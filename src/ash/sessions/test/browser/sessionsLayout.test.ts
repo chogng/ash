@@ -73,6 +73,54 @@ suite('sessions browser component', () => {
 		expect(runtimeErrors.get(page)).toEqual([]);
 	});
 
+	test('update download becomes Restart to Update above Accounts and supports retry', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?update&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const download = page.locator('.ash-sessions-update-status');
+		const account = page.locator('.ash-sessions-activity-host.bottom');
+		await expect(download).toBeHidden();
+		await page.evaluate(() => window.ashSessionsIntegration.setUpdateState('downloading'));
+		await expect(download.locator('.ash-sessions-update-row')).toHaveText('正在下载更新...');
+		await expect(download).toHaveAttribute('role', 'status');
+		const statusBounds = (await download.boundingBox())!;
+		const accountBounds = (await account.boundingBox())!;
+		expect(Math.abs(statusBounds.y + statusBounds.height - accountBounds.y)).toBeLessThan(1);
+		expect(Math.abs(statusBounds.x - accountBounds.x)).toBeLessThan(1);
+		expect(Math.abs(statusBounds.width - accountBounds.width)).toBeLessThan(1);
+		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('workbench.reduceMotion', 'on'));
+		await expect(download.locator('.ash-sessions-update-spinner')).toHaveCSS('animation-name', 'none');
+		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+		await expect(download).toBeVisible();
+		await page.evaluate(() => window.ashSessionsIntegration.setUpdateState('ready'));
+		const restart = download.getByRole('button', { name: '重启更新', exact: true });
+		await expect(restart).toBeEnabled();
+		await expect(download.locator('.ash-sessions-update-row')).toBeHidden();
+		expect(await download.boundingBox()).toEqual(statusBounds);
+		await restart.focus();
+		await restart.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.getUpdateInstallCount())).toBe(1);
+		await expect(download.getByRole('button', { name: '正在重启...' })).toBeDisabled();
+		await page.evaluate(() => window.ashSessionsIntegration.finishUpdateInstall(true));
+		await expect(page.locator('.ash-notification-message:visible').filter({ hasText: '无法安装更新。' })).toBeVisible();
+		await expect(restart).toBeEnabled();
+		await expect(restart).toBeFocused();
+		await restart.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.getUpdateInstallCount())).toBe(2);
+		await page.evaluate(() => window.ashSessionsIntegration.finishUpdateInstall(false));
+		await expect(download.getByRole('button', { name: '正在重启...' })).toBeDisabled();
+		await expect(download).toBeVisible();
+		await expect(account).toBeVisible();
+	});
+
+	test('a newly opened window retains Restart to Update when the update is ready', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?update=ready');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByRole('button', { name: 'Restart to Update', exact: true })).toBeEnabled();
+		await expect(page.locator('.ash-sessions-update-spinner')).toBeHidden();
+	});
+
 	test('Sessions navigation icons and surface controls follow the selected component', async function () {
 		const { page } = browserTests;
 		const activityBar = page.locator('[data-part="activitybar"]');

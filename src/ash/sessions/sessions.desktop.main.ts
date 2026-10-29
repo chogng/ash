@@ -12,6 +12,9 @@ import '../workbench/services/browserView/electron-browser/playwrightWorkbenchSe
 import './contrib/browserView/browser/sessionBrowserView.contribution.js';
 import './contrib/chatgptweb/browser/chatGPTWeb.contribution.js';
 import './sessions.common.main.js';
+import '../platform/update/common/update.config.contribution.js';
+import '../workbench/services/update/electron-browser/updateService.js';
+import '../workbench/contrib/update/electron-browser/update.contribution.js';
 import '../workbench/contrib/chat/electron-browser/actions/voiceChatActions.js';
 import { AgentsWindowInvitationContribution } from '../workbench/contrib/chat/electron-browser/agentSessions/agentsWindowInvitation.js';
 import { ChatScreenshotContribution } from '../workbench/contrib/chat/electron-browser/chatScreenshot.js';
