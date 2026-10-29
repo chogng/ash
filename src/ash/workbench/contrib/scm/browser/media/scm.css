@@ -736,7 +736,7 @@
 	margin: 0;
 	padding: 0;
 	font-size: var(--ash-fontSize-label1);
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-weight: var(--ash-fontWeight-regular);
 	gap: var(--ash-spacing-size40);
 	line-height: var(--ash-list-rowHeight);
 }
