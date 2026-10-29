@@ -24,3 +24,18 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+.ash-canvas-pill > .ash-button.icon-only {
+	box-sizing: border-box;
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	flex: 0 0 var(--ash-toolbar-actionSize);
+	margin-inline-end: var(--ash-spacing-size20);
+	padding: 0;
+}
+
+.ash-canvas-pill > .ash-button[aria-disabled="true"] {
+	opacity: 0.5;
+	cursor: default;
+}

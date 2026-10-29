@@ -1970,6 +1970,28 @@ test('EditorPart closes the active editor using recent tab history or the curren
 	} finally { dom.window.close(); }
 });
 
+for (const externalFocus of [true, false]) test(`closing an active editor preserves focus ownership (external: ${externalFocus})`, async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Composer</button></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	const panes: TestEditorPane[] = [];
+	using registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('test.closeFocus', '.ts', () => trackPane(panes, 'test.closeFocus')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	const first = input('/project/first.ts');
+	const second = input('/project/second.ts');
+	await editor.openEditor(first, { pinned: true });
+	await editor.openEditor(second, { pinned: true });
+	const group = editor.activeGroup;
+	const focusTarget = externalFocus ? dom.window.document.querySelector('button')! : group.domNode;
+	focusTarget.tabIndex = 0;
+	focusTarget.focus();
+	const focusCount = panes[0]!.focusCount;
+	await group.closeEditor(second);
+	assert.equal(group.activeInput, first);
+	assert.equal(panes[0]!.focusCount - focusCount, externalFocus ? 0 : 1);
+	if (externalFocus) assert.equal(dom.window.document.activeElement, focusTarget);
+});
+
 test('custom close handlers receive the exact close set after retained hosts and sticky exclusions', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {

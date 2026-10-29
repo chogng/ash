@@ -772,7 +772,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason }));
 		if (wasActive) {
 			const next = nextInput ? this.entry(nextInput) : undefined;
-			if (next) this.activateEntry(next, true);
+			if (next) this.activateEntry(next, restoreFocus);
 			else {
 				this.editorChangeEmitter.fire(Object.freeze({ kind: "activeEditorChanged", editor: undefined }));
 			}

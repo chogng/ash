@@ -7,6 +7,7 @@ import { localize, localize2 } from '../../../../nls.js';
 import { ICanvasService, CanvasInput } from '../common/canvas.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { showCanvasContextPicker } from './canvasContextPicker.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 
 export const OPEN_EDITOR_CANVAS_COMMAND_ID = 'workbench.action.chat.openCanvas';
 export const CanvasOwnerAvailableContext = new RawContextKey<boolean>('canvasOwnerAvailable', false);
@@ -14,7 +15,7 @@ export const CanvasOwnerAvailableContext = new RawContextKey<boolean>('canvasOwn
 registerAction2(class OpenCanvasAction extends Action2 {
 	constructor() {
 		super({
-			id: OPEN_EDITOR_CANVAS_COMMAND_ID, title: localize2('canvas.open', 'Open Canvas…'), f1: true,
+			id: OPEN_EDITOR_CANVAS_COMMAND_ID, title: localize2('canvas.open', 'Open Canvas…'), icon: Lxicon.preview, f1: true,
 			precondition: ContextKeyExpr.has(CanvasOwnerAvailableContext.key),
 			menu: [{ id: MenuId.ChatTitle, group: 'navigation', order: 20 }, { id: MenuId.ChatInputSecondary, group: 'navigation', order: 20 }],
 		});
@@ -58,7 +59,6 @@ registerAction2(class CloseCanvasAction extends Action2 {
 		super({
 			id: 'workbench.action.chat.closeCanvas', title: localize2('canvas.close', 'Close Canvas'), f1: true,
 			precondition: ContextKeyExpr.equals('activeEditor', CanvasInput.EDITOR_ID),
-			menu: [{ id: MenuId.EditorTitle, group: 'navigation', order: 20 }],
 		});
 	}
 	async run(accessor: ServicesAccessor): Promise<void> {

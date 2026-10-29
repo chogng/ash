@@ -46,6 +46,8 @@ suite('Canvas composer controls', () => {
 		const close = container.querySelector<HTMLButtonElement>('[aria-label="Close Canvas Updated"]')!;
 		close.focus(); close.click(); close.click();
 		assert.equal(closes, 1);
+		assert.equal(document.activeElement, close);
+		assert.equal(close.getAttribute('aria-disabled'), 'true');
 		canvases.set([], undefined);
 		assert.equal(focused, 1);
 		assert.equal(control.domNode.hidden, true);
@@ -61,6 +63,7 @@ suite('Canvas composer controls', () => {
 		const close = container.querySelector<HTMLButtonElement>('[aria-label="Close Canvas Board"]')!;
 		close.click(); await new Promise(resolve => setImmediate(resolve));
 		assert.equal(errors, 1); assert.equal(close.disabled, false);
+		assert.equal(close.hasAttribute('aria-disabled'), false);
 		context.set({ ...context.get()!, closeCanvas: undefined }, undefined);
 		assert.equal(close.hidden, true);
 	});

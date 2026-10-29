@@ -50,7 +50,7 @@ export class CanvasesPillControl extends Disposable {
 					const lifetime = new DisposableStore();
 					const element = h(container.ownerDocument, 'div', { className: 'ash-canvas-pill' });
 					const open = lifetime.add(new Button(element, { ...defaultButtonStyles, label: '', size: 'small', presentation: 'quiet', icon: Lxicon.preview }));
-					const close = lifetime.add(new Button(element, { ...defaultButtonStyles, label: '', size: 'small', presentation: 'quiet', icon: Lxicon.close }));
+					const close = lifetime.add(new Button(element, { ...defaultButtonStyles, label: '', size: 'small', presentation: 'quiet', icon: Lxicon.close, iconOnly: true }));
 					row = { element, open, close, lifetime, context: current!, canvas, label: labels[index]!, closing: false };
 					const target = row;
 					lifetime.add(open.onDidClick(() => {
@@ -86,9 +86,10 @@ export class CanvasesPillControl extends Disposable {
 	private async close(row: CanvasRow): Promise<void> {
 		if (row.closing || !row.context.closeCanvas || !this.canvases.isOwnerPresentable({ ...row.context.owner, canvas: row.canvas.resource })) { return; }
 		row.closing = true;
-		row.close.enabled = false;
+		// Keep keyboard focus until removal can return it to the composer.
+		row.close.domNode.setAttribute('aria-disabled', 'true');
 		try { await row.context.closeCanvas(row.canvas); }
 		catch (error) { this.notifications.error(localize('canvas.closeFailed', 'Could not close Canvas {0}: {1}', row.label, String(error))); }
-		finally { row.closing = false; if (!this.isDisposed && !row.lifetime.isDisposed) { row.close.enabled = true; } }
+		finally { row.closing = false; if (!this.isDisposed && !row.lifetime.isDisposed) { row.close.domNode.removeAttribute('aria-disabled'); } }
 	}
 }
