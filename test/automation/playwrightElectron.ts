@@ -12,6 +12,8 @@ import { isProcessRunning, registerRunResource } from '../../build/processes.ts'
 
 export interface ElectronApplicationLaunchResult {
 	readonly application: ElectronApplication;
+	/** Retained before Playwright releases its channel if Main exits during startup. */
+	readonly process: ChildProcess;
 	readonly diagnostics: WorkbenchDiagnostics;
 	/** Runs the product quit handshake, including renderer shutdown participants and state saves. */
 	quit(): Promise<void>;
@@ -58,7 +60,6 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 	application.context().once('close', () => application.context().off('page', observeDialogs));
 	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
 	const electronProcess = application.process();
-	await resource.process(electronProcess);
 	let closing: Promise<void> | undefined;
 	const shutdown = (kind: 'quit' | 'destroy'): Promise<void> => closing ??= (async () => {
 		const exited = electronProcess.exitCode !== null || electronProcess.signalCode !== null
@@ -112,16 +113,22 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 		if (termination && kind === 'quit') throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
 		await resource.dispose();
 	})();
-	return { application, diagnostics, quit: () => shutdown('quit'), close: () => shutdown('destroy') };
+	try {
+		await resource.process(electronProcess);
+	} catch (error) {
+		try { await shutdown('destroy'); }
+		catch (cleanup) { throw new AggregateError([error, cleanup], 'Electron process registration and cleanup failed'); }
+		throw error;
+	}
+	return { application, process: electronProcess, diagnostics, quit: () => shutdown('quit'), close: () => shutdown('destroy') };
 }
 
 /** Launches Ash Desktop through Playwright's Electron adapter and waits for Workbench readiness. */
 export async function launchElectron(options: ElectronLaunchOptions, onMilestone?: (milestone: ElectronLaunchMilestone) => void): Promise<ElectronLaunchResult> {
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
 	const session = await launchElectronApplication(options);
-	const { application, diagnostics, close } = session;
+	const { application, process: electronProcess, diagnostics, close } = session;
 	onMilestone?.('electron-launch-resolved');
-	const electronProcess = application.process();
 	const startupResources = new DisposableStore();
 	let processErrors = '';
 	const onProcessError = (chunk: Buffer): void => { processErrors = (processErrors + chunk.toString()).slice(-16_384); };

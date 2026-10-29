@@ -9,6 +9,9 @@ import { expect, test } from '@playwright/test';
 import { exercisePackagedWorkbench } from '../../../automation/packagedWorkbench.js';
 
 const run = promisify(execFile);
+// The runner's short temp root leaves room for the canonical profile/run socket
+// and its identity within Windows AF_UNIX's 108-byte limit.
+const temporaryRoot = process.platform === 'win32' ? process.env.RUNNER_TEMP ?? tmpdir() : tmpdir();
 
 test('release installation runs its bundled backend, upgrades with retained data and uninstalls', async ({ }, testInfo) => {
 	assert(['win32', 'darwin'].includes(process.platform), 'Desktop release requires Windows or macOS');
@@ -19,9 +22,9 @@ test('release installation runs its bundled backend, upgrades with retained data
 	assert.equal(Boolean(previousArchive), Boolean(previousVersion), 'Upgrade requires both previous archive and version');
 	// Installers write the per-user application registration. Run only on disposable CI hosts.
 	if (process.platform === 'win32') assert.equal(process.env.CI, 'true', 'Windows installer sanity requires a disposable CI host');
-	// Keep the canonical Windows profile socket below AF_UNIX's 108-byte limit.
-	const directory = await mkdtemp(join(tmpdir(), 'ash-r-'));
-	const installation = join(directory, 'installed');
+	const directory = await mkdtemp(join(temporaryRoot, 'ash-r-'));
+	// Exercise file-URL escaping in the real window and its IPC authorization.
+	const installation = join(directory, 'installed~app');
 	const userData = join(directory, 'Ash');
 	const workspace = join(directory, 'workspace');
 	const settingsPath = join(userData, 'profile', 'settings.json');
@@ -91,7 +94,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 	} finally {
 		try {
 			if (installed) await uninstall(installation, directory, userData);
-			await removeInstallation(directory, await realpath(tmpdir()), 'ash-r-');
+			await removeInstallation(directory, await realpath(temporaryRoot), 'ash-r-');
 		} catch (cleanup) {
 			if (failure) throw new Error(`Release acceptance failed: ${String(failure)}\nCleanup also failed: ${String(cleanup)}`, { cause: failure });
 			throw cleanup;
@@ -176,8 +179,8 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 	assert.equal(process.env.CI, 'true', 'System cleanup acceptance requires a disposable CI host');
 	const archive = resolve(required('ASH_RELEASE_ARCHIVE'));
 	for (const shared of [false, true]) {
-		const directory = await mkdtemp(join(tmpdir(), 'ash-c-'));
-		const installation = join(directory, 'installed');
+		const directory = await mkdtemp(join(temporaryRoot, 'ash-c-'));
+		const installation = join(directory, 'installed~app');
 		const userData = join(directory, 'Ash');
 		const profile = join(userData, 'profile');
 		const workspace = join(profile, 'worktrees', 'project');
@@ -263,8 +266,8 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 		} finally {
 			try {
 				if (installed) await uninstall(installation, directory, userData);
-				await shell("Get-NetFirewallRule -Name $env:ASH_TEST_OWNED_RULE,$env:ASH_TEST_SHARED_RULE -ErrorAction SilentlyContinue | Remove-NetFirewallRule");
-				await removeInstallation(directory, await realpath(tmpdir()), 'ash-c-');
+				await shell("$ErrorActionPreference='Stop'; Get-NetFirewallRule | Where-Object { $_.Name -eq $env:ASH_TEST_OWNED_RULE -or $_.Name -eq $env:ASH_TEST_SHARED_RULE } | Remove-NetFirewallRule");
+				await removeInstallation(directory, await realpath(temporaryRoot), 'ash-c-');
 			} catch (cleanup) {
 				if (failure) throw new Error(`Release acceptance failed: ${String(failure)}\nCleanup also failed: ${String(cleanup)}`, { cause: failure });
 				throw cleanup;

@@ -278,6 +278,13 @@ test('CodeWindow preserves native client pixels, coalesces resize and releases i
 
 const packagedEntry = { file: '/synthetic/workbench.html', url: 'file:///synthetic/workbench.html', useDevelopmentUrl: false };
 
+test('CodeWindow loads the registered file URL without changing Windows short-path escaping', async () => {
+	using host = createHost();
+	const entry = { file: 'C:\\Users\\RUNNER~1\\Ash\\workbench.html', url: 'file:///C:/Users/RUNNER%7E1/Ash/workbench.html', useDevelopmentUrl: false };
+	await host.load(entry);
+	assert.deepEqual(host.win.loads, [entry.url]);
+});
+
 test('CodeWindow creation fails before creating an OS window when a required service is missing', () => {
 	using services = new InstantiationService();
 	let created = false;
@@ -427,7 +434,7 @@ test('CodeWindow offers localized crash recovery and replaces the window without
 	assert.ok(options.buttons?.includes('重新打开'));
 	await result.complete({ response: options.buttons!.indexOf('重新打开'), checkboxChecked: false });
 	await new Promise(resolve => setImmediate(resolve));
-	assert.deepEqual(host.win.loads, [packagedEntry.file]);
+	assert.deepEqual(host.win.loads, [packagedEntry.url]);
 	assert.equal(reopened, 1);
 	assert.equal(host.win.destroyed, true);
 	assert.equal(host.win.messages.length, 0);
