@@ -393,10 +393,12 @@ for (const revisionSource of ['query', 'snapshot', 'id', 'current'] as const) {
 				const tag = picker.items.find((item): item is IQuickPickItem => !('type' in item) && item.label === retainedTag.name);
 				assert.ok(tag);
 				picker.selectedItems = [tag];
+				await waitFor(() => referenceQueries === 2 && pane.element.querySelector('.ash-scm-graph')!.getAttribute('aria-busy') === 'false');
+				assert.deepEqual(requests.at(-1)?.historyItemRefs, ['local'], 'Custom filters apply before accepting the picker');
+				assert.equal(quickInput.currentQuickInput, picker, 'Applying a reference keeps the picker open');
 				await quickInput.accept();
 				await picking;
-				await waitFor(() => referenceQueries === 2 && pane.element.querySelector('.ash-scm-graph')!.getAttribute('aria-busy') === 'false');
-				assert.deepEqual(requests.at(-1)?.historyItemRefs, ['local'], 'Custom filters query and resolve the selected reference instead of reusing automatic roots');
+				assert.equal(referenceQueries, 2, 'Enter only closes the picker');
 			}
 		} finally {
 			browser.window.close();
@@ -404,6 +406,109 @@ for (const revisionSource of ['query', 'snapshot', 'id', 'current'] as const) {
 		}
 	});
 }
+
+test('SCM history reference changes apply immediately and survive dismissal, including an empty selection', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		const { SCMHistoryViewPane } = await import('../../browser/scmHistoryViewPane.js');
+		using context = new ContextKeyService();
+		using services = new InstantiationService();
+		const menus = new MenuService(new CommandService(services), context);
+		using scm = new SCMService();
+		using view = new SCMViewService(scm);
+		const references = ['main', 'topic/one', 'topic/two'].map((name, index) => ({ id: `refs/heads/${name}`, name, revision: String(index + 1).repeat(40), category: 'localBranch' }));
+		const commits = references.map(ref => ({ id: ref.revision, parentIds: [], subject: ref.name, message: '' }));
+		const requests: Parameters<ISCMHistoryProvider['provideHistoryItems']>[0][] = [];
+		const head = observableValue<ISCMHistoryItemRef | undefined>('test.head', references[0]);
+		const provider = historyProviderFixture({
+			historyItemRef: head,
+			provideHistoryItemRefs: async () => references,
+			provideHistoryItems: async options => {
+				requests.push(options);
+				return commits.filter(item => options.historyItemRefs === undefined || options.historyItemRefs.includes(item.id));
+			},
+		});
+		using registration = scm.registerSCMProvider(testSCMProvider('live-filter', 'Live filter repository', provider));
+		using configuration = new InMemoryConfigurationService();
+		using ui = createTestComponentServices(undefined, undefined, browser.window.document);
+		using quickInput = new TestQuickInputService({ container: browser.window.document.body });
+		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.live-filter.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
+			setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { },
+		}, testEditorService(), testResourceLabelService(), {
+			show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
+		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, ui.get(IStorageService), scm);
+		browser.window.document.body.append(pane.element);
+		const shownIds = () => [...pane.element.querySelectorAll<HTMLElement>('.ash-scm-graph-commit')].map(row => row.dataset.historyItemId);
+		const settled = () => pane.element.querySelector('.ash-scm-graph')?.getAttribute('aria-busy') === 'false';
+		const saved = () => JSON.parse(ui.get(IStorageService).get('scm.graphView.referencesFilter', StorageScope.WORKSPACE)!)[0][1];
+		await waitFor(() => settled() && shownIds().length === 1);
+		let picking = pane.pickHistoryItemRef();
+		await waitFor(() => (quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.items.some(item => item.label === 'topic/two') === true);
+		let picker = quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		assert.equal(picker.placeholder, '筛选提交图中的分支和标签；更改立即生效。');
+		assert.match(pane.element.querySelector('[role="tree"]')!.getAttribute('aria-description')!, /立即更新提交图/);
+		const one = picker.items.find((item): item is IQuickPickItem => !('type' in item) && item.label === 'topic/one')!;
+		const two = picker.items.find((item): item is IQuickPickItem => !('type' in item) && item.label === 'topic/two')!;
+		picker.selectedItems = [...picker.selectedItems, one];
+		await waitFor(() => settled() && shownIds()[0] === references[1].revision);
+		assert.deepEqual(picker.selectedItems, [one], 'A branch replaces Auto');
+		assert.deepEqual(saved(), [references[1].id]);
+		assert.equal(quickInput.currentQuickInput, picker);
+		picker.selectedItems = [one, two];
+		await waitFor(() => settled() && shownIds().length === 2);
+		picker.selectedItems = [two];
+		await waitFor(() => settled() && shownIds()[0] === references[2].revision);
+		assert.deepEqual(requests.at(-1)?.historyItemRefs, [references[2].revision]);
+		await quickInput.cancel();
+		await picking;
+		assert.deepEqual(saved(), [references[2].id], 'Escape keeps the applied selection');
+
+		picking = pane.pickHistoryItemRef();
+		await waitFor(() => (quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.selectedItems[0]?.label === 'topic/two');
+		picker = quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		quickInput.toggle();
+		await waitFor(() => settled() && shownIds().length === 0);
+		assert.deepEqual(requests.at(-1)?.historyItemRefs, []);
+		assert.deepEqual(saved(), [], 'Clearing the last choice is distinct from Auto');
+		assert.equal(pane.element.querySelector('.ash-scm-empty')?.textContent, '未选择分支或标签。');
+		const emptyQueries = requests.length;
+		await quickInput.accept();
+		await picking;
+		assert.equal(requests.length, emptyQueries, 'Enter closes an empty selection without querying again');
+
+		picking = pane.pickHistoryItemRef();
+		await waitFor(() => (quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.items.some(item => item.label === 'topic/two') === true);
+		picker = quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		assert.deepEqual(picker.selectedItems, [], 'Reopening preserves the empty selection');
+		const all = picker.items.find((item): item is IQuickPickItem => !('type' in item) && item.label === '所有引用')!;
+		picker.selectedItems = [all];
+		await waitFor(() => settled() && shownIds().length === 3);
+		assert.equal(requests.at(-1)?.historyItemRefs, undefined);
+		picker.hide();
+		await picking;
+		assert.equal(saved(), 'all', 'Dismissing without Enter keeps All References');
+
+		picking = pane.pickHistoryItemRef();
+		await waitFor(() => (quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.selectedItems[0]?.label === '所有引用');
+		picker = quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		head.set(undefined);
+		const auto = picker.items.find((item): item is IQuickPickItem => !('type' in item) && item.label.startsWith('自动'))!;
+		picker.selectedItems = [...picker.selectedItems, auto];
+		await waitFor(() => settled() && shownIds().length === 0);
+		assert.deepEqual(picker.selectedItems, [auto], 'Auto replaces All References');
+		assert.equal(saved(), 'auto');
+		assert.equal(pane.element.querySelector('.ash-scm-empty')?.textContent, '暂无提交。', 'Auto without a HEAD retains the ordinary empty repository message');
+		picker.hide();
+		await picking;
+	} finally {
+		resetNlsResolver();
+		browser.window.close();
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+	}
+});
 
 test('SCM history details expose copy and remote actions without extension menu entries', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');

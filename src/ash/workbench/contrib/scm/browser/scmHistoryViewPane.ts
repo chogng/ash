@@ -459,7 +459,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const picker = resources.add(this.quickInputService.createQuickPick<Pick>());
 		picker.canSelectMany = true;
 		picker.sortByLabel = false;
-		picker.placeholder = picker.ariaLabel = localize('scm.history.selectRefs', 'Select history references; use Ctrl+Space to toggle, then Enter to apply.');
+		picker.placeholder = picker.ariaLabel = localize('scm.history.selectRefs', 'Filter branches and tags in the commit graph; changes apply immediately.');
 		picker.busy = true;
 		resources.add(picker.onDidHide(() => { if (this.filterPicker.value === resources) { this.filterPicker.clear(); } }));
 		picker.show();
@@ -524,25 +524,23 @@ export class SCMHistoryViewPane extends ViewPane {
 			picker.activeItems = selected.slice(0, 1);
 			let selection = picker.selectedItems;
 			resources.add(picker.onDidChangeSelection(selected => {
+				if (this.isDisposed || this.provider !== provider || key !== this.filterKey || this.filterPicker.value !== resources) { return; }
 				if (selected.length === selection.length && selected.every((item, index) => item === selection[index])) { return; }
 				const added = selected.find(item => !selection.includes(item));
 				selection = added && typeof added.reference === 'string' ? [added] : selected.filter(item => typeof item.reference !== 'string');
 				if (selection.length !== selected.length || selection.some((item, index) => item !== selected[index])) { picker.selectedItems = selection; }
+				const first = selection[0]?.reference;
+				this.filters.set(key, typeof first === 'string' ? first : selection.map(item => (item.reference as ISCMHistoryItemRef).id));
+				this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
+				this.page = undefined;
+				this.commitChanges.clear();
+				void this.refresh();
 			}));
 			picker.busy = false;
 			await new Promise<void>(resolve => {
 				resources.add(toDisposable(() => resolve()));
 				resources.add(picker.onDidHide(() => resolve()));
-				resources.add(picker.onDidAccept(() => {
-					if (selection.length === 0) { return; }
-					const first = selection[0].reference;
-					this.filters.set(key, typeof first === 'string' ? first : selection.map(item => (item.reference as ISCMHistoryItemRef).id));
-					this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
-					this.page = undefined;
-					this.commitChanges.clear();
-					picker.hide();
-					void this.refresh();
-				}));
+				resources.add(picker.onDidAccept(() => picker.hide()));
 			});
 		} catch {
 			if (!this.isDisposed && this.filterPicker.value === resources) {
@@ -714,7 +712,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				// Use the freshly queried ref to capture immutable comparison endpoints.
 				const remote = refs.find(ref => ref.id === remoteRef?.id && ref.revision !== undefined) ?? remoteRef;
 				let selected = Array.isArray(filter) ? refs.filter(ref => filter.includes(ref.id)) : [];
-				if (Array.isArray(filter) && selected.length === 0) {
+				if (Array.isArray(filter) && filter.length > 0 && selected.length === 0) {
 					filter = 'auto';
 					this.filters.delete(this.filterKey);
 					this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
@@ -834,7 +832,10 @@ export class SCMHistoryViewPane extends ViewPane {
 		this.baseContext.set(this.provider?.historyItemBaseRef?.get() !== undefined);
 		this.branchContext.set(this.head?.category === 'localBranch' && this.head.revision !== undefined);
 		this.statusElement.hidden = page.items.length > 0;
-		this.statusElement.textContent = localize('scm.history.empty', 'No commits yet.');
+		const filter = this.filters.get(this.filterKey);
+		this.statusElement.textContent = Array.isArray(filter) && filter.length === 0
+			? localize('scm.history.noRefs', 'No branches or tags selected.')
+			: localize('scm.history.empty', 'No commits yet.');
 		if (!this.tree && page.items.length > 0) this.createHistoryTree();
 		if (this.tree) {
 			const children: ObjectTreeElement<HistoryTreeElement>[] = this.rows.map(model => {
@@ -908,7 +909,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		tree.domNode.classList.add('ash-scm-graph-viewport');
 		tree.element.classList.add('ash-scm-graph-tree');
 		tree.element.setAttribute('aria-multiselectable', 'false');
-		const navigationHelp = localize('scm.history.help', 'Use Up and Down Arrow to navigate and select commits, folders and changed files. Navigating to a file previews it while keeping focus here. Home and End move to the first and last loaded rows; Page Up and Page Down move by a page. Right Arrow expands a commit or folder and enters its children; Left Arrow collapses it or returns to its parent. Enter or Space toggles commits and folders. Enter opens and pins a changed file; Space previews it while keeping focus in history. Click a file to preview it and double-click to pin it. Hold Ctrl, Command or Alt when clicking to open it beside the current editor. On macOS, Command+Down Arrow also opens the selected item. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges, Open Changes and Open File. Press Alt+Down Arrow on a commit to focus its details; Escape returns to history. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and Enter applies the selection. Use View as List or View as Tree to change file layout. Incoming and Outgoing Changes compare the branch with its merge base. Binary changes open a read-only hexadecimal comparison. The graph selects one row at a time. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded rows.');
+		const navigationHelp = localize('scm.history.help', 'Use Up and Down Arrow to navigate and select commits, folders and changed files. Navigating to a file previews it while keeping focus here. Home and End move to the first and last loaded rows; Page Up and Page Down move by a page. Right Arrow expands a commit or folder and enters its children; Left Arrow collapses it or returns to its parent. Enter or Space toggles commits and folders. Enter opens and pins a changed file; Space previews it while keeping focus in history. Click a file to preview it and double-click to pin it. Hold Ctrl, Command or Alt when clicking to open it beside the current editor. On macOS, Command+Down Arrow also opens the selected item. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges, Open Changes and Open File. Press Alt+Down Arrow on a commit to focus its details; Escape returns to history. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and updates the graph immediately. Enter, Escape or clicking outside closes the picker and keeps the selection. Use View as List or View as Tree to change file layout. Incoming and Outgoing Changes compare the branch with its merge base. Binary changes open a read-only hexadecimal comparison. The graph selects one row at a time. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded rows.');
 		const pagingHelp = localize('scm.history.pagingHelp', 'Automatic loading fetches older commits before you reach the end. When it is off, use Load more commits. If loading fails, use Retry; the loaded history stays available.');
 		tree.element.setAttribute('aria-description', `${navigationHelp} ${pagingHelp}`);
 		resources.add(tree.onDidChangeSelection(event => {
