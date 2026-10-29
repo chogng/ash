@@ -24,6 +24,7 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 
 - 只修改任务所需的内容；原文无问题就保留，不顺手重写；非必要不添加引用。
 - In `AGENTS.md`, instructions and skills, keep concrete actions, prohibitions and necessary exceptions in one place. Delete duplicated rules, skill triggers or documentation indexes, and prose that adds no constraint.
+- Skill 可以基于 `AGENTS.md` 和适用的 instructions，按职责保持独立；仅在任务确实需要组合时引用其他 skill，禁止循环引用。普通文档可以引用 skill，但 skill 不得依赖普通文档提供执行规则。通用约束放在 instructions，专项执行流程放在 skill，避免重复维护。
 - Do not keep competing copies of business state; update it through its owning model or service.
 - Product consumers use domain contracts, not generated transport DTOs.
 - TypeScript frontend service construction, registration and scope ownership must follow the [Dependency Injection contract](.github/instructions/typescript-services.instructions.md#dependency-injection).
