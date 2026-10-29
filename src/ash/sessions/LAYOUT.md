@@ -14,16 +14,16 @@ Desktop modes select view content in the shared `SidebarPart`; pages without a d
 
 Chat and Code are workspace shells selected by the titlebar switcher. Entry descriptors declare their workspace; `ISessionsLayoutService` derives the active workspace from the selected entry and publishes its context for navigation. Code has its own Activity Bar menu and a navigation-only sidebar container; it does not reuse Chat's session list or contribute a sidebar entry for switching to Code. New creates a conversation in the current workspace. Collab, Agent Teams, Automations and Symphony belong to Code. A Custom View can declare the entry command that supplies its underlying workspace; opening and restoring that view preserves the overlay while applying the declared entry. Custom Views retain the workspace sidebar's current expansion state, including Code navigation beside Automations. Navigation order is independent per workspace in the existing profile UI state store; the selected workspace is reconstructed from the restored entry rather than persisted separately.
 
-| Surface                           | Shared host        | Mode-owned content                                                               |
-| --------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
-| Persistent window notices         | `BannerPart`       | Notices submitted through the shared window-scoped `IBannerService`              |
-| Left navigation and tools         | `SidebarPart`      | Registered `ViewContainer`, its `ViewPaneContainer` and `ViewPane` contributions |
-| Agent conversations               | `SessionsPart`     | Retained session views and their independent conversation grid                   |
-| Editing and central product pages | `EditorPart`       | `EditorInput` and `EditorPane` opened through `IEditorService`                   |
-| Right properties and detail views | `AuxiliaryBarPart` | Registered view containers and views for the current mode or editor              |
-| Bottom tools                      | `PanelPart`        | Registered tool view containers and views                                        |
+| Surface                           | Shared host        | Mode-owned content                                                                       |
+| --------------------------------- | ------------------ | ---------------------------------------------------------------------------------------- |
+| Workspace and connection status   | Title bar actions  | Sessions workspace contribution projects the existing permission and connection services |
+| Left navigation and tools         | `SidebarPart`      | Registered `ViewContainer`, its `ViewPaneContainer` and `ViewPane` contributions         |
+| Agent conversations               | `SessionsPart`     | Retained session views and their independent conversation grid                           |
+| Editing and central product pages | `EditorPart`       | `EditorInput` and `EditorPane` opened through `IEditorService`                           |
+| Right properties and detail views | `AuxiliaryBarPart` | Registered view containers and views for the current mode or editor                      |
+| Bottom tools                      | `PanelPart`        | Registered tool view containers and views                                                |
 
-The window banner occupies a separate row below the title bar, outside session and mode compositions. Feature services retain their business state; the shared BannerPart owns notice selection and DOM, and the Sessions layout owns its geometry. Banner visibility is transient and does not enter saved session layouts. Its Manage action opens the shared Workspace Trust editor for this window’s workspace and execution host, independently of the selected conversation host. Switching modes or maximizing the Panel preserves an active window notice.
+The Agents Window has no Banner Part or reserved notice row. The Sessions workspace contribution presents restricted directory permissions only in the Code workspace, naming the window workspace and opening its existing Workspace Trust editor. Connection recovery remains available through a title bar action in every workspace. These controls read the owning services and do not own another permission or connection model. A terminal connection failure offers a sticky global notification with the existing Reload Window action; startup failures retain the host's recovery surface. Status changes do not move the content or enter saved session layouts. The regular IDE retains its Banner Part and notice producers.
 
 `ViewContainer` is the sidebar, auxiliary-bar and panel registration mechanism. Central editor pages use the editor input/pane mechanism rather than a separate mode container. An `EditorPane` can render a canvas, a browsing page or another rich interface; it is not limited to a text editor. Mode implementations own their documents, commands and content while the shared Parts own placement, resizing, focus and hosting lifecycle. Mode changes retain the same Sessions service and selection ownership.
 
@@ -127,7 +127,6 @@ for both browser and Electron; the phone workbench remains unimplemented.
 
 ```text
 Title bar
-Banner (when a window notice is active)
 Content
 ├── Sidebar
 └── Main region
@@ -135,7 +134,7 @@ Content
     └── Panel
 ```
 
-The workbench omits the standard Activity Bar and Status Bar. A shared window Banner appears below the title bar for connection recovery and read-only or restricted workspace permissions. Its Sessions Activity Bar runs registered product commands. Part positions are fixed by the Agents Window rather than user settings.
+The workbench omits the standard Activity Bar, Status Bar and Banner. Its Sessions Activity Bar runs registered product commands. Part positions are fixed by the Agents Window rather than user settings.
 
 Contributions register localized titles, icons and commands in `Menus.ActivityBar`.
 `ActivityBar` owns profile-scoped command order and presentation. Selected

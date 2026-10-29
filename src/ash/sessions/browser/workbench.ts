@@ -6,8 +6,6 @@ import { StatusbarService } from '../../workbench/browser/parts/statusbar/status
 import { ILanguageServerStatusService } from '../../workbench/services/language/common/languageServerStatusService.js';
 import { IProjectService } from '../../platform/projects/common/projectService.js';
 import { SessionsAgentSessionService } from './agentHost/sessionsAgentSessionService.js';
-import { BannerPart } from '../../workbench/browser/parts/banner/bannerPart.js';
-import { IBannerService } from '../../workbench/services/banner/browser/bannerService.js';
 import type { Position } from '../../workbench/services/layout/browser/layoutService.js';
 import { SessionConversationLinks } from './agentHost/sessionConversationLinks.js';
 import { SessionsAgentThreadService } from './agentHost/sessionsAgentThreadService.js';
@@ -927,14 +925,8 @@ export abstract class Workbench extends Disposable {
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		const customViewPart = this._register(services.createInstance(CustomViewGridPart, this.domNode));
 		services.registerInstance(ICustomViewGridPartService, customViewPart);
-		const banner = this._register(services.createInstance(BannerPart, this.domNode, (visible: boolean) => {
-			if (visible) layout.showPart('banner');
-			else layout.hidePart('banner');
-		}));
-		services.registerInstance(IBannerService, banner);
 		const parts = new Map<SessionsPartId, Part>([
 			['titlebar', titlebar],
-			['banner', banner],
 			['sidebar', sidebar],
 			['sessions', sessionsPart],
 			['editor', editor],

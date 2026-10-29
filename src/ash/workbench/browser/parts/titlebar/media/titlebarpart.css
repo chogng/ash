@@ -1,11 +1,15 @@
 .ash-workbench-titlebar {
 	position: relative;
 	color: var(--ash-titleBar-foreground);
-	flex-direction: row;
 	align-items: center;
 	justify-content: space-between;
 	padding: 0 12px;
 	background: var(--ash-titleBar-background);
+}
+
+.ash-workbench-part.ash-workbench-titlebar {
+	/* Keep chrome horizontal when the shared Part stylesheet loads later. */
+	flex-direction: row;
 }
 
 .ash-workbench-titlebar .ash-workbench-part-title {

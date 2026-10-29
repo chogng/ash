@@ -1,5 +1,12 @@
 {
   "ash": {
+    "sessions.workspaceStatus.reload": "重新加载 Agent 窗口",
+    "sessions.workspaceStatus.connected": "Agent 主机连接已恢复。",
+    "sessions.workspaceStatus.reconnect": "重新连接 Agent 主机",
+    "sessions.workspaceStatus.readOnly": "只读工作区：{0}",
+    "sessions.workspaceStatus.restricted": "受限工作区：{0}",
+    "sessions.workspaceStatus.manage": "管理工作区权限：{0}",
+    "sessions.workspaceStatus.help": "Agent 窗口状态\n标题栏在所有工作区中显示 Agent Host 的连接恢复状态。使用 Tab 和 Shift+Tab 聚焦状态操作，按 Enter 或空格执行。“重新连接 Agent 主机”重试连接，不会重新发送未完成的消息。命令面板中也可执行“Agent Host: 重新连接”。连接无法恢复时会提供“重新加载 Agent 窗口”。在 Code 中，“只读工作区”或“受限工作区”会标明此窗口的工作区。执行该操作可打开工作区信任，查看或更改该工作区的目录权限。其他对话和主机保留各自的权限。按 Escape 关闭帮助并返回原来的焦点。",
     "sessions.update.downloading": "正在下载更新...",
     "sessions.update.restart": "重启更新",
     "sessions.update.restarting": "正在重启...",

@@ -155,100 +155,153 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		});
 		sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 		const hostColorScheme = await api.nativeHost.getOSColorScheme();
-		workbench = sessions.add(await createSessionsWorkbench({
-			serviceCollection,
-			createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.get(IUpdateService))) : undefined,
-			createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, services.get(IPlaywrightService), services.get(IMainProcessService), services.get(IConfigurationService), services.get(IAgentHostCanvasCollection)) : undefined,
-			createTextDocumentHost: documentClient ? services => {
-				const editing = services.get(IChatEditingService);
-				return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
-			} : undefined,
-			contributionIds: [
-				'workbench.contrib.limitIndicator',
-				'status.languageStatus',
-				'workbench.contrib.opener',
-				'chatResponseResourceWorkbenchContribution',
-				'terminalAutoReplies',
-				'terminalTelemetry',
-				'workbench.contrib.settingsChangeRelauncher',
-				'workbench.contrib.partsSplash',
-				'workbench.contrib.preferences',
-				'workbench.contrib.extensionRecommendations',
-				'workbench.contrib.snippets',
-				'workbench.contrib.defaultFormatter',
-				'workbench.contrib.sessionsLayout',
-				'terminal.native',
-				'workbench.contrib.call',
-				'sessions.contrib.multiDiffSource',
-				'sessions.contrib.automationsCustomView',
-				'workbench.contrib.nativeWindow',
-				OpenAgentsWindowSystemWideKeybindingContribution.ID,
-				'workbench.contrib.chatScreenshot',
-				'workbench.contrib.agentsWindowInvitation',
-				'chat.edits.editorOverlay',
-				'chat.promptLanguageFeatures',
-				'workbench.contrib.chatEnablement',
-				'workbench.contrib.dataChannels',
-				'workbench.contrib.output',
-				'workbench.contrib.logs',
-				'workbench.contrib.appServerRecovery',
-				'workbench.contrib.workspacePermissionStatus',
-				'workbench.contrib.githubLinkPresentations',
-				'workbench.contrib.url',
-				'workbench.contrib.externalUriOpener',
-				'workbench.contrib.browserView',
-				'workbench.contrib.canvases',
-				'sessions.contrib.canvases',
-				'workbench.contrib.browserView.windowZoomSynchronizer',
-				'workbench.contrib.browserView.autoReload',
-				'workbench.contrib.sessionBrowserViewController',
-				'sessions.chatgpt.web',
-				'workbench.contrib.browserView.restore',
-				'workbench.contrib.chatAccessibilitySignals',
-				'workbench.contrib.speechAccessibilitySignal',
-				'workbench.contrib.saveAccessibilitySignals',
-			],
-			createLogService: () => {
-				// The factory owns failure cleanup and transfers the logger to the Workbench.
-				sessions.delete(logger);
-				return logger;
-			},
-			createStorageService: async options => {
-				const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
-				try { await storage.initialize(); return storage; }
-				catch (error) { storage.dispose(); throw error; }
-			},
-			profile,
-			api,
-			workspaceSelection: () => workspaceSelection,
-			workspace: () => workspace,
-			createFileDialogService: services => services.createInstance(FileDialogService),
-			createLifecycleService: services => {
-				lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
-				sessions.add(lifecycleService.onWillShutdown(event => event.join(logger.flush().catch(error => console.error('Could not flush Agents logs during shutdown', error)), 'Agents logs flush')));
-				return lifecycleService;
-			},
-			nativeHostApi: api.nativeHost,
-			createAuxiliaryWindowService: (opener, root, services) => services.createInstance(ElectronAuxiliaryWindowService, opener, root),
-			keyboardLayoutProvider: api.keyboardLayout,
-			userKeyboardLayoutApi: api.userKeyboardLayout,
-			returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
-			createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
-			createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
-			createHostColorSchemeService: services => {
-				const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
-				void colors.initialize().catch(onUnexpectedError);
-				return colors;
-			},
-			createTitlebarPart: (titlebarContainer, services) => {
-				if (isMacintosh) {
-					// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
-					sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
-				}
-				return services.createInstance(TitlebarPart, titlebarContainer, isMacintosh ? 'actions-only' : 'application-menu');
-			},
-			container,
-		}));
+		workbench = sessions.add(
+			await createSessionsWorkbench({
+				serviceCollection,
+				createAppToolsHost: documentClient
+					? services =>
+							new AppServerAppToolsHost(
+								documentClient!,
+								services.createInstance(
+									AppToolsHost,
+									container.ownerDocument,
+									services.get(IUpdateService),
+								),
+							)
+					: undefined,
+				createBrowserHost: documentClient
+					? services =>
+							registerAppServerBrowserHost(
+								documentClient!,
+								services.get(IPlaywrightService),
+								services.get(IMainProcessService),
+								services.get(IConfigurationService),
+								services.get(IAgentHostCanvasCollection),
+							)
+					: undefined,
+				createTextDocumentHost: documentClient
+					? services => {
+							const editing = services.get(IChatEditingService);
+							return services.createInstance(AppServerTextDocumentHost, documentClient!, {
+								applyEdits: editing.applyEdits.bind(editing),
+								finishTurn: editing.finishTurn.bind(editing),
+							});
+						}
+					: undefined,
+				contributionIds: [
+					'workbench.contrib.limitIndicator',
+					'status.languageStatus',
+					'workbench.contrib.opener',
+					'chatResponseResourceWorkbenchContribution',
+					'terminalAutoReplies',
+					'terminalTelemetry',
+					'workbench.contrib.settingsChangeRelauncher',
+					'workbench.contrib.partsSplash',
+					'workbench.contrib.preferences',
+					'workbench.contrib.extensionRecommendations',
+					'workbench.contrib.snippets',
+					'workbench.contrib.defaultFormatter',
+					'workbench.contrib.sessionsLayout',
+					'terminal.native',
+					'workbench.contrib.call',
+					'sessions.contrib.multiDiffSource',
+					'sessions.contrib.automationsCustomView',
+					'workbench.contrib.nativeWindow',
+					OpenAgentsWindowSystemWideKeybindingContribution.ID,
+					'workbench.contrib.chatScreenshot',
+					'workbench.contrib.agentsWindowInvitation',
+					'chat.edits.editorOverlay',
+					'chat.promptLanguageFeatures',
+					'workbench.contrib.chatEnablement',
+					'workbench.contrib.dataChannels',
+					'workbench.contrib.output',
+					'workbench.contrib.logs',
+					'sessions.contrib.workspaceStatus',
+					'workbench.contrib.githubLinkPresentations',
+					'workbench.contrib.url',
+					'workbench.contrib.externalUriOpener',
+					'workbench.contrib.browserView',
+					'workbench.contrib.canvases',
+					'sessions.contrib.canvases',
+					'workbench.contrib.browserView.windowZoomSynchronizer',
+					'workbench.contrib.browserView.autoReload',
+					'workbench.contrib.sessionBrowserViewController',
+					'sessions.chatgpt.web',
+					'workbench.contrib.browserView.restore',
+					'workbench.contrib.chatAccessibilitySignals',
+					'workbench.contrib.speechAccessibilitySignal',
+					'workbench.contrib.saveAccessibilitySignals',
+				],
+				createLogService: () => {
+					// The factory owns failure cleanup and transfers the logger to the Workbench.
+					sessions.delete(logger);
+					return logger;
+				},
+				createStorageService: async options => {
+					const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
+					try {
+						await storage.initialize();
+						return storage;
+					} catch (error) {
+						storage.dispose();
+						throw error;
+					}
+				},
+				profile,
+				api,
+				workspaceSelection: () => workspaceSelection,
+				workspace: () => workspace,
+				createFileDialogService: services => services.createInstance(FileDialogService),
+				createLifecycleService: services => {
+					lifecycleService = services.createInstance(ElectronLifecycleService, {
+						ownerWindow: window,
+						onError: onUnexpectedError,
+					});
+					sessions.add(
+						lifecycleService.onWillShutdown(event =>
+							event.join(
+								logger
+									.flush()
+									.catch(error =>
+										console.error('Could not flush Agents logs during shutdown', error),
+									),
+								'Agents logs flush',
+							),
+						),
+					);
+					return lifecycleService;
+				},
+				nativeHostApi: api.nativeHost,
+				createAuxiliaryWindowService: (opener, root, services) =>
+					services.createInstance(ElectronAuxiliaryWindowService, opener, root),
+				keyboardLayoutProvider: api.keyboardLayout,
+				userKeyboardLayoutApi: api.userKeyboardLayout,
+				returnToWorkbench: () => {
+					void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError);
+				},
+				createUserDataFileSystemProvider: async () =>
+					new FileUserDataProvider(api.localFiles, api.userDataHome),
+				createContextMenuService: services =>
+					services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
+				createHostColorSchemeService: services => {
+					const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
+					void colors.initialize().catch(onUnexpectedError);
+					return colors;
+				},
+				createTitlebarPart: (titlebarContainer, services) => {
+					if (isMacintosh) {
+						// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
+						sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
+					}
+					return services.createInstance(
+						TitlebarPart,
+						titlebarContainer,
+						isMacintosh ? 'actions-only' : 'application-menu',
+					);
+				},
+				container,
+			}),
+		);
 		requestDrain();
 		sessions.add(bindWindowControlTheme(workbench.themeService, api.nativeHost));
 		const activeWorkbench = workbench;

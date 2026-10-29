@@ -199,7 +199,6 @@ function createSessionsWorkbenchGridDescriptor(
 	dimension: IDimension,
 	state: SessionsWorkbenchLayoutState,
 	primaryPart: 'sessions' | 'editor' = 'sessions',
-	bannerVisible = false,
 ): SerializedGridDescriptor {
 	const leaf = (partId: SessionsPartId, size: number, visible = true, priority: 'normal' | 'high' = 'normal'): SerializedGridDescriptor => ({
 		type: 'leaf',
@@ -209,8 +208,7 @@ function createSessionsWorkbenchGridDescriptor(
 		priority,
 	});
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
-	const bannerHeight = requiredView(views, 'banner').minimumHeight;
-	const bodyHeight = Math.max(0, dimension.height - titlebarHeight - (bannerVisible ? bannerHeight : 0));
+	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
 	const mainWidth = Math.max(0, dimension.width - (state.sidebar.visible ? state.sidebar.width : 0));
 	const editorPrimary = primaryPart === 'editor';
 	const horizontalPanel = isHorizontal(state.panel.position);
@@ -247,7 +245,6 @@ function createSessionsWorkbenchGridDescriptor(
 		priority: 'normal',
 		children: [
 			leaf('titlebar', titlebarHeight),
-			leaf('banner', bannerHeight, bannerVisible),
 			{
 				type: 'branch',
 				orientation: 'horizontal',
@@ -272,7 +269,15 @@ function resolveSessionsInitialDimension(container: HTMLElement, dimension: IDim
 
 function parseSessionsPartId(value: unknown): SessionsPartId {
 	if (value === 'customview') return value;
-	if (value === 'titlebar' || value === 'banner' || value === 'sidebar' || value === 'sessions' || value === 'editor' || value === 'auxiliarybar' || value === 'panel') return value;
+	if (
+		value === 'titlebar' ||
+		value === 'sidebar' ||
+		value === 'sessions' ||
+		value === 'editor' ||
+		value === 'auxiliarybar' ||
+		value === 'panel'
+	)
+		return value;
 	throw new TypeError('Sessions Grid contains an unknown Part');
 }
 
@@ -345,8 +350,16 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	private readonly dockedHandle = this._register(new MutableDisposable<DockedAuxiliaryBarController>());
 	private partUpdateDepth = 0;
 	private readonly unavailableParts = new Set<SessionsPartId>();
-	private readonly desiredVisibility: { banner: boolean; sessions: boolean; sidebar: boolean; auxiliarybar: boolean; editor: boolean; panel: boolean; };
-	private get titlebarHeight(): number { return this.views.get('titlebar')?.minimumHeight ?? 0; }
+	private readonly desiredVisibility: {
+		sessions: boolean;
+		sidebar: boolean;
+		auxiliarybar: boolean;
+		editor: boolean;
+		panel: boolean;
+	};
+	private get titlebarHeight(): number {
+		return this.views.get('titlebar')?.minimumHeight ?? 0;
+	}
 	private readonly initialDimension: Dimension;
 	private readonly stateModel: SessionsWorkbenchLayoutStateModel;
 	private readonly partVisibility = new Map<SessionsPartId, boolean>();
@@ -401,8 +414,16 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		const primaryPart = storageService.get('sessions.layout.primaryPart', StorageScope.PROFILE, 'sessions');
 		if (primaryPart !== 'sessions' && primaryPart !== 'editor') { throw new TypeError('Saved primary Part is invalid.'); }
 		this.primaryPart = primaryPart;
-		if (primaryPart === 'editor') { this.unavailableParts.add('sessions'); }
-		this.desiredVisibility = { banner: false, sessions: true, sidebar: state.sidebar.visible, auxiliarybar: state.auxiliarybar.visible, editor: state.editor.visible, panel: state.panel.visible };
+		if (primaryPart === 'editor') {
+			this.unavailableParts.add('sessions');
+		}
+		this.desiredVisibility = {
+			sessions: true,
+			sidebar: state.sidebar.visible,
+			auxiliarybar: state.auxiliarybar.visible,
+			editor: state.editor.visible,
+			panel: state.panel.visible,
+		};
 		this._register(storageService.onWillSaveState(() => this.saveState()));
 	}
 
@@ -432,7 +453,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 	}
 
 	override get mainContainerOffset(): ILayoutOffsetInfo {
-		return { top: this.titlebarHeight + (this.grid && this.isPartVisible('banner') ? this.getPartSize('banner').height : 0), quickInputTop: 0 };
+		return { top: this.titlebarHeight, quickInputTop: 0 };
 	}
 
 	get state(): SessionsWorkbenchLayoutState {
@@ -492,7 +513,7 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 		this.gridHandle.clear();
 		this.grid = SerializableGrid.deserialize(
 			this.domNode,
-			createSessionsWorkbenchGridDescriptor(this.views, dimension, state, this.primaryPart, this.desiredVisibility.banner),
+			createSessionsWorkbenchGridDescriptor(this.views, dimension, state, this.primaryPart),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
 			{ edgeSnapping: true },
 		);

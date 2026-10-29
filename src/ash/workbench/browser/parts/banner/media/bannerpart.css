@@ -1,5 +1,4 @@
 .ash-workbench-banner {
-	flex-direction: row;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
 	padding: 0 var(--ash-spacing-size120);
@@ -9,6 +8,11 @@
 	font-size: var(--ash-fontSize-body1);
 	border-bottom: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, transparent);
+}
+
+.ash-workbench-part.ash-workbench-banner {
+	/* A late Part stylesheet must not stack the notice and its actions. */
+	flex-direction: row;
 }
 
 .ash-workbench-banner.neutral {
