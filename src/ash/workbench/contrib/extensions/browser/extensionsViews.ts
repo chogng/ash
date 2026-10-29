@@ -43,7 +43,8 @@ import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/vi
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
-import { ExtensionsInput, ExtensionsCapabilityInput, type ExtensionsCapabilityTarget, ExtensionsInputSource } from '../common/extensionsInput.js';
+import { ExtensionsInput, ExtensionsCapabilityInput, type ExtensionsCapabilityTarget, ExtensionsInputSource, getExtensionFallbackIcon } from '../common/extensionsInput.js';
+import { URI } from '../../../../base/common/uri.js';
 import { getExtensionAttribution } from '../common/extensionAttribution.js';
 import { IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
@@ -167,7 +168,11 @@ class ExtensionsContent extends Disposable {
 		row.dataset.packageId = item.summary.id;
 		if (item.installation) { row.dataset.installationId = item.installation.installationId; } else { delete row.dataset.installationId; }
 		const content = h(mainWindow.document, 'div'); content.className = 'extension-row';
-		const icon = h(mainWindow.document, 'div'); icon.className = 'extension-icon'; appendLabelIcon(icon, Lxicon.extensions); icon.setAttribute('aria-hidden', 'true');
+		const icon = h(mainWindow.document, 'div'); icon.className = 'extension-icon'; icon.setAttribute('aria-hidden', 'true');
+		const fallback = getExtensionFallbackIcon(item.summary.id, item.source);
+		if (fallback instanceof URI) {
+			const image = h(mainWindow.document, 'img'); image.alt = ''; image.draggable = false; image.src = fallback.toString(); icon.append(image);
+		} else { appendLabelIcon(icon, fallback); }
 		if (item.icon) {
 			const path = item.icon.path.toLowerCase();
 			void this.extensionCatalog.resources.readExtensionResourceBytes(item.icon).then(bytes => {

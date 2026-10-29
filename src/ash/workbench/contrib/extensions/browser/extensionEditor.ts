@@ -8,6 +8,8 @@ import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
+import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
@@ -117,6 +119,7 @@ class ExtensionDetailHeader extends Disposable {
 		this.icon.className = 'extension-detail-icon'; this.icon.setAttribute('aria-hidden', 'true');
 		this.iconImage.alt = ''; this.iconImage.hidden = true;
 		this.icon.append(this.iconText, this.iconImage);
+		this._register(addDisposableListener(this.iconImage, 'load', () => { this.iconImage.hidden = false; this.iconText.hidden = true; }));
 		this._register(addDisposableListener(this.iconImage, 'error', () => { this.iconImage.hidden = true; this.iconText.hidden = false; }));
 		const heading = h(mainWindow.document, 'div'); heading.className = 'extension-detail-heading';
 		const identityRow = h(mainWindow.document, 'div'); identityRow.className = 'extension-detail-identity-row';
@@ -268,7 +271,12 @@ export class ExtensionEditor extends EditorPane {
 		this.documentResources.clear(); this.readme.replaceChildren(); this.instructions.replaceChildren(); this.instructionsLoader = undefined; this.instructionsPending = undefined;
 		this.header.iconImage.removeAttribute('src'); this.header.iconImage.hidden = true; this.header.iconText.hidden = false;
 		this.header.title.textContent = input.getName();
-		this.header.iconText.textContent = [...input.getName()].slice(0, 2).join('').toUpperCase();
+		this.header.iconText.replaceChildren();
+		if (input instanceof ExtensionsInput) {
+			appendLabelIcon(this.header.iconText, Lxicon.extensions);
+			const icon = input.getIcon();
+			if (icon instanceof URI) { this.header.iconImage.src = icon.toString(); }
+		} else { this.header.iconText.textContent = [...input.getName()].slice(0, 2).join('').toUpperCase(); }
 		this.header.attribution.textContent = ''; this.header.attribution.hidden = true;
 		this.header.metadata.textContent = input instanceof ExtensionsInput ? `${input.summary.id} · ${input.summary.version}` : '';
 		this.header.description.textContent = input instanceof ExtensionsInput ? input.summary.description : '';
@@ -880,13 +888,30 @@ export class ExtensionEditor extends EditorPane {
 				const resource = await resourceFor(manifest.icon);
 				if (!resource || signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 				const bytes = await api.resources.readExtensionResourceBytes(resource);
-				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+				if (signal.aborted || this.isDisposed || input.isDisposed || version !== this.loadVersion) { return; }
 				const mime = manifest.icon.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : `image/${manifest.icon.split('.').at(-1)!.toLowerCase().replace('jpg', 'jpeg')}`;
-				const object = createObjectUrl(mainWindow, new Blob([new Uint8Array(bytes)], { type: mime })); this.documentResources.add(object.registration);
+				const object = createObjectUrl(mainWindow, new Blob([new Uint8Array(bytes)], { type: mime }));
+				this.documentResources.add(object.registration);
+				input.setIcon(URI.parse(object.url.toString()));
+				this.documentResources.add(toDisposable(() => input.setIcon(undefined)));
+				this.documentResources.add(addDisposableListener(this.header.iconImage, 'error', () => {
+					input.setIcon(undefined);
+					const fallback = input.getIcon();
+					if (fallback instanceof URI) { this.header.iconImage.src = fallback.toString(); }
+				}));
 				this.header.iconImage.src = object.url.toString(); this.header.iconImage.hidden = false; this.header.iconText.hidden = true;
-			} catch { /* Retain the package initials when its icon cannot be loaded. */ }
+			} catch { /* Keep the same fallback as the package list and tab. */ }
 		};
-		await Promise.allSettled([readme(), icon()]);
+		const notices = async (): Promise<void> => {
+			try {
+				const resource = await resourceFor('NOTICE.md');
+				if (!resource) { return; }
+				const markdown = await api.resources.readExtensionResource(resource);
+				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+				this.addResourceLink('NOTICE.md', () => this.editors.openEditor({ resource, initialText: markdown, languageId: 'markdown', label: `${input.summary.displayName}/NOTICE.md`, readOnly: true, showBreadcrumbs: false }, { pinned: true }));
+			} catch { /* Packages can omit third-party notices when no attribution is required. */ }
+		};
+		await Promise.allSettled([readme(), icon(), notices()]);
 	}
 
 	public clearInput(): void { this.currentInput = undefined; this.currentSignal = undefined; this.header.enablement.element.hidden = true; ++this.loadVersion; this.actionResources.clear(); this.documentResources.clear(); this.instructionsLoader = undefined; this.instructionsPending = undefined; }

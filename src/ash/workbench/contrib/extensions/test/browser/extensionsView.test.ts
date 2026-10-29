@@ -36,17 +36,51 @@ suite('extensions browser component', () => {
 		const detail = page.locator('.ash-extension-editor .extension-detail-icon img');
 		await expect(detail).toBeVisible();
 		await expect.poll(() => detail.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		const detailSource = (await detail.getAttribute('src'))!;
 		const sameAsset = await page.evaluate(async ({ list, detail }) => {
 			const read = async (source: string) => new Uint8Array(await (await fetch(source)).arrayBuffer());
 			const [left, right] = await Promise.all([read(list), read(detail)]);
 			return left.length === right.length && left.every((value, index) => value === right[index]);
-		}, { list: source, detail: (await detail.getAttribute('src'))! });
+		}, { list: source, detail: detailSource });
 		expect(sameAsset).toBe(true);
 		await page.evaluate(() => window.ashExtensionsIntegration.dispose());
-		expect(await page.evaluate(async source => {
-			try { await fetch(source); return false; } catch { return true; }
-		}, source)).toBe(true);
+		for (const released of [source, detailSource]) {
+			expect(await page.evaluate(async source => {
+				try { await fetch(source); return false; } catch { return true; }
+			}, released)).toBe(true);
+		}
 	});
+
+	for (const theme of ['light', 'dark', 'hc']) {
+		test(`Built-in language artwork and Ash fallbacks agree across the list and details in Chinese ${theme}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/extensions.html?locale=zh-CN&theme=${theme}`);
+			await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+			for (const [id, official] of [
+				['ash.cpp', true], ['ash.csharp', true], ['vscode.css', true], ['ash.dart', true],
+				['ash.bat', false], ['ash.bazel', false], ['ash.clojure', false], ['ash.coffeescript', false],
+			] as const) {
+				const row = page.locator(`[data-view-id="ash.extensions.plugins"] [data-package-id="${id}"]`);
+				await row.scrollIntoViewIfNeeded();
+				const listIcon = row.locator('.extension-icon img');
+				await expect(listIcon).toHaveAttribute('src', official ? /^blob:/u : /^data:image\/svg\+xml;base64,/u);
+				await expect.poll(() => listIcon.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+				const source = (await listIcon.getAttribute('src'))!;
+				await row.click();
+				const detail = page.locator('.ash-extension-editor .extension-detail-icon img');
+				await expect(detail).toBeVisible();
+				await expect(detail).toHaveAttribute('src', official ? /^blob:/u : /^data:image\/svg\+xml;base64,/u);
+				await expect.poll(() => detail.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+				expect(await page.evaluate(async ({ list, detail }) => {
+					const read = async (source: string) => new Uint8Array(await (await fetch(source)).arrayBuffer());
+					const [left, right] = await Promise.all([read(list), read(detail)]);
+					return left.length === right.length && left.every((value, index) => value === right[index]);
+				}, { list: source, detail: (await detail.getAttribute('src'))! })).toBe(true);
+				if (official) { await expect(page.locator('.ash-extension-editor').getByRole('link', { name: 'NOTICE.md', exact: true })).toBeVisible(); }
+				await expect(row.locator('.extension-icon')).toHaveAttribute('aria-hidden', 'true');
+			}
+		});
+	}
 	function serviceAccount(id: string, displayName: string, oauth = false): ConnectorView {
 		return {
 			id, displayName, description: `Authorize ${displayName}`, mcpDeclarationId: `fixture:${id}:mcp:tools`, mcpServerId: null,
