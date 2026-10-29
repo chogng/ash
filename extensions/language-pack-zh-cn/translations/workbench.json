@@ -2037,7 +2037,7 @@
     "terminal.accessibility.overview": "终端会将键入的内容发送给正在运行的进程。<keybinding:editor.action.accessibleView> 将保留的屏幕和滚动历史作为只读文本打开。",
     "terminal.accessibility.find": "<keybinding:workbench.action.terminal.focusFind> 打开查找。Enter 和 Shift+Enter 在匹配项之间导航。Escape 将焦点返回终端。",
     "terminal.accessibility.commandNavigation": "“终端：滚动到上一条命令”和“终端：滚动到下一条命令”可在 Shell 命令间移动。“终端：运行最近命令”会打开已保存的命令；选择一项后会在当前终端中运行。",
-    "terminal.accessibility.stickyScroll": "粘性滚动会在输出上方保留当前命令。按 Tab 聚焦标题，再按 Enter 或空格可滚动到命令提示符。Escape 返回终端输入。“终端：切换粘性滚动”可开启或关闭标题。无障碍视图包含原始命令及其输出。",
+    "terminal.accessibility.stickyScroll": "粘性滚动会在输出上方保留当前命令。省略号表示有命令行被隐藏；将鼠标悬停在标题上可阅读完整命令。按 Tab 聚焦标题，再按 Enter 或空格可滚动到命令提示符。Escape 返回终端输入。“终端：切换粘性滚动”可开启或关闭标题。无障碍视图包含原始命令及其输出。",
     "terminal.stickyScroll.enabled": "滚动命令输出时，在终端顶部保留当前命令。需要启用 Shell 集成。",
     "terminal.stickyScroll.maxLineCount": "终端顶部保留的最大命令行数，不超过可见行数的 40%。",
     "terminal.stickyScroll.ignoredCommands": "不显示粘性命令标题的命令。",

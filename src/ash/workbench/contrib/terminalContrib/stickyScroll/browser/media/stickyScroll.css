@@ -21,9 +21,27 @@
 
 .ash-terminal-sticky-scroll > span {
 	display: block;
+	height: 1lh;
 	overflow: hidden;
 	white-space: pre;
 	text-overflow: ellipsis;
+}
+
+.ash-terminal-sticky-scroll > span > span {
+	display: inline-block;
+	height: 100%;
+	vertical-align: top;
+}
+
+.ash-terminal-sticky-scroll.truncated::after {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 2ch;
+	background: var(--ash-terminal-surface-background);
+	color: var(--ash-terminal-foreground);
+	text-align: center;
+	content: "…";
 }
 
 .ash-terminal-sticky-scroll:focus-visible {
