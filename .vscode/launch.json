@@ -53,7 +53,8 @@
 			"preLaunchTask": "Prepare Ash Desktop Debug",
 			"env": {
 				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
-				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile"
+				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
+				"ASH_DEV_APP_SERVER_RELOAD": "1"
 			},
 			"outputCapture": "std",
 			"serverReadyAction": {
@@ -89,7 +90,8 @@
 			"env": {
 				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
 				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
-				"ASH_DEV_AGENTS_WINDOW": "1"
+				"ASH_DEV_AGENTS_WINDOW": "1",
+				"ASH_DEV_APP_SERVER_RELOAD": "1"
 			},
 			"outputCapture": "std",
 			"serverReadyAction": {
@@ -121,11 +123,11 @@
 			"autoAttachChildProcesses": false,
 			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],
 			"console": "integratedTerminal",
-			"preLaunchTask": "Prepare Ash Desktop Debug",
+			"preLaunchTask": "Prepare Ash Desktop UI Debug",
 			"env": {
 				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
 				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
-				"ASH_DEV_APP_SERVER_RELOAD": "1"
+				"ASH_DEV_APP_SERVER_RELOAD": "0"
 			},
 			"outputCapture": "std",
 			"serverReadyAction": {
@@ -203,6 +205,7 @@
 			"env": {
 				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
 				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
+				"ASH_DEV_APP_SERVER_RELOAD": "0",
 				"ASH_DEV_APP_SERVER_GENERATION": "${workspaceFolder}/.build/desktop/debug/app-server/current.json"
 			},
 			"autoAttachChildProcesses": false,

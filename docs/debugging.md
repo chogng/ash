@@ -31,12 +31,12 @@ Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并�
 
 在 Ash 中打开本仓库，通过“选择并启动调试”使用 `.vscode/launch.json`：
 
-- `Ash`、`Ash Agents` 和 `Ash (Hot Reload)` 通过 Node 启动现有 Electron launcher。前置任务准备后端并启动 Vite；launcher 发布调试目标后，server-ready 自动启动 `Ash Main Process` 附加会话，由附加会话等待 Inspector 就绪。主进程的 TS 构建生成 source map，`outFiles` 指向 `.build/desktop/main`，附加时暂停等待 source map 绑定已有断点。开发环境仍需本仓库的 Node、pnpm 和构建工具链。
+- `Ash`、`Ash Agents` 和 `Ash (Hot Reload)` 通过 Node 启动现有 Electron launcher。前置任务准备后端并启动 Vite；`Ash` 和 `Ash Agents` 还会等待 `Watch Ash Backend` 的 Rust 源码监听就绪，并在成功构建后自动切换后端。`Ash (Hot Reload)` 只监听前端和 Electron 宿主。launcher 发布调试目标后，server-ready 自动启动 `Ash Main Process` 附加会话，由附加会话等待 Inspector 就绪。主进程的 TS 构建生成 source map，`outFiles` 指向 `.build/desktop/main`，附加时暂停等待 source map 绑定已有断点。开发环境仍需本仓库的 Node、pnpm 和构建工具链。
 - 启动后选择 `Ash Renderer` 或 `Ash Agents Renderer`，通过 loopback 端口 `9222` 附加对应页面。Vite 提供渲染端 TS source map，可与主进程同时设置断点和单步。Desktop 调试的 Vite 使用 `5183`，与普通开发的 `5173` 分开；调试端口及 debug profile 同时供一个被调试实例使用。
 - `Ash (Native Debug)` 额外运行 `pnpm debug:backend`：仅为 `ash-app-server` 和 `ash-app-server-runtime` 启用完整调试信息，复用 `dev-small` 的其他设置，并发布独立的 `.build/desktop/debug/app-server/current.json`。macOS 的 packed dSYM 和 Windows 的 PDB 与二进制一起发布，避免 Cargo 后续构建改写已运行实例的符号。Electron 沿既有 generation 选择和 daemon 链路运行这个后端。原有优化仍生效，部分局部变量可能被优化掉。
 - 在终端运行 `pnpm debug:backend:status`，将输出中的 `pid` 填入 `Ash App Server (Attach)` 的输入框，即可通过同一个 CodeLLDB provider 调试当前 App Server 的 Rust 源码。配置关闭自动解引用及 Rust 1.99 的通用结构体摘要，避免暂停时遍历整个 AppServer；需要时手动展开指针。Rust provider 限制通用结构体摘要的递归深度、字段数和总量，防止读取 AppServer 大对象时阻塞适配器；成员仍可按需展开。
 
-被调试实例使用 `.build/desktop/debug/profile` 和 `.build/desktop/debug/user-data`，与启动调试的窗口分开。停止 Rust attach 会话只分离调试器；后台服务仍遵循 profile daemon 的生命周期。Vite 是可复用的后台任务，可通过“任务: 终止任务”结束。
+被调试实例使用 `.build/desktop/debug/profile` 和 `.build/desktop/debug/user-data`，与启动调试的窗口分开。停止 Rust attach 会话只分离调试器；后台服务仍遵循 profile daemon 的生命周期。Native Debug 不启动 Rust watcher，保留固定的带符号后端版本。Vite 和 Rust watcher 是可复用的后台任务，可通过“任务: 终止任务”结束。
 
 `Ash Web (Chrome)`／`Ash Web (Edge)` 及带 `Server` 的配置使用现有 JS 和 server-ready provider，开发服务分别使用 `5184`／`5185`（Agents 使用 `5186`／`5187`），可与普通 Desktop 开发并行。独立 Web 调试浏览器使用隔离 profile，macOS 加入 `--use-mock-keychain`，避免临时 HOME 触发系统钥匙串提示。Renderer 和 Web 的 `webRoot` 均对应 Vite 根目录 `src/ash/code`，入口 source map 才能映射回实际 TS 文件；外部模块的 `/@fs/` URL 由 JS provider 的默认路径映射解析。Node 配置省略 `runtimeExecutable` 时使用 Ash 管理的运行时；Desktop 复用 Electron 的 Node 模式，由 provider 的启动适配跨过 js-debug 清理 `ELECTRON_RUN_AS_NODE` 的边界。显式指定的运行时和版本保留原有语义。
 
