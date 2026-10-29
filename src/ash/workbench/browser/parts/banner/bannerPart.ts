@@ -1,6 +1,7 @@
 import './media/bannerpart.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
@@ -154,7 +155,8 @@ export class BannerPart extends Part implements IBannerService {
 		const text = message.textContent?.trim() ?? '';
 		const label = next.ariaLabel ?? text;
 		this.domNode.setAttribute('aria-label', label);
-		this.content.add(this.hover.setupDelayedHover(message, { content: text }));
+		// Open into the content area so native titlebar controls cannot cover the tooltip.
+		this.content.add(this.hover.setupDelayedHover(message, { content: text, position: { hoverPosition: HoverPosition.BELOW } }));
 		const actions = h(document, 'div');
 		actions.className = 'ash-banner-actions';
 		for (const action of next.actions ?? []) {
@@ -168,7 +170,7 @@ export class BannerPart extends Part implements IBannerService {
 		close.type = 'button';
 		const closeLabel = next.closeLabel ?? localize('banner.close', 'Close Banner');
 		close.setAttribute('aria-label', closeLabel);
-		this.content.add(this.hover.setupDelayedHover(close, { content: closeLabel }));
+		this.content.add(this.hover.setupDelayedHover(close, { content: closeLabel, position: { hoverPosition: HoverPosition.BELOW } }));
 		appendIcon(Lxicon.close, close);
 		const item = next;
 		this.content.add(addDisposableListener(close, 'click', () => {

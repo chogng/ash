@@ -10,6 +10,43 @@ suite('banner browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh']) {
+		test(`banner tooltips stay below the window chrome and inside the viewport (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/banner.html${locale === 'zh' ? '?zh' : ''}`);
+			await page.waitForFunction(() => !!window.ashBannerIntegration);
+			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
+			const banner = page.locator('[data-part="banner"]');
+			const close = banner.getByRole('button', { name: locale === 'zh' ? '关闭横幅' : 'Close Banner' });
+			const tooltip = page.getByRole('tooltip');
+			for (const width of [1280, 360]) {
+				await page.setViewportSize({ width, height: 600 });
+				for (const theme of [0, 1, 2, 3]) {
+					await page.evaluate(theme => window.ashBannerIntegration.setTheme(theme), theme);
+					for (const target of [close, banner.locator('.ash-banner-message')]) {
+						await target.hover();
+						await expect(tooltip).toHaveText(target === close ? (await close.getAttribute('aria-label'))! : (await target.textContent())!);
+						const bounds = (await tooltip.boundingBox())!;
+						const anchor = (await target.boundingBox())!;
+						expect(bounds.y).toBeGreaterThanOrEqual(anchor.y + anchor.height);
+						expect(bounds.x).toBeGreaterThanOrEqual(0);
+						expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+						await page.keyboard.press('Escape');
+						await expect(tooltip).toHaveCount(0);
+					}
+				}
+			}
+			await page.mouse.move(0, 599);
+			await page.evaluate(() => window.ashBannerIntegration.focus());
+			await banner.press('ArrowLeft');
+			await expect(close).toBeFocused();
+			await expect(tooltip).toHaveText((await close.getAttribute('aria-label'))!);
+			await expect(close).toHaveAttribute('aria-describedby', (await tooltip.getAttribute('id'))!);
+			await close.press('Escape');
+			await expect(tooltip).toHaveCount(0);
+			await expect(banner).toBeFocused();
+			await expect(banner).toBeVisible();
+		});
+
 		test(`Agent Host banner follows recovery, keeps editor focus and reconnects through the command (${locale})`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;

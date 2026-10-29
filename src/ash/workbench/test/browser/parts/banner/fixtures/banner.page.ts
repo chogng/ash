@@ -59,6 +59,7 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { WorkbenchState } from '../../../../../../platform/workspace/common/workspace.js';
 import { WorkbenchLayout } from '../../../../../browser/layout.js';
 import { Part } from '../../../../../browser/part.js';
+import { WorkbenchWindowBarHeight } from '../../../../../browser/parts/workbenchPartDimensions.js';
 import { BannerPart } from '../../../../../browser/parts/banner/bannerPart.js';
 import { IBannerService } from '../../../../../services/banner/browser/bannerService.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
@@ -132,8 +133,8 @@ class ContentPart extends Part {
 			this.contentDomNode.append(filter);
 		}
 	}
-	override get minimumHeight(): number { return this.partId === 'titlebar' || this.partId === 'statusbar' ? 28 : 0; }
-	override get maximumHeight(): number { return this.partId === 'titlebar' || this.partId === 'statusbar' ? 28 : Infinity; }
+	override get minimumHeight(): number { return this.partId === 'titlebar' ? WorkbenchWindowBarHeight : this.partId === 'statusbar' ? 28 : 0; }
+	override get maximumHeight(): number { return this.partId === 'titlebar' || this.partId === 'statusbar' ? this.minimumHeight : Infinity; }
 }
 layout.createParts(new Map(workbenchPartIds.map(id => [id, id === 'banner' ? banner : resources.add(new ContentPart(id))])));
 layout.layout(new Dimension(innerWidth, innerHeight));
