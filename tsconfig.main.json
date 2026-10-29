@@ -2,6 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "outDir": ".build/desktop/main",
+    "sourceMap": true,
     "incremental": true,
     "tsBuildInfoFile": ".build/desktop/main.tsbuildinfo",
     "rootDir": ".",

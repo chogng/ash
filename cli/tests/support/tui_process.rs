@@ -171,21 +171,24 @@ impl Fixture {
             .unwrap();
         #[cfg(windows)]
         let root = tempfile::Builder::new().prefix("zt-").tempdir().unwrap();
-        #[cfg(unix)]
         let path = {
-            // Path clipping in text snapshots must be identical on macOS and Linux.
+            // Host path length must not change clipping in shared terminal snapshots.
+            #[cfg(unix)]
             const LENGTH: usize = 66;
+            // AF_UNIX endpoints remain below the Windows sun_path limit.
+            #[cfg(windows)]
+            const LENGTH: usize = 52;
+            #[cfg(unix)]
             let path = fs::canonicalize(root.path()).unwrap();
+            #[cfg(windows)]
+            let path = root.path().to_path_buf();
             let padding = LENGTH
                 .checked_sub(path.as_os_str().len())
-                .expect("Unix PTY fixture root exceeds the fixed snapshot path length");
+                .expect("PTY fixture root exceeds the fixed snapshot path length");
             let path = if padding == 0 {
                 path
             } else {
-                assert!(
-                    padding > 1,
-                    "Unix PTY fixture path cannot be padded by one byte"
-                );
+                assert!(padding > 1, "PTY fixture path cannot be padded by one byte");
                 let padded = path.join("x".repeat(padding - 1));
                 fs::create_dir(&padded).unwrap();
                 padded
@@ -193,8 +196,6 @@ impl Fixture {
             assert_eq!(path.as_os_str().len(), LENGTH);
             path
         };
-        #[cfg(windows)]
-        let path = root.path().to_path_buf();
         let workspace = path.join("workspace");
         let profile = path.join("profile");
         fs::create_dir_all(&workspace).unwrap();
@@ -958,10 +959,56 @@ fn normalize_snapshot(mut screen: String, paths: &[String]) -> String {
         .replace("macOS Seatbelt", "platform sandbox")
         .replace("Linux Bubblewrap", "platform sandbox")
         .lines()
-        .map(|line| normalize_elapsed_time(&normalize_truncated_fixture_path(line, paths)))
+        .map(|line| {
+            normalize_elapsed_time(&normalize_fixture_separators(
+                &normalize_truncated_fixture_path(line, paths),
+            ))
+        })
         .collect::<Vec<_>>()
         .join("\n");
     normalize_assessment_ids(&normalize_session_thread_ids(&screen))
+}
+
+fn normalize_fixture_separators(line: &str) -> String {
+    let mut parts = line.split("<FIXTURE>");
+    let mut result = parts.next().unwrap_or_default().to_owned();
+    for part in parts {
+        let end = part
+            .find(|character: char| {
+                character.is_whitespace() || matches!(character, '│' | '"' | '\'' | '`')
+            })
+            .unwrap_or(part.len());
+        result.push_str("<FIXTURE>");
+        let path = part[..end].replace("\\\\", "/").replace('\\', "/");
+        if let Some(ids) = path.strip_prefix("/profile/worktrees/") {
+            result.push_str("/profile/worktrees/");
+            for (index, component) in ids.splitn(3, '/').enumerate() {
+                if index > 0 {
+                    result.push('/');
+                }
+                if index < 2 && component.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    result.push_str(&"x".repeat(component.len()));
+                } else {
+                    result.push_str(component);
+                }
+            }
+        } else {
+            result.push_str(&path);
+        }
+        result.push_str(&part[end..]);
+    }
+    result
+}
+
+#[test]
+fn snapshot_normalization_changes_only_fixture_path_separators() {
+    assert_eq!(
+        normalize_snapshot(
+            r"read C:\fixture\workspace\file.rs and user \keep\literal".into(),
+            &[r"C:\fixture".into()]
+        ),
+        r"read <FIXTURE>/workspace/file.rs and user \keep\literal"
+    );
 }
 
 fn normalize_elapsed_time(line: &str) -> String {
@@ -1194,6 +1241,8 @@ fn assert_named_snapshot(name: &str, screen: String) {
 
     let mut settings = insta::Settings::clone_current();
     settings.set_prepend_module_to_snapshot(false);
+    #[cfg(windows)]
+    settings.set_snapshot_suffix("windows");
     settings.set_snapshot_path(snapshot_dir);
     settings.bind(|| insta::assert_snapshot!(snapshot_name, screen));
 }

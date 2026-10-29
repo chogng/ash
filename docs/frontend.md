@@ -20,6 +20,12 @@
 
 `Ash (Hot Reload)` 专用于前端热更新和 Electron 宿主监听，仍连接 Rust 后端，但不监听后端源码变化；`Ash` 和 `Ash Agents` 同时监听前后端，也支持前端热更新。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
 
+这三个 Desktop F5 配置通过 `node` 调试器在集成终端启动对应的 `pnpm` 脚本，并附加其 Node 子进程。真实 Ash 已在隔离工作区验证 `Ash` 配置的包管理器子进程调试与停止回收。Electron Main 构建生成 source map，映射回当前 checkout 的 `src/`。Rust 开发运行包使用剥离符号的 `dev-small` profile；调试 Rust 源码须使用带调试信息的独立目标。
+
+`Ash Code (TUI)` 通过 CodeLLDB 调试 `.build/cargo/ci-test/ash`（Windows 为 `.exe`），在集成终端运行。其 `Prepare Ash Code Debug` 前置任务为 CLI 和 TUI 构建完整调试符号，准备匹配的后端程序和完整的 Node 扩展运行资源，并将 `ASH_DEV_RUNTIME_ROOT` 及校验锁定的 ripgrep／tgrep 路径写入 `.build/code/debug.env`。单独准备可执行 `node build/python.ts -B build/code/debug.py`；直接运行 TUI 仍用 `just ash-code`，也会先准备这些运行资源。
+
+Windows 自举验收在完成 Desktop 构建和上述 TUI 准备任务后，设置 `$env:ASH_SELFHOST_ACCEPTANCE='1'`，依次运行 `pnpm run smoketest-no-compile test/smoke/areas/windows/selfhost-tui.spec.ts --workers=1` 与 `pnpm run smoketest-no-compile test/smoke/areas/windows/selfhost-dev.spec.ts --workers=1`。整仓场景会临时修改并恢复当前 checkout 的 Renderer、Main 和 Rust 源码，必须独占 checkout，期间不要编辑源码或并发构建。它检查原型热更新、Main 重启、Rust 编译失败保留旧后端、修正后切换及草稿保留；普通烟测默认跳过这两个显式验收场景。
+
 `Ash Server (Web)` 只启动完整 Web 服务并输出认证链接，可手动在浏览器打开；带 `Chrome` 或 `Edge` 的配置在服务就绪后自动打开对应浏览器调试器。Ash 的 Agent 执行由 Rust App Server 承担，没有 VS Code 的独立 Node Agent Host 入口。Chrome 和 Edge 配置分别要求本机安装对应浏览器。
 
 IDE Web 仅前端模式打开 `http://127.0.0.1:5173/`，完整 Web 模式使用 5174 端口。Agents Web 仅前端模式使用 5175，完整模式使用 5176，可与 IDE Web 同时启动和调试；完整模式须打开各自终端输出的认证链接。Stanza 页面为 `http://127.0.0.1:5199/`，仅启动编辑器，可通过 `globalThis.stanza.editor` 检查模型和编辑器。
@@ -32,7 +38,7 @@ IDE Web 仅前端模式打开 `http://127.0.0.1:5173/`，完整 Web 模式使用
 4. 开发过程中执行 `pnpm test:web:dev --grep '<场景标题>'`，通过现有 Playwright Browser UI 项目直接验证 Vite 开发入口。
 5. 提交前按 [验证范围规则](../.github/instructions/testing.instructions.md#learnings) 检查是否仍需补充生产资源验证。需要时执行 `pnpm test:web --grep '<场景标题>'`，其前置步骤会构建 Web 和编译测试，无需先单独执行 `pnpm build:web`。已有匹配当前源码和构建模式的产物及已编译测试时，用 `pnpm test:smoke:browser:no-compile --grep '<场景标题>'`；相关输入未变且测试已经通过时直接复用结果。`pnpm start:web` 启动生产资源预览。
 
-F5 先准备生成资源，再由 VS Code 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在集成终端，F5 配置关闭输出颜色，保证 VS Code 的 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。同一 Web 入口的 F5 和手动启动使用相同端口，选择一种启动方式；IDE 与 Agents 使用不同端口，可以同时调试。
+F5 先准备生成资源，再由 Node 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在集成终端，F5 配置关闭输出颜色，保证 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。同一 Web 入口的 F5 和手动启动使用相同端口，选择一种启动方式；IDE 与 Agents 使用不同端口，可以同时调试。
 
 F5 生命周期回归测试使用已安装的 VS Code 和 Playwright。设置 `ASH_VSCODE_EXECUTABLE` 为 VS Code 可执行文件的绝对路径，再执行 `pnpm --dir build exec node --test desktop/launch/webDebug.test.ts`；它使用独立配置目录，验证停止任一调试会话、进程退出、端口释放、再次启动和端口占用失败。未提供该环境变量时，构建工具测试会跳过这一项。
 

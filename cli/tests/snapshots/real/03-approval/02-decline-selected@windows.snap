@@ -1,0 +1,36 @@
+---
+source: cli/tests/support/tui_process.rs
+expression: screen
+---
+  <FIXTURE>/workspace                                    [Dashboard]
+
+> 请尝试创建 declined-by-tui.txt
+
+● Updating file declined-by-tui.txt
+ └─ declined-by-tui.txt
+    view full
+
+
+
+
+
+
+
+
+
+
+
+○ Waiting for approval · 0s · esc to interrupt
+
+┌Approval required─────────────────────────────────────────────────────────────────────────────────┐
+│the action requires user approval                                                                 │
+│File read  ·  <FIXTURE>/profile/worktrees/xxxx/xxxxxxxx│
+│File write  ·  <FIXTURE>/profile/worktrees/xxxx/xxxxxxx│
+│  Approve once                                                                                    │
+│  Approve same action this session                                                                │
+│  Save approval for this exact action                                                             │
+│> Decline                                                                                         │
+│                                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  Enter to confirm

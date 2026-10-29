@@ -164,6 +164,8 @@ pub struct DebugScopeVariables {
     pub scope: Value,
     #[ts(type = "unknown[]")]
     pub variables: Vec<Value>,
+    /// Other scopes remain descriptors until explicitly expanded by a consumer.
+    pub variables_loaded: bool,
     pub error: Option<String>,
 }
 

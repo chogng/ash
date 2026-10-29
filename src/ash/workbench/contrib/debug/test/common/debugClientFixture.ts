@@ -333,8 +333,9 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 			return { kind: 'stack', threads, frames, threadId: selected?.id ?? null };
 		}
 		if (query.kind === 'frame') {
-			const scopes = (await request(id, 'scopes', { frameId: query.frameId })).body?.scopes as { variablesReference: number; }[];
-			return { kind: 'frame', scopes: await Promise.all(scopes.map(async scope => ({ scope, variables: scope.variablesReference > 0 ? (await request(id, 'variables', { variablesReference: scope.variablesReference })).body?.variables as unknown[] : [], error: null }))) };
+			const scopes = (await request(id, 'scopes', { frameId: query.frameId })).body?.scopes as { variablesReference: number; expensive?: boolean; }[];
+			const initial = scopes.find(scope => !scope.expensive && scope.variablesReference > 0);
+			return { kind: 'frame', scopes: await Promise.all(scopes.map(async scope => ({ scope, variables: scope === initial ? (await request(id, 'variables', { variablesReference: scope.variablesReference })).body?.variables as unknown[] : [], variablesLoaded: scope === initial, error: null }))) };
 		}
 		if (query.kind === 'variables') return { kind: 'variables', variables: (await request(id, 'variables', { variablesReference: query.variablesReference })).body?.variables as unknown[] };
 		return { kind: 'watch', values: await Promise.all(query.expressions.map(async expression => { try { return { expression, result: (await request(id, 'evaluate', { expression, context: 'watch', ...(query.frameId === undefined ? {} : { frameId: query.frameId }) })).body, error: null }; } catch (error) { return { expression, result: null, error: String(error) }; } })) };

@@ -37,7 +37,7 @@ Rust 同时使在途 stackTrace/scopes/variables/setVariable 在恢复执行、�
 
 会话断点运行意图和绑定已迁入 `breakpoints.rs`：前端只提交带编辑版本的 source/function/data/instruction 意图；Rust 决定能力过滤、源文件分组、整组替换顺序和旧源清空，只有仍匹配当前意图的回复才能建立绑定。适配器主动的 new/changed/removed 也更新同一份绑定。前端的 protocolBreakpoints、syncedBreakpointSources 和 breakpointSync 队列已退出生产链。未支持的条件不会被降级为无条件断点，跨会话的变量/指令地址不会发送或覆盖验证状态。
 
-`inspection.rs` 已拥有 threads → stack、scopes → variables、子变量和批量 Watch 求值。每次查询携带显式线程/帧及 inspectionRevision，Rust 在发送前拒绝旧暂停代次，并使迟到的中间步骤和终态失效。Watch 单个表达式、scope 单个变量请求失败不会抹掉其他结果；任务数量、期限与结果内存都有界，终态只消费一次。Variables、Watch 和 Call Stack 独立注册并分别请求领域结果；DebugService 选择默认暂停帧并打开源码，Call Stack 提交显式线程／帧选择，不再依赖视图创建。前端不再编排这些 DAP 请求链。共享 [debug-contract](../crates/debug-contract/README.md) 定义领域值，RPC/生成 decoder 仍归 App Server protocol。
+`inspection.rs` 已拥有 threads → stack、scopes → variables、子变量和批量 Watch 求值。每次查询携带显式线程/帧及 inspectionRevision，Rust 在发送前拒绝旧暂停代次，并使迟到的中间步骤和终态失效。帧检查默认只加载首个非昂贵作用域，其余通过 `variablesLoaded` 区分未加载与空结果，Variables 展开后再读取；复制状态和添加 Chat 上下文显式读取全部作用域。Watch 单个表达式、scope 单个变量请求失败不会抹掉其他结果；任务数量、期限与结果内存都有界，终态只消费一次。Variables、Watch 和 Call Stack 独立注册并分别请求领域结果；DebugService 选择默认暂停帧并打开源码，Call Stack 提交显式线程／帧选择，不再依赖视图创建。前端不再编排这些 DAP 请求链。共享 [debug-contract](../crates/debug-contract/README.md) 定义领域值，RPC/生成 decoder 仍归 App Server protocol。
 
 工作区定义/持久化、实时异常过滤器、父子关系和结构化输出现均由 Rust 拥有。Workbench 的 REPL 模型只保留会话选择、标签和带修订的只读快照；过滤和输入历史归 UI，补全经领域会话调用 Rust 的请求 owner。`rawDebugSession.ts` 保留领域调用、inline IO 桥接和释放确认。协议端口见 [App Server DAP 会话](app-server-api.md#dap-会话与请求调度)。
 
@@ -215,6 +215,10 @@ Debug 前端定向 171 项通过；两个 Rust provider、SDK、manager 与 App 
 2026-10-21 自动附加操作入口补验：macOS arm64 的真实 Desktop 已通过命令／状态栏键盘操作、用户与工作区模式持久化、暂停时保留已有会话、同终端及暂停期间新建终端恢复附加、重载清除暂停、停用撤销旧凭据、中英文显示和无障碍帮助。Rust 策略／helper 8 项及产品部署授权 1 项定向测试通过；Desktop 3 项回归和 5 步录屏场景通过。证据、构建来源与校验值见 [自动附加验收](../.build/ash-playwright-mcp/evidence/debug-auto-attach-controls-2026-10-21T23-31-52-960Z/validation.json)，[录屏报告](../.build/ash-playwright-mcp/evidence/debug-auto-attach-controls-2026-10-21T23-31-52-960Z/report.html) 保留实际 UI 断言与视频。本次未执行 Windows、Linux 或 SSH 的运行验收。
 
 ## 验证范围与限制
+
+2026-10-26 Windows x64 的真实 Ash 验证通过 JS／TS source map 断点、变量、单步，以及两种控制台模式的 server-ready 子会话启动和进程回收；默认 Desktop 自举配置也已验证包管理器子进程的暂停、检查与停止。自动附加、同终端暂停／恢复、停用撤权回收，以及中文错误和无障碍帮助均已验收。Rust Test Debug 修复了执行器丢失 MSVC `LIB` 等环境变量，以及 CodeLLDB 1.12.3 的目标输出混入 stdio DAP 通道的问题。Windows `lldb` 描述符通过扩展程序的内部桥接模式，用 loopback TCP 隔离协议，并将进程 stdout／stderr 转为标准 output 事件；共享 DAP runtime 仍拥有会话和请求状态。真实测试已通过发现、构建、断点、变量、单步、继续、输出及结束清理，桥接回归覆盖输入关闭和强制终止后的子进程回收；原始首败与修复验收日志保存在 `.build/debug-selfhost-audit-20261026/`。
+
+Windows CodeView 的 Rust 聚合格式化器另有循环、深度、字段数和总量保护，在工具链格式化器加载后的 `preRunCommands` 安装，保留用户命令。初次检查栈帧只加载首个非昂贵作用域，其余作用域展开时加载，避免大型程序的 Global／Static 阻塞局部变量和继续操作。`Ash Code (TUI)` 已在真实 Ash 内通过源码断点、调用栈、局部变量、继续、集成终端帮助界面及停止后的进程回收；准备任务同时提供完整调试符号和 Node 扩展运行资源。
 
 已有 macOS 验证覆盖 Debug manager／protocol／领域契约、浏览器控制台与布局，以及 Desktop/Web 的正常构建。真实 Desktop/Web 场景覆盖检查、Watch、单步、observer、inline 清理、父子终止、实时异常、结构化输出、配置取消、空 descriptor、停用／卸载回收、控制台过滤与历史恢复、多行 UTF-16 补全和所选帧求值；浏览器另覆盖焦点、中文和高对比主题。具体入口与证据由 [Workbench 验证记录](../src/ash/workbench/contrib/debug/README.md#desktop-acceptance-closure-2026-10-21)维护，不在本文重复测试数量与构建批次。
 

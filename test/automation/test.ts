@@ -19,6 +19,8 @@ interface RunningApplication {
 	restartMessage(): Promise<string>;
 	reload(reason?: 'windowClose' | 'quit'): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
 	restart(): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
+	/** Ends clients before a scenario tears down additional test-owned backends. */
+	close(): Promise<void>;
 }
 
 interface PlaywrightFixtures {
@@ -146,6 +148,7 @@ export const test = base.extend<PlaywrightFixtures>({
 			generations.push(driver.diagnostics);
 			const running: RunningApplication = {
 				driver, diagnostics,
+				close: () => application.close(),
 				reload: async () => {
 					await driver.workbench.page.context().tracing.stop();
 					await driver.workbench.reloadWindow();
@@ -207,6 +210,7 @@ export const test = base.extend<PlaywrightFixtures>({
 				let generation = 0;
 				const running: RunningApplication = {
 					driver: current.driver, diagnostics,
+					close: () => current.close(),
 					reload: async (reason = 'windowClose') => {
 						await current.driver.workbench.page.context().tracing.stop();
 						if (reason === 'quit') await current.quit();

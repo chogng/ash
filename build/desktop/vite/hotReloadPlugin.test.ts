@@ -32,6 +32,14 @@ test("Vite hot reload emits a valid Windows file URL for setup", () => {
 	assert.deepEqual(htmlTags, [{ tag: "script", attrs: { type: "module", src: "/@fs/C:/workspace/build/desktop/vite/setup-dev.ts" }, injectTo: "head-prepend" }]);
 });
 
+test("UI hot reload excludes unmarked services that share module-local registries", () => {
+	const plugin = hotReloadPlugin({ desktopRoot: "/workspace" });
+	const code = "const parts = new WeakMap(); export class StatusbarPart extends Part { focus() {} } export class StatusbarService extends Disposable { getPart(element) { return parts.get(element); } }";
+	const transformed = transform(plugin, code, "/workspace/src/ash/statusbarPart.ts");
+	assert.match(transformed!, /const __ashViteHotReloadExports = \{ StatusbarPart \};/u);
+	assert.doesNotMatch(transformed!, /const __ashViteHotReloadExports = \{[^}]*StatusbarService/u);
+});
+
 test("Vite preserves native watch defaults and applies only explicit polling overrides", async () => {
 	const previous = process.env.CHOKIDAR_USEPOLLING;
 	try {

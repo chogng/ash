@@ -111,9 +111,11 @@ export class VariablesView extends ViewPane {
 		if (!this.isCurrentInspection(session, generation) || this.selectedFrameId !== frameId) return;
 		const saved = this.expandedFrames.get(session)?.get(frameId);
 		const expanded = saved ?? new Set<string>();
-		const rows = await Promise.all(scopes.map(entry => {
-			const row = this.scopeRow(entry.scope);
-			return this.restoreChildren(session, saved && !saved.has(JSON.stringify(row.path)) ? { ...row, expanded: false } : row, entry.variables, expanded, generation);
+		const rows = await Promise.all(scopes.map(async entry => {
+			const show = saved ? saved.has(JSON.stringify([entry.scope.name])) : entry.variablesLoaded;
+			const row = this.scopeRow(entry.scope, show);
+			const variables = show && !entry.variablesLoaded ? await session.variables(row.variablesReference) : entry.variables;
+			return this.restoreChildren(session, row, variables, expanded, generation);
 		}));
 		if (!this.isCurrentInspection(session, generation) || this.selectedFrameId !== frameId) return;
 		this.variableRows = Object.freeze(rows.flat());
@@ -291,7 +293,7 @@ export class VariablesView extends ViewPane {
 		}));
 		if (variableInputWasFocused) this.variableEdit?.input.focus();
 	}
-	private scopeRow(scope: IDebugScope): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: scope.name, path: Object.freeze([scope.name]), variablesReference: scope.variablesReference, depth: 0, expanded: true }); }
+	private scopeRow(scope: IDebugScope, expanded: boolean): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: scope.name, path: Object.freeze([scope.name]), variablesReference: scope.variablesReference, depth: 0, expanded }); }
 	private variableRow(variable: IDebugVariable, depth: number, parentVariablesReference: number, parentPath: readonly string[]): DebugVariableRow {
 		return Object.freeze({ key: ++this.variableKey, name: variable.name, path: Object.freeze([...parentPath, variable.name]), value: variable.value, memoryReference: variable.memoryReference, variablesReference: variable.variablesReference, parentVariablesReference, readOnly: variable.presentationHint?.attributes?.includes("readOnly") || variable.presentationHint?.lazy === true, depth, expanded: false, ...(variable.type ? { type: variable.type } : {}) });
 	}

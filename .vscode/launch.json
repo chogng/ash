@@ -3,12 +3,12 @@
 	"configurations": [
 		{
 			"name": "Ash",
-			"type": "node-terminal",
+			"type": "node",
 			"request": "launch",
-			"command": "bash ./scripts/ash.sh",
-			"windows": {
-				"command": "cmd /d /c .\\scripts\\ash.bat"
-			},
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": ["dev"],
+			"console": "integratedTerminal",
+			"autoAttachChildProcesses": true,
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "0_ash",
@@ -17,9 +17,12 @@
 		},
 		{
 			"name": "Ash Agents",
-			"type": "node-terminal",
+			"type": "node",
 			"request": "launch",
-			"command": "pnpm dev:agents",
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": ["dev:agents"],
+			"console": "integratedTerminal",
+			"autoAttachChildProcesses": true,
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "0_ash",
@@ -28,12 +31,12 @@
 		},
 		{
 			"name": "Ash (Hot Reload)",
-			"type": "node-terminal",
+			"type": "node",
 			"request": "launch",
-			"command": "bash ./scripts/ash.sh --connected",
-			"windows": {
-				"command": "cmd /d /c .\\scripts\\ash.bat --connected"
-			},
+			"runtimeExecutable": "pnpm",
+			"runtimeArgs": ["dev:ui:connected"],
+			"console": "integratedTerminal",
+			"autoAttachChildProcesses": true,
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "0_ash",
@@ -314,9 +317,27 @@
 		},
 		{
 			"name": "Ash Code (TUI)",
-			"type": "node-terminal",
+			"envFile": "${workspaceFolder}/.build/code/debug.env",
+			"type": "lldb",
 			"request": "launch",
-			"command": "just ash-code",
+			"program": "${workspaceFolder}/.build/cargo/ci-test/ash",
+			"windows": {
+				"program": "${workspaceFolder}/.build/cargo/ci-test/ash.exe",
+				"env": {
+					"ASH_APP_SERVER_PATH": "${workspaceFolder}/.build/cargo/ci-test/ash-app-server.exe",
+					"ASH_CODE_MODE_HOST_BIN": "${workspaceFolder}/.build/cargo/ci-test/ash-code-mode-host.exe",
+					"ASH_PRODUCT_SERVICES_PATH": "${workspaceFolder}/resources/product-services/product-services.json"
+				}
+			},
+			"env": {
+				"ASH_APP_SERVER_PATH": "${workspaceFolder}/.build/cargo/ci-test/ash-app-server",
+				"ASH_CODE_MODE_HOST_BIN": "${workspaceFolder}/.build/cargo/ci-test/ash-code-mode-host",
+				"ASH_PRODUCT_SERVICES_PATH": "${workspaceFolder}/resources/product-services/product-services.json"
+			},
+			"args": [],
+			"terminal": "integrated",
+			"sourceLanguages": ["rust"],
+			"preLaunchTask": "Prepare Ash Code Debug",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "1_ash_code",

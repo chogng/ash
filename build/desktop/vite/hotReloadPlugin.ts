@@ -61,7 +61,11 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 				if (!analysis.syntaxValid || analysis.exportNames.length === 0) return undefined;
 				if (code.includes(hotExportsName)) throw new Error(`Reserved hot-reload export is already declared: ${hotExportsName}`);
 				analyses.set(file, analysis);
-				return injectHotReloadBoundary(code, analysis.exportNames, neutralModuleId(file, desktopRoot), analysis.classNames.some(name => !analysis.widgetClassNames.includes(name)), analysis.widgetClassNames);
+				// Unmarked services can share module-local state with a persistent view.
+				// Replacing their methods would bind live instances to the replacement
+				// module's empty registries even though only the view opted into patching.
+				const boundaryExports = analysis.classNames.length > 0 ? analysis.classNames : analysis.exportNames;
+				return injectHotReloadBoundary(code, boundaryExports, neutralModuleId(file, desktopRoot), analysis.classNames.some(name => !analysis.widgetClassNames.includes(name)), analysis.widgetClassNames);
 			},
 		},
 		async handleHotUpdate(context) {

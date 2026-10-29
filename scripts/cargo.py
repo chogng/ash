@@ -320,6 +320,21 @@ def main(arguments: list[str] | None = None) -> int:
     )
     if (
         cargo_arguments[0] in {"test", "run"}
+        and "ash-cli" in packages
+        and "ASH_RG_PATH" not in environment
+    ):
+        # The raw CLI test binary launches a sibling backend without a package's
+        # ash-path resources. Supply the same pinned search tool as packaged runs.
+        from build.lib.ripgrep import resolve_ripgrep
+
+        executable = resolve_ripgrep(
+            TARGETS[target],
+            REPOSITORY_ROOT / "third_party/ripgrep/runtime-lock.json",
+            REPOSITORY_ROOT / "third_party/.cache/ripgrep",
+        )
+        environment["ASH_RG_PATH"] = str(executable.executable)
+    if (
+        cargo_arguments[0] in {"test", "run"}
         and "ASH_TGREP_PATH" not in environment
         and (
             "ash-tgrep" in packages

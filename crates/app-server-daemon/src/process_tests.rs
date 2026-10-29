@@ -462,3 +462,44 @@ fn process_exiting_after_proc_stat_open_is_gone_without_hiding_other_read_errors
         .is_err()
     );
 }
+#[cfg(windows)]
+#[test]
+fn detached_backend_can_start_in_a_restrictive_job() {
+    use std::process::Command;
+    use std::process::Stdio;
+
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    if std::env::var_os("ASH_DAEMON_JOB_TEST_CHILD").is_some() {
+        command
+            .args(["--exact", "process::windows::tests::waiting_child"])
+            .env("ASH_PID_TEST_CHILD", "1");
+        super::detach_command(&mut command).unwrap();
+        let mut child = command
+            .spawn()
+            .expect("spawn backend inside restrictive host job");
+        assert!(child.try_wait().unwrap().is_none());
+        child.kill().unwrap();
+        child.wait().unwrap();
+        return;
+    }
+    command
+        .args([
+            "--exact",
+            "process::tests::detached_backend_can_start_in_a_restrictive_job",
+        ])
+        .env("ASH_DAEMON_JOB_TEST_CHILD", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let job = ash_utils_pty::JobObject::create().unwrap();
+    let output = job
+        .spawn_contained_std(&mut command)
+        .unwrap()
+        .wait_with_output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

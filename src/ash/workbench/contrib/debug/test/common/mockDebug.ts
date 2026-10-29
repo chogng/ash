@@ -266,8 +266,13 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 		const selected = threads.find(thread => thread.id === threadId) ?? threads[0];
 		return { threads, frames: selected ? await this.stackTrace(selected.id) : [], ...(selected ? { threadId: selected.id } : {}) };
 	}
-	public async inspectFrame(frameId: number) {
-		return Promise.all((await this.scopes(frameId)).map(async scope => ({ scope, variables: scope.variablesReference > 0 ? await this.variables(scope.variablesReference) : [] })));
+	public async inspectFrame(frameId: number, selection: 'initial' | 'all' = 'initial') {
+		const scopes = await this.scopes(frameId);
+		const initial = scopes.find(scope => !scope.expensive && scope.variablesReference > 0);
+		return Promise.all(scopes.map(async scope => {
+			const variablesLoaded = scope.variablesReference > 0 && (selection === 'all' || scope === initial);
+			return { scope, variables: variablesLoaded ? await this.variables(scope.variablesReference) : [], variablesLoaded };
+		}));
 	}
 	public async evaluateWatchExpressions(expressions: readonly string[], frameId?: number) {
 		return Promise.all(expressions.map(async expression => { try { return { expression, result: await this.evaluate(expression, frameId, 'watch') }; } catch (error) { return { expression, error: error instanceof Error ? error.message : String(error) }; } }));

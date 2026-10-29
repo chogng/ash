@@ -120,6 +120,37 @@ test("Variables restores expanded paths using fresh references after a pause and
 	}
 });
 
+test("Variables shows locals before loading other scopes on expansion", async () => {
+	const browser = new JSDOM("<!doctype html><body></body>");
+	const globals = installDomGlobals(browser);
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
+	try {
+		using debug = new MockDebugService();
+		const session = debug.sessions[0] as MockDebugSession;
+		const requests: number[] = [];
+		session.scopes = async () => [{ name: 'Locals', variablesReference: 10, expensive: false }, { name: 'Global', variablesReference: 20, expensive: false }];
+		session.variables = async reference => {
+			requests.push(reference);
+			return [{ name: reference === 10 ? 'localAnswer' : 'globalAnswer', value: '42', variablesReference: 0 }];
+		};
+		using support = new DebugViewTestServices();
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
+		const { container: view } = support.createContainer(services, browser.window.document.body);
+		debug.activate(session);
+		await waitFor(() => view.element.textContent?.includes('localAnswer = 42') === true);
+		assert.equal(requests.includes(20), false);
+		const global = [...view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')].find(row => row.textContent?.includes('Global'))!;
+		assert.equal(global.getAttribute('aria-expanded'), 'false');
+		global.click();
+		await waitFor(() => view.element.textContent?.includes('globalAnswer = 42') === true);
+		assert.equal(requests.filter(reference => reference === 20).length, 1);
+		assert.equal(global.getAttribute('aria-expanded'), 'true');
+	} finally {
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});
+
 test("Debug view opens an authority-qualified Remote stack source", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
@@ -562,7 +593,7 @@ test('Debug inspection panes follow a focused frame independently and retire del
 			if (frameId === 99) { oldWatchStarted = true; return pending.p; }
 			return expressions.map(expression => ({ expression, result: { result: `frame ${frameId}`, variablesReference: 0 } }));
 		};
-		session.inspectFrame = async frameId => [{ scope: { name: `Frame ${frameId}`, variablesReference: 0, expensive: false }, variables: [] }];
+		session.inspectFrame = async frameId => [{ scope: { name: `Frame ${frameId}`, variablesReference: 0, expensive: false }, variables: [], variablesLoaded: false }];
 		debug.focusStackFrame({ id: 99, name: 'old', lineNumber: 1, columnNumber: 1 });
 		await waitFor(() => oldWatchStarted);
 		debug.focusStackFrame({ id: 0, name: 'current', lineNumber: 1, columnNumber: 1 });
@@ -2188,6 +2219,8 @@ suite('debug browser component', () => {
 		await fillRepl(page, input, 'wrappedExpression'.repeat(20));
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBeGreaterThan(initial.height);
 		expect(await page.locator('.ash-repl-input').evaluate(host => host.scrollWidth <= host.clientWidth)).toBe(true);
+		await input.press('Escape');
+		await expect(page.getByRole('listbox', { name: 'Debug Console suggestions', exact: true })).toBeHidden();
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('');
 		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBe(initial.height);

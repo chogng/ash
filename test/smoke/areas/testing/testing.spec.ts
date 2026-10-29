@@ -47,7 +47,8 @@ test.describe('built-in Rust testing', () => {
 	});
 	test('Rust test debugging hits a real breakpoint and macro and documentation tests execute', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 		test.setTimeout(120_000);
-		await writeFile(testWorkspace.rustFile, source + '\nmacro_rules! generated { () => { #[test] fn generated_case() { assert_eq!(3, 3); } } }\n#[cfg(test)] generated!();\n');
+		const debugSource = source.replace('assert_eq!(2 + 2, 4);', 'let answer = 42;\n        println!("ASH_RUST_SELFHOST_STDOUT");\n        eprintln!("ASH_RUST_SELFHOST_STDERR");\n        assert_eq!(answer, 42);');
+		await writeFile(testWorkspace.rustFile, debugSource + '\nmacro_rules! generated { () => { #[test] fn generated_case() { assert_eq!(3, 3); } } }\n#[cfg(test)] generated!();\n');
 		const manifest = join(testWorkspace.directory, 'Cargo.toml');
 		await writeFile(manifest, await readFile(manifest, 'utf8') + '\n[lib]\npath = "lib.rs"\n');
 		await writeFile(join(testWorkspace.directory, 'lib.rs'), '/// ```\n/// assert_eq!(2 + 2, 4);\n/// ```\npub fn docs() {}\n');
@@ -87,6 +88,9 @@ test.describe('built-in Rust testing', () => {
 		await expect(debug.getByRole('status')).toContainText('stopped');
 		await expect(debug.locator('.ash-debug-stack')).toContainText('checks::passes');
 		await expect(editor.element.locator('.ash-debug-breakpoint-gutter.verified')).toHaveCount(1);
+		await debug.getByRole('button', { name: 'Step Over', exact: true }).click();
+		await expect(debug.locator('.ash-debug-variables')).toContainText('answer');
+		await expect(debug.locator('.ash-debug-variables')).toContainText('42');
 		// Macro expressions can resolve to multiple instruction locations on one line.
 		// Retire the verified breakpoint before checking continuation and session cleanup.
 		await debug.getByRole('button', { name: 'Remove breakpoint', exact: true }).click();
@@ -94,6 +98,10 @@ test.describe('built-in Rust testing', () => {
 		await debug.getByRole('button', { name: 'Continue', exact: true }).click();
 		await expect(debug.locator('.ash-debug-status')).toBeHidden();
 		await expect(debug.locator('.ash-debug-frame')).toHaveCount(0);
+		await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
+		const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+		await expect(output).toContainText('ASH_RUST_SELFHOST_STDOUT');
+		await expect(output).toContainText('ASH_RUST_SELFHOST_STDERR');
 		await page.getByRole('tab', { name: 'Testing', exact: true }).first().click();
 		await expect(pane.getByRole('button', { name: 'Run All Tests', exact: true })).toBeEnabled();
 	});

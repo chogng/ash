@@ -340,6 +340,37 @@ fn managed_request() -> ExtensionInvocation {
 }
 
 #[test]
+fn windows_rust_formatter_guard_preserves_commands_across_both_resolution_phases() {
+    let running = running("en");
+    let mut configuration = json!({"type":"lldb","name":"Rust","request":"launch","program":"/workspace/app","sourceLanguages":["rust"],"initCommands":["version"],"preRunCommands":["settings set target.max-children-count 50"]});
+    for operation in [
+        "resolveDebugConfiguration",
+        "resolveDebugConfigurationWithSubstitutedVariables",
+    ] {
+        configuration = running
+            .host
+            .invoke(invocation(
+                "codelldb.configuration",
+                operation,
+                json!({"folder":null,"configuration":configuration}),
+            ))
+            .unwrap()
+            .payload["configuration"]
+            .clone();
+        assert_eq!(configuration["initCommands"], json!(["version"]));
+        let commands = configuration["preRunCommands"].as_array().unwrap();
+        assert_eq!(commands.len(), if cfg!(windows) { 2 } else { 1 });
+        assert_eq!(
+            commands.last().unwrap(),
+            "settings set target.max-children-count 50"
+        );
+        if cfg!(windows) {
+            assert!(commands[0].as_str().unwrap().contains("_ash_bounded"));
+        }
+    }
+}
+
+#[test]
 fn codelldb_override_preserves_arguments_and_keeps_its_configuration_type() {
     let running = running("zh-CN");
     let template = running
@@ -357,9 +388,24 @@ fn codelldb_override_preserves_arguments_and_keeps_its_configuration_type() {
         ExtensionClientOperation::ReadConfiguration { .. } => Ok(ExtensionClientResult::Configuration { value: json!({"codeLldbPath":"/tools/codelldb","codeLldbArgs":["", "literal value"],"runtimeDirectory":"unused-relative-directory"}) }),
         _ => panic!("unexpected foreground request"),
     }).unwrap().payload;
-    assert_eq!(descriptor["program"], "/tools/codelldb");
+    let arguments = if cfg!(windows) {
+        assert!(
+            descriptor["program"]
+                .as_str()
+                .unwrap()
+                .ends_with("ash-debug-lldb.exe")
+        );
+        let values = descriptor["arguments"].as_array().unwrap();
+        assert_eq!(values[0], "--stdio-adapter");
+        assert_eq!(values[1], "无法连接 CodeLLDB 调试适配器");
+        assert_eq!(values[2], "/tools/codelldb");
+        json!(&values[3..])
+    } else {
+        assert_eq!(descriptor["program"], "/tools/codelldb");
+        descriptor["arguments"].clone()
+    };
     assert_eq!(
-        descriptor["arguments"],
+        arguments,
         json!([
             "",
             "literal value",

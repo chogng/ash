@@ -467,7 +467,7 @@ pub(crate) fn spawn_backend(
             crate::runtime::clear_binding(&mut command);
         }
     }
-    detach_command(&mut command);
+    detach_command(&mut command)?;
     let child = command.spawn().map_err(io_error)?;
     let mut spawned = SpawnedBackend {
         child: Some(child),
@@ -479,18 +479,26 @@ pub(crate) fn spawn_backend(
 }
 
 #[cfg(unix)]
-fn detach_command(command: &mut Command) {
+fn detach_command(command: &mut Command) -> Result<(), String> {
     command.process_group(0);
+    Ok(())
 }
 
 #[cfg(windows)]
-fn detach_command(command: &mut Command) {
+fn detach_command(command: &mut Command) -> Result<(), String> {
     use windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB;
     use windows_sys::Win32::System::Threading::CREATE_NEW_PROCESS_GROUP;
     use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
-    // A managed backend must survive the controller and its containing job.
-    command.creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB);
+    // Escape a controller job only when it permits it. Restrictive ancestor jobs
+    // remain authoritative, including when the CLI runs in a host-owned terminal.
+    // Unconditionally requesting breakaway would fail with ERROR_ACCESS_DENIED.
+    let mut flags = CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW;
+    if ash_utils_pty::JobObject::current_allows_breakaway().map_err(io_error)? {
+        flags |= CREATE_BREAKAWAY_FROM_JOB;
+    }
+    command.creation_flags(flags);
+    Ok(())
 }
 
 #[cfg(unix)]

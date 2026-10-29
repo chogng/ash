@@ -44,7 +44,7 @@ fn stack_inspection_uses_explicit_signed_selection_without_global_focus() {
     assert!(jobs.read(id, 1).is_err());
 }
 #[test]
-fn frame_inspection_keeps_other_scopes_when_one_variable_request_fails() {
+fn frame_inspection_keeps_unloaded_scopes_when_initial_variables_fail() {
     let mut jobs = Inspections::new();
     let mut client = DebugClient::new(Duration::from_secs(15));
     let (id, request) = jobs
@@ -59,14 +59,7 @@ fn frame_inspection_keeps_other_scopes_when_one_variable_request_fails() {
     let bad = jobs.progress(&mut client, 1).unwrap().remove(0);
     assert_eq!(bad["arguments"]["variablesReference"], 10);
     reply(&mut client, &bad, false, Value::Null);
-    let good = jobs.progress(&mut client, 1).unwrap().remove(0);
-    reply(
-        &mut client,
-        &good,
-        true,
-        json!({"variables":[{"name":"answer","value":"42","variablesReference":0}]}),
-    );
-    jobs.progress(&mut client, 1).unwrap();
+    assert!(jobs.progress(&mut client, 1).unwrap().is_empty());
     let DebugInspectionResult::Complete {
         value: DebugInspectionValue::Frame { scopes },
     } = jobs.read(id, 1).unwrap()
@@ -75,8 +68,71 @@ fn frame_inspection_keeps_other_scopes_when_one_variable_request_fails() {
     };
     assert!(scopes[0].variables.is_empty());
     assert!(scopes[1].error.is_some());
-    assert_eq!(scopes[2].variables[0]["value"], "42");
+    assert!(scopes[1].variables_loaded);
+    assert!(!scopes[2].variables_loaded);
+    assert_eq!(scopes[2].scope["variablesReference"], 20);
+    assert!(scopes[2].variables.is_empty());
 }
+#[test]
+fn initial_frame_loads_only_one_scope_and_other_scopes_are_explicit_inspections() {
+    let mut jobs = Inspections::new();
+    let mut client = DebugClient::new(Duration::from_secs(15));
+    let (id, request) = jobs
+        .start(&mut client, 1, DebugInspection::Frame { frame_id: 11 })
+        .unwrap();
+    reply(
+        &mut client,
+        &request,
+        true,
+        json!({"scopes":[
+            {"name":"expensive","variablesReference":10,"expensive":true},
+            {"name":"Local","variablesReference":20,"expensive":false},
+            {"name":"Global","variablesReference":30,"expensive":false}
+        ]}),
+    );
+    let local = jobs.progress(&mut client, 1).unwrap().remove(0);
+    assert_eq!(local["arguments"]["variablesReference"], 20);
+    reply(
+        &mut client,
+        &local,
+        true,
+        json!({"variables":[{"name":"answer","value":"42","variablesReference":0}]}),
+    );
+    assert!(jobs.progress(&mut client, 1).unwrap().is_empty());
+    let DebugInspectionResult::Complete {
+        value: DebugInspectionValue::Frame { scopes },
+    } = jobs.read(id, 1).unwrap()
+    else {
+        panic!("frame did not complete")
+    };
+    assert_eq!(
+        scopes
+            .iter()
+            .map(|scope| scope.variables_loaded)
+            .collect::<Vec<_>>(),
+        [false, true, false]
+    );
+    assert_eq!(scopes[1].variables[0]["value"], "42");
+    let (id, request) = jobs
+        .start(
+            &mut client,
+            1,
+            DebugInspection::Variables {
+                variables_reference: 30,
+            },
+        )
+        .unwrap();
+    assert_eq!(request["arguments"]["variablesReference"], 30);
+    reply(&mut client, &request, true, json!({"variables":[]}));
+    assert!(jobs.progress(&mut client, 1).unwrap().is_empty());
+    assert!(matches!(
+        jobs.read(id, 1).unwrap(),
+        DebugInspectionResult::Complete {
+            value: DebugInspectionValue::Variables { .. }
+        }
+    ));
+}
+
 #[test]
 fn watch_failures_are_per_expression_and_success_is_not_replayed() {
     let mut jobs = Inspections::new();

@@ -12,6 +12,10 @@ from scripts.cargo import main, prepare_test_executable, run_process_tests
 
 class CodeModeHostTests(unittest.TestCase):
     def setUp(self) -> None:
+        ripgrep = patch("build.lib.ripgrep.resolve_ripgrep")
+        self.ripgrep = ripgrep.start()
+        self.ripgrep.return_value.executable = Path("/runtime/rg")
+        self.addCleanup(ripgrep.stop)
         protocol = patch("scripts.cargo.generate_protocol")
         self.protocol = protocol.start()
         self.addCleanup(protocol.stop)
@@ -28,6 +32,28 @@ class CodeModeHostTests(unittest.TestCase):
         )
         target.start()
         self.addCleanup(target.stop)
+
+    @patch.dict(
+        "scripts.cargo.os.environ", {"ASH_TGREP_PATH": "/runtime/tgrep"}, clear=True
+    )
+    @patch("scripts.cargo.cargo_command_packages", return_value={"ash-cli"})
+    @patch("scripts.cargo.subprocess.run")
+    def test_cli_runs_prepare_pinned_ripgrep_and_respect_an_explicit_override(
+        self, run, packages
+    ):
+        run.return_value = subprocess.CompletedProcess([], 0)
+        self.assertEqual(
+            main(["test", "-p", "ash-cli", "--test", "tui_real_scenarios"]), 0
+        )
+        self.assertEqual(
+            run.call_args.kwargs["env"]["ASH_RG_PATH"], str(Path("/runtime/rg"))
+        )
+        self.ripgrep.assert_called_once()
+        self.ripgrep.reset_mock()
+        with patch.dict("scripts.cargo.os.environ", {"ASH_RG_PATH": "/custom/rg"}):
+            self.assertEqual(main(["run", "-p", "ash-cli"]), 0)
+            self.assertEqual(run.call_args.kwargs["env"]["ASH_RG_PATH"], "/custom/rg")
+        self.ripgrep.assert_not_called()
 
     @patch("scripts.cargo.cargo_command_packages", return_value=set())
     @patch("scripts.cargo.subprocess.run")

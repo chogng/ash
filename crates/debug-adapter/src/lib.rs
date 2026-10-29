@@ -8,6 +8,8 @@ mod framing;
 mod service;
 
 pub use framing::MAX_MESSAGE_BYTES;
+pub use framing::encode_message;
+pub use framing::read_message;
 
 pub use service::DebugAdapterCommand;
 pub use service::DebugAdapterConnection;

@@ -47,10 +47,19 @@ test.beforeEach(async ({ workbench }) => {
 });
 test.afterEach(async ({ workbench }, info) => {
 	const frames = workbench.page.isClosed() ? [] : await workbench.page.evaluate(() => { const trace = (globalThis as typeof globalThis & { debugWorkflowTrace?: { frames: unknown[]; dispose(): void; }; }).debugWorkflowTrace; trace?.dispose(); return trace?.frames ?? []; });
-	await info.attach('debug-workflow-boundary', { body: JSON.stringify(frames, null, 2), contentType: 'application/json' });
+	const path = info.outputPath('debug-workflow-boundary.json');
+	await writeFile(path, JSON.stringify(frames, null, 2));
+	await info.attach('debug-workflow-boundary', { path, contentType: 'application/json' });
 });
 
 const alive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return false; throw error; } };
+
+function terminalNodeCommand(script: string): string {
+	const args = [process.execPath, script];
+	return process.platform === 'win32'
+		? args.map(argument => `"${argument}"`).join(' ')
+		: args.map(argument => `'${argument.replaceAll("'", "'\\''")}'`).join(' ');
+}
 
 async function disableProvider(workbench: Workbench): Promise<void> {
 	const page = workbench.page;
@@ -59,12 +68,40 @@ async function disableProvider(workbench: Workbench): Promise<void> {
 	await search.fill('@installed ash.debug-javascript');
 	await search.press('Enter');
 	const plugins = page.getByRole('listbox', { name: 'Plugins', exact: true });
-	await plugins.getByRole('option').filter({ has: page.getByText('ash.debug-javascript', { exact: true }) }).click();
+	await plugins.locator('[data-package-id="ash.debug-javascript"]').click();
 	await plugins.press('Enter');
-	const editor = page.locator('.ash-extension-editor').filter({ has: page.getByRole('heading', { name: 'ash.debug-javascript', exact: true }) });
-	await editor.getByRole('button', { name: 'Disable', exact: true }).click();
-	await expect(editor.getByRole('button', { name: 'Enable', exact: true })).toBeEnabled();
+	const editor = page.locator('.ash-extension-editor:visible').filter({ hasText: 'ash.debug-javascript' });
+	const enabled = editor.getByRole('switch');
+	await expect(enabled).toBeChecked();
+	await enabled.press('Space');
+	await expect(enabled).not.toBeChecked();
 }
+
+test('self-host launch configuration debugs a package-manager child and releases it on stop', tags, async ({ workbench, testWorkspace }) => {
+	test.setTimeout(90_000);
+	const root = testWorkspace.directory;
+	const launch = JSON.parse(await readFile(join(import.meta.dirname, '../../../../.vscode/launch.json'), 'utf8')) as { configurations: Array<{ name: string; }>; };
+	const configuration = launch.configurations.find(candidate => candidate.name === 'Ash');
+	if (!configuration) throw new Error('Missing Ash self-host launch configuration');
+	await mkdir(join(root, '.vscode'), { recursive: true });
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [configuration] }));
+	await writeFile(join(root, 'package.json'), JSON.stringify({ private: true, scripts: { dev: `${JSON.stringify(process.execPath)} main.cjs` } }));
+	await writeFile(join(root, 'main.cjs'), "const answer = 42;\nrequire('node:fs').writeFileSync('child.pid', String(process.pid));\ndebugger;\nconsole.log(answer);\nsetInterval(() => {}, 1000);\n");
+	const page = workbench.page;
+	const pane = page.locator('[data-view-container-id="ash.debug"]');
+	if (!await pane.isVisible()) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	const sidebar = page.locator('[data-part="sidebar"]');
+	await expect(sidebar.getByRole('button', { name: /^Debug configuration:/ })).toContainText('Ash');
+	await sidebar.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
+	await expect(pane.locator('.ash-debug-variables')).toContainText('answer');
+	await expect(pane.locator('.ash-debug-variables')).toContainText('42');
+	const pid = Number(await readFile(join(root, 'child.pid'), 'utf8'));
+	expect(alive(pid)).toBe(true);
+	await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
+	await expect.poll(() => alive(pid)).toBe(false);
+	await expect(pane.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+});
 
 test('Rust JavaScript provider debugs TypeScript source maps, variables and stepping', tags, async ({ workbench, testWorkspace }) => {
 	test.setTimeout(90_000);
@@ -135,7 +172,7 @@ test.describe('Rust terminal auto attach', () => {
 		const root = testWorkspace.directory;
 		await writeFile(join(root, 'auto.cjs'), "const answer = 42;\nrequire('node:fs').writeFileSync('auto.pid', String(process.pid));\ndebugger;\nconsole.log(answer);\nsetInterval(() => {}, 1000);\n");
 		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
-		await workbench.terminal.runCommand(`'${process.execPath.replaceAll("'", "'\\''")}' '${join(root, 'auto.cjs').replaceAll("'", "'\\''")}'`);
+		await workbench.terminal.runCommand(terminalNodeCommand(join(root, 'auto.cjs')));
 		const page = workbench.page;
 		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 		const pane = page.locator('[data-view-container-id="ash.debug"]');
@@ -155,7 +192,7 @@ test.describe('Rust terminal auto attach', () => {
 		await expect(page.getByRole('button', { name: /^Auto Attach:/u })).toHaveCount(0);
 		await writeFile(join(root, 'revoked.cjs'), "require('node:fs').writeFileSync('revoked.pid', String(process.pid)); debugger; setInterval(() => {}, 1000);\n");
 		await page.getByRole('tab', { name: 'Terminal', exact: true }).first().click();
-		await workbench.terminal.runCommand(`'${process.execPath.replaceAll("'", "'\\''")}' '${join(root, 'revoked.cjs').replaceAll("'", "'\\''")}'`);
+		await workbench.terminal.runCommand(terminalNodeCommand(join(root, 'revoked.cjs')));
 		await expect.poll(async () => readFile(join(root, 'revoked.pid'), 'utf8').catch(() => '')).toMatch(/^\d+$/);
 		const unbound = Number(await readFile(join(root, 'revoked.pid'), 'utf8'));
 		await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
@@ -215,7 +252,7 @@ test('Rust auto attach controls persist modes and pause and resume in existing t
 	await writeFile(join(root, 'auto.cjs'), "const answer = 42;\nrequire('node:fs').writeFileSync('auto.pid', String(process.pid));\ndebugger;\nsetInterval(() => {}, 1000);\n");
 	await writeFile(join(root, 'paused.cjs'), "debugger; require('node:fs').writeFileSync('paused.done', 'ran without attachment');\n");
 	await workbench.quickaccess.runCommand('workbench.action.terminal.new');
-	const runNode = async (file: string) => workbench.terminal.runCommand(`'${process.execPath.replaceAll("'", "'\\''")}' '${join(root, file).replaceAll("'", "'\\''")}'`);
+	const runNode = async (file: string) => workbench.terminal.runCommand(terminalNodeCommand(join(root, file)));
 	await runNode('auto.cjs');
 	const pane = page.locator('[data-view-container-id="ash.debug"]');
 	if (!await pane.isVisible()) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
@@ -314,6 +351,7 @@ test('Rust server-ready opens its matching URL once through the native opener', 
 });
 
 test('Rust debug workflow errors and accessibility help follow Chinese display language', tags, async ({ workbench, restartWorkbench, testWorkspace }) => {
+	test.setTimeout(90_000);
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');
@@ -348,10 +386,13 @@ test('Rust debug workflow errors and accessibility help follow Chinese display l
 	await mkdir(join(root, '.vscode'), { recursive: true });
 	await writeFile(join(root, 'locale.cjs'), 'setInterval(() => {}, 1000);\n');
 	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: '中文工作流', type: 'node', request: 'launch', runtimeExecutable: process.execPath, program: '${workspaceFolder}/locale.cjs', cwd: '${workspaceFolder}', console: 'internalConsole', serverReadyAction: { action: 'openExternally', pattern: '(unsupported)\\1' } }] }));
-	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
+	if (!await pane.isVisible()) await workbench.page.getByRole('tab', { name: '运行和调试', exact: true }).first().click();
+	const sidebar = workbench.page.locator('[data-part="sidebar"]');
+	await expect(sidebar.getByRole('button', { name: '调试配置：中文工作流', exact: true })).toBeVisible();
+	await sidebar.getByRole('button', { name: '启动调试', exact: true }).click();
 	await expect(workbench.page.getByRole('article').filter({ hasText: '服务就绪配置无效或正则表达式不受支持' })).toBeVisible();
 	await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
-	const pane = workbench.page.locator('[data-view-container-id="ash.debug"]');
 	if (!await pane.isVisible()) await workbench.page.getByRole('tab', { name: '运行和调试', exact: true }).first().click();
 	const heading = pane.getByRole('button', { name: '变量', exact: true });
 	await heading.focus();

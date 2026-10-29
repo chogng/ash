@@ -335,6 +335,7 @@ export interface IDebugStackInspection {
 export interface IDebugScopeInspection {
 	readonly scope: IDebugScope;
 	readonly variables: readonly IDebugVariable[];
+	readonly variablesLoaded: boolean;
 	readonly error?: string;
 }
 export interface IDebugWatchResult {
@@ -440,7 +441,7 @@ export interface IDebugSession extends IDisposable {
 	stepOut(granularity?: DebugSteppingGranularity): Promise<void>;
 	restart(): Promise<void>;
 	inspectStack(threadId?: number): Promise<IDebugStackInspection>;
-	inspectFrame(frameId: number): Promise<readonly IDebugScopeInspection[]>;
+	inspectFrame(frameId: number, scopes?: 'initial' | 'all'): Promise<readonly IDebugScopeInspection[]>;
 	evaluateWatchExpressions(expressions: readonly string[], frameId?: number): Promise<readonly IDebugWatchResult[]>;
 	threads(): Promise<readonly IDebugThread[]>;
 	selectThread(threadId: number): void;

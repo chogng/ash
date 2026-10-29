@@ -164,7 +164,7 @@ export type DebugInspection = { readonly kind: 'stack'; readonly threadId?: numb
 	| { readonly kind: 'watch'; readonly expressions: readonly string[]; readonly frameId?: number; };
 export type DebugInspectionValue =
 	| { readonly kind: 'stack'; readonly threads: readonly unknown[]; readonly frames: readonly unknown[]; readonly threadId: number | null; }
-	| { readonly kind: 'frame'; readonly scopes: readonly { readonly scope: unknown; readonly variables: readonly unknown[]; readonly error: string | null; }[]; }
+	| { readonly kind: 'frame'; readonly scopes: readonly { readonly scope: unknown; readonly variables: readonly unknown[]; readonly variablesLoaded: boolean; readonly error: string | null; }[]; }
 	| { readonly kind: 'variables'; readonly variables: readonly unknown[]; }
 	| { readonly kind: 'watch'; readonly values: readonly { readonly expression: string; readonly result: unknown; readonly error: string | null; }[]; };
 export type DebugInspectionResult = { readonly state: 'pending'; } | { readonly state: 'complete'; readonly value: DebugInspectionValue; } | { readonly state: 'failed'; readonly message: string; } | { readonly state: 'invalidated'; };

@@ -22,6 +22,7 @@ from build.lib.targets import TARGETS  # noqa: E402
 from build.lib.targets import default_target  # noqa: E402
 from build.lib.development_store import leased_binary_generation  # noqa: E402
 from build.protocol.generate import generate_protocol  # noqa: E402
+from build.prepare import current_package, development_root  # noqa: E402
 
 
 DEVELOPMENT_PROFILE = "dev-small"
@@ -36,6 +37,25 @@ BINARY_PACKAGES = {
     "ash-realtime-voice": "ash-realtime-voice",
     "bwrap": "ash-bwrap",
 }
+
+
+def prepare_runtime_environment(root: Path) -> tuple[int, dict[str, str]]:
+    """Prepare shared backend resources, including the standalone Node host."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "build/prepare.py",
+            "--javascript-runtime",
+            "packaged-node",
+        ],
+        cwd=root,
+        check=False,
+    )
+    if result.returncode:
+        return result.returncode, {}
+    package = current_package(development_root(root, default_target(), "packaged-node"))
+    return 0, {"ASH_DEV_RUNTIME_ROOT": str(package.resolve())}
 
 
 def development_binaries(*, platform_name: str | None = None) -> list[str]:

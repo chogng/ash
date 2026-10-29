@@ -1,0 +1,36 @@
+---
+source: cli/tests/support/tui_process.rs
+expression: screen
+---
+  <FIXTURE>/workspace                                    [Dashboard]
+
+> start a session before permission bypass
+
+● BYPASS-SETUP-DONE
+
+> 请直接创建 permission-bypassed.txt
+
+● Updated file permission-bypassed.txt
+ └─ permission-bypassed.txt
+    view full
+
+● 权限确认已绕过。文件直接写入完成。
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                 /permission to change permissions
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  >
+  ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
+
+  ▶ Bypass permissions · ← Dashboard · ? for shortcuts

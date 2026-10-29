@@ -2,6 +2,15 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "Prepare Ash Code Debug",
+			"type": "process",
+			"command": "node",
+			"args": ["build/python.ts", "-B", "build/code/debug.py"],
+			"options": { "cwd": "${workspaceFolder}" },
+			"problemMatcher": [],
+			"runOptions": { "instanceLimit": 1 }
+		},
+		{
 			"label": "Prepare Ash Web",
 			"type": "shell",
 			"command": "pnpm prepare:generated",

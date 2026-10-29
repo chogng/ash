@@ -490,6 +490,7 @@ dependencies = [
  "ash-uds",
  "ash-utils-home-dir",
  "ash-utils-process",
+ "ash-utils-pty",
  "dunce",
  "libc",
  "rustix 1.1.5",
@@ -1364,10 +1365,12 @@ name = "ash-debug-lldb"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-debug-adapter",
  "ash-external-ext",
  "ash-external-ext-protocol",
  "ash-external-ext-sdk",
  "ash-http-client",
+ "ash-sandboxing",
  "dirs",
  "dunce",
  "fs2",
@@ -1375,6 +1378,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "tokio",
  "url",
  "zip",
 ]

@@ -9,6 +9,7 @@
   "configuration.launch": "LLDB: Launch program",
   "error.adapterSettings": "LLDB executable settings must be paths or command names, arguments and sourceLanguages must be string arrays without NUL characters, and debug.lldb.runtimeDirectory must be empty or absolute.",
   "error.program": "LLDB launch configuration requires a non-empty program path.",
+  "error.transport": "Unable to connect to the CodeLLDB adapter",
   "configuration.codelldbLaunch": "CodeLLDB: Launch program",
   "command.install": "LLDB: Install or Retry Debugger",
   "command.cancel": "LLDB: Cancel Debugger Installation",

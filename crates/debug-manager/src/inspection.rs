@@ -325,6 +325,7 @@ fn advance(
                     .map(|scope| DebugScopeVariables {
                         scope,
                         variables: Vec::new(),
+                        variables_loaded: false,
                         error: None,
                     })
                     .collect::<Vec<_>>();
@@ -335,6 +336,7 @@ fn advance(
         },
         Step::ScopeVariables { scopes, index } => {
             let scope = &mut scopes[*index];
+            scope.variables_loaded = true;
             match body {
                 Ok(body) => scope.variables = values(&body, "variables")?,
                 Err(error) => scope.error = Some(error),
@@ -404,10 +406,15 @@ fn next_scope(job: &mut Job, client: &mut DebugClient) -> Result<Option<Value>, 
         return Err(DebugClientError::InvalidMessage);
     };
     while *index < scopes.len() {
+        // CodeLLDB reports even process-wide globals as inexpensive. Eagerly
+        // reading every scope blocks locals and execution controls in large apps.
+        if scopes.iter().any(|scope| scope.variables_loaded) {
+            break;
+        }
         let reference = scopes[*index].scope["variablesReference"]
             .as_u64()
             .ok_or(DebugClientError::InvalidMessage)?;
-        if reference > 0 {
+        if reference > 0 && scopes[*index].scope["expensive"] != true {
             let (request, message) =
                 client.request("variables", Some(json!({"variablesReference":reference})))?;
             job.request = Some(request);

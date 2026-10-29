@@ -302,10 +302,21 @@ export class DebugSession extends Disposable implements IDebugSession {
 		return { threads, frames: result.frames.map((value, index) => ({ ...stackFrame(value, index, this.workspace), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) })), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) };
 	}
 
-	async inspectFrame(frameId: number): Promise<readonly IDebugScopeInspection[]> {
-		const result = await this.transport!.inspect({ kind: 'frame', frameId: integer(frameId, 'frameId') }, this.runtime?.inspectionRevision ?? 0);
+	async inspectFrame(frameId: number, scopes: 'initial' | 'all' = 'initial'): Promise<readonly IDebugScopeInspection[]> {
+		const revision = this.runtime?.inspectionRevision ?? 0;
+		const result = await this.transport!.inspect({ kind: 'frame', frameId: integer(frameId, 'frameId') }, revision);
 		if (result.kind !== 'frame') throw new TypeError('Invalid frame inspection result');
-		return result.scopes.map((entry, index) => ({ scope: scope(entry.scope, index), variables: entry.variables.map(variable), ...(entry.error === null ? {} : { error: entry.error }) }));
+		const inspections: IDebugScopeInspection[] = [];
+		for (const [index, entry] of result.scopes.entries()) {
+			const descriptor = scope(entry.scope, index);
+			const load = scopes === 'all' && !entry.variablesLoaded && descriptor.variablesReference > 0;
+			try {
+				inspections.push({ scope: descriptor, variables: load ? await this.variables(descriptor.variablesReference, revision) : entry.variables.map(variable), variablesLoaded: entry.variablesLoaded || load, ...(entry.error === null ? {} : { error: entry.error }) });
+			} catch (error) {
+				inspections.push({ scope: descriptor, variables: [], variablesLoaded: true, error: getErrorMessage(error) });
+			}
+		}
+		return inspections;
 	}
 
 	async evaluateWatchExpressions(expressions: readonly string[], frameId?: number): Promise<readonly IDebugWatchResult[]> {

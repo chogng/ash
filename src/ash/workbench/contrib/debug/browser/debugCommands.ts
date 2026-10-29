@@ -309,7 +309,7 @@ registerAction2(class VisualizeVariableAction extends Action2 {
 		if (!session || session.state !== 'stopped' || !frame) return;
 		const revision = session.inspectionRevision;
 		const current = () => debug.session === session && session.state === 'stopped' && session.inspectionRevision === revision && debug.getViewModel().focusedStackFrame === frame;
-		const scopes = await session.inspectFrame(frame.id);
+		const scopes = await session.inspectFrame(frame.id, 'all');
 		if (!current()) return;
 		const quickInput = accessor.get(IQuickInputService);
 		const variable = await pickDebugItem<IQuickPickItem & { variable: IDebugVariable; }>(quickInput, scopes.flatMap(scope => scope.variables.map(variable => ({ label: variable.name, description: scope.scope.name, detail: variable.value.slice(0, 256), variable }))), localize('debug.pickVariable', 'Select a variable to visualize'));
