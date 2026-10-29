@@ -3,6 +3,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { ITerminalStatus } from '../common/terminal.js';
 
 export const enum TerminalStatus {
+	Disconnected = 'disconnected',
 	ShellIntegrationInfo = 'shell-integration-info',
 }
 

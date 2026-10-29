@@ -146,13 +146,15 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 		const active = this.terminals.activeInstance;
 		this.setTabs(rows.map(instance => {
 			const group = this.groups.getGroupForInstance(instance)!;
+			const status = instance.statusList?.primary;
+			const splitDescription = group.terminalInstances.length > 1
+				? localize('terminal.tabs.splitDescription', 'Split {0} of {1} in terminal group {2}', group.terminalInstances.indexOf(instance) + 1, group.terminalInstances.length, orderedGroups.indexOf(group) + 1)
+				: undefined;
 			return {
 				// The row's custom label owns the interactive instance card.
 				id: instance.id, value: instance, label: instance.title, tooltip: '',
-				ariaDescription: group.terminalInstances.length > 1
-					? localize('terminal.tabs.splitDescription', 'Split {0} of {1} in terminal group {2}', group.terminalInstances.indexOf(instance) + 1, group.terminalInstances.length, orderedGroups.indexOf(group) + 1)
-					: undefined,
-				icon: terminalProfileIcon(instance.profile), state: instance.state, tabId: `${instance.id}-tab`,
+				ariaDescription: [splitDescription, status?.icon ? status.tooltip : undefined].filter(Boolean).join(', ') || undefined,
+				icon: status?.icon ?? terminalProfileIcon(instance.profile), state: instance.state, tabId: `${instance.id}-tab`,
 				actions: {
 					ariaLabel: localize('terminal.title.actions', 'Terminal actions'),
 					items: [{
@@ -173,15 +175,16 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 					branch.setAttribute('aria-hidden', 'true');
 					container.append(branch);
 					this.branches.set(instance, branch);
-					const label = new IconLabel(container, { label: instance.title, icon: terminalProfileIcon(instance.profile) });
+					const label = new IconLabel(container, { label: instance.title, icon: status?.icon ?? terminalProfileIcon(instance.profile) });
 					this.labels.set(instance, label);
 					return toDisposable(() => { this.hovers.delete(instance); this.branches.delete(instance); this.labels.delete(instance); label.dispose(); hover.dispose(); });
 				},
 			};
 		}), active && rows.includes(active) ? active.id : undefined);
 		for (const [instance, label] of this.labels) {
-			label.setLabel(instance.title, undefined, { icon: terminalProfileIcon(instance.profile) });
-			label.iconElement.style.color = instance.profile.color ? `var(${colorCssVariable(instance.profile.color)})` : '';
+			const statusIcon = instance.statusList?.primary?.icon;
+			label.setLabel(instance.title, undefined, { icon: statusIcon ?? terminalProfileIcon(instance.profile) });
+			label.iconElement.style.color = !statusIcon && instance.profile.color ? `var(${colorCssVariable(instance.profile.color)})` : '';
 			const branch = this.branches.get(instance)!;
 			const members = this.groups.getGroupForInstance(instance)!.terminalInstances;
 			const index = members.indexOf(instance);

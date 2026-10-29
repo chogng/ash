@@ -1,5 +1,6 @@
 {
   "ash": {
+    "disconnectStatus": "与进程的连接已断开",
     "workbench.panel.opensMaximized.title": "面板打开时最大化",
     "workbench.panel.opensMaximized.description": "选择面板打开时是否最大化，或恢复上次的最大化状态。",
     "workbench.panel.opensMaximized.invalid": "面板最大化设置必须为 always、never 或 preserve。",

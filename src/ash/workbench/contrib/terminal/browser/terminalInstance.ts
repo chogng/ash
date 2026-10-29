@@ -35,6 +35,7 @@ import type { AgentHostTerminalService } from './agentHostTerminalService.js';
 import { XtermTerminal } from './xterm/xtermTerminal.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { TerminalStatus, TerminalStatusList } from './terminalStatusList.js';
 import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
@@ -1005,6 +1006,16 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private setState(state: TerminalInstanceState): void {
 		if (this._state === state || this.closed) return;
 		this._state = state;
+		if (state === 'reconnecting' || state === 'disconnected') {
+			this.statusList.add({
+				id: TerminalStatus.Disconnected,
+				severity: Severity.Error,
+				icon: Lxicon.debugDisconnect,
+				tooltip: localize('disconnectStatus', 'Lost connection to process'),
+			});
+		} else {
+			this.statusList.remove(TerminalStatus.Disconnected);
+		}
 		if (state === 'error') {
 			this.shellProcessManager?.stop();
 			this.writeScreenData(`\r\n${localize('terminal.operationFailed', '[terminal operation failed]')}\r\n`);

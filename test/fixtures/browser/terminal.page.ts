@@ -1544,6 +1544,7 @@ if (new URLSearchParams(location.search).has('input')) {
 				reject: () => { rejectRead!(); rejectRead = undefined; },
 				finish: async () => { try { await pasteOperation; return undefined; } catch (error) { return (error as Error).message; } },
 				disconnect: () => { connectionChanged.fire('crashed'); return terminal.state; },
+				reconnect: () => connectionChanged.fire('ready'),
 				switchAway: async () => {
 					screen.setVisible(false);
 					const other = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
@@ -1675,6 +1676,7 @@ declare global {
 			reject(): void;
 			finish(): Promise<string | undefined>;
 			disconnect(): string;
+			reconnect(): void;
 			switchAway(): Promise<void>;
 			switchBack(): void;
 			help(): Promise<string>;

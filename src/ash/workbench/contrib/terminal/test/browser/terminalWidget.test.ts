@@ -6,6 +6,39 @@ suite('terminal browser component', () => {
 	const browserTests = useBrowserTests();
 
 	for (const locale of ['en', 'zh-CN']) {
+		for (const placement of ['title', 'rows']) {
+			test(`terminal disconnect artwork follows connection status in ${placement} in ${locale}`, async () => {
+				const { page } = browserTests;
+				await page.goto(`/terminal.html?input&groups&clipboard&browser&voice&locale=${locale}`);
+				await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));
+				if (placement === 'rows') await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
+				const target = placement === 'title'
+					? page.locator('.ash-terminal-active-action button')
+					: page.locator('.ash-terminal-tabs [role="tab"]').first();
+				await expect(target).toBeVisible();
+				await page.evaluate(() => window.ashTerminalClipboardIntegration.disconnect());
+				const icon = target.locator('.ash-icon-debug-disconnect');
+				await expect(icon).toBeVisible();
+				await expect(icon).toHaveAttribute('aria-hidden', 'true');
+				await expect.poll(() => icon.evaluate(element => document.fonts.check('16px "Ash UI Icons"', element.getAttribute('data-ash-icon-character')!))).toBe(true);
+				const message = locale === 'zh-CN' ? '与进程的连接已断开' : 'Lost connection to process';
+				await expect(target).toHaveAttribute(placement === 'title' ? 'aria-label' : 'aria-description', new RegExp(message));
+				await target.focus();
+				await target.press('Alt+ArrowDown');
+				const status = page.locator('.ash-terminal-instance-hover [data-severity="error"]');
+				await expect(status).toContainText(message);
+				await expect(status.locator('.ash-icon-debug-disconnect')).toBeVisible();
+				await page.screenshot({ path: browserTests.info.outputPath(`disconnect-${placement}-${locale}.png`) });
+				await page.keyboard.press('Escape');
+				if (placement === 'rows') await target.click();
+				await page.evaluate(() => window.ashTerminalClipboardIntegration.reconnect());
+				await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.relaunch', window.ashTerminalGroupsIntegration.active()));
+				await expect(target.locator('.ash-icon-debug-disconnect')).toHaveCount(0);
+			});
+		}
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
 		test(`task command markers retain their header and final status across hidden output and process reuse in ${locale}`, async () => {
 			const { page } = browserTests;
 			await page.goto(`/terminal.html?stream&task&deferred&reuseCommands&locale=${locale}`);

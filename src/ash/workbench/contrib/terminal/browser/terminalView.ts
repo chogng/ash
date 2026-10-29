@@ -326,6 +326,7 @@ class TerminalViewItem extends Disposable {
 		super();
 		this._register(toDisposable(() => instance.detachFromElement()));
 		this._register(instance.onDidChangeState(onDidChangeState));
+		if (instance.statusList) this._register(instance.statusList.onDidChangePrimaryStatus(onDidChangeState));
 	}
 }
 
@@ -514,10 +515,11 @@ class ActiveTerminalActionViewItem extends LabelActionViewItem {
 		const tooltip = instance.title === instance.profile.title
 			? localize('terminal.title.active', 'Active terminal: {0}', instance.title)
 			: localize('terminal.title.activeProfile', 'Active terminal: {0} ({1})', instance.title, instance.profile.title);
+		const status = instance.statusList?.primary;
 		super(action, {
 			label: instance.title,
-			icon: terminalProfileIcon(instance.profile),
-			ariaLabel: tooltip,
+			icon: status?.icon ?? terminalProfileIcon(instance.profile),
+			ariaLabel: status?.icon ? `${tooltip}, ${status.tooltip}` : tooltip,
 		});
 	}
 
