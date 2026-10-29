@@ -58,6 +58,11 @@ test('native installer upgrades and removes isolated installations without losin
 		await copyFile(process.env.ASH_INSTALLATION_TEST_DAEMON!, join(bundle, 'resources/bin/ash-app-server-daemon.exe'));
 		// Silent fixture installation never launches this product executable.
 		await copyFile(process.env.ASH_INSTALLATION_TEST_DAEMON!, join(bundle, 'Ash.exe'));
+		// The full application contains platform/workspaces modules. They must be
+		// removable only while every byte in this reserved-name tree is owned.
+		const modules = 'resources/app/dist/main/platform/workspaces';
+		await mkdir(join(bundle, modules), { recursive: true });
+		await writeFile(join(bundle, modules, 'module.js'), 'delivered program');
 		await writeFile(join(bundle, 'obsolete.txt'), 'previous release');
 		await writeFile(join(bundle, 'modified.txt'), 'previous release');
 		const previous = await compile('1.0.0');
@@ -97,7 +102,7 @@ test('native installer upgrades and removes isolated installations without losin
 		await register('desktop', installation);
 		// Native removal must refuse a redirected installation before Inno gets
 		// an opportunity to traverse it or data cleanup modifies the profile.
-		const redirected = join(installation, 'external');
+		const redirected = join(installation, modules, 'external');
 		await symlink(outside, redirected, 'junction');
 		try {
 			await assert.rejects(uninstall('purge'));

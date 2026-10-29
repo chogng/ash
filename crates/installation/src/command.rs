@@ -285,7 +285,7 @@ fn uninstall(
         .ok_or_else(|| invalid("installation has no receipt"))?
         .clone();
     let outcome = (|| {
-        if product == Product::Desktop && !files::eligible(&root)? {
+        if product == Product::Desktop && !crate::upgrade::eligible(&root)? {
             return Err(invalid(
                 "installation contains links or repositories; native removal is unsafe",
             ));

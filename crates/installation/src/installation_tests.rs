@@ -468,6 +468,90 @@ fn junctions_and_bare_repositories_are_never_deleted() {
     assert!(report.retained.contains(&profile.join("cache")));
 }
 
+#[test]
+fn delivered_workspace_modules_are_not_user_worktrees() {
+    for name in ["workspaces", "worktrees", "repositories"] {
+        let (temporary, _registry, desktop, _cli, _profile) = setup();
+        let module = format!("resources/app/dist/main/platform/{name}/module.js");
+        fs::create_dir_all(desktop.join(&module).parent().unwrap()).unwrap();
+        fs::write(desktop.join(&module), "program").unwrap();
+        fs::write(desktop.join("obsolete"), "retired").unwrap();
+        let files = serde_json::json!({module.clone(): format!("{:x}", Sha256::digest(b"program")), "obsolete": format!("{:x}", Sha256::digest(b"retired"))});
+        fs::write(
+            desktop.join("resources/installation-files.json"),
+            serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"files":files})).unwrap(),
+        )
+        .unwrap();
+        let incoming = temporary.path().join("incoming.json");
+        fs::write(
+            &incoming,
+            serde_json::to_vec(
+                &serde_json::json!({"schemaVersion":1,"files":{module.clone(): files[&module]}}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(
+            !crate::files::eligible(&desktop).unwrap(),
+            "Data cleanup remains conservative"
+        );
+        assert!(crate::upgrade::eligible(&desktop).unwrap());
+        crate::upgrade::prepare(&desktop, &incoming).unwrap();
+        assert!(!desktop.join("obsolete").exists());
+        assert_eq!(
+            fs::read_to_string(desktop.join(&module)).unwrap(),
+            "program"
+        );
+    }
+}
+
+#[test]
+fn program_manifest_never_exempts_unknown_or_changed_workspace_content() {
+    for contamination in [
+        "modified",
+        "unknown-file",
+        "unknown-directory",
+        ".git",
+        ".hg",
+        ".svn",
+        "bare",
+    ] {
+        let (temporary, _registry, desktop, _cli, _profile) = setup();
+        let directory = desktop.join("resources/workspaces");
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(directory.join("module.js"), "program").unwrap();
+        fs::write(desktop.join("obsolete"), "retired").unwrap();
+        let files = serde_json::json!({"resources/workspaces/module.js": format!("{:x}", Sha256::digest(b"program")), "obsolete": format!("{:x}", Sha256::digest(b"retired"))});
+        fs::write(
+            desktop.join("resources/installation-files.json"),
+            serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"files":files})).unwrap(),
+        )
+        .unwrap();
+        match contamination {
+            "modified" => fs::write(directory.join("module.js"), "user edit").unwrap(),
+            "unknown-file" => fs::write(directory.join("notes.txt"), "user work").unwrap(),
+            "bare" => {
+                fs::write(directory.join("HEAD"), "ref: refs/heads/main").unwrap();
+                fs::create_dir(directory.join("objects")).unwrap();
+                fs::create_dir(directory.join("refs")).unwrap();
+            }
+            name => fs::create_dir(directory.join(name)).unwrap(),
+        }
+        let incoming = temporary.path().join("incoming.json");
+        fs::write(&incoming, r#"{"schemaVersion":1,"files":{}}"#).unwrap();
+        assert!(
+            !crate::upgrade::eligible(&desktop).unwrap(),
+            "{contamination}"
+        );
+        assert!(crate::upgrade::prepare(&desktop, &incoming).is_err());
+        assert!(
+            desktop.join("obsolete").exists(),
+            "Preflight must not partially remove files"
+        );
+        assert!(directory.join("module.js").exists());
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn symbolic_data_never_reaches_external_files() {

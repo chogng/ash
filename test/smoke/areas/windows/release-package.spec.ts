@@ -19,7 +19,8 @@ test('release installation runs its bundled backend, upgrades with retained data
 	assert.equal(Boolean(previousArchive), Boolean(previousVersion), 'Upgrade requires both previous archive and version');
 	// Installers write the per-user application registration. Run only on disposable CI hosts.
 	if (process.platform === 'win32') assert.equal(process.env.CI, 'true', 'Windows installer sanity requires a disposable CI host');
-	const directory = await mkdtemp(join(tmpdir(), 'ash-release-'));
+	// Keep the canonical Windows profile socket below AF_UNIX's 108-byte limit.
+	const directory = await mkdtemp(join(tmpdir(), 'ash-r-'));
 	const installation = join(directory, 'installed');
 	const userData = join(directory, 'data');
 	const workspace = join(directory, 'workspace');
@@ -31,6 +32,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 	] as const;
 	const file = join(workspace, 'main.ts');
 	let installed = false;
+	let failure: unknown;
 	try {
 		await mkdir(workspace);
 		await install(resolve(previousArchive ?? archive), installation, userData);
@@ -45,7 +47,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 		}
 		await writeFile(file, 'const release = 1;\n');
 		if (previousArchive) {
-			await exercisePackagedWorkbench(installation, previousVersion!, userData, workspace, 'const release = 2;', testInfo, 'previous', installationEnvironment(userData));
+			await exercisePackagedWorkbench(installation, previousVersion!, userData, workspace, 'const release = 2;', testInfo, 'previous', workbenchEnvironment(userData));
 			await expect.poll(async () => JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize']).toBe(17);
 			assert.equal(await readFile(file, 'utf8'), 'const release = 2;');
 			if (process.platform === 'win32' && previousVersion === '0.0.0') assert(await exists(join(installation, 'upgrade-retired.txt')));
@@ -56,9 +58,9 @@ test('release installation runs its bundled backend, upgrades with retained data
 		assert.equal(await readFile(file, 'utf8'), previousArchive ? 'const release = 2;' : 'const release = 1;\n');
 		assert.equal(JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize'], 17);
 		assert.equal(await readFile(keybindingsPath, 'utf8'), '[]');
-		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 3;', testInfo, 'candidate', installationEnvironment(userData));
+		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 3;', testInfo, 'candidate', workbenchEnvironment(userData));
 		// Reopen the delivered executable with the same state after the upgrade.
-		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 4;', testInfo, 'restart', installationEnvironment(userData));
+		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 4;', testInfo, 'restart', workbenchEnvironment(userData));
 		assert.equal(JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize'], 17);
 		await uninstall(installation, directory, userData);
 		installed = false;
@@ -72,7 +74,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 			await assertNoNativeResidue(installation);
 			await install(archive, installation, userData);
 			installed = true;
-			await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 6;', testInfo, 'reinstall', installationEnvironment(userData));
+			await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 6;', testInfo, 'reinstall', workbenchEnvironment(userData));
 			assert.equal(JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize'], 17);
 			await uninstall(installation, directory, userData, 'purge');
 			installed = false;
@@ -83,9 +85,17 @@ test('release installation runs its bundled backend, upgrades with retained data
 			assert(!await exists(userData), 'An exclusively owned profile must leave no application data after purge');
 			await assertNoNativeResidue(installation);
 		}
+	} catch (error) {
+		failure = error;
+		throw error;
 	} finally {
-		if (installed) await uninstall(installation, directory, userData);
-		await removeInstallation(directory, await realpath(tmpdir()), 'ash-release-');
+		try {
+			if (installed) await uninstall(installation, directory, userData);
+			await removeInstallation(directory, await realpath(tmpdir()), 'ash-r-');
+		} catch (cleanup) {
+			if (failure) throw new Error(`Release acceptance failed: ${String(failure)}\nCleanup also failed: ${String(cleanup)}`, { cause: failure });
+			throw cleanup;
+		}
 	}
 });
 
@@ -129,6 +139,10 @@ async function uninstall(installation: string, directory: string, userData: stri
 	else await removeInstallation(installation, await realpath(directory), 'installed');
 }
 
+function workbenchEnvironment(userData: string) {
+	return { environment: installationEnvironment(userData), homeDirectory: join(dirname(userData), 'home') };
+}
+
 function installationEnvironment(userData: string): NodeJS.ProcessEnv {
 	return { ...process.env, ASH_INSTALLATION_REGISTRY: installationRegistry(userData) };
 }
@@ -166,7 +180,7 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 	assert.equal(process.env.CI, 'true', 'System cleanup acceptance requires a disposable CI host');
 	const archive = resolve(required('ASH_RELEASE_ARCHIVE'));
 	for (const shared of [false, true]) {
-		const directory = await mkdtemp(join(tmpdir(), 'ash-release-cleanup-'));
+		const directory = await mkdtemp(join(tmpdir(), 'ash-c-'));
 		const installation = join(directory, 'installed');
 		const userData = join(directory, 'data');
 		const profile = join(userData, 'profile');
@@ -175,6 +189,7 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 		const ownedRule = `TCP Query User${randomUUID()}`;
 		const sharedRule = `TCP Query User${randomUUID()}`;
 		let installed = false;
+		let failure: unknown;
 		const shell = (script: string) => run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
 			windowsHide: true, timeout: 60_000,
 			env: { ...installationEnvironment(userData), ASH_TEST_INSTALL: installation, ASH_TEST_OUTSIDE: outside, ASH_TEST_OWNED_RULE: ownedRule, ASH_TEST_SHARED_RULE: sharedRule },
@@ -210,7 +225,7 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 			await install(archive, installation, userData);
 			assert(!await exists(join(installation, 'obsolete.txt')));
 			assert.equal(await readFile(join(installation, 'modified.txt'), 'utf8'), 'user changed this');
-			await exercisePackagedWorkbench(installation, required('ASH_RELEASE_VERSION'), userData, workspace, 'const release = 5;', testInfo, shared ? 'shared' : 'purge', installationEnvironment(userData));
+			await exercisePackagedWorkbench(installation, required('ASH_RELEASE_VERSION'), userData, workspace, 'const release = 5;', testInfo, shared ? 'shared' : 'purge', workbenchEnvironment(userData));
 			await writeFile(join(userData, 'state.json'), JSON.stringify({ installationAcceptance: true }));
 			const lease = spawn(maintenance, ['installation', 'lease', '--product', 'desktop', '--root', installation], { windowsHide: true, env: installationEnvironment(userData), stdio: ['pipe', 'pipe', 'pipe'] });
 			try {
@@ -245,10 +260,18 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 				assert.deepEqual((await readdir(profile)).sort(), ['logs', 'worktrees']);
 			}
 			await assertNoNativeResidue(installation);
+		} catch (error) {
+			failure = error;
+			throw error;
 		} finally {
-			if (installed) await uninstall(installation, directory, userData);
-			await shell("Get-NetFirewallRule -Name $env:ASH_TEST_OWNED_RULE,$env:ASH_TEST_SHARED_RULE -ErrorAction SilentlyContinue | Remove-NetFirewallRule");
-			await removeInstallation(directory, await realpath(tmpdir()), 'ash-release-cleanup-');
+			try {
+				if (installed) await uninstall(installation, directory, userData);
+				await shell("Get-NetFirewallRule -Name $env:ASH_TEST_OWNED_RULE,$env:ASH_TEST_SHARED_RULE -ErrorAction SilentlyContinue | Remove-NetFirewallRule");
+				await removeInstallation(directory, await realpath(tmpdir()), 'ash-c-');
+			} catch (cleanup) {
+				if (failure) throw new Error(`Release acceptance failed: ${String(failure)}\nCleanup also failed: ${String(cleanup)}`, { cause: failure });
+				throw cleanup;
+			}
 		}
 	}
 });

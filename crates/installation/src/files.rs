@@ -4,6 +4,7 @@ use crate::absolute_path;
 use crate::invalid;
 use sha2::Digest;
 use sha2::Sha256;
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::io::Read;
@@ -121,6 +122,26 @@ pub fn remove_owned_tree(path: &Path, report: &mut RemovalReport) -> io::Result<
 }
 
 pub(crate) fn eligible(path: &Path) -> io::Result<bool> {
+    eligible_with_programs(path, Ownership::Data)
+}
+
+#[derive(Clone, Copy)]
+enum Ownership<'a> {
+    Data,
+    Installation {
+        root: &'a Path,
+        manifest: &'a BTreeMap<String, String>,
+    },
+}
+
+pub(crate) fn eligible_installation(
+    root: &Path,
+    manifest: &BTreeMap<String, String>,
+) -> io::Result<bool> {
+    eligible_with_programs(root, Ownership::Installation { root, manifest })
+}
+
+fn eligible_with_programs(path: &Path, ownership: Ownership<'_>) -> io::Result<bool> {
     let metadata = fs::symlink_metadata(path)?;
     if redirected(&metadata) {
         return Ok(false);
@@ -137,17 +158,69 @@ pub(crate) fn eligible(path: &Path) -> io::Result<bool> {
     for entry in fs::read_dir(path)? {
         let entry = entry?;
         let name = entry.file_name();
-        if [
-            ".git",
-            ".hg",
-            ".svn",
-            "worktrees",
-            "workspaces",
-            "repositories",
-        ]
-        .iter()
-        .any(|protected| name.to_string_lossy().eq_ignore_ascii_case(protected))
-            || !eligible(&entry.path())?
+        if [".git", ".hg", ".svn"]
+            .iter()
+            .any(|protected| name.to_string_lossy().eq_ignore_ascii_case(protected))
+        {
+            return Ok(false);
+        }
+        if ["worktrees", "workspaces", "repositories"]
+            .iter()
+            .any(|protected| name.to_string_lossy().eq_ignore_ascii_case(protected))
+        {
+            // Delivered modules also use names such as platform/workspaces. Only
+            // the installed manifest and unchanged bytes can distinguish them
+            // from user data; a name alone must never grant deletion authority.
+            match ownership {
+                Ownership::Data => return Ok(false),
+                Ownership::Installation { root, manifest } => {
+                    if !owned_program_tree(&entry.path(), root, manifest)? {
+                        return Ok(false);
+                    }
+                }
+            }
+        } else if !eligible_with_programs(&entry.path(), ownership)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn owned_program_tree(
+    path: &Path,
+    root: &Path,
+    manifest: &BTreeMap<String, String>,
+) -> io::Result<bool> {
+    let metadata = fs::symlink_metadata(path)?;
+    if redirected(&metadata) {
+        return Ok(false);
+    }
+    let relative = path
+        .strip_prefix(root)
+        .map_err(invalid)?
+        .to_string_lossy()
+        .replace('\\', "/");
+    if metadata.is_file() {
+        return match manifest.get(&relative) {
+            Some(expected) => Ok(file_hash(path)? == *expected),
+            None => Ok(false),
+        };
+    }
+    if !metadata.is_dir() || repository_root(path) {
+        return Ok(false);
+    }
+    let prefix = format!("{relative}/");
+    if !manifest.keys().any(|name| name.starts_with(&prefix)) {
+        return Ok(false);
+    }
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        if [".git", ".hg", ".svn"].iter().any(|name| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(name)
+        }) || !owned_program_tree(&entry.path(), root, manifest)?
         {
             return Ok(false);
         }

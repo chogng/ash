@@ -17,6 +17,8 @@ export interface ElectronLaunchOptions {
 	/** Total budget for process launch and Workbench restoration. */
 	readonly startupTimeout?: number;
 	readonly userDataDirectory: string;
+	/** Installation tests keep OS-owned home files separate from removable application data. */
+	readonly homeDirectory?: string;
 	readonly profileDirectory?: string;
 	/** Explicit opt-in for real-model scenarios; ordinary tests keep account storage isolated. */
 	readonly externalCodexHome?: string;
@@ -52,15 +54,16 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	const electronExecutablePath = bundle
 		? process.platform === 'darwin' ? join(bundle, 'Contents', 'MacOS', 'Ash') : join(bundle, 'Ash.exe')
 		: resolveDevelopmentElectronExecutable(desktopDirectory);
-	const environment = createTestEnvironment(options.userDataDirectory, options.environment ?? process.env, options.externalCodexHome);
+	const homeDirectory = options.homeDirectory ?? options.userDataDirectory;
+	const environment = createTestEnvironment(homeDirectory, options.environment ?? process.env, options.externalCodexHome);
 	if (process.platform === 'win32') {
 		// Known-folder APIs verify this directory exists before returning LocalAppData
 		// to backend services such as the cross-process Git operation lock.
-		mkdirSync(join(options.userDataDirectory, 'AppData', 'Local'), { recursive: true });
+		mkdirSync(join(homeDirectory, 'AppData', 'Local'), { recursive: true });
 		// Windows cannot begin a Jump List transaction without its destination stores
 		// beneath the isolated USERPROFILE. Keep Shell data inside the test home too.
 		for (const store of ['AutomaticDestinations', 'CustomDestinations']) {
-			mkdirSync(join(options.userDataDirectory, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Recent', store), { recursive: true });
+			mkdirSync(join(homeDirectory, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Recent', store), { recursive: true });
 		}
 	}
 	if (bundle) {

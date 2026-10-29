@@ -43,7 +43,7 @@ pub(crate) fn prepare(root: &Path, incoming: &Path) -> io::Result<()> {
         return Ok(());
     }
     let root = files::real_directory(root)?;
-    if !files::eligible(&root)? {
+    if !eligible(&root)? {
         return Err(invalid(
             "installation contains links or repositories; upgrade cannot safely replace its files",
         ));
@@ -94,6 +94,16 @@ pub(crate) fn prepare(root: &Path, incoming: &Path) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+pub(crate) fn eligible(root: &Path) -> io::Result<bool> {
+    let path = root.join("resources/installation-files.json");
+    let manifest = if path.exists() {
+        read(&path)?.files
+    } else {
+        BTreeMap::new()
+    };
+    files::eligible_installation(root, &manifest)
 }
 
 pub(crate) fn installed_files(root: &Path) -> io::Result<Vec<std::path::PathBuf>> {

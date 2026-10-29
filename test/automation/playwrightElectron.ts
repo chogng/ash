@@ -174,7 +174,9 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 	} catch (error) {
 		// A deadline can win before the readiness call rejects. Collect the document
 		// here while the process is still alive, with a separate bounded read.
-		const page = application.windows()[0];
+		// Main may have exited and released Playwright's channel before startup
+		// diagnostics run. Keep that failure from hiding the original launch error.
+		const page = electronProcess.exitCode === null && electronProcess.signalCode === null ? application.windows()[0] : undefined;
 		const text = page ? await beforeDeadline(page.evaluate(() => [
 			document.body.innerText,
 			...Array.from(document.querySelectorAll('textarea'), field => field.value),

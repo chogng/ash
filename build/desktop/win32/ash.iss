@@ -131,7 +131,7 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then begin
     MaintenancePath := ExpandConstant('{tmp}\ash-install-maintenance.exe');
-    if not FileCopy(ExpandConstant('{app}\resources\bin\ash-app-server-daemon.exe'), MaintenancePath, False) then
+    if not CopyFile(ExpandConstant('{app}\resources\bin\ash-app-server-daemon.exe'), MaintenancePath, False) then
       RaiseException(InstallationMessage('InstallCleanupFailed'));
     if not RunMaintenance(MaintenancePath, 'prepare-uninstall', '--mode ' + RemovalMode) then
       RaiseException(FmtMessage(InstallationMessage('CleanupFailed'), [ExpandConstant('{localappdata}\Ash\installation-registry')]));

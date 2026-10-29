@@ -1,12 +1,24 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test, type TestInfo } from '@playwright/test';
 import { launchElectron } from './playwrightElectron.js';
+import type { ElectronLaunchOptions } from './electron.js';
 
 /** Verify file and terminal operations through the delivered application's own backend. */
-export async function exercisePackagedWorkbench(installation: string, version: string, userDataDirectory: string, workspaceDirectory: string, saved: string, testInfo: TestInfo, stage: string, environment?: NodeJS.ProcessEnv): Promise<void> {
+export async function exercisePackagedWorkbench(installation: string, version: string, userDataDirectory: string, workspaceDirectory: string, saved: string, testInfo: TestInfo, stage: string, options?: Pick<ElectronLaunchOptions, 'environment' | 'homeDirectory'>): Promise<void> {
 	const packagedBundle = process.platform === 'darwin' ? join(installation, 'Ash.app') : installation;
-	const desktop = await test.step(`${stage}: launch delivered application`, () => launchElectron({ packagedBundle, appServerMode: 'required', startupTimeout: 60_000, userDataDirectory, workspaceDirectory, workspacePermissions: 'development', environment }));
+	const attachBackendLogs = async (): Promise<void> => {
+		const logs = join(userDataDirectory, 'profile', 'run');
+		for (const entry of await readdir(logs, { withFileTypes: true }).catch(() => [])) {
+			if (entry.isFile() && entry.name.endsWith('.log')) {
+				await testInfo.attach(`${stage}-app-server-${entry.name}`, { path: join(logs, entry.name), contentType: 'text/plain' });
+			}
+		}
+	};
+	const desktop = await test.step(`${stage}: launch delivered application`, async () => {
+		try { return await launchElectron({ ...options, packagedBundle, appServerMode: 'required', startupTimeout: 60_000, userDataDirectory, workspaceDirectory, workspacePermissions: 'development' }); }
+		catch (error) { await attachBackendLogs(); throw error; }
+	});
 	const page = desktop.driver.workbench.page;
 	const diagnostics = desktop.driver.diagnostics;
 	let failed = false;
@@ -40,6 +52,7 @@ export async function exercisePackagedWorkbench(installation: string, version: s
 			expect(diagnostics.errors).toEqual([]);
 		} catch (error) {
 			failed = true;
+			await attachBackendLogs();
 			await testInfo.attach(`${stage}-diagnostics`, { body: JSON.stringify({ pageErrors: diagnostics.pageErrors, consoleErrors: diagnostics.consoleErrors, dom: await page.locator('body').innerText() }, null, 2), contentType: 'application/json' });
 			throw error;
 		} finally {
