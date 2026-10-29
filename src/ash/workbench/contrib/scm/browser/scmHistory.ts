@@ -20,7 +20,6 @@ import type { IHoverService, IManagedHover } from '../../../../platform/hover/br
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { openLinkFromMarkdown } from '../../../../platform/markdown/browser/markdownRenderer.js';
 import { localize, getNLSLanguage } from '../../../../nls.js';
-import { findLastIdx } from "../../../../base/common/arraysFind.js";
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
 import { chartsBlue, chartsPurple } from '../../../../platform/theme/common/colors/chartsColors.js';
 import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, type ISCMHistoryItemDetails, type ISCMHistoryItem, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryItemGraphNode } from '../common/history.js';
@@ -176,10 +175,10 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 	}
 
 	for (let index = 1; index < row.historyItem.parentIds.length; index += 1) {
-		// Repeated parent IDs keep separate branch lanes until that commit is reached.
-		let parentOutputIndex = findLastIdx(row.outputSwimlanes, lane => lane.id === row.historyItem.parentIds[index]);
-		if (parentOutputIndex < 0) { parentOutputIndex = findLastIdx(row.outputSwimlanes, lane => lane.id === SCMIncomingHistoryItemId); }
-		if (parentOutputIndex === -1) continue;
+		// createRows appends a distinct lane for every additional parent. Use its
+		// position because summary nodes can replace its ID while an unrelated
+		// lane still targets the original parent commit.
+		const parentOutputIndex = row.outputSwimlanes.length - row.historyItem.parentIds.length + index;
 		const parentColorIndex = row.outputSwimlanes[parentOutputIndex].color;
 		appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * (parentOutputIndex + 1)} ${LaneHeight}`, parentColorIndex);
 		appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} H ${LaneWidth * (circleIndex + 1)}`, parentColorIndex);

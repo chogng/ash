@@ -80,6 +80,30 @@ suite('SCM history graph', () => {
 			environment.window.close();
 		}
 	});
+
+	for (const incoming of [false, true]) test(`connects a remote merge to its own parent lane with incoming changes ${incoming ? 'shown' : 'hidden'}`, () => {
+		const history: ISCMHistoryItem[] = [
+			{ id: 'local', parentIds: ['base'], subject: 'local', message: 'local' },
+			{ id: 'remote', parentIds: ['topic', 'base'], subject: 'remote merge', message: 'remote merge' },
+			{ id: 'base', parentIds: ['root'], subject: 'base', message: 'base' },
+			{ id: 'topic', parentIds: ['root'], subject: 'topic', message: 'topic' },
+			{ id: 'root', parentIds: [], subject: 'root', message: 'root' },
+		];
+		const rows = toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
+			remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' }, base: 'base', incoming, outgoing: true,
+		});
+		const environment = new JSDOM();
+		try {
+			const merge = rows.find(row => row.historyItem.id === 'remote')!;
+			const graph = renderSCMHistoryItemGraph(merge, 22, environment.window.document);
+			assert.deepEqual(merge.historyItem.parentIds, ['topic', 'base']);
+			assert.equal(graph.querySelectorAll('path[d="M 22 11 A 11 11 0 0 1 33 22"]').length, 1, 'The second parent must enter the third lane, including when projected through Incoming Changes.');
+			assert.equal(graph.querySelectorAll('path[d="M 22 11 H 22"]').length, 1, 'The merge edge must start at its own node.');
+			assert.equal(graph.querySelectorAll('path[d="M 0 11 A 11 11 0 0 1 11 22"]').length, 0, 'The merge must not hook into the unrelated local branch.');
+		} finally {
+			environment.window.close();
+		}
+	});
 });
 
 test('summary nodes compare captured branch revisions without changing commit parents', () => {
