@@ -402,6 +402,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "debug-disconnect",
+      "file": "debug-disconnect.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "debug-pause",
       "file": "debug-pause.svg",
       "rendering": "symbolic"

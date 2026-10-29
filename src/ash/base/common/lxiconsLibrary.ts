@@ -84,6 +84,7 @@ export const lxiconsLibrary = {
 	databaseFlat: registerLxicon("database-flat", 0xe04c),
 	debug: registerLxicon("debug", 0xe051),
 	debugAlt: registerLxicon("debug-alt", 0xe04e),
+	debugDisconnect: registerLxicon("debug-disconnect", 0xe139),
 	debugPause: registerLxicon("debug-pause", 0xe04f),
 	debugStart: registerLxicon("debug-start", 0xe050),
 	design: registerLxicon("design", 0xe052),

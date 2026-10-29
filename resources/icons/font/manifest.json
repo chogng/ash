@@ -312,7 +312,8 @@
     "terminal-session": "E135",
     "folder-opened": "E136",
     "diff-added": "E137",
-    "diff-changes": "E138"
+    "diff-changes": "E138",
+    "debug-disconnect": "E139"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -394,6 +395,7 @@
     "database-flat": "872752313b3d506d8cf09ab4da8e47d5ecfdfd5f3c6f6e42d993cf582893df7b",
     "database": "15b0a7834ce691e526b0b84d339e4139ac76d540acb55b20dad51f7d1026ad62",
     "debug-alt": "bffaea5a151dbd4fac1aa8ba6931548a277126f1826095f23ab6656b66e69691",
+    "debug-disconnect": "7b0a2f111e6d5d91ebaa203a3267aa04d1cb07a77c48d5f29d638c58bd4a8ed2",
     "debug-pause": "4ff5ba33d3a86ab23dc9e9cfc0385375e63bcbdaba09dd8ef19a95d819572cd3",
     "debug-start": "5190fd05105dadd496d1615a320b90fd31253163d58dd8815fb1bcd9308aa5f9",
     "debug": "b2b4d76d8e0563383343f0fa3d71eba6d171a88aa4e0142c3195756f7a47209e",
