@@ -126,7 +126,16 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('rust-analyzer')) this.queuePermissionRefresh();
 		}));
-		if (checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queuePermissionRefresh()));
+		if (checkWorkspaceTrust) {
+			this._register(workspaceTrust.onDidChangeTrustedFolders(() => this.queuePermissionRefresh()));
+			this._register(workspaceTrust.addWorkspaceTrustTransitionParticipant({
+				participate: async () => {
+					this.queuePermissionRefresh();
+					await Promise.resolve();
+					await this.permissionQueue;
+				}
+			}));
+		}
 		this._register(workspace.onDidChangeWorkspace(() => {
 			this.clearPullCapabilities();
 			this.languageAllowed = false;

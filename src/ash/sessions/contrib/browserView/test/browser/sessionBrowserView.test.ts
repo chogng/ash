@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../../../workbench/test/common/workbenchTestServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -211,7 +212,7 @@ function fixture() {
 			onDidChangeWorkbenchState: Event.None,
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [] }), getWorkbenchState: () => WorkbenchState.FOLDER, getWorkspaceFolder: () => null
 		}],
-		[IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) }],
+		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>))],
 		[IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, pages], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs],
 		[ITelemetryService, new NullTelemetryServiceShape()], [ISessionsManagementService, management], [ISessionsService, sessions],
 	)));

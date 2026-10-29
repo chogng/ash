@@ -196,7 +196,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	}
 
 	test('the runtime registry shares one endpoint, isolates equal servers with different roots, and retires window scopes', async () => {
-		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		const first = { name: 'Build', host: 'build', workspace: '/repo' };
 		const nested = { name: 'Nested', host: 'build', workspace: '/repo/nested' };
@@ -227,7 +227,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('disconnecting a pending runtime endpoint rejects acquisition and its late Main result cannot publish a host', async () => {
-		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		const opening = new DeferredPromise<void>();
 		beforeHostOpen = () => opening.p;
@@ -245,7 +245,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('synchronous registry observers can retire a starting endpoint before Main acquisition', async () => {
-		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		using listener = registry.onDidChangeConnections(() => {
 			const first = registry.connections[0];
@@ -257,7 +257,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('runtime reconnect waits for directory rebind, retains its domain scope, and reports failed restoration', async () => {
-		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const registry = renderer.agentHosts!;
 		const host = await registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal);
 		const generation = host.api.appServer.connectionGeneration;
@@ -294,7 +294,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('the production SSH renderer restores current workspace directories only after its execution carrier reconnects', async () => {
-		using renderer = await createRendererApi([], { browser: false }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		assert.deepEqual(directoryBindings, [{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] }]);
 		const localReconnected = new DeferredPromise<void>();
 		onInitialized = channel => { if (channel === 'ash:app-server:local:initialized') void localReconnected.complete(); };
@@ -316,7 +316,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		directoryAuthorized = false;
 		let prompts = 0;
 		using renderer = await createRendererApi([], { browser: false }, {
-			requestWorkspaceTrust: async () => { prompts++; return 'cancel'; },
+			requestDirectoryPermissions: async () => { prompts++; return 'cancel'; },
 		}, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		assert.equal(await renderer.appServer.getConnectionState(), 'ready');
@@ -341,12 +341,12 @@ suite('Desktop Workbench Agent Host selection', () => {
 	test('startup directory failures still reject renderer creation', async () => {
 		failDirectoryBinding = true;
 		await assert.rejects(createRendererApi([], { browser: false }, {
-			requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); },
+			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); },
 		}, mainProcess), /restore rejected/);
 	});
 
 	test('workspace rebind failure remains failed and concurrent retries restore directories without reconnecting the ready carrier', async () => {
-		using renderer = await createRendererApi([], { browser: false }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		const states: string[] = [];
 		const failedState = new DeferredPromise<void>();
@@ -386,7 +386,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('a retired workspace restoration cannot fail a newer ready connection', async () => {
-		using renderer = await createRendererApi([], { browser: false }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		const entered = new DeferredPromise<void>();
 		const carrierSettled = new DeferredPromise<void>();

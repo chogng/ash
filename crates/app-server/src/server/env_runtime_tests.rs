@@ -4844,6 +4844,120 @@ fn browser_workspace_explicit_revocation_retires_exact_handles_and_narrows_rollb
 }
 
 #[test]
+fn web_workspace_rebind_activates_services_after_config_grant_promotion() {
+    for promoted_index in [0, 1] {
+        let first = TestDir::new("trust-promotion-first", "first.txt");
+        let second = TestDir::new("trust-promotion-second", "second.txt");
+        let config = Arc::new(ConfigStore::open(first.path.join("permissions.sqlite3")).unwrap());
+        let roots = [first.root(), second.root()];
+        let mut revision = ConfigRevision::INITIAL;
+        for (index, root) in roots.iter().enumerate() {
+            revision = config
+                .apply(ConfigCommandRequest {
+                    command_id: CommandId::new(format!("restrict-trust-root-{index}")).unwrap(),
+                    expected_revision: revision,
+                    command: UserConfigCommand::SetDirectoryGrant {
+                        dir: root.id(),
+                        permissions: inspection_permissions(),
+                        display_path: None,
+                    },
+                })
+                .unwrap()
+                .revision;
+        }
+        let server = server()
+            .with_config_store(Arc::clone(&config))
+            .with_local_env_host(None, DirGrantPolicy::WebSession(Arc::clone(&config)))
+            .unwrap();
+        server
+            .bind_web_workspace(
+                None,
+                roots
+                    .iter()
+                    .map(|root| (root.clone(), String::new()))
+                    .collect(),
+            )
+            .unwrap();
+        let ids = roots.each_ref().map(|root| root.id().to_string());
+        assert!(
+            server
+                .terminal_service_for(Some(&ids[promoted_index]))
+                .is_err()
+        );
+        config
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("promote-trust-root").unwrap(),
+                expected_revision: revision,
+                command: UserConfigCommand::SetDirectoryGrant {
+                    dir: roots[promoted_index].id(),
+                    permissions: host_directory_capabilities(),
+                    display_path: None,
+                },
+            })
+            .unwrap();
+        // Config reconciliation replaces file routes immediately. The subsequent
+        // renderer rebind must still initialize the newly authorized execution services.
+        server
+            .env_runtime_control()
+            .unwrap()
+            .reconcile_user_directory_grants(&config.read_snapshot().unwrap().values)
+            .unwrap();
+        let mut connection = server.product_host_connection();
+        let request_id = AtomicUsize::new(1);
+        let rpc = |connection: &mut ConnectionState, method: &str, params: serde_json::Value| {
+            serde_json::from_str::<serde_json::Value>(
+                &server.handle_json(
+                    connection,
+                    &serde_json::json!({
+                        "jsonrpc": "2.0", "id": request_id.fetch_add(1, Ordering::SeqCst), "method": method, "params": params,
+                    })
+                    .to_string(),
+                ),
+            )
+            .unwrap()
+        };
+        let initialized = rpc(
+            &mut connection,
+            "initialize",
+            serde_json::json!({
+                "clientInfo": {"name": "trust-transition-test", "version": "1"},
+                "capabilities": {"directoryGrantsHost": {"version": 1}},
+            }),
+        );
+        assert!(initialized.get("error").is_none(), "{initialized}");
+        let bindings = serde_json::json!({"dirs": roots.iter().zip(&ids).map(|(root, id)| {
+            serde_json::json!({"id": id, "path": root.canonical_path(), "grant": {"type": "config"}})
+        }).collect::<Vec<_>>()});
+        let rebound = rpc(&mut connection, "env/dirs/set", bindings.clone());
+        assert!(rebound.get("error").is_none(), "{rebound}");
+        for (index, id) in ids.iter().enumerate() {
+            assert!(server.content_search_service_for(Some(id)).is_ok());
+            let profiles = rpc(
+                &mut connection,
+                "terminal/profile/list",
+                serde_json::json!({"dirId": id}),
+            );
+            assert_eq!(
+                profiles.get("error").is_none(),
+                index == promoted_index,
+                "{profiles}"
+            );
+        }
+        let terminals = server
+            .terminal_service_for(Some(&ids[promoted_index]))
+            .unwrap();
+        let repeated = rpc(&mut connection, "env/dirs/set", bindings);
+        assert!(repeated.get("error").is_none(), "{repeated}");
+        assert!(Arc::ptr_eq(
+            &terminals,
+            &server
+                .terminal_service_for(Some(&ids[promoted_index]))
+                .unwrap()
+        ));
+    }
+}
+
+#[test]
 fn web_readonly_reconciliation_preserves_directory_ids_and_other_roots() {
     for restricted_index in [0, 1] {
         let first = TestDir::new("readonly-route-first", "original.txt");

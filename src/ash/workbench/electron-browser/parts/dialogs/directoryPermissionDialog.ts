@@ -4,7 +4,7 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { DialogResult, type DialogRequest } from '../../../../platform/dialogs/common/dialogs.js';
-import type { IWorkspaceTrustRequestService, WorkspaceTrustChoice } from '../../../../platform/workspace/common/workspaceTrust.js';
+import type { IDirectoryPermissionRequestService, WorkspaceTrustChoice } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { ManagedStyleSheet } from '../../../../base/browser/domStylesheets.js';
 import { generateColorThemeCSS } from '../../../services/themes/browser/colorThemeCss.js';
@@ -12,7 +12,7 @@ import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/comm
 import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialog.js';
 
 /** Presents directory authorization in the window before or after Workbench startup. */
-export class DirectoryPermissionDialog extends Disposable implements IWorkspaceTrustRequestService {
+export class DirectoryPermissionDialog extends Disposable implements IDirectoryPermissionRequestService {
 	private readonly activeRequest = this._register(new MutableDisposable<DisposableStore>());
 	private readonly handler: BrowserDialogHandler;
 
@@ -21,7 +21,7 @@ export class DirectoryPermissionDialog extends Disposable implements IWorkspaceT
 		this.handler = new BrowserDialogHandler(container);
 	}
 
-	public async requestWorkspaceTrust(path: string, signal?: AbortSignal): Promise<WorkspaceTrustChoice> {
+	public async requestDirectoryPermissions(path: string, signal?: AbortSignal): Promise<WorkspaceTrustChoice> {
 		this.assertNotDisposed();
 		if (signal) throwIfCancelled(signal);
 		if (this.activeRequest.value) throw new Error('Directory permission selection is already in progress');

@@ -207,7 +207,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 				const focused = document.activeElement;
 				if (!this.active || !isHTMLElement(focused) || !this.root.contains(focused)) return undefined;
 				return new AccessibleContentProvider(AccessibleViewProviderId.WorkspaceTrust, { type }, () => type === AccessibleViewType.Help
-					? localize('workspaceTrust.help', 'Workspace Trust\nThis page shows the current folder’s effective permissions on this window’s connected host, independently of the selected Agents conversation. Use Tab to reach Trust workspace or Open read-only. Each action asks for confirmation before saving and restoring the workspace connection. For multi-folder workspaces, select the folder to manage. Expand Advanced permissions with Enter or Space to review the folder path, choose a preset or change individual permission switches. Advanced changes are a draft until Save permissions is confirmed. Discard changes restores the saved permissions. When permissions cannot be applied or read, Refresh rereads them and discards drafts. If grants, workspace or connection change, review the refreshed permissions before saving. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost; review the warning before confirming. Hosts without management authority can only view permissions. Escape closes this help and returns focus.')
+					? localize('workspaceTrust.help', 'Workspace Trust\nThis page shows the current folder’s effective permissions on this window’s connected host, independently of the selected Agents conversation. Use Tab to reach Trust workspace or Open read-only. Each action asks for confirmation before saving and restoring the workspace connection. Trust changes finish after workspace integrations have updated. For multi-folder workspaces, select the folder to manage. Expand Advanced permissions with Enter or Space to review the folder path, choose a preset or change individual permission switches. Advanced changes are a draft until Save permissions is confirmed. Discard changes restores the saved permissions. When permissions cannot be applied or read, Refresh rereads them and discards drafts. If grants, workspace or connection change, review the refreshed permissions before saving. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost; review the warning before confirming. Hosts without management authority can only view permissions. Escape closes this help and returns focus.')
 					: [this.folderName.textContent, this.folderPath.textContent, this.heading.textContent, this.summary.textContent, ...[...this.draft].map(permission => this.permissionLabel(permission)), this.status.textContent].join('\n'),
 					() => { if (focused.isConnected) focused.focus(); }, AccessibilityVerbositySettingId.WorkspaceTrust);
 			},
@@ -345,10 +345,17 @@ export class WorkspaceTrustEditor extends EditorPane {
 			});
 			// Confirmation may outlive the selected workspace or connection. It authorizes only this captured target.
 			if (!result.confirmed || !this.current(generation) || connectionGeneration !== this.api.connectionGeneration) return;
-			await this.trust.setDirectoryPermissions(path, permissions, revision);
-			if (!this.current(generation) || connectionGeneration !== this.api.connectionGeneration) return;
-			this.status.textContent = localize('workspaceTrust.applying', 'Permissions saved. Restoring the workspace connection…');
-			await this.api.recovery?.reconnect();
+			if (preset) {
+				const folder = this.workspace.getWorkspace().folders.find(folder => folder.uri.toString() === selected);
+				if (!folder) return;
+				await this.management.setUrisTrust([folder.uri], development, revision);
+			} else {
+				await this.trust.setDirectoryPermissions(path, permissions, revision);
+				if (!this.current(generation) || connectionGeneration !== this.api.connectionGeneration) return;
+				this.status.textContent = localize('workspaceTrust.applying', 'Permissions saved. Restoring the workspace connection…');
+				await this.api.recovery?.reconnect();
+				await this.management.resolveWorkspaceTrust();
+			}
 			// Recovery invalidates the old snapshot. Reread the still-open folder before restoring focus.
 			if (this.active && this.selected === selected) {
 				await this.refresh();

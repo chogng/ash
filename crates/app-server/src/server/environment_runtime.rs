@@ -110,6 +110,19 @@ pub(super) struct DirRuntime {
 }
 
 impl DirRuntime {
+    /// Reconciliation installs file routes before an explicit rebind initializes
+    /// search and execution. Equal grants alone cannot retain that partial runtime.
+    fn can_retain(&self, next: &Grant) -> bool {
+        self.grant.dir() == next.dir()
+            && self.grant.source() == next.source()
+            && self.grant.permissions() == next.permissions()
+            && self.grant.is_active()
+            && next.is_active()
+            && (!next.permissions().allows(Permission::SearchFiles)
+                || self.content_search.is_some())
+            && (!next.permissions().allows(Permission::ExecuteCommands) || self.terminals.is_some())
+    }
+
     /// Replace the same directory's file capabilities without a fallible watcher startup
     /// delaying revocation. Existing authorized watches keep their route; executable
     /// services require an explicit rebind. The caller retires the returned old grant.
@@ -1907,14 +1920,10 @@ impl AppServer {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             let unchanged = runtime.dirs.len() == dirs.len()
                 && dirs.iter().all(|(id, next)| {
-                    runtime.dirs.get(id).is_some_and(|current| {
-                        let current = &current.grant;
-                        current.dir() == next.dir()
-                            && current.source() == next.source()
-                            && current.permissions() == next.permissions()
-                            && current.is_active()
-                            && next.is_active()
-                    })
+                    runtime
+                        .dirs
+                        .get(id)
+                        .is_some_and(|current| current.can_retain(next))
                 });
             if unchanged {
                 return Ok(runtime
@@ -2010,14 +2019,7 @@ impl AppServer {
             let ids = runtime
                 .dirs
                 .iter()
-                .filter(|(id, current)| {
-                    dirs.get(*id).is_some_and(|next| {
-                        current.grant.dir() == next.dir()
-                            && current.grant.source() == next.source()
-                            && current.grant.permissions() == next.permissions()
-                            && current.grant.is_active()
-                    })
-                })
+                .filter(|(id, current)| dirs.get(*id).is_some_and(|next| current.can_retain(next)))
                 .map(|(id, _)| id.clone())
                 .collect::<Vec<_>>();
             ids
@@ -3057,17 +3059,23 @@ impl AppServer {
     }
 
     fn selected_grant_is_current(&self, authorization: &Grant) -> bool {
-        self.env_runtime
+        let runtime = self
+            .env_runtime
             .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .selected_grant
-            .as_ref()
-            .is_some_and(|current| {
-                current.dir() == authorization.dir()
-                    && current.source() == authorization.source()
-                    && current.permissions() == authorization.permissions()
-                    && current.is_active() == authorization.is_active()
-            })
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        runtime.selected_grant.as_ref().is_some_and(|current| {
+            current.dir() == authorization.dir()
+                && current.source() == authorization.source()
+                && current.permissions() == authorization.permissions()
+                && current.is_active()
+                && authorization.is_active()
+                && (!authorization.permissions().allows(Permission::SearchFiles)
+                    || runtime.workspace.content_search.is_some())
+                && (!authorization
+                    .permissions()
+                    .allows(Permission::ExecuteCommands)
+                    || runtime.execution.terminals.is_some())
+        })
     }
 
     #[cfg(test)]

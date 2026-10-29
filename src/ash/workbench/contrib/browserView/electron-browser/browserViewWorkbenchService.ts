@@ -158,6 +158,8 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	private async defaultStorage(owner: IBrowserViewCreateOptions['owner']): Promise<IBrowserViewCreateOptions['session']> {
 		if (owner.type === 'agent') { throw new Error('Agent browser storage requires an explicit Thread'); }
 		// Offline hosts cannot resolve backend capabilities; keep new pages isolated until trust is known.
+		await this.trust.workspaceTrustInitialized;
+		await this.trust.resolveWorkspaceTrust().catch(() => undefined);
 		const trust = await this.trust.getWorkspaceTrustInfo().catch(() => undefined);
 		if (!trust?.isTrusted) { return { scope: BrowserViewStorageScope.Ephemeral }; }
 		const configured = this.configuration.getValue<string>('workbench.browser.dataStorage');

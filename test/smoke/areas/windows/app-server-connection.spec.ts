@@ -217,6 +217,15 @@ startElectronApplication();
 					return JSON.parse(output.stdout) as { pid: number; instanceId: string; };
 				}
 			});
+			if (testInfo.status !== testInfo.expectedStatus) {
+				const rendererErrors = testInfo.outputPath('renderer-errors.txt');
+				await writeFile(rendererErrors, startupErrors.join('\n'));
+				await testInfo.attach('renderer-errors.txt', { path: rendererErrors, contentType: 'text/plain' });
+				const connectionState = testInfo.outputPath('connection-state.txt');
+				await writeFile(connectionState, JSON.stringify(await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario)));
+				await testInfo.attach('connection-state.txt', { path: connectionState, contentType: 'text/plain' });
+				await testInfo.attach('connection-marks.txt', { body: await page.evaluate(() => performance.getEntriesByType('mark').filter(entry => /appServer|rendererApi/.test(entry.name)).map(entry => entry.name).join('\n')), contentType: 'text/plain' });
+			}
 		} finally {
 			await application.evaluate(({ BrowserWindow }) => {
 				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
@@ -419,6 +428,21 @@ test('initialization of an exited carrier cannot report a ready Agents connectio
 for (const surface of ['workbench', 'agents'] as const) {
 	test.describe(`${surface} Workspace Trust`, () => {
 		test.use({ connectionSurface: surface, connectionWorkspace: 'readOnly' });
+		if (surface === 'workbench') {
+			test('New Terminal awaits Workspace Trust before creating a process in a read-only workspace', async ({ connectionHarness: { application, page } }) => {
+				const workbench = new Workbench(page);
+				const banner = page.locator('[data-part="banner"]');
+				await expect(banner).toContainText('This workspace is read-only');
+				const dialogs = new Dialogs(page);
+				const canceled = await dialogs.confirm(application, 'Workspace Trust', 'Cancel', () => workbench.quickaccess.runCommand('workbench.action.terminal.new'));
+				expect(canceled.message).toContain('Creating a terminal can run code from this workspace');
+				await expect(page.locator('.xterm-screen')).toHaveCount(0);
+				await expect(banner).toContainText('This workspace is read-only');
+				await dialogs.confirm(application, 'Workspace Trust', 'Trust workspace', () => workbench.quickaccess.runCommand('workbench.action.terminal.new'));
+				await expect(banner).toBeHidden();
+				await expect(page.locator('[data-part="panel"] .xterm-screen')).toBeVisible();
+			});
+		}
 		test('Banner manages the current workspace permissions and refreshes effective trust', async ({ connectionHarness: { application, page, workspaceFolder } }, testInfo) => {
 			const folder = await realpath(workspaceFolder!);
 			const banner = page.locator('[data-part="banner"]');

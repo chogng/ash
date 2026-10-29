@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import { ITextFileService } from '../../../textfile/common/textfiles.js';
 import type { ITextFileSaveEvent } from '../../../textfile/common/textFileService.js';
 import assert from "node:assert/strict";
@@ -27,15 +28,16 @@ import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLang
 
 function createDiagnosticsService(api: FakeLanguageApi, events: FakeServerEvents, workspace: TestWorkspaceService, documents?: ICodeIntelligenceDocumentService, trust?: IWorkspaceTrustManagementService, saves: Event<ITextFileSaveEvent> = Event.None): AppServerLanguageDiagnosticsService {
 	using services = new InstantiationService();
+	using defaultTrust = new TestWorkspaceTrustManagementService();
 	services.registerInstance(IServerEventApi, events);
 	services.registerInstance(ITextFileService, { onDidSave: saves, onDidChangeFiles: Event.None, resolve: async () => { throw new Error('unexpected resolve'); }, save: async () => { throw new Error('unexpected save'); } });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IConfigurationService, workspace);
-	services.registerInstance(IWorkspaceTrustManagementService, trust ?? {
+	services.registerInstance(IWorkspaceTrustManagementService, trust ?? Object.assign(defaultTrust, {
 		onDidChangeTrust: Event.None,
 		getUriTrustInfo: async () => { throw new Error('Backend-authorized diagnostics must not inspect host grants'); },
 		getWorkspaceTrustInfo: async () => undefined,
-	});
+	} satisfies Partial<IWorkspaceTrustManagementService>));
 	const service = services.createInstance(AppServerLanguageDiagnosticsService, api, documents, !!trust);
 	api.onServers = params => {
 		if (!api.negotiateCapabilities) return;
@@ -498,12 +500,12 @@ test("App Server diagnostics service gates Editor synchronization on directory p
 	assert.equal(api.synchronized.length, synchronizedBeforeEdit);
 });
 
-class FakeWorkspaceTrustService extends Disposable implements IWorkspaceTrustManagementService {
+class FakeWorkspaceTrustService extends TestWorkspaceTrustManagementService {
 	private readonly change = this._register(new Emitter<void>());
-	readonly onDidChangeTrust = this.change.event;
+	override readonly onDidChangeTrustedFolders = this.change.event;
 	constructor(public value: readonly WorkspaceTrustPermission[]) { super(); }
-	async getUriTrustInfo(uri: URI) { return { uri, trusted: false, permissions: this.value }; }
-	async getWorkspaceTrustInfo() { return undefined; }
+	override async getUriTrustInfo(uri: URI) { return { uri, trusted: false, permissions: this.value }; }
+	override async getWorkspaceTrustInfo() { return undefined; }
 	notify() { this.change.fire(); }
 }
 

@@ -60,7 +60,7 @@ import type { RendererHostCapabilities } from "../../platform/renderer/common/re
 import { createRemoteAgentApi } from "../../platform/remote/electron-browser/remoteAgentApi.js";
 import { createRemoteConnectionApi } from "../../platform/remote/electron-browser/remoteConnectionApi.js";
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../platform/remote/common/remote.js';
-import type { IWorkspaceTrustRequestService } from '../../platform/workspace/common/workspaceTrust.js';
+import type { IDirectoryPermissionRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { InstantiationType } from '../../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../../platform/webWorker/browser/webWorkerService.js';
@@ -70,7 +70,7 @@ import { isCancellationError, CancellationError } from '../../base/common/errors
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; readonly agentHosts?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; readonly agentHosts?: boolean; }, workspaceTrust: IDirectoryPermissionRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
 	const workspaceApi = createWorkspaceContextApi();

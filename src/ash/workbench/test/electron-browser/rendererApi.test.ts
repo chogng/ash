@@ -50,7 +50,7 @@ test('Electron renderer assembles its connection Worker dependency before Workbe
 		const { createElectronRendererApi } = await import('../../electron-browser/rendererApi.js');
 		for (let attempt = 0; attempt < 2; attempt++) {
 			await assert.rejects(createElectronRendererApi([], { browser: false }, {
-				requestWorkspaceTrust: async () => { throw new Error('no workspace approval expected'); },
+				requestDirectoryPermissions: async () => { throw new Error('no workspace approval expected'); },
 			}, mainProcess), error => error === nextBoundary);
 			assert.equal(subscriptions.size, 0, 'failed connection composition must retire its listeners before retry');
 		}

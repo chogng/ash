@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Event } from '../../../../../base/common/event.js';
@@ -19,11 +20,11 @@ test('language access requires both capabilities in every directory independentl
 	]);
 	let trusted = true;
 	const queries: URI[] = [];
-	const trust: IWorkspaceTrustManagementService = {
+	using trust: IWorkspaceTrustManagementService = Object.assign(new TestWorkspaceTrustManagementService(), {
 		onDidChangeTrust: Event.None,
 		getWorkspaceTrustInfo: async () => undefined,
 		getUriTrustInfo: async uri => { queries.push(uri); return { uri, trusted, permissions: permissions.get(uri.toString()) }; },
-	};
+	} satisfies Partial<IWorkspaceTrustManagementService>);
 	assert.deepEqual(await resolveAppServerLanguageDirAccess(workspace, trust, true), { workspaceId: 'workspace', allowed: false });
 	permissions.set(second.toString(), ['useLanguageServices']);
 	assert.equal((await resolveAppServerLanguageDirAccess(workspace, trust, true)).allowed, false);
@@ -39,11 +40,11 @@ test('language access requires both capabilities in every directory independentl
 
 test('Web authorization stays in the backend and unsupported workspace identities cannot start language services', async () => {
 	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
-	const trust: IWorkspaceTrustManagementService = {
+	using trust: IWorkspaceTrustManagementService = Object.assign(new TestWorkspaceTrustManagementService(), {
 		onDidChangeTrust: Event.None,
 		getWorkspaceTrustInfo: async () => undefined,
 		getUriTrustInfo: async () => { throw new Error('Unexpected host grant inspection'); },
-	};
+	} satisfies Partial<IWorkspaceTrustManagementService>);
 	assert.deepEqual(await resolveAppServerLanguageDirAccess(workspace, trust, false), { workspaceId: 'workspace', allowed: true });
 	for (const uri of [URI.file('/@browser/handle'), URI.parse('ash-remote://ssh+server/project')]) {
 		workspace.updateWorkspace({ id: 'unsupported', uri });

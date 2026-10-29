@@ -95,7 +95,17 @@ export class AppServerLanguageProviders extends Disposable {
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('rust-analyzer')) this.queueRefresh();
 		}));
-		if (options.checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queueRefresh()));
+		if (options.checkWorkspaceTrust) {
+			this._register(workspaceTrust.onDidChangeTrustedFolders(() => this.queueRefresh()));
+			this._register(workspaceTrust.addWorkspaceTrustTransitionParticipant({
+				participate: async () => {
+					this.queueRefresh();
+					// queueRefresh coalesces requests in a microtask before replacing the owned queue.
+					await Promise.resolve();
+					await this.refreshQueue;
+				}
+			}));
+		}
 		this._register(workspace.onDidChangeWorkspace(() => { this.clearCapabilities(); this.queueRefresh(); }));
 		this._register(toDisposable(() => { this.alive = false; this.clearCapabilities(); }));
 	}

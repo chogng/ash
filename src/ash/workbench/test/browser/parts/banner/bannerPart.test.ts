@@ -380,4 +380,52 @@ suite('banner browser component', () => {
 		await expect(save).toBeDisabled();
 		expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
 	});
+
+	for (const locale of ['en', 'zh']) {
+		test(`Workspace Trust requests coalesce, cancel with Escape and complete after recovery (${locale})`, async function () {
+			const { page } = browserTests;
+			const zh = locale === 'zh';
+			await page.goto(`/banner.html${zh ? '?zh' : ''}`);
+			await page.waitForFunction(() => !!window.ashBannerIntegration);
+			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
+			const origin = page.getByRole('textbox', { name: 'Editor draft' });
+			await origin.focus();
+			await page.evaluate(() => { window.ashBannerIntegration.requestTrust(); window.ashBannerIntegration.requestTrust(); });
+			const dialog = page.getByRole('dialog', { name: zh ? '工作区信任' : 'Workspace Trust', exact: true });
+			await expect(dialog).toHaveCount(1);
+			await expect(dialog).toContainText(zh ? '你是否信任此工作区中文件的作者' : 'Do you trust the authors');
+			await expect(dialog).toContainText(zh ? '未保存的状态可能丢失' : 'Unsaved process state may be lost');
+			await dialog.press('Escape');
+			await expect(dialog).toBeHidden();
+			await expect(origin).toBeFocused();
+			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled']);
+			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
+			await page.evaluate(() => window.ashBannerIntegration.requestTrust());
+			const trust = dialog.getByRole('button', { name: zh ? '信任工作区' : 'Trust workspace', exact: true });
+			await trust.focus();
+			await trust.press('Enter');
+			await expect(dialog).toBeHidden();
+			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled', 'trusted']);
+			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(1);
+			expect((await page.evaluate(() => window.ashBannerIntegration.state())).retries).toBe(1);
+			await expect(page.locator('[data-part="banner"]')).toBeHidden();
+		});
+	}
+
+	test('an old Workspace Trust dialog cannot authorize the replacement workspace request', async function () {
+		const { page } = browserTests;
+		await page.goto('/banner.html');
+		await page.waitForFunction(() => !!window.ashBannerIntegration);
+		await page.evaluate(() => { window.ashBannerIntegration.setPermissions('readonly'); window.ashBannerIntegration.requestTrust(); });
+		const dialog = page.getByRole('dialog', { name: 'Workspace Trust', exact: true });
+		await expect(dialog).toBeVisible();
+		await page.evaluate(() => window.ashBannerIntegration.switchWorkspace('replacement'));
+		await expect(dialog).toBeHidden();
+		await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled']);
+		expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
+		await page.evaluate(() => window.ashBannerIntegration.requestTrust());
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled']);
+	});
 });

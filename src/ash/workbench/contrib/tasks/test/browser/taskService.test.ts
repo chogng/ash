@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
@@ -3168,7 +3169,7 @@ suite('Configured task automatic launch and split groups', () => {
 		]);
 		const changes = owner.add(new Emitter<void>());
 		let trusted = false;
-		services.registerInstance(IWorkspaceTrustManagementService, { onDidChangeTrust: changes.event, getUriTrustInfo: async uri => ({ uri, trusted, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: trusted, isReadOnly: false }) });
+		services.registerInstance(IWorkspaceTrustManagementService, owner.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrustedFolders: changes.event, isWorkspaceTrusted: () => trusted, getUriTrustInfo: async uri => ({ uri, trusted, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: trusted, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>)));
 		owner.add(services.createInstance(RunAutomaticTasks));
 		await tasks.refresh();
 		await new Promise<void>(resolve => setImmediate(resolve));
@@ -3191,7 +3192,7 @@ suite('Configured task automatic launch and split groups', () => {
 	test('policy refresh after start publication preserves a run while terminal reveal is pending', async () => {
 		using owner = new DisposableStore();
 		const { services, tasks, terminals } = assemble(owner, [{ label: 'Automatic', command: 'auto', runOptions: { runOn: 'folderOpen' } }]);
-		services.registerInstance(IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) });
+		services.registerInstance(IWorkspaceTrustManagementService, owner.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>)));
 		const entered = new DeferredPromise<void>();
 		const release = new DeferredPromise<undefined>();
 		services.registerInstance(IViewsService, { openView: async () => { void entered.complete(); return release.p; } } as unknown as IViewsService);
@@ -3215,7 +3216,7 @@ suite('Configured task automatic launch and split groups', () => {
 		const entered = new DeferredPromise<void>();
 		const result = new DeferredPromise<string>();
 		owner.add(CommandsRegistry.register('tasks.automatic.wait', () => { void entered.complete(); return result.p; }));
-		services.registerInstance(IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) });
+		services.registerInstance(IWorkspaceTrustManagementService, owner.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>)));
 		await services.get(IConfigurationService).updateValue('task.allowAutomaticTasks', 'on');
 		owner.add(services.createInstance(RunAutomaticTasks));
 		await entered.p;

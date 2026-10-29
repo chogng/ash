@@ -54,6 +54,7 @@ export class RunAutomaticTasks extends Disposable implements IWorkbenchContribut
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(allowAutomaticTasks)) this.schedule(true); }));
 		this._register(trust.onDidChangeTrust(() => this.schedule(true)));
+		this._register(trust.onDidChangeTrustedFolders(() => this.schedule(true)));
 		this._register(workspace.onDidChangeWorkspace(() => {
 			this.attempted.clear();
 			this.schedule(true);
@@ -75,7 +76,10 @@ export class RunAutomaticTasks extends Disposable implements IWorkbenchContribut
 
 	private async run(generation: number, refresh: boolean): Promise<void> {
 		const current = (): boolean => !this.isDisposed && generation === this.generation && this.configuration.getValue(allowAutomaticTasks) === 'on';
-		if (!current() || !(await this.trust.getWorkspaceTrustInfo())?.isTrusted || !current()) return;
+		if (!current()) return;
+		await this.trust.workspaceTrustInitialized;
+		await this.trust.resolveWorkspaceTrust();
+		if (!current() || !this.trust.isWorkspaceTrusted()) return;
 		if (refresh) await this.tasks.refresh();
 		if (!current()) return;
 		for (const task of this.tasks.tasks) {

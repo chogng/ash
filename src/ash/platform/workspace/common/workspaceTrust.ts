@@ -1,4 +1,5 @@
 import type { Event } from '../../../base/common/event.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { URI } from '../../../base/common/uri.js';
 import { localize2 } from '../../../nls.js';
@@ -78,16 +79,53 @@ export interface IWorkspaceTrustUriInfo {
 }
 
 export interface IWorkspaceTrustManagementService {
-	/** Consumers reread after this event; Rust remains the authority for the permissions. */
-	readonly onDidChangeTrust: Event<void>;
+	/** Published after the effective permissions and transition participants have settled. */
+	readonly onDidChangeTrust: Event<boolean>;
+	/** Invalidates permission projections, including changes that preserve the trust boolean. */
+	readonly onDidChangeTrustedFolders: Event<void>;
+	readonly workspaceResolved: Promise<void>;
+	readonly workspaceTrustInitialized: Promise<void>;
+	isWorkspaceTrusted(): boolean;
+	canSetWorkspaceTrust(): boolean;
+	resolveWorkspaceTrust(): Promise<void>;
+	setWorkspaceTrust(trusted: boolean): Promise<void>;
+	/** expectedRevision retains the revision approved in Ash's permission editor. */
+	setUrisTrust(uris: URI[], trusted: boolean, expectedRevision?: number): Promise<void>;
+	addWorkspaceTrustTransitionParticipant(participant: IWorkspaceTrustTransitionParticipant): IDisposable;
 	getUriTrustInfo(uri: URI): Promise<IWorkspaceTrustUriInfo>;
 	getWorkspaceTrustInfo(): Promise<IWorkspaceTrustInfo | undefined>;
 }
 
 export const IWorkspaceTrustManagementService = createServiceIdentifier<IWorkspaceTrustManagementService>('workspaceTrustManagementService');
 
+/** Startup directory authorization is available before Workbench services exist. */
+export interface IDirectoryPermissionRequestService {
+	requestDirectoryPermissions(path: string, signal?: AbortSignal): Promise<WorkspaceTrustChoice>;
+}
+
+export interface WorkspaceTrustRequestButton {
+	readonly label: string;
+	readonly type: 'ContinueWithTrust' | 'ContinueWithoutTrust' | 'Manage' | 'Cancel';
+}
+
+export interface WorkspaceTrustRequestOptions {
+	readonly buttons?: WorkspaceTrustRequestButton[];
+	readonly message?: string;
+}
+
 export interface IWorkspaceTrustRequestService {
-	requestWorkspaceTrust(path: string, signal?: AbortSignal): Promise<WorkspaceTrustChoice>;
+	readonly onDidInitiateWorkspaceTrustRequest: Event<WorkspaceTrustRequestOptions | undefined>;
+	readonly onDidInitiateWorkspaceTrustRequestOnStartup: Event<void>;
+	requestWorkspaceTrust(options?: WorkspaceTrustRequestOptions): Promise<boolean | undefined>;
+	requestWorkspaceTrustOnStartup(): void;
+	completeWorkspaceTrustRequest(trusted?: boolean): Promise<void>;
+	cancelWorkspaceTrustRequest(): void;
+}
+
+export const IWorkspaceTrustRequestService = createServiceIdentifier<IWorkspaceTrustRequestService>('workspaceTrustRequestService');
+
+export interface IWorkspaceTrustTransitionParticipant {
+	participate(trusted: boolean): Promise<void>;
 }
 
 /** English NLS originals; each consumer resolves them through its window's localization service. */

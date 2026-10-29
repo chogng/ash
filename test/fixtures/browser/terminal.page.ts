@@ -1,4 +1,7 @@
 import { ITerminalCompletionService, TerminalCompletionService } from '../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../src/ash/platform/workspace/common/workspaceTrust.js';
+import { TestWorkspaceTrustManagementService } from '../../../src/ash/workbench/test/common/workbenchTestServices.js';
+import { WorkspaceTrustRequestService } from '../../../src/ash/workbench/services/workspaces/common/workspaceTrust.js';
 import { ITerminalQuickFixService } from '../../../src/ash/workbench/contrib/terminalContrib/quickFix/browser/quickFix.js';
 import { TerminalQuickFixService } from '../../../src/ash/workbench/contrib/terminalContrib/quickFix/browser/terminalQuickFixService.js';
 import { ITerminalLinkProviderService } from '../../../src/ash/workbench/contrib/terminalContrib/links/browser/links.js';
@@ -148,6 +151,8 @@ function createTerminalFixtureLayout(root: HTMLElement, lifetime: DisposableStor
 }
 
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore, fallbackProcess = true, provideLayout = true): void {
+	if (!services.has(IWorkspaceTrustManagementService)) services.registerSingleton(IWorkspaceTrustManagementService, () => services.createInstance(TestWorkspaceTrustManagementService));
+	if (!services.has(IWorkspaceTrustRequestService)) services.registerSingleton(IWorkspaceTrustRequestService, () => services.createInstance(WorkspaceTrustRequestService));
 	if (!services.has(IHostService)) services.registerInstance(IHostService, new TestHostService());
 	// Filename discovery is an explicit boundary of the terminal-only fixture.
 	if (!services.has(ISearchService)) services.registerInstance(ISearchService, {

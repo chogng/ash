@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -342,7 +343,7 @@ function fixture() {
 			onDidChangeWorkbenchState: Event.None,
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [], ...(f.remote ? { remoteAuthority: f.remote } : {}) }), getWorkbenchState: () => f.state, getWorkspaceFolder: () => null
 		}],
-		[IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => { if (f.trustUnavailable) { throw new Error('Backend unavailable'); } return { isTrusted: f.trusted, isReadOnly: false }; } }], [IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs], [ITelemetryService, telemetry])));
+		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => { if (f.trustUnavailable) { throw new Error('Backend unavailable'); } return { isTrusted: f.trusted, isReadOnly: false }; } } satisfies Partial<IWorkspaceTrustManagementService>))], [IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, service], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs], [ITelemetryService, telemetry])));
 	const views = resources.add(services.createInstance(BrowserViewWorkbenchService));
 	return Object.assign(f, { [Symbol.dispose]: () => resources.dispose(), views, service, services, telemetryEvents, configuration });
 }

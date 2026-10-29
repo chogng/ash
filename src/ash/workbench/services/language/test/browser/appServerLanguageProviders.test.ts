@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
@@ -207,17 +208,18 @@ test('retained adapters filter every request after capability revocation and acr
 
 function createProviders(languages: LanguageFeaturesService, api: FakeLanguageApi, workspace: TestWorkspaceService, options: { workspaceTrust?: IWorkspaceTrustManagementService; events?: FakeServerEvents; } = {}): AppServerLanguageProviders {
 	using services = new InstantiationService();
+	using defaultTrust = new TestWorkspaceTrustManagementService();
 	services.registerInstance(ILanguageFeaturesService, languages);
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IConfigurationService, workspace);
 	services.registerInstance(ILanguageServerLifecycleService, { start() { }, withActivity: (_document, _signal, operation) => operation() });
 	const events = options.events ?? new FakeServerEvents();
 	services.registerInstance(IServerEventApi, events);
-	services.registerInstance(IWorkspaceTrustManagementService, options.workspaceTrust ?? {
+	services.registerInstance(IWorkspaceTrustManagementService, options.workspaceTrust ?? Object.assign(defaultTrust, {
 		onDidChangeTrust: Event.None,
 		getUriTrustInfo: async () => { throw new Error('Backend-authorized language requests must not inspect host grants'); },
 		getWorkspaceTrustInfo: async () => undefined,
-	});
+	} satisfies Partial<IWorkspaceTrustManagementService>));
 	const service = services.createInstance(AppServerLanguageProviders, api, { checkWorkspaceTrust: !!options.workspaceTrust });
 	api.onServers = params => {
 		if (!api.negotiateCapabilities) return;
@@ -847,12 +849,12 @@ test('Desktop providers discover custom routes and retire disabled routes after 
 	assert.equal(languages.hoverProvider.ordered(model).length, 0);
 });
 
-class FakeWorkspaceTrustService extends Disposable implements IWorkspaceTrustManagementService {
+class FakeWorkspaceTrustService extends TestWorkspaceTrustManagementService {
 	private readonly change = this._register(new Emitter<void>());
-	readonly onDidChangeTrust = this.change.event;
+	override readonly onDidChangeTrustedFolders = this.change.event;
 	constructor(public value: readonly WorkspaceTrustPermission[]) { super(); }
-	async getUriTrustInfo(uri: URI) { return { uri, trusted: false, permissions: this.value }; }
-	async getWorkspaceTrustInfo() { return undefined; }
+	override async getUriTrustInfo(uri: URI) { return { uri, trusted: false, permissions: this.value }; }
+	override async getWorkspaceTrustInfo() { return undefined; }
 	notify() { this.change.fire(); }
 }
 

@@ -542,7 +542,7 @@ Workspace 内容搜索通过独立的
 
 首次进入未授权目录时，Electron Renderer 在窗口内显示目录权限选择，启动阶段也先完成选择再
 建立 Workbench。Electron Main 提供按当前语言翻译的文案并等待选择；App Server 保存目录能力。
-前端 `IWorkspaceTrustRequestService` 负责取得选择，`IWorkspaceTrustManagementService` 按当前
+启动前的 `IDirectoryPermissionRequestService` 负责取得目录授权选择，`IWorkspaceTrustManagementService` 按当前
 Workspace 各目录的实际权限提供界面状态和变化通知；它每次从 App Server 读取权限，不保存独立的
 “已信任”配置。只有全部目录具备开发权限时，界面才视为已信任。只读授权显示“只读文件夹”；
 允许部分开发操作的目录显示“受限工作区”。文件读写和命令执行仍由 App Server 按具体权限检查，
@@ -559,9 +559,10 @@ Ash 的异步权限读取和只读状态是该契约的扩展，不能以信任�
 Renderer 的 `workspaceTrust` API 在 Workbench 和 Sessions 的服务容器中注册；打开目录时
 也使用同一 API，通过 `config/directoryGrants/list|read|set|forget` 与后端 config owner 对接，
 授权通过修订号和 command ID 提交，启动时仍由 `env/dirs/set` 原子应用所选授权。
-当前本地工作区的信任检查通过 `env/dir/read` 按已激活目录 ID 读取有效权限，
+当前工作区（包括远程工作区）的信任检查通过 `env/dir/read` 按已激活目录 ID 读取有效权限，
 不把 profile 中保存的授权当作当前运行时授权。该只读请求可供 Browser 使用，
 不提供路径发现、授权列表或修改能力；未知、已移除和已失效的目录被拒绝。
+工作区、授权、远端解析或目录恢复完成通知会使在途读取失效；旧结果不再发布为当前信任状态。
 设置中的目录授权列表、精确权限编辑和撤销使用 `IWorkspaceTrustApi`，设置模型只持有草稿、
 可见页快照和修订冲突状态，不保存另一份授权配置。目录别名以 Rust 返回的目录身份匹配，
 修改文件和命令能力时保留未编辑的发现与配置能力。
@@ -569,6 +570,20 @@ Renderer 的 `workspaceTrust` API 在 Workbench 和 Sessions 的服务容器中�
 检查每个目录同时具备 `useLanguageServices` 和 `executeCommands`；部分授权无需满足完整开发信任。
 桌面权限变化由信任服务通知，撤销后移除提供者并停止后续同步；Web 仍由后端检查已认证工作区，
 不新增目录授权宿主能力。旧 `dirPermissions` 服务标识、Renderer 属性和注册已退出生产调用链。
+
+工作台的 `IWorkspaceTrustRequestService` 合并同一工作区的在途信任请求，发出普通或启动请求事件，
+由 Workspace Trust contribution 使用当前窗口的对话框呈现。取消、窗口释放和工作区切换会结束原请求；
+旧请求的异步完成不能结束新请求。已信任的工作区直接返回成功，受限模式下拒绝或取消不会增加权限。
+`workspaceResolved` 在目录环境与 canonical 身份首次读取完成后释放，`workspaceTrustInitialized`
+还会等待首轮信任切换参与者；暂时启动或恢复中的连接不会提前释放这两个屏障，终止失败按受限状态结束等待。
+终端创建会先等初始化，并在缺少命令权限时请求信任；自动任务等待切换结束后再检查信任。
+
+`setWorkspaceTrust` 与 `setUrisTrust` 通过同一 Rust 授权 API 保存并恢复有效目录环境，随后依序等待
+`addWorkspaceTrustTransitionParticipant` 注册的语言提供者与诊断同步。`onDidChangeTrust` 仅在参与者
+完成后发布布尔状态，信任请求也在这之后完成。`onDidChangeTrustedFolders` 负责权限与来源失效通知，
+因此不改变信任布尔值的部分授权变更仍会更新界面和语言能力。前端同步查询使用可失效的派生投影，
+不保存另一份授权清单。多根目录的授权保存不是跨目录事务；部分保存失败仍恢复已保存的有效权限，
+但不会将整个工作区报告为已信任，也不会自动重试修订冲突。
 
 编辑器窗口的 Workspace 不归 Session catalog 所有。前端 `ISession.workspace` 只描述该 Session
 使用的 Environment、`cwd` 和目录；它可以帮助界面显示位置或请求切换运行环境，但不能改变窗口
