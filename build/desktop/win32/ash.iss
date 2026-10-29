@@ -103,10 +103,19 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ProfilePath, UserDataPath: String;
 begin
-  if CurStep = ssPostInstall then
-    if not RunMaintenance(ExpandConstant('{app}\resources\bin\ash-app-server-daemon.exe'), 'register', '') then
+  if CurStep = ssPostInstall then begin
+    { Electron creates userData before Main can register it. Record whether the
+      default paths already existed before the first application launch. }
+    ProfilePath := GetEnv('ASH_HOME');
+    if ProfilePath = '' then ProfilePath := GetEnv('USERPROFILE') + '\.ash';
+    UserDataPath := GetEnv('APPDATA') + '\Ash';
+    if not RunMaintenance(ExpandConstant('{app}\resources\bin\ash-app-server-daemon.exe'), 'register',
+        '--profile "' + ProfilePath + '" --user-data "' + UserDataPath + '"') then
       RaiseException(InstallationMessage('InstallCleanupFailed'));
+  end;
 end;
 
 function InitializeUninstall: Boolean;

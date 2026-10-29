@@ -22,7 +22,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 	// Keep the canonical Windows profile socket below AF_UNIX's 108-byte limit.
 	const directory = await mkdtemp(join(tmpdir(), 'ash-r-'));
 	const installation = join(directory, 'installed');
-	const userData = join(directory, 'data');
+	const userData = join(directory, 'Ash');
 	const workspace = join(directory, 'workspace');
 	const settingsPath = join(userData, 'profile', 'settings.json');
 	const keybindingsPath = join(userData, 'profile', 'keybindings.json');
@@ -37,7 +37,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 		await mkdir(workspace);
 		await install(resolve(previousArchive ?? archive), installation, userData);
 		installed = true;
-		if (process.platform === 'win32') await registerProfile(installation, userData);
+		assert(!await exists(userData), 'Installation must record ownership without creating application data');
 		await mkdir(join(userData, 'profile'), { recursive: true });
 		await writeFile(settingsPath, JSON.stringify({ 'update.policy': 'never', 'editor.fontSize': 17 }));
 		await writeFile(keybindingsPath, '[]');
@@ -144,15 +144,11 @@ function workbenchEnvironment(userData: string) {
 }
 
 function installationEnvironment(userData: string): NodeJS.ProcessEnv {
-	return { ...process.env, ASH_INSTALLATION_REGISTRY: installationRegistry(userData) };
+	return { ...process.env, APPDATA: dirname(userData), ASH_HOME: join(userData, 'profile'), ASH_INSTALLATION_REGISTRY: installationRegistry(userData) };
 }
 
 function installationRegistry(userData: string): string {
 	return join(dirname(userData), `${basename(userData)}-installation-registry`);
-}
-
-async function registerProfile(installation: string, userData: string): Promise<void> {
-	await run(join(installation, 'resources/bin/ash-app-server-daemon.exe'), ['installation', 'register', '--product', 'desktop', '--root', installation, '--profile', join(userData, 'profile'), '--user-data', userData], { windowsHide: true, env: installationEnvironment(userData) });
 }
 
 async function attachRemovalReport(userData: string, testInfo: import('@playwright/test').TestInfo, name: string): Promise<void> {
@@ -182,7 +178,7 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 	for (const shared of [false, true]) {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-c-'));
 		const installation = join(directory, 'installed');
-		const userData = join(directory, 'data');
+		const userData = join(directory, 'Ash');
 		const profile = join(userData, 'profile');
 		const workspace = join(profile, 'worktrees', 'project');
 		const outside = join(directory, 'shared-files');
@@ -199,13 +195,14 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 			installed = true;
 			const maintenance = join(installation, 'resources', 'bin', 'ash-app-server-daemon.exe');
 			const register = async (product: string, root: string) => run(maintenance, ['installation', 'register', '--product', product, '--root', root, '--profile', profile, '--user-data', userData], { windowsHide: true, env: installationEnvironment(userData) });
-			await register('desktop', installation); // Before the profile first exists.
+			assert(!await exists(userData), 'The native installer must register the fresh profile before launch');
 			if (shared) {
 				const other = join(directory, 'other-cli');
 				await mkdir(other);
 				await register('cli', other);
 			}
-			await mkdir(join(workspace, '.git'), { recursive: true });
+			await mkdir(workspace, { recursive: true });
+			await run('git', ['init', '--quiet', workspace], { windowsHide: true });
 			await mkdir(join(profile, 'cache'));
 			await mkdir(join(profile, 'logs'));
 			await mkdir(outside);

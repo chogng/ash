@@ -22,11 +22,11 @@ test('native installer upgrades and removes isolated installations without losin
 	const installation = join(directory, 'installed');
 	const registry = join(directory, 'registry');
 	const profile = join(directory, 'profile');
-	const userData = join(directory, 'electron-data');
+	const userData = join(directory, 'roaming', 'Ash');
 	const outside = join(directory, 'shared-component');
 	const identity = `com.ash.acceptance.${randomUUID()}`;
 	const name = `Ash acceptance ${randomUUID()}`;
-	const environment = { ...process.env, ASH_INSTALLATION_REGISTRY: registry, ASH_HOME: profile, ASH_TEST_APP_ID: identity };
+	const environment = { ...process.env, APPDATA: dirname(userData), ASH_INSTALLATION_REGISTRY: registry, ASH_HOME: profile, ASH_TEST_APP_ID: identity };
 	const shortcut = join(process.env.APPDATA!, 'Microsoft/Windows/Start Menu/Programs', `${name}.lnk`);
 	const maintenance = join(installation, 'resources/bin/ash-app-server-daemon.exe');
 	const command = (exe: string, args: string[]) => run(exe, args, { env: environment, windowsHide: true, timeout: 120_000, maxBuffer: 4 * 1024 * 1024 });
@@ -70,7 +70,8 @@ test('native installer upgrades and removes isolated installations without losin
 		installed = true;
 		assert.equal(await registered(), true);
 		assert.equal(await exists(shortcut), true);
-		await register('desktop', installation);
+		assert.equal(await exists(profile), false);
+		assert.equal(await exists(userData), false);
 		await mkdir(join(profile, 'worktrees/project/.git'), { recursive: true });
 		await mkdir(join(profile, 'cache'));
 		await mkdir(join(userData, 'Cache'), { recursive: true });
@@ -99,7 +100,6 @@ test('native installer upgrades and removes isolated installations without losin
 		assert.equal(await registered(), false);
 		await install(current);
 		installed = true;
-		await register('desktop', installation);
 		// Native removal must refuse a redirected installation before Inno gets
 		// an opportunity to traverse it or data cleanup modifies the profile.
 		const redirected = join(installation, modules, 'external');
@@ -135,7 +135,6 @@ test('native installer upgrades and removes isolated installations without losin
 		await testInfo.attach('native-purge-report', { body: JSON.stringify(await report(), null, 2), contentType: 'application/json' });
 		await install(current);
 		installed = true;
-		await register('desktop', installation);
 		const shared = join(directory, 'other-cli');
 		await mkdir(shared);
 		await register('cli', shared);
