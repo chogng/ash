@@ -83,6 +83,7 @@ export class SessionsBrowserMain extends Disposable {
 				} : undefined,
 				contributionIds: [
 					'workbench.contrib.limitIndicator',
+					'status.languageStatus',
 					'workbench.contrib.opener',
 					'chatResponseResourceWorkbenchContribution',
 					'terminalAutoReplies',

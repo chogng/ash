@@ -403,7 +403,7 @@ const properties: Record<string, JsonSchema> = {
 	'editor.folding': { type: 'boolean', default: true },
 	'editor.foldingStrategy': { type: 'string', enum: ['auto', 'indentation'], default: 'auto' },
 	'editor.foldingHighlight': { type: 'boolean', default: true },
-	'editor.foldingMaximumRegions': { type: 'number', default: 5000, minimum: 1 },
+	'editor.foldingMaximumRegions': { type: 'number', default: 5000, minimum: 10, maximum: 65000 },
 	'editor.showFoldingControls': { type: 'string', enum: ['always', 'never', 'mouseover'], default: 'mouseover' },
 	'editor.matchBrackets': { type: 'string', enum: ['never', 'near', 'always'], default: 'always' },
 	'editor.suggestOnTriggerCharacters': { type: 'boolean', default: true },
@@ -591,11 +591,13 @@ configurationRegistry.registerConfiguration<number>({
 	defaultValue: 5000,
 	scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 	parse(value: unknown): number {
-		if (!Number.isSafeInteger(value) || (value as number) < 1) throw new RangeError(localize('limitIndicator.foldingInvalid', 'The folding region limit must be a positive integer.'));
+		if (!Number.isSafeInteger(value) || (value as number) < 10 || (value as number) > 65000) {
+			throw new RangeError(localize('limitIndicator.foldingInvalid', 'The folding region limit must be an integer between {0} and {1}.', 10, 65000));
+		}
 		return value as number;
 	},
 	setting: {
-		valueType: 'number', minimum: 1, maximum: Number.MAX_SAFE_INTEGER,
+		valueType: 'number', minimum: 10, maximum: 65000,
 		get title() { return localize('limitIndicator.foldingTitle', 'Maximum folding regions'); },
 		get description() { return localize('limitIndicator.foldingDescription', 'Limit the number of folding regions available in each editor.'); },
 	},

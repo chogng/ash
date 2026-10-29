@@ -55,6 +55,7 @@ import './contrib/url/browser/url.contribution.js';
 import './contrib/folding/browser/folding.contribution.js';
 import './contrib/inlayHints/browser/inlayHintsAccessibilty.js';
 import './contrib/limitIndicator/browser/limitIndicator.contribution.js';
+import './contrib/languageStatus/browser/languageStatus.contribution.js';
 import './contrib/opener/browser/opener.contribution.js';
 import './contrib/snippets/browser/snippets.contribution.js';
 import './contrib/scrollLocking/browser/scrollLocking.contribution.js';

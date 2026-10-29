@@ -1,4 +1,5 @@
 import { type Event } from '../../../base/common/event.js';
+import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 
@@ -56,6 +57,11 @@ export interface IMarkerReadOptions {
 	resource?: URI;
 	severities?: number;
 	take?: number;
+	ignoreResourceFilters?: boolean;
+}
+
+export interface IMarkerChangeOptions {
+	readonly isTruncated?: boolean;
 }
 
 export interface MarkerStatistics {
@@ -71,10 +77,12 @@ export interface IMarkerService {
 	readonly onMarkerChanged: Event<readonly URI[]>;
 
 	getStatistics(): MarkerStatistics;
-	changeOne(owner: string, resource: URI, markers: IMarkerData[]): void;
+	isSourceTruncated(resource: URI): boolean;
+	changeOne(owner: string, resource: URI, markers: IMarkerData[], options?: IMarkerChangeOptions): void;
 	changeAll(owner: string, data: IResourceMarker[]): void;
 	remove(owner: string, resources: URI[]): void;
 	read(filter?: IMarkerReadOptions): IMarker[];
+	installResourceFilter(resource: URI, reason: string): IDisposable;
 }
 
 export const IMarkerService = createDecorator<IMarkerService>('markerService');

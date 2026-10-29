@@ -6649,23 +6649,28 @@ suite('standalone browser component', () => {
 			for (let index = 0; index < requests.length; index++) await window.ashStandaloneIntegration.finishContributionRequest(index);
 		});
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).every(request => request.aborted)).toBe(true);
-		await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('first\n  child\nsecond\n  child\nthird\n  child'));
-		const controls = page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded');
-		await expect(controls).toHaveCount(3);
-		await controls.last().click();
-		await expect(page.locator('#caller .view-line[data-logical-line-index="5"]')).toHaveCount(0);
-		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 1 }));
-		await expect(controls).toHaveCount(1);
-		await expect(page.locator('#caller .view-line[data-logical-line-index="5"]')).toHaveCount(1);
-		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 3 }));
-		await expect(controls).toHaveCount(3);
 		await page.evaluate(() => {
-			window.ashStandaloneIntegration.prepareClipboard('first\n  inner\n    child\nsecond\n  child');
-			window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 2 });
+			document.getElementById('caller')!.style.height = '600px';
+			window.ashStandaloneIntegration.layoutContribution(640, 600);
+			window.ashStandaloneIntegration.prepareClipboard(Array.from({ length: 12 }, (_, index) => `section${index}\n  child`).join('\n'));
 		});
-		await expect(controls).toHaveCount(2);
+		const controls = page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded');
+		await expect(controls).toHaveCount(12);
 		await controls.last().click();
-		await expect(page.locator('#caller .view-line[data-logical-line-index="4"]')).toHaveCount(0);
+		await expect(page.locator('#caller .view-line[data-logical-line-index="23"]')).toHaveCount(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 1 }));
+		await expect(controls).toHaveCount(10);
+		await expect(page.locator('#caller .view-line[data-logical-line-index="23"]')).toHaveCount(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 12 }));
+		await expect(controls).toHaveCount(12);
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareClipboard('first\n  inner\n    child\n'
+				+ Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n'));
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 11 });
+		});
+		await expect(controls).toHaveCount(11);
+		await controls.last().click();
+		await expect(page.locator('#caller .view-line[data-logical-line-index="22"]')).toHaveCount(0);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 

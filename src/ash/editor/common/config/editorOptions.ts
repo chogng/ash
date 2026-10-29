@@ -1877,7 +1877,6 @@ const numberCompatibilityDefaults = {
 	suggestLineHeight: 0,
 	tabIndex: 0,
 	wordWrapColumn: 80,
-	foldingMaximumRegions: 5_000,
 } as const;
 
 const enumCompatibilityDefaults = {
@@ -1964,6 +1963,9 @@ const stringCompatibilityDefaults = {
 for (const [name, defaultValue] of Object.entries(booleanCompatibilityDefaults)) {
 	addCompatibilityOption(name, defaultValue, { type: 'boolean', default: defaultValue });
 }
+addCompatibilityOption('foldingMaximumRegions', 5000,
+	{ type: 'number', default: 5000, minimum: 10, maximum: 65000 },
+	input => clampedInt(input, 5000, 10, 65000));
 for (const [name, defaultValue] of Object.entries(numberCompatibilityDefaults)) {
 	addCompatibilityOption(name, defaultValue, { type: 'number', default: defaultValue, minimum: 0 });
 }

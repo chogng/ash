@@ -27,6 +27,7 @@ import '../workbench/contrib/language/browser/languageServers.contribution.js';
 import '../workbench/contrib/format/browser/format.contribution.js';
 import '../workbench/contrib/inlayHints/browser/inlayHintsAccessibilty.js';
 import '../workbench/contrib/limitIndicator/browser/limitIndicator.contribution.js';
+import '../workbench/contrib/languageStatus/browser/languageStatus.contribution.js';
 import '../workbench/contrib/opener/browser/opener.contribution.js';
 import '../workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../workbench/contrib/chat/browser/chat.contribution.js';

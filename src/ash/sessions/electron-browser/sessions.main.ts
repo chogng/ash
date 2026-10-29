@@ -164,6 +164,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			} : undefined,
 			contributionIds: [
 				'workbench.contrib.limitIndicator',
+				'status.languageStatus',
 				'workbench.contrib.opener',
 				'chatResponseResourceWorkbenchContribution',
 				'terminalAutoReplies',
