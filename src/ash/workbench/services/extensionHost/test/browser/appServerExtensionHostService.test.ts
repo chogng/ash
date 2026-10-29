@@ -14,7 +14,7 @@ import { IEnvironmentVariableService } from '../../../../contrib/terminal/common
 import { EnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariableService.js';
 import { ITerminalContributionService, ITerminalProfileService, ITerminalProfileResolverService } from '../../../../contrib/terminal/common/terminal.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { ITerminalService } from '../../../../contrib/terminal/browser/terminal.js';
+import { ITerminalGroupService, ITerminalService } from '../../../../contrib/terminal/browser/terminal.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
 import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
@@ -248,7 +248,7 @@ test('SCM registrations reach their owner, preserve history on resource updates 
 	const signal = new AbortController().signal;
 	assert.deepEqual(await api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 2, providers: [provider] }, signal, source), { result: 'done' });
 	assert.equal(historyChanges, 0);
-	assert.deepEqual(invalidations, [undefined], 'Resource invalidation refreshes all quick diffs through their typed contract');
+	assert.deepEqual(invalidations, [], 'An identical resource snapshot does not invalidate working-tree consumers');
 	await api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 3, providers: [{ ...provider, historyRevision: 2 }] }, signal, source);
 	assert.equal(historyChanges, 1);
 	api.invocationResult = Promise.resolve({ providerId: 'acme.demo:extension-repo', providerLabel: provider.label, label: provider.label, resource: 'git-original:/file.txt', text: 'base' });
@@ -1190,6 +1190,19 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi, services.get(IAdapterManager)));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None, listProfiles: async () => [] } as unknown as ITerminalProcessService);
 	services.registerInstance(ITerminalService, { ...Disposable.None } as unknown as ITerminalService);
+	services.registerInstance(ITerminalGroupService, {
+		...Disposable.None,
+		groups: [], activeGroup: undefined, onDidChangeGroups: Event.None,
+		createGroup: () => assert.fail('Unexpected terminal group creation'),
+		getGroupForInstance: () => assert.fail('Unexpected terminal group lookup'),
+		joinInstances: () => assert.fail('Unexpected terminal group join'),
+		moveInstance: () => assert.fail('Unexpected terminal group move'),
+		unsplitInstance: () => assert.fail('Unexpected terminal group unsplit'),
+		instanceIsSplit: () => assert.fail('Unexpected terminal split lookup'),
+		setActiveInstanceByIndex: () => assert.fail('Unexpected terminal group selection'),
+		showPanel: async () => assert.fail('Unexpected terminal panel request'),
+		focusHover: async () => assert.fail('Unexpected terminal hover request'),
+	});
 	services.registerSingleton(ITerminalCompletionService, () => services.createInstance(TerminalCompletionService));
 	services.registerSingleton(ITerminalQuickFixService, () => services.createInstance(TerminalQuickFixService));
 	services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));

@@ -357,6 +357,22 @@ impl GitService {
         })
     }
 
+    pub(crate) fn head_for_request(
+        &self,
+        repository: &GitRepository,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_git::GitHead, GitServiceError> {
+        self.ensure_readable()?;
+        let client = self.client();
+        run(&self.runtime, async {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => Err(GitServiceError::Cancelled),
+                result = client.head(repository) => result.map_err(GitServiceError::Git),
+            }
+        })
+    }
+
     pub(crate) fn reference_state_for_request(
         &self,
         repository: &GitRepository,

@@ -1746,6 +1746,83 @@ fn worktree_and_index_changes_preserve_history_revision_and_graph_cursor() {
 }
 
 #[test]
+fn history_refresh_reads_metadata_without_scanning_or_replacing_working_tree_state() {
+    let repository = TestRepository::init();
+    for message in ["first", "second"] {
+        repository.write("file.txt", message);
+        repository.git(&["add", "."]);
+        repository.git(&["commit", "-m", message]);
+    }
+    repository.write("file.txt", "modified\n");
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.status().unwrap();
+    queue.drain();
+    repository.write("new.txt", "not scanned by history\n");
+    repository.git(&["tag", "new-label", "HEAD"]);
+    let ((refs, graph), timings) = crate::git_service::with_process_timings(|| {
+        let refs = runtime.history_refs_for(None).unwrap();
+        let graph = runtime
+            .graph(1, std::num::NonZeroUsize::new(1).unwrap(), None)
+            .unwrap();
+        (refs, graph)
+    });
+    assert_eq!(
+        refs.status.changes, initial.changes,
+        "History preserves the last authoritative path snapshot"
+    );
+    assert!(
+        refs.references
+            .iter()
+            .any(|reference| reference.name == "new-label")
+    );
+    assert_eq!(graph.commits[0].subject, "second");
+    assert!(!timings.records.is_empty());
+    assert!(
+        timings
+            .records
+            .iter()
+            .all(|record| !matches!(record.kind, ash_git::GitProcessKind::Status)),
+        "{timings:?}"
+    );
+    assert_eq!(
+        queue.drain().len(),
+        1,
+        "Reference changes still notify other history consumers"
+    );
+    let updated = runtime.status().unwrap();
+    assert!(
+        updated
+            .changes
+            .iter()
+            .any(|change| change.path == "new.txt")
+    );
+    queue.drain();
+    let ((refs, _), timings) = crate::git_service::with_process_timings(|| {
+        (
+            runtime.history_refs_for(None).unwrap(),
+            runtime
+                .graph(1, std::num::NonZeroUsize::new(1).unwrap(), None)
+                .unwrap(),
+        )
+    });
+    assert_eq!(refs.status, updated);
+    assert!(
+        queue.drain().is_empty(),
+        "An unchanged history refresh publishes no status update"
+    );
+    assert!(
+        timings
+            .records
+            .iter()
+            .all(|record| !matches!(record.kind, ash_git::GitProcessKind::Status)),
+        "{timings:?}"
+    );
+}
+
+#[test]
 fn new_graph_observes_external_changes_before_a_late_watcher_refresh() {
     let repository = TestRepository::init();
     for message in ["first", "second"] {

@@ -900,6 +900,19 @@ fn verify_terminal_helpers(
 }
 
 fn verify_history_references(supervisor: &host::ExtensionHostSupervisor, client: &Client) {
+    client.requests.lock().unwrap().clear();
+    execute(
+        supervisor,
+        client,
+        invocation(
+            "ash.scm",
+            "scm",
+            json!({"method":"history","providerId":"root","methodName":"refresh","arguments":[]}),
+        ),
+    );
+    let requests = client.requests.lock().unwrap().clone();
+    assert!(requests.iter().any(|(method, _)| method == "historyRefs"));
+    assert!(requests.iter().all(|(method, _)| method != "status"));
     let references = execute(
         supervisor,
         client,

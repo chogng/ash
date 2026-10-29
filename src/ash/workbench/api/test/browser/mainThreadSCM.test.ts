@@ -39,7 +39,7 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], r
 	const timeline = lifetime.add(new TimelineService(contexts, {} as IViewsService, new NullLoggerService()));
 	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts, timeline, { activeGroup: { inputs: [] } } as unknown as IEditorPart));
 	bridge.update(fleet(providers));
-	return { lifetime, scm, view, bridge, decorationProviders, errors, contexts, commands, timeline };
+	return { lifetime, scm, view, bridge, quickDiff, decorationProviders, errors, contexts, commands, timeline };
 }
 
 test('SCM file timeline bridges scoped history, paging, open commands and meaningful changes', async () => {
@@ -442,6 +442,37 @@ test('SCM cannot take over another extension repository or change its registered
 	assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [{ ...(provider() as Record<string, JsonValue>), rootUri: 'file:///other' }]), /identity cannot change/);
 	assert.equal(value.scm.getRepository('repo'), repository);
 	assert.equal(value.scm.getRepository('other'), otherRepository);
+});
+
+test('SCM history and reference updates leave Changes quiet while working-tree controls still update', () => {
+	const initial: Record<string, JsonValue> = { ...(provider() as Record<string, JsonValue>), hasHistory: true };
+	const value = fixture(async () => null, [initial]);
+	using cleanup = value.lifetime;
+	const repository = value.scm.getRepository('repo')!;
+	let resources = 0;
+	let history = 0;
+	let diff = 0;
+	using diffListener = value.quickDiff.onDidChange(() => diff++);
+	using resourceListener = repository.provider.onDidChangeResources(() => resources++);
+	using historyListener = repository.provider.historyProvider!.onDidChange(() => history++);
+	const groups = repository.provider.groups;
+	const changed = { ...initial, historyRevision: 2, historyRef: { id: 'refs/heads/main', name: 'main', revision: 'new-commit' } };
+	value.bridge.set(source, 'ash.scm', 2, [changed]);
+	value.bridge.set(source, 'ash.scm', 3, [changed]);
+	assert.equal(history, 1);
+	assert.equal(diff, 1, 'A moved HEAD invalidates the original diff without refreshing Changes');
+	assert.equal(resources, 0, 'History-only and identical snapshots do not refresh Changes');
+	assert.equal(repository.provider.groups, groups);
+	value.bridge.set(source, 'ash.scm', 4, [{ ...changed, isBusy: true }]);
+	assert.equal(resources, 1, 'Operation state still updates Commit and resource actions');
+	value.bridge.set(source, 'ash.scm', 5, [{ ...changed, input: { ...(initial.input as Record<string, JsonValue>), value: 'new draft' } }]);
+	assert.equal(resources, 2);
+	assert.equal(diff, 2, 'Completing an index operation can change diff content without changing path statuses');
+	assert.equal(repository.provider.input.value, 'new draft');
+	value.bridge.set(source, 'ash.scm', 6, [{ ...changed, groups: [{ id: 'working', label: 'Changes', resources: [], actions: [] }] }]);
+	assert.equal(resources, 3, 'Actual working-tree changes still reach Changes');
+	assert.equal(diff, 3);
+	assert.notEqual(repository.provider.groups, groups);
 });
 
 test('SCM bridge forwards reference-only HEAD moves once without invalidating history', () => {

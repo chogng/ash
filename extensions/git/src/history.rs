@@ -20,7 +20,7 @@ impl GitRuntime {
         let arg = |index: usize| args.get(index).cloned().unwrap_or(Value::Null);
         match payload["methodName"].as_str().unwrap_or_default() {
             "refresh" => {
-                self.accept_status(self.api.status(repository, Some(token))?);
+                self.accept_status(self.api.history_refs(repository, Some(token))?.status);
                 self.publish()?;
                 Ok(Value::Null)
             }

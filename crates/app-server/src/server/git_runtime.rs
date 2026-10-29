@@ -1580,8 +1580,7 @@ impl GitRepositoryRuntime {
     fn history_refs(&self) -> Result<GitHistoryRefsResult, GitRuntimeError> {
         let _operation = lock_current_operation(&self.operation)
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
-        let (repository, snapshot) = self.service.snapshot().map_err(GitRuntimeError::Service)?;
-        let status = self.accept(repository, snapshot)?;
+        let status = self.accept_history()?;
         let branches = self.local_branches_locked()?;
         let state = self
             .state
@@ -1611,9 +1610,7 @@ impl GitRepositoryRuntime {
             // A new traversal observes current refs and remotes. Accept that state
             // before saving its cursor so a delayed watcher cannot invalidate it
             // merely for reporting changes this traversal has already observed.
-            let (repository, snapshot) =
-                self.service.snapshot().map_err(GitRuntimeError::Service)?;
-            self.accept(repository, snapshot)?;
+            self.accept_history()?;
         }
         let mut sessions = self
             .graph_sessions
@@ -2250,6 +2247,62 @@ impl GitRepositoryRuntime {
                 .reference_state_for_request(&repository, cancellation)
                 .map_err(GitRuntimeError::Service)?,
         };
+        self.accept_state(
+            repository,
+            projected,
+            references,
+            notification,
+            cancellation,
+        )
+    }
+
+    /// History reads advance metadata on the existing owner while retaining its
+    /// last working-tree snapshot. File watchers and explicit status reads own paths.
+    fn accept_history(&self) -> Result<GitStatusResult, GitRuntimeError> {
+        let cancellation = CancellationSource::new().token();
+        let previous = self
+            .state
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?
+            .status
+            .clone();
+        let Some(mut projected) = previous else {
+            // Initialize the shared repository once; an unknown worktree is not clean.
+            let (repository, snapshot) =
+                self.service.snapshot().map_err(GitRuntimeError::Service)?;
+            return self.accept(repository, snapshot);
+        };
+        let repository = self
+            .service
+            .repository_for_request(&cancellation)
+            .map_err(GitRuntimeError::Service)?;
+        projected.head = head(
+            &self
+                .service
+                .head_for_request(&repository, &cancellation)
+                .map_err(GitRuntimeError::Service)?,
+        );
+        let references = self
+            .service
+            .reference_state_for_request(&repository, &cancellation)
+            .map_err(GitRuntimeError::Service)?;
+        self.accept_state(
+            repository,
+            projected,
+            references,
+            StatusNotification::OnChange,
+            &cancellation,
+        )
+    }
+
+    fn accept_state(
+        &self,
+        repository: GitRepository,
+        mut projected: GitStatusResult,
+        references: ash_git::GitReferenceState,
+        notification: StatusNotification,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
         let mut state = self
             .state
             .lock()

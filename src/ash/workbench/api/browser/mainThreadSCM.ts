@@ -287,10 +287,10 @@ export class MainThreadSCM extends Disposable {
 						primaryRepositoryAction: input => input.source?.kind === 'external' && input.source.providerId === source.extensionId && input.source.repositoryId === value.id ? actions(metadata.repositoryActions)[0] : undefined,
 						repositoryActions: input => input.source?.kind === 'external' && input.source.providerId === source.extensionId && input.source.repositoryId === value.id ? actions(metadata.repositoryActions) : [],
 					}));
-					provider.add(provider.onDidChangeResources(() => this.multiDiff.notifyChanged()));
+					provider.add(provider.onDidChangeDiff(() => this.multiDiff.notifyChanged()));
 				}
 				provider.add(this.quickDiff.addProvider({
-					id: `${source.extensionId}:${value.id}`, label: value.label, rootUri: provider.rootUri, onDidChange: listener => provider!.onDidChangeResources(() => listener(undefined)), provideOriginalResource: async (resource, signal) => {
+					id: `${source.extensionId}:${value.id}`, label: value.label, rootUri: provider.rootUri, onDidChange: listener => provider!.onDidChangeDiff(() => listener(undefined)), provideOriginalResource: async (resource, signal) => {
 						const result = await provider!.call('quickDiff', { resource: resource.toString() }, signal);
 						if (result === null) {
 							return undefined;
@@ -469,6 +469,8 @@ interface ProviderSnapshot {
 class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeResources = this.changed.event;
+	private readonly diffChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeDiff = this.diffChanged.event;
 	private readonly decorationChanged = this._register(new Emitter<readonly URI[]>());
 	public readonly onDidChangeDecorations = this.decorationChanged.event;
 	private readonly historyChanged = this._register(new Emitter<void>());
@@ -677,6 +679,23 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		const resourcesChanged = !structuralEquals(value.groups, this.snapshot.groups);
+		// An index write can change original content while path/status entries stay equal.
+		const diffChanged = resourcesChanged
+			|| value.label !== this.snapshot.label
+			|| value.historyRef?.revision !== this.snapshot.historyRef?.revision
+			|| this.snapshot.isBusy && !value.isBusy;
+		// History revisions and reference decorations do not change the working-tree
+		// presentation. Keep input, operation and status controls responsive independently.
+		const presentationChanged = resourcesChanged
+			|| value.label !== this.snapshot.label
+			|| value.count !== this.snapshot.count
+			|| value.activeRepositoryName !== this.snapshot.activeRepositoryName
+			|| value.statusMessage !== this.snapshot.statusMessage
+			|| value.isBusy !== this.snapshot.isBusy
+			|| !structuralEquals(value.input, this.snapshot.input)
+			|| !structuralEquals(value.actionButton, this.snapshot.actionButton)
+			|| !structuralEquals(value.statusBarCommands, this.snapshot.statusBarCommands)
+			|| !structuralEquals(value.multiDiff, this.snapshot.multiDiff);
 		const timelineChanged = historyChanged || resourcesChanged || !structuralEquals(value.timeline, this.snapshot.timeline);
 		if (resourcesChanged && this.resourceGroups) {
 			// Reconcile by provider/group/resource identity. Unchanged rows keep their
@@ -687,8 +706,9 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
 		if (!structuralEquals(this.historyRemoteRef.get(), value.historyRemoteRef)) { this.historyRemoteRef.set(value.historyRemoteRef); }
 		if (!structuralEquals(this.historyBaseRef.get(), value.historyBaseRef)) { this.historyBaseRef.set(value.historyBaseRef); }
-		this.changed.fire();
-		this.decorationChanged.fire([]);
+		if (presentationChanged) this.changed.fire();
+		if (diffChanged) this.diffChanged.fire();
+		if (resourcesChanged) this.decorationChanged.fire([]);
 		if (timelineChanged) this.timelineChanged.fire();
 		if (historyChanged) { this.historyChanged.fire(); }
 		else if (historyRefsChanged) { this.historyRefsChanged.fire(value.historyRefsItems); }
