@@ -2,7 +2,7 @@ import { chromium, expect, test, type Browser, type Page } from '@playwright/tes
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer } from 'node:net';
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ProcessRun, isProcessRunning, registerRunResource } from '../../../../build/processes.ts';
@@ -83,13 +83,20 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 		await rename(source.path + '.selfhost-swap', source.path);
 		source.written = next;
 	};
-	const backendLog = async () => {
-		const root = join(profile, 'run');
-		const files = await readdir(root).catch(() => [] as string[]);
-		const logs = await Promise.all(files.filter(file => file.endsWith('.log')).map(async file => ({ file: join(root, file), mtime: (await stat(join(root, file))).mtimeMs })));
-		return (await Promise.all(logs.sort((a, b) => a.mtime - b.mtime).map(file => readFile(file.file, 'utf8')))).join('\n');
+	const backendStatus = async () => {
+		// The daemon owns runtime paths, which need not be beneath the profile on
+		// Unix. Its read-only lifecycle result also identifies the actual server.
+		const { stdout } = await execute(daemon, ['version'], { env: environment, windowsHide: true, timeout: 30_000 });
+		const status = JSON.parse(stdout) as { status: string; pid?: number; logPath: string; };
+		expect(typeof status.logPath).toBe('string');
+		expect(isAbsolute(status.logPath)).toBe(true);
+		return status;
 	};
-	const backendPid = async () => Number([...(await backendLog()).matchAll(/endpoint ready:.*\(pid (\d+)\)/g)].at(-1)?.[1]);
+	const backendLog = async () => readFile((await backendStatus()).logPath, 'utf8').catch(error => {
+		if (error.code === 'ENOENT') return '';
+		throw error;
+	});
+	const backendPid = async () => (await backendStatus()).pid ?? 0;
 	let browser: Browser | undefined;
 	let page: Page | undefined;
 	let workbench: Workbench | undefined;

@@ -7,7 +7,7 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { SegmentedControl } from '../../../../base/browser/ui/segmentedControl/segmentedControl.js';
 import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
-import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { raceCancellationError, RunOnceScheduler } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -23,6 +23,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { CustomizationMarketplaceMediaType, ICustomizationMarketplaceService, type ICustomizationMarketplaceCursor, type ICustomizationMarketplaceResource } from '../../../../platform/customizationMarketplace/common/customizationMarketplaceService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IPluginManagementService } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
@@ -37,9 +38,9 @@ import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPan
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { addConnection, describeConnectorState, describeMcpServerState, getSkillSummary } from '../../../../workbench/contrib/extensions/browser/extensionsActions.js';
+import { changeExtensionPackage, ExtensionEditor } from '../../../../workbench/contrib/extensions/browser/extensionEditor.js';
 import { ExtensionsCapabilityInput, ExtensionsInput, ExtensionsInputSource } from '../../../../workbench/contrib/extensions/common/extensionsInput.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { CustomizeSkillActions } from './customizeSkillActions.js';
 import './customizeEditor.css';
 import { LoadingSkeleton } from '../../../browser/ui/loadingSkeleton.js';
@@ -51,6 +52,8 @@ interface Card {
 	readonly name: string;
 	readonly description: string;
 	readonly metadata?: string;
+	readonly installed?: boolean;
+	readonly install?: () => Promise<unknown>;
 	readonly open: () => Promise<void>;
 }
 interface Catalog {
@@ -66,6 +69,14 @@ interface CatalogMenuAction extends IAction {
 export class CustomizeEditorPane extends EditorPane {
 	public readonly id = 'sessions.editor.customize';
 	private root!: HTMLElement;
+	private catalog!: HTMLElement;
+	private details!: HTMLElement;
+	private detailHost!: HTMLElement;
+	private back!: Button;
+	private detailEditor: ExtensionEditor | undefined;
+	private catalogScrollTop = 0;
+	private returnFocus: { readonly element: HTMLElement; readonly resourceId?: string; readonly action: boolean; } | undefined;
+	private readonly detailResources = this._register(new DisposableStore());
 	private panel!: HTMLElement;
 	private grid!: HTMLElement;
 	private loading!: LoadingSkeleton;
@@ -106,13 +117,13 @@ export class CustomizeEditorPane extends EditorPane {
 		@IMcpServerManagementService private readonly mcp: IMcpServerManagementService,
 		@IMcpServerStatusService private readonly mcpStatus: IMcpServerStatusService,
 		@IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
-		@IEditorService private readonly editors: IEditorService,
 		@ICommandService private readonly commands: ICommandService,
 		@IContextMenuService private readonly menus: IContextMenuService,
 		@IContextKeyService private readonly contexts: IContextKeyService,
 		@IHoverService private readonly hover: IHoverService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@INotificationService private readonly notifications: INotificationService,
 		@IAccessibleViewService private readonly accessible: IAccessibleViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IThemeService theme: IThemeService,
@@ -138,9 +149,11 @@ export class CustomizeEditorPane extends EditorPane {
 		const hint = this.accessible.getOpenAriaHint(AccessibilityVerbositySettingId.Customize);
 		this.root.setAttribute('aria-label', `${localize('customize.title', 'Customize')}${hint ? ` ${hint}` : ''}`);
 		this._register(this.contexts.createScoped(this.root)).createKey('sessionsCustomizeFocused', true);
-		this.root.append(h(document, 'h1', {}, localize('customize.title', 'Customize')));
+		this.catalog = h(document, 'div', { className: 'ash-customize-catalog' });
+		this.root.append(this.catalog);
+		this.catalog.append(h(document, 'h1', {}, localize('customize.title', 'Customize')));
 		const toolbar = h(document, 'div', { className: 'ash-customize-toolbar' });
-		this.root.append(toolbar);
+		this.catalog.append(toolbar);
 		this.tabs = this._register(new TabList(toolbar, {
 			ariaLabel: localize('customize.categories', 'Customization categories'), presentation: 'navigation',
 			onActivate: category => {
@@ -214,7 +227,7 @@ export class CustomizeEditorPane extends EditorPane {
 		}));
 		this.toolbar.element.classList.add('ash-customize-actions');
 		this.panel = h(document, 'div', { className: 'ash-customize-panel', attributes: { id: 'ash-customize-panel', role: 'tabpanel' } });
-		this.root.append(this.panel);
+		this.catalog.append(this.panel);
 		this.hero = h(document, 'div', { className: 'ash-customize-hero' });
 		this.heroTitle = h(document, 'h2');
 		this.heroDescription = h(document, 'p');
@@ -233,13 +246,30 @@ export class CustomizeEditorPane extends EditorPane {
 		this.more = this._register(new Button(this.panel, { ...defaultButtonStyles, label: localize('customize.more', 'Load more'), onClick: () => { void this.load(true); } }));
 		this.more.domNode.hidden = true;
 		this._register(addDisposableListener(this.grid, 'keydown', event => this.navigateCards(event)));
+		this.details = h(document, 'div', { className: 'ash-customize-details' });
+		this.details.hidden = true;
+		const navigation = h(document, 'div', { className: 'ash-customize-detail-navigation' });
+		this.back = this._register(new Button(navigation, {
+			...defaultButtonStyles, label: localize('customize.skills', 'Skills'), icon: Lxicon.arrowLeft,
+			onClick: () => this.showCatalog(),
+		}));
+		this.detailHost = h(document, 'div', { className: 'ash-customize-detail-host' });
+		this.details.append(navigation, this.detailHost);
+		this.root.append(this.details);
 		this.registerAccessibility();
 		this.updateControls();
 	}
 
 	public override async setInput(_input: IResourceEditorInput, signal: AbortSignal): Promise<void> { signal.throwIfAborted(); }
-	public override clearInput(): void { this.request?.dispose(true); this.refresh.cancel(); }
-	public override focus(): void { this.search.focus(); }
+	public override clearInput(): void {
+		this.request?.dispose(true);
+		this.refresh.cancel();
+		this.showCatalog(false);
+	}
+	public override focus(): void {
+		if (this.detailEditor) this.back.focus();
+		else this.search.focus();
+	}
 	public override layout(dimension: IDimension): void {
 		this.root.style.width = `${dimension.width}px`;
 		this.root.style.height = `${dimension.height}px`;
@@ -248,6 +278,7 @@ export class CustomizeEditorPane extends EditorPane {
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		this.shown = visible;
+		this.detailEditor?.setVisible(visible);
 		if (visible) void this.load();
 		else { this.refresh.cancel(); this.request?.dispose(true); }
 	}
@@ -342,11 +373,22 @@ export class CustomizeEditorPane extends EditorPane {
 				note: snapshot.unavailableSources.join(' · '),
 			};
 		}
-		const page = await this.marketplace.query({ query, mediaType: this.category === 'skills' ? CustomizationMarketplaceMediaType.Skill : CustomizationMarketplaceMediaType.McpServer, sourceIds: this.sourceId ? [this.sourceId] : undefined, pageSize: 30, cursor }, request.token);
+		const skills = this.category === 'skills';
+		const [page, installed] = await Promise.all([
+			this.marketplace.query({ query, mediaType: skills ? CustomizationMarketplaceMediaType.Skill : CustomizationMarketplaceMediaType.McpServer, sourceIds: this.sourceId ? [this.sourceId] : undefined, pageSize: 30, cursor }, request.token),
+			skills ? this.extensions.listInstalled() : Promise.resolve([]),
+		]);
 		return {
 			cards: page.items.map(resource => ({
 				id: JSON.stringify([resource.sourceId, resource.identifier, resource.version]), name: resource.displayName, description: resource.description,
 				metadata: `${this.marketplace.allSources.find(source => source.id === resource.sourceId)?.displayName ?? resource.sourceId} · ${resource.version}`,
+				installed: skills && installed.some(item => item.package.id === resource.installation.selectionId && item.package.version === resource.version && item.state === 'installed'),
+				install: skills && !installed.some(item => item.package.id === resource.installation.selectionId) ? async () => {
+					const details = await this.extensions.get(resource.installation.selectionId, resource.version);
+					if (!this.shown || this.isDisposed) return;
+					const result = await changeExtensionPackage(this.extensions, this.dialogs, this.notifications, 'install', details);
+					if (result && this.shown && !this.isDisposed) await this.load();
+				} : undefined,
 				open: () => this.openResource(resource),
 			})),
 			cursor: page.nextCursor,
@@ -454,10 +496,29 @@ export class CustomizeEditorPane extends EditorPane {
 			this.cardResources.add(this.hover.setupDelayedHover(name.domNode, { content: card.name }));
 			article.append(icon, content);
 			const open = this.cardResources.add(new Button(article, {
-				...defaultButtonStyles, label: localize('customize.details', 'View {0}', card.name), icon: Lxicon.arrowRight, iconOnly: true,
-				onClick: () => { void this.run(card.open); },
+				...defaultButtonStyles,
+				label: card.installed ? localize('customize.installedDetails', 'Installed: {0}. View details', card.name)
+					: card.install ? localize('customize.installSkill', 'Install {0}', card.name) : localize('customize.details', 'View {0}', card.name),
+				icon: card.installed ? Lxicon.check : card.install ? Lxicon.add : Lxicon.arrowRight, iconOnly: true,
+				onClick: () => {
+					void this.run(async () => {
+						const document = open.domNode.ownerDocument;
+						const restoreFocus = document.activeElement === open.domNode;
+						open.enabled = false;
+						try { await (card.install ?? card.open)(); }
+						finally {
+							if (open.domNode.isConnected) open.enabled = true;
+							// The review dialog cannot restore focus to the disabled install button.
+							if (restoreFocus && this.shown && document.activeElement === document.body) {
+								const row = [...this.grid.children].find(row => (row as HTMLElement).dataset.resourceId === card.id);
+								row?.querySelector<HTMLButtonElement>('.ash-customize-card-open')?.focus();
+							}
+						}
+					});
+				},
 			}));
 			open.domNode.classList.add('ash-customize-card-open');
+			open.domNode.classList.toggle('installed', !!card.installed);
 			open.setTitle(open.label);
 			this.grid.append(article);
 		}
@@ -496,12 +557,71 @@ export class CustomizeEditorPane extends EditorPane {
 
 	private async openInput(input: ExtensionsInput | ExtensionsCapabilityInput): Promise<void> {
 		if (!this.shown || this.isDisposed) { input.dispose(); return; }
-		await this.editors.openEditor(input, { pinned: true });
+		if (!this.detailEditor) {
+			this.catalogScrollTop = this.catalog.scrollTop;
+		}
+		this.detailResources.clear();
+		const request = new AbortController();
+		const pane = this.instantiationService.createInstance(ExtensionEditor, {
+			presentation: 'page',
+			openDetails: (next: ExtensionsInput | ExtensionsCapabilityInput) => this.openInput(next),
+			accessibilityHelp: localize('customize.detailHelp', 'Use the Back button above the details to return to your resource list. Your category, search, sorting and scroll position are preserved, and focus returns to the resource card.'),
+		});
+		// The embedded pane borrows services; this navigation owns its request, input and lifetime.
+		this.detailResources.add(toDisposable(() => {
+			request.abort();
+			pane.clearInput();
+			pane.setVisible(false);
+		}));
+		this.detailResources.add(input);
+		this.detailResources.add(pane);
+		this.detailEditor = pane;
+		this.catalog.hidden = true;
+		this.details.hidden = false;
+		this.back.label = this.category === 'skills' ? localize('customize.skills', 'Skills')
+			: this.category === 'connectors' ? localize('customize.connectors', 'Connectors') : localize('customize.plugins', 'Plugins');
+		this.back.domNode.setAttribute('aria-label', localize('customize.backToCollection', 'Back to {0}', this.back.label));
+		pane.create(this.detailHost);
+		pane.setVisible(true);
+		this.back.focus();
+		try {
+			await raceCancellationError(pane.setInput(input, request.signal), request.signal);
+		} catch (error) {
+			if (request.signal.aborted || this.isDisposed || this.detailEditor !== pane) return;
+			this.showCatalog(this.shown);
+			this.message.hidden = false;
+			this.message.textContent = localize('customize.loadFailed', 'Could not load resources: {0}', String(error));
+		}
+	}
+
+	private showCatalog(restoreFocus = true): void {
+		if (!this.detailEditor) return;
+		this.detailResources.clear();
+		this.detailEditor = undefined;
+		this.details.hidden = true;
+		this.catalog.hidden = false;
+		const previous = this.returnFocus;
+		this.returnFocus = undefined;
+		if (restoreFocus) {
+			const row = [...this.grid.children].find(row => (row as HTMLElement).dataset.resourceId === previous?.resourceId);
+			const target = previous?.element.isConnected ? previous.element
+				: row?.querySelector<HTMLButtonElement>(previous?.action ? '.ash-customize-card-open' : '.ash-customize-card-name');
+			if (target) target.focus({ preventScroll: true });
+			else this.search.focus();
+		}
+		this.catalog.scrollTop = this.catalogScrollTop;
 	}
 
 	private async run(action: () => Promise<unknown>): Promise<void> {
 		if (this.opening) return;
 		this.opening = true;
+		const focused = this.root.ownerDocument.activeElement;
+		if (!this.detailEditor && focused instanceof HTMLElement && this.catalog.contains(focused)) {
+			this.returnFocus = {
+				element: focused, resourceId: focused.closest<HTMLElement>('[data-resource-id]')?.dataset.resourceId,
+				action: focused.classList.contains('ash-customize-card-open'),
+			};
+		}
 		try { await action(); }
 		catch (error) { if (!this.isDisposed && this.shown && !isCancellationError(error)) this.message.textContent = String(error); }
 		finally { this.opening = false; }
@@ -545,9 +665,9 @@ export class CustomizeEditorPane extends EditorPane {
 			type, priority: 100, name: `sessionsCustomize-${type}`, when: ContextKeyExpr.has('sessionsCustomizeFocused'),
 			getProvider: () => {
 				const focused = this.root.ownerDocument.activeElement as HTMLElement | null;
-				if (!this.shown || !focused || !this.root.contains(focused)) return undefined;
-				return new AccessibleContentProvider(AccessibleViewProviderId.Customize, { type }, () => type === AccessibleViewType.View ? this.panel.innerText
-					: localize('customize.help', 'Customize brings Skills, Connectors and Plugins together. Use Left and Right Arrow on category tabs, then Enter to select. Yours lists current resources; Discover searches catalogs. Use Tab to reach search, the actions toolbar and resource cards. In the toolbar, Left and Right Arrow move between source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens the existing detail editor for installation, authorization and enablement. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. Other categories offer catalog browsing, connection setup or plugin installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.'),
+				if (!this.shown || !focused || !this.root.contains(focused) || this.detailHost.contains(focused)) return undefined;
+				return new AccessibleContentProvider(AccessibleViewProviderId.Customize, { type }, () => type === AccessibleViewType.View ? (this.detailEditor ? this.details.innerText : this.panel.innerText)
+					: localize('customize.help', 'Customize brings Skills, Connectors and Plugins together. Use Left and Right Arrow on category tabs, then Enter to select. Yours lists current resources; Discover searches catalogs. In Discover, activate Install on a skill card, review and confirm. A green check marks installed skills; activate it to open details. Successful installation shows a notification. Use Tab to reach search, the actions toolbar and resource cards. In the toolbar, Left and Right Arrow move between source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens resource details within Customize for installation, authorization and enablement. Use the Back button above the details to return to the same category, search, sorting and scroll position, with focus restored to the resource card. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. Other categories offer catalog browsing, connection setup or plugin installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.'),
 					() => { if (focused.isConnected) focused.focus(); else this.focus(); }, AccessibilityVerbositySettingId.Customize);
 			},
 		}));

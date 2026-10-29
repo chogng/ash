@@ -4,6 +4,7 @@ import { IClipboardService } from '../../../../../../platform/clipboard/common/c
 import { BrowserContextMenuService } from '../../../../../../platform/contextview/browser/contextMenuService.js';
 import type { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
 import { TestNotificationService } from '../../../../../../../../test/fixtures/browser/notificationFixture.js';
+import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { ConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
@@ -146,6 +147,7 @@ if (new URLSearchParams(window.location.search).get('locale') === 'zh-CN') {
 
 const disposables = new DisposableStore();
 const services = disposables.add(new InstantiationService());
+services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 let activeSessionId: string | undefined;

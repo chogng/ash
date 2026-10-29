@@ -34,6 +34,7 @@ import {
 import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { addConnection, describeConnectorState, describeMcpServerState, changeExtensionEnablement, extensionEnablementLabel, getSkillSummary } from './extensionsActions.js';
 import { IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -91,6 +92,7 @@ class ExtensionsContent extends Disposable {
 	constructor(container: HTMLElement, options: ExtensionsOpenOptions & { readonly beforeOpenEditor?: () => Promise<void>; },
 		@IExtensionManagementService private readonly extensionManagement: IExtensionManagementService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@INotificationService private readonly notifications: INotificationService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IEditorService private readonly editors: IEditorService,
@@ -205,7 +207,7 @@ class ExtensionsContent extends Disposable {
 				event.stopPropagation(); void this.run(async () => {
 					if (this.working) { return; }
 					this.working = true; install.enabled = false;
-					try { const details = await this.extensionManagement.get(item.summary.id, item.summary.version); await changeExtensionPackage(this.extensionManagement, this.dialogs, 'install', details); }
+					try { const details = await this.extensionManagement.get(item.summary.id, item.summary.version); await changeExtensionPackage(this.extensionManagement, this.dialogs, this.notifications, 'install', details); }
 					finally { this.working = false; if (!this.isDisposed) { await this.load(); } }
 				});
 			}));

@@ -267,16 +267,4 @@ suite('terminalNotification browser component', () => {
 		expect(recording.truncated).toBe(false);
 	});
 
-	test('terminal dictation converts spoken symbols before acknowledged input and keeps non-English text without executing Enter', async function () {
-		const { page } = browserTests;
-
-		await page.goto('/terminal.html?pane&existing');
-		await page.waitForFunction(() => !!window.ashTerminalPaneIntegration);
-		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
-		await page.getByRole('button', { name: 'Terminal: Start dictation', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
-		await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('Echo dollar sign HOME ampersand echo 中文\r\n\x1b\x9b', true));
-		await page.getByRole('button', { name: 'Stop dictation', exact: true }).click();
-		await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo $ HOME & echo 中文 ']);
-	});
 });

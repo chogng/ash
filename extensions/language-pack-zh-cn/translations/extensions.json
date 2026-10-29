@@ -1,5 +1,6 @@
 {
   "ash.extensions": {
+    "skillInstalled": "{0} 已安装，可以使用。",
     "agentRecommendationsEmpty": "此窗口暂无推荐。可浏览扩展市场，发现技能、连接器和其他扩展。",
     "keymapRecommendationReason": "推荐 {0} 键位方案",
     "remoteRecommendationReason": "为远程工作区推荐",

@@ -86,6 +86,9 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 		},
 	};
 }
+let completeCustomizeDetails = (): void => { };
+let customizeDetailsRead: 'ready' | 'hold' | 'fail' = 'ready';
+window.addEventListener('pagehide', () => completeCustomizeDetails(), { once: true });
 // Synthetic catalogs exercise the real Sessions composition without using a personal profile.
 if (new URL(location.href).searchParams.has('customize')) {
 	const catalog = { generation: 1, skills: ['research-notes', 'code-review', 'writing-guide'].map(name => ({
@@ -96,9 +99,19 @@ if (new URL(location.href).searchParams.has('customize')) {
 	const summaries = ['Data explorer', 'Document studio', 'Team knowledge', 'Writing companion'].map((displayName, index) => ({
 		id: `fixture.package-${index}`, version: '1.0.0', packageType: 'plugin', displayName, description: `Tools and reusable instructions for ${displayName.toLowerCase()}.`,
 	}));
+	const installed: Awaited<ReturnType<typeof disconnectedApi.extensionManagement.install>>[] = [];
 	globalThis.ashWebWorkbenchHost = { api: {
 		...globalThis.ashWebWorkbenchHost!.api,
-		skills: { ...disconnectedApi.skills, list: async () => catalog, read: async () => ({ revision: 1, catalog, diagnostics: [] }) },
+		skills: {
+			...disconnectedApi.skills, list: async () => catalog,
+			read: async () => {
+				const mode = customizeDetailsRead;
+				customizeDetailsRead = 'ready';
+				if (mode === 'fail') throw new Error('Synthetic detail failure');
+				if (mode === 'hold') await new Promise<void>(resolve => { completeCustomizeDetails = resolve; });
+				return { revision: 1, catalog, diagnostics: [] };
+			},
+		},
 		plugins: { ...disconnectedApi.plugins, list: async () => ({ revision: 1, activationGeneration: 1, packages: [{
 			id: 'fixture.local', version: '1.0.0', digest: 'a'.repeat(64), displayName: 'Local productivity', permissions: [],
 			hasEditorExtensions: true, enabled: true, granted: false, effective: false, revoked: false,
@@ -110,7 +123,18 @@ if (new URL(location.href).searchParams.has('customize')) {
 		}] }) },
 		extensionManagement: {
 			...disconnectedApi.extensionManagement,
-			listInstalled: async () => ({ instanceId: 'fixture', generation: 1, packages: [] }),
+			listInstalled: async () => ({ instanceId: 'fixture', generation: 1 + installed.length, packages: installed }),
+			install: async ({ packageId, version }) => {
+				if (new URL(location.href).searchParams.has('installFails')) throw new Error('Synthetic installation failure');
+				if (installed.some(item => item.package.id === packageId)) throw new Error('Duplicate installation');
+				const result = {
+					installationId: `installed:${packageId}`, package: { id: packageId, version: version!, digest: 'a'.repeat(64) }, state: 'installed' as const,
+					capabilities: [{ reference: { id: `skill:${packageId}` }, kind: 'skill' as const, id: 'fixture-skill', contractVersion: '1', permissions: [], authenticationProvider: null }],
+				};
+				installed.push(result);
+				return result;
+			},
+			editorExtensions: async () => ({ revision: 1, extensions: [] }),
 			sources: async () => ({ revision: 1, sources: [{ id: 'Ash fixtures', kind: 'ash', enabled: true, productOwned: true }] }),
 			search: async ({ query }) => ({ unavailableSources: [], packages: summaries.filter(item => item.displayName.toLowerCase().includes(query.toLowerCase())) }),
 			searchPage: async ({ query, cursor }) => {
@@ -167,6 +191,8 @@ window.addEventListener('pagehide', stopObservingErrors, { once: true });
 declare global {
 	interface Window {
 		ashSessionsIntegration: {
+			completeCustomizeDetails(): void;
+			setCustomizeDetailsRead(mode: 'hold' | 'fail'): void;
 			readonly errors: readonly string[];
 			readonly multiHost?: ReturnType<typeof installMultiHostSessionsFixture>;
 			readonly errorDetails: readonly string[];
@@ -184,6 +210,8 @@ declare global {
 }
 
 window.ashSessionsIntegration = {
+	completeCustomizeDetails: () => completeCustomizeDetails(),
+	setCustomizeDetailsRead: mode => { customizeDetailsRead = mode; },
 	errors, errorDetails, multiHost,
 	setUpdateState: value => { updateState = value; updateChanges.fire(value); },
 	getUpdateInstallCount: () => updateInstallCount,

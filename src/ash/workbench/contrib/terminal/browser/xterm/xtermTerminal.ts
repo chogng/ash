@@ -19,8 +19,9 @@ import { IThemeService } from "../../../../../platform/theme/common/themeService
 import { onUnexpectedError } from "../../../../../base/common/errors.js";
 import { ITerminalConfigurationService } from "../terminal.js";
 import type { ITerminalDimensions, ITerminalScreenHost, IXtermTerminal } from "../terminal.js";
-import { h } from "../../../../../base/browser/dom.js";
+import { getWindow, h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
+import { AnimationFrameScheduler } from '../../../../../base/browser/scheduler.js';
 import { TerminalResizeDebouncer } from '../terminalResizeDebouncer.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { Color } from '../../../../../base/common/color.js';
@@ -125,7 +126,11 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				if (this.terminal) this.terminal.options.theme = terminalTheme(this.themeService.getColorTheme(), instance.target);
 			}));
 		}
-		this._register(observeResize(this.element, () => this.fit()));
+		// Fitting can flush pending xterm writes and initialize contributions that
+		// observe this same element. Do it outside ResizeObserver delivery so those
+		// observers receive their first notification without a depth-loop error.
+		const fit = this._register(new AnimationFrameScheduler(getWindow(this.element), () => this.fit()));
+		this._register(observeResize(this.element, () => fit.schedule()));
 		this._register(configuration.onConfigChanged(() => {
 			if (!this.terminal) return;
 			this.terminal.options = this.screenOptions();

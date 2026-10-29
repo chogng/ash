@@ -176,20 +176,23 @@
 }
 
 .ash-tab-list-inset .ash-tab-label:focus-visible,
-.ash-tab-list-navigation .ash-tab-label:focus-visible {
+.ash-tab-list-navigation .ash-tab-label:focus-visible,
+.ash-tab-list-underline .ash-tab-label:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
 /* Page categories size to their labels, while keeping the shared overflow and
  * keyboard-reveal behavior. Hosts only size this root and select visual tokens. */
-.ash-tab-list-navigation {
+.ash-tab-list-navigation,
+.ash-tab-list-underline {
 	width: max-content;
 	max-width: 100%;
 	height: var(--ash-tab-height);
 }
 
-.ash-tab-list-navigation > .ash-scrollbar-viewport {
+.ash-tab-list-navigation > .ash-scrollbar-viewport,
+.ash-tab-list-underline > .ash-scrollbar-viewport {
 	position: relative;
 	inset: auto;
 }
@@ -199,7 +202,8 @@
 	color: var(--ash-foreground);
 }
 
-.ash-tab-list-navigation .ash-tab-label {
+.ash-tab-list-navigation .ash-tab-label,
+.ash-tab-list-underline .ash-tab-label {
 	height: 100%;
 	align-items: center;
 	justify-content: center;
@@ -209,7 +213,8 @@
 	white-space: nowrap;
 }
 
-.ash-tab-list-navigation .ash-tab:hover {
+.ash-tab-list-navigation .ash-tab:hover,
+.ash-tab-list-underline .ash-tab:hover {
 	background: var(--ash-tabList-hoverBackground);
 }
 
@@ -218,6 +223,18 @@
 	outline: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, transparent);
 	outline-offset: -1px;
+}
+
+.ash-tab-list-underline .ash-tab {
+	box-sizing: border-box;
+	border-bottom: var(--ash-strokeThickness) solid transparent;
+	color: var(--ash-description-foreground);
+}
+
+.ash-tab-list-underline .ash-tab.checked {
+	border-bottom-color: var(--ash-foreground);
+	color: var(--ash-foreground);
+	background: transparent;
 }
 
 .ash-tab.preview .ash-icon-label-text {

@@ -134,7 +134,7 @@ export class ExtensionRecommendationNotificationService extends Disposable imple
 				await this.commands.executeCommand(OPEN_EXTENSIONS_COMMAND_ID, candidates.length > 1 ? { query: '@recommended' } : { mode: 'browse', query: request.searchValue ?? candidates[0].displayName, ...(request.languageId ? { languageId: request.languageId } : {}) });
 			});
 			const install = action('extensions.recommendations.install', localize({ bundle: 'ash.extensions', key: 'installRecommended' }, 'Install'), async () => {
-				for (const candidate of candidates) { await changeExtensionPackage(this.packages, this.dialogs, 'install', await this.packages.get(candidate.id, candidate.version)); }
+				for (const candidate of candidates) { await changeExtensionPackage(this.packages, this.dialogs, this.notificationService, 'install', await this.packages.get(candidate.id, candidate.version)); }
 			});
 			const never = action('extensions.recommendations.never', localize({ bundle: 'ash.extensions', key: 'neverRecommend' }, "Don't show again"), () => {
 				if (request.source === RecommendationSource.WORKSPACE) { this.storage.store(ignoredWorkspaceKey, true, StorageScope.WORKSPACE, StorageTarget.USER); }
