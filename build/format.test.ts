@@ -276,7 +276,7 @@ test('the Bun buffer command and CI formatter produce identical bytes for every 
 			];
 		assert.equal(
 			settings[`[${language}]`]?.['editor.defaultFormatter'] ?? group['editor.defaultFormatter'],
-			language === 'jsonc' ? 'vscode.json-language-features' : 'wdomitrz.simple-lsp-client',
+			'wdomitrz.simple-lsp-client',
 		);
 		writeFileSync(file, input);
 		const template = editor.cmd;

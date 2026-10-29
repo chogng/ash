@@ -205,13 +205,21 @@ suite('browserView browser component', () => {
 		await page.getByRole('menuitemcheckbox', { name: 'Toggle auto reload', exact: true }).click();
 		await expect(primary.locator('[data-ash-icon-id="sync"]')).toHaveCount(1);
 		await dropdown.click();
-		await expect(page.getByRole('menuitemcheckbox', { name: 'Toggle auto reload', exact: true })).toHaveAttribute('aria-checked', 'true');
+		await expect(page.getByRole('menuitemcheckbox', { name: 'Toggle auto reload', exact: true })).toHaveAttribute(
+			'aria-checked',
+			'true',
+		);
 		await page.keyboard.press('Escape');
 		await expect(dropdown).toBeFocused();
 		await page.evaluate(() => window.ashBrowserViewIntegration.loading(true));
 		await expect(dropdown).toHaveCount(0);
 		await page.getByRole('button', { name: 'Stop', exact: true }).click();
-		assert.deepEqual(await page.evaluate(() => [...window.ashBrowserViewIntegration.calls]), ['reload', 'hardReload', 'autoReload', 'stop']);
+		assert.deepEqual(await page.evaluate(() => [...window.ashBrowserViewIntegration.calls]), [
+			'reload',
+			'hardReload',
+			'autoReload',
+			'stop',
+		]);
 	});
 	for (const locale of ['en', 'zh-CN']) {
 		test(`browser history search opens recorded pages and clears the session in ${locale}`, async function () {

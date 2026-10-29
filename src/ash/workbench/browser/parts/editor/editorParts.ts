@@ -1,32 +1,61 @@
-import { EditorInputCapabilities, type IResourceEditorInput, type IEditorPane, type IEditorIdentifier } from '../../../common/editor.js';
+import {
+	EditorInputCapabilities,
+	type IResourceEditorInput,
+	type IEditorPane,
+	type IEditorIdentifier,
+} from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
-import { addDisposableListener, getWindow } from "../../../../base/browser/dom.js";
-import type { IDimension } from "../../../../base/browser/dom.js";
-import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { onUnexpectedError } from "../../../../base/common/errors.js";
-import { DisposableMap, Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { rot } from "../../../../base/common/numbers.js";
-import { IInstantiationService, createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
+import type { IDimension } from '../../../../base/browser/dom.js';
+import type { Direction as GridDirection } from '../../../../base/browser/ui/grid/grid.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
+import {
+	DisposableMap,
+	Disposable,
+	DisposableStore,
+	toDisposable,
+	type IDisposable,
+} from '../../../../base/common/lifecycle.js';
+import { rot } from '../../../../base/common/numbers.js';
+import {
+	IInstantiationService,
+	createServiceIdentifier,
+} from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { type IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
-import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
-import type { EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
-import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
-import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
+import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import type { EditorOpenOptions, EditorOpenTarget } from '../../../services/editor/common/editorService.js';
+import type {
+	ApplyEditorWorkingSetOptions,
+	EditorWorkingSet,
+	EditorWorkingSetTarget,
+} from '../../../services/editor/common/editorWorkingSet.js';
+import type {
+	EditorGroupId,
+	EditorIdentifier,
+	EditorPartChangeEvent,
+	EditorPartState,
+} from '../../../services/editor/common/editorState.js';
 import { localize } from '../../../../nls.js';
 import { EditorCloseEmptyGroupsConfiguration } from '../../../services/editor/common/editorConfiguration.js';
-import { parseAuxiliaryWindowState, type AuxiliaryWindowOpenOptions, type AuxiliaryWindowState, type IAuxiliaryWindow, type IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
+import {
+	parseAuxiliaryWindowState,
+	type AuxiliaryWindowOpenOptions,
+	type AuxiliaryWindowState,
+	type IAuxiliaryWindow,
+	type IAuxiliaryWindowService,
+} from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 
-import { editorInputKey } from "./editorTabsControl.js";
-import type { EditorCloseAllOptions, IEditorPart } from "./editorPart.js";
-import type { IEditorGroupView } from "./editor.js";
+import { editorInputKey } from './editorTabsControl.js';
+import type { EditorCloseAllOptions, IEditorPart } from './editorPart.js';
+import type { IEditorGroupView } from './editor.js';
 import type { IEditorGroup, IFindGroupScope } from '../../../services/editor/common/editorGroupsService.js';
 import {
 	AuxiliaryEditorPart,
 	type AuxiliaryEditorPartCreation,
 	type AuxiliaryEditorPartFactory,
-} from "./auxiliaryEditorPart.js";
+} from './auxiliaryEditorPart.js';
 
 export interface EditorPartsState {
 	readonly version: 1;
@@ -43,16 +72,23 @@ export interface IEditorPartsService extends IEditorPart {
 	readonly onDidCreateAuxiliaryEditorPart: Event<IEditorPart>;
 	createAuxiliaryEditorPart(options?: AuxiliaryWindowOpenOptions): Promise<IEditorPart>;
 	/** Opens one window for the selected instances; copies share content but receive new instance identities. */
-	openEditorsInNewWindow(editors: readonly EditorIdentifier[], mode: 'move' | 'copy'): Promise<IEditorPart | undefined>;
+	openEditorsInNewWindow(
+		editors: readonly EditorIdentifier[],
+		mode: 'move' | 'copy',
+	): Promise<IEditorPart | undefined>;
 	closeAuxiliaryEditorPart(part: IEditorPart): Promise<boolean>;
-	replaceEditorResource(source: IEditorGroupView, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;
+	replaceEditorResource(
+		source: IEditorGroupView,
+		input: IResourceEditorInput,
+		replacement: IResourceEditorInput,
+	): Promise<void>;
 	savePartsState(): EditorPartsState;
 	restorePartsState(state: EditorPartsState): Promise<void>;
 	restoreSavedState(shouldRestore: boolean): Promise<void>;
 	pauseStatePersistence(): IDisposable;
 }
 
-export const IEditorPartsService = createServiceIdentifier<IEditorPartsService>("editorPartsService");
+export const IEditorPartsService = createServiceIdentifier<IEditorPartsService>('editorPartsService');
 
 /** Coordinates one primary EditorPart and zero or more auxiliary-window parts. */
 export class EditorParts extends Disposable implements IEditorPartsService {
@@ -82,40 +118,83 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		this._register(toDisposable(() => this.partWindows.clear()));
 		this._activePart = mainPart;
 		this.registerPart(mainPart);
-		this._register(storage.onWillSaveState(() => {
-			if (this.hasRestoredState && this.statePersistencePauses === 0) {
-				storage.store(EditorParts.stateStorageKey, JSON.stringify(this.savePartsState()), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-			}
-		}));
+		this._register(
+			storage.onWillSaveState(() => {
+				if (this.hasRestoredState && this.statePersistencePauses === 0) {
+					storage.store(
+						EditorParts.stateStorageKey,
+						JSON.stringify(this.savePartsState()),
+						StorageScope.WORKSPACE,
+						StorageTarget.MACHINE,
+					);
+				}
+			}),
+		);
 	}
 
-	get parts(): readonly IEditorPart[] { return [this.mainPart, ...this.auxiliary.keys()]; }
-	get activePart(): IEditorPart { return this._activePart; }
-	get domNode(): HTMLElement { return this._activePart.domNode; }
-	get groups(): readonly IEditorGroupView[] { return this.parts.flatMap(part => part.groups); }
-	get activeGroup(): IEditorGroupView { return this._activePart.activeGroup; }
+	get parts(): readonly IEditorPart[] {
+		return [this.mainPart, ...this.auxiliary.keys()];
+	}
+	get activePart(): IEditorPart {
+		return this._activePart;
+	}
+	get domNode(): HTMLElement {
+		return this._activePart.domNode;
+	}
+	get groups(): readonly IEditorGroupView[] {
+		return this.parts.flatMap(part => part.groups);
+	}
+	get activeGroup(): IEditorGroupView {
+		return this._activePart.activeGroup;
+	}
 	public findGroup(scope: IFindGroupScope, source: IEditorGroup = this.activeGroup): IEditorGroup | undefined {
 		const part = this.parts.find(candidate => candidate.groups.some(group => group.id === source.id))!;
 		return part.findGroup(scope, source);
 	}
-	toggleActiveGroupLock(): boolean { return this._activePart.toggleActiveGroupLock(); }
-	hasMaximizedGroup(): boolean { return this._activePart.hasMaximizedGroup(); }
+	toggleActiveGroupLock(): boolean {
+		return this._activePart.toggleActiveGroupLock();
+	}
+	hasMaximizedGroup(): boolean {
+		return this._activePart.hasMaximizedGroup();
+	}
 	toggleMaximizeGroup(group: IEditorGroup | EditorGroupId = this.activeGroup): void {
 		const id = typeof group === 'number' ? group : group.id;
 		this.parts.find(part => part.groups.some(candidate => candidate.id === id))?.toggleMaximizeGroup(group);
 	}
-	get activeInput(): IResourceEditorInput | undefined { return this._activePart.activeInput; }
-	get activePane(): IEditorPane | undefined { return this._activePart.activePane; }
-	get isModalEditorVisible(): boolean { return this._activePart.isModalEditorVisible; }
+	get activeInput(): IResourceEditorInput | undefined {
+		return this._activePart.activeInput;
+	}
+	get activePane(): IEditorPane | undefined {
+		return this._activePart.activePane;
+	}
+	get isModalEditorVisible(): boolean {
+		return this._activePart.isModalEditorVisible;
+	}
 	get editorsMru(): readonly EditorIdentifier[] {
-		return uniqueEditors([this._activePart, ...this.parts.filter(part => part !== this._activePart)].flatMap(part => part.editorsMru));
+		return uniqueEditors(
+			[this._activePart, ...this.parts.filter(part => part !== this._activePart)].flatMap(
+				part => part.editorsMru,
+			),
+		);
 	}
 
-	getEditorState(): EditorPartState { return this._activePart.getEditorState(); }
+	getEditorState(): EditorPartState {
+		return this._activePart.getEditorState();
+	}
 
 	savePartsState(): EditorPartsState {
 		const parts = this.parts;
-		return { version: 1, active: parts.indexOf(this._activePart), parts: parts.map(part => part.saveWorkingSet('lastSession', this.getEmptySessionGroups(part).map(group => group.id))), windows: parts.map(part => this.partWindows.get(part)?.createState() ?? null) };
+		return {
+			version: 1,
+			active: parts.indexOf(this._activePart),
+			parts: parts.map(part =>
+				part.saveWorkingSet(
+					'lastSession',
+					this.getEmptySessionGroups(part).map(group => group.id),
+				),
+			),
+			windows: parts.map(part => this.partWindows.get(part)?.createState() ?? null),
+		};
 	}
 
 	private getEmptySessionGroups(part: IEditorPart): readonly IEditorGroupView[] {
@@ -146,19 +225,39 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	pauseStatePersistence(): IDisposable {
 		this.statePersistencePauses++;
-		return toDisposable(() => { this.statePersistencePauses--; });
+		return toDisposable(() => {
+			this.statePersistencePauses--;
+		});
 	}
 
 	async restorePartsState(state: EditorPartsState): Promise<void> {
-		if (state?.version !== 1 || !Array.isArray(state.parts) || state.parts.length === 0 || !Number.isInteger(state.active) || state.active < 0 || state.active >= state.parts.length) {
+		if (
+			state?.version !== 1 ||
+			!Array.isArray(state.parts) ||
+			state.parts.length === 0 ||
+			!Number.isInteger(state.active) ||
+			state.active < 0 ||
+			state.active >= state.parts.length
+		) {
 			throw new TypeError('Invalid saved editor parts state');
 		}
-		if (state.windows !== undefined && (!Array.isArray(state.windows) || state.windows.length !== state.parts.length || state.windows.some(window => window !== null && !parseAuxiliaryWindowState(JSON.stringify(window))))) throw new TypeError('Invalid saved auxiliary windows');
-		const options: ApplyEditorWorkingSetOptions = { preserveFocus: true, excludeEmptyGroups: this.configurationService.getValue<boolean>(EditorCloseEmptyGroupsConfiguration) !== false };
+		if (
+			state.windows !== undefined &&
+			(!Array.isArray(state.windows) ||
+				state.windows.length !== state.parts.length ||
+				state.windows.some(window => window !== null && !parseAuxiliaryWindowState(JSON.stringify(window))))
+		)
+			throw new TypeError('Invalid saved auxiliary windows');
+		const options: ApplyEditorWorkingSetOptions = {
+			preserveFocus: true,
+			excludeEmptyGroups:
+				this.configurationService.getValue<boolean>(EditorCloseEmptyGroupsConfiguration) !== false,
+		};
 		await this.mainPart.applyWorkingSet(state.parts[0]!, options);
 		for (const [index, workingSet] of state.parts.slice(1).entries()) {
 			const savedWindow = state.windows?.[index + 1];
-			const windowOptions = savedWindow == null ? undefined : parseAuxiliaryWindowState(JSON.stringify(savedWindow));
+			const windowOptions =
+				savedWindow == null ? undefined : parseAuxiliaryWindowState(JSON.stringify(savedWindow));
 			if (savedWindow != null && !windowOptions) throw new TypeError('Invalid saved auxiliary window state');
 			const part = await this.createAuxiliaryEditorPart(windowOptions);
 			await part.applyWorkingSet(workingSet, options);
@@ -182,7 +281,12 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		}
 		let handle: AuxiliaryEditorPart;
 		try {
-			handle = this.instantiationService.createInstance(AuxiliaryEditorPart, auxiliaryWindow, creation, this.accessibility);
+			handle = this.instantiationService.createInstance(
+				AuxiliaryEditorPart,
+				auxiliaryWindow,
+				creation,
+				this.accessibility,
+			);
 		} catch (error) {
 			creation.titlebar.dispose();
 			creation.part.dispose();
@@ -198,11 +302,17 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return creation.part;
 	}
 
-	async openEditorsInNewWindow(editors: readonly EditorIdentifier[], mode: 'move' | 'copy'): Promise<IEditorPart | undefined> {
-		if (mode === 'copy') editors = editors.filter(editor => {
-			const input = this.groups.find(group => group.id === editor.groupId)?.editors.find(candidate => candidate.instanceId === editor.instanceId)?.input;
-			return !((input?.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton);
-		});
+	async openEditorsInNewWindow(
+		editors: readonly EditorIdentifier[],
+		mode: 'move' | 'copy',
+	): Promise<IEditorPart | undefined> {
+		if (mode === 'copy')
+			editors = editors.filter(editor => {
+				const input = this.groups
+					.find(group => group.id === editor.groupId)
+					?.editors.find(candidate => candidate.instanceId === editor.instanceId)?.input;
+				return !((input?.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton);
+			});
 		if (editors.length === 0) return undefined;
 		const previousActive = this._activePart;
 		const target = await this.createAuxiliaryEditorPart();
@@ -217,7 +327,10 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 					await sourceGroup.moveEditorTo(current.input, target.activeGroup, target.activeGroup.inputs.length);
 				} else {
 					const viewState = sourceGroup.saveEditorViewState(current.input);
-					await target.activeGroup.openEditor(current.input, { pinned: true, preferredEditorId: current.paneId });
+					await target.activeGroup.openEditor(current.input, {
+						pinned: true,
+						preferredEditorId: current.paneId,
+					});
 					if (current.isSticky) target.activeGroup.stickEditor(current.input);
 					target.activeGroup.restoreEditorViewState(current.input, viewState);
 				}
@@ -250,9 +363,13 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	private getReturnGroup(): IEditorGroupView {
 		const recentGroups = this.mainPart.editorsMru.map(editor => editor.groupId);
-		return recentGroups.map(id => this.mainPart.groups.find(group => group.id === id)).find(group => group && !group.isLocked)
-			?? this.mainPart.groups.find(group => !group.isLocked)
-			?? this.mainPart.addGroup(this.mainPart.activeGroup.id, 'right');
+		return (
+			recentGroups
+				.map(id => this.mainPart.groups.find(group => group.id === id))
+				.find(group => group && !group.isLocked) ??
+			this.mainPart.groups.find(group => !group.isLocked) ??
+			this.mainPart.addGroup(this.mainPart.activeGroup.id, 'right')
+		);
 	}
 
 	private async prepareAuxiliaryClose(part: IEditorPart): Promise<boolean> {
@@ -279,19 +396,30 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return true;
 	}
 
-	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane> {
+	openEditor(
+		input: IResourceEditorInput,
+		options?: EditorOpenOptions,
+		target?: EditorOpenTarget,
+	): Promise<IEditorPane> {
 		if (typeof target === 'object') {
-			return this.parts.find(part => part.groups.some(group => group.id === target.groupId))!.openEditor(input, options, target);
+			return this.parts
+				.find(part => part.groups.some(group => group.id === target.groupId))!
+				.openEditor(input, options, target);
 		}
 		return this._activePart.openEditor(input, options, target);
 	}
 
 	public addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView {
-		return this.parts.find(part => part.groups.some(group => group.id === reference))!.addGroup(reference, direction);
+		return this.parts
+			.find(part => part.groups.some(group => group.id === reference))!
+			.addGroup(reference, direction);
 	}
 	public removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean> {
 		const id = typeof group === 'number' ? group : group.id;
-		return this.parts.find(part => part.groups.some(group => group.id === id))?.removeGroup(id) ?? Promise.resolve(true);
+		return (
+			this.parts.find(part => part.groups.some(group => group.id === id))?.removeGroup(id) ??
+			Promise.resolve(true)
+		);
 	}
 	public activateGroup(id: EditorGroupId): void {
 		const part = this.parts.find(part => part.groups.some(group => group.id === id))!;
@@ -319,7 +447,8 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	}
 
 	activateEditorMru(offset: number): IEditorPane | undefined {
-		if (!Number.isInteger(offset) || offset === 0) throw new TypeError("Editor MRU offset must be a non-zero integer");
+		if (!Number.isInteger(offset) || offset === 0)
+			throw new TypeError('Editor MRU offset must be a non-zero integer');
 		const editors = this.editorsMru;
 		if (editors.length === 0) return undefined;
 		const index = rot(offset, editors.length);
@@ -331,7 +460,11 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return part.closeEditor(input);
 	}
 
-	async replaceEditorResource(source: IEditorGroupView, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void> {
+	async replaceEditorResource(
+		source: IEditorGroupView,
+		input: IResourceEditorInput,
+		replacement: IResourceEditorInput,
+	): Promise<void> {
 		const key = editorInputKey(input);
 		const groups = this.groups.filter(group => group.inputs.some(candidate => editorInputKey(candidate) === key));
 		if (!groups.includes(source)) throw new RangeError(`Editor is not open in its source group: ${input.resource}`);
@@ -351,21 +484,31 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	private getClosingEditors(options: EditorCloseAllOptions): IEditorIdentifier[] {
 		return this.parts.flatMap(part => [
 			...(part.isModalEditorVisible && part.activeInput ? [{ editor: part.activeInput, groupId: -1 }] : []),
-			...part.groups.flatMap(group => group.inputs.filter(input => !options.excludeSticky || !group.isSticky(input)).map(editor => ({ editor, groupId: group.id }))),
+			...part.groups.flatMap(group =>
+				group.inputs
+					.filter(input => !options.excludeSticky || !group.isSticky(input))
+					.map(editor => ({ editor, groupId: group.id })),
+			),
 		]);
 	}
 
-	async confirmCloseAllEditors(options: EditorCloseAllOptions = {}, closingEditors: readonly IEditorIdentifier[] = this.getClosingEditors(options)): Promise<boolean> {
-		for (const part of this.parts) if (!await part.confirmCloseAllEditors(options, closingEditors)) return false;
+	async confirmCloseAllEditors(
+		options: EditorCloseAllOptions = {},
+		closingEditors: readonly IEditorIdentifier[] = this.getClosingEditors(options),
+	): Promise<boolean> {
+		for (const part of this.parts) if (!(await part.confirmCloseAllEditors(options, closingEditors))) return false;
 		return true;
 	}
 
-	async closeAllEditors(options: EditorCloseAllOptions = {}, closingEditors: readonly IEditorIdentifier[] = this.getClosingEditors(options)): Promise<boolean> {
-		if (!options.skipConfirmation && !await this.confirmCloseAllEditors(options, closingEditors)) return false;
+	async closeAllEditors(
+		options: EditorCloseAllOptions = {},
+		closingEditors: readonly IEditorIdentifier[] = this.getClosingEditors(options),
+	): Promise<boolean> {
+		if (!options.skipConfirmation && !(await this.confirmCloseAllEditors(options, closingEditors))) return false;
 		for (const part of this.parts) {
-			if (!await part.closeAllEditors({ ...options, skipConfirmation: true }, closingEditors)) return false;
+			if (!(await part.closeAllEditors({ ...options, skipConfirmation: true }, closingEditors))) return false;
 		}
-		if (options.reason === "reset") {
+		if (options.reason === 'reset') {
 			for (const part of [...this.auxiliary.keys()]) this.removeAuxiliaryPart(part);
 			this.setActivePart(this.mainPart);
 		}
@@ -376,62 +519,114 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return this._activePart.moveActiveEditorTo(target === this ? this._activePart : target);
 	}
 
-	saveActiveEditor(): Promise<void> { return this._activePart.saveActiveEditor(); }
-	setContent(content: Element): Promise<void> { return this._activePart.setContent(content); }
-	splitActiveGroup(direction: GridDirection): Promise<void> { return this._activePart.splitActiveGroup(direction); }
-	splitActiveGroupHorizontal(): Promise<void> { return this._activePart.splitActiveGroupHorizontal(); }
-	splitActiveGroupVertical(): Promise<void> { return this._activePart.splitActiveGroupVertical(); }
-	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: GridDirection): Promise<void> {
+	saveActiveEditor(): Promise<void> {
+		return this._activePart.saveActiveEditor();
+	}
+	setContent(content: Element): Promise<void> {
+		return this._activePart.setContent(content);
+	}
+	splitActiveGroup(direction: GridDirection): Promise<void> {
+		return this._activePart.splitActiveGroup(direction);
+	}
+	splitActiveGroupHorizontal(): Promise<void> {
+		return this._activePart.splitActiveGroupHorizontal();
+	}
+	splitActiveGroupVertical(): Promise<void> {
+		return this._activePart.splitActiveGroupVertical();
+	}
+	splitEditors(
+		groupId: EditorGroupId,
+		inputs: readonly IResourceEditorInput[],
+		direction: GridDirection,
+	): Promise<void> {
 		const part = this.parts.find(candidate => candidate.groups.some(group => group.id === groupId));
 		if (!part) throw new RangeError(`Editor group is not open: ${groupId}`);
 		return part.splitEditors(groupId, inputs, direction);
 	}
-	getEditorPaneChoices(input?: IResourceEditorInput): readonly IEditorPaneDescriptor[] { return this._activePart.getEditorPaneChoices(input); }
-	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> { return this._activePart.reopenActiveEditorWith(preferredEditorId); }
-	saveWorkingSet(id: string, excludedGroups?: readonly EditorGroupId[]): EditorWorkingSet { return this._activePart.saveWorkingSet(id, excludedGroups); }
-	applyWorkingSet(workingSet: EditorWorkingSetTarget, options?: ApplyEditorWorkingSetOptions): Promise<void> { return this._activePart.applyWorkingSet(workingSet, options); }
-	layout(dimension: IDimension): void { this.mainPart.layout(dimension); }
-	focus(): void { this._activePart.focus(); }
+	getEditorPaneChoices(input?: IResourceEditorInput): readonly IEditorPaneDescriptor[] {
+		return this._activePart.getEditorPaneChoices(input);
+	}
+	reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> {
+		return this._activePart.reopenActiveEditorWith(preferredEditorId);
+	}
+	saveWorkingSet(id: string, excludedGroups?: readonly EditorGroupId[]): EditorWorkingSet {
+		return this._activePart.saveWorkingSet(id, excludedGroups);
+	}
+	applyWorkingSet(workingSet: EditorWorkingSetTarget, options?: ApplyEditorWorkingSetOptions): Promise<void> {
+		return this._activePart.applyWorkingSet(workingSet, options);
+	}
+	layout(dimension: IDimension): void {
+		this.mainPart.layout(dimension);
+	}
+	focus(): void {
+		this._activePart.focus();
+	}
 
 	private registerPart(part: IEditorPart, auxiliaryWindow?: IAuxiliaryWindow): void {
 		const listeners = new DisposableStore();
-		listeners.add(part.onDidChangeEditors(event => {
-			if (isActivationEvent(event)) this.setActivePart(part, false);
-			this.editorChangeEmitter.fire(event);
-		}));
-		listeners.add(addDisposableListener(part.domNode, "focusin", () => this.setActivePart(part)));
+		listeners.add(
+			part.onDidChangeEditors(event => {
+				if (isActivationEvent(event)) this.setActivePart(part, false);
+				this.editorChangeEmitter.fire(event);
+			}),
+		);
+		listeners.add(addDisposableListener(part.domNode, 'focusin', () => this.setActivePart(part)));
 		// Window chrome and shortcuts can receive focus without focusing the editor DOM.
 		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
 			listeners.add(addDisposableListener(getWindow(part.domNode), event, () => this.setActivePart(part), true));
 		}
-		if (auxiliaryWindow) listeners.add(addDisposableListener(auxiliaryWindow.container, 'focusin', () => this.setActivePart(part)));
-		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onBeforeUnload(event => {
-			if (this.isDisposed) return;
-			const target = this.getReturnGroup();
-			for (const group of part.groups) for (const editor of group.editors) {
-				const veto = editor.input.canMove?.(group.id, target.id);
-				if (typeof veto === 'string') { event.veto(veto); return; }
-			}
-			event.veto(localize('auxiliaryWindow.returningEditors', 'Returning unsaved editors to the main window.'));
-			void this.closeAuxiliaryEditorPart(part).catch(onUnexpectedError);
-		}));
-		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onDidClose(() => {
-			if (!this.isDisposed) void this.returnEditorsToMainPart(part);
-		}));
+		if (auxiliaryWindow)
+			listeners.add(addDisposableListener(auxiliaryWindow.container, 'focusin', () => this.setActivePart(part)));
+		if (auxiliaryWindow)
+			listeners.add(
+				auxiliaryWindow.onBeforeUnload(event => {
+					if (this.isDisposed) return;
+					const target = this.getReturnGroup();
+					for (const group of part.groups)
+						for (const editor of group.editors) {
+							const veto = editor.input.canMove?.(group.id, target.id);
+							if (typeof veto === 'string') {
+								event.veto(veto);
+								return;
+							}
+						}
+					event.veto(
+						localize('auxiliaryWindow.returningEditors', 'Returning unsaved editors to the main window.'),
+					);
+					void this.closeAuxiliaryEditorPart(part).catch(onUnexpectedError);
+				}),
+			);
+		if (auxiliaryWindow)
+			listeners.add(
+				auxiliaryWindow.onDidClose(() => {
+					if (!this.isDisposed) void this.returnEditorsToMainPart(part);
+				}),
+			);
 		this.partListeners.set(part, listeners);
 	}
 
 	private async returnEditorsToMainPart(part: IEditorPart): Promise<void> {
 		const activeGroup = part.activeGroup;
 		const activeInput = activeGroup.activeInput;
-		const editors = part.groups.flatMap(group => group.editors.filter(editor => editor.isDirty).map(editor => ({ group, input: editor.input })));
+		const editors = part.groups.flatMap(group =>
+			group.editors.filter(editor => editor.isDirty).map(editor => ({ group, input: editor.input })),
+		);
 		const active = editors.find(editor => editor.group === activeGroup && editor.input === activeInput);
 		try {
 			for (const editor of editors) {
 				if (editor === active) continue;
-				await editor.group.moveEditorTo(editor.input, this.mainPart.activeGroup, this.mainPart.activeGroup.inputs.length);
+				await editor.group.moveEditorTo(
+					editor.input,
+					this.mainPart.activeGroup,
+					this.mainPart.activeGroup.inputs.length,
+				);
 			}
-			if (active) await active.group.moveEditorTo(active.input, this.mainPart.activeGroup, this.mainPart.activeGroup.inputs.length);
+			if (active)
+				await active.group.moveEditorTo(
+					active.input,
+					this.mainPart.activeGroup,
+					this.mainPart.activeGroup.inputs.length,
+				);
 		} catch (error) {
 			onUnexpectedError(error);
 		} finally {
@@ -451,17 +646,23 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	private setActivePart(part: IEditorPart, publish = true): void {
 		if (this._activePart === part) return;
 		this._activePart = part;
-		if (publish) this.editorChangeEmitter.fire(Object.freeze({ kind: "activeGroupChanged", groupId: part.activeGroup.id }));
+		if (publish)
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'activeGroupChanged', groupId: part.activeGroup.id }));
 	}
 
 	private findPartForInput(input: IResourceEditorInput): IEditorPart | undefined {
 		const key = editorInputKey(input);
-		return this.parts.find(part => part.groups.some(group => group.inputs.some(candidate => editorInputKey(candidate) === key)));
+		return this.parts.find(part =>
+			part.groups.some(group => group.inputs.some(candidate => editorInputKey(candidate) === key)),
+		);
 	}
 }
 
 function isActivationEvent(event: EditorPartChangeEvent): boolean {
-	return event.kind === "activeGroupChanged" || (event.kind === "groupChanged" && event.event.kind === "activeEditorChanged");
+	return (
+		event.kind === 'activeGroupChanged' ||
+		(event.kind === 'groupChanged' && event.event.kind === 'activeEditorChanged')
+	);
 }
 
 function uniqueEditors(editors: readonly EditorIdentifier[]): readonly EditorIdentifier[] {

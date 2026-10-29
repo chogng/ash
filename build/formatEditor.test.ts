@@ -123,7 +123,7 @@ exports.activate = async () => {
       assert.equal(document.languageId, item.language, item.name);
       const editor = await vscode.window.showTextDocument(document);
       const configuration = vscode.workspace.getConfiguration('editor', document);
-      assert.equal(configuration.get('defaultFormatter'), item.language === 'jsonc' ? 'vscode.json-language-features' : formatter.id, item.name);
+      assert.equal(configuration.get('defaultFormatter'), formatter.id, item.name);
       assert.equal(configuration.get('formatOnSave'), true, item.name);
       const range = new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length));
       assert.equal(await editor.edit(edit => edit.replace(range, item.input)), true);

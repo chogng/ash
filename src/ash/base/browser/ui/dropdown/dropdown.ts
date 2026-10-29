@@ -1,16 +1,24 @@
-import { Emitter } from "../../../common/event.js";
-import type { IAction } from "../../../common/actions.js";
-import type { Icon } from "../../../common/icon.js";
-import { Disposable, toDisposable } from "../../../common/lifecycle.js";
-import { Lxicon } from "../../../common/lxicons.js";
-import { addDisposableListener, stopEvent, h } from "../../dom.js";
-import { setAriaAttribute } from "../aria/aria.js";
-import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
-import { appendIcon } from "../lxicons/lxicon.js";
+import { Emitter } from '../../../common/event.js';
+import type { IAction } from '../../../common/actions.js';
+import type { Icon } from '../../../common/icon.js';
+import { Disposable, toDisposable } from '../../../common/lifecycle.js';
+import { Lxicon } from '../../../common/lxicons.js';
+import { addDisposableListener, stopEvent, h } from '../../dom.js';
+import { setAriaAttribute } from '../aria/aria.js';
+import {
+	AnchorAlignment,
+	AnchorAxisAlignment,
+	AnchorPosition,
+	ContextView,
+	ContextViewFocusRestore,
+	type ContextViewHideReason,
+	type IContextViewProvider,
+} from '../contextview/contextview.js';
+import { appendIcon } from '../lxicons/lxicon.js';
 
 export type DropdownContent = HTMLElement | (() => HTMLElement);
 
-export type DropdownContentWidth = "intrinsic" | "at-least-trigger";
+export type DropdownContentWidth = 'intrinsic' | 'at-least-trigger';
 
 export interface IActionProvider {
 	getActions(): readonly IAction[];
@@ -43,9 +51,7 @@ export class Dropdown extends Disposable {
 	private readonly label: HTMLSpanElement;
 	private readonly content: DropdownContent;
 	private readonly contextView: IContextViewProvider;
-	private readonly _onDidChangeVisibility = this._register(
-		new Emitter<DropdownVisibilityChangeEvent>(),
-	);
+	private readonly _onDidChangeVisibility = this._register(new Emitter<DropdownVisibilityChangeEvent>());
 	readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
 	private readonly options: DropdownOptions;
 	private _visible = false;
@@ -55,30 +61,30 @@ export class Dropdown extends Disposable {
 		this.options = options;
 		this.content = options.content;
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "div");
+		const element = h(ownerDocument, 'div');
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = "ash-dropdown";
+		element.className = 'ash-dropdown';
 		container.append(element);
 
-		const button = h(ownerDocument, "button");
+		const button = h(ownerDocument, 'button');
 		this.button = button;
-		button.className = "ash-dropdown-button";
-		button.type = "button";
-		setAriaAttribute(button, "haspopup", true);
-		setAriaAttribute(button, "expanded", false);
+		button.className = 'ash-dropdown-button';
+		button.type = 'button';
+		setAriaAttribute(button, 'haspopup', true);
+		setAriaAttribute(button, 'expanded', false);
 		if (options.ariaLabel) {
-			setAriaAttribute(button, "label", options.ariaLabel);
+			setAriaAttribute(button, 'label', options.ariaLabel);
 		}
 
-		const label = h(ownerDocument, "span");
+		const label = h(ownerDocument, 'span');
 		this.label = label;
-		label.className = "ash-dropdown-label";
+		label.className = 'ash-dropdown-label';
 		label.textContent = options.label;
-		const indicator = h(ownerDocument, "span");
-		indicator.className = "ash-dropdown-indicator";
+		const indicator = h(ownerDocument, 'span');
+		indicator.className = 'ash-dropdown-indicator';
 		appendIcon(options.indicator ?? Lxicon.chevronDown, indicator);
-		setAriaAttribute(indicator, "hidden", true);
+		setAriaAttribute(indicator, 'hidden', true);
 		button.append(label, indicator);
 		element.append(button);
 
@@ -86,19 +92,21 @@ export class Dropdown extends Disposable {
 		const popupContainer = container.closest<HTMLElement>('dialog, [data-color-scheme]') ?? ownerDocument.body;
 		this.contextView = options.contextViewProvider ?? this._register(new ContextView(popupContainer));
 		this._register(toDisposable(() => this.hide()));
-		this._register(addDisposableListener(button, "click", () => this.toggle()));
-		this._register(addDisposableListener(button, "keydown", (event) => {
-			if (
-				event.key !== "ArrowDown" &&
-				event.key !== "ArrowUp" &&
-				event.key !== "Enter" &&
-				event.key !== " "
-			) {
-				return;
-			}
-			stopEvent(event);
-			this.show();
-		}));
+		this._register(addDisposableListener(button, 'click', () => this.toggle()));
+		this._register(
+			addDisposableListener(button, 'keydown', event => {
+				if (
+					event.key !== 'ArrowDown' &&
+					event.key !== 'ArrowUp' &&
+					event.key !== 'Enter' &&
+					event.key !== ' '
+				) {
+					return;
+				}
+				stopEvent(event);
+				this.show();
+			}),
+		);
 	}
 
 	get visible(): boolean {
@@ -120,19 +128,17 @@ export class Dropdown extends Disposable {
 
 	show(): void {
 		if (this._visible || !this.enabled) return;
-		const content = typeof this.content === "function"
-			? this.content()
-			: this.content;
-		content.classList.add("ash-dropdown-content");
-		if (this.options.contentWidth === "at-least-trigger") {
+		const content = typeof this.content === 'function' ? this.content() : this.content;
+		content.classList.add('ash-dropdown-content');
+		if (this.options.contentWidth === 'at-least-trigger') {
 			const triggerWidth = Math.ceil(this.button.getBoundingClientRect().width);
-			content.style.setProperty("--dropdown-trigger-width", `${triggerWidth}px`);
+			content.style.setProperty('--dropdown-trigger-width', `${triggerWidth}px`);
 		}
 		if (!content.id) {
 			dropdownId += 1;
 			content.id = `ash-dropdown-content-${dropdownId}`;
 		}
-		setAriaAttribute(this.button, "controls", content.id);
+		setAriaAttribute(this.button, 'controls', content.id);
 		const shown = this.contextView.show({
 			anchor: this.button,
 			content,
@@ -141,12 +147,12 @@ export class Dropdown extends Disposable {
 			anchorAxisAlignment: this.options.anchorAxisAlignment,
 			gap: this.options.gap,
 			focusRestore: ContextViewFocusRestore.Previous,
-			onHide: (reason) => this.didHide(reason),
+			onHide: reason => this.didHide(reason),
 		});
 		if (!shown) return;
 		this._visible = true;
-		this.element.classList.add("ash-dropdown-open");
-		setAriaAttribute(this.button, "expanded", true);
+		this.element.classList.add('ash-dropdown-open');
+		setAriaAttribute(this.button, 'expanded', true);
 		this._onDidChangeVisibility.fire({ visible: true });
 	}
 
@@ -167,8 +173,8 @@ export class Dropdown extends Disposable {
 	private didHide(reason: ContextViewHideReason): void {
 		if (!this._visible) return;
 		this._visible = false;
-		this.element.classList.remove("ash-dropdown-open");
-		setAriaAttribute(this.button, "expanded", false);
+		this.element.classList.remove('ash-dropdown-open');
+		setAriaAttribute(this.button, 'expanded', false);
 		this._onDidChangeVisibility.fire({ visible: false, reason });
 	}
 }

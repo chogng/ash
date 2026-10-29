@@ -84,11 +84,7 @@ export const lxiconFontSizeCompact = length(
 	localize('size.lxiconFontSize.compact', 'Compact Lxicon glyph size.'),
 );
 
-length(
-	"lxiconFontSize.large",
-	18,
-	localize("size.lxiconFontSize.large", "Large Lxicon glyph size."),
-);
+length('lxiconFontSize.large', 18, localize('size.lxiconFontSize.large', 'Large Lxicon glyph size.'));
 
 // Typography roles describe text hierarchy; emphasis pairs a size role with a separate weight token.
 export const fontSizeHeading1 = length(

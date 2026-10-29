@@ -51,7 +51,12 @@ export function validateDesignTokens(contents: string): DesignTokenSuggestion[] 
 				block,
 			);
 			if (/\.lxicon(?:[\s.:#\[]|$|-)/.test(selector)) {
-				const token = lengths[0] === 12 ? '--ash-lxiconFontSize-compact' : lengths[0] === 18 ? '--ash-lxiconFontSize-large' : '--ash-lxiconFontSize';
+				const token =
+					lengths[0] === 12
+						? '--ash-lxiconFontSize-compact'
+						: lengths[0] === 18
+							? '--ash-lxiconFontSize-large'
+							: '--ash-lxiconFontSize';
 				add('icon', `font-size: ${value}; use var(${token}) and review the icon size and glyph`);
 			} else {
 				const detail = fontRamp.includes(lengths[0]!)
