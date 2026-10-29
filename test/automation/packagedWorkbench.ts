@@ -19,11 +19,14 @@ export async function exercisePackagedWorkbench(installation: string, version: s
 			const row = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 			await expect(row).toHaveCount(1, { timeout: 30_000 });
 			await row.dblclick();
-			const input = desktop.driver.workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-			await input.focus();
-			await input.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-			await input.type(saved);
-			await input.press(process.platform === 'darwin' ? 'Meta+S' : 'Control+S');
+			const editor = desktop.driver.workbench.editors.groupAt(0).editor;
+			await editor.waitForEditorFocus();
+			await editor.input.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+			// Use the shared editor driver: one text insertion followed by a rendered-content
+			// checkpoint keeps package lifecycle acceptance independent of typing throughput.
+			await editor.waitForTypeInEditor(saved);
+			await editor.waitForEditorContents(contents => contents === saved);
+			await editor.input.press(process.platform === 'darwin' ? 'Meta+S' : 'Control+S');
 			await expect.poll(() => readFile(join(workspaceDirectory, 'main.ts'), 'utf8'), { timeout: 30_000 }).toBe(saved);
 			const terminal = page.locator('.ash-terminal-instance:visible').first();
 			if (!await terminal.isVisible()) await page.getByRole('button', { name: 'Toggle Panel Visibility', exact: true }).click();
