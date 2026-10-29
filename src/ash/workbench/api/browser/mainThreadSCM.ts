@@ -729,6 +729,9 @@ interface ProviderSnapshot {
 	readonly hasHistoryItemRefs: boolean;
 	readonly hasHistoryMergeBase: boolean;
 	readonly historyRevision: number;
+	readonly historyChangeSilent: boolean;
+	/** A completion sequence survives publication coalescing even when busy state was never observed. */
+	readonly historyOperationRevision: number;
 	readonly historyRefsRevision: number;
 	readonly historyRefsItems: readonly ISCMHistoryItem[];
 	readonly hasHistory: boolean;
@@ -744,7 +747,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	public readonly onDidChangeDiff = this.diffChanged.event;
 	private readonly decorationChanged = this._register(new Emitter<readonly URI[]>());
 	public readonly onDidChangeDecorations = this.decorationChanged.event;
-	private readonly historyChanged = this._register(new Emitter<void>());
+	private readonly historyChanged = this._register(new Emitter<void | { readonly silent: boolean }>());
 	private readonly timelineChanged = this._register(new Emitter<void>());
 	public readonly onDidChangeTimeline = this.timelineChanged.event;
 	private readonly historyRefsChanged = this._register(new Emitter<readonly ISCMHistoryItem[]>());
@@ -1113,6 +1116,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			this.draft = string(value.input.value);
 		}
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
+		const historyOperationCompleted = this.snapshot.historyOperationRevision !== value.historyOperationRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		const resourcesChanged = !structuralEquals(value.groups, this.snapshot.groups);
 		// An index write can change original content while path/status entries stay equal.
@@ -1155,8 +1159,8 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		if (diffChanged) this.diffChanged.fire();
 		if (resourcesChanged) this.decorationChanged.fire([]);
 		if (timelineChanged) this.timelineChanged.fire();
-		if (historyChanged) {
-			this.historyChanged.fire();
+		if (historyChanged || historyOperationCompleted) {
+			this.historyChanged.fire({ silent: !historyOperationCompleted && value.historyChangeSilent });
 		} else if (historyRefsChanged) {
 			this.historyRefsChanged.fire(value.historyRefsItems);
 		}
@@ -1305,6 +1309,14 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 		throw new TypeError('Invalid SCM selection revision');
 	}
 	const historyRefsRevision = entry.historyRefsRevision == null ? 0 : number(entry.historyRefsRevision);
+	if (entry.historyChangeSilent !== undefined && typeof entry.historyChangeSilent !== 'boolean') {
+		throw new TypeError('Invalid SCM history change origin');
+	}
+	const historyOperationRevision =
+		entry.historyOperationRevision == null ? 0 : number(entry.historyOperationRevision);
+	if (!Number.isSafeInteger(historyOperationRevision) || historyOperationRevision < 0) {
+		throw new TypeError('Invalid SCM history operation revision');
+	}
 	if (!Number.isSafeInteger(historyRefsRevision) || historyRefsRevision < 0) {
 		throw new TypeError('Invalid SCM history refs revision');
 	}
@@ -1332,6 +1344,8 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 		hasHistoryItemRefs: entry.hasHistoryItemRefs === true,
 		hasHistoryMergeBase: entry.hasHistoryMergeBase === true,
 		historyRevision: number(entry.historyRevision),
+		historyChangeSilent: entry.historyChangeSilent === true,
+		historyOperationRevision,
 		historyRefsRevision,
 		historyRefsItems,
 		hasHistory: entry.hasHistory === true,

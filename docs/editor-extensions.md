@@ -1056,6 +1056,7 @@ PR/Issue 业务由独立的 [`github`](../extensions/github/README.md) Rust 扩�
 精确提交对象、编辑器版本与 activation 身份绑定操作，退役会取消回调、辅助进程和贡献。
 Git 自动获取仍持久化到共享配置 owner，旧用户配置经版本检查写入并回读确认后迁移。
 `ash.scm` 使用已接入的Ash Provider契约，没有旧兼容对象或通用后端请求入口。
+Git 状态的 `historyChangeSilent` 随最后一次 `historyRevision` 保留，仅由共享后台自动 fetch 设置；扩展快照原样传递，前端历史事件映射为 `silent`。扩展的 `historyOperationRevision` 记录主动同步类操作的完成，即使状态发布合并或没有新提交也不会丢失。主动历史更新和手动刷新回到图表顶部，浏览旧历史时的静默更新保留视口并显示更新提示。
 
 [`build/builtin`](../build/builtin) 打包 manifest、消息与资源，Cargo/Bazel 构建独立 Git
 可执行文件，后端包布局与签名包含它。Rust 源码、Cargo 输入和旧 TS 实现不进入资源包。

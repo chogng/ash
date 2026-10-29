@@ -226,6 +226,7 @@ struct IgnoreCache {
 enum StatusNotification {
     OnChange,
     Always,
+    BackgroundFetch,
 }
 
 enum StatusRefresh {
@@ -669,6 +670,7 @@ impl GitRuntime {
             )?;
             result.revision = status.revision;
             result.history_revision = status.history_revision;
+            result.history_change_silent = status.history_change_silent;
             return Ok(result);
         }
         Err(GitRuntimeError::Service(GitServiceError::ConflictChanged))
@@ -1189,6 +1191,7 @@ impl GitRuntime {
     ) -> Result<GitStatusResult, GitRuntimeError> {
         self.repository(repository_id)?.mutate_remote(
             |service, cancellation| service.remote_with_options(operation, options, cancellation),
+            StatusNotification::Always,
             cancellation,
         )
     }
@@ -2011,14 +2014,18 @@ impl GitRepositoryRuntime {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::fetch, cancellation)
+        self.mutate_remote(GitService::fetch, StatusNotification::Always, cancellation)
     }
 
     pub(super) fn fetch_default(
         &self,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::fetch_default, cancellation)
+        self.mutate_remote(
+            GitService::fetch_default,
+            StatusNotification::Always,
+            cancellation,
+        )
     }
 
     pub(super) fn fetch_remote(
@@ -2028,6 +2035,7 @@ impl GitRepositoryRuntime {
     ) -> Result<GitStatusResult, GitRuntimeError> {
         self.mutate_remote(
             |service, cancellation| service.fetch_remote(name, cancellation),
+            StatusNotification::Always,
             cancellation,
         )
     }
@@ -2039,6 +2047,7 @@ impl GitRepositoryRuntime {
     ) -> Result<GitStatusResult, GitRuntimeError> {
         self.mutate_remote(
             |service, cancellation| service.pull(mode, cancellation),
+            StatusNotification::Always,
             cancellation,
         )
     }
@@ -2047,7 +2056,7 @@ impl GitRepositoryRuntime {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::push, cancellation)
+        self.mutate_remote(GitService::push, StatusNotification::Always, cancellation)
     }
 
     pub(super) fn start_watching(
@@ -2122,6 +2131,7 @@ impl GitRepositoryRuntime {
             &CancellationToken,
         )
             -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError>,
+        notification: StatusNotification,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
         let _operation = lock_operation_for_request(&self.operation, cancellation)
@@ -2137,7 +2147,7 @@ impl GitRepositoryRuntime {
                         let _ = self.accept_status_for_request(
                             repository,
                             snapshot,
-                            StatusNotification::Always,
+                            notification,
                             cancellation,
                         );
                     }
@@ -2148,12 +2158,7 @@ impl GitRepositoryRuntime {
                 return Err(GitRuntimeError::Service(error));
             }
         };
-        self.accept_status_for_request(
-            repository,
-            snapshot,
-            StatusNotification::Always,
-            cancellation,
-        )
+        self.accept_status_for_request(repository, snapshot, notification, cancellation)
     }
 
     fn accept(
@@ -2365,6 +2370,10 @@ impl GitRepositoryRuntime {
         if unchanged && matches!(notification, StatusNotification::OnChange) {
             projected.revision = state.revision;
             projected.history_revision = state.history_revision;
+            projected.history_change_silent = state
+                .status
+                .as_ref()
+                .is_some_and(|status| status.history_change_silent);
             return Ok(projected);
         }
         state.revision = state
@@ -2378,6 +2387,14 @@ impl GitRepositoryRuntime {
                 .checked_add(1)
                 .expect("Git history revision overflowed");
         }
+        projected.history_change_silent = if history_changed {
+            matches!(notification, StatusNotification::BackgroundFetch)
+        } else {
+            state
+                .status
+                .as_ref()
+                .is_some_and(|status| status.history_change_silent)
+        };
         projected.history_revision = state.history_revision;
         if graph_changed {
             state.graph_revision = state
@@ -2877,8 +2894,16 @@ fn run_autofetch(
                 return;
             };
             let result = match policy.autofetch {
-                GitAutoFetchMode::Default => repository.fetch_default(&cancellation),
-                GitAutoFetchMode::All => repository.fetch(&cancellation),
+                GitAutoFetchMode::Default => repository.mutate_remote(
+                    GitService::fetch_default,
+                    StatusNotification::BackgroundFetch,
+                    &cancellation,
+                ),
+                GitAutoFetchMode::All => repository.mutate_remote(
+                    GitService::fetch,
+                    StatusNotification::BackgroundFetch,
+                    &cancellation,
+                ),
                 GitAutoFetchMode::Off => unreachable!(),
             };
             if cancellation.is_cancelled() {
@@ -3494,6 +3519,7 @@ fn project_status(
         stream_instance_id,
         revision: 0,
         history_revision: 0,
+        history_change_silent: false,
         path: wire_path(dir_prefix)?,
         head: head(snapshot.head()),
         changes,

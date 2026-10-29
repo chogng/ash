@@ -424,10 +424,10 @@ pub fn snapshot(
         "input":{"visible":configuration.boolean("showCommitInput",true),"buttonVisible":configuration.value("showActionButton").get(primary).and_then(Value::as_bool).unwrap_or(true),"value":repository.draft,
             "validationMessage":input_validation,"placeholder":api.text("git.commitMessageOnBranch",&[if cfg!(target_os="macos") {"Cmd+Enter"} else {"Ctrl+Enter"},branch.unwrap_or("HEAD")]),"enabled":true,"canAccept":can_accept,"buttonLabel":label,"buttonTooltip":tooltip},
         "actionButton":{"command":primary_command,"secondaryCommands":secondary_commands,"enabled":can_accept && !repository.is_busy()},
-        "activeRepositoryName":branch,"statusMessage":status_message,"isBusy":repository.is_busy(),"statusBarCommands":statusbar,
+        "activeRepositoryName":branch,"statusMessage":status_message,"isBusy":repository.is_busy(),"historyOperationRevision":repository.history_operation_revision,"statusBarCommands":statusbar,
         "timeline":{"label":api.text("git.timelineHistory",&[]),"resetKey":format!("{}:{}:{}",configuration.text("timeline.date","committed"),configuration.boolean("timeline.showAuthor",true),configuration.boolean("timeline.showUncommitted",false))},
         "hasHistory":true,"hasHistoryItemRefs":true,"hasHistoryMergeBase":true,"historyRef":history_ref,"historyRemoteRef":remote_ref,
-        "historyRevision":repository.status.as_ref().map(|status|status.history_revision).unwrap_or(0),"historyRefsRevision":0,"historyRefsItems":[],"hasMerge":true,"inputRevision":repository.input_revision,
+        "historyRevision":repository.status.as_ref().map(|status|status.history_revision).unwrap_or(0),"historyChangeSilent":repository.status.as_ref().is_some_and(|status|status.history_change_silent),"historyRefsRevision":0,"historyRefsItems":[],"hasMerge":true,"inputRevision":repository.input_revision,
         "multiDiff":{"resourcePrefix":source_uri,"sourceActions":[
             {"id":"staged","label":api.text("git.stagedChanges",&[]),"tooltip":api.text("git.stagedChanges",&[]),"command":"git.openChangesSource","arguments":[repository.descriptor.id,"staged"]},
             {"id":"unstaged","label":api.text("git.changes",&[]),"tooltip":api.text("git.changes",&[]),"command":"git.openChangesSource","arguments":[repository.descriptor.id,"unstaged"]}],

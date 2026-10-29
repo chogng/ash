@@ -828,6 +828,111 @@ suite('scmHistory browser component', () => {
 		});
 	}
 
+	for (const locale of ['en', 'zh-CN']) {
+		for (const silent of [false, true]) {
+			for (const scrolled of [false, true]) {
+				test(`${silent ? 'background fetch' : 'active history changes'} ${scrolled && silent ? 'retain the visible history' : 'return to the top'} (${locale}, scrolled=${scrolled})`, async function () {
+					const { page } = browserTests;
+					await page.goto(`/scmHistory.html?paging&manual&locale=${locale}`);
+					const graph = page.locator('.ash-scm-graph');
+					const tree = graph.locator('.ash-scm-graph-tree');
+					const viewport = graph.locator('.ash-scrollbar-viewport');
+					await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '81');
+					await tree.focus();
+					await tree.press('Home');
+					if (scrolled) {
+						await viewport.evaluate(element => {
+							element.scrollTop = 447;
+							element.dispatchEvent(new Event('scroll'));
+						});
+					}
+					const position = await viewport.evaluate(element => {
+						const top = element.getBoundingClientRect().top;
+						const anchor = [...element.querySelectorAll<HTMLElement>('.ash-list-row')].find(
+							row => row.getBoundingClientRect().bottom > top,
+						)!;
+						return {
+							scrollTop: element.scrollTop,
+							anchorId: anchor.id,
+							anchorTop: anchor.getBoundingClientRect().top,
+						};
+					});
+					const reads = await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length);
+					await page.evaluate(
+						silent => window.ashSCMHistoryIntegration.prependHistoryItem('new-tip', silent),
+						silent,
+					);
+					if (scrolled && silent) {
+						await expect(page.locator('.ash-view-pane-header-description')).toHaveText(
+							locale === 'en' ? 'Outdated' : '有更新',
+						);
+						expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(
+							reads,
+						);
+						expect(await viewport.evaluate(element => element.scrollTop)).toBe(position.scrollTop);
+						const anchor = page.locator(`[id="${position.anchorId}"]`);
+						expect(await anchor.evaluate(element => element.getBoundingClientRect().top)).toBeCloseTo(
+							position.anchorTop,
+							1,
+						);
+						await expect(tree).toBeFocused();
+						await page.evaluate(() => window.ashSCMHistoryIntegration.manualRefresh());
+					}
+					await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '82');
+					await expect(graph).toHaveAttribute('aria-busy', 'false');
+					expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+					await expect(tree.locator('[data-history-item-id="new-tip"]')).toBeInViewport();
+					await expect(page.locator('.ash-view-pane-header-description')).toBeHidden();
+				});
+			}
+		}
+		test(`manual history refresh returns to the top without new commits (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?paging&manual&locale=${locale}`);
+			const tree = page.locator('.ash-scm-graph-tree');
+			const viewport = page.locator('.ash-scm-graph .ash-scrollbar-viewport');
+			await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '81');
+			await viewport.evaluate(element => {
+				element.scrollTop = 447;
+				element.dispatchEvent(new Event('scroll'));
+			});
+			await page.evaluate(() => window.ashSCMHistoryIntegration.manualRefresh());
+			expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+			await expect(tree.locator('[data-history-item-id="paging-0"]')).toBeInViewport();
+		});
+	}
+
+	test('automatic fetch during an active refresh retains the request to return to the top', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?paging&manual');
+		const graph = page.locator('.ash-scm-graph');
+		const tree = graph.locator('.ash-scm-graph-tree');
+		const viewport = graph.locator('.ash-scrollbar-viewport');
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '81');
+		await viewport.evaluate(element => {
+			element.scrollTop = 447;
+			element.dispatchEvent(new Event('scroll'));
+		});
+		const reads = await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length);
+		await page.evaluate(() => {
+			window.ashSCMHistoryIntegration.holdNextHistoryPage();
+			void window.ashSCMHistoryIntegration.manualRefresh();
+		});
+		await expect(graph).toHaveAttribute('aria-busy', 'true');
+		await expect
+			.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length))
+			.toBe(reads + 1);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.prependHistoryItem('new-tip', true));
+		await expect
+			.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length))
+			.toBe(reads + 2);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead());
+		await expect(graph).toHaveAttribute('aria-busy', 'false');
+		expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+		await expect(tree.locator('[data-history-item-id="new-tip"]')).toBeInViewport();
+		await expect(page.locator('.ash-view-pane-header-description')).toBeHidden();
+	});
+
 	test('automatic paging failures retain the graph and wait for keyboard retry', async function () {
 		const { page } = browserTests;
 		await page.goto('/scmHistory.html?paging');
@@ -1118,6 +1223,11 @@ suite('scmHistory browser component', () => {
 		await expect(last).toHaveAttribute('aria-setsize', '200');
 		expect(await tree.getByRole('treeitem').count()).toBeLessThan(100);
 		await page.evaluate(() => window.ashSCMHistoryIntegration.refresh());
+		const viewport = page.locator('.ash-scm-graph .ash-scrollbar-viewport');
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
+		await tree.press('ArrowUp');
+		await expect(tree.getByRole('treeitem', { name: /file-198.ts/u })).toHaveAttribute('aria-selected', 'true');
+		await tree.press('ArrowDown');
 		await expect(last).toHaveAttribute('aria-selected', 'true');
 		await expect(last).toBeVisible();
 		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.changeReads)).toBe(1);

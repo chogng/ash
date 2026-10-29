@@ -82,6 +82,8 @@ pub struct Status {
     pub stream_instance_id: String,
     pub revision: u64,
     pub history_revision: u64,
+    #[serde(default)]
+    pub history_change_silent: bool,
     pub path: String,
     pub head: Head,
     pub changes: Vec<Change>,
@@ -178,6 +180,8 @@ pub struct Repository {
     pub draft: String,
     pub input_revision: u64,
     pub operation: Option<RepositoryOperation>,
+    /// Retains completed foreground history operations across coalesced publications.
+    pub history_operation_revision: u64,
     pub error: String,
     pub notice: String,
     /// The message editor's intent stays attached to the HEAD at which it was opened.

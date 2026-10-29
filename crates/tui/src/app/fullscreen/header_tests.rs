@@ -21,6 +21,7 @@ fn app_with_branch() -> App {
         repository_id: "repository".into(),
         stream_instance_id: ash_protocol::StreamInstanceId::new("git-stream").unwrap(),
         history_revision: 1,
+        history_change_silent: false,
         revision: 1,
         path: "/work/ash".into(),
         head: GitHeadDto::Unborn {

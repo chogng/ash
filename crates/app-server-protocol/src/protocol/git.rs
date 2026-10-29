@@ -346,6 +346,9 @@ pub struct GitStatusResult {
     /// Scoped to stream_instance_id, independently of worktree/index status revision.
     #[ts(type = "number")]
     pub history_revision: u64,
+    /// Whether the last history revision came from automatic background fetching.
+    #[serde(default)]
+    pub history_change_silent: bool,
     pub path: String,
     pub head: GitHeadDto,
     pub changes: Vec<GitRepositoryChangeDto>,

@@ -12,6 +12,7 @@ fn status(stream: &str, revision: u64) -> Status {
         stream_instance_id: stream.into(),
         revision,
         history_revision: 1,
+        history_change_silent: false,
         path: String::new(),
         head: Head::Unborn {
             name: "main".into(),
@@ -36,6 +37,7 @@ fn repository(initial_status: Option<Status>) -> Repository {
         draft: "Retained draft".into(),
         input_revision: 7,
         operation: None,
+        history_operation_revision: 0,
         error: String::new(),
         notice: String::new(),
         commit_editor_head: None,

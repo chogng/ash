@@ -3,6 +3,7 @@ import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/workbench/contrib/scm/browser/scm.contribution.js';
 import { Button } from '../../../src/ash/base/browser/ui/button/button.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
+import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
@@ -44,6 +45,7 @@ import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmSer
 import { ISCMService, ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
 import type { ISCMHistoryItem, ISCMHistoryProvider } from '../../../src/ash/workbench/contrib/scm/common/history.js';
 const resources = new DisposableStore();
+resources.add(setARIAContainer(document.body));
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const root = document.querySelector<HTMLElement>('#history-root')!;
 const configuration = resources.add(new WorkbenchConfigurationService());
@@ -79,7 +81,7 @@ const message = new URLSearchParams(location.search).has('markdown') ? [
 	'<script>window.commitScriptRan = true</script>', '',
 	'[Unsafe command](command:workbench.action.closeWindow)',
 ].join('\n') : Array.from({ length: 24 }, (_, index) => `    Detail ${index + 1}: the complete explanation remains available without taking space from the history title.`).join('\n');
-const historyChanged = resources.add(new Emitter<void>());
+const historyChanged = resources.add(new Emitter<void | { readonly silent: boolean }>());
 const repositoryChanged = resources.add(new Emitter<void>());
 let repositoryBusy = false;
 let heldHistory: DeferredPromise<void> | undefined;
@@ -155,6 +157,11 @@ const fixture = {
 	finishContents(path: string): void { void heldContents.get(path)?.complete(); heldContents.delete(path); },
 	setViewMode(mode: 'list' | 'tree'): void { (panes.getView('fixture.history') as SCMHistoryViewPane).setViewMode(mode); },
 	refresh(): void { historyChanged.fire(); },
+	manualRefresh(): Promise<void> { return (panes.getView('fixture.history') as SCMHistoryViewPane).runTitleOperation(); },
+	prependHistoryItem(id: string, silent = false): void {
+		historyItems = [{ id, parentIds: historyItems?.length ? [historyItems[0].id] : [], subject: id, message: id }, ...historyItems ?? []];
+		historyChanged.fire({ silent });
+	},
 	async setHistoryItems(prefix: string): Promise<void> {
 		await configuration.updateValue('scm.graph.pageSize', 200);
 		historyItems = Array.from({ length: 100 }, (_, index) => ({

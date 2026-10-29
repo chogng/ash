@@ -759,10 +759,13 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
             .current_dir(consumer.root())
             .output()
             .unwrap();
-        notified |= queue
-            .drain()
-            .iter()
-            .any(|notification| notification["method"] == "git/statusChanged");
+        for notification in queue.drain() {
+            if notification["method"] == "git/statusChanged"
+                && notification["params"]["status"]["historyChangeSilent"] == true
+            {
+                notified = true;
+            }
+        }
         if output.status.success() && notified {
             assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), expected);
             break;
@@ -2262,6 +2265,10 @@ fn fetch_then_pull_reuses_fetched_history_and_ref_only_fetch_preserves_cursors()
     let third = source.git_output(&["rev-parse", "HEAD"]);
     let fetched = runtime.fetch(&cancellation.token()).unwrap();
     assert!(fetched.history_revision > status.history_revision);
+    assert!(
+        !fetched.history_change_silent,
+        "Explicit fetch is an active history update"
+    );
     assert!(matches!(
         runtime.graph(1, limit, Some(&cursor)),
         Err(super::GitRuntimeError::InvalidGraphCursor)

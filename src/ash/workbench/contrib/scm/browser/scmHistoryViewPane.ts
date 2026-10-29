@@ -3,6 +3,7 @@ import { localize2, localize } from '../../../../nls.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { observeResize } from '../../../../base/browser/observer.js';
+import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
@@ -482,7 +483,32 @@ class HistoryItemRow extends Disposable {
 /** Paged SCM history rendered as a compact graph. */
 export class SCMHistoryViewPane extends ViewPane {
 	private readonly loadingProgress = this._register(new DisposableStore());
-	private readonly refreshScheduler = this._register(new RunOnceScheduler(() => void this.refresh(), 0));
+	private readonly refreshScheduler = this._register(
+		new RunOnceScheduler(() => {
+			if (
+				this.pendingHistoryChange === 'background' &&
+				!this.refreshing &&
+				this.tree &&
+				this.tree.scrollTop > 0
+			) {
+				this.pendingHistoryChange = undefined;
+				if (!this.repositoryOutdated) {
+					this.repositoryOutdated = true;
+					this.updateTitleDescription(localize('scm.history.outdated', 'Outdated'));
+					status(
+						localize(
+							'scm.history.outdatedHint',
+							'The commit graph has updates. Refresh to show the latest history.',
+						),
+					);
+				}
+				return;
+			}
+			void this.refresh();
+		}, 0),
+	);
+	private pendingHistoryChange: 'active' | 'background' | undefined;
+	private repositoryOutdated = false;
 	private readonly scmViewService: ISCMViewService;
 	private readonly graphLabel: string;
 	private readonly busyContext: IContextKey<boolean>;
@@ -977,6 +1003,8 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private clearGraph(): void {
+		this.repositoryOutdated = false;
+		this.updateTitleDescription();
 		this.page = undefined;
 		this.head = undefined;
 		this.comparison = undefined;
@@ -1000,6 +1028,7 @@ export class SCMHistoryViewPane extends ViewPane {
 
 	private async refresh(): Promise<void> {
 		this.refreshScheduler.cancel();
+		this.pendingHistoryChange = undefined;
 		this.loadingProgress.clear();
 		const generation = ++this.generation;
 		const repository = this.scmViewService.activeRepository;
@@ -1032,7 +1061,14 @@ export class SCMHistoryViewPane extends ViewPane {
 			if (provider) {
 				// One provider publication can change several observable refs and history.
 				// Reload once after that publication has installed all of its endpoints.
-				listeners.add(provider.onDidChange(() => this.refreshScheduler.schedule()));
+				listeners.add(
+					provider.onDidChange(event => {
+						if (!event?.silent || this.pendingHistoryChange !== 'active') {
+							this.pendingHistoryChange = event?.silent ? 'background' : 'active';
+						}
+						this.refreshScheduler.schedule();
+					}),
+				);
 				if (provider.historyItemRemoteRef) {
 					listeners.add(provider.historyItemRemoteRef.onDidChange(() => this.refreshScheduler.schedule()));
 				}
@@ -1253,7 +1289,10 @@ export class SCMHistoryViewPane extends ViewPane {
 			const page = { items: items.slice(0, retainedCount), hasMore: items.length > retainedCount || hasMore };
 			this.page = page;
 			this.head = provider.historyItemRef.get();
+			if (this.tree) this.tree.scrollTop = 0;
 			this.renderGraph(page);
+			this.repositoryOutdated = false;
+			this.updateTitleDescription();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
 			this.refreshFailed = true;
@@ -1327,9 +1366,11 @@ export class SCMHistoryViewPane extends ViewPane {
 			});
 			if (page.hasMore && this.showLoadMore()) children.push({ element: this.moreItem });
 			this.tree.setChildren(children);
-			if (anchor && this.tree.model.has(anchor.id))
+			// At the top, follow newly inserted commits. Preserve a row anchor only
+			// when the user has scrolled into older history.
+			if (scrollTop === 0) this.tree.scrollTop = 0;
+			else if (anchor && this.tree.model.has(anchor.id))
 				this.tree.scrollTop = (this.tree.getElementTop(anchor.id) ?? 0) + anchorOffset;
-			else if (scrollTop === 0) this.tree.scrollTop = 0;
 			if (restoreFocus === this.tree.element && focusedId && !this.tree.model.has(focusedId)) {
 				// A rewritten branch may remove the focused node while the tree keeps
 				// DOM focus. Give its visible replacement logical focus without scrolling.
@@ -1419,7 +1460,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		tree.element.setAttribute('aria-multiselectable', 'false');
 		const navigationHelp = localize(
 			'scm.history.help',
-			'Use Up and Down Arrow to navigate and select commits, folders and changed files. Navigating to a file previews it while keeping focus here. Home and End move to the first and last loaded rows; Page Up and Page Down move by a page. Right Arrow expands a commit or folder and enters its children; Left Arrow collapses it or returns to its parent. Enter or Space toggles commits and folders. Enter opens and pins a changed file; Space previews it while keeping focus in history. Click a file to preview it and double-click to pin it. Hold Ctrl, Command or Alt when clicking to open it beside the current editor. On macOS, Command+Down Arrow also opens the selected item. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges, Open Changes and Open File. Press Alt+Down Arrow on a commit to focus its details; Escape returns to history. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and updates the graph immediately. Enter, Escape or clicking outside closes the picker and keeps the selection. Use View as List or View as Tree to change file layout. Incoming and Outgoing Changes compare the branch with its merge base. Binary changes open a read-only hexadecimal comparison. The graph selects one row at a time. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded rows.',
+			'Use Up and Down Arrow to navigate and select commits, folders and changed files. Navigating to a file previews it while keeping focus here. Home and End move to the first and last loaded rows; Page Up and Page Down move by a page. Right Arrow expands a commit or folder and enters its children; Left Arrow collapses it or returns to its parent. Enter or Space toggles commits and folders. Enter opens and pins a changed file; Space previews it while keeping focus in history. Click a file to preview it and double-click to pin it. Hold Ctrl, Command or Alt when clicking to open it beside the current editor. On macOS, Command+Down Arrow also opens the selected item. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges, Open Changes and Open File. Press Alt+Down Arrow on a commit to focus its details; Escape returns to history. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and updates the graph immediately. Enter, Escape or clicking outside closes the picker and keeps the selection. Use View as List or View as Tree to change file layout. Incoming and Outgoing Changes compare the branch with its merge base. Binary changes open a read-only hexadecimal comparison. The graph selects one row at a time. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded rows. Synchronizing or refreshing returns to the top. Automatic fetch keeps older history in place and marks the graph as outdated; refresh to update it.',
 		);
 		const pagingHelp = localize(
 			'scm.history.pagingHelp',

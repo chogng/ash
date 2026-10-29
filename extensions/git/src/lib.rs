@@ -566,6 +566,7 @@ impl GitRuntime {
                     draft: String::new(),
                     input_revision: 0,
                     operation: None,
+                    history_operation_revision: 0,
                     error: String::new(),
                     notice: String::new(),
                     commit_editor_head: None,
@@ -662,6 +663,7 @@ impl GitRuntime {
                     repository.draft = current.draft.clone();
                     repository.input_revision = current.input_revision;
                     repository.operation = current.operation;
+                    repository.history_operation_revision = current.history_operation_revision;
                     repository.error = current.error.clone();
                     repository.notice = current.notice.clone();
                     repository.commit_editor_head = current.commit_editor_head.clone();

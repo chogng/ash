@@ -860,6 +860,37 @@ test('SCM history and reference updates leave Changes quiet while working-tree c
 	assert.notEqual(repository.provider.groups, groups);
 });
 
+test('SCM history distinguishes automatic fetch and completed foreground synchronization', () => {
+	const initial = { ...(provider() as Record<string, JsonValue>), hasHistory: true };
+	const value = fixture(async () => null, [initial]);
+	using cleanup = value.lifetime;
+	const changes: unknown[] = [];
+	using listener = value.scm
+		.getRepository('repo')!
+		.provider.historyProvider!.onDidChange(event => changes.push(event));
+	const background = { ...initial, historyRevision: 2, historyChangeSilent: true };
+	value.bridge.set(source, 'ash.scm', 2, [background]);
+	assert.deepEqual(changes, [{ silent: true }]);
+	value.bridge.set(source, 'ash.scm', 3, [{ ...background, historyOperationRevision: 1 }]);
+	assert.deepEqual(
+		changes,
+		[{ silent: true }, { silent: false }],
+		'A no-op sync remains observable when its in-progress publication was coalesced',
+	);
+	value.bridge.set(source, 'ash.scm', 4, [
+		{ ...background, historyRevision: 3, historyChangeSilent: false, historyOperationRevision: 1 },
+	]);
+	assert.deepEqual(changes, [{ silent: true }, { silent: false }, { silent: false }]);
+	assert.throws(
+		() => value.bridge.set(source, 'ash.scm', 6, [{ ...background, historyChangeSilent: 'yes' }]),
+		/history change origin/u,
+	);
+	assert.throws(
+		() => value.bridge.set(source, 'ash.scm', 7, [{ ...background, historyOperationRevision: -1 }]),
+		/history operation revision/u,
+	);
+});
+
 test('SCM bridge forwards reference-only HEAD moves once without invalidating history', () => {
 	const initial = { ...(provider() as Record<string, JsonValue>), hasHistory: true };
 	const value = fixture(async () => null, [initial]);

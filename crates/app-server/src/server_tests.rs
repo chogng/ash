@@ -7840,14 +7840,17 @@ fn git_named_fetch_rpc_keeps_other_refs_and_local_state_and_revalidates_remote_n
         serde_json::json!({"jsonrpc":"2.0","id":4,"method":"git/fetch","params":{"repositoryId":repository_id,"mode":{"remote":"team/backup"}}}),
     );
     assert!(fetched.get("error").is_none(), "{fetched}");
-    let backup_head = std::process::Command::new("git")
-        .current_dir(&producer)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .unwrap()
-        .stdout;
+    let backup_head = String::from_utf8(
+        std::process::Command::new("git")
+            .current_dir(&producer)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
     assert_eq!(
-        read_git(&["rev-parse", "refs/remotes/team/backup/main"]).as_bytes(),
+        read_git(&["rev-parse", "refs/remotes/team/backup/main"]),
         backup_head
     );
     assert_eq!(
@@ -7871,6 +7874,7 @@ fn git_named_fetch_rpc_keeps_other_refs_and_local_state_and_revalidates_remote_n
     );
     // Fetch advances the upstream comparison without moving the checked-out commit.
     let mut expected_head = initial["result"]["head"].clone();
+    expected_head["upstream"]["objectId"] = serde_json::json!(backup_head.trim());
     expected_head["upstream"]["behind"] = serde_json::json!(2);
     assert_eq!(fetched["result"]["status"]["head"], expected_head);
     assert!(

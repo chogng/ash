@@ -1438,13 +1438,15 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 		await waitFor(
 			() =>
 				graph.getAttribute('aria-busy') === 'false' &&
-				current()?.closest('[role="treeitem"]')?.getAttribute('aria-setsize') === '111',
+				graph.querySelector('[role="treeitem"]')?.getAttribute('aria-setsize') === '111',
 		);
+		assert.equal(viewport.scrollTop, 0, 'Active history updates return to the top');
+		viewport.scrollTop = position + 100 * 22;
+		viewport.dispatchEvent(new browser.window.Event('scroll'));
 		assert.equal(historyTreeRow(folder()).getAttribute('aria-selected'), 'true');
 		assert.equal(historyTreeRow(current()).getAttribute('aria-expanded'), 'true');
 		assert.equal(historyTreeRow(folder()).getAttribute('aria-expanded'), 'false');
 		assert.equal(focusedHistoryRow(tree), historyTreeRow(folder()), 'Refresh returns to the same logical folder');
-		assert.equal(viewport.scrollTop, position + 100 * 22);
 		assert.ok(queries.every(query => query.limit <= 16));
 		const beforeRewrite = queries.length;
 		reachable = false;
@@ -1469,7 +1471,7 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 		assert.equal(graph.querySelectorAll('[role="treeitem"][aria-selected="true"]').length, 0);
 		assert.equal(
 			focusedHistoryRow(tree)?.querySelector<HTMLElement>('.ash-scm-graph-commit')?.dataset.historyItemId,
-			'rewritten-104',
+			'rewritten-0',
 		);
 		const deferred = new DeferredPromise<void>();
 		pauseNextQuery = deferred;

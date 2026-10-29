@@ -225,6 +225,19 @@ impl GitRuntime {
             }
         }
         if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+            if matches!(
+                current.operation,
+                Some(
+                    crate::model::RepositoryOperation::Preparing
+                        | crate::model::RepositoryOperation::Synchronize
+                )
+            ) || matches!(command, "git.fetch" | "git.fetchAll")
+            {
+                current.history_operation_revision = current
+                    .history_operation_revision
+                    .checked_add(1)
+                    .expect("Git history operation revision overflowed");
+            }
             current.operation = None;
             current.pending_paths = None;
             if let Err(error) = &outcome {
