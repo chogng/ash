@@ -483,6 +483,7 @@ dependencies = [
  "ash-build-info",
  "ash-exec-server-protocol",
  "ash-install-context",
+ "ash-installation",
  "ash-package-store",
  "ash-process-hardening",
  "ash-product-update",
@@ -990,6 +991,7 @@ dependencies = [
  "ash-github-extension",
  "ash-http-client",
  "ash-install-context",
+ "ash-installation",
  "ash-package-store",
  "ash-plugin",
  "ash-process-hardening",
@@ -2133,6 +2135,24 @@ version = "0.1.0"
 dependencies = [
  "ash-utils-path",
  "dunce",
+]
+
+[[package]]
+name = "ash-installation"
+version = "0.1.0"
+dependencies = [
+ "ash-keyring-store",
+ "ash-package-store",
+ "ash-secrets",
+ "ash-utils-home-dir",
+ "ash-utils-path",
+ "dirs",
+ "dunce",
+ "fs2",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
 ]
 
 [[package]]

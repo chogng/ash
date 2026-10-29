@@ -3,6 +3,17 @@ name: Desktop Electron runtime acceptance
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Desktop platform to validate
+        type: choice
+        default: all
+        options: [all, windows, macos]
+      suite:
+        description: Full runtime or delivered installation lifecycle
+        type: choice
+        default: all
+        options: [all, installation]
 
 permissions:
   contents: read
@@ -18,7 +29,7 @@ jobs:
       fail-fast: false
       matrix:
         # The production packager compiles .icon assets with macOS 26's actool.
-        runner: [windows-latest, macos-26]
+        runner: ${{ fromJSON(inputs.platform == 'windows' && '["windows-latest"]' || inputs.platform == 'macos' && '["macos-26"]' || '["windows-latest","macos-26"]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
@@ -75,6 +86,7 @@ jobs:
       - name: Prepare bundled extension packages
         run: pnpm run prepare:extensions
       - name: Build self-contained backend for Web and headless hosts
+        if: inputs.suite != 'installation'
         run: pnpm run prepare:backend:web
       - name: Build Desktop backend with bundled media
         run: pnpm run prepare:backend
@@ -103,16 +115,45 @@ jobs:
         run: ./node_modules/.bin/bun check -p test/automation/tsconfig.json --all
       - name: Verify real Desktop startup, quit, file and terminal operations
         run: pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/packaged-app.spec.ts
+      - name: Build and exercise native installation, upgrade and both removal modes
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:ISCC_PATH = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $env:ISCC_PATH)) { throw 'Inno Setup compiler is required for installer acceptance' }
+          $env:ASH_INSTALLATION_TEST_DAEMON = Join-Path $env:ASH_PACKAGED_BUNDLE 'resources/bin/ash-app-server-daemon.exe'
+          node test/smoke/run.ts electron-release test/smoke/areas/windows/installation-cleanup.spec.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm package:win32:installer --bundle $env:ASH_PACKAGED_BUNDLE --output .build/installer-acceptance
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node build/desktop/installerAcceptance.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:ASH_RELEASE_VERSION = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $env:ASH_RELEASE_ARCHIVE = (Resolve-Path ".build/installer-acceptance/AshSetup-$env:ASH_RELEASE_VERSION-win32-x64.exe").Path
+          $env:ASH_RELEASE_PREVIOUS_VERSION = '0.0.0'
+          $env:ASH_RELEASE_PREVIOUS_ARCHIVE = (Resolve-Path '.build/installer-acceptance/AshSetup-0.0.0-win32-x64.exe').Path
+          node test/smoke/run.ts electron-release test/smoke/areas/windows/release-package.spec.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify background, TUI restart, crash recovery, binding upgrade and rollback
+        if: inputs.suite != 'installation'
         shell: bash
         run: python -B build/desktop/runtime_acceptance.py --bundle "$ASH_PACKAGED_BUNDLE" --standalone-package "$ASH_ACCEPTANCE_RUNTIME_PACKAGE" --report .build/desktop-runtime-acceptance.json
       - name: Test publication, daemon and capability contracts
-        run: just test ash-app-server-daemon -p ash-package-store -p ash-lsp-server-provider -p ash-external-ext --lib --profile ci-test --locked
+        if: inputs.suite != 'installation'
+        run: just test ash-app-server-daemon -p ash-installation -p ash-package-store -p ash-lsp-server-provider -p ash-external-ext --lib --profile ci-test --locked
+      - name: Verify managed CLI install and uninstall through real processes
+        if: inputs.suite != 'installation'
+        run: |
+          python -B scripts/cargo.py build -p ash-app-server-daemon --bin ash-app-server-daemon --profile ci-test --locked
+          just test-processes ash-cli --test installation --profile ci-test --locked
       - name: Verify real Electron language-server initialization and shutdown
+        if: inputs.suite != 'installation'
         run: just test-processes ash-lsp-server-provider --test electron_runtime --profile ci-test --locked -- --ignored
       - name: Verify real Electron extensions retain separate window lifetimes
+        if: inputs.suite != 'installation'
         run: just test ash-app-server-runtime --lib --profile ci-test --locked standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate
       - name: Verify disabled MCP stays disabled across process restart
+        if: inputs.suite != 'installation'
         run: just test-processes ash-app-server --test mcp_restart --profile ci-test --locked
       - name: Upload runtime and application diagnostics
         if: always()

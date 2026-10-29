@@ -22,6 +22,7 @@ pub(crate) struct Options {
 }
 
 pub(crate) fn run(options: Options) -> Result<(), CliError> {
+    let launcher = options.bin_dir.clone();
     let result = (|| {
         let version =
             Version::parse(env!("CARGO_PKG_VERSION")).map_err(|error| error.to_string())?;
@@ -29,6 +30,21 @@ pub(crate) fn run(options: Options) -> Result<(), CliError> {
     })();
     let installed = result
         .map_err(|error: String| CliError::failure(nls::format(Message::InstallFailed, error)))?;
+    let registration = (|| {
+        let profile = ash_utils_home_dir::find_ash_home()?;
+        ash_installation::Registry::open(&ash_installation::registry_directory()?)?.register(
+            ash_installation::Product::Cli,
+            installed
+                .parent()
+                .and_then(Path::parent)
+                .ok_or_else(|| io::Error::other("missing managed installation root"))?,
+            Some(&launcher),
+            Some((&profile, None)),
+        )
+    })();
+    registration.map_err(|error| {
+        CliError::failure(nls::format(Message::InstallFailed, error.to_string()))
+    })?;
     println!(
         "{}",
         nls::format(Message::Installed, installed.display().to_string())
@@ -76,6 +92,7 @@ fn install_package(options: Options, version: &Version, target: &str) -> Result<
     update::clean_staging(&versions)?;
     let staging = versions.join(format!(".update-install-{}", std::process::id()));
     fs::create_dir(&staging).map_err(detail)?;
+    update::mark_staging(&staging)?;
     let result = (|| {
         let package = staging.join("package");
         // Stage on the destination filesystem. TMPDIR and the installation may
@@ -94,9 +111,12 @@ fn install_package(options: Options, version: &Version, target: &str) -> Result<
         // Prepare the launcher first: failure must leave an existing selection usable.
         prepare_launcher(&root, &bin, &installed)?;
         update::select_package(&root, &installed)?;
+        if let Err(error) = update::clean_versions(&root, &installed) {
+            eprintln!("{}", nls::format(Message::CleanupFailed, error));
+        }
         Ok(installed)
     })();
-    let _ = fs::remove_dir_all(staging);
+    let _ = update::remove_staging(&staging);
     result
 }
 

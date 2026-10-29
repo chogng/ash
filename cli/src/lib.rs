@@ -14,6 +14,7 @@ mod nls;
 mod reconnect;
 mod remote;
 mod secrets;
+mod uninstall;
 mod update;
 
 #[cfg(windows)]
@@ -44,6 +45,8 @@ enum Command {
     Code,
     #[command(hide = true)]
     InstallManaged(install::Options),
+    #[command(about = nls::text(nls::Message::UninstallAbout))]
+    Uninstall(uninstall::Options),
     #[command(about = nls::text(nls::Message::AppAbout))]
     App(app::Options),
     /// Run a prompt non-interactively and print the final answer.
@@ -135,8 +138,23 @@ pub fn run(arguments: impl IntoIterator<Item = impl Into<OsString> + Clone>) -> 
 }
 
 fn dispatch(cli: Cli) -> Result<i32, CliError> {
+    // Register custom ASH_HOME before any command can create it. Forwarded
+    // backend commands and non-interactive clients need the same ownership as TUI.
+    if !matches!(
+        &cli.command,
+        Some(
+            Command::InstallManaged(_)
+                | Command::Uninstall(_)
+                | Command::App(_)
+                | Command::Update { .. }
+        )
+    ) && !matches!(&cli.command, Some(Command::AppServer(args) | Command::Remote(args)) if args.arguments.iter().any(|arg| arg == "--help" || arg == "-h"))
+    {
+        profile_root()?;
+    }
     let result = match cli.command {
         Some(Command::InstallManaged(options)) => install::run(options),
+        Some(Command::Uninstall(options)) => uninstall::run(options),
         None | Some(Command::Code) => {
             local_tui::run(configured_dir()?, profile_root()?).map_err(CliError::failure)
         }
@@ -205,7 +223,21 @@ fn configured_dir() -> Result<PathBuf, String> {
 }
 
 fn profile_root() -> Result<PathBuf, CliError> {
-    ash_utils_home_dir::find_ash_home().map_err(CliError::failure)
+    let profile = ash_utils_home_dir::find_ash_home().map_err(CliError::failure)?;
+    if let Ok(root) = update::managed_root() {
+        let directory = ash_installation::registry_directory().map_err(CliError::failure)?;
+        ash_installation::Registry::open(&directory)
+            .and_then(|mut registry| {
+                registry.register(
+                    ash_installation::Product::Cli,
+                    &root,
+                    None,
+                    Some((&profile, None)),
+                )
+            })
+            .map_err(CliError::failure)?;
+    }
+    Ok(profile)
 }
 
 fn print_json(value: &impl serde::Serialize) -> Result<(), CliError> {

@@ -31,10 +31,10 @@ export default defineConfig({
 			// Installing the optional PDF Viewer and downloading publisher documents
 			// belong to the opt-in project. Ordinary profiles exercise the fallback.
 			testIgnore: project.name === 'electron-pdf-corpus-app-server'
-				? '**/release-package.spec.ts'
-				: ['**/release-package.spec.ts', '**/pdf-academy-corpus.spec.ts'],
+				? ['**/release-package.spec.ts', '**/installation-cleanup.spec.ts']
+				: ['**/release-package.spec.ts', '**/installation-cleanup.spec.ts', '**/pdf-academy-corpus.spec.ts'],
 		})),
-		{ name: 'electron-release', testMatch: '**/release-package.spec.ts', testIgnore: '', timeout: 600_000 },
+		{ name: 'electron-release', testMatch: ['**/release-package.spec.ts', '**/installation-cleanup.spec.ts'], testIgnore: '', timeout: 600_000 },
 	],
 	webServer: browserUi
 		? {

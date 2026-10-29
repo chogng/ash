@@ -73,6 +73,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		delete environment.ASH_DESKTOP_UI_ONLY;
 	}
 	environment.ASH_HOME = options.profileDirectory ?? resolve(options.userDataDirectory, "profile");
+	environment.ASH_INSTALLATION_REGISTRY = options.environment?.ASH_INSTALLATION_REGISTRY ?? join(options.userDataDirectory, 'installation-registry');
 	if (options.productServicesPath) environment.ASH_PRODUCT_SERVICES_PATH = options.productServicesPath;
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;

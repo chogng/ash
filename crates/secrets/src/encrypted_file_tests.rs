@@ -21,6 +21,33 @@ fn key(name: &str) -> SecretKey {
     SecretKey::new(name).unwrap()
 }
 
+#[test]
+fn profile_purge_only_deletes_its_encryption_key_and_is_retryable() {
+    let keyring = MemorySecretStore::default();
+    keyring
+        .store(&key(MASTER_KEY_NAME), &SecretValue::new(vec![1; 32]))
+        .unwrap();
+    keyring
+        .store(&key("unrelated/entry"), &SecretValue::new(vec![2]))
+        .unwrap();
+    assert_eq!(
+        ProfileSecretStore::delete_encryption_key(&keyring).unwrap(),
+        DeleteSecretOutcome::Deleted
+    );
+    assert_eq!(
+        ProfileSecretStore::delete_encryption_key(&keyring).unwrap(),
+        DeleteSecretOutcome::NotFound
+    );
+    assert_eq!(
+        keyring
+            .load(&key("unrelated/entry"))
+            .unwrap()
+            .unwrap()
+            .expose(),
+        &[2]
+    );
+}
+
 #[derive(Clone, Copy, Default)]
 enum KeyringState {
     #[default]
