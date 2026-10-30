@@ -18,6 +18,13 @@ async function editColor(field: Locator, value: string): Promise<void> {
 	await field.press('Enter');
 }
 
+async function overrideReferencedColor(popup: Page, id: string, value: string): Promise<void> {
+	await popup.getByRole('button', { name: `Choose color for ${id}`, exact: true }).press('Enter');
+	const picker = popup.getByRole('dialog', { name: 'Color picker', exact: true });
+	await editColor(picker.getByRole('textbox', { name: 'Color value', exact: true }), value);
+	await picker.getByRole('button', { name: 'Close', exact: true }).click();
+}
+
 async function chooseThemeAction(popup: Page, label: string, _locale = 'en'): Promise<void> {
 	if (label === 'Open Theme (JSON)' || label === 'Open Theme (UI)') {
 		await popup.locator('.ash-breadcrumbs-editor-type:visible').click();
@@ -385,9 +392,13 @@ test('design token links navigate across groups, follow changes and restore afte
 	const search = popup.getByRole('searchbox', { name: 'Search colors' });
 	const frame = popup.frameLocator('.ash-theme-editor-preview:visible');
 	await search.fill('input.foreground');
-	const hex = popup.getByRole('textbox', { name: 'Hex color for input.foreground', exact: true });
+	const hex = popup.getByRole('textbox', { name: 'Hex color for input.foreground', exact: true, includeHidden: true });
 	const row = popup.locator('.ash-theme-color').filter({ has: hex });
-	await expect(row.locator('.ash-theme-color-source')).toHaveText('Linked to foreground');
+	await expect(row.locator('.ash-theme-color-source')).toHaveText('foreground');
+	await expect(row.locator('.ash-theme-color-source')).toHaveAccessibleName('Linked to foreground');
+	await expect(hex).toBeHidden();
+	await expect(row.getByRole('spinbutton')).toHaveCount(0);
+	await expect(row.locator('.ash-color-picker-input .ash-theme-color-link')).toHaveCount(1);
 	await expect
 		.poll(() =>
 			row.evaluate(element => {
@@ -414,8 +425,9 @@ test('design token links navigate across groups, follow changes and restore afte
 	await search.fill('input.foreground');
 	await expect(hex).toHaveValue('BB8855');
 	// Even an equal value is an explicit override, not a link inferred from color equality.
-	await editColor(hex, '#bb8855');
-	await expect(row.locator('.ash-theme-color-source')).toHaveText('Set in this file');
+	await overrideReferencedColor(popup, 'input.foreground', '#bb8855');
+	await expect(row.locator('.ash-theme-color-source')).toHaveCount(0);
+	await expect(hex).toBeVisible();
 	await editColor(hex, '#aabbcc');
 	const source = await page.evaluate(() => window.themeEditorTest.source());
 	await page.evaluate(text => window.themeEditorTest.setSource(text.replace('#bb8855', '#447799')), source);
@@ -426,13 +438,20 @@ test('design token links navigate across groups, follow changes and restore afte
 	expect(await reset.boundingBox()).toMatchObject({ width: 22, height: 22 });
 	await expect(reset.locator('.ash-icon')).toHaveCSS('width', '16px');
 	await reset.click();
-	await expect(row.locator('.ash-theme-color-source')).toHaveText('Linked to foreground');
+	await expect(row.locator('.ash-theme-color-source')).toHaveText('foreground');
+	await expect(hex).toBeHidden();
 	await expect(hex).toHaveValue('447799');
 	await expect(frame.locator('#app')).toHaveCSS('--ash-input-foreground', '#447799');
 	await chooseThemeAction(popup, 'Save');
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.persisted())).toContain('#447799');
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).not.toContain('"input.foreground"');
 	await search.fill('input.');
+	const literalRow = popup.locator('.ash-theme-color').filter({
+		has: popup.getByRole('button', { name: 'input.background', exact: true }),
+	});
+	expect(await row.evaluate(element => element.getBoundingClientRect().height)).toBe(
+		await literalRow.evaluate(element => element.getBoundingClientRect().height),
+	);
 	await popup.screenshot({ path: testInfo.outputPath('design-token-links.png') });
 });
 
@@ -454,7 +473,7 @@ test('included overrides do not claim a default token relationship after reset',
 	await expect(hex).toHaveValue('778899');
 	await row.getByRole('button', { name: 'Remove the override for input.foreground', exact: true }).click();
 	await expect(hex).toHaveValue('112233');
-	await expect(row.locator('.ash-theme-color-source')).toHaveText('Inherited / default');
+	await expect(row.locator('.ash-theme-color-source')).toHaveCount(0);
 	await expect(row.locator('.ash-theme-color-link')).toHaveCount(0);
 	await expect(popup.frameLocator('.ash-theme-editor-preview:visible').locator('#app')).toHaveCSS(
 		'--ash-input-foreground',
@@ -472,20 +491,19 @@ test('Agent Window reports transformed token dependencies and keeps their alpha'
 	await expect(frame.locator('.ash-sessions-window')).toBeVisible();
 	const search = popup.getByRole('searchbox', { name: 'Search colors' });
 	await search.fill('sessions.accentGlow');
-	const hex = popup.getByRole('textbox', { name: 'Hex color for sessions.accentGlow', exact: true });
+	const hex = popup.getByRole('textbox', { name: 'Hex color for sessions.accentGlow', exact: true, includeHidden: true });
 	const row = popup.locator('.ash-theme-color').filter({ has: hex });
 	await expect(row.locator('.ash-theme-color-source')).toHaveText('Derived from button.primaryBackground');
 	await row.getByRole('button', { name: 'Go to design token button.primaryBackground', exact: true }).click();
-	const source = popup.getByRole('textbox', { name: 'Hex color for button.primaryBackground', exact: true });
 	await expect(
 		popup.getByRole('button', { name: 'Choose color for button.primaryBackground', exact: true }),
 	).toBeFocused();
-	await editColor(source, '#2288ee');
+	await overrideReferencedColor(popup, 'button.primaryBackground', '#2288ee');
 	await expect(frame.locator('#app')).toHaveCSS('--ash-sessions-accentGlow', 'rgba(34, 136, 238, 0.16)');
 	await search.fill('sessions.accentGlow');
 	await expect(hex).toHaveValue('2288EE');
-	await editColor(hex, '#88442240');
-	await expect(row.locator('.ash-theme-color-source')).toHaveText('Set in this file');
+	await overrideReferencedColor(popup, 'sessions.accentGlow', '#88442240');
+	await expect(row.locator('.ash-theme-color-source')).toHaveCount(0);
 	await row.getByRole('button', { name: 'Remove the override for sessions.accentGlow', exact: true }).click();
 	await expect(row.locator('.ash-theme-color-source')).toHaveText('Derived from button.primaryBackground');
 	await expect(hex).toHaveValue('2288EE');
@@ -497,9 +515,11 @@ for (const theme of ['ash-light', 'ash-high-contrast-dark']) {
 		await saveEditableTheme(popup, 'zh-CN');
 		await popup.getByRole('searchbox', { name: '搜索颜色' }).fill('editorGroup.border');
 		const token = theme === 'ash-light' ? 'border' : 'contrastBorder';
-		const hex = popup.getByRole('textbox', { name: 'editorGroup.border 的十六进制颜色', exact: true });
+		const hex = popup.getByRole('textbox', { name: 'editorGroup.border 的十六进制颜色', exact: true, includeHidden: true });
 		const row = popup.locator('.ash-theme-color').filter({ has: hex });
-		await expect(row.locator('.ash-theme-color-source')).toHaveText(`关联到 ${token}`);
+		await expect(row.locator('.ash-theme-color-source')).toHaveText(token);
+		await expect(row.locator('.ash-theme-color-source')).toHaveAccessibleName(`关联到 ${token}`);
+		await expect(hex).toBeHidden();
 		await expect(row.locator('.ash-theme-color-reset')).toBeHidden();
 		const link = row.getByRole('button', { name: `转到设计令牌 ${token}`, exact: true });
 		await link.focus();
@@ -1259,9 +1279,7 @@ test('extension publisher metadata remains editable and exports through Save as'
 	await editColor(hex, '#abcdef');
 	await expect(preview).toHaveCSS('--ash-editor-background', '#abcdef');
 	await expect(popup.locator('.ash-theme-editor-message')).not.toHaveClass(/error/);
-	await expect(popup.locator('.ash-theme-color').filter({ has: hex }).locator('.ash-theme-color-source')).toHaveText(
-		'Set in this file',
-	);
+	await expect(popup.locator('.ash-theme-color').filter({ has: hex }).locator('.ash-theme-color-source')).toHaveCount(0);
 	await chooseThemeAction(popup, 'Save');
 	await expectSaved(page);
 	expect(await page.evaluate(() => window.themeEditorTest.themeSource('themes/ash-light.json'))).toContain(

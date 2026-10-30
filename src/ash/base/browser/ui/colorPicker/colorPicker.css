@@ -226,6 +226,19 @@
 	border-color: var(--ash-focusBorder);
 }
 
+.ash-color-picker-input-fields,
+.ash-color-picker-input-content {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	min-height: var(--ash-spacing-size320);
+}
+
+.ash-color-picker-input-fields[hidden],
+.ash-color-picker-input-content[hidden] {
+	display: none;
+}
+
 /* High-contrast input borders can already use the focus color. */
 .ash-high-contrast .ash-color-picker-input:focus-within {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);

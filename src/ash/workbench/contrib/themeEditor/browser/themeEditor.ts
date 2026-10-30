@@ -1392,12 +1392,14 @@ class ThemeColorRow extends Disposable {
 	private readonly source: HTMLElement;
 	private readonly sourceLifetime = this._register(new DisposableStore());
 	private sourceKey: string | undefined;
+	private sourceLabel = '';
+	private sourceTooltip = '';
 	private currentColor: Color | undefined;
 	private documentValue: string | undefined;
 	private renderedState: string | undefined;
 	private editable = false;
 	public get accessibleText(): string {
-		return `${this.id}: ${this.picker.getAccessibleContent()}. ${this.source.textContent ?? ''}`;
+		return `${this.id}: ${this.picker.getAccessibleContent()}. ${this.sourceLabel}`;
 	}
 	public get color(): Color | undefined {
 		return this.currentColor;
@@ -1424,9 +1426,9 @@ class ThemeColorRow extends Disposable {
 		this._register(this.picker.onDidChangeColor(color => edit(Color.Format.CSS.formatHexA(color, true))));
 		this._register(this.picker.onDidCommitColor(color => edit(Color.Format.CSS.formatHexA(color, true))));
 		this.element.append(this.picker.domNode);
-		this.source = h(doc, 'p');
+		this.source = h(doc, 'div', { attributes: { role: 'group' } });
 		this.source.className = 'ash-theme-color-source';
-		this.element.append(this.source);
+		this._register(hover.setupHover({ target: this.source, content: () => this.sourceTooltip }));
 		this.reset = this._register(
 			new Button(this.element, {
 				...defaultButtonStyles,
@@ -1449,6 +1451,7 @@ class ThemeColorRow extends Disposable {
 			element =>
 				element.tabIndex >= 0 &&
 				!element.matches(':disabled') &&
+				!element.closest('[hidden]') &&
 				getWindow(element).getComputedStyle(element).visibility !== 'hidden',
 		);
 	}
@@ -1483,22 +1486,26 @@ class ThemeColorRow extends Disposable {
 		this.element.classList.toggle('modified', authored !== undefined);
 		const relation = authored === undefined ? references : undefined;
 		const label = colorSourceLabel(authored, effective, references);
-		const key = JSON.stringify(relation ?? label);
+		this.sourceLabel = label;
+		this.sourceTooltip = effective
+			? `${label}\n${localize('themeEditor.effective', 'Effective: {0}', Color.Format.CSS.formatHexA(effective, true))}`
+			: label;
+		this.picker.domNode.title = relation ? '' : this.sourceTooltip;
+		this.source.setAttribute('aria-label', label);
+		const key = JSON.stringify(relation ?? null);
 		// Keep focused links and their listeners stable across preview refreshes.
 		if (this.sourceKey === key) return;
 		this.sourceKey = key;
 		this.sourceLifetime.clear();
 		this.source.replaceChildren();
+		this.picker.setValueContent(relation ? this.source : undefined);
 		if (!relation) {
-			this.source.textContent = label;
-			this.source.title = label;
 			return;
 		}
 		const format = (tokens: string) =>
 			relation.kind === 'linked'
 				? localize('themeEditor.linkedTo', 'Linked to {0}', tokens)
 				: localize('themeEditor.derivedFrom', 'Derived from {0}', tokens);
-		this.source.title = format(relation.tokens.join(', '));
 		const icon = h(this.source.ownerDocument, 'span', {
 			className: 'ash-theme-color-link-icon',
 			attributes: { 'aria-hidden': 'true' },
@@ -1506,8 +1513,8 @@ class ThemeColorRow extends Disposable {
 		appendLabelIcon(icon, Lxicon.link);
 		this.source.append(icon);
 		// Insert controls at the translated placeholder; languages can put the label on either side.
-		const [before, after] = format('\uFFFC').split('\uFFFC');
-		this.source.append(before!);
+		const [before, after] = (relation.kind === 'derived' ? format('\uFFFC') : '\uFFFC').split('\uFFFC');
+		if (before) this.source.append(h(this.source.ownerDocument, 'span', { className: 'ash-theme-color-relation-label' }, before));
 		for (const [index, token] of relation.tokens.entries()) {
 			if (index) this.source.append(', ');
 			const link = h(
@@ -1525,6 +1532,6 @@ class ThemeColorRow extends Disposable {
 			this.source.append(link);
 			this.sourceLifetime.add(addDisposableListener(link, 'click', () => this.navigate(token)));
 		}
-		if (after) this.source.append(after);
+		if (after) this.source.append(h(this.source.ownerDocument, 'span', { className: 'ash-theme-color-relation-label' }, after));
 	}
 }

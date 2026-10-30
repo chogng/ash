@@ -53,6 +53,8 @@ export class ColorPicker extends Disposable {
 	private swatchDomNode: HTMLElement | undefined;
 	private compactValueInput: InputBox | undefined;
 	private compactAlphaInput: InputBox | undefined;
+	private inputFieldsDomNode: HTMLElement | undefined;
+	private inputContentDomNode: HTMLElement | undefined;
 	private readonly editedInputs = new Set<HTMLInputElement>();
 	private popupVisible = false;
 	private committing = false;
@@ -79,13 +81,16 @@ export class ColorPicker extends Disposable {
 			this.swatch.domNode.append(this.swatchDomNode);
 			// The composed row owns the shared frame and focus indicator; InputBox retains each field's validation.
 			const inputBoxStyles = { inputBackground: 'transparent', inputForeground: 'inherit', inputBorder: 'transparent' };
-			this.compactValueInput = this._register(new InputBox(this.domNode, {
+			this.inputFieldsDomNode = h(ownerDocument, 'div', { className: 'ash-color-picker-input-fields' });
+			this.inputContentDomNode = h(ownerDocument, 'div', { className: 'ash-color-picker-input-content', properties: { hidden: true } });
+			this.domNode.append(this.inputFieldsDomNode, this.inputContentDomNode);
+			this.compactValueInput = this._register(new InputBox(this.inputFieldsDomNode, {
 				presentation: 'field', ariaLabel: input.value, inputBoxStyles, selectOnFocus: true,
 			}));
 			this.compactValueInput.element.classList.add('ash-color-picker-input-value');
 			this.compactValueInput.inputElement.maxLength = 9;
 			const percent = h(ownerDocument, 'div', { className: 'ash-color-picker-input-percent' });
-			this.domNode.append(percent);
+			this.inputFieldsDomNode.append(percent);
 			this.compactAlphaInput = this._register(new InputBox(percent, {
 				type: 'number', presentation: 'field', ariaLabel: input.opacity, inputBoxStyles, selectOnFocus: true,
 			}));
@@ -420,6 +425,15 @@ export class ColorPicker extends Disposable {
 			const picker = focusedPickers.get(element);
 			if (picker && !picker.committing) { picker.cancel(); }
 		}
+	}
+
+	/** Mount caller-owned inline content in place of the fields; the swatch still opens color editing. */
+	public setValueContent(content: HTMLElement | undefined): void {
+		if (!this.inputFieldsDomNode || !this.inputContentDomNode) { return; }
+		if (this.inputContentDomNode.firstChild === (content ?? null)) { return; }
+		this.inputFieldsDomNode.hidden = !!content;
+		this.inputContentDomNode.hidden = !content;
+		this.inputContentDomNode.replaceChildren(...(content ? [content] : []));
 	}
 
 	public set enabled(enabled: boolean) {
