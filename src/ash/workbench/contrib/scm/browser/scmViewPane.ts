@@ -94,7 +94,7 @@ export class ScmViewPane extends ViewPane {
 		this.canCommitContext = SCMCanCommitContext.bindTo(this.titleContext);
 		this.viewModeContext = SCMViewModeContext.bindTo(this.titleContext);
 		this.viewSortKeyContext = SCMViewSortKeyContext.bindTo(this.titleContext);
-		this._viewMode = storageService.get('scm.viewMode', StorageScope.WORKSPACE) === 'list' ? 'list' : 'tree';
+		this._viewMode = storageService.get('scm.viewMode', StorageScope.WORKSPACE) === 'tree' ? 'tree' : 'list';
 		const sortKey = storageService.get('scm.viewSortKey', StorageScope.WORKSPACE);
 		this._viewSortKey = sortKey === 'name' || sortKey === 'status' ? sortKey : 'path';
 		this.viewModeContext.set(this._viewMode);

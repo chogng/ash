@@ -1569,6 +1569,7 @@ async function createResourceGroupMenuFixture(renderContextMenu = false, groupLa
 		registerCodeEditorServices(services);
 		if (renderContextMenu) contextMenu = resources.add(services.createInstance(BrowserContextMenuService));
 		const pane = resources.add(services.createInstance(ScmViewPane, browser.window.document.body, { id: VIEW_PANE_ID, title: 'Changes' }));
+		pane.viewMode = 'tree';
 		const openedViews: string[] = [];
 		const viewHost: ResourceGroupMenuFixture['viewHost'] = {
 			getViewWithId: () => pane,
@@ -2039,6 +2040,7 @@ test('ScmViewPane folds groups through the shared tree and keeps state when reso
 		const { registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 		registerCodeEditorServices(services);
 		using pane = services.createInstance(ScmViewPane, browser.window.document.body, { id: 'scm-folding', title: 'Changes' });
+		pane.viewMode = 'tree';
 		assert.match(pane.element.querySelector('.ash-scm-input .stanza-editor-input')!.getAttribute('aria-label')!, /^提交信息/u);
 		const tree = pane.element.querySelector<HTMLElement>('[role="tree"]')!;
 		const group = (): HTMLElement => tree.querySelector<HTMLElement>('[role="treeitem"][aria-level="1"]')!;
