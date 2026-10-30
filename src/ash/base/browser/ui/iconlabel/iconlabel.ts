@@ -38,6 +38,8 @@ export interface IconLabelValueOptions {
 export interface IconLabelOptions extends IconLabelValueOptions {
 	readonly label: string | readonly string[];
 	readonly description?: string;
+	/** Use the containing control as the title hover target and anchor. */
+	readonly hoverTargetOverride?: HTMLElement;
 }
 
 /**
@@ -53,6 +55,7 @@ export class IconLabel extends Disposable {
 	private readonly descriptionHover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly titleHover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly supportIcons: boolean;
+	private readonly hoverTarget: HTMLElement;
 	private appliedClasses: readonly string[] = [];
 	private descriptionElement: HTMLSpanElement | undefined;
 	private suffixElement: HTMLSpanElement | undefined;
@@ -67,6 +70,7 @@ export class IconLabel extends Disposable {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'span');
 		this.element = element;
+		this.hoverTarget = options.hoverTargetOverride ?? element;
 		this._register(toDisposable(() => element.remove()));
 		element.className = 'ash-icon-label';
 		this.supportIcons = options.supportIcons === true;
@@ -114,7 +118,7 @@ export class IconLabel extends Disposable {
 		this.renderDescription(typeof escapedDescription.value === 'string' ? escapedDescription.value : undefined, escapedDescription.matches, supportIcons, options?.descriptionTitle);
 		this.renderSuffix(options?.suffix);
 		this.renderSuffixIcon(options?.suffixIcon);
-		this.setHover(this.titleHover, this.element, options?.title);
+		this.setHover(this.titleHover, this.hoverTarget, options?.title);
 	}
 
 	/** Replaces the current icon while keeping the label nodes stable. */

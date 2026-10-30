@@ -223,7 +223,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				description: label.description,
 				renderLabel: container => {
 					const store = new DisposableStore();
-					const resourceLabel = store.add(this.labels.create(container));
+					const resourceLabel = store.add(this.labels.create(container, { hoverTargetOverride: container }));
 					store.add(resourceLabel.onDidRender(() => {
 						const current = this.editors.find(candidate => candidate.instanceId === editor.instanceId)!;
 						this.updateTabAriaLabel(current, resourceLabel);
@@ -236,7 +236,8 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 					store.add(toDisposable(() => this.protectedCloseActions.delete(editor.instanceId)));
 					return store;
 				},
-				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
+				// The resource label owns one hover for the whole tab, including its padding.
+				tooltip: '',
 				closeActionTooltip: editor.closeActionTooltip,
 				ariaLabel: stateLabel ? `${label.name}, ${stateLabel}` : label.name,
 				ariaDescription,

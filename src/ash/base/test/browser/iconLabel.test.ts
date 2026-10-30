@@ -45,6 +45,27 @@ test('IconLabel updates name, description, suffix, and semantic icons in place',
 	dom.window.close();
 });
 
+test('IconLabel targets its containing control for title hovers and releases it on disposal', () => {
+	const dom = new JSDOM('<!doctype html><body><button></button></body>');
+	try {
+		const target = dom.window.document.querySelector('button')!;
+		using label = new IconLabel(target, {
+			label: 'file.ts', title: 'src/file.ts', hoverTargetOverride: target,
+		});
+		assert.equal(target.title, 'src/file.ts');
+		assert.equal(label.element.hasAttribute('title'), false);
+		label.setLabel('renamed.ts', undefined, { title: 'src/renamed.ts' });
+		assert.equal(target.title, 'src/renamed.ts');
+		assert.equal(label.element.hasAttribute('title'), false);
+		label.dispose();
+		assert.equal(target.isConnected, true);
+		assert.equal(target.hasAttribute('title'), false);
+		assert.equal(target.childElementCount, 0);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('IconLabel escapes newlines, maps highlights, and exposes compatibility metadata', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using label = new IconLabel(dom.window.document.body, {

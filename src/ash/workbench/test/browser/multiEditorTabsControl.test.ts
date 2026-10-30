@@ -651,6 +651,8 @@ suite('Editor resource decorations', () => {
 		control.setEditors([descriptor(file)], file);
 		const tab = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-label')!;
 		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Modified');
+		assert.equal(tab.title, '/file.ts • Modified');
+		assert.equal(tab.querySelector('[title]'), null);
 		tab.focus();
 		control.setEditors([{ ...descriptor(file), isDirty: true }], file);
 		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Modified, unsaved changes');
@@ -658,10 +660,13 @@ suite('Editor resource decorations', () => {
 		data = { letter: 'D', strikethrough: true, tooltip: 'Deleted' };
 		changes.fire([file.resource]);
 		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Deleted, unsaved changes');
+		assert.equal(tab.title, '/file.ts • Deleted');
+		assert.equal(tab.querySelector('[title]'), null);
 		assert.equal(control.domNode.querySelector('.ash-tab-label'), tab);
 		assert.equal(dom.window.document.activeElement, tab);
 		provider.dispose();
 		assert.equal(tab.getAttribute('aria-label'), 'file.ts, unsaved changes');
+		assert.equal(tab.title, '/file.ts');
 		dom.window.close();
 	});
 });
