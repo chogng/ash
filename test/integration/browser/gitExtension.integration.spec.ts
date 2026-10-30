@@ -430,7 +430,17 @@ for (const language of ['en', 'zh-CN']) test(`distributed Rust Git registers SCM
 		expect(history).toMatchObject([{ id: 'a'.repeat(40), subject: 'First commit' }]);
 		await page.evaluate(() => window.gitExtensionIntegration.invoke('git.switchBranch', ['root']));
 		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).errors).toEqual([]);
-		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).requests).toContainEqual({ operation: 'showQuickPick', placeholder: language === 'zh-CN' ? '选择 Git 分支' : 'Select a Git branch', items: [{ label: 'main', description: language === 'zh-CN' ? '当前分支' : 'Current', detail: 'a'.repeat(7) }, { label: 'occupied', description: 'origin/occupied', detail: language === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree' }] });
+		expect((await page.evaluate(() => window.gitExtensionIntegration.state())).requests).toContainEqual({
+			operation: 'showQuickPick',
+			placeholder: language === 'zh-CN' ? '选择要检出的分支或标签' : 'Select a branch or tag to checkout',
+			items: [
+				{ label: `$(add) ${language === 'zh-CN' ? '创建新分支...' : 'Create new branch...'}`, alwaysShow: true },
+				{ label: `$(add) ${language === 'zh-CN' ? '从指定引用创建新分支...' : 'Create new branch from...'}`, alwaysShow: true },
+				{ label: `$(debug-disconnect) ${language === 'zh-CN' ? '以分离 HEAD 模式检出...' : 'Checkout detached...'}`, alwaysShow: true },
+				{ label: '$(git-branch) main', description: `${language === 'zh-CN' ? '当前分支' : 'Current'} · ${'a'.repeat(7)}`, separator: language === 'zh-CN' ? '分支' : 'branches' },
+				{ label: '$(git-branch) occupied', description: `origin/occupied · ${'a'.repeat(7)}`, detail: language === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree' },
+			],
+		});
 		await page.evaluate(() => window.gitExtensionIntegration.stage());
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().calls.some(call => call.method === 'git/stage'))).toBe(true);
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.groups)).toContain(language === 'zh-CN' ? '暂存的更改' : 'Staged Changes');

@@ -859,6 +859,7 @@ impl Api {
                         label,
                         description,
                         detail: None,
+                        ..Default::default()
                     },
                 )
                 .collect(),

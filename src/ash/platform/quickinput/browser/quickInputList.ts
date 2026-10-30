@@ -11,6 +11,8 @@ import { addDisposableListener, h, isElement, stopEvent } from '../../../base/br
 import { localize } from '../../../nls.js';
 import { appendIcon, getRegisteredIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
+import { stripIcons } from '../../../base/common/iconLabels.js';
+import { renderLabelWithIcons } from '../../../base/browser/ui/iconlabel/iconLabels.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IAction } from '../../../base/common/actions.js';
@@ -327,7 +329,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			const checkbox = resources.add(new Checkbox(content, {
 				...defaultCheckboxStyles,
 				checked: this.checked.has(item),
-				ariaLabel: item.label,
+				ariaLabel: stripIcons(item.label).trim(),
 				onChange: () => this.toggleSelection(item),
 			}));
 			checkbox.element.classList.add('ash-quick-pick-row-checkbox');
@@ -362,8 +364,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		text.className = 'ash-quick-pick-row-text';
 		const label = h(ownerDocument, 'span');
 		label.className = 'ash-quick-pick-row-label';
-		label.textContent = item.label;
-		label.title = item.label;
+		renderLabelWithIcons(label, item.label);
+		label.title = label.textContent ?? '';
 		text.append(label);
 		appendOptionalText(
 			text,
@@ -399,7 +401,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		if (item.buttons?.length) {
 			const buttons = item.buttons;
 			const actions = new ActionBar(content, {
-				ariaLabel: localize('quickInput.itemActions', 'Actions for {0}', item.label),
+				ariaLabel: localize('quickInput.itemActions', 'Actions for {0}', label.title),
 				actionViewItemProvider: action => new QuickInputButtonActionViewItem(action, buttons.find(button => button.id === action.id)?.iconClass),
 				actions: buttons.map(button => ({
 					id: button.id,
@@ -492,9 +494,9 @@ function scoreItem(
 	item: IQuickPickItem,
 	tokens: readonly string[],
 ): number {
-	const label = normalize(item.label);
+	const label = normalize(stripIcons(item.label));
 	const searchable = normalize(
-		[item.label, item.description, item.detail].filter(Boolean).join(' '),
+		[item.label, item.description, item.detail].filter(Boolean).map(value => stripIcons(value!)).join(' '),
 	);
 	let score = 0;
 	for (const token of tokens) {
@@ -520,8 +522,8 @@ function appendOptionalText(
 	if (!value) return;
 	const element = h(ownerDocument, 'span');
 	element.className = className;
-	element.textContent = value;
-	element.title = value;
+	renderLabelWithIcons(element, value);
+	element.title = element.textContent ?? '';
 	container.append(element);
 }
 

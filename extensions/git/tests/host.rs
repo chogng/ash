@@ -799,6 +799,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
         assert_eq!(client.git(&["rev-parse", "HEAD^"]), parent);
         assert!(client.git(&["status", "--porcelain"]).is_empty());
         verify_history_references(&supervisor, &client);
+        verify_checkout_picker(&supervisor, &client, language);
         verify_workspace_comparisons(&supervisor, &client, language);
         verify_binary_comparisons(&supervisor, &client);
         for cancellable in [false, true] {
@@ -990,6 +991,169 @@ fn verify_terminal_helpers(
     }
     client.configuration.lock().unwrap()["enabled"] = json!(false);
     assert!(terminal_environment(supervisor, client).is_empty());
+}
+
+fn verify_checkout_picker(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+    language: &str,
+) {
+    for show_details in [true, false] {
+        client.configuration.lock().unwrap()["showReferenceDetails"] = json!(show_details);
+        client.configuration.lock().unwrap()["commitShortHashLength"] = json!(9);
+        client.configuration_reset.store(true, Ordering::Release);
+        let mut shown = false;
+        let result = supervisor
+            .begin_invoke(invocation(
+                "git.switchBranch",
+                "execute",
+                json!({"arguments":["root"]}),
+            ))
+            .unwrap()
+            .wait_with_client(|operation, _, _| match operation {
+                Operation::BackendRequest { ref method, .. } if method == "historyRefs" => {
+                    let ResultValue::Value { mut value } = client.request(operation)? else {
+                        panic!("Expected reference response");
+                    };
+                    for reference in value["references"].as_array_mut().unwrap() {
+                        reference["objectId"] = json!("0123456789abcdef");
+                    }
+                    value["references"].as_array_mut().unwrap().push(json!({
+                        "kind":"localBranch","name":"topic/$(cloud)","objectId":"0123456789abcdef","current":false
+                    }));
+                    value["branches"] = json!([
+                        {"name":"main","objectId":"0123456789abcdef","current":true,"upstream":"origin/main","checkedOutElsewhere":false},
+                        {"name":"topic/$(cloud)","objectId":"0123456789abcdef","current":false,"upstream":null,"checkedOutElsewhere":true}
+                    ]);
+                    Ok(ResultValue::Value { value })
+                }
+                Operation::ShowQuickPick { items, placeholder } => {
+                    shown = true;
+                    let chinese = language == "zh-CN";
+                    assert_eq!(
+                        placeholder,
+                        if chinese {
+                            "选择要检出的分支或标签"
+                        } else {
+                            "Select a branch or tag to checkout"
+                        }
+                    );
+                    assert_eq!(
+                        items[..3].iter().map(|item| item.label.as_str()).collect::<Vec<_>>(),
+                        if chinese {
+                            ["$(add) 创建新分支...", "$(add) 从指定引用创建新分支...", "$(debug-disconnect) 以分离 HEAD 模式检出..."]
+                        } else {
+                            ["$(add) Create new branch...", "$(add) Create new branch from...", "$(debug-disconnect) Checkout detached..."]
+                        }
+                    );
+                    assert!(items[..3].iter().all(|item| item.always_show == Some(true)));
+                    let items = &items[3..];
+                    assert_eq!(
+                        items.iter().map(|item| item.label.as_str()).collect::<Vec<_>>(),
+                        ["$(git-branch) main", "$(git-branch) topic/\\$(cloud)", "$(cloud) origin/main", "$(tag) v1"]
+                    );
+                    assert_eq!(
+                        items.iter().filter_map(|item| item.separator.as_deref()).collect::<Vec<_>>(),
+                        if chinese { ["分支", "远程分支", "标签"] } else { ["branches", "remote branches", "tags"] }
+                    );
+                    let current = if chinese { "当前分支" } else { "Current" };
+                    assert_eq!(
+                        items.iter().map(|item| item.description.clone()).collect::<Vec<_>>(),
+                        if show_details {
+                            vec![
+                                Some(format!("{current} · 012345678")),
+                                Some("012345678".into()),
+                                Some(if chinese { "远程分支位于 012345678" } else { "Remote branch at 012345678" }.into()),
+                                Some(if chinese { "标签位于 012345678" } else { "Tag at 012345678" }.into()),
+                            ]
+                        } else {
+                            vec![Some(current.into()), None, None, None]
+                        }
+                    );
+                    assert!(items.iter().enumerate().filter(|(index, _)| *index != 1).all(|(_, item)| item.detail.is_none()));
+                    assert!(items[1].detail.as_ref().is_some_and(|detail| !detail.is_empty()));
+                    // Cancel through the real SDK response; no decorated label reaches Git.
+                    Ok(ResultValue::Selection { index: None })
+                }
+                operation => client.request(operation),
+            })
+            .unwrap();
+        assert!(shown);
+        assert_eq!(result.payload, Value::Null);
+    }
+    let mut configuration = client.configuration.lock().unwrap();
+    configuration
+        .as_object_mut()
+        .unwrap()
+        .remove("showReferenceDetails");
+    configuration
+        .as_object_mut()
+        .unwrap()
+        .remove("commitShortHashLength");
+    drop(configuration);
+    client.configuration_reset.store(true, Ordering::Release);
+
+    for action in 0..3 {
+        let mut choices = 0;
+        let mut named = false;
+        let result = supervisor
+            .begin_invoke(invocation(
+                "git.switchBranch",
+                "execute",
+                json!({"arguments":["root"]}),
+            ))
+            .unwrap()
+            .wait_with_client(|operation, _, _| match operation {
+                Operation::ShowQuickPick { items, .. } => {
+                    choices += 1;
+                    if choices == 1 {
+                        return Ok(ResultValue::Selection {
+                            index: Some(action),
+                        });
+                    }
+                    assert!(
+                        items.iter().all(|item| item.always_show != Some(true)),
+                        "Nested reference selection must not repeat the creation actions"
+                    );
+                    if action == 2 {
+                        assert!(
+                            items.iter().all(|item| !item.label.starts_with("$(tag)")),
+                            "Detached checkout offers branches"
+                        );
+                    } else {
+                        assert!(
+                            items.iter().any(|item| item.label == "$(tag) v1"),
+                            "A tag can be the start of a new branch"
+                        );
+                    }
+                    Ok(ResultValue::Selection { index: None })
+                }
+                Operation::EditorOperation { ref payload } if payload["method"] == "input" => {
+                    named = true;
+                    Ok(ResultValue::Value { value: Value::Null })
+                }
+                Operation::BackendRequest { ref method, .. }
+                    if matches!(
+                        method.as_str(),
+                        "createBranch" | "executeCommand" | "switchBranch"
+                    ) =>
+                {
+                    panic!("Cancelled checkout action must not mutate the repository: {method}")
+                }
+                operation => client.request(operation),
+            })
+            .unwrap();
+        assert_eq!(choices, if action == 0 { 1 } else { 2 });
+        assert_eq!(named, action == 0);
+        assert_eq!(
+            result.payload,
+            if action == 0 {
+                json!(false)
+            } else {
+                Value::Null
+            }
+        );
+    }
 }
 
 fn verify_history_references(supervisor: &host::ExtensionHostSupervisor, client: &Client) {

@@ -29,4 +29,15 @@ suite('Quick Input list filtering', () => {
 		const item = { label: 'İstanbul 😀 files' };
 		assert.deepEqual(filterQuickPickItems([item, { label: 'Other' }], 'i😀'), [item]);
 	});
+
+	test('matches visible text without ranking or matching decorative icon names', () => {
+		const decorated = { label: '$(git-branch) main', description: '$(cloud) origin/main' };
+		const plain = { label: 'main' };
+		assert.deepEqual(filterQuickPickItems([decorated, plain], 'main'), [decorated, plain]);
+		assert.deepEqual(filterQuickPickItems([decorated], 'origin'), [decorated]);
+		assert.deepEqual(filterQuickPickItems([decorated], 'git-branch'), []);
+		assert.deepEqual(filterQuickPickItems([decorated], 'cloud'), []);
+		const literal = { label: '$(git-branch) topic/\\$(cloud)' };
+		assert.deepEqual(filterQuickPickItems([literal], '$(cloud)'), [literal]);
+	});
 });

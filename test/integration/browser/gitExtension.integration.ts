@@ -96,6 +96,8 @@ import { normalizeExtensionHostPayload } from '../../../src/ash/platform/agentHo
 import { ILanguagePackService } from '../../../src/ash/platform/languagePacks/common/languagePacks.js';
 import { IExtensionApi } from '../../../src/ash/platform/extensions/common/extensionApi.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
+import { IWorkspaceTrustManagementService } from '../../../src/ash/platform/workspace/common/workspaceTrust.js';
+import { TestWorkspaceTrustManagementService } from '../../../src/ash/workbench/test/common/workbenchTestServices.js';
 
 const chineseMessages: Record<string, Record<string, string>> = {};
 for (const source of [scmChineseMessages, settingsChineseMessages]) {
@@ -251,6 +253,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			case 'git/branch/list': return { branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }] };
 			case 'git/history/refs': return { status: status(), graphRevision: 1, references: [{ name: 'main', objectId: 'a'.repeat(40), kind: 'localBranch', current: true }, { name: 'occupied', objectId: 'a'.repeat(40), kind: 'localBranch', current: false }], branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }], remotes: [] };
 			case 'git/graph': return { commits: [{ objectId: 'a'.repeat(40), parentObjectIds: [], timestampSeconds: 1, subject: 'First commit' }], references: [], remotes: [], hasMore: false, nextCursor: null };
+			case 'git/commitDetails': return { authorName: 'Fixture', authorEmail: 'fixture@example.invalid', timestampSeconds: 1, message: 'First commit', statistics: { files: 1, additions: 1, deletions: 0 } };
 			case 'git/init': return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };
 			case 'git/clone': return { repositoryPath: '/downloads/clone' };
 			case 'git/stage': revision++; return { status: status() };
@@ -264,6 +267,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 	{ listCodeEditors: () => [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };
 const workerCatalog = { ...catalog, list: async () => { const snapshot = await catalog.list('cached'); return { ...snapshot, extensions: snapshot.extensions.filter(extension => extension.id !== 'ash.git') }; } };
+services.registerSingleton(IWorkspaceTrustManagementService, () => services.createInstance(TestWorkspaceTrustManagementService));
 const genericHost = lifetime.add(services.createInstance(BrowserExtensionHostApi, workerCatalog, createDisconnectedExtensionHostApi(unavailable)));
 const host = lifetime.add(new RustGitHostFixture(catalog, genericHost, () => createExtensionHostInitialization(workspace, configuration)));
 const scm = lifetime.add(new SCMService());
@@ -336,7 +340,11 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			const result = await invoke(operation.command, operation.arguments);
 			return { result: 'command', hasValue: result !== undefined, value: result ?? null };
 		}
-		case 'showQuickPick': requests.push(operation as unknown as JsonValue); return { result: 'selection', index: remotePickSelection };
+		case 'showQuickPick': {
+			requests.push(operation as unknown as JsonValue);
+			const actions = operation.items.filter(item => item.alwaysShow).length;
+			return { result: 'selection', index: remotePickSelection + actions };
+		}
 		case 'showMessage':
 			if (operation.severity === 'error') errors.push(operation.message);
 			if (operation.severity === 'warning') installationWarnings.push(operation.message);

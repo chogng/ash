@@ -31,6 +31,19 @@ use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum CheckoutMode {
+    Switch,
+    Detached,
+    CreateBranchFrom,
+}
+
+enum CheckoutAction {
+    CreateBranch,
+    CreateBranchFrom,
+    CheckoutDetached,
+}
+
 impl GitRuntime {
     pub(crate) fn command(
         &self,
@@ -1334,55 +1347,65 @@ impl GitRuntime {
             token,
         )
     }
+    fn prompt_branch_name(
+        &self,
+        repository: &Repository,
+        token: &CancellationToken,
+    ) -> Result<Option<String>, ExtensionError> {
+        let config = &repository.configuration;
+        let prefix = config.text("branchPrefix", "");
+        let random = if config.boolean("branchRandomName.enable", false) {
+            random_branch(config)?
+        } else {
+            String::new()
+        };
+        let pattern = config.text("branchValidationRegex", "");
+        let expression = if pattern.is_empty() {
+            None
+        } else {
+            Some(
+                regex::Regex::new(pattern)
+                    .map_err(|_| invalid(&self.api.text("git.invalidBranchRegex", &[])))?,
+            )
+        };
+        let mut value = format!("{prefix}{random}");
+        let mut validation: Option<String> = None;
+        let name = loop {
+            token.check_cancelled()?;
+            let entered=self.api.editor(json!({"method":"input","title":self.api.text("git.createBranchCommandTitle",&[]),"placeHolder":self.api.text("git.newBranchName",&[]),"value":value,"validationMessage":validation}),Some(token))?;
+            let Some(entered) = entered.as_str() else {
+                return Ok(None);
+            };
+            let entered = entered
+                .trim()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(config.text("branchWhitespaceChar", "-"));
+            value = if entered.starts_with(prefix) {
+                entered
+            } else {
+                format!("{prefix}{entered}")
+            };
+            if expression
+                .as_ref()
+                .is_some_and(|expression| !expression.is_match(&value))
+            {
+                validation = Some(self.api.text("git.branchNameDoesNotMatch", &[]));
+                continue;
+            }
+            break value;
+        };
+        Ok(Some(name))
+    }
     pub(crate) fn branch(
         &self,
         repository: &Repository,
         command: &str,
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
-        let config = &repository.configuration;
         if command == "git.branch" || command == "git.branchForCommit" {
-            let prefix = config.text("branchPrefix", "");
-            let random = if config.boolean("branchRandomName.enable", false) {
-                random_branch(config)?
-            } else {
-                String::new()
-            };
-            let pattern = config.text("branchValidationRegex", "");
-            let expression = if pattern.is_empty() {
-                None
-            } else {
-                Some(
-                    regex::Regex::new(pattern)
-                        .map_err(|_| invalid(&self.api.text("git.invalidBranchRegex", &[])))?,
-                )
-            };
-            let mut value = format!("{prefix}{random}");
-            let mut validation: Option<String> = None;
-            let name = loop {
-                token.check_cancelled()?;
-                let entered=self.api.editor(json!({"method":"input","title":self.api.text("git.createBranchCommandTitle",&[]),"placeHolder":self.api.text("git.newBranchName",&[]),"value":value,"validationMessage":validation}),Some(token))?;
-                let Some(entered) = entered.as_str() else {
-                    return Ok(json!(false));
-                };
-                let entered = entered
-                    .trim()
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(config.text("branchWhitespaceChar", "-"));
-                value = if entered.starts_with(prefix) {
-                    entered
-                } else {
-                    format!("{prefix}{entered}")
-                };
-                if expression
-                    .as_ref()
-                    .is_some_and(|expression| !expression.is_match(&value))
-                {
-                    validation = Some(self.api.text("git.branchNameDoesNotMatch", &[]));
-                    continue;
-                }
-                break value;
+            let Some(name) = self.prompt_branch_name(repository, token)? else {
+                return Ok(json!(false));
             };
             self.api.create_branch(repository, &name, token)?;
             if command == "git.branchForCommit" {
@@ -1439,129 +1462,257 @@ impl GitRuntime {
                 )
                 .map(|result| json!(result))
         } else {
-            let graph = json!(self.api.history_refs(repository, Some(token))?);
-            let types = if config.strings("checkoutType").is_empty() {
-                vec!["local".into(), "remote".into(), "tags".into()]
-            } else {
-                config.strings("checkoutType")
-            };
-            let mut refs: Vec<_> = graph["references"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter(|reference| {
-                    types.iter().any(|kind| {
-                        kind == match reference["kind"].as_str().unwrap_or_default() {
-                            "localBranch" => "local",
-                            "remoteBranch" => "remote",
-                            _ => "tags",
-                        }
-                    })
-                })
-                .cloned()
-                .collect();
-            if config.text("branchSortOrder", "committerdate") == "alphabetically" {
-                refs.sort_by(|left, right| left["name"].as_str().cmp(&right["name"].as_str()));
-            }
-            let branches = graph["branches"].as_array().cloned().unwrap_or_default();
-            let items = refs
-                .iter()
-                .map(|reference| {
-                    let branch = branches
-                        .iter()
-                        .find(|branch| branch["name"] == reference["name"]);
-                    let description = if reference["current"] == true {
-                        Some(self.api.text("git.currentBranch", &[]))
-                    } else {
-                        branch.and_then(|branch| branch["upstream"].as_str().map(str::to_owned))
-                    };
-                    let detail =
-                        if branch.is_some_and(|branch| branch["checkedOutElsewhere"] == true) {
-                            Some(self.api.text("git.branchWorktreeOccupancy", &[]))
-                        } else {
-                            config
-                                .boolean("showReferenceDetails", true)
-                                .then(|| {
-                                    reference["objectId"]
-                                        .as_str()
-                                        .unwrap_or_default()
-                                        .chars()
-                                        .take(config.number("commitShortHashLength", 7) as usize)
-                                        .collect()
-                                })
-                                .filter(|detail: &String| !detail.is_empty())
-                        };
-                    external_ext_sdk::client::QuickPickItem {
-                        label: reference["name"].as_str().unwrap_or_default().into(),
-                        description,
-                        detail,
+            self.checkout(repository, CheckoutMode::Switch, token)
+        }
+    }
+
+    fn checkout(
+        &self,
+        repository: &Repository,
+        mode: CheckoutMode,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        let config = &repository.configuration;
+        let graph = json!(self.api.history_refs(repository, Some(token))?);
+        let types = if mode == CheckoutMode::CreateBranchFrom
+            || config.strings("checkoutType").is_empty()
+        {
+            vec!["local".into(), "remote".into(), "tags".into()]
+        } else {
+            config.strings("checkoutType")
+        };
+        let mut refs: Vec<_> = graph["references"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|reference| {
+                if mode == CheckoutMode::Detached && reference["kind"] == "tag" {
+                    return false;
+                }
+                types.iter().any(|kind| {
+                    kind == match reference["kind"].as_str().unwrap_or_default() {
+                        "localBranch" => "local",
+                        "remoteBranch" => "remote",
+                        _ => "tags",
                     }
                 })
-                .collect();
-            let Some(index) = self.api.client.show_quick_pick_items(
-                items,
-                self.api.text("git.selectBranch", &[]),
-                token,
-            )?
-            else {
-                return Ok(Value::Null);
-            };
-            let reference = &refs[index];
-            if reference["current"] == true {
-                return Ok(Value::Null);
-            }
-            if let Some(branch) = branches
+            })
+            .cloned()
+            .collect();
+        if config.text("branchSortOrder", "committerdate") == "alphabetically" {
+            refs.sort_by(|left, right| left["name"].as_str().cmp(&right["name"].as_str()));
+        }
+        // Keep the configured ordering within each reference kind, then form stable groups.
+        refs.sort_by_key(|reference| match reference["kind"].as_str() {
+            Some("localBranch") => 0,
+            Some("remoteBranch") => 1,
+            _ => 2,
+        });
+        let branches = graph["branches"].as_array().cloned().unwrap_or_default();
+        let actions = if mode == CheckoutMode::Switch {
+            vec![
+                (CheckoutAction::CreateBranch, "git.createBranchPick", "add"),
+                (
+                    CheckoutAction::CreateBranchFrom,
+                    "git.createBranchFromPick",
+                    "add",
+                ),
+                (
+                    CheckoutAction::CheckoutDetached,
+                    "git.checkoutDetachedPick",
+                    "debug-disconnect",
+                ),
+            ]
+        } else {
+            Vec::new()
+        };
+        let mut items: Vec<_> = actions
+            .iter()
+            .map(|(_, key, icon)| external_ext_sdk::client::QuickPickItem {
+                label: format!("$({icon}) {}", self.api.text(key, &[])),
+                always_show: Some(true),
+                ..Default::default()
+            })
+            .collect();
+        items.extend(refs.iter().enumerate().map(|(index, reference)| {
+            let branch = branches
                 .iter()
-                .find(|branch| branch["name"] == reference["name"])
-                && self.explain_branch_occupancy(branch, token)?
-            {
-                return Ok(Value::Null);
-            }
-            match reference["kind"].as_str() {
-                Some("localBranch") => {
-                    let result = match self
-                        .api
-                        .switch_branch(
-                            repository,
-                            &decode::<String>(reference["name"].clone())?,
-                            token,
+                .find(|branch| branch["name"] == reference["name"]);
+            let state = if reference["current"] == true {
+                Some(self.api.text("git.currentBranch", &[]))
+            } else {
+                branch.and_then(|branch| {
+                    branch["upstream"]
+                        .as_str()
+                        .map(|name| name.replace("$(", "\\$("))
+                })
+            };
+            let short_commit: String = reference["objectId"]
+                .as_str()
+                .unwrap_or_default()
+                .chars()
+                .take(config.number("commitShortHashLength", 7) as usize)
+                .collect();
+            let commit = config
+                .boolean("showReferenceDetails", true)
+                .then(|| match reference["kind"].as_str() {
+                    Some("remoteBranch") => self.api.text("git.remoteBranchAt", &[&short_commit]),
+                    Some("tag") => self.api.text("git.tagAt", &[&short_commit]),
+                    _ => short_commit.clone(),
+                })
+                .filter(|_| !short_commit.is_empty());
+            let description = match (state, commit) {
+                (Some(state), Some(commit)) => Some(
+                    self.api
+                        .text("git.referenceDescription", &[&state, &commit]),
+                ),
+                (state, commit) => state.or(commit),
+            };
+            let detail = if branch.is_some_and(|branch| branch["checkedOutElsewhere"] == true) {
+                Some(self.api.text("git.branchWorktreeOccupancy", &[]))
+            } else {
+                None
+            };
+            let icon = match reference["kind"].as_str() {
+                Some("remoteBranch") => "cloud",
+                Some("tag") => "tag",
+                _ => "git-branch",
+            };
+            // Ref names are user content; only the leading token is an icon.
+            let name = reference["name"]
+                .as_str()
+                .unwrap_or_default()
+                .replace("$(", "\\$(");
+            external_ext_sdk::client::QuickPickItem {
+                label: format!("$({icon}) {name}"),
+                description,
+                detail,
+                separator: (index == 0 || refs[index - 1]["kind"] != reference["kind"]).then(
+                    || {
+                        self.api.text(
+                            match reference["kind"].as_str() {
+                                Some("localBranch") => "git.branchGroup",
+                                Some("remoteBranch") => "git.remoteBranchGroup",
+                                _ => "git.tagGroup",
+                            },
+                            &[],
                         )
-                        .map(|result| json!(result))
-                    {
-                        Ok(result) => result,
-                        Err(_) => {
-                            token.check_cancelled()?;
-                            self.api
-                                .warning("git.switchBranchRejected", &[], Some(token))?;
-                            return Ok(Value::Null);
-                        }
-                    };
-                    self.accept_status(decode(result["status"].clone())?);
-                    Ok(result)
+                    },
+                ),
+                ..Default::default()
+            }
+        }));
+        let Some(index) = self.api.client.show_quick_pick_items(
+            items,
+            self.api.text(
+                match mode {
+                    CheckoutMode::Switch => "git.selectCheckoutReference",
+                    CheckoutMode::Detached => "git.selectDetachedReference",
+                    CheckoutMode::CreateBranchFrom => "git.selectBranchStartPoint",
+                },
+                &[],
+            ),
+            token,
+        )?
+        else {
+            return Ok(Value::Null);
+        };
+        if let Some((action, _, _)) = actions.get(index) {
+            return match action {
+                CheckoutAction::CreateBranch => {
+                    self.branch(repository, "git.branchForCommit", token)
                 }
-                Some("remoteBranch") => {
-                    let name = reference["name"].as_str().unwrap_or_default();
-                    let remote = reference["remoteName"].as_str().unwrap_or_default();
-                    self.execute(
-                        repository,
-                        RepositoryCommand::CheckoutRemoteBranch {
-                            reference: name.into(),
-                            name: name
-                                .strip_prefix(&format!("{remote}/"))
-                                .unwrap_or(name)
-                                .into(),
-                        },
-                        token,
-                    )
+                CheckoutAction::CreateBranchFrom => {
+                    self.checkout(repository, CheckoutMode::CreateBranchFrom, token)
                 }
-                _ => self.execute(
+                CheckoutAction::CheckoutDetached => {
+                    self.checkout(repository, CheckoutMode::Detached, token)
+                }
+            };
+        }
+        let reference = &refs[index - actions.len()];
+        match mode {
+            CheckoutMode::Detached => {
+                return self.execute(
                     repository,
                     RepositoryCommand::CheckoutDetached {
                         object_id: decode(reference["objectId"].clone())?,
                     },
                     token,
-                ),
+                );
             }
+            CheckoutMode::CreateBranchFrom => {
+                let Some(name) = self.prompt_branch_name(repository, token)? else {
+                    return Ok(Value::Null);
+                };
+                self.execute(
+                    repository,
+                    RepositoryCommand::CreateBranchAt {
+                        name: name.clone(),
+                        object_id: decode(reference["objectId"].clone())?,
+                    },
+                    token,
+                )?;
+                let result = self.api.switch_branch(repository, &name, token)?;
+                self.accept_status(result.status.clone());
+                return Ok(json!(result));
+            }
+            CheckoutMode::Switch => {}
+        }
+        if reference["current"] == true {
+            return Ok(Value::Null);
+        }
+        if let Some(branch) = branches
+            .iter()
+            .find(|branch| branch["name"] == reference["name"])
+            && self.explain_branch_occupancy(branch, token)?
+        {
+            return Ok(Value::Null);
+        }
+        match reference["kind"].as_str() {
+            Some("localBranch") => {
+                let result = match self
+                    .api
+                    .switch_branch(
+                        repository,
+                        &decode::<String>(reference["name"].clone())?,
+                        token,
+                    )
+                    .map(|result| json!(result))
+                {
+                    Ok(result) => result,
+                    Err(_) => {
+                        token.check_cancelled()?;
+                        self.api
+                            .warning("git.switchBranchRejected", &[], Some(token))?;
+                        return Ok(Value::Null);
+                    }
+                };
+                self.accept_status(decode(result["status"].clone())?);
+                Ok(result)
+            }
+            Some("remoteBranch") => {
+                let name = reference["name"].as_str().unwrap_or_default();
+                let remote = reference["remoteName"].as_str().unwrap_or_default();
+                self.execute(
+                    repository,
+                    RepositoryCommand::CheckoutRemoteBranch {
+                        reference: name.into(),
+                        name: name
+                            .strip_prefix(&format!("{remote}/"))
+                            .unwrap_or(name)
+                            .into(),
+                    },
+                    token,
+                )
+            }
+            _ => self.execute(
+                repository,
+                RepositoryCommand::CheckoutDetached {
+                    object_id: decode(reference["objectId"].clone())?,
+                },
+                token,
+            ),
         }
     }
     fn explain_branch_occupancy(

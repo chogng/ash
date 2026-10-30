@@ -344,6 +344,16 @@
 	white-space: nowrap;
 }
 
+.ash-quick-pick-row-text .ash-icon-label-inline-icon {
+	display: inline-flex;
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+	align-items: center;
+	justify-content: center;
+	font-size: var(--ash-lxiconFontSize);
+	vertical-align: middle;
+}
+
 .ash-quick-pick-row-detail {
 	grid-column: 1 / -1;
 }

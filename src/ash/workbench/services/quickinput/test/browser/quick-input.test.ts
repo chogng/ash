@@ -217,6 +217,35 @@ test('QuickInputList mounts theme icons and retains labeled and unlabeled group 
 	}
 });
 
+test('QuickInputList renders inline icons while preserving literal labels and acceptance identity', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	const list = new QuickInputList(dom.window.document.body);
+	try {
+		const item = { label: '$(git-branch) main', description: '$(cloud) origin/main', detail: '$(tag) v1' };
+		const literal = { label: '$(git-branch) topic/\\$(cloud)' };
+		const accepted: IQuickPickItem[] = [];
+		list.onDidAccept(value => accepted.push(value));
+		list.items = [item, literal];
+		assert.deepEqual(
+			[...list.element.querySelectorAll('[data-ash-icon-id]')].map(icon => [icon.getAttribute('data-ash-icon-id'), icon.getAttribute('aria-hidden'), !!icon.getAttribute('data-ash-icon-character')]),
+			[['git-branch', 'true', true], ['cloud', 'true', true], ['tag', 'true', true], ['git-branch', 'true', true]],
+		);
+		assert.deepEqual(
+			[...list.element.querySelectorAll<HTMLElement>('.ash-quick-pick-row-label')].map(label => [label.textContent, label.title]),
+			[[' main', ' main'], [' topic/$(cloud)', ' topic/$(cloud)']],
+		);
+		assert.equal(list.element.querySelector('.ash-quick-pick-row-description')?.textContent, ' origin/main');
+		list.filter('topic');
+		list.acceptActive();
+		assert.deepEqual(accepted, [literal], 'Rendering and filtering must retain the provider item');
+	} finally {
+		list.dispose();
+		dom.window.close();
+	}
+});
+
 test('QuickInputList owns filtering, looping focus, and acceptance', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using heights = installTestElementHeights(dom.window.document);
