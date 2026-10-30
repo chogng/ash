@@ -1,3 +1,7 @@
+import { OPEN_AGENTS_WINDOW_COMMAND_ID, AgentsWindowGraphicVariant, agentsWindowGraphicConfiguration } from '../../../chat/common/constants.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { Registry } from '../../../../../platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { expectIconFontLoaded } from '../../../../../../../test/automation/iconFonts.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -7,7 +11,7 @@ import { IThemeService } from '../../../../../platform/theme/common/themeService
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandsRegistry, type ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
@@ -19,6 +23,9 @@ import type { IGitHubConnectionService } from '../../../../services/accounts/com
 import type { IWorkspacesService } from '../../../../../platform/workspaces/common/workspaces.js';
 import { TestHostService } from '../../../../services/host/test/browser/testHostService.js';
 import type { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+
+const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+if (!registry.owns(agentsWindowGraphicConfiguration.key)) registry.registerConfiguration(agentsWindowGraphicConfiguration);
 
 suite('Welcome page', () => {
 	test('dispatches the Git clone command from an empty desktop window', async () => {
@@ -32,6 +39,7 @@ suite('Welcome page', () => {
 		const commands = { executeCommand: async (id: string) => { calls.push(id); commandDispatched?.(); } } as ICommandService;
 		using contextKeys = new ContextKeyService();
 		contextKeys.setContext('openFolderWorkspaceSupport', true);
+		using configuration = new InMemoryConfigurationService();
 		using services = createTestComponentServices(undefined, undefined, dom.window.document);
 		using page = new GettingStartedPage(
 			history,
@@ -40,6 +48,7 @@ suite('Welcome page', () => {
 			commands,
 			contextKeys,
 			{} as IGitHubConnectionService,
+			configuration,
 			services.get(IThemeService),
 			services.get(IStorageService),
 		);
@@ -51,6 +60,48 @@ suite('Welcome page', () => {
 		assert.deepEqual(calls, [GitCloneCommandId]);
 		dom.window.close();
 	});
+	test('ignores stale window snapshots after an explicit setting change and after disposal', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		const pending: ((windows: Awaited<ReturnType<TestHostService['getWindows']>>) => void)[] = [];
+		using focusChanged = new Emitter<boolean>();
+		const host = new class extends TestHostService { override readonly onDidChangeFocus = focusChanged.event; }();
+		host.getWindows = () => new Promise(resolve => pending.push(resolve));
+		using command = CommandsRegistry.register(OPEN_AGENTS_WINDOW_COMMAND_ID, () => { });
+		using configuration = new InMemoryConfigurationService();
+		using contexts = new ContextKeyService();
+		using services = createTestComponentServices(undefined, undefined, dom.window.document);
+		using page = new GettingStartedPage(
+			{ onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService,
+			host, {} as IFileDialogService, { executeCommand: async () => { } } as unknown as ICommandService,
+			contexts, {} as IGitHubConnectionService, configuration, services.get(IThemeService), services.get(IStorageService),
+		);
+		try {
+			page.create(dom.window.document.body);
+			assert.equal(pending.length, 1);
+			focusChanged.fire(false);
+			assert.equal(pending.length, 1);
+			focusChanged.fire(true);
+			assert.equal(pending.length, 2);
+			await configuration.updateValue(agentsWindowGraphicConfiguration.key, AgentsWindowGraphicVariant.ManyWindowsToOne);
+			pending[0]!([]);
+			pending[1]!([]);
+			await Promise.resolve();
+			assert.ok(dom.window.document.querySelector('.many-windows-to-one'));
+			await configuration.updateValue(agentsWindowGraphicConfiguration.key, AgentsWindowGraphicVariant.Auto);
+			assert.equal(pending.length, 3);
+			const illustration = dom.window.document.querySelector('.ash-agents-banner')!;
+			assert.equal(illustration.querySelector('svg'), null);
+			page.dispose();
+			pending[2]!([]);
+			await Promise.resolve();
+			assert.equal(illustration.isConnected, false);
+			assert.equal(illustration.querySelector('svg'), null);
+		} finally {
+			page.dispose();
+			dom.window.close();
+		}
+	});
+
 	test('shows actions, translates labels, and dispatches the available action', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		let openFolderCount = 0;
@@ -123,6 +174,138 @@ suite('Welcome page', () => {
 
 suite('gettingStarted browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		test(`Agents introduction supports keyboard launch and theme surfaces (${theme})`, async () => {
+			const { page } = browserTests;
+			await page.setViewportSize({ width: 1000, height: 900 });
+			await page.goto(`/gettingStarted.html?agents&seed=false&theme=${theme}`);
+			const welcome = page.getByRole('region', { name: 'Welcome', exact: true });
+			const graphic = welcome.locator('.ash-agents-window-graphic');
+			await expect(graphic).toBeVisible();
+			await expect(graphic.locator('svg')).toHaveCount(2);
+			await expect(graphic.locator('svg').first()).toHaveAttribute('aria-hidden', 'true');
+			const frame = graphic.locator('.window-frame').first();
+			const colors = await frame.evaluate(node => ({ fill: getComputedStyle(node).fill, stroke: getComputedStyle(node).stroke }));
+			expect(colors.fill).toBe(await welcome.evaluate(node => getComputedStyle(node).backgroundColor));
+			expect(colors.stroke).not.toBe('none');
+			expect(colors.stroke).not.toBe('rgba(0, 0, 0, 0)');
+			const launch = welcome.getByRole('button', { name: 'Open Agents window', exact: true });
+			await welcome.focus();
+			for (let index = 0; index < 4; index++) {
+				await page.keyboard.press('Tab');
+			}
+			await expect(launch).toBeFocused();
+			await expect(launch).toHaveCSS('outline-style', 'solid');
+			await page.keyboard.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashWelcomeIntegration.agentsLaunches)).toBe(1);
+		});
+	}
+
+	test('Agents entry follows command availability and preserves a safe focus target', async () => {
+		const { page } = browserTests;
+		await page.goto('/gettingStarted.html?seed=false');
+		const banner = page.locator('.ash-agents-banner');
+		await expect(banner).toBeHidden();
+		await page.evaluate(() => window.ashWelcomeIntegration.setAgentsAvailable(true));
+		const button = banner.getByRole('button', { name: 'Open Agents window', exact: true });
+		await expect(button).toBeVisible();
+		await button.focus();
+		await page.evaluate(() => window.ashWelcomeIntegration.setAgentsAvailable(false));
+		await expect(banner).toBeHidden();
+		await expect(page.locator('.ash-getting-started')).toBeFocused();
+		await page.evaluate(() => window.ashWelcomeIntegration.setAgentsAvailable(true));
+		await button.click();
+		await expect.poll(() => page.evaluate(() => window.ashWelcomeIntegration.agentsLaunches)).toBe(1);
+	});
+
+	test('Graphic preference overrides auto and auto excludes managed and auxiliary windows', async () => {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 1000, height: 900 });
+		await page.goto('/gettingStarted.html?agents&seed=false');
+		const graphic = page.locator('.ash-agents-window-graphic');
+		await page.evaluate(() => window.ashWelcomeIntegration.setEditorWindows(1));
+		await expect(graphic.locator('h2')).toHaveText(['Editor window', 'Agents window']);
+		await page.evaluate(() => window.ashWelcomeIntegration.setEditorWindows(2));
+		await expect(graphic).toHaveClass(/many-windows-to-one/);
+		const nestedWidth = await graphic.locator('svg > svg').first().evaluate(node => node.getBoundingClientRect().width);
+		expect(nestedWidth).toBeGreaterThan(150);
+		expect(nestedWidth).toBeLessThan(250);
+		await page.evaluate(() => window.ashWelcomeIntegration.setGraphic('windowComparison'));
+		await expect(graphic.locator('h2')).toHaveCount(2);
+		await page.evaluate(() => window.ashWelcomeIntegration.setGraphic('none'));
+		await expect(graphic).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Open Agents window', exact: true })).toBeVisible();
+		await page.evaluate(() => window.ashWelcomeIntegration.setGraphic('auto'));
+		await expect(graphic).toHaveClass(/many-windows-to-one/);
+		await page.evaluate(() => window.ashWelcomeIntegration.setEditorWindows(1));
+		await expect(graphic.locator('h2')).toHaveCount(2);
+	});
+
+	test('Agents introduction fits height changes without losing the focused launch button', async () => {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 1000, height: 900 });
+		await page.goto('/gettingStarted.html?agents&seed=false');
+		const welcome = page.locator('.ash-getting-started');
+		const banner = welcome.locator('.ash-agents-banner');
+		const graphic = banner.locator('.ash-agents-window-graphic');
+		const launch = banner.getByRole('button', { name: 'Open Agents window', exact: true });
+		await expect(graphic).toBeVisible();
+		await launch.focus();
+		for (const [height, compact, shown] of [[600, true, true], [450, true, false], [900, false, true]] as const) {
+			await page.setViewportSize({ width: 1000, height });
+			await expect.poll(() => banner.evaluate(node => node.classList.contains('compact'))).toBe(compact);
+			if (shown) {
+				await expect(graphic).toBeVisible();
+			} else {
+				await expect(graphic).toBeHidden();
+			}
+			await expect(launch).toBeFocused();
+			await expect(launch).toBeInViewport();
+			await expect.poll(() => welcome.evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
+		}
+	});
+
+	test('Agents introduction stacks on narrow editors and uses Chinese captions', async () => {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 360, height: 1200 });
+		await page.goto('/gettingStarted.html?agents&seed=false&locale=zh-CN');
+		const graphic = page.locator('.ash-agents-window-graphic');
+		await expect(graphic).toBeVisible();
+		await expect(graphic.locator('h2')).toHaveText(['编辑器窗口', '智能体窗口']);
+		const figures = await graphic.locator('figure').evaluateAll(nodes => nodes.map(node => {
+			const rect = node.getBoundingClientRect();
+			return { x: rect.x, y: rect.y, right: rect.right };
+		}));
+		expect(figures[1]!.y).toBeGreaterThan(figures[0]!.y);
+		expect(figures[1]!.x).toBe(figures[0]!.x);
+		expect(figures[0]!.x).toBeGreaterThanOrEqual(0);
+		expect(figures[0]!.right).toBeLessThanOrEqual(360);
+		await page.getByRole('button', { name: '打开智能体窗口', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashWelcomeIntegration.agentsLaunches)).toBe(1);
+	});
+
+	test('Agents introduction refits when recent projects grow and shrink', async () => {
+		const { page } = browserTests;
+		await page.setViewportSize({ width: 1000, height: 720 });
+		await page.goto('/gettingStarted.html?agents&seed=false');
+		const graphic = page.locator('.ash-agents-window-graphic');
+		await expect(graphic).toBeVisible();
+		await page.evaluate(async () => {
+			for (let index = 0; index < 12; index++) {
+				await window.ashWelcomeIntegration.addRecent(`project-${index}`);
+			}
+		});
+		await expect(page.locator('.ash-getting-started-recent-item')).toHaveCount(12);
+		await expect(graphic).toBeHidden();
+		for (let index = 0; index < 12; index++) {
+			const row = page.locator('.ash-getting-started-recent-item').first();
+			await row.hover();
+			await row.getByRole('button', { name: 'Remove', exact: false }).click();
+		}
+		await expect(graphic).toBeVisible();
+		await expect(page.locator('.ash-agents-banner')).not.toHaveClass(/compact/);
+	});
+
 	test('Welcome renders its brand and light-theme action cards', async function () {
 		const { page } = browserTests;
 

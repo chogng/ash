@@ -1,3 +1,4 @@
+import type { IWorkbenchWindowInfo } from '../../../../platform/window/common/window.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { basename } from '../../../../base/common/resources.js';
@@ -66,6 +67,14 @@ export class BrowserHostService extends Disposable implements IHostService {
 		this._register(onDidUnregisterWindow(targetWindow => {
 			listeners.deleteAndDispose(targetWindow);
 			scheduler.schedule();
+		}));
+	}
+
+	public async getWindows(options: { readonly includeAuxiliaryWindows: boolean; }): Promise<readonly IWorkbenchWindowInfo[]> {
+		return [...getWindows()].filter(entry => options.includeAuxiliaryWindows || entry.window === this.ownerWindow).map(entry => ({
+			id: entry.id, title: entry.window.document.title,
+			focused: entry.window.document.hasFocus(), current: entry.window === this.ownerWindow,
+			kind: entry.window === this.ownerWindow ? 'editor' : 'auxiliary',
 		}));
 	}
 

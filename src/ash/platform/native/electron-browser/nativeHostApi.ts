@@ -35,7 +35,7 @@ import {
 	AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, validateAuxiliaryWindowState, validateAuxiliaryWindowStateEvent,
 	validateWindowAlwaysOnTopChangedEvent,
 	WINDOW_OPEN_EXTERNAL_URI_CHANNEL,
-	type IWorkbenchWindowInfo,
+	validateWorkbenchWindowInfo,
 } from '../../window/common/window.js';
 import { showMessageBox } from '../../dialogs/electron-browser/dialog.js';
 import { normalizeExternalUrl } from '../../opener/common/opener.js';
@@ -69,7 +69,11 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		getOSColorScheme: async () => validateColorScheme(await colors.call<unknown>('getOSColorScheme')),
 		onDidChangeColorScheme: listener => colors.listen<unknown>('onDidChangeColorScheme')(value => listener(validateColorScheme(value))),
 		showMessageBox,
-		listWindows: windowName => invoke<readonly IWorkbenchWindowInfo[]>(WINDOW_OPERATION_CHANNEL, { kind: 'list', ...(windowName === undefined ? {} : { windowName }) }),
+		listWindows: async windowName => {
+			const windows = await invoke<unknown>(WINDOW_OPERATION_CHANNEL, { kind: 'list', ...(windowName === undefined ? {} : { windowName }) });
+			if (!Array.isArray(windows)) throw new TypeError('Invalid native window list');
+			return windows.map(validateWorkbenchWindowInfo);
+		},
 		focusWindowById: windowId => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'focus', windowId }),
 		focusWindow: windowName => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'focusSelf', ...(windowName === undefined ? {} : { windowName }) }),
 		closeWindow: windowName => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'close', ...(windowName === undefined ? {} : { windowName }) }),

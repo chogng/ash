@@ -51,7 +51,9 @@ export function createTestLocaleService(configuration: IConfigurationService, la
 	services.registerInstance(ILanguagePackService, languagePacks);
 	services.registerInstance(ILanguagePackStore, createTestLanguagePackStore(store ?? { read: async locale => catalogs.get(locale), write: async catalog => { catalogs.set(catalog.locale, catalog); } }));
 	services.registerInstance(IDialogService, { confirm: onConfirm } as unknown as IDialogService);
-	services.registerInstance(IHostService, { reload: async () => { throw new Error('Unexpected reload in this fixture'); }, hasFocus: true, onDidChangeFocus: Event.None, restart: onRestart, openWindow: async () => { }, getScreenshot: async () => undefined });
+	services.registerInstance(IHostService, {
+		getWindows: async () => [], reload: async () => { throw new Error('Unexpected reload in this fixture'); }, hasFocus: true, onDidChangeFocus: Event.None, restart: onRestart, openWindow: async () => { }, getScreenshot: async () => undefined
+	});
 	return services.createInstance(WorkbenchLocaleService);
 }
 

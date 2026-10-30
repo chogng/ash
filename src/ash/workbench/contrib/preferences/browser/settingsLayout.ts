@@ -230,6 +230,7 @@ export const SettingsNavigation = [
 						description: localize('settings.workbench.startup.group.description', 'Choose what appears when no editor is restored.'),
 						settings: [
 							'workbench.startupEditor',
+							'chat.welcomePage.agentsWindowGraphic',
 							'workbench.editor.restoreEditors',
 							'workbench.secondarySideBar.defaultVisibility',
 							'workbench.secondarySideBar.forceMaximized',

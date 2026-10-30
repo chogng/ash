@@ -722,6 +722,7 @@ class NotificationsPresentation extends Disposable {
 		this.services.registerInstance(INotificationService, service);
 		const presentation = this;
 		this.services.registerInstance(IHostService, {
+			getWindows: async () => [],
 			get hasFocus() { return presentation.hostFocused; }, onDidChangeFocus: this.hostFocusChanges.event,
 			openWindow: async () => { throw new Error('Unexpected window open'); },
 			restart: async () => { throw new Error('Unexpected restart'); }, reload: async () => { throw new Error('Unexpected reload'); },

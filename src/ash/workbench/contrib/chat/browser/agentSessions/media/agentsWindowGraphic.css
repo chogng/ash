@@ -1,0 +1,73 @@
+.ash-agents-window-graphic {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--ash-spacing-size240);
+}
+
+.ash-agents-window-graphic figure {
+	min-width: 0;
+	margin: 0;
+}
+
+.ash-agents-window-graphic figure > svg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.ash-agents-window-graphic .window-frame {
+	fill: var(--ash-editor-background);
+	stroke: var(--ash-widget-border);
+	stroke-width: var(--ash-strokeThickness);
+}
+
+.ash-agents-window-graphic .window-chrome {
+	fill: var(--ash-sideBar-background);
+}
+
+.ash-agents-window-graphic .window-line {
+	fill: var(--ash-description-foreground);
+}
+
+.ash-agents-window-graphic .window-accent {
+	fill: var(--ash-textLink-activeForeground);
+}
+
+.ash-agents-window-graphic h2 {
+	margin: var(--ash-spacing-size120) 0 var(--ash-spacing-size40);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-agents-window-graphic p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+
+@container (max-width: 420px) {
+	.ash-agents-window-graphic {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.ash-agents-window-graphic figure {
+		width: min(240px, 100%);
+		margin-inline: auto;
+	}
+}
+
+.ash-agents-window-graphic.many-windows-to-one {
+	display: block;
+}
+
+.ash-agents-window-graphic.many-windows-to-one figure {
+	width: 100%;
+}
+
+.ash-agents-window-graphic .window-merge-arrow {
+	fill: none;
+	stroke: var(--ash-textLink-activeForeground);
+	stroke-width: var(--ash-strokeThickness);
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}

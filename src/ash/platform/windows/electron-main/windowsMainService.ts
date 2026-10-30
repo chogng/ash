@@ -618,7 +618,10 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		if (!target) throw new Error('Auxiliary window is closed or belongs to another workbench');
 		switch (operation.kind) {
 			case 'list':
-				return windows.map((window): IWorkbenchWindowInfo => ({ id: window.id, title: window.getTitle(), focused: window.isFocused(), current: window === target }));
+				return windows.map((window): IWorkbenchWindowInfo => ({
+					id: window.id, title: window.getTitle(), focused: window.isFocused(), current: window === target,
+					kind: this.workbenchWindows.has(window.id) ? 'editor' : this.getWindowById(window.id) ? 'managed' : 'auxiliary',
+				}));
 			case 'focus': {
 				const target = windows.find(window => window.id === operation.windowId);
 				if (!target) throw new Error('Workbench window is closed');

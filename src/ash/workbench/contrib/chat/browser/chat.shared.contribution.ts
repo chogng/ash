@@ -12,7 +12,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ChatContextKeys } from '../common/actions/chatContextKeys.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import { ChatInputConfiguration, ChatEditorConfiguration, autoAcceptDelaySetting } from '../common/constants.js';
+import { agentsWindowGraphicConfiguration, ChatInputConfiguration, ChatEditorConfiguration, autoAcceptDelaySetting } from '../common/constants.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -67,6 +67,7 @@ registerWorkbenchContribution('workbench.contrib.chatEnablement', WorkbenchPhase
 });
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatAIDisabledSettingId,

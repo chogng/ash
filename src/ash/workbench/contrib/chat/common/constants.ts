@@ -1,3 +1,5 @@
+import { localize } from '../../../../nls.js';
+import { ConfigurationScope, type IConfigurationKeyDefinition } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { DictationBackend } from '../../../../platform/renderer/common/dictation.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
@@ -7,6 +9,40 @@ export const MANAGE_CHAT_COMMAND_ID = 'workbench.action.chat.manage';
 export const CONTEXT_MODELS_EDITOR = new RawContextKey<boolean>('inModelsEditor', false);
 
 export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';
+/** The illustration preference is interpreted by the TypeScript Welcome page. */
+export enum AgentsWindowGraphicVariant {
+	None = 'none',
+	WindowComparison = 'windowComparison',
+	ManyWindowsToOne = 'manyWindowsToOne',
+	Auto = 'auto',
+}
+
+export const agentsWindowGraphicConfiguration: IConfigurationKeyDefinition<AgentsWindowGraphicVariant> = {
+	key: 'chat.welcomePage.agentsWindowGraphic',
+	defaultValue: AgentsWindowGraphicVariant.Auto,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'string', enum: Object.values(AgentsWindowGraphicVariant) },
+	parse(value: unknown): AgentsWindowGraphicVariant {
+		if (typeof value === 'string' && Object.values(AgentsWindowGraphicVariant).includes(value as AgentsWindowGraphicVariant)) {
+			return value as AgentsWindowGraphicVariant;
+		}
+		throw new TypeError(localize('agentsGraphic.invalid', 'Choose a supported Agents window illustration.'));
+	},
+	setting: {
+		valueType: 'select',
+		get title() { return localize('agentsGraphic.title', 'Agents window illustration'); },
+		get description() { return localize('agentsGraphic.description', 'Choose the illustration shown above the Agents window button on the Welcome page.'); },
+		get options() {
+			return [
+				{ value: AgentsWindowGraphicVariant.None, label: localize('agentsGraphic.none', 'None') },
+				{ value: AgentsWindowGraphicVariant.WindowComparison, label: localize('agentsGraphic.comparison', 'Window comparison') },
+				{ value: AgentsWindowGraphicVariant.ManyWindowsToOne, label: localize('agentsGraphic.many', 'Multiple windows in one') },
+				{ value: AgentsWindowGraphicVariant.Auto, label: localize('agentsGraphic.auto', 'Automatic') },
+			];
+		},
+	},
+};
+
 export const ScreenshotCommandId = 'workbench.action.chat.attachScreenshot';
 export const ScreenshotGlobalShortcutSetting = 'screenshot.globalShortcut';
 
