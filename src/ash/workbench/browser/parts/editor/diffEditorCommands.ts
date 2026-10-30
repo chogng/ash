@@ -1,4 +1,5 @@
 import { localize2 } from '../../../../nls.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
@@ -135,8 +136,14 @@ export function registerDiffEditorCommands(): void {
 					title,
 					f1: true,
 					precondition: diffEditorActive,
+					icon: id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE ? Lxicon.whitespace : undefined,
 					toggled: id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE ? ContextKeyExpr.equals('config.diffEditor.ignoreTrimWhitespace', false) : undefined,
-					menu: id === DIFF_OPEN_SIDE ? undefined : { id: MenuId.EditorTitle, when: diffEditorActive, group: '1_diff', order: id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE ? 20 : 30 },
+					menu: id === DIFF_OPEN_SIDE ? undefined : {
+						id: MenuId.EditorTitle,
+						when: diffEditorActive,
+						group: id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE ? 'navigation' : '1_diff',
+						order: id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE ? 20 : 30,
+					},
 				});
 			}
 			override run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
