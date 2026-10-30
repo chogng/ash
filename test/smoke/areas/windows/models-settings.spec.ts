@@ -1,9 +1,70 @@
 import { createServer } from 'node:http';
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { launchElectron } from '../../../automation/playwrightElectron.js';
+import type { Locator } from '@playwright/test';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { expect, test } from '../../../automation/test.js';
 
 const defaultVisibleModelNames = ['GPT-6.1 Sol', 'Claude Sonnet 5.5', 'Grok 4.7', 'Gemini 3.8 Flash', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3', 'Muse Spark 1.3'];
 const defaultEnabledModelNames = ['GPT-6.1 Sol', 'GPT-6 Luna', 'GPT-6 Astra', 'Claude Sonnet 5.5', 'Claude Opus 5.5', 'Grok 4.7'];
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Development credential files persist across Desktop restarts (${locale})`, { tag: ['@electron-app-server'] }, async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-development-credentials-'));
+		const profile = join(directory, 'profile');
+		await mkdir(profile);
+		await writeFile(join(profile, 'settings.json'), JSON.stringify({ 'workbench.locale': locale }));
+		const chinese = locale === 'zh-CN';
+		const credential = 'synthetic-development-key';
+		const options = { appServerMode: 'required' as const, userDataDirectory: directory, useInMemorySecretStorage: false, environment: { ...process.env, ASH_DEV_APP_SERVER_RELOAD: '1' } };
+		let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+		try {
+			const openModels = async (): Promise<Locator> => {
+				const workbench = desktop!.driver.workbench;
+				await workbench.settingsEditor.openUserSettingsUI();
+				await workbench.settingsEditor.selectGroup('agents');
+				await workbench.settingsEditor.selectCategory('models');
+				const settings = workbench.settingsEditor.element;
+				await expect(settings.getByRole('status').filter({ hasText: chinese ? '凭据以未加密形式保存在私有文件中' : 'Credentials are stored without encryption in private files' })).toBeVisible();
+				await expect(settings.getByRole('button', { name: chinese ? '授权系统钥匙串' : 'Authorize system keyring', exact: true })).toBeHidden();
+				return settings;
+			};
+			desktop = await launchElectron(options);
+			const settings = await openModels();
+			await settings.getByRole('button', { name: chinese ? '新增供应商' : 'New provider', exact: true }).click();
+			const card = settings.locator('.ash-chat-models-widget').first();
+			await card.getByRole('textbox', { name: chinese ? '供应商名称' : 'Provider name', exact: true }).fill('Development fixture');
+			const url = card.getByRole('textbox', { name: 'Base URL', exact: true });
+			await url.fill('https://example.invalid/v1');
+			await url.press('Tab');
+			const input = card.locator('input[type="password"]');
+			await input.fill(credential);
+			await input.press('Tab');
+			await expect(input).toHaveValue('••••••••');
+			const values = join(profile, 'development-secrets/values');
+			await expect.poll(async () => {
+				const files = await readdir(values);
+				return (await Promise.all(files.map(file => readFile(join(values, file))))).some(value => value.includes(credential));
+			}).toBe(true);
+			if (process.platform !== 'win32') {
+				expect((await stat(join(profile, 'development-secrets'))).mode & 0o777).toBe(0o700);
+				expect((await stat(values)).mode & 0o777).toBe(0o700);
+				for (const file of await readdir(values)) expect((await stat(join(values, file))).mode & 0o777).toBe(0o600);
+			}
+			await desktop.close();
+			desktop = await launchElectron(options);
+			const restored = (await openModels()).locator('.ash-chat-models-widget').filter({ has: desktop.driver.workbench.page.getByRole('textbox', { name: chinese ? '供应商名称' : 'Provider name', exact: true }) }).first();
+			await expect(restored.getByRole('textbox', { name: chinese ? '供应商名称' : 'Provider name', exact: true })).toHaveValue('Development fixture');
+			await expect(restored.locator('input[type="password"]')).toHaveValue('••••••••');
+			expect(await readFile(join(profile, 'development-secrets/storage-mode'), 'utf8')).toBe('file');
+		} finally {
+			try { await desktop?.close(); }
+			finally { await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 }); }
+		}
+	});
+}
 
 test('Models management opens from the command palette with search, accessible help and provider settings', async ({ workbench, target, reloadWorkbench }) => {
 	const page = workbench.page;

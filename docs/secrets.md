@@ -127,7 +127,8 @@ MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成�
 
 | Host                     | 默认 backend          | 说明                                                               |
 | ------------------------ | --------------------- | ------------------------------------------------------------------ |
-| Desktop                  | 加密文件 + OS keyring | `<profile>/secrets/encrypted/values/` 保存密文，keyring 保存主密钥 |
+| 正式 Desktop             | 加密文件 + OS keyring | `<profile>/secrets/encrypted/values/` 保存密文，keyring 保存主密钥 |
+| 源码 Desktop / 开发 Web  | 开发 profile 私有文件 | `<profile>/development-secrets/values/`，默认不访问系统 keyring    |
 | CLI/TUI interactive      | 加密文件 + OS keyring | 与 Desktop 共用同一 profile authority；需可用的系统 keyring        |
 | CI/exec                  | ephemeral / injected  | secret 由进程环境或调用方注入，不自动落盘                          |
 | Standalone embedded host | injected              | host 必须显式注入与自己 authority 一致的 backend                   |
@@ -154,7 +155,9 @@ profile file backend 的最低要求：
 
 macOS 的后台状态检查、启动和普通凭据操作保持静默；需要系统授权时返回 `accessDenied`。模型设置中的“授权系统钥匙串”或 `ash secrets authorize` 显式调用 `secrets/authorize`，允许本次调用显示系统授权窗口；用户主动选择 encrypted 存储也允许系统授权。授权不会让后续后台操作弹窗。
 
-profile 存储方式由唯一 `ProfileSecretStore` 保存于 `<profile>/secrets/storage-mode`，不是目录级或 Session 配置。未设置时为 `encrypted`；用户可在模型设置中经说明及确认选择 `file`，或运行 `ash secrets mode file`。文件模式在 `secrets/values/` 保存未加密字节，由现有私有目录、文件权限和原子 IO 保护；同账户进程可读。`ash secrets mode encrypted` 切回认证加密存储，`ash secrets status` 静默返回状态和当前模式。持久模式没有 `auto`，错误不会自动改变 encrypted/file 的选择。
+源码 Desktop 和开发 Web 由宿主传入 `ASH_USE_DEVELOPMENT_SECRETSTORAGE=1`，在独立开发 profile 的 `development-secrets/` 打开同一个 `ProfileSecretStore`，仅对没有持久模式且为空的存储初始化 `file`。后续启动保留显式模式和迁移日志；开发用户可通过已有存储切换操作测试 encrypted 模式。正式 Desktop 固定传入 `0`，覆盖继承环境中的开发标记；其他 host 未设置时保留原有加密默认值。变量只接受 `0`/`1`；测试的 `ASH_USE_INMEMORY_SECRETSTORAGE=1` 优先选择内存，不创建开发凭据目录。旧 `secrets/` 的密文及钥匙串主密钥原样保留，不自动解密、迁移或作为开发文件存储的备用读取来源。
+
+profile 存储方式由唯一 `ProfileSecretStore` 保存于其根目录下的 `storage-mode`（正式 profile 为 `secrets/`，开发 profile 为 `development-secrets/`），不是目录级或 Session 配置。未设置时为 `encrypted`；用户可在模型设置中经说明及确认选择 `file`，或运行 `ash secrets mode file`。文件模式在存储根目录下的 `values/` 保存未加密字节，由现有私有目录、文件权限和原子 IO 保护；同账户进程可读。`ash secrets mode encrypted` 切回认证加密存储，`ash secrets status` 静默返回状态和当前模式。持久模式没有 `auto`，错误不会自动改变 encrypted/file 的选择。
 
 `secrets/storageMode/set` 按 profile 全局写操作串行；同一 profile 的不同进程在 `store.lock` 下重新读取模式。切换会验证源数据，原子记录 `to-file` / `to-encrypted` 迁移状态，逐项写入并重读核对后才删除源值，完成后原子提交目标模式。重启或另一进程访问时先恢复未完成的迁移，不暴露部分目标数据。缺失原密钥、损坏或冲突会保留尚未迁移的数据并返回错误；不会生成替代密钥、自动切换或长期双写。
 

@@ -27,7 +27,7 @@ test('packaged daemon connections use verified binaries and an explicit workspac
 		}));
 		const { launcher, generationFile } = createAppServerDaemonLauncher({
 			packageLocation: { appPath: '/unused', expectedVersion: '1.2.3', isPackaged: true, platform: 'linux', resourcesPath },
-			sourceEnvironment: { AI_AGENT: 'enclosing-agent', PATH: '/bin', DISPLAY: ':0', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_RG_PATH: '/package/rg', ASH_PRODUCT_SERVICES_PATH: '/product/services.json', API_SECRET: 'private', ASH_HOME: '/ignored', ASH_WORKSPACE_ROOT: '/ignored' },
+			sourceEnvironment: { AI_AGENT: 'enclosing-agent', PATH: '/bin', DISPLAY: ':0', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_USE_DEVELOPMENT_SECRETSTORAGE: '1', ASH_RG_PATH: '/package/rg', ASH_PRODUCT_SERVICES_PATH: '/product/services.json', API_SECRET: 'private', ASH_HOME: '/ignored', ASH_WORKSPACE_ROOT: '/ignored' },
 			profileRoot: '/selected/profile',
 			electronExecutable: '/electron',
 			workspaceRoot: '/selected/workspace',
@@ -37,7 +37,7 @@ test('packaged daemon connections use verified binaries and an explicit workspac
 		assert.deepStrictEqual({ executable: launcher.executable, args: launcher.options.args, environment: launcher.environment, generationFile }, {
 			executable: join(resourcesPath, 'bin', 'ash-app-server-daemon'),
 			args: ['connect'],
-			environment: { PATH: '/bin', DISPLAY: ':0', API_SECRET: 'private', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_ELECTRON_RUN_AS_NODE_PATH: '/electron', ASH_APP_SERVER_PATH: join(resourcesPath, 'bin', 'ash-app-server'), ASH_HOME: '/selected/profile', ASH_RG_PATH: '/package/rg', ASH_PRODUCT_SERVICES_PATH: '/product/services.json', ASH_APP_SERVER_SHA256: backendDigest, ASH_WORKSPACE_ROOT: '/selected/workspace', ASH_DIR_GRANT_SOURCE: 'userConfig' },
+			environment: { PATH: '/bin', DISPLAY: ':0', API_SECRET: 'private', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_USE_DEVELOPMENT_SECRETSTORAGE: '0', ASH_ELECTRON_RUN_AS_NODE_PATH: '/electron', ASH_APP_SERVER_PATH: join(resourcesPath, 'bin', 'ash-app-server'), ASH_HOME: '/selected/profile', ASH_RG_PATH: '/package/rg', ASH_PRODUCT_SERVICES_PATH: '/product/services.json', ASH_APP_SERVER_SHA256: backendDigest, ASH_WORKSPACE_ROOT: '/selected/workspace', ASH_DIR_GRANT_SOURCE: 'userConfig' },
 			generationFile: undefined,
 		});
 		await launcher.validate();
@@ -71,7 +71,7 @@ test('Agents daemon connections identify their role without a workspace grant', 
 		using ownedLauncher = launcher;
 		assert.deepStrictEqual({ executable: launcher.executable, environment: launcher.environment }, {
 			executable: join(resourcesPath, 'bin', 'ash-app-server-daemon.exe'),
-			environment: { PATH: 'C:\\Windows', DISPLAY: ':0', ASH_WORKSPACE_ROOT: '/ignored', ASH_ELECTRON_RUN_AS_NODE_PATH: '/electron', ASH_APP_SERVER_PATH: join(resourcesPath, 'bin', 'ash-app-server.exe'), ASH_HOME: '/profile', ASH_APP_SERVER_SHA256: 'c'.repeat(64), ASH_APP_SERVER_CONNECTION_ROLE: 'agents' },
+			environment: { PATH: 'C:\\Windows', DISPLAY: ':0', ASH_WORKSPACE_ROOT: '/ignored', ASH_ELECTRON_RUN_AS_NODE_PATH: '/electron', ASH_APP_SERVER_PATH: join(resourcesPath, 'bin', 'ash-app-server.exe'), ASH_HOME: '/profile', ASH_USE_DEVELOPMENT_SECRETSTORAGE: '0', ASH_APP_SERVER_SHA256: 'c'.repeat(64), ASH_APP_SERVER_CONNECTION_ROLE: 'agents' },
 		});
 	} finally {
 		rmSync(resourcesPath, { recursive: true, force: true });

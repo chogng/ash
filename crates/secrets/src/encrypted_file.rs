@@ -85,6 +85,16 @@ impl ProfileSecretStore {
         root: impl AsRef<Path>,
         keyring: Arc<dyn SecretStore>,
     ) -> Result<Self, SecretStoreError> {
+        Self::open_with_default_mode(root, keyring, SecretStorageMode::Encrypted)
+    }
+
+    /// Selects a host default only for an empty store without a persisted mode.
+    /// Existing credentials and migration journals always retain their original mode.
+    pub fn open_with_default_mode(
+        root: impl AsRef<Path>,
+        keyring: Arc<dyn SecretStore>,
+        default_mode: SecretStorageMode,
+    ) -> Result<Self, SecretStoreError> {
         let root = std::path::absolute(root.as_ref()).map_err(store_io)?;
         fs::create_dir_all(&root).map_err(store_io)?;
         let boundary = CanonicalPathRoot::new(&root).map_err(store_io)?;
@@ -94,7 +104,7 @@ impl ProfileSecretStore {
         let legacy = FileSecretStore::open(&root)?;
         ensure_directory_without_symlinks(&boundary, &root.join("encrypted"))?;
         let files = FileSecretStore::open(root.join("encrypted"))?;
-        Ok(Self {
+        let store = Self {
             root,
             boundary,
             files,
@@ -102,7 +112,17 @@ impl ProfileSecretStore {
             keyring,
             master_key: OnceLock::new(),
             operations: Mutex::new(()),
-        })
+        };
+        if default_mode == SecretStorageMode::File
+            && store
+                .legacy
+                .load_path(&store.root.join(STORAGE_MODE), 32)?
+                .is_none()
+            && store.is_uninitialized()?
+        {
+            store.write_storage_state(StorageState::Ready(SecretStorageMode::File))?;
+        }
+        Ok(store)
     }
 
     // All callers hold both operation locks. Only a successful load is retained: a silent

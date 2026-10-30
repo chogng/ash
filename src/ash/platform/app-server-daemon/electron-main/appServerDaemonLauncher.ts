@@ -35,6 +35,7 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 		ASH_ELECTRON_RUN_AS_NODE_PATH: options.electronExecutable,
 		ASH_APP_SERVER_PATH: developmentRuntime ? join(developmentRuntime, 'bin', packageLocation.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') : appServerExecutablePath(packageLocation),
 		ASH_HOME: options.profileRoot,
+		ASH_USE_DEVELOPMENT_SECRETSTORAGE: packageLocation.isPackaged ? '0' : '1',
 	};
 	if (developmentRuntime) productEnvironment.ASH_DEV_RUNTIME_ROOT = developmentRuntime;
 	for (const key of ['ASH_RG_PATH', 'ASH_SSH_PATH', 'ASH_PRODUCT_SERVICES_PATH'] as const) {

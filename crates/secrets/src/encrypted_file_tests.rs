@@ -92,6 +92,104 @@ impl SecretStore for CountingKeyring {
 }
 
 #[test]
+fn file_default_persists_without_keyring_access_and_preserves_explicit_mode() {
+    let root = tempfile::tempdir().unwrap();
+    let keyring = Arc::new(CountingKeyring::default());
+    let name = key("development/api-key");
+    let store = ProfileSecretStore::open_with_default_mode(
+        root.path(),
+        keyring.clone(),
+        crate::SecretStorageMode::File,
+    )
+    .unwrap();
+    store.check_availability().unwrap();
+    store
+        .store(&name, &SecretValue::new(b"development credential".to_vec()))
+        .unwrap();
+    drop(store);
+    let reopened = ProfileSecretStore::open(root.path(), keyring.clone()).unwrap();
+    assert_eq!(
+        reopened.storage_mode().unwrap(),
+        Some(crate::SecretStorageMode::File)
+    );
+    assert_eq!(
+        reopened.load(&name).unwrap().unwrap().expose(),
+        b"development credential"
+    );
+    assert_eq!(keyring.loads.load(Ordering::SeqCst), 0);
+    assert_eq!(keyring.stores.load(Ordering::SeqCst), 0);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(root.path()).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            fs::metadata(&reopened.legacy.values)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o700
+        );
+        assert_eq!(
+            fs::metadata(reopened.legacy.value_path(&name))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
+    reopened
+        .set_storage_mode(crate::SecretStorageMode::Encrypted)
+        .unwrap();
+    drop(reopened);
+    let encrypted = ProfileSecretStore::open_with_default_mode(
+        root.path(),
+        keyring,
+        crate::SecretStorageMode::File,
+    )
+    .unwrap();
+    assert_eq!(
+        encrypted.storage_mode().unwrap(),
+        Some(crate::SecretStorageMode::Encrypted)
+    );
+    assert_eq!(
+        encrypted.load(&name).unwrap().unwrap().expose(),
+        b"development credential"
+    );
+}
+
+#[test]
+fn file_default_never_reinterprets_existing_ciphertext() {
+    let root = tempfile::tempdir().unwrap();
+    let name = key("existing/api-key");
+    let keyring = Arc::new(MemorySecretStore::default());
+    let store = ProfileSecretStore::open(root.path(), keyring).unwrap();
+    store
+        .store(&name, &SecretValue::new(b"existing credential".to_vec()))
+        .unwrap();
+    let path = store.files.value_path(&name);
+    let ciphertext = fs::read(&path).unwrap();
+    drop(store);
+    let reopened = ProfileSecretStore::open_with_default_mode(
+        root.path(),
+        Arc::new(UnavailableSecretStore),
+        crate::SecretStorageMode::File,
+    )
+    .unwrap();
+    assert_eq!(
+        reopened.storage_mode().unwrap(),
+        Some(crate::SecretStorageMode::Encrypted)
+    );
+    assert!(reopened.load(&name).is_err());
+    assert_eq!(fs::read(path).unwrap(), ciphertext);
+    assert!(!root.path().join(super::STORAGE_MODE).exists());
+}
+
+#[test]
 fn empty_reads_and_deletes_do_not_allocate_a_persistent_master_key() {
     let root = tempfile::tempdir().unwrap();
     let keyring = Arc::new(CountingKeyring::default());

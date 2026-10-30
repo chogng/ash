@@ -10,7 +10,7 @@ pub enum DeleteSecretOutcome {
     NotFound,
 }
 
-/// Profile persistence selected explicitly by the user, never as an error fallback.
+/// Profile persistence chosen by the host default or an explicit user selection, never as an error fallback.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SecretStorageMode {
     Encrypted,

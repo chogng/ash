@@ -62,6 +62,7 @@ test('development and production resolve the same canonical package entrypoint',
 			});
 			using launcher = development.launcher;
 			assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, join(generationDirectory, generation));
+			assert.equal(launcher.environment.ASH_USE_DEVELOPMENT_SECRETSTORAGE, '1');
 			assert.equal(launcher.options.generationFile, generationFile);
 			assert.equal(development.generationFile, reloadBackend ? generationFile : undefined);
 		}

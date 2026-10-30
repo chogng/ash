@@ -58,6 +58,9 @@ export async function startElectronApplication(): Promise<void> {
 				privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: true },
 			},
 		]);
+		if (!app.isPackaged) {
+			process.env.ASH_HOME ??= developmentArtifactsPath(app.getAppPath(), 'dev', 'profile');
+		}
 		const profileRoot = resolveHome();
 		configureApplicationDataPaths();
 		if (app.isPackaged) {
@@ -258,8 +261,9 @@ async function startup(application: AshApplication, developmentLauncher: boolean
 
 function configureApplicationDataPaths(): void {
 	if (process.platform === 'win32') app.setAppUserModelId(AshApplicationId);
-	if (!hasUserDataDirectoryOverride(process.argv))
-		app.setPath('userData', getDefaultUserDataPath(AshUserDataFolderName));
+	if (!hasUserDataDirectoryOverride(process.argv)) {
+		app.setPath('userData', app.isPackaged ? getDefaultUserDataPath(AshUserDataFolderName) : developmentArtifactsPath(app.getAppPath(), 'dev', 'user-data'));
+	}
 	const userDataPath = app.getPath('userData');
 	app.setPath('sessionData', join(userDataPath, 'session-data'));
 	app.setPath('logs', join(userDataPath, 'logs'));

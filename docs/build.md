@@ -25,6 +25,10 @@ macOS 架构支持范围见 [Getting started](../README.md#getting-started)。
 
 准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/README.md)。
 
+源码 Desktop 默认使用 `.build/desktop/dev/profile` 和独立的 `.build/desktop/dev/user-data`；开发 Web 默认使用 `.build/desktop/dev/web-profile`。开发凭据存放在对应 profile 的 `development-secrets/values/` 私有文件中，Unix 目录权限为 `0700`、文件为 `0600`，Windows 使用仅当前账户可访问的 DACL。文件未加密，同一账户运行的应用可以读取。开发后端不自动生成签名证书，也不为默认凭据存储访问系统钥匙串；可在 Models 设置中显式切换加密存储以测试钥匙串集成。
+
+正式 Desktop 继续默认使用系统钥匙串和加密文件。开发版启动不会迁移或覆盖原 `secrets/` 中的加密凭据；已有开发 API Key 需要重新输入到新的开发存储，原加密存储仍可通过原有授权流程恢复。自动化测试仍默认使用内存存储，持久化场景单独启用文件存储。
+
 ### Windows 开发环境
 
 安装下列工具后，使用对应目标架构的 **Visual Studio Developer PowerShell** 构建。已安装的 Ash 产品不依赖这些开发工具。

@@ -956,6 +956,7 @@ impl LocalProfileRuntime {
         let secrets = open_profile_secrets(
             &profile_root,
             std::env::var("ASH_USE_INMEMORY_SECRETSTORAGE"),
+            std::env::var("ASH_USE_DEVELOPMENT_SECRETSTORAGE"),
         )?;
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
@@ -1149,7 +1150,25 @@ impl CodebaseProviders {
 fn open_profile_secrets(
     profile_root: &Path,
     memory_setting: Result<String, std::env::VarError>,
+    development_setting: Result<String, std::env::VarError>,
 ) -> Result<Arc<dyn SecretStore>, OpenAppServerError> {
+    // The development host supplies this policy; a released host explicitly clears it.
+    // Keep the previous encrypted store untouched instead of attempting an implicit migration.
+    let (storage_root, default_mode) = match development_setting.as_deref() {
+        Ok("1") => (
+            profile_root.join("development-secrets"),
+            ash_secrets::SecretStorageMode::File,
+        ),
+        Ok("0") | Err(std::env::VarError::NotPresent) => (
+            profile_root.join("secrets"),
+            ash_secrets::SecretStorageMode::Encrypted,
+        ),
+        Ok(_) | Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(open_error(
+                "ASH_USE_DEVELOPMENT_SECRETSTORAGE must be 0 or 1",
+            ));
+        }
+    };
     match memory_setting.as_deref() {
         Ok("1") => return Ok(Arc::new(ash_secrets::MemorySecretStore::default())),
         Ok("0") | Err(std::env::VarError::NotPresent) => {}
@@ -1165,7 +1184,7 @@ fn open_profile_secrets(
     #[cfg(test)]
     let keyring = ash_secrets::FileSecretStore::open(profile_root.join("test-keyring"))
         .map_err(open_error)?;
-    ProfileSecretStore::open(profile_root.join("secrets"), Arc::new(keyring))
+    ProfileSecretStore::open_with_default_mode(storage_root, Arc::new(keyring), default_mode)
         .map(|store| {
             Arc::new(ash_secrets::SessionSecretStore::new(Arc::new(store))) as Arc<dyn SecretStore>
         })
@@ -1393,6 +1412,7 @@ pub fn open_app_server_with_codebase_providers(
         (None, None) => open_profile_secrets(
             &options.profile_root,
             std::env::var("ASH_USE_INMEMORY_SECRETSTORAGE"),
+            std::env::var("ASH_USE_DEVELOPMENT_SECRETSTORAGE"),
         )?,
     };
     let mut connector_runtime = match options.connector_runtime.take() {

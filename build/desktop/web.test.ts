@@ -23,13 +23,15 @@ for (const [succeeds, reuse] of [[true, false], [false, false], [true, true]]) {
 		t.mock.method(fs, 'readFileSync', (path: string) => JSON.stringify(path.endsWith('ash-package.json')
 			? { protocol: { major: APP_SERVER_PROTOCOL_MAJOR, schemaHash: APP_SERVER_SCHEMA_HASH } }
 			: { formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${'a'.repeat(64)}` }));
-		t.mock.method(childProcess, 'spawn', (command: string, args: readonly string[]) => {
+		t.mock.method(childProcess, 'spawn', (command: string, args: readonly string[], options: childProcess.SpawnOptions) => {
 			const child = new ChildProcess();
 			if (args.includes('build/prepare.py')) {
 				events.push('prepare');
 				setImmediate(() => { prepared = succeeds; child.emit('close', succeeds ? 0 : 1, null); });
 			} else {
 				assert.equal(command, join(packageRoot, 'bin', `ash-app-server${process.platform === 'win32' ? '.exe' : ''}`));
+				assert.equal(options.env?.ASH_USE_DEVELOPMENT_SECRETSTORAGE, '1');
+				assert.equal(options.env?.ASH_HOME, join(process.cwd(), '.build/desktop/dev/web-profile'));
 				events.push('launch');
 				child.stdin = new PassThrough();
 				child.stdout = new PassThrough();

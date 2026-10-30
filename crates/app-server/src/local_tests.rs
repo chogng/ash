@@ -2202,7 +2202,12 @@ fn user_network_config_is_loaded_before_start_and_reconciled_on_edit() {
 fn default_profile_secrets_keep_unit_test_keys_inside_the_fixture() {
     let profile = tempfile::tempdir().unwrap();
     let name = ash_secrets::SecretKey::new("test/profile-credential").unwrap();
-    let store = open_profile_secrets(profile.path(), Err(std::env::VarError::NotPresent)).unwrap();
+    let store = open_profile_secrets(
+        profile.path(),
+        Err(std::env::VarError::NotPresent),
+        Err(std::env::VarError::NotPresent),
+    )
+    .unwrap();
     store
         .store(&name, &ash_secrets::SecretValue::new(b"fixture".to_vec()))
         .unwrap();
@@ -2214,8 +2219,12 @@ fn default_profile_secrets_keep_unit_test_keys_inside_the_fixture() {
         "unit-test master keys must be owned by the temporary fixture"
     );
     drop(store);
-    let reopened =
-        open_profile_secrets(profile.path(), Err(std::env::VarError::NotPresent)).unwrap();
+    let reopened = open_profile_secrets(
+        profile.path(),
+        Err(std::env::VarError::NotPresent),
+        Err(std::env::VarError::NotPresent),
+    )
+    .unwrap();
     assert_eq!(reopened.load(&name).unwrap().unwrap().expose(), b"fixture");
 }
 
@@ -2223,16 +2232,63 @@ fn default_profile_secrets_keep_unit_test_keys_inside_the_fixture() {
 fn in_memory_profile_secrets_do_not_touch_disk_or_survive_reopening() {
     let profile = tempfile::tempdir().unwrap();
     let name = ash_secrets::SecretKey::new("test/profile-credential").unwrap();
-    let store = open_profile_secrets(profile.path(), Ok("1".into())).unwrap();
+    let store = open_profile_secrets(profile.path(), Ok("1".into()), Ok("1".into())).unwrap();
     store
         .store(&name, &ash_secrets::SecretValue::new(b"fixture".to_vec()))
         .unwrap();
     assert_eq!(store.load(&name).unwrap().unwrap().expose(), b"fixture");
     drop(store);
-    let reopened = open_profile_secrets(profile.path(), Ok("1".into())).unwrap();
+    let reopened = open_profile_secrets(profile.path(), Ok("1".into()), Ok("1".into())).unwrap();
     assert!(reopened.load(&name).unwrap().is_none());
     assert_eq!(std::fs::read_dir(profile.path()).unwrap().count(), 0);
-    assert!(open_profile_secrets(profile.path(), Ok("true".into())).is_err());
+    assert!(
+        open_profile_secrets(
+            profile.path(),
+            Ok("true".into()),
+            Err(std::env::VarError::NotPresent)
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn development_profile_secrets_persist_without_reusing_encrypted_credentials() {
+    let profile = tempfile::tempdir().unwrap();
+    let name = ash_secrets::SecretKey::new("test/profile-credential").unwrap();
+    let production = open_profile_secrets(profile.path(), Ok("0".into()), Ok("0".into())).unwrap();
+    production
+        .store(
+            &name,
+            &ash_secrets::SecretValue::new(b"existing encrypted credential".to_vec()),
+        )
+        .unwrap();
+    let development = open_profile_secrets(profile.path(), Ok("0".into()), Ok("1".into())).unwrap();
+    assert_eq!(
+        development.storage_mode().unwrap(),
+        Some(ash_secrets::SecretStorageMode::File)
+    );
+    assert!(development.load(&name).unwrap().is_none());
+    development
+        .store(
+            &name,
+            &ash_secrets::SecretValue::new(b"development credential".to_vec()),
+        )
+        .unwrap();
+    drop(development);
+    let reopened = open_profile_secrets(profile.path(), Ok("0".into()), Ok("1".into())).unwrap();
+    assert_eq!(
+        reopened.load(&name).unwrap().unwrap().expose(),
+        b"development credential"
+    );
+    assert_eq!(
+        production.load(&name).unwrap().unwrap().expose(),
+        b"existing encrypted credential"
+    );
+    assert_eq!(
+        std::fs::read(profile.path().join("development-secrets/storage-mode")).unwrap(),
+        b"file"
+    );
+    assert!(open_profile_secrets(profile.path(), Ok("0".into()), Ok("true".into())).is_err());
 }
 
 #[test]
