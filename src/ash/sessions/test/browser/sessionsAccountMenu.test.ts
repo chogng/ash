@@ -49,6 +49,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions account menu opens settings
 			: ['Settings', 'Account', 'Open IDE', 'Keyboard Shortcuts']);
 		assert.ok(actions.every(action => action.enabled));
 		assert.match(localize('sessions.activity.help', ''), locale === 'zh-CN' ? /保留 Agent 窗口及其中未发送的草稿/u : /keeping the Agents window and its unsent drafts open/u);
+		assert.match(localize('sessions.activity.help', ''), locale === 'zh-CN' ? /关闭最后一个文档会收起编辑器，文件树保持可见/u : /closing the last document hides it and keeps Files visible/u);
 		assert.equal(anchor.getAttribute('aria-expanded'), 'true');
 		for (const action of actions) { await action.run(); }
 		assert.deepEqual(invoked, ['settings', 'workbench.action.manageAccounts', OPEN_ASH_WINDOW_COMMAND_ID, 'workbench.action.openKeyboardShortcuts']);

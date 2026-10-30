@@ -65,7 +65,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		super.start();
 		this._register(this.editor.onDidChangeEditors(event => {
 			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed' && this.context.isDocumentContent && !this.isRestoringEditors && !this.context.isChangingContent && this.documentGroups.every(group => group.inputs.length === 0)) {
-				this.layout.updateParts(() => { this.layout.hidePart('editor'); this.layout.hidePart('auxiliarybar'); });
+				this.layout.hidePart('editor');
 			}
 		}));
 	}
@@ -87,7 +87,11 @@ export class DesktopLayoutController extends BaseLayoutController {
 	public async activate(revealDetails: boolean): Promise<void> {
 		await this.whenSettled();
 		if (this.isDisposed) { return; }
+		// Old working sets may still contain the Files landing tab. Files now lives in Details.
+		await this.tabs.removeFilesLandingTab();
+		if (this.isDisposed) { return; }
 		this.editor.activateGroup(this.documentGroups[0]!.id);
+		if (this.documentGroups.every(group => group.inputs.length === 0)) { this.layout.hidePart('editor'); }
 		const selection = this.sessions.activeSelection;
 		if (selection) { await this.tabs.reconcile(selection, !this.documentsVisible && revealDetails); }
 		if (this.isDisposed) { return; }
@@ -131,7 +135,10 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 	protected override async onSessionRestored(selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> {
 		if (!this.context.isDocumentContent) { return; }
+		await this.tabs.removeFilesLandingTab();
+		if (this.isDisposed) { return; }
 		this.editor.activateGroup(this.documentGroups[0]!.id);
+		if (this.documentGroups.every(group => group.inputs.length === 0)) { this.layout.hidePart('editor'); }
 		await this.tabs.reconcile(selection, !this.documentsVisible && this.layout.isPartVisible('auxiliarybar'));
 		if (this.isDisposed) { return; }
 		await this.detailPanel.update(false);
@@ -176,7 +183,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 			this.layout.hidePart('auxiliarybar');
 			this.layout.focus();
 		} else {
-			this.setDocumentsVisible(this.closedProfile.documents);
+			this.setDocumentsVisible(this.closedProfile.documents && this.documentGroups.some(group => group.inputs.length > 0));
 			this.editor.activateGroup(this.documentGroups[0]!.id);
 			this.setPartVisible(this.closedProfile.details);
 			await this.detailPanel.update(false);
