@@ -68,7 +68,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.GettingStarted,
 			{ type: AccessibleViewType.Help },
-			() => localize('gettingStarted.accessibilityHelp', 'Welcome\nUse Tab and Shift+Tab to move between actions and Recents. Press Enter to activate the focused item. Each recent item has a Remove from Recents button; use Enter or Space to remove its history entry. Clone repo asks for a repository URL and a destination folder. When available, Open Agents window opens your projects and agent conversations in a separate window. Change the illustration in the Agents window illustration setting; Automatic selects it from the number of editor windows.'),
+			() => localize('gettingStarted.accessibilityHelp', 'Welcome\nUse Tab and Shift+Tab to move between actions and Recents. Press Enter to activate the focused item. Each recent item has a Remove from Recents button; use Enter or Space to remove its history entry. Clone repo asks for a repository URL and a destination folder. The window illustrations and captions are buttons: Open new editor window creates an empty editor window, and Open Agents window opens your projects and agent conversations in a separate window. Activate either button with Enter or Space. Change the illustration in the Agents window illustration setting; Automatic selects it from the number of editor windows. Choosing None keeps the text buttons available.'),
 			() => {
 				if (isHTMLElement(focused) && focused.isConnected) {
 					focused.focus();

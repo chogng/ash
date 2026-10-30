@@ -190,8 +190,10 @@ suite('gettingStarted browser component', () => {
 			expect(colors.stroke).not.toBe('none');
 			expect(colors.stroke).not.toBe('rgba(0, 0, 0, 0)');
 			const launch = welcome.getByRole('button', { name: 'Open Agents window', exact: true });
+			await launch.hover();
+			expect(await launch.evaluate(node => getComputedStyle(node).borderColor)).not.toBe('rgba(0, 0, 0, 0)');
 			await welcome.focus();
-			for (let index = 0; index < 4; index++) {
+			for (let index = 0; index < 5; index++) {
 				await page.keyboard.press('Tab');
 			}
 			await expect(launch).toBeFocused();
@@ -200,6 +202,37 @@ suite('gettingStarted browser component', () => {
 			await expect.poll(() => page.evaluate(() => window.ashWelcomeIntegration.agentsLaunches)).toBe(1);
 		});
 	}
+
+	test('Window illustrations and captions open their respective hosts as whole buttons', async () => {
+		const { page } = browserTests;
+		await page.goto('/gettingStarted.html?agents&seed=false');
+		const banner = page.locator('.ash-agents-banner');
+		await expect(banner.locator('.ash-agents-banner-open')).toHaveCount(0);
+		const editor = banner.getByRole('button', { name: 'Open new editor window', exact: true });
+		const agents = banner.getByRole('button', { name: 'Open Agents window', exact: true });
+		await editor.click({ position: { x: 20, y: 20 } });
+		await expect.poll(() => page.evaluate(() => window.ashWelcomeIntegration.editorLaunches)).toBe(1);
+		expect(await page.evaluate(() => window.ashWelcomeIntegration.agentsLaunches)).toBe(0);
+		const bounds = (await agents.boundingBox())!;
+		await agents.click({ position: { x: bounds.width / 2, y: bounds.height - 16 } });
+		await expect.poll(() => page.evaluate(() => window.ashWelcomeIntegration.agentsLaunches)).toBe(1);
+		await editor.focus();
+		await page.keyboard.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashWelcomeIntegration.editorLaunches)).toBe(2);
+		await page.keyboard.press('Tab');
+		await expect(agents).toBeFocused();
+		await page.evaluate(() => window.ashWelcomeIntegration.setGraphic('manyWindowsToOne'));
+		await expect(agents).toBeFocused();
+		await page.evaluate(() => window.ashWelcomeIntegration.setGraphic('none'));
+		await expect(banner.locator('svg')).toHaveCount(0);
+		await expect(agents).toBeFocused();
+		await expect(editor).toBeVisible();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashWelcomeIntegration.agentsLaunches)).toBe(2);
+		await editor.focus();
+		await page.evaluate(() => window.ashWelcomeIntegration.setGraphic('manyWindowsToOne'));
+		await expect(agents).toBeFocused();
+	});
 
 	test('Agents entry follows command availability and preserves a safe focus target', async () => {
 		const { page } = browserTests;
@@ -228,12 +261,12 @@ suite('gettingStarted browser component', () => {
 		await page.evaluate(() => window.ashWelcomeIntegration.setEditorWindows(2));
 		await expect(graphic).toHaveClass(/many-windows-to-one/);
 		const nestedWidth = await graphic.locator('svg > svg').first().evaluate(node => node.getBoundingClientRect().width);
-		expect(nestedWidth).toBeGreaterThan(150);
-		expect(nestedWidth).toBeLessThan(250);
+		expect(nestedWidth).toBeGreaterThan(120);
+		expect(nestedWidth).toBeLessThanOrEqual(200);
 		await page.evaluate(() => window.ashWelcomeIntegration.setGraphic('windowComparison'));
 		await expect(graphic.locator('h2')).toHaveCount(2);
 		await page.evaluate(() => window.ashWelcomeIntegration.setGraphic('none'));
-		await expect(graphic).toHaveCount(0);
+		await expect(graphic.locator('svg')).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Open Agents window', exact: true })).toBeVisible();
 		await page.evaluate(() => window.ashWelcomeIntegration.setGraphic('auto'));
 		await expect(graphic).toHaveClass(/many-windows-to-one/);
@@ -241,7 +274,7 @@ suite('gettingStarted browser component', () => {
 		await expect(graphic.locator('h2')).toHaveCount(2);
 	});
 
-	test('Agents introduction fits height changes without losing the focused launch button', async () => {
+	test('Agents introduction sits at the bottom and scrolls in short editors without losing focus', async () => {
 		const { page } = browserTests;
 		await page.setViewportSize({ width: 1000, height: 900 });
 		await page.goto('/gettingStarted.html?agents&seed=false');
@@ -250,18 +283,19 @@ suite('gettingStarted browser component', () => {
 		const graphic = banner.locator('.ash-agents-window-graphic');
 		const launch = banner.getByRole('button', { name: 'Open Agents window', exact: true });
 		await expect(graphic).toBeVisible();
+		const illustration = await graphic.locator('figure > svg').first().boundingBox();
+		expect(illustration!.width).toBeLessThanOrEqual(200);
+		expect(900 - (await banner.boundingBox())!.y - (await banner.boundingBox())!.height).toBeCloseTo(32, 0);
+		await page.screenshot({ path: browserTests.info.outputPath('welcome-bottom.png') });
 		await launch.focus();
-		for (const [height, compact, shown] of [[600, true, true], [450, true, false], [900, false, true]] as const) {
+		for (const [height, overflows] of [[450, true], [900, false]] as const) {
 			await page.setViewportSize({ width: 1000, height });
-			await expect.poll(() => banner.evaluate(node => node.classList.contains('compact'))).toBe(compact);
-			if (shown) {
-				await expect(graphic).toBeVisible();
-			} else {
-				await expect(graphic).toBeHidden();
-			}
+			await expect(graphic).toBeVisible();
 			await expect(launch).toBeFocused();
+			await expect.poll(() => welcome.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(overflows);
+			await launch.scrollIntoViewIfNeeded();
 			await expect(launch).toBeInViewport();
-			await expect.poll(() => welcome.evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
+			await page.screenshot({ path: browserTests.info.outputPath(`welcome-height-${height}.png`) });
 		}
 	});
 
@@ -284,10 +318,11 @@ suite('gettingStarted browser component', () => {
 		await expect.poll(() => page.evaluate(() => window.ashWelcomeIntegration.agentsLaunches)).toBe(1);
 	});
 
-	test('Agents introduction refits when recent projects grow and shrink', async () => {
+	test('Agents introduction follows all recent projects in the same scroll flow', async () => {
 		const { page } = browserTests;
 		await page.setViewportSize({ width: 1000, height: 720 });
 		await page.goto('/gettingStarted.html?agents&seed=false');
+		const welcome = page.locator('.ash-getting-started');
 		const graphic = page.locator('.ash-agents-window-graphic');
 		await expect(graphic).toBeVisible();
 		await page.evaluate(async () => {
@@ -296,14 +331,21 @@ suite('gettingStarted browser component', () => {
 			}
 		});
 		await expect(page.locator('.ash-getting-started-recent-item')).toHaveCount(12);
-		await expect(graphic).toBeHidden();
+		await expect(graphic).toBeVisible();
+		await expect.poll(() => welcome.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+		const lastProject = await page.locator('.ash-getting-started-recent-item').last().boundingBox();
+		expect((await graphic.boundingBox())!.y).toBeGreaterThanOrEqual(lastProject!.y + lastProject!.height + 40);
+		await page.getByRole('button', { name: 'Open Agents window', exact: true }).focus();
+		await expect(page.getByRole('button', { name: 'Open Agents window', exact: true })).toBeInViewport();
 		for (let index = 0; index < 12; index++) {
 			const row = page.locator('.ash-getting-started-recent-item').first();
 			await row.hover();
 			await row.getByRole('button', { name: 'Remove', exact: false }).click();
 		}
 		await expect(graphic).toBeVisible();
-		await expect(page.locator('.ash-agents-banner')).not.toHaveClass(/compact/);
+		await expect.poll(() => welcome.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(false);
+		const banner = (await page.locator('.ash-agents-banner').boundingBox())!;
+		expect(720 - banner.y - banner.height).toBeCloseTo(32, 0);
 	});
 
 	test('Welcome renders its brand and light-theme action cards', async function () {

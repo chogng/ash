@@ -28,7 +28,7 @@ import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browse
 import '../../../../../browser/media/style.css';
 
 declare global {
-	interface Window { ashWelcomeIntegration: { readonly opened: readonly string[]; readonly agentsLaunches: number; setAgentsAvailable(available: boolean): void; setEditorWindows(count: number): void; setGraphic(value: string): Promise<void>; addRecent(name: string): Promise<void>; }; }
+	interface Window { ashWelcomeIntegration: { readonly opened: readonly string[]; readonly editorLaunches: number; readonly agentsLaunches: number; setAgentsAvailable(available: boolean): void; setEditorWindows(count: number): void; setGraphic(value: string): Promise<void>; addRecent(name: string): Promise<void>; }; }
 }
 
 const resources = new DisposableStore();
@@ -78,6 +78,7 @@ const page = resources.add(new GettingStartedPage(
 page.create(document.querySelector('main')!);
 window.ashWelcomeIntegration = {
 	get agentsLaunches() { return agentsLaunches; },
+	get editorLaunches() { return host.opened.filter(request => request.targets.length === 0).length; },
 	setAgentsAvailable,
 	setGraphic: value => configuration.updateValue(agentsWindowGraphicConfiguration.key, value as AgentsWindowGraphicVariant),
 	setEditorWindows: count => {

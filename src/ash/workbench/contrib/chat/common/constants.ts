@@ -29,7 +29,7 @@ export const agentsWindowGraphicConfiguration: IConfigurationKeyDefinition<Agent
 	setting: {
 		valueType: 'select',
 		get title() { return localize('agentsGraphic.title', 'Agents window illustration'); },
-		get description() { return localize('agentsGraphic.description', 'Choose the illustration shown above the Agents window button on the Welcome page.'); },
+		get description() { return localize('agentsGraphic.description', 'Choose the illustration shown in the window entries on the Welcome page.'); },
 		get options() {
 			return [
 				{ value: AgentsWindowGraphicVariant.None, label: localize('agentsGraphic.none', 'None') },

@@ -32,8 +32,14 @@
 }
 
 .ash-getting-started-content {
+	display: flex;
 	width: min(372px, calc(100% - 32px));
-	margin: clamp(40px, 8vh, 96px) 0 64px;
+	margin: clamp(40px, 8vh, 96px) 0 var(--ash-spacing-size320);
+	flex-direction: column;
+}
+
+.ash-getting-started-content > * {
+	flex-shrink: 0;
 }
 
 .ash-getting-started-intro {
@@ -319,44 +325,47 @@ button.ash-getting-started-recent-content:focus-visible {
 }
 
 .ash-getting-started-agents {
-	width: min(560px, calc(100cqw - 32px));
-	margin-block-start: var(--ash-spacing-size400);
-	margin-inline-start: 50%;
-	transform: translateX(-50%);
+	width: min(440px, calc(100cqw - 32px));
+	/* Spare height pushes the introduction down; overflow stays in the page's scroll flow. */
+	margin-block-start: auto;
+	padding-block-start: var(--ash-spacing-size400);
+	align-self: center;
 	text-align: center;
 }
 
-.ash-getting-started-agents .ash-agents-banner-open {
-	margin-top: var(--ash-spacing-size200);
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
-	border: var(--ash-strokeThickness) solid var(--ash-editorWelcome-cardBorder);
+.ash-getting-started-agents
+	.ash-agents-window-graphic:not(.many-windows-to-one)
+	figure
+	> svg {
+	max-width: 200px;
+	margin-inline: auto;
+}
+
+.ash-getting-started-agents figure {
+	position: relative;
+}
+
+/* The native button covers the illustration and caption without changing their layout. */
+.ash-getting-started-agents .ash-agents-window-card {
+	position: absolute;
+	inset: calc(-1 * var(--ash-spacing-size80));
+	padding: 0;
+	border: var(--ash-strokeThickness) solid transparent;
 	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-foreground);
-	background: var(--ash-editorWelcome-cardBackground);
-	font: inherit;
+	background: transparent;
 	cursor: pointer;
 }
 
-.ash-getting-started-agents .ash-agents-banner-open:hover {
-	background: var(--ash-editorWelcome-cardHoverBackground);
+.ash-getting-started-agents .ash-agents-window-card:disabled {
+	cursor: default;
 }
 
-.ash-getting-started-agents .ash-agents-banner-open:focus-visible {
+.ash-getting-started-agents .ash-agents-window-card:hover:not(:disabled) {
+	border-color: var(--ash-editorWelcome-cardBorder);
+}
+
+.ash-getting-started-agents .ash-agents-window-card:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
-}
-
-/* Keep primary actions in view before spending vertical space on the illustration. */
-.ash-getting-started.agents-compact .ash-getting-started-content {
-	margin-block: var(--ash-spacing-size240);
-}
-
-.ash-getting-started.agents-compact .ash-getting-started-cards,
-.ash-getting-started.agents-compact .ash-getting-started-recent,
-.ash-getting-started-agents.compact {
-	margin-block-start: var(--ash-spacing-size240);
-}
-
-.ash-getting-started-agents.compact .ash-agents-banner-open {
-	margin-top: var(--ash-spacing-size80);
 }

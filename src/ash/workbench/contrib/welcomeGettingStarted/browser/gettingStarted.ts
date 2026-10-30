@@ -77,6 +77,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 				openFolder: this.canOpenFolder ? () => this.fileDialogs.pickFolderAndOpen() : undefined,
 				cloneRepository: this.cloneAction(),
 				openAgentsWindow: this.agentsAction(),
+				openEditorWindow: () => this.host.openWindow(),
 				connectViaSsh: () => this.commandService.executeCommand(ConnectToRemoteCommandId),
 				connectGitHub: () => this.githubConnection.connect(),
 			},
