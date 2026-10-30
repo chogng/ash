@@ -930,6 +930,12 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			for (const copy of dirty) await copy.revert(controller.signal);
 			return dirty.every(copy => !copy.isDirty);
 		}
+		if (input.resource.scheme === 'untitled' && pane.saveDraft) {
+			const saved = await pane.saveDraft();
+			if (!saved) return false;
+			// Saving can replace the draft tab; finish the close against that saved resource.
+			return group ? group.closeEditor(saved) : true;
+		}
 		if (group && input.resource.scheme === 'untitled') return !!await this.saveEditor(group, input, pane);
 		for (const copy of dirty) await copy.save(controller.signal);
 		if (group && !group.inputs.some(candidate => this.isSameEditor(candidate, input))) return true;

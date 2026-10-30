@@ -730,6 +730,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const entry = this.entry(input);
 		if (!entry || this.isDisposed) { return undefined; }
 		const pane = entry.paneInstance.pane;
+		if (input.resource.scheme === Schemas.untitled && pane.saveDraft) {
+			return pane.saveDraft();
+		}
 		if (options.saveAs || input.resource.scheme === Schemas.untitled) {
 			return this.onSave?.(this, entry.input, pane);
 		}

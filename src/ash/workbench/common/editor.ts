@@ -50,6 +50,8 @@ export interface IEditorPane extends IComposite, IDisposable {
 	isVisible(): boolean;
 	revealRange?(range: Range): void;
 	save?(options?: ISaveOptions): Promise<void>;
+	/** Custom drafts own naming and return their saved replacement, or undefined when cancelled. */
+	saveDraft?(): Promise<IResourceEditorInput | undefined>;
 	saveAs?(resource: URI): Promise<void>;
 }
 

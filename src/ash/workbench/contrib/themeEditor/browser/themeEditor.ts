@@ -28,6 +28,7 @@ import { findNodeAtLocation, parseTree } from '../../../../base/common/json.js';
 import { applyEdits, setProperty } from '../../../../base/common/jsonEdit.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
+import { Schemas } from '../../../../base/common/network.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { localize } from '../../../../nls.js';
@@ -87,6 +88,15 @@ const defaultSettingsWidth = 280;
 
 export function createThemeEditorInput(input: IResourceEditorInput): IResourceEditorInput {
 	return { ...input, editorId: ThemeEditorId, languageId: 'jsonc' };
+}
+
+/** Installed themes seed a separate draft; no working copy ever targets their source file. */
+export function createThemeEditorDraftInput(theme: IColorTheme): IResourceEditorInput {
+	return createThemeEditorInput({
+		resource: URI.from({ scheme: Schemas.untitled, authority: 'theme-editor', path: `/${theme.id}.json` }),
+		label: `${theme.id}.json`,
+		initialText: serializeUserColorThemeDraft(theme, theme.label),
+	});
 }
 
 /** Resolve the original contribution, including its include boundary and package generation. */
@@ -604,7 +614,10 @@ export class ThemeEditor extends EditorPane {
 	public async save(options?: ISaveOptions): Promise<void> {
 		const input = this.input;
 		if (!input) return;
-		if (input.readOnly || input.resource.scheme === 'untitled') return this.saveThemeAs();
+		if (input.readOnly || input.resource.scheme === Schemas.untitled) {
+			await this.saveThemeAs();
+			return;
+		}
 		// Keep theme validation errors in this editor, before generic file-error dialogs.
 		const validation = await this.validateSave(new AbortController().signal, true);
 		if (this.input !== input) throw new CancellationError();
@@ -655,14 +668,20 @@ export class ThemeEditor extends EditorPane {
 		await this.userThemes.reload();
 	}
 
-	private async saveThemeAs(): Promise<void> {
+	public async saveDraft(): Promise<IResourceEditorInput | undefined> {
+		return this.saveThemeAs();
+	}
+
+	private async saveThemeAs(): Promise<IResourceEditorInput | undefined> {
 		const input = this.input;
 		const model = this.getControl()?.getModel();
 		if (!input || !model) return;
 		const name = await this.promptName();
 		if (name === undefined || this.input !== input) return;
 		const source = model.getText();
-		const copiedThemeId = input.readOnly ? this.themeIdForResource(input.resource) : undefined;
+		const copiedThemeId = input.readOnly || input.resource.scheme === Schemas.untitled
+			? this.themeIdForResource(input.resource)
+			: undefined;
 		// Exporting an extension theme is explicit. Resolve its package-relative
 		// includes here; the original source editor keeps the original document.
 		const candidate = getThemeEditorSource(this.extensions, input.resource)
@@ -702,6 +721,7 @@ export class ThemeEditor extends EditorPane {
 				label: saved.file,
 			});
 			await this.editorParts.replaceEditorResource(group, input, replacement);
+			return replacement;
 		}
 	}
 
@@ -719,7 +739,9 @@ export class ThemeEditor extends EditorPane {
 		);
 		const label = this.compiled?.label ?? localize('themeEditor.title', 'Theme Editor');
 		name.value =
-			this.input?.resource.scheme === 'untitled' ? label : localize('themeEditor.copyName', '{0} Copy', label);
+			this.input?.resource.scheme === Schemas.untitled && this.input.resource.authority !== 'theme-editor'
+				? label
+				: localize('themeEditor.copyName', '{0} Copy', label);
 		const hint = h(content.ownerDocument, 'p');
 		hint.textContent = localize('themeEditor.invalidName', 'Enter a theme name of 1 to 256 characters.');
 		content.append(hint);
@@ -785,6 +807,9 @@ export class ThemeEditor extends EditorPane {
 	}
 
 	private themeIdForResource(resource: URI | undefined): string | undefined {
+		if (resource?.scheme === Schemas.untitled && resource.authority === 'theme-editor') {
+			return resource.path.slice(1, -'.json'.length);
+		}
 		const extension = resource && getThemeEditorSource(this.extensions, resource);
 		if (extension) return extension.id;
 		if (!resource || !this.userThemes.directory) return undefined;
@@ -824,7 +849,9 @@ export class ThemeEditor extends EditorPane {
 						'themeEditor.readOnlySource',
 						'This theme source is read-only. Use Save as to create an editable user theme.',
 					)
-					: '',
+					: this.input.resource.scheme === Schemas.untitled && this.input.resource.authority === 'theme-editor'
+						? localize('themeEditor.draftSource', 'Changes are previewed here. Save to name and apply your own theme.')
+						: '',
 			);
 		} catch (error) {
 			if (operation !== this.operation || this.textEditor.getValue() !== source) return;
@@ -1221,7 +1248,7 @@ export class ThemeEditor extends EditorPane {
 		for (const [id, row] of this.rows) row.element.classList.toggle('selected', id === selected);
 	}
 
-	private async runAction(action: () => Promise<void>): Promise<void> {
+	private async runAction(action: () => Promise<unknown>): Promise<void> {
 		if (this.saving) return;
 		this.saving = true;
 		this.updateTitleArea();

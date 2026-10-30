@@ -118,17 +118,16 @@ for (const locale of ['en', 'zh-CN']) {
 			.toEqual(['aurora.json', 'ash-light.json']);
 		expect((await page.evaluate(() => window.themeEditorTest.editors()))[0].dirty).toBe(true);
 		await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-		const saveAs = page.getByRole('button', { name: chinese ? '另存为…' : 'Save as…', exact: true });
-		await saveAs.press('Enter');
+		await chooseThemeAction(page, 'Save');
 		const dialog = page.getByRole('dialog', { name: chinese ? '另存为…' : 'Save as…', exact: true });
 		await expect(dialog).toBeVisible();
 		await dialog.getByRole('button', { name: chinese ? '取消' : 'Cancel', exact: true }).click();
 		await expect(dialog).toBeHidden();
-		await expect(saveAs).toBeFocused();
-		expect((await page.evaluate(() => window.themeEditorTest.editors()))[1].dirty).toBe(false);
+		await expect(page.locator('.ash-theme-editor-preview-tabs').getByRole('tab', { selected: true })).toBeFocused();
+		expect((await page.evaluate(() => window.themeEditorTest.editors()))[1].dirty).toBe(true);
 		await page.getByRole('searchbox').press('Alt+F1');
 		await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue(
-			chinese ? /个人主题副本/u : /editable user theme copy/u,
+			chinese ? /个人主题副本/u : /own theme/u,
 		);
 	});
 }
@@ -1023,11 +1022,14 @@ test('closing an unsaved preview leaves the main window unchanged and leaves the
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toContain('#101525');
 });
 
-test('built-in themes open their clean source and only Save as creates a user theme', async ({ page }) => {
+test('built-in themes preview edits before saving and applying a named user theme', async ({ page }) => {
 	const popup = await openEditor(page, undefined, 'ash-dark');
 	await expect(popup.locator('.ash-theme-editor-message')).not.toHaveClass(/error/);
-	expect(await page.evaluate(() => window.themeEditorTest.source())).toContain('"include":');
-	expect(await page.evaluate(() => window.themeEditorTest.draft())).toBeUndefined();
+	expect(JSON.parse(await page.evaluate(() => window.themeEditorTest.source()))).not.toHaveProperty('include');
+	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
+	await editColor(popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }), '#445566');
+	await expect(popup.frameLocator('.ash-theme-editor-preview:visible').locator('#app')).toHaveCSS('--ash-editor-background', '#445566');
+	await expect(page.locator('#main')).not.toHaveCSS('--ash-editor-background', '#445566');
 	await chooseThemeAction(popup, 'Save as…');
 	const dialog = popup.getByRole('dialog', { name: 'Save as…' });
 	await expect(dialog).toBeVisible();
@@ -1039,7 +1041,7 @@ test('built-in themes open their clean source and only Save as creates a user th
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await editColor(popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }), '#667788');
 	await chooseThemeAction(popup, 'Save');
-	await page.evaluate(() => window.themeEditorTest.selectTheme('custom-dark'));
+
 	await expect
 		.poll(() =>
 			page
@@ -1051,19 +1053,19 @@ test('built-in themes open their clean source and only Save as creates a user th
 });
 
 for (const theme of ['aurora', 'ash-light']) {
-	test(`reopening ${theme} reuses its source and closing leaves no main-window tabs`, async ({ page }) => {
+	test(`reopening ${theme} reuses its document and closing leaves no main-window tabs`, async ({ page }) => {
 		const popup = await openEditor(page, 'zh-CN', theme);
 		const original = await page.evaluate(() => window.themeEditorTest.editors());
 		expect(original).toHaveLength(1);
-		expect(original[0].resource).toContain(theme === 'aurora' ? '/themes/aurora.json' : '/themes/ash-light.json');
+		expect(original[0].resource).toContain(theme === 'aurora' ? '/themes/aurora.json' : 'untitled://theme-editor/ash-light.json');
 		expect(original[0].label).not.toMatch(/Copy|副本/);
-		expect(original[0].dirty).toBe(false);
+		expect(original[0].dirty).toBe(theme !== 'aurora');
 		if (theme === 'ash-light') {
 			await expect(popup.locator('.ash-theme-editor-message')).toHaveText(
-				'此主题源文件为只读。选择“另存为”可创建可编辑的用户主题。',
+				'修改会显示在预览中。保存时命名并应用自己的主题。',
 			);
 			await popup.getByRole('searchbox', { name: '搜索颜色' }).press('Alt+F1');
-			await expect(popup.getByRole('dialog').getByRole('textbox')).toHaveValue(/原始主题源文件/u);
+			await expect(popup.getByRole('dialog').getByRole('textbox')).toHaveValue(/可编辑草稿/u);
 			await popup.keyboard.press('Escape');
 		}
 		await page.evaluate(async () => {
@@ -1071,7 +1073,8 @@ for (const theme of ['aurora', 'ash-light']) {
 		});
 		expect(page.context().pages()).toHaveLength(2);
 		expect(await page.evaluate(() => window.themeEditorTest.editors())).toEqual(original);
-		await popup.close();
+		await page.evaluate(() => window.themeEditorTest.close());
+		await expect.poll(() => popup.isClosed()).toBe(true);
 		await expect.poll(() => page.evaluate(() => window.themeEditorTest.editors())).toEqual([]);
 		expect(await page.evaluate(() => window.themeEditorTest.mainEditors())).toEqual([]);
 		const [reopened] = await Promise.all([
@@ -1093,7 +1096,7 @@ for (const theme of ['aurora', 'ash-light']) {
 	});
 }
 
-test('installed theme sources remain read-only even when their files are writable', async ({ page }) => {
+test('installed theme drafts remain separate even when their source files are writable', async ({ page }) => {
 	await page.goto('/themeEditor.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	await page.evaluate(async () => {
@@ -1103,7 +1106,12 @@ test('installed theme sources remain read-only even when their files are writabl
 	const original = await page.evaluate(() => window.themeEditorTest.themeSource('themes/ash-light.json'));
 	await page.locator('#open').click();
 	await page.getByRole('searchbox').fill('editor.background');
-	await expect(page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true })).toBeDisabled();
+	const draftHex = page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+	await expect(draftHex).toBeEnabled();
+	await editColor(draftHex, '#abcdef');
+	await expect(page.frameLocator('.ash-theme-editor-preview:visible').locator('#app')).toHaveCSS('--ash-editor-background', '#abcdef');
+	await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+	expect(await page.evaluate(() => window.themeEditorTest.themeSource('themes/ash-light.json'))).toBe(original);
 	await chooseThemeAction(page, 'Save');
 	const dialog = page.getByRole('dialog', { name: 'Save as…', exact: true });
 	await dialog.getByRole('textbox', { name: 'Theme name', exact: true }).fill('My light theme');
@@ -1112,6 +1120,7 @@ test('installed theme sources remain read-only even when their files are writabl
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.editors())).toEqual([
 		{ resource: 'file:///themes/my-light-theme.json', label: 'my-light-theme.json', dirty: false },
 	]);
+	await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(171, 205, 239)');
 	await page.getByRole('searchbox').fill('editor.background');
 	const hex = page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
 	await expect(hex).toBeEnabled();
@@ -1122,6 +1131,54 @@ test('installed theme sources remain read-only even when their files are writabl
 	expect(await page.evaluate(() => window.themeEditorTest.themeSource('themes/ash-light.json'))).toBe(original);
 	expect(await page.evaluate(() => window.themeEditorTest.persisted('my-light-theme.json'))).toContain('#234567');
 });
+
+for (const mode of ['save', 'saveAll', 'close'] as const) {
+	test(`installed theme draft names and applies its edited copy through ${mode}`, async ({ page }) => {
+		await page.goto('/themeEditor.html');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(() => window.themeEditorTest.selectTheme('ash-light'));
+		const original = await page.evaluate(() => window.themeEditorTest.installedThemeSource('themes/ash-light.json'));
+		await page.locator('#open').click();
+		await page.getByRole('searchbox').fill('editor.background');
+		const hex = page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+		await editColor(hex, '#345678');
+		await expect(page.frameLocator('.ash-theme-editor-preview:visible').locator('#app')).toHaveCSS('--ash-editor-background', '#345678');
+		await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+		const startSave = () => page.evaluate(async mode => {
+			if (mode === 'close') {
+				window.themeEditorTest.saveOnClose();
+				return window.themeEditorTest.close();
+			}
+			return window.themeEditorTest.save(mode === 'saveAll');
+		}, mode);
+		let save = startSave();
+		const dialog = page.getByRole('dialog', { name: 'Save as…', exact: true });
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+		expect(await save).toBe(false);
+		await expect(hex).toHaveValue('345678');
+		expect((await page.evaluate(() => window.themeEditorTest.editors()))[0].dirty).toBe(true);
+		save = startSave();
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('textbox', { name: 'Theme name', exact: true }).fill(`My ${mode} theme`);
+		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+		await save;
+		await expect(dialog).toBeHidden();
+		await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(52, 86, 120)');
+		expect(await page.evaluate(() => window.themeEditorTest.installedThemeSource('themes/ash-light.json'))).toBe(original);
+		expect(await page.evaluate(mode => window.themeEditorTest.persisted(`my-${mode.toLowerCase()}-theme.json`), mode)).toContain('#345678');
+		if (mode === 'close') {
+			expect(await page.evaluate(() => window.themeEditorTest.editors())).toEqual([]);
+		} else {
+			await expectSaved(page);
+			await page.getByRole('searchbox').fill('editor.background');
+			await editColor(hex, '#456789');
+			await page.evaluate(() => window.themeEditorTest.save());
+			await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(69, 103, 137)');
+			await expect(dialog).toBeHidden();
+		}
+	});
+}
 
 test('a development built-in theme opens and saves its checkout source instead of its installed copy', async ({
 	page,

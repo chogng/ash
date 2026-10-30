@@ -225,6 +225,7 @@ declare global {
 			selectTheme(id: string): Promise<void>;
 			setSetting(key: string, value: unknown): Promise<void>;
 			open(): Promise<void>;
+			save(all?: boolean): Promise<boolean>;
 			detach(): Promise<void>;
 			mainEditors(): { resource: string; label: string | undefined; dirty: boolean; }[];
 			openJsonSource(): Promise<void>;
@@ -258,6 +259,13 @@ window.themeEditorTest = {
 	selectTheme: id => themes.setColorTheme(id, 'themePicker').then(() => { }),
 	setSetting: (key, value) => configuration.updateValue(key, value),
 	open: async () => { await services.invokeFunction(accessor => CommandsRegistry.getCommand('workbench.action.openThemeEditor')!(accessor)); },
+	save: async all => {
+		const editors = services.get(IEditorService);
+		const result = all
+			? await editors.saveAll({ includeUntitled: true })
+			: await editors.save({ editor: parts.activeGroup.activeInput!, groupId: parts.activeGroup.id });
+		return result.success;
+	},
 	detach: async () => { const group = parts.activeGroup; const editor = group.editors.find(editor => editor.input === group.activeInput)!; await parts.openEditorsInNewWindow([editor], 'move'); },
 	mainEditors: () => main.groups.flatMap(group => group.editors.map(editor => ({ resource: editor.input.resource.toString(), label: editor.input.label, dirty: editor.isDirty }))),
 	openJsonSource: async () => { await main.openEditor({ resource, languageId: 'jsonc' }, { preferredEditorId: CODE_EDITOR_ID, pinned: true }); },

@@ -5,17 +5,13 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { URI } from '../../../../base/common/uri.js';
 import { IUserThemeService } from '../../../common/userThemes.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
-import {
-	IExtensionResourceLoaderService,
-	toExtensionResourceURI,
-} from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { EditorPanes, registerEditorPane } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { CODE_EDITOR_ID, TextResourceEditor } from '../../../browser/parts/editor/textResourceEditor.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import { createThemeEditorInput, getThemeEditorSource, ThemeEditor, ThemeEditorId } from './themeEditor.js';
+import { createThemeEditorDraftInput, createThemeEditorInput, getThemeEditorSource, ThemeEditor, ThemeEditorId } from './themeEditor.js';
 import './themeEditorAccessibility.js';
 
 const themesMenu = MenuId.for('ThemesSubMenu');
@@ -77,26 +73,14 @@ registerAction2(
 					),
 				);
 			const resource = source ? URI.joinPath(users.directory!, source.file) : extension!.resource;
-			const resources = accessor.get(IExtensionResourceLoaderService);
 			const files = accessor.get(IFileService);
 			const editors = accessor.get(IEditorService);
-			// An installation path does not grant access through the workspace file provider.
-			// Only checkout sources are editable. Installed themes are copied into the user profile.
-			const stat =
-				extension && resource.scheme !== 'ash-extension-resource'
-					? await files.stat(resource).catch(() => undefined)
-					: undefined;
-			const packaged = extension !== undefined && stat === undefined;
-			const editorResource = packaged ? toExtensionResourceURI(extension.request) : resource;
-			const input = createThemeEditorInput({
-				resource: editorResource,
-				label: source?.file ?? resource.path.split('/').at(-1),
-				...(packaged
-					? { initialText: await resources.readExtensionResource(editorResource), readOnly: true }
-					: extension && (!extension.developmentRoot || stat?.readonly)
-						? { readOnly: true }
-						: {}),
-			});
+			const stat = extension?.developmentRoot
+				? await files.stat(resource).catch(() => undefined)
+				: undefined;
+			const input = extension && (!extension.developmentRoot || !stat || stat.readonly)
+				? createThemeEditorDraftInput(theme)
+				: createThemeEditorInput({ resource, label: source?.file ?? resource.path.split('/').at(-1) });
 			await editors.openEditor(
 				input,
 				{ preferredEditorId: ThemeEditorId, pinned: true, revealIfOpened: true },
