@@ -86,6 +86,8 @@ import { WorkbenchThemesRegistry } from '../../../common/theme.js';
 export const ThemeEditorId = 'workbench.editor.themeEditor';
 export const ThemeEditorFocused = new RawContextKey<boolean>('themeEditorFocused', false);
 
+const defaultSettingsWidth = 280;
+
 export function createThemeEditorInput(input: IResourceEditorInput): IResourceEditorInput {
 	return { ...input, editorId: ThemeEditorId, languageId: 'jsonc' };
 }
@@ -491,9 +493,11 @@ export class ThemeEditor extends EditorPane {
 			{
 				element: settings,
 				get minimumSize() {
-					return Math.min(300, editor.dimension.width);
+					return Math.min(220, editor.dimension.width);
 				},
 				maximumSize: 440,
+				// Let the preview absorb editor resizing, preserving the inspector width.
+				priority: 'low',
 				onDidChange: Event.None,
 				layout: (width, _offset, _height) => {
 					this.scrollable?.layout();
@@ -501,7 +505,7 @@ export class ThemeEditor extends EditorPane {
 					this.textEditor.layout({ width, height: 0 });
 				},
 			},
-			360,
+			defaultSettingsWidth,
 		);
 		// The embedded preview scales to the space left by an ordinary editor group.
 		this.split.addView(
@@ -567,9 +571,9 @@ export class ThemeEditor extends EditorPane {
 				dimension.width,
 				Math.max(0, dimension.height - this.body.offsetTop + (this.root?.offsetTop ?? 0)),
 			);
-			if (this.initialSplitLayout && dimension.width > 520 && this.split) {
+			if (this.initialSplitLayout && dimension.width > 0 && this.split) {
 				this.initialSplitLayout = false;
-				this.split.resizeView(0, 360);
+				this.split.resizeView(0, defaultSettingsWidth);
 			}
 		}
 	}
