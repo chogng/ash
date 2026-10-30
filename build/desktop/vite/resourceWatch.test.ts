@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
-import { cp, mkdtemp, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test, type TestContext } from 'node:test';
@@ -47,7 +47,7 @@ test('icon generation watches formatter configuration and implementation', async
 	assert.equal(watcher.listenerCount('all'), 0);
 });
 
-test('all resource plugins remove subscriptions and cancel pending generation on shutdown', t => {
+test('all resource plugins remove subscriptions and cancel pending generation on shutdown', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout'] });
 	const repository = resolve(import.meta.dirname, '../../..');
 	const plugins = [
@@ -80,7 +80,7 @@ test('all resource plugins remove subscriptions and cancel pending generation on
 				const plugin = create();
 				assert.ok(typeof plugin.configureServer === 'function');
 				assert.ok(typeof plugin.closeBundle === 'function');
-				Reflect.apply(plugin.configureServer, {}, [server]);
+				await Reflect.apply(plugin.configureServer, {}, [server]);
 				assert.equal(watcher.listenerCount('all'), 1);
 				watcher.emit('all', 'change', path);
 				if (httpServer) {
@@ -111,6 +111,59 @@ test('Vite middleware server closes the icon watcher through the plugin lifecycl
 	assert.ok(server.watcher.listenerCount('all') > 0);
 	await server.close();
 	assert.equal(server.watcher.listenerCount('all'), 0);
+});
+
+test('failed resource preparation during a Vite restart keeps HTTP available and source repair recovers', { timeout: 90_000 }, async t => {
+	const fixture = await iconFixture(t);
+	// Keep the real compiler and both font faces, with only its four required variable glyphs.
+	const names = ['add', 'code', 'projects', 'clockface'];
+	for (const file of await readdir(fixture.sourceDirectory)) {
+		if (file.endsWith('.svg') && !names.includes(file.slice(0, -4))) { await unlink(join(fixture.sourceDirectory, file)); }
+	}
+	const profilePath = join(fixture.sourceDirectory, 'font/sessions.json');
+	const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+	for (const field of ['outlinedFills', 'outlineShapes', 'omitShapes', 'insetStrokes', 'sourceWidths']) {
+		profile[field] = Object.fromEntries(Object.entries(profile[field] ?? {}).filter(([name]) => names.includes(name)));
+	}
+	await writeFile(profilePath, JSON.stringify(profile));
+	await writeFile(join(fixture.root, 'index.html'), '<html><body>Resource server is available</body></html>');
+	const events = new EventEmitter();
+	const logger = createLogger('silent');
+	logger.error = message => { events.emit('failure', message); };
+	const server = await createServer({
+		configFile: false, root: fixture.root, customLogger: logger,
+		plugins: [productIconsPlugin({ ...fixture, debounceMilliseconds: 5 })],
+		server: { host: '127.0.0.1', port: 0 },
+		optimizeDeps: { noDiscovery: true, include: [] },
+	});
+	t.after(() => server.close());
+	server.ws.send = (message: HMRPayload | string) => {
+		if (typeof message !== 'string' && message.type === 'full-reload') { events.emit('reload'); }
+	};
+	await server.listen();
+	const httpServer = server.httpServer!;
+	const failed = once(events, 'failure');
+	const broken = join(fixture.sourceDirectory, 'broken.svg');
+	await writeFile(broken, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="url(#gradient)" d="M2 2H14V14H2Z"/></svg>');
+	server.watcher.emit('all', 'change', broken);
+	assert.match(String((await failed)[0]), /gradients|external resources/);
+	try {
+		await server.restart();
+	} catch (error) {
+		assert.match(String(error), /gradients|external resources/);
+	}
+	assert.equal(server.httpServer, httpServer, 'a failed replacement must retain the previous server');
+	assert.equal(httpServer.listening, true, 'resource errors must not leave a live process with a closed port');
+	const address = httpServer.address();
+	assert.ok(address && typeof address !== 'string');
+	const origin = `http://127.0.0.1:${address.port}`;
+	assert.match(await (await fetch(origin)).text(), /Resource server is available/);
+	const repaired = once(events, 'reload');
+	await writeFile(broken, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="none" stroke="#000" d="M2 2H14V14H2Z"/></svg>');
+	server.watcher.emit('all', 'change', broken);
+	await repaired;
+	assert.equal(httpServer.listening, true, 'source repair must recover without manually restarting the task');
+	assert.match(await (await fetch(origin)).text(), /Resource server is available/);
 });
 
 test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last good outputs on failure, and recover', { timeout: 180_000 }, async t => {
@@ -197,7 +250,7 @@ test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last g
 	assert.notDeepEqual(after[3], before[3], 'the IDE face must rebuild even when the catalog stays unchanged');
 	assert.notDeepEqual(after[4], before[4], 'the Sessions face must rebuild as well');
 	const modified = await Promise.all(paths.map(async path => (await stat(path)).mtimeMs));
-	await plugin.buildStart();
+	await plugin.config();
 	assert.deepEqual(await Promise.all(paths.map(async path => (await stat(path)).mtimeMs)), modified, 'a no-op build must not rewrite watched outputs');
 
 	const broken = join(fixture.sourceDirectory, 'watch-broken.svg');

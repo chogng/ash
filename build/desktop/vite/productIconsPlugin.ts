@@ -20,9 +20,9 @@ interface ProductIconsServer extends RebuildServer {
 	readonly watcher: RebuildServer['watcher'] & { add(path: string): unknown; };
 }
 
-export type AshProductIconsPlugin = Omit<Plugin, 'configureServer' | 'handleHotUpdate' | 'buildStart'> & {
+export type AshProductIconsPlugin = Omit<Plugin, 'configureServer' | 'handleHotUpdate' | 'config'> & {
 	readonly configureServer: (server: ProductIconsServer) => void;
-	readonly buildStart: () => Promise<void>;
+	readonly config: () => Promise<void>;
 	readonly handleHotUpdate: (context: { readonly file: string; }) => [] | undefined;
 };
 
@@ -54,7 +54,6 @@ export function productIconsPlugin(options: ProductIconsPluginOptions = {}): Ash
 		inputs.some(input => samePath(resolve(path), input));
 	const debounceMilliseconds = options.debounceMilliseconds ?? 50;
 	let stopWatching: (() => Promise<void>) | undefined;
-	let initialBuild: Promise<unknown> = Promise.resolve();
 
 	async function rebuild(): Promise<boolean> {
 		const { command, args } = pythonCommand([
@@ -82,13 +81,13 @@ export function productIconsPlugin(options: ProductIconsPluginOptions = {}): Ash
 	return {
 		name: 'ash-product-icons',
 		apply: 'serve',
-		async buildStart() {
-			initialBuild = rebuild();
-			await initialBuild;
+		async config() {
+			// Vite resolves replacement config before closing the live server, but runs
+			// buildStart afterwards. A resource error must leave the old port available.
+			await rebuild();
 		},
 		async closeBundle() {
 			await stopWatching?.();
-			await initialBuild;
 		},
 		configureServer(server) {
 			server.watcher.add(sourceDirectory);

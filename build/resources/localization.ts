@@ -487,9 +487,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Rebuild the startup resource when a feature declaration or translation changes. */
 export function localizationPlugin(options: { watch?: boolean; } = {}): Plugin {
 	let stopWatching: (() => Promise<void>) | undefined;
+	let development = false;
 	return {
 		name: 'ash-localization',
-		async buildStart() { await generateLocalization(); },
+		async config(_config, environment) {
+			development = environment.command === 'serve';
+			// Failed replacement preparation must not retire a still-serving dev server.
+			if (development) { await generateLocalization(); }
+		},
+		async buildStart() {
+			if (!development) { await generateLocalization(); }
+		},
 		async closeBundle() { await stopWatching?.(); },
 		configureServer(server) {
 			if (options.watch === false) { return; }

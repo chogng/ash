@@ -9,12 +9,17 @@ import { generateLocalization, isLocalizationInput, localizationWatchRoots } fro
 /** Publishes package snapshots before compilation and reloads after an extension source changes. */
 export function browserExtensionsPlugin(): Plugin {
 	let stopWatching: (() => Promise<void>) | undefined;
-	let updateWatchFiles: (() => Promise<void>) | undefined;
+	let development = false;
 	return {
 		name: 'ash-browser-extensions',
 		async config(_config, environment) {
+			development = environment.command === 'serve';
 			const locations: Record<string, string> = Object.create(null);
-			if (environment.command === 'serve') {
+			if (development) {
+				// Preflight resources while Vite still serves the previous configuration.
+				// A failed buildStart would run after that server has already closed.
+				await generateLocalization();
+				await prepareBuiltinExtensions();
 				for (const entry of await readdir(browserExtensionRoots[0], { withFileTypes: true })) {
 					if (!entry.isDirectory()) {
 						continue;
@@ -44,21 +49,23 @@ export function browserExtensionsPlugin(): Plugin {
 			return { define: { 'import.meta.env.ASH_BUILTIN_THEME_SOURCES': JSON.stringify(locations) } };
 		},
 		async buildStart() {
-			await generateLocalization();
-			await prepareBuiltinExtensions();
-			await updateWatchFiles?.();
+			if (!development) {
+				await generateLocalization();
+				await prepareBuiltinExtensions();
+			}
 		},
 		async closeBundle() {
 			await stopWatching?.();
 		},
-		configureServer(server) {
+		async configureServer(server) {
 			const dependencies = new Set<string>();
-			updateWatchFiles = async () => {
+			const updateWatchFiles = async () => {
 				const files = await browserExtensionWatchFiles();
 				dependencies.clear();
 				for (const file of files) { dependencies.add(resolve(file)); }
 				server.watcher.add(files);
 			};
+			await updateWatchFiles();
 			server.watcher.add([...browserExtensionRoots, ...localizationWatchRoots]);
 			stopWatching = watchRebuild(server, path => dependencies.has(resolve(path)) || isLocalizationInput(path) || browserExtensionRoots.some(root => {
 				const inside = relative(root, path);
@@ -67,7 +74,7 @@ export function browserExtensionsPlugin(): Plugin {
 			}), async () => {
 				const localized = await generateLocalization();
 				const extensions = await prepareBuiltinExtensions();
-				await updateWatchFiles?.();
+				await updateWatchFiles();
 				return localized || extensions;
 			});
 		},
