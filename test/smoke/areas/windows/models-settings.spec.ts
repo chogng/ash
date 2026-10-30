@@ -634,8 +634,7 @@ for (const host of ['Workbench', 'Sessions']) {
 		const automatic = picker.getByRole('switch', { name: 'Auto', exact: true });
 		await expect(automatic).toBeVisible();
 		if (await automatic.isChecked()) { await automatic.press('Space'); }
-		await expect(picker.getByRole('tab', { name: 'GPT', exact: true })).toBeVisible();
-		await picker.getByRole('tab', { name: 'GPT', exact: true }).click();
+		await expect(picker.getByRole('tab', { includeHidden: true })).toHaveCount(0);
 		await expect(picker.getByRole('menuitemradio').first()).toHaveAccessibleName(chosen[0]);
 		for (const name of names) { await expect(picker.getByRole('menuitemradio', { name, exact: true })).toBeVisible(); }
 	});
@@ -837,7 +836,6 @@ for (const host of ['Workbench', 'Sessions']) {
 		let picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
 		const automatic = picker.getByRole('switch', { name: 'Auto', exact: true });
 		if (await automatic.isChecked()) { await automatic.press('Space'); }
-		await picker.getByRole('tab', { name: 'Claude', exact: true }).click();
 		await picker.getByRole('menuitemradio', { name: 'Claude Sonnet 5.5', exact: true }).click();
 		await expect(trigger()).toHaveText('Claude Sonnet 5.5');
 		await newChat();

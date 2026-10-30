@@ -16,11 +16,19 @@ export function createManageModelsAction(commandService: ICommandService): IActi
 	};
 }
 
-/** Projects the chosen provider's ordered catalog into selectable rows. */
+/** Projects the enabled catalog into selectable rows without changing its order or model identities. */
 export function buildModelPickerItems(
 	models: readonly ModelCatalogEntry[],
 	selected: ModelRef | undefined,
 	options?: IModelPickerItemOptions,
 ): readonly IActionListItem<ModelCatalogEntry>[] {
-	return models.map(entry => createModelItem(entry, selected, options));
+	const names = new Map<string, number>();
+	for (const entry of models) {
+		names.set(entry.displayName, (names.get(entry.displayName) ?? 0) + 1);
+	}
+	return models.map(entry => {
+		const item = createModelItem(entry, selected, options);
+		if (names.get(entry.displayName)! < 2) { return item; }
+		return { ...item, description: [entry.model.provider, item.description].filter(Boolean).join(' · ') };
+	});
 }

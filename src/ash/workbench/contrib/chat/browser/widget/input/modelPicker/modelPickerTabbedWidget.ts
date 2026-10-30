@@ -1,4 +1,4 @@
-import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
 import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
@@ -27,7 +27,7 @@ import { ModelPickerWelcome } from './modelPickerWelcome.js';
 
 let nextPickerId = 0;
 
-/** Projects provider tabs and detail pages; model state remains in the delegate and language-model service. */
+/** Presents the enabled catalog and detail pages; model state remains in the delegate and language-model service. */
 export class TabbedModelPicker extends Disposable {
 	private readonly widget: TabbedActionListWidget;
 	private readonly showing = this._register(new MutableDisposable<DisposableStore>());
@@ -66,8 +66,6 @@ export class TabbedModelPicker extends Disposable {
 		const session = new DisposableStore();
 		this.showing.value = session;
 		const document = anchor.ownerDocument;
-		const selected = this.delegate.getSelectedModel();
-		const initialTab = this.destinations.find(tab => tab.id === (detailsModel ?? selected)?.provider)?.id ?? this.destinations[0]!.id;
 		const pickerId = `chatModelPicker-${++nextPickerId}`;
 		const manageModels = createManageModelsAction(this.commands);
 		const empty = h(document, 'div');
@@ -91,41 +89,41 @@ export class TabbedModelPicker extends Disposable {
 		error.hidden = true;
 		let automaticSwitch: Switch | undefined;
 		let popupRoot: HTMLElement | undefined;
-		const owner = this;
 		anchor.setAttribute('aria-expanded', 'true');
 		this.widget.show<ModelCatalogEntry>({
-			user: pickerId, anchor, width: 360,
+			user: pickerId, anchor, width: 240,
 			isBodyCollapsed: () => this.delegate.isAutomaticModel() && this.delegate.getModels().length > 0,
 			focusFooter: () => automaticSwitch?.focus(),
-			get tabs() { return owner.destinations; },
-			initialTab,
-			createActionList: provider => {
-				const destination = this.destinations.find(destination => destination.id === provider)!;
+			tabs: [], initialTab: '',
+			createActionList: () => {
+				const models = this.delegate.getModels();
 				const current = this.delegate.isAutomaticModel() ? undefined : this.delegate.getSelectedModel();
-				empty.hidden = destination.models.length > 0;
-				if (!destination.models.length) {
-					const placeholders = destination.placeholders.length ? destination.placeholders : fallbackPlaceholders();
-					const key = JSON.stringify([provider, placeholders.map(({ label, message }) => [label, message])]);
+				empty.hidden = models.length > 0;
+				if (!models.length) {
+					const destinations = this.destinations;
+					const unavailable = destinations.flatMap(destination => destination.placeholders);
+					const placeholders = unavailable.length ? unavailable : fallbackPlaceholders();
+					const key = JSON.stringify(placeholders.map(({ label, message }) => [label, message]));
 					if (key !== welcomeKey) {
 						const hadFocus = empty.contains(document.activeElement);
 						welcomeKey = key;
-						welcome.value = new ModelPickerWelcome({ ...destination, placeholders }, document);
+						welcome.value = new ModelPickerWelcome({ ...destinations[0]!, placeholders }, document);
 						empty.replaceChildren(welcome.value.element);
 						if (hadFocus) { focusWelcome(); }
 					}
 				}
 				return {
-					items: buildModelPickerItems(destination.models, current, {
+					items: buildModelPickerItems(models, current, {
 						selectedEffort: this.delegate.getSelectedReasoningEffort(),
 						onOpenDetails: entry => this.showDetails(entry),
 					}),
 					listOptions: {
 						className: 'ash-chat-model-picker', presentation: 'details',
 						ariaLabel: localize('chat.modelPicker.aria', 'Choose a chat model'),
-						showFilter: true, filterVisible: destination.models.length > 0 && !this.delegate.isAutomaticModel(),
+						showFilter: true, filterVisible: models.length > 0 && !this.delegate.isAutomaticModel(),
 						filterPlaceholder: localize('chat.modelPicker.search', 'Search models'),
 						focusFilterOnOpen: true, filterAsCombobox: true,
-						itemsVisible: destination.models.length > 0 && !this.delegate.isAutomaticModel(), header: empty,
+						itemsVisible: models.length > 0 && !this.delegate.isAutomaticModel(), header: empty,
 						accessibilityHelp: () => this.accessibleViewService.show(AccessibleViewType.Help),
 					},
 				};
@@ -165,15 +163,9 @@ export class TabbedModelPicker extends Disposable {
 						if (!this.preview?.domNode.contains(event.target as Node)) { this.preview?.hide(); }
 					}));
 				}
-				resources.add(addDisposableListener(root, 'keydown', event => {
-					if (!event.isComposing && event.key === 'ArrowDown' && !empty.hidden && (event.target as HTMLElement).getAttribute('role') === 'tab') {
-						stopEvent(event);
-						focusWelcome();
-					}
-				}, true));
 				return resources;
 			},
-			renderFooter: (container, provider) => {
+			renderFooter: container => {
 				const resources = new DisposableStore();
 				const automatic = resources.add(new Switch(container, {
 					...defaultToggleStyles, label: localize('chat.modelPicker.auto', 'Auto'),
@@ -216,8 +208,7 @@ export class TabbedModelPicker extends Disposable {
 					container.classList.toggle('ash-chat-model-picker-footer', hasModels);
 					automatic.element.hidden = !hasModels;
 					automatic.checked = this.delegate.isAutomaticModel();
-					menu.element.hidden = !this.destinations.some(destination => destination.id === provider && destination.models.length > 0)
-						|| this.delegate.isAutomaticModel();
+					menu.element.hidden = !hasModels || this.delegate.isAutomaticModel();
 				};
 				refreshAutomatic();
 				resources.add(this.delegate.onDidChangePresentation(refreshAutomatic));
@@ -316,7 +307,7 @@ export class TabbedModelPicker extends Disposable {
 					if (!(active instanceof HTMLElement) || !root.contains(active)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
 						() => type === AccessibleViewType.Help
-							? localize('chat.modelPicker.help', 'Model picker. Provider tabs group models by connection. Left and Right Arrow move between tabs; Enter selects a tab and Down Arrow enters its models. Type in search to filter the active provider. Up and Down Arrow browse models and Enter selects one. The details button or Right Arrow opens model information and supported thinking, context and speed settings. Tab moves between controls; arrow keys change a focused option group. Applying settings selects that model. Back to models or Alt+Left Arrow returns to the retained list and search. Auto enables automatic model selection. Escape closes the picker. Add Models opens Language Models management.')
+							? localize('chat.modelPicker.help', 'Model picker. All enabled models appear in one list. Type in search to filter models across all providers. Up and Down Arrow browse models and Enter selects one. The details button or Right Arrow opens model information and supported thinking, context and speed settings. Tab moves between controls; arrow keys change a focused option group. Applying settings selects that model. Back to models or Alt+Left Arrow returns to the retained list and search. Auto enables automatic model selection. Escape closes the picker. Add Models opens Language Models management.')
 							: root.innerText,
 						() => { if (active.isConnected) { active.focus(); } }, AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},

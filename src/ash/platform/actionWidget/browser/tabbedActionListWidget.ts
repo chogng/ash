@@ -25,6 +25,7 @@ export interface ITabbedActionListBuildResult<T> {
 export interface ITabbedActionListShowOptions<T> {
 	readonly user: string;
 	readonly anchor: ContextViewAnchor;
+	/** Empty for a single ungrouped list with no tab navigation. */
 	readonly tabs: readonly ITabDescriptor[];
 	readonly initialTab: string;
 	readonly delegate: IActionListDelegate<T>;
@@ -80,7 +81,6 @@ export class TabbedActionListWidget extends Disposable {
 		const panel = h(document, 'div');
 		panel.className = 'ash-tabbed-action-list-panel';
 		panel.id = `${options.user}.action-panel`;
-		panel.setAttribute('role', 'tabpanel');
 		panel.append(...root.childNodes);
 		const tabHost = h(document, 'div');
 		tabHost.className = 'ash-tabbed-action-list-tabbar';
@@ -106,20 +106,30 @@ export class TabbedActionListWidget extends Disposable {
 		let renderedFooterTab: string | undefined;
 		const refresh = (): void => {
 			descriptors = describeTabs();
-			if (!descriptors.some(tab => tab.id === activeTab)) { activeTab = descriptors[0]!.id; }
-			tabs.setTabs(descriptors, activeTab);
-			panel.setAttribute('aria-labelledby', descriptors.find(tab => tab.id === activeTab)!.tabId);
+			if (!descriptors.some(tab => tab.id === activeTab)) { activeTab = descriptors[0]?.id ?? ''; }
+			tabs.setTabs(descriptors, descriptors.length ? activeTab : undefined);
+			const active = descriptors.find(tab => tab.id === activeTab);
+			if (active) {
+				panel.setAttribute('role', 'tabpanel');
+				panel.setAttribute('aria-labelledby', active.tabId);
+			} else {
+				panel.removeAttribute('role');
+				panel.removeAttribute('aria-labelledby');
+			}
 			const result = options.createActionList(activeTab);
 			list.updateItems(result.items, result.listOptions);
-			if (!this.detailsVisible) { tabHost.hidden = panel.hidden = options.isBodyCollapsed?.() ?? false; }
+			if (!this.detailsVisible) {
+				panel.hidden = options.isBodyCollapsed?.() ?? false;
+				tabHost.hidden = panel.hidden || descriptors.length === 0;
+			}
 			if (renderedFooterTab !== activeTab) {
 				renderedFooterTab = activeTab;
 				footerLifetime.clear();
 				footer.replaceChildren();
 				footerLifetime.value = options.renderFooter?.(footer, activeTab);
 			}
-			const active = document.activeElement;
-			if (active instanceof document.defaultView!.HTMLElement && root.contains(active) && active.closest('[hidden]')) { list.focusFilter(); }
+			const focused = document.activeElement;
+			if (focused instanceof document.defaultView!.HTMLElement && root.contains(focused) && focused.closest('[hidden]')) { list.focusFilter(); }
 			layout();
 		};
 		const tabs = lifetime.add(new TabList<string>(tabHost, {
@@ -132,14 +142,15 @@ export class TabbedActionListWidget extends Disposable {
 				refresh();
 			},
 		}));
-		tabs.setTabs(descriptors, activeTab);
-		panel.setAttribute('aria-labelledby', descriptors.find(tab => tab.id === activeTab)!.tabId);
+		tabs.setTabs(descriptors, descriptors.length ? activeTab : undefined);
 		let returnFocus: HTMLElement | undefined;
 		this.back = () => {
 			if (!this.detailsVisible) { return; }
 			this.detailsVisible = false;
 			details.hidden = true;
-			tabHost.hidden = panel.hidden = footer.hidden = false;
+			panel.hidden = options.isBodyCollapsed?.() ?? false;
+			tabHost.hidden = panel.hidden || descriptors.length === 0;
+			footer.hidden = false;
 			detailLifetime.clear();
 			details.replaceChildren();
 			if (returnFocus?.isConnected) { returnFocus.focus({ preventScroll: true }); }

@@ -68,6 +68,8 @@ import type { IFileSearchService } from '../../../../../platform/search/common/f
 import type { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import type { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
+import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
 import type { ChatAgent } from '../../../../services/chat/common/chatService.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
@@ -75,6 +77,7 @@ import type { ChatContextAttachment } from '../../../../services/chat/common/cha
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -3315,7 +3318,7 @@ suite('chatInput browser component', () => {
 			const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
 			const search = picker.locator('input[role=combobox]');
 			const width = await picker.evaluate(element => element.getBoundingClientRect().width);
-			expect(width).toBeGreaterThan(320);
+			expect(width).toBe(240);
 			expect(width).toBeLessThanOrEqual(page.viewportSize()!.width * 0.8);
 			await expect(search).toHaveCSS('outline-style', 'none');
 			await expect(search).toHaveCSS('border-top-width', '0px');
