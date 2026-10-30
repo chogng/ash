@@ -7,6 +7,13 @@
 `open_app_server*` 产品入口继续装配默认实现；直接构造 `AppServer::new` 的嵌入方须显式传入
 `DiffRequestHandler`。运行时的 diff 实现依赖只用于测试，不进入其普通构建图。
 
+Desktop 的 ChatGPT Web 凭据消费者使用 daemon 的 `credentials` 原生连接角色，
+使用 profile 共享的 `ChatGptWebAuthentication` owner；无目录和各目录 runtime 的原生消费者及登录适配器均接入同一 owner。该连接只接受
+`host_credentials` 私有类型化帧，不进入 JSON-RPC dispatch；Renderer、WebSocket
+业务连接和远程连接均不能调用它。每个请求固定原始账号上下文，令牌更新保留上下文，
+账号变化、登出或断连撤销旧授权；401 最多由 owner 恢复一次。Codex 管理凭据时只读复用，
+不竞争刷新令牌。独立 Web 登录由 Ash owner 在私有 SecretStore 维护，首次授权前刷新并提交凭据；来源切换和登出以同一记录的持久代次撤销旧授权及迟到登录回调。`chatgpt-web` 登录入口与两种模型订阅连接各自独立，失败不切换来源。原始鉴权头仅返回本机 Main 私有管道，公共账号协议仍只提供脱敏元数据。
+
 `ash-app-server` 组合一个环境中的服务并实现 App Server 协议，具体职责如下：
 
 1. 分发类型化协议，管理请求取消、产品会话组织和通知订阅。

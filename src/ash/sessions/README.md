@@ -15,8 +15,21 @@ The `ash-chatgpt` editor resource and conversation storage keys stay stable
 across entry restoration. Previous native-experiment restore commands resolve
 to this same entry without creating or sending a new conversation.
 
-The window-owned Main transport reads the existing Codex credentials and makes
-ChatGPT requests; credentials never enter the renderer. Its hidden Chromium
+The profile-scoped Rust ChatGPT Web authentication owner supplies request-bound
+authorization over the daemon's native-only credentials connection. The New context
+menu offers independent Ash device sign-in, explicit read-only Codex reuse and sign-out.
+Independent credentials and source selection share one guarded profile SecretStore
+record. The owner renews these tokens before use, persists rotation before granting
+headers and handles same-account 401 recovery once. External Codex credentials remain
+read-only; a failure never switches the selected source. Each window's account login
+adapter retains its own completion route while sharing the profile owner. Main no longer reads
+`auth.json`; credential headers never cross renderer RPC or the HTTP result channel.
+The renderer carries only an opaque authentication context. Account changes or owner
+connection loss revoke pending requests and retire Chromium cookies; the ChatGPT
+model drops the old account's history, conversation IDs and attachments while
+preserving local unsent draft text. A definite HTTP 401 may be retried once after
+the owner supplies a replacement authorization, before any response is delivered.
+The window-owned Main transport executes those requests. Its hidden Chromium
 runtime only performs the website's request verification. It does not host an
 additional chat UI or own conversation state. Voice capture and playback use
 the renderer's existing media lifecycle. ChatGPT remains separate from the

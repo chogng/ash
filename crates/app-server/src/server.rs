@@ -87,6 +87,7 @@ mod browser_file_access;
 #[path = "server/request_processors/browser.rs"]
 mod browser_processor;
 mod browser_workspace;
+mod host_credentials;
 pub(crate) use browser_workspace::WebWorkspaceRollback;
 
 mod call_adapters;
@@ -374,6 +375,7 @@ pub struct AppServer {
     github_processor: Option<Arc<github_processor::GitHubRequestProcessor>>,
     issue_reporter: Option<github::GitHubIssueReporter>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
+    chatgpt_web: Option<Arc<ash_chatgpt::ChatGptWebAuthentication>>,
     kimi: Option<Arc<ash_kimi::KimiOAuth>>,
     supergrok: Option<Arc<supergrok::SuperGrokOAuth>>,
     glm_accounts: std::collections::BTreeMap<String, Arc<ash_glm::GlmOAuth>>,
@@ -1364,6 +1366,7 @@ impl AppServer {
             github_processor: None,
             issue_reporter: None,
             chatgpt: None,
+            chatgpt_web: None,
             kimi: None,
             supergrok: None,
             glm_accounts: std::collections::BTreeMap::new(),
@@ -2060,6 +2063,14 @@ impl AppServer {
 
     pub fn with_chatgpt_account(mut self, chatgpt: Arc<ash_chatgpt::ChatGptAccount>) -> Self {
         self.chatgpt = Some(chatgpt);
+        self
+    }
+
+    pub fn with_chatgpt_web_authentication(
+        mut self,
+        auth: Arc<ash_chatgpt::ChatGptWebAuthentication>,
+    ) -> Self {
+        self.chatgpt_web = Some(auth);
         self
     }
 

@@ -3,19 +3,20 @@ import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Editor } from '../../../automation/editor.js';
 import { simpleChatGPTModelCatalog } from '../../../fixtures/chatGPTModels.js';
+import { chatGPTAuthDocument } from '../../../fixtures/chatGPTAuth.js';
 
 declare global {
 	var ashNativeFixture: { advance(): void; readonly sends: number; };
 }
 
-/** Keep the production IPC, transport, verification asset and UI; replace only service I/O. */
+/** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
 async function installService(application: ElectronApplication): Promise<void> {
-	await application.evaluate(async ({ app, session, webContents }, catalog) => {
+	await application.evaluate(async ({ app, session, webContents }, { catalog, authentication }) => {
 		const fs = process.getBuiltinModule('fs/promises');
 		const path = process.getBuiltinModule('path');
 		const home = path.join(process.env.HOME!, '.codex');
 		await fs.mkdir(home, { recursive: true });
-		await fs.writeFile(path.join(home, 'auth.json'), JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'synthetic-test-login' } }));
+		await fs.writeFile(path.join(home, 'auth.json'), authentication);
 		let sends = 0; let step = 0; let reply: ReadableStreamDefaultController<Uint8Array> | undefined;
 		const message = (id: string, role: string, text: string) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
 		const live: Record<string, { parent: string | null; message: ReturnType<typeof message>; }> = {};
@@ -84,13 +85,13 @@ async function installService(application: ElectronApplication): Promise<void> {
 		};
 		install(session.defaultSession); for (const contents of webContents.getAllWebContents()) { install(contents.session); }
 		app.on('session-created', install);
-	}, simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]));
+	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument() });
 }
 
 for (const locale of ['en', 'zh-CN'] as const) {
 	test.describe(`ChatGPT entry in ${locale}`, () => {
 		test.use({ electronWindowMode: 'active' });
-		test('opens by default, retains the existing login, streams followups and restores history and drafts', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench }, testInfo) => {
+		test('opens by default, retains the existing login, streams followups and restores history and drafts', { tag: ['@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench }, testInfo) => {
 			let application = initialApplication as ElectronApplication; let workbench = initialWorkbench;
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');

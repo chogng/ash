@@ -65,3 +65,9 @@ Ash 提供两条独立的 ChatGPT 订阅连接。同一模型厂商仍为 `opena
 使用 `just verify ash-chatgpt` 和 `just verify ash-model-provider` 验证所属包。App Server 登录方法变化须运行 `just generate-protocol`、协议测试、生成 TypeScript 严格检查和受影响客户端检查。
 
 所有真实模型测试固定使用 `gpt-5.6-luna`、`reasoning.effort=low`，不得刷新真实 Codex 凭据。默认测试不调用用户真实账户；已有只读验收入口为 `just test ash-chatgpt live_codex_usage_is_read_only -- --ignored --nocapture` 与 `just test ash-tui live_usage_command_through_local_app_server -- --ignored --nocapture`。原 Codex 格式实现的历史验收见[认证兼容验收](../../crates/docs/changes/chatgpt-auth/verification.md)。
+
+## ChatGPT Web 工作区
+
+聊天工作区的历史、附件和网页会话由 `chatgpt-web` 认证入口提供，与上面的模型订阅连接独立。在“新建”的右键菜单中选择“登录 Ash”可发起设备授权；凭据仅写入 Ash profile 的 SecretStore。共享 Rust owner 提前刷新过期凭据并持久化，401 仅对原账号恢复一次。该入口使用独立的 Codex 格式设备授权，不能使用 `chatgpt-plan` 的公共推理 token 访问网页历史接口。
+
+“使用 Codex 登录”显式选择只读复用外部来源。刷新失败不会自动切换来源；“退出 Ash 登录”清除独立凭据并停用外部来源，保留 Codex 登录不变。切换来源、登出和账号变化撤销旧请求；各窗口共用 profile owner，登录完成仍路由回发起窗口。

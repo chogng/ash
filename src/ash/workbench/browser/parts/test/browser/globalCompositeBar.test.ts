@@ -159,7 +159,15 @@ test('Activity Bar global actions open account and management menus', async () =
 	await actions[1].actions[0]?.run();
 	await actions[3]?.run();
 	assert.deepEqual({ loggedOutProviders, manageAccountsOpened }, { loggedOutProviders: ['github'], manageAccountsOpened: 1 });
-	accountState = { revision: 2n, accounts: [] };
+	accountState = { revision: 2n, accounts: [{ provider: 'chatgpt-web', accountId: 'private', status: 'ready', credentialRevision: 1n }] };
+	accountsChanged.fire(accountState);
+	closeMenu(false);
+	accountsButton.click();
+	assert.equal(actions[0]?.label, 'ChatGPT Web (ChatGPT Web)');
+	assert.ok(actions[0] instanceof SubmenuAction);
+	await actions[0].actions[0]?.run();
+	assert.deepEqual(loggedOutProviders, ['github', 'chatgpt-web']);
+	accountState = { revision: 3n, accounts: [] };
 	accountsChanged.fire(accountState);
 	closeMenu(false);
 	accountsButton.click();

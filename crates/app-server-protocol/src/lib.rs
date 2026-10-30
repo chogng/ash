@@ -4,6 +4,7 @@
 
 #[cfg(any(test, feature = "export"))]
 mod export;
+pub mod host_credentials;
 mod listen_info;
 mod schema;
 mod web;

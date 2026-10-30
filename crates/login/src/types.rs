@@ -86,6 +86,8 @@ pub enum LoginMethod {
     },
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
+    ChatGptWebDeviceCode,
+    ChatGptWebCodex,
     KimiDeviceCode,
     XaiDeviceCode,
     BigModelBrowser,
@@ -103,6 +105,7 @@ impl LoginMethod {
         match self {
             Self::ChatGptPlanBrowser { .. } => "chatgpt-plan",
             Self::OpenAiChatGptBrowser | Self::OpenAiChatGptDeviceCode => "chatgpt-subscription",
+            Self::ChatGptWebDeviceCode | Self::ChatGptWebCodex => "chatgpt-web",
             Self::KimiDeviceCode => "kimi-subscription",
             Self::XaiDeviceCode => "xai-subscription",
             Self::BigModelBrowser => "bigmodel-coding-plan",

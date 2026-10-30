@@ -1,6 +1,37 @@
 use super::*;
 use base64::Engine;
 
+#[test]
+fn external_in_place_writes_never_publish_an_incomplete_auth_snapshot() {
+    for partial in [false, true] {
+        let home = tempfile::tempdir().unwrap();
+        let file = home.path().join("auth.json");
+        let document = encode_new_auth(
+            &tokens(),
+            &TokenCredential::from_parts(&tokens().id_token, tokens().access_token.clone(), None)
+                .unwrap(),
+        )
+        .unwrap();
+        let mut writer = fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&file)
+            .unwrap();
+        let split = if partial { 23 } else { 0 };
+        writer.write_all(&document[..split]).unwrap();
+        let tail = document[split..].to_vec();
+        let write = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(40));
+            writer.write_all(&tail).unwrap();
+            writer.flush().unwrap();
+        });
+        let bytes = read_auth_file(&file).unwrap().unwrap();
+        assert_eq!(&*bytes, &*document);
+        write.join().unwrap();
+    }
+}
+
 fn tokens() -> TokenResponse {
     let jwt = |value: serde_json::Value| {
         format!(

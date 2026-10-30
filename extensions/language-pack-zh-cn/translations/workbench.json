@@ -4,6 +4,8 @@
     "hover.verbosityInvalid": "悬停内容的无障碍详细提示设置必须为布尔值。",
     "hover.verbosityTitle": "悬停内容无障碍帮助",
     "hover.verbosityDescription": "阅读悬停内容时提示如何打开无障碍帮助。",
+    "workbench.chatgptWebAccount": "ChatGPT 网页",
+    "sessions.chatgpt.loginUnavailable": "ChatGPT 登录不可用。请使用“新建”按钮的右键菜单登录 Ash 或选择 Codex 登录。",
     "button.moreActions": "更多操作…",
     "debug.stopActions": "更多停止操作",
     "debug.stopActionsHelp": "停止旁的箭头提供全部停止。使用左右方向键在停止按钮与箭头之间移动，按下方向键打开菜单，按 Escape 关闭菜单并返回按钮。",

@@ -161,6 +161,16 @@ pub(crate) fn run(
                             return;
                         }
                     };
+                    if connection.options.role() == ConnectionRole::Credentials {
+                        let shutdown = connection.writer.try_clone().ok();
+                        if let Err(error) = server.serve_host_credentials(connection.reader, connection.writer)
+                            && !is_peer_disconnect(&error)
+                        {
+                            eprintln!("managed private credential connection failed: {error}");
+                        }
+                        if let Some(stream) = shutdown { let _ = stream.shutdown(std::net::Shutdown::Both); }
+                        return;
+                    }
                     if let Some(options) = connection.web.take() {
                         if let Err(error) = web::serve(server, web_registry, connection, options) {
                             eprintln!("Managed Web listener failed: {error}");

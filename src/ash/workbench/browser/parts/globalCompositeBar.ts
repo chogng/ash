@@ -188,8 +188,8 @@ export class GlobalCompositeBar extends Disposable {
 			? this.label('workbench.cancelGitHubConnection', 'Cancel GitHub connection')
 			: this.label('workbench.connectGitHub', 'Connect GitHub');
 		const accountActions = this.accounts.map(account => {
-			const name = account.displayName ?? account.email ?? account.provider;
 			const providerName = this.accountProviderName(account.provider);
+			const name = account.displayName ?? account.email ?? (account.provider === 'chatgpt-web' ? providerName : account.provider);
 			const label = this.localizationService.translate('ash', 'workbench.accountWithProvider', '{0} ({1})', { '0': name, '1': providerName });
 			return new SubmenuAction(`ash.activityBar.account.${account.provider}.${account.accountId}`, label, [
 				{ id: `ash.activityBar.signOut.${account.provider}.${account.accountId}`, label: signOutLabel, tooltip: signOutLabel, enabled: true, run: () => this.accountService.logout(account.provider, account.accountId) },
@@ -205,6 +205,7 @@ export class GlobalCompositeBar extends Disposable {
 		switch (provider) {
 			case 'github': return 'GitHub';
 			case 'chatgpt-subscription': return 'ChatGPT';
+			case 'chatgpt-web': return this.label('workbench.chatgptWebAccount', 'ChatGPT Web');
 			case 'kimi-subscription': return 'Kimi';
 			case 'xai-subscription': return 'Super Grok';
 			case 'bigmodel-coding-plan': return 'BigModel';

@@ -1,5 +1,6 @@
-import type { ChatGPTRequest, IChatGPTTransport } from '../common/chatGPTTransport.js';
+import { ChatGPTAuthenticationError, type ChatGPTRequest, type IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
+import { localize } from '../../../../nls.js';
 
 /** Adapt the contribution's pull-based IPC transport to the client's HTTP/stream parser. */
 export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
@@ -47,6 +48,12 @@ export function createChatGPTFetch(transport: IChatGPTTransport): typeof fetch {
 				cancel: release,
 			});
 			return new Response(body, response);
-		} catch (error) { release(); throw error; }
+		} catch (error) {
+			release();
+			if (error instanceof Error && error.name === 'ChatGPTAuthenticationError') {
+				throw new ChatGPTAuthenticationError(localize('sessions.chatgpt.loginUnavailable', 'ChatGPT sign-in is unavailable. Use the New button context menu to sign in to Ash or select the Codex login.'));
+			}
+			throw error;
+		}
 	};
 }

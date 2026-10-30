@@ -860,6 +860,7 @@ pub struct LocalProfileRuntime {
     extension_packages: Mutex<Option<ProfileExtensionsAuthority>>,
     github_authentication: Mutex<Option<Arc<GitHubAuthenticationRuntime>>>,
     github_extension: Mutex<Option<Arc<GitHubExtensionRuntime>>>,
+    chatgpt_web: Mutex<Option<Arc<ash_chatgpt::ChatGptWebAuthentication>>>,
     editor_extension_policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     pub(crate) session_runtimes: Arc<crate::session_runtime_provider::SessionRuntimeProvider>,
 }
@@ -1015,6 +1016,7 @@ impl LocalProfileRuntime {
             extension_packages: Mutex::new(None),
             github_authentication: Mutex::new(None),
             github_extension: Mutex::new(None),
+            chatgpt_web: Mutex::new(None),
         })
     }
 
@@ -1609,6 +1611,24 @@ pub fn open_app_server_with_codebase_providers(
         options.profile_root.join("chatgpt-plan.lock"),
         Arc::clone(&model_client),
     );
+    let create_web_auth = || {
+        ash_chatgpt::ChatGptWebAuthentication::new(
+            options.profile_root.clone(),
+            profile_secrets.clone(),
+            model_client.clone(),
+            chatgpt_oauth.clone(),
+        )
+    };
+    let chatgpt_web = if let Some(profile) = &profile_runtime {
+        let mut authority = profile
+            .chatgpt_web
+            .lock()
+            .map_err(|_| OpenAppServerError("ChatGPT Web authority lock poisoned".into()))?;
+        authority.get_or_insert_with(create_web_auth).clone()
+    } else {
+        create_web_auth()
+    };
+    let chatgpt_web_login = chatgpt_web.login_driver();
     let kimi_oauth = match &model_operation_client {
         Some(client) => KimiOAuth::with_client(Arc::clone(&profile_secrets), Arc::clone(client)),
         None => KimiOAuth::production(Arc::clone(&profile_secrets))
@@ -1817,6 +1837,7 @@ pub fn open_app_server_with_codebase_providers(
         )
     });
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
+        chatgpt_web_login.clone(),
         chatgpt_plan.clone(),
         chatgpt_oauth.clone(),
         kimi_oauth.clone(),
@@ -1839,6 +1860,9 @@ pub fn open_app_server_with_codebase_providers(
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
     chatgpt_plan
+        .install_login_service(&login_service)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    chatgpt_web_login
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     chatgpt_oauth
@@ -1930,6 +1954,7 @@ pub fn open_app_server_with_codebase_providers(
     ))
     .with_login_service(login_service)
     .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
+    .with_chatgpt_web_authentication(chatgpt_web)
     .with_kimi_account(kimi_oauth)
     .with_supergrok_account(supergrok_oauth)
     .with_glm_accounts(glm_accounts)

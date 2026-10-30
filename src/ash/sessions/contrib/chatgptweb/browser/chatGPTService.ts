@@ -3,7 +3,7 @@ import { observableValue, type IObservable } from '../../../../base/common/obser
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { IChatGPTTransport } from '../common/chatGPTTransport.js';
+import { ChatGPTAuthenticationError, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ChatGPTClient, ChatGPTRequestError, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTFile, type ChatGPTProject, type ChatGPTHistory } from './chatGPTClient.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
 import { getChatGPTRichContentText } from './chatGPTRichContent.js';
@@ -94,14 +94,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private stream: AbortController | undefined;
 	private stopping: Promise<void> | undefined;
 	private generation = 0;
-	private readonly management = new AbortController();
+	private management = new AbortController();
 	// Auxiliary pin results do not advance the recent-history pagination offset.
 	private recentOffset = 0;
 	private readonly recentIds = new Set<string>();
 
 	public readonly state: IObservable<ChatGPTState> = this.model;
 	private readonly client: ChatGPTClient;
-	private initialized = false;
 	constructor(@IChatGPTTransport transport: IChatGPTTransport, @IStorageService private readonly storage: IStorageService) {
 		super();
 		this.client = new ChatGPTClient(createChatGPTFetch(transport));
@@ -112,8 +111,38 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			for (const upload of this.uploads.values()) { upload.abort(); }
 			this.uploads.clear(); this.attachmentFiles.clear();
 		}));
+		if (transport.onDidChangeAuthentication) { this._register(transport.onDidChangeAuthentication(() => this.authenticationChanged())); }
 	}
-	public initialize(): void { if (!this.initialized) { this.initialized = true; void this.loadCatalog(); } }
+
+	private authenticationChanged(): void {
+		if (this.isDisposed) { return; }
+		const draft = this.model.get().draft;
+		this.generation++;
+		this.operation?.abort(); this.stream?.abort(); this.stream = undefined;
+		this.management.abort(); this.management = new AbortController();
+		void this.endVoice(false);
+		for (const upload of this.uploads.values()) { upload.abort(); }
+		this.uploads.clear(); this.attachmentFiles.clear(); this.drafts.clear();
+		this.drafts.set('new', { text: draft, attachments: [] });
+		this.recentIds.clear(); this.recentOffset = 0;
+		this.rememberConversation(undefined);
+		// User-authored draft text stays local. Conversation IDs, files and history
+		// belong to the retired account and cannot be reused with its successor.
+		this.update({
+			draft, attachments: [], connected: false, busy: false, sending: false, managing: false,
+			loading: undefined, conversations: [], projects: [], models: [], model: '', modelPreset: undefined,
+			conversationId: undefined, messages: [], parentId: crypto.randomUUID(), title: 'ChatGPT',
+			voice: 'idle', voiceTranscript: [], uncertain: false, stopped: false, hasMore: false, error: '',
+		});
+		this.initialize();
+	}
+	public initialize(): void {
+		const state = this.model.get();
+		if (this.isDisposed || state.connected || state.busy) { return; }
+		// A rejected login must not latch initialization: re-entry reads the current
+		// credentials again while pending and successful loads remain shared.
+		void this.loadCatalog();
+	}
 	public async listProjects(signal: AbortSignal): Promise<readonly ChatGPTProject[]> {
 		const projects = await this.client.projects(AbortSignal.any([signal, this.management.signal, AbortSignal.timeout(30_000)]));
 		const previous = this.model.get().projects;
@@ -176,9 +205,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const state = this.model.get();
 		if (this.isDisposed || !state.connected || state.busy || state.sending || state.managing || state.voice !== 'idle' || !state.conversations.some(item => item.id === id)) { return undefined; }
 		this.update({ managing: true, error: '' });
-		try { return await operation(AbortSignal.any([this.management.signal, AbortSignal.timeout(30_000)])); }
-		catch (error) { this.update({ error: this.errorText(error) }); return undefined; }
-		finally { this.update({ managing: false }); }
+		const management = this.management;
+		try { return await operation(AbortSignal.any([management.signal, AbortSignal.timeout(30_000)])); }
+		catch (error) { if (management === this.management) { this.update({ error: this.errorText(error) }); } return undefined; }
+		finally { if (management === this.management) { this.update({ managing: false }); } }
 	}
 
 	public async reload(): Promise<void> {
@@ -396,7 +426,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				}
 			}
 		} catch (error) {
-			if (generation === this.generation) { this.update({ busy: false, loading: undefined, error: this.errorText(error) }); }
+			if (generation === this.generation) {
+				const authenticationFailed = error instanceof ChatGPTAuthenticationError || (error instanceof ChatGPTRequestError && error.status === 401);
+				this.update({ busy: false, loading: undefined, error: this.errorText(error), ...(authenticationFailed ? { connected: false } : {}) });
+			}
 		}
 	}
 
@@ -412,6 +445,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.operation?.abort();
 		this.generation++;
 		this.update({ draft: this.drafts.get('new')?.text ?? '', attachments: this.drafts.get('new')?.attachments ?? [], conversationId: undefined, title: 'ChatGPT', messages: [], parentId: crypto.randomUUID(), error: '', busy: false, loading: undefined, uncertain: false, stopped: false });
+		// New may interrupt the first catalog while its native auth owner is still
+		// becoming ready. The new entry must retain a live initialization attempt.
+		this.initialize();
 		this.rememberConversation(undefined);
 	}
 
@@ -522,10 +558,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			}
 		} catch (error) {
 			if (!controller.signal.aborted) {
-				const rejected = error instanceof ChatGPTRequestError && error.status >= 400 && error.status < 500;
+				const rejected = (!acknowledged && error instanceof ChatGPTAuthenticationError) || (error instanceof ChatGPTRequestError && error.status >= 400 && error.status < 500);
 				this.update({
 					error: this.errorText(error), uncertain: !rejected,
 					...(rejected ? { messages: state.messages, parentId: state.parentId } : {}),
+					...(error instanceof ChatGPTAuthenticationError ? { connected: false } : {}),
 				});
 			}
 		} finally {

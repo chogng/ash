@@ -38,7 +38,6 @@ import { IBrowserPasswordMainService, BrowserPasswordMainService, browserPasswor
 import { EncryptionMainService } from '../../platform/encryption/electron-main/encryptionMainService.js';
 
 import { basename, dirname, isAbsolute, join, parse } from 'node:path';
-import { homedir } from 'node:os';
 import { mkdir } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -59,7 +58,8 @@ import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platfo
 import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { browserViewChannel } from '../../platform/browserView/electron-main/browserViewIpc.js';
 import { BrowserViewMainService, IBrowserViewMainService } from '../../platform/browserView/electron-main/browserViewMainService.js';
-import { ChatGPTTransport } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTTransport.js';
+import { ChatGPTTransport, type ChatGPTTransportOptions } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTTransport.js';
+import { ChatGPTAuthentication } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTAuthentication.js';
 import { ChatGPTVerificationRuntime } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTVerificationRuntime.js';
 import { chatGPTTransportChannel } from '../../sessions/contrib/chatgptweb/common/chatGPTTransport.js';
 import { readFile } from 'node:fs/promises';
@@ -538,7 +538,11 @@ export class AshApplication extends Disposable {
 				if (!channel) { throw new Error('ChatGPT is unavailable in this window'); }
 				return channel.call<T>(context, command, arg);
 			},
-			listen: () => { throw new Error('ChatGPT transport has no events'); },
+			listen: <T>(context: string, event: string, arg: unknown) => {
+				const channel = this.chatGPTChannels.get(context);
+				if (!channel) { throw new Error('ChatGPT is unavailable in this window'); }
+				return channel.listen<T>(context, event, arg);
+			},
 		});
 		this.mainProcessIpcServer.registerChannel('browserHost', {
 			call: <T>(context: string, command: string, arg: unknown) => this.getBrowserHostChannel(context).call<T>(context, command, arg),
@@ -2010,8 +2014,18 @@ export class AshApplication extends Disposable {
 					});
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables, sessionsRelay, systemContextMenu);
-					const chatGPT = windowDisposables.add(new ChatGPTTransport({
-						credentialFile: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json'),
+					const authConnection = this.appServerStartupMode === 'disabled' ? undefined : createAppServerDaemonLauncher({
+						packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
+						sourceEnvironment: process.env, profileRoot: this.profileRoot, electronExecutable: process.execPath, role: 'credentials',
+					});
+					if (authConnection) { windowDisposables.add(authConnection.launcher); }
+					const authentication = windowDisposables.add(new ChatGPTAuthentication(authConnection ? { enabled: true, launcher: authConnection.launcher } : { enabled: false }));
+					if (authConnection?.generationFile) {
+						if (!this.developmentAppServerReloader.value) { this.developmentAppServerReloader.value = new DevelopmentAppServerReloader({ generationFile: authConnection.generationFile }); }
+						windowDisposables.add(this.developmentAppServerReloader.value.registerConnection(authConnection.launcher, authentication));
+					}
+					const chatGPT = windowDisposables.add(this.windowServices.createInstance(ChatGPTTransport, {
+						authentication,
 						readVerificationScript: async signal => {
 							const devURL = process.env.ASH_RENDERER_URL;
 							if (devURL) {
@@ -2022,7 +2036,7 @@ export class AshApplication extends Disposable {
 							return readFile(join(this.rendererRoot, 'browser/chatgpt/verification.js'), { encoding: 'utf8', signal });
 						},
 						createRuntime: authorize => new ChatGPTVerificationRuntime(authorize),
-					}));
+					} satisfies ChatGPTTransportOptions));
 					const chatGPTContext = `window:${window.id}`;
 					this.chatGPTChannels.set(chatGPTContext, chatGPT.getChannel());
 					windowDisposables.add(toDisposable(() => this.chatGPTChannels.delete(chatGPTContext)));
