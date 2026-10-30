@@ -18,6 +18,8 @@ export interface ActionViewItemOptions {
 	readonly buttonStyles?: IButtonStyles;
 	/** Selects the shared Button presentation for this action's triggers. */
 	readonly buttonPresentation?: IButtonOptions['presentation'];
+	/** Hides button captions while retaining their accessible names and tooltips. */
+	readonly iconOnly?: boolean;
 	/** Allows the host ActionBar to expose this item as a native drag source. */
 	readonly draggable?: boolean;
 	/** Places the item's managed tooltip relative to its trigger. */
@@ -55,6 +57,7 @@ export abstract class ActionViewItem extends Disposable {
 			...this.actionViewItemOptions.buttonStyles,
 			presentation: this.actionViewItemOptions.buttonPresentation,
 			...options,
+			iconOnly: options.iconOnly ?? this.actionViewItemOptions.iconOnly,
 			title: undefined,
 			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
 			hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,

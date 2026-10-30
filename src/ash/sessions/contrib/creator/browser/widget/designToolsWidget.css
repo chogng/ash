@@ -33,16 +33,9 @@
 	padding: 0;
 }
 
-.ash-design-tool-split .ash-dropdown-with-primary-dropdown > .ash-button {
+.ash-design-tools-widget .ash-dropdown-with-primary-dropdown > .ash-button {
 	width: 20px;
 	min-width: 0;
-}
-
-.ash-design-tool-split
-	.ash-dropdown-with-primary-dropdown
-	> .ash-button
-	> .ash-button-content {
-	display: none;
 }
 
 /* Menus live in the context-view host, outside the canvas DOM. */

@@ -189,6 +189,51 @@ test('menu entry actions switch to their alternative while Alt is held', async (
 	dom.window.close();
 });
 
+test('split primary menu commands preserve modifiers without changing their dropdown', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const [{ ModifierKeyEmitter }, { MenuItemAction }, { ContextKeyService }, { DropdownWithPrimaryActionViewItem }] = await Promise.all([
+		import('../../../../base/browser/dom.js'),
+		import('../../common/actions.js'),
+		import('../../../contextkey/browser/contextKeyService.js'),
+		import('../../browser/dropdownWithPrimaryActionViewItem.js'),
+	]);
+	try {
+		using contexts = new ContextKeyService();
+		const runs: Array<{ id: string; args: readonly unknown[]; }> = [];
+		const commands = { executeCommand: async (id: string, ...args: readonly unknown[]) => { runs.push({ id, args }); } } as unknown as import('../../../commands/common/commands.js').ICommandService;
+		const alternate = new MenuItemAction({ id: 'split.alternate', title: 'Split' }, undefined, { arg: 'origin' }, contexts, commands);
+		const action = new MenuItemAction({ id: 'split.primary', title: 'New' }, alternate, { arg: 'origin' }, contexts, commands);
+		let shown: import('../../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
+		const menuAction = testAction('profiles');
+		const profile = testAction('shell');
+		using item = new DropdownWithPrimaryActionViewItem(action, menuAction, [profile], { showContextMenu(delegate) { shown = delegate; } });
+		const container = h(dom.window.document, 'div');
+		dom.window.document.body.append(container);
+		item.render(container);
+		const primary = container.querySelector<HTMLButtonElement>('.ash-split-action-primary button')!;
+		const dropdown = container.querySelector<HTMLButtonElement>('.ash-split-action-dropdown button')!;
+		primary.click();
+		primary.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, altKey: true }));
+		assert.equal(primary.getAttribute('aria-label'), 'Split');
+		primary.click();
+		dropdown.click();
+		assert.deepEqual(shown!.getActions(), [profile]);
+		assert.equal(dropdown.getAttribute('aria-label'), 'profiles');
+		shown!.onHide?.(true);
+		dom.window.dispatchEvent(new dom.window.KeyboardEvent('keyup', { key: 'Alt' }));
+		assert.equal(primary.getAttribute('aria-label'), 'New');
+		primary.click();
+		assert.deepEqual(runs, [
+			{ id: 'split.primary', args: ['origin'] },
+			{ id: 'split.alternate', args: ['origin'] },
+			{ id: 'split.primary', args: ['origin'] },
+		]);
+	} finally {
+		ModifierKeyEmitter.disposeInstance(dom.window as unknown as Window);
+		dom.window.close();
+	}
+});
+
 test('DropdownWithPrimaryActionViewItem presents one split toolbar item', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const [

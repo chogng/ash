@@ -294,6 +294,14 @@ test('Terminal profile menu launches the selected shell profile', async () => {
 	await Promise.resolve();
 	assert.deepEqual(createdProfiles, [undefined, 'pwsh']);
 	shownProfileMenu?.onHide?.(false);
+	const splitPrimary = toolbar.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-primary button')!;
+	splitPrimary.dispatchEvent(new browserEnvironment.window.MouseEvent('mousedown', { bubbles: true, altKey: true }));
+	assert.equal(splitPrimary.getAttribute('aria-label'), 'Split Terminal');
+	splitPrimary.click();
+	await Promise.resolve();
+	assert.equal(splitCount, 2);
+	browserEnvironment.window.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keyup', { key: 'Alt' }));
+	assert.equal(splitPrimary.getAttribute('aria-label'), 'New Terminal');
 	const extensionProfiles = [
 		{ profileId: 'extension:github.copilot-chat/cli', title: 'Assistant CLI', isDefault: false },
 		{ profileId: 'extension:anthropic.claude-code/cli', title: 'Claude CLI', isDefault: false },

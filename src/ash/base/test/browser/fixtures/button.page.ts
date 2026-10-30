@@ -4,8 +4,16 @@ import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/
 import { Disposable, DisposableStore } from '../../../common/lifecycle.js';
 import { Event } from '../../../common/event.js';
 import { Lxicon } from '../../../common/lxicons.js';
-import { setNlsMessages } from '../../../../nls.js';
+import { localize, setNlsMessages } from '../../../../nls.js';
 import chinese from '../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
+import chineseSessions from '../../../../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
+import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../platform/actions/common/menuService.js';
+import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
+import { CommandService } from '../../../../workbench/services/commands/common/commandService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
@@ -27,7 +35,7 @@ declare global {
 }
 
 if (new URLSearchParams(location.search).get('locale') === 'zh-CN') {
-	setNlsMessages('zh-CN', chinese);
+	setNlsMessages('zh-CN', { ...chinese, ...chineseSessions, ash: { ...chinese.ash, ...chineseSessions.ash } });
 }
 const resources = new DisposableStore();
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
@@ -70,6 +78,25 @@ quietToolbar.setActions([
 	{ id: 'run', label: 'Run', tooltip: '', icon: Lxicon.play, enabled: true, run: () => { } },
 	{ id: 'pin', label: 'Pin', tooltip: '', icon: Lxicon.pin, enabled: true, run: () => { } },
 ]);
+const services = resources.add(new InstantiationService());
+const keys = resources.add(new ContextKeyService());
+const commands = resources.add(new CommandService(services));
+const menuService = new MenuService(commands, keys);
+const titleMenu = MenuId.for('test.button.default.title');
+const newMenu = MenuId.for('test.button.default.new');
+const newLabel = localize({ bundle: 'ash.sessions', key: 'command.NewChatAction' }, 'New Chat');
+resources.add(CommandsRegistry.register('test.button.default.new', () => { document.querySelector('output')!.textContent = 'new'; }));
+resources.add(CommandsRegistry.register('test.button.default.other', () => { document.querySelector('output')!.textContent = 'other'; }));
+resources.add(MenusRegistry.appendMenuItem(titleMenu, {
+	title: newLabel, submenu: newMenu, isSplitButton: true, group: 'navigation',
+}));
+resources.add(MenusRegistry.appendMenuItem(newMenu, {
+	command: { id: 'test.button.default.new', title: newLabel, icon: Lxicon.add }, group: '1_new',
+}));
+resources.add(MenusRegistry.appendMenuItem(newMenu, {
+	command: { id: 'test.button.default.other', title: 'Other action' }, group: '2_other',
+}));
+resources.add(new MenuWorkbenchToolBar(document.querySelector('#default-toolbar')!, menuService, menus, titleMenu));
 window.ashButtonIntegration = {
 	theme: id => theme.setColorTheme(themes[id as keyof typeof themes]),
 	disable: () => { button.enabled = false; },

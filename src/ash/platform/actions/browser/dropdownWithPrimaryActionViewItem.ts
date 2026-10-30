@@ -9,6 +9,8 @@ import type { IAction } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import { DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
 import { assertDefined } from '../../../base/common/types.js';
+import { MenuItemAction } from '../common/actions.js';
+import { MenuEntryActionViewItem } from './menuEntryActionViewItem.js';
 
 export type IDropdownWithPrimaryActionViewItemOptions = ActionViewItemOptions;
 
@@ -47,7 +49,9 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		super(primaryAction, viewItemOptions);
 		this.contextMenuProvider = contextMenuProvider;
 		this.viewItemOptions = viewItemOptions;
-		this.primaryItem = this._register(new ButtonActionViewItem(primaryAction, viewItemOptions));
+		this.primaryItem = this._register(primaryAction instanceof MenuItemAction
+			? new MenuEntryActionViewItem(primaryAction, viewItemOptions)
+			: new ButtonActionViewItem(primaryAction, viewItemOptions));
 		this.setDropdownItem(dropdownAction, dropdownActions);
 	}
 
@@ -55,12 +59,12 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		if (this.primaryButton || this.dropdownButton) {
 			throw new Error(`Action view item is already rendered: ${this.action.id}`);
 		}
-		container.classList.add('ash-dropdown-with-primary-action-view-item');
+		container.classList.add('ash-dropdown-with-primary-action-view-item', 'ash-split-action');
 		container.classList.toggle('primary', this.viewItemOptions.buttonPresentation === 'primary');
 		container.classList.toggle('disabled', !this.action.enabled);
 
 		const primaryContainer = h(container.ownerDocument, 'div');
-		primaryContainer.className = 'ash-dropdown-with-primary-primary';
+		primaryContainer.className = 'ash-dropdown-with-primary-primary ash-split-action-primary';
 		primaryContainer.classList.toggle('icon', this.action.icon !== undefined);
 		this.primaryItem.render(primaryContainer);
 		const primaryButton = primaryContainer.querySelector<HTMLButtonElement>('button');
@@ -68,7 +72,7 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		this.primaryButton = primaryButton;
 
 		const dropdownContainer = h(container.ownerDocument, 'div');
-		dropdownContainer.className = 'ash-dropdown-with-primary-dropdown';
+		dropdownContainer.className = 'ash-dropdown-with-primary-dropdown ash-split-action-dropdown';
 		this.dropdownContainer = dropdownContainer;
 		this.renderDropdownItem();
 

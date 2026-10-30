@@ -171,6 +171,6 @@
 	justify-content: flex-end;
 }
 
-.ash-titlebar-actions .ash-dropdown-with-primary-action-view-item {
+.ash-titlebar-actions .ash-split-action {
 	margin-left: auto;
 }

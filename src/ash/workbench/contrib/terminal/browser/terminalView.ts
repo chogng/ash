@@ -448,7 +448,7 @@ export class TerminalTitleActions extends Disposable {
 				if (!this.activeInstance) return undefined;
 				return this.instantiation.createInstance(ActiveTerminalActionViewItem, action, this.activeInstance);
 			case TerminalCommandId.New:
-				return new NewTerminalActionViewItem(
+				return new DropdownWithPrimaryActionViewItem(
 					action,
 					new TerminalProfileSelectorAction(action.enabled, (profileId) => this.createTerminalWithProfile(profileId)),
 					() => this.profileMenuActions(action),
@@ -484,20 +484,6 @@ export class TerminalTitleActions extends Disposable {
 			throw new TypeError(`Unknown terminal profile: ${String(profileId)}`);
 		}
 		return this.commandService.executeCommand(TerminalCommandId.NewWithProfile, profileId);
-	}
-}
-
-/** Keeps the profile trigger independent while Alt applies to the primary action. */
-class NewTerminalActionViewItem extends DropdownWithPrimaryActionViewItem {
-	override render(container: HTMLElement): void {
-		super.render(container);
-		const primary = container.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-primary button')!;
-		this._register(addDisposableListener(primary, 'click', event => {
-			if (!event.altKey || !(this.action instanceof MenuItemAction) || !this.action.alt?.enabled) return;
-			stopEvent(event);
-			event.stopImmediatePropagation();
-			void this.action.alt.run();
-		}, true));
 	}
 }
 
