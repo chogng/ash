@@ -2858,8 +2858,6 @@
     "openEditors": "打开的编辑器"
   },
   "ash.workbench": {
-    "browser.reloadMenu": "更多刷新操作",
-    "browser.hardReload": "忽略缓存重新加载",
     "browser.auth.title": "浏览器身份验证",
     "browser.auth.proxy": "登录代理 {0}",
     "browser.auth.site": "登录 {0}",

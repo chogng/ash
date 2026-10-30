@@ -6119,6 +6119,21 @@ suite('standalone browser component', () => {
 		for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
 			await expect(page.locator('html')).toHaveAttribute('data-color-theme', theme);
+			for (const fontSize of [10, 14, 20]) {
+				await page.evaluate(fontSize => window.ashStandaloneIntegration.updateContributionOptions({ fontSize }), fontSize);
+				const geometry = await page.locator('#caller .colorpicker-color-decoration').evaluate(element => {
+					const style = getComputedStyle(element);
+					const bounds = element.getBoundingClientRect();
+					return {
+						width: bounds.width,
+						height: bounds.height,
+						outerWidth: bounds.width + parseFloat(style.marginLeft) + parseFloat(style.marginRight),
+					};
+				});
+				expect(geometry.width).toBeCloseTo(geometry.height, 1);
+				expect(geometry.height).toBeCloseTo(fontSize * 0.8, 1);
+				expect(geometry.outerWidth).toBeCloseTo(fontSize * 1.2, 1);
+			}
 			const background = await picker.evaluate(element => {
 				const probe = document.createElement('span');
 				probe.style.color = 'var(--ash-editor-widgetBackground)';
