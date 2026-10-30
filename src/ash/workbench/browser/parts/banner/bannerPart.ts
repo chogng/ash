@@ -31,7 +31,7 @@ import { Part } from '../../part.js';
 /** A single window notice surface; pending producers retain their own identity and priority. */
 export class BannerPart extends Part implements IBannerService {
 	declare readonly _serviceBrand: undefined;
-	readonly height = 32;
+	readonly height = 36;
 	private readonly notices = new Map<string, IBannerItem>();
 	private readonly content = this._register(new DisposableStore());
 	private displayed: IBannerItem | undefined;
@@ -135,6 +135,9 @@ export class BannerPart extends Part implements IBannerService {
 
 		const document = this.domNode.ownerDocument;
 		this.domNode.classList.toggle('neutral', next.neutral === true);
+		const surface = h(document, 'div');
+		surface.className = 'ash-banner-content';
+		this.domNode.append(surface);
 		if (next.icon) {
 			const icon = h(document, 'span');
 			icon.className = 'ash-banner-icon';
@@ -145,13 +148,13 @@ export class BannerPart extends Part implements IBannerService {
 				image.alt = '';
 				icon.append(image);
 			} else appendIcon(next.icon, icon);
-			this.domNode.append(icon);
+			surface.append(icon);
 		}
 		const message = h(document, 'div');
 		message.className = 'ash-banner-message';
 		if (typeof next.message === 'string') message.textContent = next.message;
 		else message.append(this.content.add(this.markdown.render(next.message, { ownerDocument: document })).element);
-		this.domNode.append(message);
+		surface.append(message);
 		const text = message.textContent?.trim() ?? '';
 		const label = next.ariaLabel ?? text;
 		this.domNode.setAttribute('aria-label', label);
@@ -164,7 +167,7 @@ export class BannerPart extends Part implements IBannerService {
 				opener: (href: string) => { void this.opener.open(href, { allowCommands: true, fromUserGesture: true }).catch(onUnexpectedError); },
 			}));
 		}
-		this.domNode.append(actions);
+		surface.append(actions);
 		const close = h(document, 'button');
 		close.className = 'ash-banner-close';
 		close.type = 'button';
@@ -177,7 +180,7 @@ export class BannerPart extends Part implements IBannerService {
 			this.hide(item.id);
 			item.onClose?.();
 		}));
-		this.domNode.append(close);
+		surface.append(close);
 		if (!wasVisible) this.setBannerVisible(true);
 		// State changes never steal editor focus, but keep a keyboard user inside an updated notice.
 		if (hadFocus) {

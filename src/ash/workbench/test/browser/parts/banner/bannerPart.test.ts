@@ -62,7 +62,7 @@ suite('banner browser component', () => {
 			await expect(banner).toBeVisible();
 			await expect(banner).toContainText(locale === 'zh' ? '正在重新连接到 Agent Host…' : 'Reconnecting to the Agent Host…');
 			await expect(editor).toBeFocused();
-			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 32);
+			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 36);
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('failed'));
 			const reconnect = banner.getByRole('button', { name: locale === 'zh' ? '重新连接' : 'Reconnect', exact: true });
 			await expect(reconnect).toBeVisible();
@@ -77,11 +77,11 @@ suite('banner browser component', () => {
 			await expect(banner.getByRole('button')).toHaveCount(1);
 			await page.evaluate(() => window.ashBannerIntegration.rebuild());
 			await expect(banner).toBeVisible();
-			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 32);
+			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 36);
 			for (const index of [0, 1, 2, 3]) {
 				await page.evaluate(index => window.ashBannerIntegration.setTheme(index), index);
 				await page.screenshot({ path: testInfo.outputPath(`banner-${locale}-theme-${index}.png`) });
-				const colors = await banner.evaluate(node => ({ background: getComputedStyle(node).backgroundColor, foreground: getComputedStyle(node).color, border: getComputedStyle(node).borderBottomColor }));
+				const colors = await banner.locator('.ash-banner-content').evaluate(node => ({ background: getComputedStyle(node).backgroundColor, foreground: getComputedStyle(node).color, border: getComputedStyle(node).borderBottomColor }));
 				expect(colors.background).not.toBe(colors.foreground);
 				if (index > 1) expect(colors.border).not.toBe(colors.background);
 			}
@@ -199,6 +199,24 @@ suite('banner browser component', () => {
 			const banner = page.locator('[data-part="banner"]');
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
 			await expect(banner).toContainText(locale === 'zh' ? '此工作区为只读' : 'This workspace is read-only');
+			const surface = banner.locator('.ash-banner-content');
+			const outerBounds = (await banner.boundingBox())!;
+			const surfaceBounds = (await surface.boundingBox())!;
+			expect(surfaceBounds.height).toBe(28);
+			expect(surfaceBounds.y - outerBounds.y).toBe(4);
+			expect(outerBounds.y + outerBounds.height - surfaceBounds.y - surfaceBounds.height).toBe(4);
+			const partBounds = await page.locator('[data-part="activitybar"], [data-part="sidebar"], [data-part="editor"], [data-part="auxiliarybar"], [data-part="agentSidebar"], [data-part="panel"]').evaluateAll(nodes => nodes.filter(node => node.getClientRects().length > 0).map(node => {
+				const bounds = node.getBoundingClientRect();
+				return { left: bounds.left, right: bounds.right };
+			}));
+			expect(surfaceBounds.x).toBe(Math.min(...partBounds.map(bounds => bounds.left)));
+			expect(surfaceBounds.x + surfaceBounds.width).toBe(Math.max(...partBounds.map(bounds => bounds.right)));
+			await expect(surface).toHaveCSS('border-radius', '6px');
+			const iconBounds = (await banner.locator('.ash-banner-icon').boundingBox())!;
+			const closeBounds = (await banner.locator('.ash-banner-close').boundingBox())!;
+			expect(iconBounds.x + iconBounds.width / 2 - surfaceBounds.x).toBeCloseTo(surfaceBounds.x + surfaceBounds.width - closeBounds.x - closeBounds.width / 2, 2);
+			expect(iconBounds.y + iconBounds.height / 2).toBeCloseTo(closeBounds.y + closeBounds.height / 2, 2);
+			await page.screenshot({ path: browserTests.info.outputPath(`banner-readonly-${locale}.png`) });
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('failed'));
 			await expect(banner).toContainText(locale === 'zh' ? '无法恢复' : 'Could not restore');
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('idle'));
