@@ -199,6 +199,7 @@ exports.activate = context => {
         launcher,
         EditorExtensionDeployment {
             scope: EditorExtensionScope::Workspace,
+            workspace_trust: super::super::source::WorkspaceTrustRequirement::Required,
             id: "test.node".into(),
             version: "1".into(),
             package_digest: format!("sha256:{}", "a".repeat(64)),
@@ -871,11 +872,21 @@ fn lldb_rust_providers_keep_client_configuration_language_and_shutdown_separate(
         None,
     )
     .unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(directory.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::DiscoverPlugins]),
+    );
+    let authorization = grant.authorize(Permission::DiscoverPlugins).unwrap();
+    runtime.bind_dir(authorization.clone()).unwrap();
     let deployment =
         super::super::source::product_lldb_deployment(executable.parent().unwrap()).unwrap();
-    let entry = runtime
-        .inner
-        .build_entry(None, &deployment, std::num::NonZeroU64::new(7).unwrap());
+    let entry = runtime.inner.build_entry(
+        Some(&authorization),
+        &deployment,
+        std::num::NonZeroU64::new(7).unwrap(),
+    );
     assert!(
         entry.is_window_template(),
         "the production recipe must bind Rust Debug to a window"

@@ -10,6 +10,11 @@
   "displayName": "%displayName%",
   "description": "%description%",
   "icon": "media/icon.png",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "engines": {
     "ash": "*"
   },

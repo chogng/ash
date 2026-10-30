@@ -533,3 +533,50 @@ fn debug_workflow_deployments_use_public_capabilities_and_separate_authority() {
         ["onDebug"]
     );
 }
+#[test]
+fn product_workspace_trust_requires_opt_in_and_revokes_the_activation_lease() {
+    use super::super::authority::prepare_extension;
+    use super::WorkspaceTrustRequirement;
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    use std::num::NonZeroU64;
+
+    let executable = std::env::current_exe().unwrap();
+    let mut deployment = super::product_git_deployment(executable.parent().unwrap()).unwrap();
+    let generation = NonZeroU64::new(1).unwrap();
+    for supported in [
+        serde_json::Value::Null,
+        serde_json::json!(false),
+        serde_json::json!("true"),
+        serde_json::json!(1),
+    ] {
+        deployment.workspace_trust = WorkspaceTrustRequirement::from_manifest(&serde_json::json!({
+            "capabilities": {"untrustedWorkspaces": {"supported": supported}}
+        }));
+        assert!(prepare_extension(None, &deployment, generation).is_err());
+    }
+    for supported in [serde_json::json!(true), serde_json::json!("limited")] {
+        deployment.workspace_trust = WorkspaceTrustRequirement::from_manifest(&serde_json::json!({
+            "capabilities": {"untrustedWorkspaces": {"supported": supported}}
+        }));
+        assert!(prepare_extension(None, &deployment, generation).is_ok());
+    }
+    deployment.workspace_trust = WorkspaceTrustRequirement::Required;
+    let directory = tempfile::tempdir().unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(directory.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::DiscoverPlugins]),
+    );
+    let authorization = grant.authorize(Permission::DiscoverPlugins).unwrap();
+    let prepared = prepare_extension(Some(&authorization), &deployment, generation).unwrap();
+    assert!(prepared.activation.authority().authorizes());
+    assert!(prepared.activation.acquire().is_some());
+    grant.revoke();
+    assert!(!prepared.activation.authority().authorizes());
+    assert!(prepared.activation.acquire().is_none());
+    assert!(prepare_extension(Some(&authorization), &deployment, generation).is_err());
+}

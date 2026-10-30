@@ -19,6 +19,7 @@ use serde::Deserialize;
 
 use crate::server::extension_host_runtime::source::ActivationPlan;
 use crate::server::extension_host_runtime::source::EditorExtensionDeployment;
+use crate::server::extension_host_runtime::source::WorkspaceTrustRequirement;
 
 const PRODUCT_MANIFEST_PATH: &str = "ash/editor-extensions.json";
 const MAXIMUM_MANIFEST_BYTES: u64 = 64 * 1024;
@@ -199,6 +200,7 @@ pub(crate) fn deployments(
         )
         .map_err(|error| error.to_string())?;
         result.push(EditorExtensionDeployment {
+            workspace_trust: WorkspaceTrustRequirement::Required,
             scope: crate::server::extension_host_runtime::source::EditorExtensionScope::Workspace,
             activation,
             activation_failure,
@@ -320,6 +322,7 @@ fn deployment(
         source: source.clone(),
     });
     Ok(EditorExtensionDeployment {
+        workspace_trust: product_workspace_trust(source)?,
         scope: if source.is_product_runtime() {
             crate::server::extension_host_runtime::source::EditorExtensionScope::ProductPackage
         } else {
@@ -367,6 +370,33 @@ fn deployment(
         },
         authority,
     })
+}
+
+// Only release-admitted packages can opt into Restricted Mode. Package consent and
+// operation-specific filesystem permissions remain independent of this declaration.
+fn product_workspace_trust(
+    source: &LocalCapabilitySource,
+) -> Result<WorkspaceTrustRequirement, String> {
+    if !source.is_product_runtime() {
+        return Ok(WorkspaceTrustRequirement::Required);
+    }
+    let root = source
+        .editor_extension_root()
+        .unwrap_or(source.package_root());
+    let path = root.join("package.json");
+    let metadata = match std::fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(WorkspaceTrustRequirement::Required);
+        }
+        Err(_) => return Err("extension manifest is unavailable".into()),
+    };
+    if !metadata.is_file() || metadata.len() > 4 * 1024 * 1024 {
+        return Err("invalid extension manifest".into());
+    }
+    let manifest = serde_json::from_slice(&std::fs::read(path).map_err(|error| error.to_string())?)
+        .map_err(|error| error.to_string())?;
+    Ok(WorkspaceTrustRequirement::from_manifest(&manifest))
 }
 
 fn read_product_manifest(

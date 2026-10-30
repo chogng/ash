@@ -10,6 +10,7 @@ import type { IExtensionApi, ExtensionDescriptor } from '../../../../platform/ex
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import type { ExtensionClientHandler, ExtensionClientOperation } from '../../../api/common/extHost.protocol.js';
 import type { BrowserExtensionHostRequest } from '../common/extensionHostProtocol.js';
+import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 
 const BUILT_IN_SSH_EXTENSION_ID = 'ash.remote-ssh';
 
@@ -24,6 +25,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	private clientHandler: ExtensionClientHandler | undefined;
 	private readonly workers = this._register(new DisposableMap<string, BrowserExtensionWorker>());
 	private readonly workerPackages = new Map<string, string>();
+	private readonly trustRequiredWorkers = new Set<string>();
 	private readonly changes = this._register(new Emitter<number>());
 	private generation = 0;
 	private snapshot: ExtensionHostFleetSnapshot = { generation: 1, extensions: [] };
@@ -34,8 +36,32 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	private remoteConnectionRevision = 0;
 
 	constructor(private readonly extensions: IExtensionApi, private readonly remote: IExtensionHostApi,
-		@IInstantiationService private readonly instantiation: IInstantiationService) {
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IWorkspaceTrustManagementService private readonly trust: IWorkspaceTrustManagementService) {
 		super();
+		this._register(trust.onDidChangeTrustedFolders(() => {
+			// Invalidated permissions fail closed, including Workers still awaiting activation.
+			for (const id of this.trustRequiredWorkers) {
+				this.workers.deleteAndDispose(id);
+				this.workerPackages.delete(id);
+			}
+			this.trustRequiredWorkers.clear();
+			this.snapshot = { ...this.snapshot, extensions: this.snapshot.extensions.filter(runtime => this.workers.has(runtime.id)) };
+			this.changes.fire(++this.snapshotGeneration);
+			// A refresh can preserve the trust boolean, so transition participants alone
+			// cannot restore Workers after an invalidated permission projection settles.
+			void trust.resolveWorkspaceTrust().then(() => {
+				if (this.isDisposed) { return; }
+				this.pendingMode = 'refresh';
+				return this.reconcile('refresh');
+			}).catch(error => console.error('Browser extension trust refresh failed', error));
+		}));
+		this._register(trust.addWorkspaceTrustTransitionParticipant({
+			participate: async () => {
+				this.pendingMode = 'refresh';
+				await this.reconcile('refresh');
+			}
+		}));
 		if (extensions.onDidChange) {
 			this._register(extensions.onDidChange(() => {
 				this.pendingMode ??= 'restartFailed';
@@ -130,13 +156,22 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	}
 
 	private async activate(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot> {
+		// workspaceResolved precedes transition participants; waiting for initialization
+		// here would deadlock the first trusted startup participant.
+		await this.trust.workspaceResolved;
+		this.assertNotDisposed();
 		const generation = ++this.generation;
 		// Reconcile runtime instances against the authoritative package snapshot.
 		// Source discovery belongs to package/theme refresh, not each host startup;
 		// a cached backend read still observes managed updates and connection changes.
 		const catalog = await this.extensions.list('cached');
 		this.assertNotDisposed();
-		const packages = new Map(catalog.extensions.map(extension => [extension.id, browserPackageIdentity(extension)]));
+		const candidates = catalog.extensions.filter(extension => {
+			if (extension.sourceKind !== 'builtIn') { return false; }
+			const manifest = JSON.parse(extension.manifestJson);
+			return typeof manifest.browser === 'string' && this.canRun(manifest);
+		});
+		const packages = new Map(candidates.map(extension => [extension.id, browserPackageIdentity(extension)]));
 		const retained = this.snapshot.extensions.filter(runtime => runtime.lifecycle === 'ready' && this.workers.has(runtime.id) && this.workerPackages.get(runtime.id) === packages.get(runtime.id));
 		const retainedIds = new Set(retained.map(runtime => runtime.id));
 		const retired: BrowserExtensionWorker[] = [];
@@ -144,6 +179,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 			if (!retainedIds.has(id)) {
 				retired.push(this.workers.deleteAndLeak(id)!);
 				this.workerPackages.delete(id);
+				this.trustRequiredWorkers.delete(id);
 			}
 		}
 		// Revoke changed owners before cleanup or replacement can reuse their SCM identities.
@@ -155,13 +191,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		await Promise.all(retired.map(worker => worker.close()));
 		this.assertNotDisposed();
 		const runtimes: ExtensionHostRuntime[] = [];
-		for (const extension of catalog.extensions) {
-			// Package readability does not admit code into the client host. User and registry
-			// packages must pass backend runtime admission before their scripts can execute.
-			if (extension.sourceKind !== 'builtIn') { continue; }
-			// Declarative and Rust packages have no browser activation. Do not put
-			// their optional translation/resource reads on the executable host path.
-			if (typeof JSON.parse(extension.manifestJson).browser !== 'string') { continue; }
+		for (const extension of candidates) {
 			const previous = this.snapshot.extensions.find(runtime => runtime.id === extension.id);
 			if (previous?.lifecycle === 'ready') { runtimes.push(previous); continue; }
 			const localization = this.instantiation.createInstance(MainThreadLocalization);
@@ -173,6 +203,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				const path = manifest.browser.replace(/^\.\//, '');
 				const source = await this.extensions.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
 				this.assertNotDisposed();
+				if (!this.canRun(manifest)) { continue; }
 				worker = this.instantiation.createInstance(BrowserExtensionWorker, extension.id, source, async (message: unknown, signal: AbortSignal) => {
 					if (this.workers.get(extension.id) !== worker) {
 						throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation'));
@@ -202,6 +233,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 					return result;
 				});
 				this.workers.set(extension.id, worker);
+				if (!supportsUntrustedWorkspace(manifest)) { this.trustRequiredWorkers.add(extension.id); }
 				worker.onDidChangeRegistrations(() => {
 					if (this.workers.get(extension.id) !== worker) return;
 					const current = this.snapshot.extensions.find(runtime => runtime.id === extension.id && runtime.incarnation === generation);
@@ -220,23 +252,28 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				if (!this.clientHandler) throw new Error('No extension client handler is registered');
 				const initialized = await this.clientHandler({ operation: 'readInitialization' }, new AbortController().signal, { extensionId: extension.id, activationGeneration: generation, incarnation: generation });
 				if (initialized.result !== 'initialization') throw new Error('Invalid extension initialization');
+				if (this.workers.get(extension.id) !== worker) { continue; }
 				const registrations = await worker.request({ type: 'activate', entryPoint: worker.entryPoint, language: getNLSLanguage(), extensionId: extension.id, initialization: normalizeExtensionHostPayload(initialized.initialization), configuration: normalizeExtensionHostPayload({ commands: manifest.contributes?.commands ?? [], extensionId: extension.id, extensionPath: '/', pathSeparator: '/', manifest, debuggers: manifest.contributes?.debuggers ?? [] }) }, Date.now() + 30_000);
 				this.assertNotDisposed();
+				if (this.workers.get(extension.id) !== worker) { continue; }
 				const runtime = normalizeExtensionHostSnapshot({ generation, extensions: [{ ...runtimeIdentity(extension, generation), lifecycle: 'ready', failure: null, registrations }] }).extensions[0];
 				assertRemoteResolverOwnership(runtime, false);
 				worker.onDidFail(error => this.retire(extension.id, generation, error));
 				this.workerPackages.set(extension.id, packages.get(extension.id)!);
 				runtimes.push(runtime);
 			} catch (error) {
+				const revoked = worker !== undefined && this.workers.get(extension.id) !== worker;
 				this.workers.deleteAndDispose(extension.id);
+				this.trustRequiredWorkers.delete(extension.id);
 				if (this.isDisposed) { throw error; }
+				if (revoked || !this.canRun(manifest)) { continue; }
 				runtimes.push({ ...runtimeIdentity(extension, generation), lifecycle: 'failed', failure: { code: 'activationFailed', message: String(error), incarnation: generation }, registrations: [] });
 			}
 		}
 		// Background SCM/status-bar publication can advance a retained runtime while another
 		// package activates. Carry its latest acknowledged registrations into the complete fleet.
 		this.snapshot = Object.freeze({
-			generation: this.snapshot.generation + 1, extensions: Object.freeze(runtimes.map(runtime => {
+			generation: this.snapshot.generation + 1, extensions: Object.freeze(runtimes.filter(runtime => runtime.lifecycle !== 'ready' || this.workers.has(runtime.id)).map(runtime => {
 				const current = this.snapshot.extensions.find(candidate => candidate.id === runtime.id && candidate.activationGeneration === runtime.activationGeneration) ?? runtime;
 				const registrations = this.workers.get(runtime.id)?.takeRegistrationSnapshot();
 				const updated = registrations ? Object.freeze({ ...current, registrations }) : current;
@@ -250,11 +287,16 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		return this.list();
 	}
 
+	private canRun(manifest: { capabilities?: { untrustedWorkspaces?: { supported?: unknown; }; }; }): boolean {
+		return this.trust.isWorkspaceTrusted() || supportsUntrustedWorkspace(manifest);
+	}
+
 	private retire(id: string, activationGeneration: number, error: Error): void {
 		const runtime = this.snapshot.extensions.find(extension => extension.id === id);
 		if (!runtime || runtime.activationGeneration !== activationGeneration) { return; }
 		this.workers.deleteAndDispose(id);
 		this.workerPackages.delete(id);
+		this.trustRequiredWorkers.delete(id);
 		this.snapshot = {
 			generation: this.snapshot.generation + 1,
 			extensions: this.snapshot.extensions.map(extension => extension.id === id
@@ -263,6 +305,12 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		};
 		this.changes.fire(++this.snapshotGeneration);
 	}
+}
+
+function supportsUntrustedWorkspace(manifest: { capabilities?: { untrustedWorkspaces?: { supported?: unknown; }; }; }): boolean {
+	const supported = manifest.capabilities?.untrustedWorkspaces?.supported;
+	// Limited providers own their restrictions; privileged operations still use host permissions.
+	return supported === true || supported === 'limited';
 }
 
 type WorkerRequest = Omit<Extract<BrowserExtensionHostRequest, { type: 'activate'; }>, 'id'> | Omit<Extract<BrowserExtensionHostRequest, { type: 'invoke'; }>, 'id'> | Omit<Extract<BrowserExtensionHostRequest, { type: 'deactivate'; }>, 'id'>;

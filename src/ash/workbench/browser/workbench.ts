@@ -667,9 +667,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAppServerHookApi, api.hooks);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
-		// Hosts can disable executable extensions while keeping declarative assets.
-		// Otherwise browser packages execute in Workers and server packages keep their process host.
-		services.registerInstance(IExtensionHostApi, extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
@@ -719,6 +716,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceTrustApi, api.workspaceTrust);
 		const workspaceTrustService = this._register(services.createInstance(WorkspaceTrustManagementService));
 		services.registerInstance(IWorkspaceTrustManagementService, workspaceTrustService);
+		// Hosts can disable executable extensions while keeping declarative assets.
+		// Otherwise browser packages execute in Workers and server packages keep their process host.
+		services.registerInstance(IExtensionHostApi, extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, api.extensionHost)));
 		const workspaceFileService = new AgentHostFileSystemProvider({
 			configurationFiles: api.workspaceConfigurationFiles,
 			configuration: () => workspaceContext.getWorkspace().configuration,

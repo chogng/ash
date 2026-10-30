@@ -1,3 +1,4 @@
+import { APP_SERVER_METHODS, type EnvDirSetEntry } from '../../../../.build/protocol/typescript/index.js';
 import { TERMINAL_WINDOW_LIFETIME_CHANNEL } from '../../platform/terminal/common/terminal.js';
 import { localize } from '../../nls.js';
 import { throwIfCancelled } from '../../base/common/cancellation.js';
@@ -113,27 +114,42 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		let backend: IRendererHost;
 		const workspaceChanges = resources.add(new Emitter<void>());
 		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; error?: unknown; } | undefined;
+		const trackWorkspaceInitialization = (promise: Promise<void>): Promise<void> => {
+			const attempt: NonNullable<typeof workspaceInitialization> = {
+				generation: client.generation, state: 'restoring', promise,
+			};
+			workspaceInitialization = attempt;
+			workspaceChanges.fire();
+			void promise.then(() => {
+				if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
+				attempt.state = 'ready';
+				workspaceChanges.fire();
+			}, error => {
+				if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
+				attempt.state = 'failed';
+				attempt.error = error;
+				workspaceChanges.fire();
+			});
+			return promise;
+		};
 		const restoreWorkspace = (retry = false): Promise<void> => {
 			// Terminals and reconnect listeners share one binding attempt per generation.
 			if (workspaceInitialization?.generation !== client.generation || retry && workspaceInitialization.state === 'failed') {
-				const attempt: NonNullable<typeof workspaceInitialization> = {
-					generation: client.generation, state: 'restoring',
-					promise: Promise.resolve().then(() => initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)),
-				};
-				workspaceInitialization = attempt;
-				workspaceChanges.fire();
-				void attempt.promise.then(() => {
-					if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
-					attempt.state = 'ready';
-					workspaceChanges.fire();
-				}, error => {
-					if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
-					attempt.state = 'failed';
-					attempt.error = error;
-					workspaceChanges.fire();
-				});
+				return trackWorkspaceInitialization(Promise.resolve().then(() => initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)));
 			}
 			return workspaceInitialization.promise;
+		};
+		const setWorkspaceFolders = (folders: readonly EnvDirSetEntry[]): Promise<unknown> => {
+			const generation = client.generation;
+			// Reconnection still reads the old Main identity until the transition commits.
+			// Drain that restoration before replacing its roots, and make later callers
+			// join the replacement instead of replaying the previous directory snapshot.
+			const operation = Promise.resolve(workspaceInitialization?.promise).catch(() => undefined).then(() => {
+				if (resources.isDisposed || client.generation !== generation || client.state !== 'ready') throw new CancellationError();
+				return client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs: [...folders] });
+			});
+			trackWorkspaceInitialization(operation.then(() => { }));
+			return operation;
 		};
 		const recovery: IAppServerConnectionRecovery = {
 			get status() {
@@ -167,7 +183,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)), remoteConnection.kind === 'ssh' ? remoteConnection.host : undefined, recovery);
 			resources.add(backend.mcpServerManagement);
 			if (backend.contextResourceHost) { resources.add(backend.contextResourceHost); }
-			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
+			resources.add(registerAppServerWorkspaceHost(() => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, setWorkspaceFolders, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
 			// Editor recovery belongs to this Desktop profile, including SSH workspaces.
 			backend = { ...backend, backup: new AppServerBackupService(localClient, 'ash-editor'), ...(agentHost.windowExtensions ? { extensionHost: agentHost.windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }

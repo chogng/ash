@@ -420,7 +420,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IProjectService, options.api.projects);
 		services.registerInstance(INetworkDiagnosticsService, options.api.networkDiagnostics);
 		services.registerInstance(IContentSearchConfigurationService, options.api.contentSearchConfiguration);
-		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, options.api.extensionHost)));
 		if (!serviceCollection.has(ITelemetryService)) { services.registerInstance(ITelemetryService, NullTelemetryService); }
 		if (options.api.approvalEnvironment) { services.registerInstance(IApprovalEnvironmentService, options.api.approvalEnvironment); }
 		services.registerInstance(IVoiceCodeTranscriptionBackendService, options.api.dictation);
@@ -576,6 +575,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(options.api.connectors, options.api.events)));
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
+		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, options.api.extensionHost)));
 		const checkWorkspaceTrust = !!options.nativeHostApi;
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
 		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));

@@ -74,10 +74,12 @@ test('opening a folder displays its files in Explorer', { tag: ['@electron-app-s
 	const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'visible.txt' });
 	await expect(file).toHaveCount(1);
 	const tree = page.locator('.ash-explorer').getByRole('tree');
+	await expect(tree).not.toBeFocused();
+	// Opening the top-level folder resolves its compact chain lazily.
+	await tree.getByRole('treeitem', { name: 'inner', exact: true }).click();
 	const compressed = tree.locator('.ash-tree-row').filter({ hasText: 'inner/deep' });
 	const segments = compressed.locator('[data-explorer-segment]');
 	await expect(segments).toHaveCount(2);
-	await expect(tree).not.toBeFocused();
 	for (const segment of await segments.all()) {
 		await expect(segment).toHaveCSS('outline-style', 'none');
 	}
@@ -93,7 +95,8 @@ test('opening a folder displays its files in Explorer', { tag: ['@electron-app-s
 	await expect(tree).not.toBeFocused();
 	await expect(segments.last()).toHaveCSS('outline-style', 'none');
 	const fileRow = await file.elementHandle();
-	const folder = tree.getByRole('treeitem', { name: 'deep, folder 2 of 2', exact: true });
+	const folder = compressed;
+	await expect(folder).toHaveAccessibleName('deep, folder 2 of 2');
 	// The segment click expanded the compressed directory; restore the initial collapsed state.
 	await folder.click();
 	await folder.click();
@@ -103,6 +106,8 @@ test('opening a folder displays its files in Explorer', { tag: ['@electron-app-s
 	await expect(folder).toHaveAttribute('aria-expanded', 'false');
 	await expect(page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'nested.txt' })).toHaveCount(0);
 	expect(await fileRow?.evaluate(row => row.isConnected)).toBe(true);
+	await workbench.quickaccess.runCommand('workbench.trust.manage');
+	await expect(page.locator('.ash-workspace-trust-editor').getByRole('heading', { level: 2 })).toHaveText('Read-only workspace');
 });
 
 test('Explorer file context menu includes file actions for the clicked row', { tag: ['@electron-app-server'] }, async ({ target, application, workbench }) => {

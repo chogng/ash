@@ -10,6 +10,11 @@
   "type": "module",
   "displayName": "%displayName%",
   "description": "%description%",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "engines": {
     "ash": "*"
   },

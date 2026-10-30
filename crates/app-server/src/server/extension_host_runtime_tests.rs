@@ -925,6 +925,19 @@ fn changing_git_enablement_preserves_unrelated_runtime_and_window_instances() {
         Default::default(),
     )
     .unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        ash_file_access::Dir::open_local(directory.path()).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::DiscoverPlugins]),
+    );
+    runtime
+        .bind_dir(
+            grant
+                .authorize(ash_file_access::Permission::DiscoverPlugins)
+                .unwrap(),
+        )
+        .unwrap();
     let (mut git_generation, shared_gate, window_gate) = {
         let mut state = runtime.inner.state.lock().unwrap();
         let git_generation = state.entries["ash.git"].fallback.activation_generation;

@@ -68,7 +68,7 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 	}
 }
 
-export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, validateFolders: (folders: readonly URI[]) => void = () => { }, resourceForPath: (path: string) => URI = URI.file): IDisposable {
+export function registerAppServerWorkspaceHost(ready: () => Promise<void>, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, setFolders: (folders: readonly EnvDirSetEntry[]) => Promise<unknown>, validateFolders: (folders: readonly URI[]) => void = () => { }, resourceForPath: (path: string) => URI = URI.file): IDisposable {
 	const subscription = subscribe('ash:workspace:operation', (value: unknown) => {
 		if (!isRecord(value) || typeof value.nonce !== 'string' || !isRecord(value.params)) { return; }
 		const { nonce, operation, params } = value;
@@ -107,7 +107,7 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 					validateFolders(request.dirs.map(folder => resourceForPath(folder.path)));
 					return;
 				}
-				case 'setFolders': return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));
+				case 'setFolders': return setFolders(decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }).dirs);
 				default: throw new Error('Unknown workspace operation');
 			}
 		};

@@ -62,6 +62,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	let windowConnection: RemoteAgentConnection;
 	let onDirectoryBound: ((channel: string) => void) | undefined;
 	let onInitialized: ((channel: string) => void) | undefined;
+	let onWorkspaceCompleted: ((value: unknown) => void) | undefined;
 	let onLog: ((entry: LogEntry) => void) | undefined;
 	let failDirectoryBinding: boolean;
 	let directoryAuthorized: boolean;
@@ -88,6 +89,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 				if (channel === REMOTE_AGENT_HOST_CLOSE_CHANNEL) { hostCloses.push((payload as { id: string; }).id); return; }
 				if (channel === 'ash:remote:connection') return windowConnection;
 				if (channel === 'ash:workspace:context:read') { await beforeWorkspaceRead?.(); return { id: 'desktop', folders: [{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 }] }; }
+				if (channel === 'ash:workspace:completed') { onWorkspaceCompleted?.(payload); return; }
 				if (channel.endsWith(':initialized')) { onInitialized?.(channel); return; }
 				assert.ok(channel.endsWith(':acquire'), channel);
 				acquired.push(channel);
@@ -139,7 +141,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	setup(() => {
 		acquired.length = handshakes.length = 0;
 		directoryBindings.length = 0;
-		onDirectoryBound = onInitialized = onLog = undefined;
+		onDirectoryBound = onInitialized = onLog = onWorkspaceCompleted = undefined;
 		failDirectoryBinding = false;
 		directoryAuthorized = true;
 		beforeHostOpen = beforeWorkspaceRead = undefined;
@@ -312,6 +314,59 @@ suite('Desktop Workbench Agent Host selection', () => {
 			{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] },
 			{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/next-project', grant: { type: 'config' } }] },
 		]);
+	});
+
+	for (const kind of ['local', 'ssh'] as const) {
+		test(`${kind} workspace replacement drains reconnect restoration before binding the new folders`, async () => {
+			windowConnection = kind === 'local' ? { kind: 'local', generation: 1 } : windowConnection;
+			if (kind === 'local') requestedWorkspace = URI.file('/workspace');
+			using renderer = await createRendererApi([], { browser: false }, {
+				requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
+			}, mainProcess);
+			const readStarted = new DeferredPromise<void>();
+			const releaseRead = new DeferredPromise<void>();
+			beforeWorkspaceRead = async () => { await readStarted.complete(); await releaseRead.p; };
+			restart('ash:app-server:restart');
+			await readStarted.p;
+			const restored = new DeferredPromise<void>();
+			using restoration = renderer.appServer.recovery!.onDidChange(() => {
+				if (renderer.appServer.recovery!.status === 'idle') void restored.complete();
+			});
+			const completed = new DeferredPromise<unknown>();
+			onWorkspaceCompleted = value => { void completed.complete(value); };
+			const next = [{ id: 'next-folder', path: '/next-project', grant: { type: 'config' } }];
+			for (const listener of ipcListeners.get('ash:workspace:operation') ?? []) {
+				listener({ nonce: 'replace-workspace', operation: 'setFolders', params: { folders: next } });
+			}
+			// Give the IPC operation its turn while the old workspace read is deliberately held.
+			await new Promise<void>(resolve => setImmediate(resolve));
+			await releaseRead.complete();
+			assert.deepEqual(await completed.p, { nonce: 'replace-workspace', result: { dirs: next.map(folder => ({ id: folder.id, path: folder.path, permissions: [] })) } });
+			await restored.p;
+			assert.deepEqual(directoryBindings.map(binding => binding.dirs), [
+				[{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }],
+				[{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }],
+				next,
+			]);
+			assert.equal(renderer.appServer.recovery!.status, 'idle');
+		});
+	}
+
+	test('an explicit folder replacement can recover a cancelled startup directory binding', async () => {
+		directoryAuthorized = false;
+		using renderer = await createRendererApi([], { browser: false }, {
+			requestDirectoryPermissions: async () => 'cancel'
+		}, mainProcess);
+		assert.equal(renderer.appServer.recovery!.status, 'failed');
+		directoryAuthorized = true;
+		const completed = new DeferredPromise<unknown>();
+		onWorkspaceCompleted = value => { void completed.complete(value); };
+		for (const listener of ipcListeners.get('ash:workspace:operation') ?? []) {
+			listener({ nonce: 'replace-cancelled', operation: 'setFolders', params: { folders: [{ id: 'next-folder', path: '/next-project', grant: { type: 'config' } }] } });
+		}
+		await completed.p;
+		assert.equal(renderer.appServer.recovery!.status, 'idle');
+		assert.deepEqual(directoryBindings.at(-1)!.dirs, [{ id: 'next-folder', path: '/next-project', grant: { type: 'config' } }]);
 	});
 
 	test('cancelled startup authorization keeps the renderer available and explicit retry shares the ready carrier', async () => {

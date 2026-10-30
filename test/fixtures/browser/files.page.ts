@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../src/ash/workbench/test/common/workbenchTestServices.js';
 import { migrateLegacyBrowserSettings } from '../../../src/ash/workbench/services/userData/browser/userDataInit.js';
 import { AsyncDataTree } from '../../../src/ash/base/browser/ui/tree/asyncDataTree.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
@@ -382,7 +383,7 @@ const integration = {
 				export function activate() { return [{ kind: 'command', registrationId: 'folders', command: 'folders', title: 'Folders' }]; }
 				export function invoke() { return globalThis.__ashInitialization.workspaceFolders.map(folder => folder.uri); }
 			`)),
-		}, createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected remote operation ${operation}`); }), services));
+		}, createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected remote operation ${operation}`); }), services, lifetime.add(new TestWorkspaceTrustManagementService())));
 		using configuration = new InMemoryConfigurationService();
 		const handler = host.registerClientHandler(async operation => {
 			if (!operation || typeof operation !== 'object' || !('operation' in operation) || operation.operation !== 'readInitialization') throw new Error('Unexpected offline client operation');

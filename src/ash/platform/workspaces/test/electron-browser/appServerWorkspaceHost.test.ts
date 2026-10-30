@@ -211,8 +211,7 @@ suite('workspace trust during directory opening', () => {
 
 	test('the IPC boundary rejects unknown capabilities before creating a grant and releases its route', async () => {
 		const grants: WorkspaceTrustPermission[][] = [];
-		const client = {} as AppServerProtocolClient;
-		using registration = host.registerAppServerWorkspaceHost(client, async () => { }, { requestDirectoryPermissions: async () => 'cancel' }, trustApi(new Map(), grants));
+		using registration = host.registerAppServerWorkspaceHost(async () => { }, { requestDirectoryPermissions: async () => 'cancel' }, trustApi(new Map(), grants), async () => { throw new Error('Unexpected directory replacement'); });
 		const completion = new Promise<unknown>(resolve => { reply = resolve; });
 		try {
 			listeners.get('ash:workspace:operation')!({ nonce: 'request', operation: 'createGrant', params: { path: '/new', permissions: ['readFiles', 'futureCapability'] } });
@@ -230,7 +229,7 @@ suite('workspace trust during directory opening', () => {
 			...trustApi(new Map([['/partial', selected]]), []),
 			persistGrant: async (path, grant) => { writes.push({ path, grant }); },
 		};
-		using registration = host.registerAppServerWorkspaceHost({} as AppServerProtocolClient, async () => { }, { requestDirectoryPermissions: async () => 'cancel' }, api);
+		using registration = host.registerAppServerWorkspaceHost(async () => { }, { requestDirectoryPermissions: async () => 'cancel' }, api, async () => { throw new Error('Unexpected directory replacement'); });
 		try {
 			let completion = new Promise<unknown>(resolve => { reply = resolve; });
 			listeners.get('ash:workspace:operation')!({ nonce: 'read', operation: 'readPermissions', params: { path: '/partial' } });
@@ -243,8 +242,7 @@ suite('workspace trust during directory opening', () => {
 		} finally { reply = undefined; }
 	});
 	test('Remote folder validation preserves the remote resource identity for dirty-owner checks', async () => {
-		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
-		using registration = host.registerAppServerWorkspaceHost(client, async () => { }, { requestDirectoryPermissions: async () => 'cancel' }, trustApi(new Map(), []), folders => {
+		using registration = host.registerAppServerWorkspaceHost(async () => { }, { requestDirectoryPermissions: async () => 'cancel' }, trustApi(new Map(), []), async () => { throw new Error('Unexpected directory replacement'); }, folders => {
 			assert.equal(folders[0]?.toString(), 'ash-remote://ssh+host/second');
 		}, path => createSshRemoteWorkspaceUri('host', path));
 		const completion = new Promise<unknown>(resolve => { reply = resolve; });
@@ -255,8 +253,7 @@ suite('workspace trust during directory opening', () => {
 	});
 
 	test('folder validation asks the editor owner without sending a backend directory mutation', async () => {
-		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
-		using registration = host.registerAppServerWorkspaceHost(client, async () => { }, { requestDirectoryPermissions: async () => 'cancel' }, trustApi(new Map(), []), folders => {
+		using registration = host.registerAppServerWorkspaceHost(async () => { }, { requestDirectoryPermissions: async () => 'cancel' }, trustApi(new Map(), []), async () => { throw new Error('Unexpected directory replacement'); }, folders => {
 			assert.equal(folders[0]?.fsPath, URI.file('/first').fsPath);
 			throw new Error('unsaved files');
 		});

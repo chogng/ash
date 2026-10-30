@@ -1,3 +1,5 @@
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
+import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
 import { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
 import { IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
@@ -38,12 +40,19 @@ test('extension backend routes decode parameters before using the protocol conne
 	assert.equal(requests.length, 1);
 });
 
+class WorkspaceTrust extends TestWorkspaceTrustManagementService {
+	readonly invalidations = this._register(new Emitter<void>());
+	override readonly onDidChangeTrustedFolders = this.invalidations.event;
+}
+
 class RemoteHost extends Disposable implements IExtensionHostApi {
 	constructor() {
 		super();
+		this.instantiation.registerInstance(IWorkspaceTrustManagementService, this.trust);
 		this.instantiation.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 		this.instantiation.registerInstance(IExtensionApi, { list: async () => ({ generation: 1, extensions: [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => new Uint8Array()) });
 	}
+	readonly trust = this._register(new WorkspaceTrust());
 	readonly instantiation = this._register(new InstantiationService());
 	private readonly changes = this._register(new Emitter<number>());
 	private readonly connection = this._register(new Emitter<AppServerConnectionState>());
@@ -80,10 +89,68 @@ function browser(remote: RemoteHost): WebWorkerExtensionHost {
 	return new WebWorkerExtensionHost({
 		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
 		resources: new ExtensionResourceLoaderService(async () => { throw new Error('Bundled resources are outside this fixture'); }),
-	}, remote, remote.instantiation);
+	}, remote, remote.instantiation, remote.trust);
 }
 
 const request = { extensionId: 'lazy', activationGeneration: 7, event: { type: 'command' as const, command: 'lazy.run' } };
+
+test('workspace trust gates built-in browser activation and retires old command registrations', async () => {
+	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+	const activated: string[] = [];
+	const terminated: string[] = [];
+	class WorkerFixture extends EventTarget {
+		private id = '';
+		postMessage(message: BrowserExtensionHostRequest): void {
+			if (message.type === 'activate') { this.id = message.extensionId; activated.push(this.id); }
+			queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', {
+				data: {
+					id: message.id, success: true, result: message.type === 'activate'
+						? [{ kind: 'command', registrationId: 'callback', command: `${this.id}.run`, title: 'Run' }] : null,
+				}
+			})));
+		}
+		terminate(): void { terminated.push(this.id); }
+	}
+	Object.defineProperty(globalThis, 'Worker', { configurable: true, value: WorkerFixture });
+	try {
+		using remote = new RemoteHost();
+		await remote.trust.setWorkspaceTrust(false);
+		remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });
+		remote.registerClientHandler = () => Disposable.None;
+		const declarations = [undefined, false, true, 'limited', 'true'];
+		const extensions: IExtensionApi = {
+			list: async () => ({
+				generation: 1, diagnostics: [], extensions: declarations.map((supported, index) => ({
+					id: `builtin.${index}`, name: String(index), publisher: 'builtin', displayName: String(index), version: '1', sourceKind: 'builtIn',
+					manifestJson: JSON.stringify({ browser: 'main.js', capabilities: { untrustedWorkspaces: { supported } } }),
+					manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'b'.repeat(64)}`,
+				}))
+			}),
+			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+		};
+		using api = remote.instantiation.createInstance(WebWorkerExtensionHost, extensions, remote);
+		const registration = api.registerClientHandler(async () => ({ result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }));
+		using handler = toDisposable(() => registration.dispose());
+		assert.deepEqual((await api.reconcile('refresh')).extensions.map(runtime => runtime.id), ['builtin.2', 'builtin.3']);
+		assert.deepEqual(activated, ['builtin.2', 'builtin.3']);
+		await remote.trust.setWorkspaceTrust(true);
+		const trusted = await api.list();
+		assert.equal(trusted.extensions.length, 5);
+		const previous = trusted.extensions.find(runtime => runtime.id === 'builtin.0')!;
+		remote.trust.invalidations.fire();
+		assert.deepEqual((await api.list()).extensions.map(runtime => runtime.id), ['builtin.2', 'builtin.3']);
+		await api.reconcile('refresh');
+		assert.equal((await api.list()).extensions.length, 5, 'An unchanged trust refresh restores required Workers');
+		await remote.trust.setWorkspaceTrust(false);
+		assert.deepEqual((await api.list()).extensions.map(runtime => runtime.id), ['builtin.2', 'builtin.3']);
+		assert.deepEqual(terminated.sort(), ['builtin.0', 'builtin.0', 'builtin.1', 'builtin.1', 'builtin.4', 'builtin.4']);
+		await assert.rejects(api.invoke({ extensionId: previous.id, activationGeneration: previous.activationGeneration, incarnation: previous.incarnation!, registrationId: 'callback', operation: 'execute', payload: {}, deadlineUnixMillis: Date.now() + 5_000 }, new AbortController().signal), /retired activation/);
+		assert.equal(activated.filter(id => id === 'builtin.2').length, 1, 'Restricted Mode retains a healthy opted-in Worker');
+	} finally {
+		if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
+		else Reflect.deleteProperty(globalThis, 'Worker');
+	}
+});
 
 test('invalid client results reject the Worker call instead of stranding its pending request', async () => {
 	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
@@ -105,7 +172,7 @@ test('invalid client results reject the Worker call instead of stranding its pen
 		using api = new WebWorkerExtensionHost({
 			list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn', manifestJson: '{"browser":"./browser.js"}', manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}` }] }),
 			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
-		}, remote, remote.instantiation);
+		}, remote, remote.instantiation, remote.trust);
 		const handler = api.registerClientHandler(async operation => (operation as { operation: string; }).operation === 'readInitialization'
 			? { result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }
 			: { result: 'command', hasValue: true, value: NaN });
@@ -134,7 +201,7 @@ test('readable user and registry browser packages do not gain client execution a
 			}))
 		}),
 		resources: new ExtensionResourceLoaderService(async () => { reads++; throw new Error('Unauthorized browser entry'); }),
-	}, remote, remote.instantiation);
+	}, remote, remote.instantiation, remote.trust);
 	assert.deepEqual((await api.reconcile('refresh')).extensions, []);
 	assert.equal(reads, 0);
 });
@@ -155,7 +222,7 @@ test('declarative packages do not delay executable host startup with translation
 		resources: new ExtensionResourceLoaderService(async () => { resourceReads++; return new Uint8Array(); }),
 	};
 	using catalogServices = remote.instantiation.createChild(new ServiceCollection([IExtensionApi, extensions]));
-	using api = new WebWorkerExtensionHost(extensions, remote, catalogServices);
+	using api = new WebWorkerExtensionHost(extensions, remote, catalogServices, remote.trust);
 	assert.deepEqual((await api.reconcile('refresh')).extensions, []);
 	assert.equal(reconciled, true);
 	assert.equal(resourceReads, 0);
@@ -218,7 +285,7 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 				};
 			},
 			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
-		}, remote, remote.instantiation);
+		}, remote, remote.instantiation, remote.trust);
 		const registration = api.registerClientHandler(async operation => {
 			if ((operation as { operation: string; }).operation === 'setStatusBarEntries') return { result: 'done' };
 			assert.deepEqual(operation, { operation: 'readInitialization' });
@@ -267,68 +334,78 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 	}
 });
 
-test('disablement during activation retires the Worker before publishing its contributions', async () => {
-	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
-	const started = new DeferredPromise<void>();
-	let enabled = true;
-	let reads = 0;
-	let terminated = false;
-	let reply: (() => void) | undefined;
-	class WorkerFixture extends EventTarget {
-		postMessage(message: BrowserExtensionHostRequest): void {
-			if (message.type === 'deactivate') {
-				queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: null } })));
-				return;
+for (const revocation of ['disablement', 'workspace trust']) {
+	test(`${revocation} during activation retires the Worker before publishing its contributions`, async () => {
+		const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+		const started = new DeferredPromise<void>();
+		let enabled = true;
+		let reads = 0;
+		let terminated = false;
+		let reply: (() => void) | undefined;
+		class WorkerFixture extends EventTarget {
+			postMessage(message: BrowserExtensionHostRequest): void {
+				if (message.type === 'deactivate') {
+					queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: null } })));
+					return;
+				}
+				assert.equal(message.type, 'activate');
+				reply = () => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: [] } }));
+				void started.complete();
 			}
-			assert.equal(message.type, 'activate');
-			reply = () => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, success: true, result: [] } }));
-			void started.complete();
+			terminate(): void { terminated = true; }
 		}
-		terminate(): void { terminated = true; }
-	}
-	Object.defineProperty(globalThis, 'Worker', { configurable: true, value: WorkerFixture });
-	try {
-		using remote = new RemoteHost();
-		remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });
-		remote.registerClientHandler = () => Disposable.None;
-		remote.instantiation.registerInstance(ICommandService, {} as ICommandService);
-		remote.instantiation.registerInstance(IFileService, {} as IFileService);
-		remote.instantiation.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
-		remote.instantiation.registerInstance(IAppServerApi, {} as IAppServerApi);
-		using changes = new Emitter<void>();
-		using api = new WebWorkerExtensionHost({
-			onDidChange: changes.event,
-			list: async () => {
-				reads++;
-				return {
-					generation: 1, diagnostics: [], extensions: enabled ? [{
-						id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn',
-						manifestJson: JSON.stringify({ browser: './browser.js' }), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}`,
-					}] : []
-				};
-			},
-			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
-		}, remote, remote.instantiation);
-		const registration = api.registerClientHandler(async () => ({ result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }));
-		using handler = toDisposable(() => registration.dispose());
-		const published: Promise<ExtensionHostFleetSnapshot>[] = [];
-		const subscription = api.onDidChange(() => { published.push(api.list()); });
-		using listener = toDisposable(() => subscription.dispose());
-		const activation = api.reconcile('refresh');
-		await started.p;
-		enabled = false;
-		changes.fire();
-		assert.equal(api.reconcile('restartFailed'), activation);
-		reply!();
-		assert.deepEqual((await activation).extensions, []);
-		assert.equal(reads, 2, 'The enablement event queues a fresh catalog read');
-		assert.equal(terminated, true);
-		for (const fleet of await Promise.all(published)) { assert.deepEqual(fleet.extensions, []); }
-	} finally {
-		if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
-		else Reflect.deleteProperty(globalThis, 'Worker');
-	}
-});
+		Object.defineProperty(globalThis, 'Worker', { configurable: true, value: WorkerFixture });
+		try {
+			using remote = new RemoteHost();
+			remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });
+			remote.registerClientHandler = () => Disposable.None;
+			remote.instantiation.registerInstance(ICommandService, {} as ICommandService);
+			remote.instantiation.registerInstance(IFileService, {} as IFileService);
+			remote.instantiation.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
+			remote.instantiation.registerInstance(IAppServerApi, {} as IAppServerApi);
+			using changes = new Emitter<void>();
+			using api = new WebWorkerExtensionHost({
+				onDidChange: changes.event,
+				list: async () => {
+					reads++;
+					return {
+						generation: 1, diagnostics: [], extensions: enabled ? [{
+							id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn',
+							manifestJson: JSON.stringify({ browser: './browser.js' }), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+						}] : []
+					};
+				},
+				resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
+			}, remote, remote.instantiation, remote.trust);
+			const registration = api.registerClientHandler(async () => ({ result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }));
+			using handler = toDisposable(() => registration.dispose());
+			const published: Promise<ExtensionHostFleetSnapshot>[] = [];
+			const subscription = api.onDidChange(() => { published.push(api.list()); });
+			using listener = toDisposable(() => subscription.dispose());
+			const activation = api.reconcile('refresh');
+			await started.p;
+			let trustChange: Promise<void> | undefined;
+			if (revocation === 'workspace trust') {
+				trustChange = remote.trust.setWorkspaceTrust(false);
+				remote.trust.invalidations.fire();
+			} else {
+				enabled = false;
+				changes.fire();
+			}
+			assert.equal(api.reconcile('restartFailed'), activation);
+			reply!();
+			assert.deepEqual((await activation).extensions, []);
+			await trustChange;
+			if (revocation === 'disablement') assert.equal(reads, 2, 'The enablement event queues a fresh catalog read');
+			else assert.ok(reads >= 2, 'Trust revocation queues a fresh catalog read');
+			assert.equal(terminated, true);
+			for (const fleet of await Promise.all(published)) { assert.deepEqual(fleet.extensions, []); }
+		} finally {
+			if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
+			else Reflect.deleteProperty(globalThis, 'Worker');
+		}
+	});
+}
 
 test('first-use activation returns ready even while a notification refresh is pending', async () => {
 	using remote = new RemoteHost();
