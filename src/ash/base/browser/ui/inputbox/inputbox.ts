@@ -32,6 +32,8 @@ export interface InputBoxOptions<Flexible extends boolean = false> {
 	readonly presentation?: 'default' | 'field' | 'compact';
 	readonly readOnly?: boolean;
 	readonly enabled?: boolean;
+	/** Select the entire value when focus enters; subsequent clicks retain native caret placement. Defaults to false. */
+	readonly selectOnFocus?: boolean;
 	readonly ariaLabel?: string;
 	readonly role?: AriaRole;
 	readonly ariaAutoComplete?: AriaAutoComplete;
@@ -174,6 +176,7 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 			'focus',
 			() => {
 				this.element.classList.add('is-focused');
+				if (options.selectOnFocus) { this.select(); }
 				this._onDidFocus.fire();
 			},
 		));

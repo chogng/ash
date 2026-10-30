@@ -222,6 +222,16 @@
 	color: var(--ash-input-foreground);
 }
 
+.ash-color-picker-input:focus-within {
+	border-color: var(--ash-focusBorder);
+}
+
+/* High-contrast input borders can already use the focus color. */
+.ash-high-contrast .ash-color-picker-input:focus-within {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: 2px;
+}
+
 .ash-color-picker-input > .ash-color-picker-input-swatch {
 	min-width: var(--ash-spacing-size320);
 	width: var(--ash-spacing-size320);
@@ -231,6 +241,10 @@
 		var(--ash-cornerRadius-small);
 	background: transparent;
 	flex-shrink: 0;
+}
+
+.ash-color-picker-input > .ash-color-picker-input-swatch:focus-visible {
+	outline: none;
 }
 
 .ash-color-picker-input-preview {
@@ -255,6 +269,13 @@
 	min-width: 0;
 	width: 100%;
 	min-height: var(--ash-spacing-size320);
+}
+
+.ash-color-picker-input
+	.ash-color-picker-input-value.is-focused:not(.has-validation),
+.ash-color-picker-input
+	.ash-color-picker-input-alpha.is-focused:not(.has-validation) {
+	border-color: transparent;
 }
 
 .ash-color-picker-input .ash-color-picker-input-value {

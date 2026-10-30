@@ -77,17 +77,17 @@ export class ColorPicker extends Disposable {
 			this.swatch.domNode.setAttribute('aria-expanded', 'false');
 			this.swatchDomNode = h(ownerDocument, 'span', { className: 'ash-color-picker-input-preview', attributes: { 'aria-hidden': 'true' } });
 			this.swatch.domNode.append(this.swatchDomNode);
-			// The composed row draws the shared frame; InputBox owns each field's interaction states.
+			// The composed row owns the shared frame and focus indicator; InputBox retains each field's validation.
 			const inputBoxStyles = { inputBackground: 'transparent', inputForeground: 'inherit', inputBorder: 'transparent' };
 			this.compactValueInput = this._register(new InputBox(this.domNode, {
-				presentation: 'field', ariaLabel: input.value, inputBoxStyles,
+				presentation: 'field', ariaLabel: input.value, inputBoxStyles, selectOnFocus: true,
 			}));
 			this.compactValueInput.element.classList.add('ash-color-picker-input-value');
 			this.compactValueInput.inputElement.maxLength = 9;
 			const percent = h(ownerDocument, 'div', { className: 'ash-color-picker-input-percent' });
 			this.domNode.append(percent);
 			this.compactAlphaInput = this._register(new InputBox(percent, {
-				type: 'number', presentation: 'field', ariaLabel: input.opacity, inputBoxStyles,
+				type: 'number', presentation: 'field', ariaLabel: input.opacity, inputBoxStyles, selectOnFocus: true,
 			}));
 			this.compactAlphaInput.element.classList.add('ash-color-picker-input-alpha');
 			this.compactAlphaInput.inputElement.min = '0';

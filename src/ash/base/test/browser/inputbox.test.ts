@@ -1,7 +1,69 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { setup, suite, test } from 'mocha';
+import { expect } from '@playwright/test';
 import { JSDOM } from 'jsdom';
 import { HistoryInputBox, InputBox } from '../../browser/ui/inputbox/inputbox.js';
+import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
+
+suite('InputBox focus selection in the browser', () => {
+	const browser = useBrowserTests();
+	setup(async () => {
+		await browser.page.goto('/inputbox.html');
+		await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true');
+	});
+
+	test('default and explicitly disabled selection preserve click positioning', async () => {
+		for (const name of ['Default', 'Disabled selection']) {
+			const input = browser.page.getByRole('textbox', { name, exact: true });
+			await input.click({ position: { x: 9, y: 12 } });
+			assert.deepEqual(await input.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd]), [0, 0]);
+		}
+	});
+
+	test('first click selects the value while subsequent clicks and drags place the caret normally', async () => {
+		const { page } = browser;
+		const input = page.getByRole('textbox', { name: 'Select text', exact: true });
+		await input.click({ position: { x: 9, y: 12 } });
+		assert.deepEqual(await input.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd]), [0, 6]);
+		await input.click({ position: { x: 9, y: 12 } });
+		assert.deepEqual(await input.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd]), [0, 0]);
+		const bounds = (await input.boundingBox())!;
+		await page.mouse.move(bounds.x + 9, bounds.y + 12);
+		await page.mouse.down();
+		await page.mouse.move(bounds.x + 30, bounds.y + 12, { steps: 5 });
+		await page.mouse.up();
+		const selection = await input.evaluate((element: HTMLInputElement) => [element.selectionStart!, element.selectionEnd!]);
+		assert.equal(selection[0], 0);
+		assert.ok(selection[1]! > 0 && selection[1]! < 6);
+		await page.getByRole('button', { name: 'Before inputs' }).click();
+		await input.click();
+		await page.keyboard.insertText('ABCDEF');
+		await expect(input).toHaveValue('ABCDEF');
+	});
+
+	test('Tab entry selects text and numeric values and programmatic focus selects multiline values', async () => {
+		const { page } = browser;
+		await page.getByRole('textbox', { name: 'Disabled selection', exact: true }).focus();
+		await page.keyboard.press('Tab');
+		const text = page.getByRole('textbox', { name: 'Select text', exact: true });
+		await expect(text).toBeFocused();
+		await page.keyboard.insertText('123456');
+		await expect(text).toHaveValue('123456');
+		await page.keyboard.press('Tab');
+		const numeric = page.getByRole('spinbutton', { name: 'Select number', exact: true });
+		await expect(numeric).toBeFocused();
+		await page.keyboard.insertText('42');
+		await expect(numeric).toHaveValue('42');
+		await page.getByRole('button', { name: 'Before inputs' }).click();
+		await numeric.click();
+		await page.keyboard.insertText('16');
+		await expect(numeric).toHaveValue('16');
+		const multiline = page.getByRole('textbox', { name: 'Select multiline', exact: true });
+		await multiline.focus();
+		await page.keyboard.insertText('new\nvalue');
+		await expect(multiline).toHaveValue('new\nvalue');
+	});
+});
 
 test('Flexible InputBox preserves multiline editing, selection and validation without changing default numeric inputs', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
