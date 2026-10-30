@@ -190,9 +190,11 @@ export class ThemePreview extends Disposable {
 		let loading: ThemePreviewFrame | undefined;
 		const loadSelected = (): void => {
 			const frame = this.active;
-			if (!frame || frame.started || loading) return;
+			if (!frame || frame.started || loading || !geometry) return;
 			// A cold document imports the shared product graph. Serializing startup
 			// avoids exhausting the browser's resource requests during rapid switches.
+			// Wait for the canvas dimensions so Parts do not seed their layout from
+			// the iframe's default 300 × 150 viewport and retain a minimum-size panel.
 			loading = frame;
 			frame.started = true;
 			frame.domNode.src = frame.url;
@@ -279,6 +281,7 @@ export class ThemePreview extends Disposable {
 				resizeFrame.value = scheduleAtNextAnimationFrame(getWindow(container), () => {
 					geometry = { width, height, scale };
 					for (const [, frame] of this.frames) resize(frame);
+					loadSelected();
 				});
 			}),
 		);

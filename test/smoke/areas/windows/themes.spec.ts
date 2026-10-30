@@ -240,6 +240,42 @@ test('Theme Editor restores a workspace draft and can move it to another window'
 	await restored.page.screenshot({ path: testInfo.outputPath('restored-workspace-theme-draft.png') });
 });
 
+test('Theme Editor sizes its preview before initializing terminal layout', { tag: ['@electron-app-server'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	// Delay the canvas measurement to exercise a cold preview starting before
+	// its host has delivered the first layout, independently of machine speed.
+	await page.evaluate(() => {
+		const NativeResizeObserver = window.ResizeObserver;
+		window.ResizeObserver = class extends NativeResizeObserver {
+			constructor(callback: ResizeObserverCallback) {
+				super((entries, observer) => {
+					if (entries.some(entry => entry.target.classList.contains('ash-theme-editor-preview-viewport'))) {
+						setTimeout(() => callback(entries, observer), 1000);
+					} else {
+						callback(entries, observer);
+					}
+				});
+			}
+		};
+	});
+	try {
+		await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
+		const preview = page.frameLocator('.ash-theme-editor-preview:visible');
+		await expect(preview.locator('body')).toHaveAttribute('data-ready', 'true');
+		await expect.poll(() => preview.locator('.ash-theme-preview-terminal').evaluate(element => {
+			const bounds = element.getBoundingClientRect();
+			return [...element.querySelectorAll('p')].every(line => {
+				const rect = line.getBoundingClientRect();
+				return rect.top >= bounds.top && rect.bottom <= bounds.bottom;
+			}) && bounds.height > innerHeight / 5 && bounds.height < innerHeight / 2;
+		})).toBe(true);
+	} finally {
+		await page.evaluate(() => {
+			window.ResizeObserver = Object.getPrototypeOf(window.ResizeObserver) as typeof ResizeObserver;
+		});
+	}
+});
+
 test('Theme Editor connects its local file preview and isolates draft colors', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
 	const page = workbench.page;
 	const original = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'));
