@@ -28,6 +28,7 @@ export interface DebugSessionStartOptions {
 	readonly createDebugAdapterDescriptor?: (session: IDebugSession) => PromiseLike<IDebugConfiguration['adapter'] | null>;
 	readonly configuration: IDebugConfiguration;
 	readonly sessionOptions?: IDebugSessionOptions;
+	readonly signal?: AbortSignal;
 	readonly onWillStart?: (session: IDebugSession) => void;
 	/** Execution data is resolved by DebugService; the source configuration remains available for restart. */
 	readonly resolvedConfiguration: Pick<IDebugConfiguration, 'adapter' | 'arguments'>;
@@ -237,6 +238,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			session.retainedConsoles = prepared.consoleIds;
 			session.retentionRevision = prepared.consoleCatalogRevision;
 			options.onWillStart?.(session);
+			if (session.isDisposed || options.signal?.aborted) { throw new CancellationError(); }
 			let adapter = options.resolvedConfiguration.adapter;
 			if (!adapter) {
 				if (!options.createDebugAdapterDescriptor) throw new Error(localize('debug.adapterDescriptorUnavailable', 'The Debug Adapter factory did not provide an adapter.'));
@@ -245,20 +247,20 @@ export class DebugSession extends Disposable implements IDebugSession {
 				session._resolvedConfiguration = Object.freeze({ ...session.resolvedConfiguration, adapter });
 			}
 			session.transport = new RawDebugSession(options.processService, adapter.inline);
-			if (session.isDisposed) { throw new CancellationError(); }
+			if (session.isDisposed || options.signal?.aborted) { throw new CancellationError(); }
 			const trackers = await options.createDebugAdapterTrackers?.(session) ?? [];
-			if (session.isDisposed) {
+			if (session.isDisposed || options.signal?.aborted) {
 				for (const tracker of trackers) { tracker.dispose(); }
 				throw new CancellationError();
 			}
 			session.trackers = trackers;
 			for (const tracker of trackers) session.trackerDisposables.set(tracker, session._register(toDisposable(() => tracker.dispose())));
 			await session.callTrackers(tracker => tracker.onWillStartSession?.());
-			if (session.isDisposed) { throw new CancellationError(); }
+			if (session.isDisposed || options.signal?.aborted) { throw new CancellationError(); }
 			await session.transport.start(adapter.inline
 				? { arguments: [], connection: { type: 'client' }, ...(options.configuration.dirId ? { dirId: options.configuration.dirId } : {}) }
 				: { ...adapter, ...(options.configuration.dirId ? { dirId: options.configuration.dirId } : {}) });
-			if (session.isDisposed) { throw new CancellationError(); }
+			if (session.isDisposed || options.signal?.aborted) { throw new CancellationError(); }
 			session.adapterStarted = true;
 			session.polling = true;
 			void session.poll();
@@ -268,7 +270,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			session.retentionRevision = completed.consoleCatalogRevision;
 			return session;
 		} catch (error) {
-			const cancelled = session.isDisposed;
+			const cancelled = session.isDisposed || options.signal?.aborted;
 			if (!cancelled) { await session.reportTrackerError(error); }
 			await session.closeProcess();
 			await session.stopTrackers();

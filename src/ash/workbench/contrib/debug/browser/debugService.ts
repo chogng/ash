@@ -531,7 +531,7 @@ export class DebugService extends Disposable implements IDebugService {
 		let initializingSession: IDebugSession | undefined;
 		const acceptsBreakpointEvents = (): boolean => !this.isDisposed && workspaceGeneration === this.workspaceGeneration && initializingSession !== undefined && !['terminated', 'error'].includes(initializingSession.state);
 		const session = await DebugSession.start({
-			id, admitted: true, configuration: current, sessionOptions,
+			id, admitted: true, configuration: current, sessionOptions, signal,
 			processService: this.processes,
 			resolvedConfiguration: factory?.createDebugAdapterDescriptor ? { ...resolvedConfiguration, adapter: undefined } : resolvedConfiguration,
 			workspace: root, breakpoints: () => this.currentBreakpoints,
@@ -614,8 +614,8 @@ export class DebugService extends Disposable implements IDebugService {
 			throw error;
 		});
 		this.preparingSessions.delete(session.id);
-		if (generation !== this.workspaceGeneration || this.isDisposed || sessionOptions.parentSession && this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession) {
-			// Initialization can finish after the workspace or service lifetime ends.
+		if (signal.aborted || generation !== this.workspaceGeneration || this.isDisposed || sessionOptions.parentSession && this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession) {
+			// Initialization can finish after stopping or after the workspace or service lifetime ends.
 			// Release the returned process before publishing a session to any consumer.
 			try { await session.disconnect(); } finally { session.dispose(); await this.stopChildSessions(session); this.endSessionEmitter.fire(session); }
 			throw new CancellationError();
@@ -794,9 +794,10 @@ export class DebugService extends Disposable implements IDebugService {
 
 	async stop(session: IDebugSession | undefined = this.session): Promise<void> {
 		if (!session) {
-			// A pre-launch task can be running before there is a session to disconnect.
+			// The first launch may still be preparing its task or adapter without a focused session.
 			this.taskRunner.cancel();
 			for (const controller of this.launchControllers.values()) controller.abort();
+			await Promise.allSettled([...this.preparingSessions.values()].map(session => this.stop(session)));
 			return;
 		}
 		this.launchControllers.get(session.id)?.abort();

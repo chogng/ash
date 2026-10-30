@@ -1200,7 +1200,7 @@ for (const result of ['succeeded', 'failed'] as const) {
 	});
 }
 
-for (const change of ['workspace', 'factory', 'dispose'] as const) {
+for (const change of ['workspace', 'factory', 'dispose', 'stop', 'stopAll'] as const) {
 	test(`DebugService cancels a pending descriptor on ${change} without starting its adapter process`, async () => {
 		const root = URI.file('/workspace');
 		using resources = new DisposableStore();
@@ -1212,18 +1212,80 @@ for (const change of ['workspace', 'factory', 'dispose'] as const) {
 		using registration = adapters.registerFactories([{ type: 'hosted', label: 'Hosted', sourceId: 'extension:hosted', createDebugAdapterDescriptor: async (_configuration, signal) => { void entered.complete(signal); return result.p; } }]);
 		using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
 		using service = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+		let preparingSession: IDebugSession | undefined;
+		let published = 0;
+		using preparing = service.onWillNewSession(session => { preparingSession = session; });
+		using publishing = service.onDidNewSession(() => { published++; });
 		const pending = assert.rejects(service.startDebugging({ id: 'pending', name: 'Pending', type: 'hosted', request: 'launch', arguments: {}, preLaunchTask: 'build' }), isCancellationError);
 		const signal = await entered.p;
+		assert.equal(service.session, undefined);
 		if (change === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 		else if (change === 'factory') registration.dispose();
-		else service.dispose();
+		else if (change === 'dispose') service.dispose();
+		else await service[change]();
 		await pending;
 		assert.equal(signal.aborted, true);
 		void result.complete({ program: 'late-adapter', arguments: [] });
 		await Promise.resolve();
-		assert.deepEqual({ tasks: tasks.ran, adapters: processes.started }, { tasks: ['build'], adapters: [] });
+		assert.ok(preparingSession instanceof DebugSession);
+		assert.equal(preparingSession.isDisposed, true);
+		assert.equal(service.getSession(preparingSession.id), undefined);
+		assert.deepEqual({ tasks: tasks.ran, adapters: processes.started, sessions: service.sessions, published }, { tasks: ['build'], adapters: [], sessions: [], published: 0 });
 	});
 }
+
+test('Debug stop during session preparation prevents descriptor and tracker invocation', async () => {
+	using resources = new DisposableStore();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	let descriptors = 0;
+	let trackerCreations = 0;
+	using factory = adapters.registerFactories([{
+		type: 'hosted', label: 'Hosted', sourceId: 'host',
+		createDebugAdapterDescriptor: async () => { descriptors++; return { program: 'adapter', arguments: [] }; },
+	}]);
+	const root = URI.file('/workspace');
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	using trackers = service.registerDebugAdapterTrackerFactories([{
+		id: 'tracker', type: '*', createDebugAdapterTracker: () => { trackerCreations++; return toDisposable(() => { }); },
+	}]);
+	let stopping: Promise<void> | undefined;
+	using listener = service.onWillNewSession(() => { stopping = service.stop(); });
+	await assert.rejects(service.startDebugging({ id: 'pending', name: 'Pending', type: 'hosted', request: 'launch', arguments: {} }), isCancellationError);
+	await stopping;
+	assert.deepEqual({ descriptors, trackerCreations, adapters: processes.started, sessions: service.sessions }, { descriptors: 0, trackerCreations: 0, adapters: [], sessions: [] });
+});
+
+test('Debug stop prevents publication when the final session read completes late', async () => {
+	using resources = new DisposableStore();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	const root = URI.file('/workspace');
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	const entered = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const manage = processes.manageSession.bind(processes);
+	let held = false;
+	processes.manageSession = async (id, operation) => {
+		const relation = await manage(id, operation);
+		if (operation === 'read' && processes.started.length && !held) {
+			held = true;
+			void entered.complete();
+			await release.p;
+		}
+		return relation;
+	};
+	let published = 0;
+	using listener = service.onDidNewSession(() => { published++; });
+	const pending = assert.rejects(service.startDebugging({ id: 'pending', name: 'Pending', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {} }), isCancellationError);
+	await entered.p;
+	await service.stop();
+	await release.complete();
+	await pending;
+	assert.deepEqual({ published, sessions: service.sessions, closed: processes.closed }, { published: 0, sessions: [], closed: ['debug-1'] });
+});
 
 test('unrelated provider retirement preserves a pending Debug configuration resolver', async () => {
 	using resources = new DisposableStore();
