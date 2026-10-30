@@ -41,6 +41,7 @@ pub use history::GitFileHistoryPage;
 pub use history::GitGraph;
 pub use history::GitGraphCursor;
 pub use history::GitReference;
+pub use history::GitReferenceCommit;
 pub use history::GitReferenceKind;
 pub use objects::GitPackBase;
 pub use objects::GitPrivateRef;

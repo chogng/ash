@@ -1821,6 +1821,21 @@ fn history_refresh_reads_metadata_without_scanning_or_replacing_working_tree_sta
             .any(|reference| reference.name == "new-label")
     );
     assert_eq!(graph.commits[0].subject, "second");
+    let tag = refs
+        .references
+        .iter()
+        .find(|reference| reference.name == "new-label")
+        .unwrap();
+    let details = tag
+        .commit_details
+        .as_ref()
+        .expect("reference metadata reaches the protocol");
+    assert_eq!(details.subject, "second");
+    assert!(!details.author_name.is_empty());
+    assert_eq!(
+        serde_json::to_value(tag).unwrap()["commitDetails"]["timestampSeconds"].as_i64(),
+        Some(details.timestamp_seconds)
+    );
     assert!(!timings.records.is_empty());
     assert!(
         timings

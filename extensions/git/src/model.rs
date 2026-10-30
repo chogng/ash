@@ -675,6 +675,14 @@ pub struct Reference {
     pub kind: ReferenceKind,
     pub remote_name: Option<String>,
     pub current: bool,
+    pub commit_details: Option<ReferenceCommit>,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceCommit {
+    pub author_name: String,
+    pub timestamp_seconds: i64,
+    pub subject: String,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

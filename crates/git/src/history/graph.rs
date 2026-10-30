@@ -17,6 +17,14 @@ pub enum GitReferenceKind {
     Tag,
 }
 
+/// Display metadata for the commit targeted by a branch or tag.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitReferenceCommit {
+    pub author_name: String,
+    pub timestamp_seconds: i64,
+    pub subject: String,
+}
+
 /// One branch or tag ref associated with a repository graph object.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitReference {
@@ -25,6 +33,7 @@ pub struct GitReference {
     kind: GitReferenceKind,
     remote_name: Option<String>,
     current: bool,
+    commit_details: Option<GitReferenceCommit>,
 }
 
 impl GitReference {
@@ -46,6 +55,10 @@ impl GitReference {
 
     pub fn is_current(&self) -> bool {
         self.current
+    }
+
+    pub fn commit_details(&self) -> Option<&GitReferenceCommit> {
+        self.commit_details.as_ref()
     }
 }
 
@@ -297,7 +310,9 @@ impl GitClient {
                 repository.worktree_root(),
                 [
                     "for-each-ref",
-                    "--format=%(refname)%00%(objectname)%00%(symref)%00%(HEAD)%00%(*objectname)",
+                    // Read commit metadata in the same snapshot as the refs. Starred atoms
+                    // describe an annotated tag's target rather than the tag annotation.
+                    "--format=%(refname)%00%(objectname)%00%(symref)%00%(HEAD)%00%(*objectname)%00%(objecttype)%00%(authorname)%00%(committerdate:unix)%00%(subject)%00%(*objecttype)%00%(*authorname)%00%(*committerdate:unix)%00%(*subject)",
                     "refs/heads",
                     "refs/remotes",
                     "refs/tags",
@@ -314,10 +329,10 @@ fn parse_references(bytes: &[u8], command: &str) -> GitResult<Vec<GitReference>>
     let mut references = Vec::new();
     for line in text.lines().filter(|line| !line.is_empty()) {
         let fields = line.split('\0').collect::<Vec<_>>();
-        if fields.len() != 5 {
+        if fields.len() != 13 {
             return Err(GitError::invalid_output(
                 command,
-                format!("ref record had {} fields instead of 5", fields.len()),
+                format!("ref record had {} fields instead of 13", fields.len()),
             ));
         }
         if !fields[2].is_empty() {
@@ -331,6 +346,24 @@ fn parse_references(bytes: &[u8], command: &str) -> GitResult<Vec<GitReference>>
                 "ref record omitted object id",
             ));
         }
+        let metadata = if fields[5] == "commit" {
+            &fields[6..9]
+        } else if fields[9] == "commit" {
+            &fields[10..13]
+        } else {
+            &[][..]
+        };
+        let commit_details = if metadata.is_empty() {
+            None
+        } else {
+            Some(GitReferenceCommit {
+                author_name: metadata[0].to_string(),
+                timestamp_seconds: metadata[1].parse().map_err(|_| {
+                    GitError::invalid_output(command, "ref commit timestamp was not an integer")
+                })?,
+                subject: metadata[2].to_string(),
+            })
+        };
         let reference = if let Some(name) = full_name.strip_prefix("refs/heads/") {
             if name.is_empty() {
                 return Err(GitError::invalid_output(command, "local ref omitted name"));
@@ -341,6 +374,7 @@ fn parse_references(bytes: &[u8], command: &str) -> GitResult<Vec<GitReference>>
                 kind: GitReferenceKind::LocalBranch,
                 remote_name: None,
                 current: fields[3] == "*",
+                commit_details,
             }
         } else if let Some(name) = full_name.strip_prefix("refs/remotes/") {
             let Some((remote_name, branch_name)) = name.split_once('/') else {
@@ -361,6 +395,7 @@ fn parse_references(bytes: &[u8], command: &str) -> GitResult<Vec<GitReference>>
                 kind: GitReferenceKind::RemoteBranch,
                 remote_name: Some(remote_name.to_string()),
                 current: false,
+                commit_details,
             }
         } else if let Some(name) = full_name.strip_prefix("refs/tags/") {
             GitReference {
@@ -374,6 +409,7 @@ fn parse_references(bytes: &[u8], command: &str) -> GitResult<Vec<GitReference>>
                 kind: GitReferenceKind::Tag,
                 remote_name: None,
                 current: false,
+                commit_details,
             }
         } else {
             continue;

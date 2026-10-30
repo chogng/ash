@@ -998,7 +998,7 @@ fn verify_checkout_picker(
     client: &Client,
     language: &str,
 ) {
-    for show_details in [true, false] {
+    for (show_details, with_metadata) in [(true, true), (false, true), (true, false)] {
         client.configuration.lock().unwrap()["showReferenceDetails"] = json!(show_details);
         client.configuration.lock().unwrap()["commitShortHashLength"] = json!(9);
         client.configuration_reset.store(true, Ordering::Release);
@@ -1017,6 +1017,13 @@ fn verify_checkout_picker(
                     };
                     for reference in value["references"].as_array_mut().unwrap() {
                         reference["objectId"] = json!("0123456789abcdef");
+                        if with_metadata {
+                            reference["commitDetails"] = json!({
+                                "authorName":"Author $(cloud)",
+                                "timestampSeconds":SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() - 7320,
+                                "subject":if reference["kind"] == "tag" { "" } else { "Commit $(git-branch) subject" }
+                            });
+                        }
                     }
                     value["references"].as_array_mut().unwrap().push(json!({
                         "kind":"localBranch","name":"topic/$(cloud)","objectId":"0123456789abcdef","current":false
@@ -1059,18 +1066,26 @@ fn verify_checkout_picker(
                     let current = if chinese { "当前分支" } else { "Current" };
                     assert_eq!(
                         items.iter().map(|item| item.description.clone()).collect::<Vec<_>>(),
-                        if show_details {
+                        if show_details && with_metadata {
+                            vec![
+                                Some(format!("{current} · {}", if chinese { "2 小时前" } else { "2 hours ago" })),
+                                Some("012345678".into()),
+                                Some(if chinese { "2 小时前" } else { "2 hours ago" }.into()),
+                                Some(if chinese { "2 小时前" } else { "2 hours ago" }.into()),
+                            ]
+                        } else {
                             vec![
                                 Some(format!("{current} · 012345678")),
                                 Some("012345678".into()),
                                 Some(if chinese { "远程分支位于 012345678" } else { "Remote branch at 012345678" }.into()),
                                 Some(if chinese { "标签位于 012345678" } else { "Tag at 012345678" }.into()),
                             ]
-                        } else {
-                            vec![Some(current.into()), None, None, None]
                         }
                     );
-                    assert!(items.iter().enumerate().filter(|(index, _)| *index != 1).all(|(_, item)| item.detail.is_none()));
+                    for index in [0, 2] {
+                        assert_eq!(items[index].detail.as_deref(), (show_details && with_metadata).then_some("Author \\$(cloud) · 012345678 · Commit \\$(git-branch) subject"));
+                    }
+                    assert!(items[3].detail.is_none(), "An empty commit subject must not produce an empty metadata line");
                     assert!(items[1].detail.as_ref().is_some_and(|detail| !detail.is_empty()));
                     // Cancel through the real SDK response; no decorated label reaches Git.
                     Ok(ResultValue::Selection { index: None })

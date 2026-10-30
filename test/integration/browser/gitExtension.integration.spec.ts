@@ -437,8 +437,8 @@ for (const language of ['en', 'zh-CN']) test(`distributed Rust Git registers SCM
 				{ label: `$(add) ${language === 'zh-CN' ? '创建新分支...' : 'Create new branch...'}`, alwaysShow: true },
 				{ label: `$(add) ${language === 'zh-CN' ? '从指定引用创建新分支...' : 'Create new branch from...'}`, alwaysShow: true },
 				{ label: `$(debug-disconnect) ${language === 'zh-CN' ? '以分离 HEAD 模式检出...' : 'Checkout detached...'}`, alwaysShow: true },
-				{ label: '$(git-branch) main', description: `${language === 'zh-CN' ? '当前分支' : 'Current'} · ${'a'.repeat(7)}`, separator: language === 'zh-CN' ? '分支' : 'branches' },
-				{ label: '$(git-branch) occupied', description: `origin/occupied · ${'a'.repeat(7)}`, detail: language === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree' },
+				{ label: '$(git-branch) main', description: language === 'zh-CN' ? '当前分支 · 2 小时前' : 'Current · 2 hours ago', detail: 'Fixture · aaaaaaa · First commit', separator: language === 'zh-CN' ? '分支' : 'branches' },
+				{ label: '$(git-branch) occupied', description: `origin/occupied · ${language === 'zh-CN' ? '2 小时前' : '2 hours ago'}`, detail: `Fixture · aaaaaaa · First commit · ${language === 'zh-CN' ? '已在另一个工作树中检出' : 'Checked out in another worktree'}` },
 			],
 		});
 		await page.evaluate(() => window.gitExtensionIntegration.stage());

@@ -449,6 +449,16 @@ pub enum GitReferenceKindDto {
     Tag,
 }
 
+/// Commit display metadata captured with a branch or tag reference.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitReferenceCommitDto {
+    pub author_name: String,
+    pub timestamp_seconds: i64,
+    pub subject: String,
+}
+
 /// A branch or tag ref in a repository graph.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -459,6 +469,10 @@ pub struct GitReferenceDto {
     pub kind: GitReferenceKindDto,
     pub remote_name: Option<String>,
     pub current: bool,
+    /// Absent for non-commit tags and older servers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub commit_details: Option<GitReferenceCommitDto>,
 }
 
 /// Starts or continues one bounded traversal of the active directory repository graph.

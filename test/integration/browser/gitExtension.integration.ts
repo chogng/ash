@@ -251,7 +251,10 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 
 			case 'git/branch/create': return { branches: [] };
 			case 'git/branch/list': return { branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }] };
-			case 'git/history/refs': return { status: status(), graphRevision: 1, references: [{ name: 'main', objectId: 'a'.repeat(40), kind: 'localBranch', current: true }, { name: 'occupied', objectId: 'a'.repeat(40), kind: 'localBranch', current: false }], branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }], remotes: [] };
+			case 'git/history/refs': {
+				const commitDetails = { authorName: 'Fixture', timestampSeconds: Math.floor(Date.now() / 1000) - 7320, subject: 'First commit' };
+				return { status: status(), graphRevision: 1, references: [{ name: 'main', objectId: 'a'.repeat(40), kind: 'localBranch', current: true, commitDetails }, { name: 'occupied', objectId: 'a'.repeat(40), kind: 'localBranch', current: false, commitDetails }], branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }], remotes: [] };
+			}
 			case 'git/graph': return { commits: [{ objectId: 'a'.repeat(40), parentObjectIds: [], timestampSeconds: 1, subject: 'First commit' }], references: [], remotes: [], hasMore: false, nextCursor: null };
 			case 'git/commitDetails': return { authorName: 'Fixture', authorEmail: 'fixture@example.invalid', timestampSeconds: 1, message: 'First commit', statistics: { files: 1, additions: 1, deletions: 0 } };
 			case 'git/init': return { repositories: [{ id: 'root', label: 'workspace', path: '' }] };

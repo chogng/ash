@@ -1323,6 +1323,8 @@ use crate::protocol::git::GitPullPreflightResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitPushModeDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitReferenceCommitDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitReferenceDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitReferenceKindDto;
@@ -7683,6 +7685,7 @@ typescript_bindings! {
     GitRepositoryIdentityDto,
     GitRemoteDto,
     GitReferenceKindDto,
+    GitReferenceCommitDto,
     GitReferenceDto,
     GitGraphParams,
     GitGraphResult,

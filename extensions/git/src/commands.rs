@@ -30,6 +30,8 @@ use external_ext_sdk::client::ConfigurationTarget;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum CheckoutMode {
@@ -1466,6 +1468,31 @@ impl GitRuntime {
         }
     }
 
+    fn reference_age(&self, timestamp_seconds: i64, now: u64) -> String {
+        let elapsed = (now as i64).saturating_sub(timestamp_seconds);
+        if elapsed < 60 {
+            return self.api.text("git.referenceAge.now", &[]);
+        }
+        let (unit, count) = if elapsed < 3600 {
+            ("minute", elapsed / 60)
+        } else if elapsed < 86_400 {
+            ("hour", elapsed / 3600)
+        } else if elapsed < 604_800 {
+            ("day", elapsed / 86_400)
+        } else if elapsed < 2_592_000 {
+            ("week", elapsed / 604_800)
+        } else if elapsed < 31_536_000 {
+            ("month", elapsed / 2_592_000)
+        } else {
+            ("year", elapsed / 31_536_000)
+        };
+        let plural = if count == 1 { "" } else { "s" };
+        self.api.text(
+            &format!("git.referenceAge.{unit}{plural}"),
+            &[&count.to_string()],
+        )
+    }
+
     fn checkout(
         &self,
         repository: &Repository,
@@ -1509,6 +1536,10 @@ impl GitRuntime {
             _ => 2,
         });
         let branches = graph["branches"].as_array().cloned().unwrap_or_default();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         let actions = if mode == CheckoutMode::Switch {
             vec![
                 (CheckoutAction::CreateBranch, "git.createBranchPick", "add"),
@@ -1553,12 +1584,21 @@ impl GitRuntime {
                 .chars()
                 .take(config.number("commitShortHashLength", 7) as usize)
                 .collect();
-            let commit = config
+            let metadata = config
                 .boolean("showReferenceDetails", true)
-                .then(|| match reference["kind"].as_str() {
-                    Some("remoteBranch") => self.api.text("git.remoteBranchAt", &[&short_commit]),
-                    Some("tag") => self.api.text("git.tagAt", &[&short_commit]),
-                    _ => short_commit.clone(),
+                .then_some(&reference["commitDetails"])
+                .filter(|details| !details.is_null());
+            let commit = metadata
+                .and_then(|details| details["timestampSeconds"].as_i64())
+                .map(|timestamp| self.reference_age(timestamp, now))
+                .or_else(|| {
+                    Some(match reference["kind"].as_str() {
+                        Some("remoteBranch") => {
+                            self.api.text("git.remoteBranchAt", &[&short_commit])
+                        }
+                        Some("tag") => self.api.text("git.tagAt", &[&short_commit]),
+                        _ => short_commit.clone(),
+                    })
                 })
                 .filter(|_| !short_commit.is_empty());
             let description = match (state, commit) {
@@ -1568,11 +1608,24 @@ impl GitRuntime {
                 ),
                 (state, commit) => state.or(commit),
             };
-            let detail = if branch.is_some_and(|branch| branch["checkedOutElsewhere"] == true) {
-                Some(self.api.text("git.branchWorktreeOccupancy", &[]))
-            } else {
-                None
-            };
+            let mut details = Vec::new();
+            if let Some(metadata) = metadata {
+                // Authors and subjects are user content, just like ref names.
+                // Escape icon tokens so commit text cannot turn into UI glyphs.
+                let author = metadata["authorName"].as_str().unwrap_or_default();
+                let subject = metadata["subject"].as_str().unwrap_or_default();
+                if !author.is_empty() && !subject.is_empty() {
+                    details.push(format!(
+                        "{} · {short_commit} · {}",
+                        author.replace("$(", "\\$("),
+                        subject.replace("$(", "\\$(")
+                    ));
+                }
+            }
+            if branch.is_some_and(|branch| branch["checkedOutElsewhere"] == true) {
+                details.push(self.api.text("git.branchWorktreeOccupancy", &[]));
+            }
+            let detail = (!details.is_empty()).then(|| details.join(" · "));
             let icon = match reference["kind"].as_str() {
                 Some("remoteBranch") => "cloud",
                 Some("tag") => "tag",
