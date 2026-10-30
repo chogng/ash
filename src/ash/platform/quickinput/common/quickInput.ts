@@ -18,6 +18,8 @@ export interface IQuickPickItem {
 	readonly className?: string;
 	readonly buttons?: readonly IQuickPickItemButton[];
 	readonly iconClass?: string;
+	/** Resource icon classes resolved by the active file icon theme. */
+	readonly iconClasses?: readonly string[];
 	readonly alwaysShow?: boolean;
 }
 

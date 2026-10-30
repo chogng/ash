@@ -5,6 +5,45 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('quickAccess browser component', () => {
 	const browserTests = useBrowserTests();
 
+	for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }, { locale: 'en', theme: 'hcLight' }]) {
+		test(`Quick Access file icons follow the active theme for history and search (${variant.locale}, ${variant.theme})`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/quickAccess.html?fileIcons&fileSearch&${new URLSearchParams(variant)}`);
+			await expect(page.getByRole('button', { name: 'Open files' })).toBeEnabled();
+			await page.evaluate(() => window.ashQuickAccessIntegration.show(''));
+			const picker = page.getByRole('dialog');
+			const input = picker.getByRole('combobox');
+			const iconFor = (name: string) => picker.getByRole('option').filter({ has: page.getByText(name, { exact: true }) }).locator('.ash-themed-file-icon');
+			const appearance = (name: string) => iconFor(name).evaluate(element => {
+				const style = getComputedStyle(element, '::before');
+				return { glyph: style.content, color: style.color, font: style.fontFamily, size: style.fontSize, width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height };
+			});
+			const todo = await appearance('TODO.md');
+			expect(todo.glyph).toBe('"\uE096"');
+			expect(todo.color).toBe((await appearance('notes.md')).color);
+			expect(todo.font).toContain('ash-file-icon-');
+			expect(todo.size).toBe('19.5px');
+			expect([todo.width, todo.height]).toEqual([16, 16]);
+			await expect(iconFor('TODO.md')).toHaveAttribute('aria-hidden', 'true');
+			await expect(input).toBeFocused();
+			await input.fill('main');
+			await expect(iconFor('main.ts')).toHaveCount(1);
+			const typescript = await appearance('main.ts');
+			expect(typescript.glyph).not.toBe(todo.glyph);
+			expect(typescript.glyph).not.toBe('none');
+			expect(typescript.font).toBe(todo.font);
+			expect([typescript.width, typescript.height]).toEqual([16, 16]);
+			await page.evaluate(() => window.ashQuickAccessIntegration.setIconTheme(null));
+			expect((await appearance('main.ts')).glyph).toBe('none');
+			await expect(input).toBeFocused();
+			await page.evaluate(() => window.ashQuickAccessIntegration.setIconTheme('vs-seti'));
+			expect(await appearance('main.ts')).toEqual(typescript);
+			await input.press('Enter');
+			await expect(picker).toHaveCount(0);
+			await expect(page.locator('output')).toHaveText('file:///workspace/main.ts');
+		});
+	}
+
 	test('Quick Input releases an interrupted drag when the picker closes', async () => {
 		const { page } = browserTests;
 		await page.goto('/quickAccess.html');

@@ -177,6 +177,12 @@
 	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
 }
 
+.ash-quick-pick-row-content > .ash-themed-file-icon {
+	flex: 0 0 var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+	line-height: var(--ash-lxiconFontSize);
+}
+
 .ash-quick-pick-list:not(.ash-quick-pick-list-menu)
 	.ash-quick-pick-row-content {
 	box-sizing: border-box;

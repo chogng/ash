@@ -320,7 +320,12 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		} else {
 			row.removeAttribute('aria-checked');
 		}
-		if (item.iconClass) {
+		if (item.iconClasses?.length) {
+			const icon = h(ownerDocument, 'span');
+			icon.classList.add('ash-themed-file-icon', ...item.iconClasses);
+			icon.setAttribute('aria-hidden', 'true');
+			content.append(icon);
+		} else if (item.iconClass) {
 			const classes = item.iconClass.split(/\s+/).filter(Boolean);
 			const iconId = classes.find(name => name.startsWith('ash-icon-'))?.slice('ash-icon-'.length);
 			const registeredIcon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
