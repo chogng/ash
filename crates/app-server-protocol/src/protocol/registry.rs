@@ -1511,6 +1511,10 @@ use crate::protocol::github::GitHubPullRequestUpdateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRemoteRepository;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryBlobParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryBlobResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositoryBranchesParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositoryBranchesResult;
@@ -1522,6 +1526,10 @@ use crate::protocol::github::GitHubRepositoryParams;
 use crate::protocol::github::GitHubRepositorySearchParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositorySearchResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryTreeParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryTreeResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRequestedReviewers;
 #[cfg(any(test, feature = "export"))]
@@ -5283,6 +5291,8 @@ client_methods! {
     GitHubPullRequestFiles => "github/pullRequest/files" { params: GitHubPageParams, response: GitHubPullRequestFilesResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubPullRequestReviews => "github/pullRequest/reviews" { params: GitHubPageParams, response: GitHubPullRequestReviewsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubPullRequestDiff => "github/pullRequest/diff" { params: GitHubReviewDiffParams, response: GitHubReviewDiffResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubRepositoryTree => "github/repository/tree" { params: GitHubRepositoryTreeParams, response: GitHubRepositoryTreeResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubRepositoryBlob => "github/repository/blob" { params: GitHubRepositoryBlobParams, response: GitHubRepositoryBlobResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubFileRead => "github/file/read" { params: GitHubFileReadParams, response: GitHubFileContent, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubReviewThreads => "github/pullRequest/threads" { params: GitHubReviewThreadsParams, response: GitHubReviewThreadsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubReviewThreadRead => "github/pullRequest/thread/read" { params: GitHubReviewThreadReadParams, response: GitHubReviewCommentsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
@@ -6185,6 +6195,12 @@ typescript_bindings! {
     crate::protocol::github::GitHubReviewDiffParams,
     crate::protocol::github::GitHubReviewDiffResult,
     crate::protocol::github::GitHubFileReadParams,
+    crate::protocol::github::GitHubRepositoryTreeParams,
+    crate::protocol::github::GitHubRepositoryTreeResult,
+    crate::protocol::github::GitHubRepositoryTreeEntry,
+    crate::protocol::github::GitHubRepositoryEntryKind,
+    crate::protocol::github::GitHubRepositoryBlobParams,
+    crate::protocol::github::GitHubRepositoryBlobResult,
     crate::protocol::github::GitHubFileContent,
     crate::protocol::github::GitHubReviewThreadsParams,
     crate::protocol::github::GitHubReviewThreadReadParams,

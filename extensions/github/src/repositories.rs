@@ -311,6 +311,132 @@ fn response() -> Error {
     Error::InvalidResponse("Invalid GitHub repository response".into())
 }
 
+impl GitHub {
+    pub(crate) async fn repository_tree(
+        &self,
+        repository: &Repository,
+        reference: &str,
+    ) -> Result<RepositoryTree> {
+        if reference.is_empty() || reference.len() > 1024 || reference.chars().any(char::is_control)
+        {
+            return Err(Error::InvalidInput("Invalid repository reference".into()));
+        }
+        #[derive(Deserialize)]
+        struct Tree {
+            sha: String,
+            truncated: bool,
+            tree: Vec<Entry>,
+        }
+        #[derive(Deserialize)]
+        struct Entry {
+            path: String,
+            mode: String,
+            #[serde(rename = "type")]
+            kind: String,
+            sha: String,
+            size: Option<u64>,
+        }
+        let encoded: String = url::form_urlencoded::byte_serialize(reference.as_bytes())
+            .collect::<String>()
+            .replace('+', "%20");
+        let tree: Tree = self
+            .api(
+                repository,
+                HttpMethod::Get,
+                &crate::endpoint(repository, &format!("git/trees/{encoded}?recursive=1")),
+                None,
+            )
+            .await?;
+        // A truncated recursive response cannot represent a complete filesystem or search result.
+        if tree.truncated || !valid_object_sha(&tree.sha) || tree.tree.len() > 100_000 {
+            return Err(response());
+        }
+        let mut paths = BTreeSet::new();
+        let mut entries = Vec::with_capacity(tree.tree.len());
+        for entry in tree.tree {
+            if entry.path.len() > 4096
+                || entry.path.contains('\\')
+                || entry.path.chars().any(char::is_control)
+                || entry
+                    .path
+                    .split('/')
+                    .any(|part| part.is_empty() || matches!(part, "." | ".."))
+                || !valid_object_sha(&entry.sha)
+                || !paths.insert(entry.path.clone())
+            {
+                return Err(response());
+            }
+            let kind = match (entry.kind.as_str(), entry.mode.as_str()) {
+                ("tree", "040000") => RepositoryEntryKind::Directory,
+                ("blob", "100644" | "100755") => RepositoryEntryKind::File,
+                ("blob", "120000") => RepositoryEntryKind::SymbolicLink,
+                ("commit", "160000") => RepositoryEntryKind::Submodule,
+                _ => return Err(response()),
+            };
+            if entry.kind == "blob" && entry.size.is_none() {
+                return Err(response());
+            }
+            entries.push(RepositoryTreeEntry {
+                path: entry.path,
+                kind,
+                sha: entry.sha,
+                size: entry.size.unwrap_or(0),
+            });
+        }
+        Ok(RepositoryTree {
+            sha: tree.sha,
+            entries,
+        })
+    }
+
+    pub(crate) async fn repository_blob(
+        &self,
+        repository: &Repository,
+        sha: &str,
+    ) -> Result<RepositoryBlob> {
+        use base64::Engine;
+        if !valid_object_sha(sha) {
+            return Err(Error::InvalidInput("Invalid blob SHA".into()));
+        }
+        #[derive(Deserialize)]
+        struct Blob {
+            sha: String,
+            size: u64,
+            encoding: String,
+            content: String,
+        }
+        let blob: Blob = self
+            .api(
+                repository,
+                HttpMethod::Get,
+                &crate::endpoint(repository, &format!("git/blobs/{sha}")),
+                None,
+            )
+            .await?;
+        if blob.sha != sha
+            || blob.encoding != "base64"
+            || blob.size > 5 * 1024 * 1024
+            || blob.content.len() > 15 * 1024 * 1024
+        {
+            return Err(response());
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(blob.content.replace(['\r', '\n'], ""))
+            .map_err(|_| response())?;
+        if bytes.len() as u64 != blob.size {
+            return Err(response());
+        }
+        Ok(RepositoryBlob {
+            sha: blob.sha,
+            content_base64: base64::engine::general_purpose::STANDARD.encode(bytes),
+        })
+    }
+}
+
+fn valid_object_sha(sha: &str) -> bool {
+    sha.len() == 40 && sha.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
 #[cfg(test)]
 #[path = "repositories_tests.rs"]
 mod tests;

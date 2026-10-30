@@ -639,6 +639,18 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
             ],
         ),
         (
+            "github/repository/tree",
+            json!({"reference":"feature/links"}),
+            vec![
+                json!({"sha":commit,"truncated":false,"tree":[{"path":"main.rs","mode":"100644","type":"blob","sha":commit,"size":4}]}),
+            ],
+        ),
+        (
+            "github/repository/blob",
+            json!({"sha":commit}),
+            vec![json!({"sha":commit,"size":4,"encoding":"base64","content":"bmV3Cg=="})],
+        ),
+        (
             "github/file/read",
             json!({"commit":commit,"path":"main.rs"}),
             vec![json!({"type":"file","size":4,"encoding":"base64","content":"bmV3Cg=="})],
@@ -723,6 +735,18 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
         let response =
             repository_request(&server, &mut connection, index as u32 + 2, method, params);
         assert!(response.get("result").is_some(), "{method}: {response}");
+        if method == "github/repository/tree" {
+            assert_eq!(
+                response["result"],
+                json!({"sha":commit,"entries":[{"path":"main.rs","kind":"file","sha":commit,"size":4}]})
+            );
+        }
+        if method == "github/repository/blob" {
+            assert_eq!(
+                response["result"],
+                json!({"sha":commit,"contentBase64":"bmV3Cg=="})
+            );
+        }
         if method == "github/commit/read" {
             assert_eq!(
                 response["result"],

@@ -1,3 +1,5 @@
+import { decodeBase64 } from '../../../base/common/buffer.js';
+import { GitHubRepositoryEntryKind, type GitHubRepositoryTree, type GitHubRepositoryBlob } from '../common/githubService.js';
 import type { GitHubCheckDetails, GitHubCheckTarget } from '../common/githubService.js';
 import type { GitHubRemoteRepository, GitHubRepositoryVisibility, GitHubRepositoryBranch, GitHubBranchProtection, GitHubShareLink } from '../common/githubService.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
@@ -174,6 +176,21 @@ export class AppServerGitHubService implements IGitHubService {
 		const result = await this.request('github/pullRequest/diff', { repository, number, commit, page }, RequestKind.Read, token);
 		return { baseCommit: result.baseCommit, files: { items: result.files.files.map(file => ({ ...file })), nextPage: result.files.nextPage, limitReached: result.files.limitReached } };
 	}
+	public async readRepositoryTree(repository: GitHubRepository, reference: string, token?: CancellationToken): Promise<GitHubRepositoryTree> {
+		const tree = await this.request('github/repository/tree', { repository, reference }, RequestKind.Read, token);
+		return {
+			sha: tree.sha, entries: tree.entries.map(entry => ({
+				...entry, kind: {
+					file: GitHubRepositoryEntryKind.File, directory: GitHubRepositoryEntryKind.Directory,
+					symbolicLink: GitHubRepositoryEntryKind.SymbolicLink, submodule: GitHubRepositoryEntryKind.Submodule,
+				}[entry.kind]
+			}))
+		};
+	}
+	public async readRepositoryBlob(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubRepositoryBlob> {
+		const blob = await this.request('github/repository/blob', { repository, sha }, RequestKind.Read, token);
+		return { sha: blob.sha, bytes: decodeBase64(blob.contentBase64).buffer };
+	}
 	public async readFile(repository: GitHubRepository, commit: string, path: string, token?: CancellationToken): Promise<GitHubFileContent> {
 		return { ...await this.request('github/file/read', { repository, commit, path }, RequestKind.Read, token) };
 	}
@@ -272,7 +289,7 @@ export function createDisconnectedGitHubService(): IGitHubService {
 		listComments: unavailable, createComment: unavailable, updateComment: unavailable, deleteComment: unavailable,
 		listPullRequests: unavailable, readPullRequest: unavailable, createPullRequest: unavailable, updatePullRequest: unavailable,
 		listPullRequestFiles: unavailable, listPullRequestReviews: unavailable, reviewPullRequest: unavailable, mergePullRequest: unavailable, enableAutoMerge: unavailable,
-		readReviewDiff: unavailable, readFile: unavailable, listReviewThreads: unavailable, readReviewThreadComments: unavailable, replyReviewThread: unavailable, resolveReviewThread: unavailable,
+		readReviewDiff: unavailable, readRepositoryTree: unavailable, readRepositoryBlob: unavailable, readFile: unavailable, listReviewThreads: unavailable, readReviewThreadComments: unavailable, replyReviewThread: unavailable, resolveReviewThread: unavailable,
 		readCheckDetails: unavailable, readCheckLog: unavailable, rerunCheck: unavailable, readChecks: unavailable, listLabels: unavailable, createLabel: unavailable, updateLabelColor: unavailable, listAssignees: unavailable,
 	};
 }

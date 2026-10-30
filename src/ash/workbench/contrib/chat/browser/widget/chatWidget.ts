@@ -352,6 +352,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
 	}
 
+	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]> {
+		return this.inputPart.acquireContext(prepare, signal);
+	}
+
 	addContext(attachment: ChatContextAttachment): void {
 		this.inputPart.addContext(attachment);
 	}

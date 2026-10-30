@@ -168,6 +168,14 @@ fn github_admission_uses_case_insensitive_hosted_repository_identity_and_connect
             SerializationAccess::SharedRead,
         ),
         (
+            super::client_method_definition("github/repository/tree").unwrap(),
+            SerializationAccess::SharedRead,
+        ),
+        (
+            super::client_method_definition("github/repository/blob").unwrap(),
+            SerializationAccess::SharedRead,
+        ),
+        (
             super::client_method_definition("github/file/read").unwrap(),
             SerializationAccess::SharedRead,
         ),

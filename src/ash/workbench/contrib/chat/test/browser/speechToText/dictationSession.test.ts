@@ -229,6 +229,7 @@ function commandFixture() {
 		sessionId: undefined, threadId: undefined, onDidChangeVisibility: Event.None,
 		domNode: f.editor.getContainerDomNode(), inputEditor: f.editor, visible: true,
 		isTranscriptProgressActive: false, onDidHide: hidden.event, onDidChangeViewModel: changed.event,
+		acquireContext: async () => { throw new Error('Unexpected context preparation'); },
 		startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); },
 	};
 	const registration = resources.add(widgets.register(widget));

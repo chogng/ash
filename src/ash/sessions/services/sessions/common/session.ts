@@ -184,3 +184,6 @@ export interface IUntitledChatSession {
 	readonly agent: ChatAgent | undefined;
 	readonly workspace: SessionWorkspaceSelection;
 }
+
+/** Repository-backed resources remain independent of Session execution directories. */
+export const GITHUB_REMOTE_FILE_SCHEME = 'github-remote-file';

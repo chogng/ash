@@ -445,7 +445,7 @@
     "sessions.files.noFiles": "文件夹和文件将在这里显示。",
     "sessions.files.collapseFolders": "折叠文件夹",
     "sessions.files.actions": "文件操作",
-    "sessions.files.help": "文件\n文件视图显示所选会话的目录。按 Ctrl 或 Command+Shift+E 聚焦文件视图。使用方向键浏览文件和文件夹，右方向键展开，左方向键折叠，Enter 打开文件。使用文件工具栏中的“折叠文件夹”折叠所有目录。按 Shift+F10 打开文件操作，Alt+F2 阅读可见文件。可以从编辑器标题栏下载远程文件。没有目录时，文件视图显示空状态提示。",
+    "sessions.files.help": "文件\n文件视图显示所选会话的目录。按 Ctrl 或 Command+Shift+E 聚焦文件视图。使用方向键浏览文件和文件夹，右方向键展开，左方向键折叠，Enter 打开文件。使用文件工具栏中的“折叠文件夹”折叠所有目录。按 Shift+F10 打开文件操作，Alt+F2 阅读可见文件。可以从编辑器标题栏下载远程文件。没有目录时，文件视图显示空状态提示。 使用命令面板中的“GitHub: 浏览仓库文件”选择仓库和分支、搜索文件名，并在没有本地检出的情况下只读打开文件。 在 GitHub 文件结果中按 Tab 到“添加到当前 Agent 上下文”，再按 Enter 或空格附加捕获的文件内容，不会发送消息。按 Escape 取消正在进行的读取。",
     "sessions.changes.title": "更改",
     "sessions.changes.truncated": "此更改过大，无法完整比较。",
     "sessions.changes.review": "查看全部更改",

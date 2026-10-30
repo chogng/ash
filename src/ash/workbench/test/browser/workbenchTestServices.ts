@@ -86,6 +86,7 @@ export function registerTestTerminalCreationServices(services: InstantiationServ
 	} as unknown as IExtensionService);
 	if (!services.has(IHostService)) services.registerInstance(IHostService, new TestHostService());
 	if (!services.has(ISearchService)) services.registerInstance(ISearchService, {
+		registerSearchResultProvider: () => { throw new Error('Terminal creation fixture does not register search providers'); },
 		fileSearch: async () => ({ results: [], messages: [] }),
 		textSearch: async () => { throw new Error('Terminal creation fixture does not search file contents'); },
 	});

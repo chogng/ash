@@ -762,3 +762,33 @@ pub struct CheckAnnotation {
     pub message: String,
     pub title: Option<String>,
 }
+
+/// Immutable Git objects used to expose a repository without a checkout.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RepositoryTree {
+    pub sha: String,
+    pub entries: Vec<RepositoryTreeEntry>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RepositoryEntryKind {
+    File,
+    Directory,
+    SymbolicLink,
+    Submodule,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RepositoryTreeEntry {
+    pub path: String,
+    pub kind: RepositoryEntryKind,
+    pub sha: String,
+    pub size: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct RepositoryBlob {
+    pub sha: String,
+    pub content_base64: String,
+}

@@ -218,6 +218,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.logs',
 					'sessions.contrib.workspaceStatus',
 					'workbench.contrib.githubLinkPresentations',
+					'workbench.contrib.githubFileSystemProvider',
 					'workbench.contrib.url',
 					'workbench.contrib.externalUriOpener',
 					'workbench.contrib.browserView',

@@ -347,6 +347,17 @@ pub(crate) async fn dispatch(client: &GitHub, request: GitHubRequest) -> Result<
             .review_diff(&repository, number, &commit, page)
             .await
             .map(GitHubResponse::ReviewDiff),
+        GitHubRequest::RepositoryTree {
+            repository,
+            reference,
+        } => client
+            .repository_tree(&repository, &reference)
+            .await
+            .map(GitHubResponse::RepositoryTree),
+        GitHubRequest::RepositoryBlob { repository, sha } => client
+            .repository_blob(&repository, &sha)
+            .await
+            .map(GitHubResponse::RepositoryBlob),
         GitHubRequest::FileContent {
             repository,
             commit,

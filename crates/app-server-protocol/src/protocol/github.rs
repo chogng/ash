@@ -1023,3 +1023,53 @@ pub struct GitHubCheckDetailsResult {
 pub struct GitHubCheckLogResult {
     pub url: String,
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositoryTreeParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    pub reference: String,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositoryTreeResult {
+    pub sha: String,
+    pub entries: Vec<GitHubRepositoryTreeEntry>,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositoryTreeEntry {
+    pub path: String,
+    pub kind: GitHubRepositoryEntryKind,
+    pub sha: String,
+    #[ts(type = "number")]
+    pub size: u64,
+}
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubRepositoryEntryKind {
+    File,
+    Directory,
+    SymbolicLink,
+    Submodule,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositoryBlobParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    pub sha: String,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubRepositoryBlobResult {
+    pub sha: String,
+    pub content_base64: String,
+}

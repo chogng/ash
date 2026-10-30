@@ -3312,6 +3312,8 @@ impl AppServer {
                 | ClientMethod::GitHubPullRequestFiles
                 | ClientMethod::GitHubPullRequestReviews
                 | ClientMethod::GitHubPullRequestDiff
+                | ClientMethod::GitHubRepositoryTree
+                | ClientMethod::GitHubRepositoryBlob
                 | ClientMethod::GitHubFileRead
                 | ClientMethod::GitHubReviewThreads
                 | ClientMethod::GitHubReviewThreadRead

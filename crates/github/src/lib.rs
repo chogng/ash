@@ -978,6 +978,42 @@ impl GitHub {
             )),
         }
     }
+    pub async fn repository_tree(
+        &self,
+        repository: &Repository,
+        reference: &str,
+    ) -> Result<RepositoryTree> {
+        match self
+            .invoke(GitHubRequest::RepositoryTree {
+                repository: repository.clone(),
+                reference: reference.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::RepositoryTree(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
+    pub async fn repository_blob(
+        &self,
+        repository: &Repository,
+        sha: &str,
+    ) -> Result<RepositoryBlob> {
+        match self
+            .invoke(GitHubRequest::RepositoryBlob {
+                repository: repository.clone(),
+                sha: sha.to_owned(),
+            })
+            .await?
+        {
+            GitHubResponse::RepositoryBlob(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "GitHub provider returned a different operation".into(),
+            )),
+        }
+    }
     pub async fn file_content(
         &self,
         repository: &Repository,

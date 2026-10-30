@@ -188,3 +188,109 @@ async fn incomplete_active_rules_are_not_misreported_as_unprotected() {
         Err(Error::InvalidResponse(_))
     ));
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn virtual_repository_tree_preserves_git_kinds_and_encoded_refs() {
+    let http = Arc::new(FakeHttp::default());
+    let client = github(http.clone());
+    let sha = "a".repeat(40);
+    http.push(
+        200,
+        json!({"sha":sha,"truncated":false,"tree":[
+            {"path":"src","mode":"040000","type":"tree","sha":sha},
+            {"path":"src/a #%.rs","mode":"100644","type":"blob","sha":sha,"size":4},
+            {"path":"link","mode":"120000","type":"blob","sha":sha,"size":2},
+            {"path":"dependency","mode":"160000","type":"commit","sha":sha}
+        ]}),
+    );
+    let tree = client
+        .repository_tree(&repository(), "feature/链接 #?")
+        .await
+        .unwrap();
+    assert_eq!(tree.sha, sha);
+    assert_eq!(
+        tree.entries
+            .iter()
+            .map(|entry| entry.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            RepositoryEntryKind::Directory,
+            RepositoryEntryKind::File,
+            RepositoryEntryKind::SymbolicLink,
+            RepositoryEntryKind::Submodule
+        ]
+    );
+    assert_eq!(tree.entries[1].path, "src/a #%.rs");
+    assert_eq!(
+        http.requests.lock().unwrap()[0].url(),
+        "https://api.github.com/repos/team/repo/git/trees/feature%2F%E9%93%BE%E6%8E%A5%20%23%3F?recursive=1"
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn virtual_repository_rejects_partial_trees_and_invalid_remote_paths() {
+    let http = Arc::new(FakeHttp::default());
+    let client = github(http.clone());
+    let sha = "a".repeat(40);
+    http.push(200, json!({"sha":sha,"truncated":true,"tree":[]}));
+    assert!(matches!(
+        client.repository_tree(&repository(), "main").await,
+        Err(Error::InvalidResponse(_))
+    ));
+    for path in ["../secret", "a/../b", "/absolute", "a//b", "a\\b", "a\n"] {
+        http.push(200, json!({"sha":sha,"truncated":false,"tree":[{"path":path,"mode":"100644","type":"blob","sha":sha,"size":0}]}));
+        assert!(
+            matches!(
+                client.repository_tree(&repository(), "main").await,
+                Err(Error::InvalidResponse(_))
+            ),
+            "{path}"
+        );
+    }
+    let before = http.requests.lock().unwrap().len();
+    for reference in ["", "main\n", "bad\0ref"] {
+        assert!(matches!(
+            client.repository_tree(&repository(), reference).await,
+            Err(Error::InvalidInput(_))
+        ));
+    }
+    assert_eq!(http.requests.lock().unwrap().len(), before);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn virtual_repository_blobs_preserve_binary_bom_empty_content_and_exact_sha() {
+    use base64::Engine;
+    let http = Arc::new(FakeHttp::default());
+    let client = github(http.clone());
+    let sha = "a".repeat(40);
+    for bytes in [vec![0, 255, 128, 10], vec![239, 187, 191, 65], vec![]] {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        http.push(200, json!({"sha":sha,"size":bytes.len(),"encoding":"base64","content":format!("{encoded}\r\n")}));
+        let blob = client.repository_blob(&repository(), &sha).await.unwrap();
+        assert_eq!(blob.sha, sha);
+        assert_eq!(
+            base64::engine::general_purpose::STANDARD
+                .decode(blob.content_base64)
+                .unwrap(),
+            bytes
+        );
+    }
+    for reply in [
+        json!({"sha":"b".repeat(40),"size":1,"encoding":"base64","content":"YQ=="}),
+        json!({"sha":sha,"size":2,"encoding":"base64","content":"YQ=="}),
+        json!({"sha":sha,"size":1,"encoding":"base64","content":"????"}),
+        json!({"sha":sha,"size":5*1024*1024+1,"encoding":"base64","content":""}),
+    ] {
+        http.push(200, reply);
+        assert!(matches!(
+            client.repository_blob(&repository(), &sha).await,
+            Err(Error::InvalidResponse(_))
+        ));
+    }
+    let before = http.requests.lock().unwrap().len();
+    assert!(matches!(
+        client.repository_blob(&repository(), "../main").await,
+        Err(Error::InvalidInput(_))
+    ));
+    assert_eq!(http.requests.lock().unwrap().len(), before);
+}

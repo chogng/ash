@@ -249,6 +249,10 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	get isTranscriptProgressActive(): boolean { return this.model.inputState.inputBlocked === true || this.model.inputState.aiDisabled === true; }
 	get onDidChangeViewModel(): Event<void> { return this.model.onDidChangeComposer; }
 
+	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]> {
+		return this.inputPart.acquireContext(prepare, signal);
+	}
+
 	addContext(attachment: ChatContextAttachment): void {
 		this.inputPart.addContext(attachment);
 	}

@@ -17,6 +17,8 @@ export interface IChatWidget {
 	readonly onDidHide: Event<void>;
 	readonly onDidChangeViewModel: Event<void>;
 	startVoiceConversation(): Promise<void>;
+	/** Prepares references within this composer’s draft lifetime and admission rules. */
+	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
 }
 
 export interface IChatWidgetService {

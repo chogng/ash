@@ -132,6 +132,10 @@ export enum GitHubDiffSide { Left = 'LEFT', Right = 'RIGHT' }
 export enum GitHubReviewThreadState { Resolved = 'resolved', Unresolved = 'unresolved' }
 export interface GitHubReviewCommentInput { readonly path: string; readonly line: number; readonly side: GitHubDiffSide; readonly body: string; }
 export interface GitHubReview { readonly commit: string; readonly event: GitHubReviewEvent; readonly body: string; readonly comments?: readonly GitHubReviewCommentInput[]; }
+export enum GitHubRepositoryEntryKind { File = 'file', Directory = 'directory', SymbolicLink = 'symbolicLink', Submodule = 'submodule' }
+export interface GitHubRepositoryTreeEntry { readonly path: string; readonly kind: GitHubRepositoryEntryKind; readonly sha: string; readonly size: number; }
+export interface GitHubRepositoryTree { readonly sha: string; readonly entries: readonly GitHubRepositoryTreeEntry[]; }
+export interface GitHubRepositoryBlob { readonly sha: string; readonly bytes: Uint8Array; }
 export type GitHubFileContent = { readonly kind: 'text'; readonly text: string; } | { readonly kind: 'binary' | 'tooLarge'; };
 export interface GitHubReviewComment { readonly id: string; readonly body: string; readonly url: string; readonly author: string | null; readonly canUpdate: boolean; readonly canDelete: boolean; }
 export interface GitHubReviewComments { readonly comments: readonly GitHubReviewComment[]; readonly nextCursor: string | null; }
@@ -212,6 +216,8 @@ export interface IGitHubService {
 	listPullRequestFiles(repository: GitHubRepository, number: number, page: number, token?: CancellationToken): Promise<GitHubPullRequestFiles>;
 	listPullRequestReviews(repository: GitHubRepository, number: number, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubPullRequestReview>>;
 	readReviewDiff(repository: GitHubRepository, number: number, commit: string, page: number, token?: CancellationToken): Promise<GitHubReviewDiff>;
+	readRepositoryTree(repository: GitHubRepository, reference: string, token?: CancellationToken): Promise<GitHubRepositoryTree>;
+	readRepositoryBlob(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubRepositoryBlob>;
 	readFile(repository: GitHubRepository, commit: string, path: string, token?: CancellationToken): Promise<GitHubFileContent>;
 	listReviewThreads(repository: GitHubRepository, number: number, cursor: string | null, token?: CancellationToken): Promise<GitHubReviewThreads>;
 	readReviewThreadComments(repository: GitHubRepository, number: number, threadId: string, cursor: string | null, token?: CancellationToken): Promise<GitHubReviewComments>;

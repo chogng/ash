@@ -124,7 +124,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.Explorer,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.files.help', 'Files\nFiles follow the selected session directory. Press Ctrl or Command+Shift+E to focus Files. Use the arrow keys to move through files and folders, Right Arrow to expand, Left Arrow to collapse, and Enter to open a file. Use Collapse folders in the Files toolbar to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message.'),
+			() => localize('sessions.files.help', 'Files\nFiles follow the selected session directory. Press Ctrl or Command+Shift+E to focus Files. Use the arrow keys to move through files and folders, Right Arrow to expand, Left Arrow to collapse, and Enter to open a file. Use Collapse folders in the Files toolbar to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message. Use GitHub: Browse Repository Files in the Command Palette to choose a repository and branch, search filenames, and open read-only files without a local checkout. In GitHub file results, use Tab to reach Add to current Agent context, then Enter or Space to attach the captured file content without sending. Escape cancels a pending read.'),
 			() => { if (focused instanceof HTMLElement) { focused.focus(); } },
 			AccessibilityVerbositySettingId.Explorer,
 		);

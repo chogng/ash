@@ -260,6 +260,14 @@ pub enum GitHubRequest {
         commit: String,
         page: u32,
     },
+    RepositoryTree {
+        repository: Repository,
+        reference: String,
+    },
+    RepositoryBlob {
+        repository: Repository,
+        sha: String,
+    },
     FileContent {
         repository: Repository,
         commit: String,
@@ -370,6 +378,8 @@ impl GitHubRequest {
             | Self::PullRequest { .. }
             | Self::RequestedReviewers { .. }
             | Self::ReviewDiff { .. }
+            | Self::RepositoryTree { .. }
+            | Self::RepositoryBlob { .. }
             | Self::FileContent { .. }
             | Self::ReviewThreads { .. }
             | Self::ThreadComments { .. }
@@ -436,6 +446,8 @@ pub enum GitHubResponse {
     UpdateReviewComment(ReviewComment),
     DeleteReviewComment(()),
     ReviewDiff(ReviewDiff),
+    RepositoryTree(RepositoryTree),
+    RepositoryBlob(RepositoryBlob),
     FileContent(FileContent),
     ReviewThreads(ReviewThreadPage),
     ThreadComments(ThreadComments),
