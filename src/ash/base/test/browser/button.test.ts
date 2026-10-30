@@ -249,7 +249,7 @@ suite('Split button rendering', () => {
 			assert.ok(initial.small.height >= 24);
 			assert.ok(initial.filled.height >= 28);
 			assert.deepEqual(initial.pin, { width: 22, height: 22 });
-			assert.deepEqual(initial.quiet, { height: 22, width: 22, arrowHeight: 22 });
+			assert.deepEqual(initial.quiet, { height: 22, width: 16, arrowHeight: 22 });
 			const filledDropdown = page.getByRole('button', { name: 'Theme actions', exact: true });
 			await filledDropdown.focus();
 			await filledDropdown.press('ArrowDown');

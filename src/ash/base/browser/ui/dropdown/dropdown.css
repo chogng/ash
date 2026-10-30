@@ -100,8 +100,12 @@
 
 .ash-toolbar .ash-dropdown-with-primary-dropdown > .ash-button {
 	box-sizing: border-box;
-	width: var(--ash-toolbar-actionSize);
-	min-width: var(--ash-toolbar-actionSize);
+	width: calc(
+		var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20)
+	);
+	min-width: calc(
+		var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20)
+	);
 	padding: 0 var(--ash-spacing-size20);
 	border-radius: 0 var(--ash-cornerRadius-small) var(--ash-cornerRadius-small)
 		0;
