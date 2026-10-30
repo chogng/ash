@@ -444,6 +444,8 @@ test('SCM history reference changes apply immediately and survive dismissal, inc
 		const settled = () => pane.element.querySelector('.ash-scm-graph')?.getAttribute('aria-busy') === 'false';
 		const saved = () => JSON.parse(ui.get(IStorageService).get('scm.graphView.referencesFilter', StorageScope.WORKSPACE)!)[0][1];
 		await waitFor(() => settled() && shownIds().length === 1);
+		const filterButton = pane.element.querySelector<HTMLButtonElement>('[data-action-id="workbench.scm.action.graph.pickHistoryItemRefs"] > button')!;
+		assert.equal(filterButton.textContent, '自动');
 		let picking = pane.pickHistoryItemRef();
 		await waitFor(() => (quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.items.some(item => item.label === 'topic/two') === true);
 		let picker = quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
@@ -455,15 +457,19 @@ test('SCM history reference changes apply immediately and survive dismissal, inc
 		await waitFor(() => settled() && shownIds()[0] === references[1].revision);
 		assert.deepEqual(picker.selectedItems, [one], 'A branch replaces Auto');
 		assert.deepEqual(saved(), [references[1].id]);
+		assert.equal(filterButton.textContent, 'topic/one');
 		assert.equal(quickInput.currentQuickInput, picker);
 		picker.selectedItems = [one, two];
 		await waitFor(() => settled() && shownIds().length === 2);
+		assert.equal(filterButton.textContent, '2 项');
+		assert.equal(filterButton.getAttribute('aria-description'), '2 项');
 		picker.selectedItems = [two];
 		await waitFor(() => settled() && shownIds()[0] === references[2].revision);
 		assert.deepEqual(requests.at(-1)?.historyItemRefs, [references[2].revision]);
 		await quickInput.cancel();
 		await picking;
 		assert.deepEqual(saved(), [references[2].id], 'Escape keeps the applied selection');
+		assert.equal(filterButton.textContent, 'topic/two');
 
 		picking = pane.pickHistoryItemRef();
 		await waitFor(() => (quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.selectedItems[0]?.label === 'topic/two');
@@ -473,6 +479,7 @@ test('SCM history reference changes apply immediately and survive dismissal, inc
 		assert.deepEqual(requests.at(-1)?.historyItemRefs, []);
 		assert.deepEqual(saved(), [], 'Clearing the last choice is distinct from Auto');
 		assert.equal(pane.element.querySelector('.ash-scm-empty')?.textContent, '未选择分支或标签。');
+		assert.equal(filterButton.textContent, '0 项');
 		const emptyQueries = requests.length;
 		await quickInput.accept();
 		await picking;
@@ -489,6 +496,8 @@ test('SCM history reference changes apply immediately and survive dismissal, inc
 		picker.hide();
 		await picking;
 		assert.equal(saved(), 'all', 'Dismissing without Enter keeps All References');
+		assert.equal(filterButton.textContent, '全部');
+		assert.equal(pane.element.querySelector('[data-action-id="workbench.scm.action.graph.pickHistoryItemRefs"] > button'), filterButton, 'Selection updates retain the toolbar button');
 
 		picking = pane.pickHistoryItemRef();
 		await waitFor(() => (quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.selectedItems[0]?.label === '所有引用');
@@ -499,6 +508,7 @@ test('SCM history reference changes apply immediately and survive dismissal, inc
 		await waitFor(() => settled() && shownIds().length === 0);
 		assert.deepEqual(picker.selectedItems, [auto], 'Auto replaces All References');
 		assert.equal(saved(), 'auto');
+		assert.equal(pane.element.querySelector('[data-action-id="workbench.scm.action.graph.pickHistoryItemRefs"] > button')?.textContent, '自动');
 		assert.equal(pane.element.querySelector('.ash-scm-empty')?.textContent, '暂无提交。', 'Auto without a HEAD retains the ordinary empty repository message');
 		picker.hide();
 		await picking;

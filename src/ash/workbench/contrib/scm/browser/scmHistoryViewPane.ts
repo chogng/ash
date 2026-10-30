@@ -7,9 +7,10 @@ import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
-import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ButtonActionViewItem, LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
+import { observableValue } from '../../../../base/common/observable.js';
 
 import { equals } from '../../../../base/common/arrays.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
@@ -325,6 +326,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private readonly baseContext: IContextKey<boolean>;
 	private readonly branchContext: IContextKey<boolean>;
 	private readonly filters = new Map<string, HistoryItemRefsFilter>();
+	private readonly filterPresentation = observableValue(this, { label: localize('scm.history.filterAuto', 'Auto'), tooltip: '' });
 	private historyItemRefs: readonly string[] | undefined;
 	private comparison:
 		| { readonly remote: ISCMHistoryItemRef; readonly base: string; readonly incoming: boolean; readonly outgoing: boolean; }
@@ -396,7 +398,31 @@ export class SCMHistoryViewPane extends ViewPane {
 			menuService,
 			contextMenuService,
 			MenuId.SCMHistoryTitle,
-			{ ariaLabel: localize('scm.history.actions', 'History actions'), menuOptions: { arg: this } },
+			{
+				ariaLabel: localize('scm.history.actions', 'History actions'), menuOptions: { arg: this },
+				actionViewItemProvider: (action, options) => {
+					if (action.id !== 'workbench.scm.action.graph.pickHistoryItemRefs') { return undefined; }
+					const presentation = this.filterPresentation;
+					return new class extends ButtonActionViewItem {
+						public override render(container: HTMLElement): void {
+							container.classList.remove('icon');
+							container.classList.add('ash-scm-history-filter');
+							super.render(container);
+						}
+						protected override setupTooltip(): void {
+							const hover = this.setupHover(this.button.domNode, presentation.get().tooltip);
+							const update = (): void => {
+								const { label, tooltip } = presentation.get();
+								this.button.label = label;
+								this.button.domNode.setAttribute('aria-description', label);
+								hover.update(tooltip);
+							};
+							this._register(presentation.onDidChange(update));
+							update();
+						}
+					}(action, options);
+				},
+			},
 		));
 		toolbar.element.classList.add('ash-scm-remote-actions');
 		this._register(this.scmViewService.onDidChangeActiveRepository(() => void this.refresh()));
@@ -419,6 +445,26 @@ export class SCMHistoryViewPane extends ViewPane {
 	private get filterKey(): string {
 		const repository = this.scmViewService.activeRepository;
 		return repository?.provider.rootUri?.toString() ?? repository?.id ?? '';
+	}
+
+	private updateFilterPresentation(references: readonly ISCMHistoryItemRef[] = []): void {
+		const filter = this.filters.get(this.filterKey) ?? 'auto';
+		let label: string;
+		let tooltip: string;
+		if (Array.isArray(filter)) {
+			const names = filter.map(id => references.find(ref => ref.id === id)?.name ?? id);
+			label = names.length === 1 ? names[0] : localize('scm.history.filterItems', '{0} Items', names.length);
+			tooltip = names.join(', ') || localize('scm.history.noRefs', 'No branches or tags selected.');
+		} else if (filter === 'all') {
+			label = localize('scm.history.filterAll', 'All');
+			tooltip = localize('scm.history.allRefs', 'All References');
+		} else {
+			label = localize('scm.history.filterAuto', 'Auto');
+			tooltip = [this.provider?.historyItemRef.get(), this.provider?.historyItemRemoteRef?.get(), this.provider?.historyItemBaseRef?.get()]
+				.map(ref => ref?.name).filter(Boolean).join(', ') || localize('scm.history.autoRefs', 'Auto (current branch, upstream and base branch)');
+		}
+		const current = this.filterPresentation.get();
+		if (current.label !== label || current.tooltip !== tooltip) { this.filterPresentation.set({ label, tooltip }); }
 	}
 
 	public async pickRepository(): Promise<void> {
@@ -549,6 +595,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (selection.length !== selected.length || selection.some((item, index) => item !== selected[index])) { picker.selectedItems = selection; }
 				const first = selection[0]?.reference;
 				this.filters.set(key, typeof first === 'string' ? first : selection.map(item => (item.reference as ISCMHistoryItemRef).id));
+				this.updateFilterPresentation(references);
 				this.storageService.store('scm.graphView.referencesFilter', JSON.stringify([...this.filters]), StorageScope.WORKSPACE, StorageTarget.USER);
 				this.page = undefined;
 				this.commitChanges.clear();
@@ -654,6 +701,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			this.filterPicker.clear();
 			this.clearGraph();
 			this.provider = provider;
+			this.updateFilterPresentation();
 			const listeners = new DisposableStore();
 			this.providerListener.value = listeners;
 			if (repository) {
@@ -683,6 +731,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				if (provider.historyItemBaseRef) { listeners.add(provider.historyItemBaseRef.onDidChange(() => this.refreshScheduler.schedule())); }
 				listeners.add(provider.historyItemRef.onDidChange(head => {
 					this.head = head;
+					if ((this.filters.get(this.filterKey) ?? 'auto') === 'auto') { this.updateFilterPresentation(); }
 					if (this.page) this.renderGraph(this.page);
 				}));
 				if (provider.onDidChangeHistoryItemRefs) {
@@ -751,6 +800,7 @@ export class SCMHistoryViewPane extends ViewPane {
 						.map(ref => ref.revision ? ref : refs.find(candidate => candidate.id === ref.id) ?? ref);
 				}
 				this.historyItemRefs = filter === 'all' ? undefined : selected.map(ref => ref.revision ?? ref.id);
+				this.updateFilterPresentation(refs);
 				this.comparison = undefined;
 				if (this.head?.revision && remote?.revision && remote.revision !== this.head.revision && provider.resolveHistoryItemRefsCommonAncestor) {
 					// A missing merge base must not hide otherwise readable commit history.

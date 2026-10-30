@@ -12,6 +12,19 @@
 	overflow: hidden;
 }
 
+.ash-scm-history-filter {
+	min-width: 0;
+	max-width: 8em;
+}
+
+.ash-scm-history-filter > .ash-button {
+	min-width: 0;
+	max-width: 100%;
+	padding-inline: var(--ash-spacing-size40);
+	font-size: var(--ash-fontSize-label2);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
 .ash-scm-empty {
 	margin: 0;
 	padding: 8px;
