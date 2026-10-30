@@ -1,9 +1,8 @@
-import { defaultButtonStyles, defaultCountBadgeStyles } from '../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../base/browser/dom.js';
 import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
 import { ActionViewItem, type ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { IconLabel } from '../../../base/browser/ui/iconlabel/iconlabel.js';
-import { CountBadge } from '../../../base/browser/ui/countBadge/countBadge.js';
 import type { IAction } from '../../../base/common/actions.js';
 import type { Icon } from '../../../base/common/icon.js';
 import { assertDefined } from '../../../base/common/types.js';
@@ -12,7 +11,7 @@ import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import { ActivityBarPosition, type SideBarLocation } from '../../common/configuration.js';
 
@@ -168,13 +167,17 @@ export class CompositeActionViewItem extends ActionViewItem {
 		container.append(focusRing);
 		if (options.badge && options.badgeEnabled && options.badge.count > 0) {
 			const count = options.badge.count;
-			const countFormat = count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : undefined;
-			const badge = this._register(new CountBadge(container, {
-				count, countFormat, size: 'small'
-			}, defaultCountBadgeStyles));
-			badge.domNode.classList.add('ash-composite-bar-badge');
-			badge.domNode.classList.toggle('long-count', (countFormat ?? String(count)).length >= 3);
-			badge.domNode.setAttribute('aria-hidden', 'true');
+			const text = count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : String(count);
+			// Activity badges are part of the navigation item's presentation: abbreviated text,
+			// overlay geometry, region colors and the tab's accessible description belong together.
+			// Using the inline CountBadge here would require overriding its internal presentation.
+			const badge = h(container.ownerDocument, 'span', {
+				className: 'ash-composite-bar-badge',
+				attributes: { 'aria-hidden': 'true' },
+			}, text);
+			badge.classList.toggle('long-count', text.length >= 3);
+			container.append(badge);
+			this._register(toDisposable(() => badge.remove()));
 		}
 		this._register(addDisposableListener(container, 'click', (event) => {
 			event.preventDefault();

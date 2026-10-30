@@ -154,6 +154,10 @@
 	font-weight: var(--ash-fontWeight-semiBold);
 }
 
+.ash-customize-count {
+	display: flex;
+}
+
 .ash-customize-message {
 	color: var(--ash-description-foreground);
 	line-height: 1.5;

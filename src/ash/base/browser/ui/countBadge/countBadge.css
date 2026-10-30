@@ -33,3 +33,22 @@
 .ash-count-badge.accent {
 	background: var(--ash-accent-background);
 }
+
+.ash-count-badge.outlined {
+	min-width: 0;
+	height: auto;
+	padding: 0 var(--ash-spacing-size40);
+	border: var(--ash-strokeThickness) solid
+		var(
+			--ash-badge-style-badge-border,
+			var(--ash-contrastBorder, var(--ash-border))
+		);
+	border-radius: var(--ash-cornerRadius-xSmall);
+	color: var(
+		--ash-badge-style-badge-foreground,
+		var(--ash-description-foreground)
+	);
+	background: var(--ash-badge-style-badge-background, transparent);
+	line-height: inherit;
+	outline: none;
+}

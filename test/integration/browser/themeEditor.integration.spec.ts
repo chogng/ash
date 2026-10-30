@@ -1275,7 +1275,7 @@ test('color list virtualizes scrolling and keeps an active edit through recyclin
 	const rows = popup.locator('.ash-theme-color');
 	const viewport = popup.locator('.ash-theme-editor-scroll .ash-scrollbar-viewport');
 	const count = await popup
-		.locator('.ash-theme-color-group-count')
+		.locator('.ash-theme-color-group-heading > .ash-theme-color-group-count > .ash-count-badge')
 		.evaluateAll(nodes => nodes.reduce((sum, node) => sum + Number(node.textContent), 0));
 	expect(count).toBeGreaterThan(200);
 	await expect.poll(() => rows.count()).toBeLessThan(25);
@@ -1357,7 +1357,7 @@ test('color list keyboard traversal reaches recycled rows and crosses group boun
 		if (!active.inside) break;
 		if (active.name) names.push(active.name);
 	}
-	expect(names.length).toBe(Number(await heading.locator('.ash-theme-color-group-count').textContent()));
+	expect(names.length).toBe(Number(await heading.locator('.ash-count-badge').textContent()));
 	expect(new Set(names).size).toBe(names.length);
 	expect(names).toContain('terminal.ansiBrightWhite');
 	await popup.keyboard.press('Shift+Tab');

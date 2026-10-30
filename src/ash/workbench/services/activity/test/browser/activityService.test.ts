@@ -34,12 +34,12 @@ test('activity counts abbreviate visually while retaining complete descriptions'
 		for (const [count, text] of [[13, '13'], [999, '999'], [1000, '1K'], [1234, '1K+'], [2000, '2K']] as const) {
 			using handle = activity.showViewContainerActivity('large-count', { badge: new NumberBadge(count, () => `${count} changes`) });
 			const tab = bar.domNode.querySelector('[role="tab"]')!;
-			assert.equal(tab.querySelector('.ash-count-badge')?.textContent, text);
+			assert.equal(tab.querySelector('.ash-composite-bar-badge')?.textContent, text);
 			assert.equal(tab.getAttribute('aria-label'), `Changes, ${count} changes`);
-			assert.equal(tab.querySelector('.ash-count-badge')?.getAttribute('aria-hidden'), 'true');
+			assert.equal(tab.querySelector('.ash-composite-bar-badge')?.getAttribute('aria-hidden'), 'true');
 		}
 		using zero = activity.showViewContainerActivity('large-count', { badge: new NumberBadge(0, () => 'No changes') });
-		assert.equal(bar.domNode.querySelector('.ash-count-badge'), null);
+		assert.equal(bar.domNode.querySelector('.ash-composite-bar-badge'), null);
 	} finally {
 		dom.window.close();
 	}
@@ -65,24 +65,24 @@ test('ActivityService combines concurrent counts and descriptions and releases o
 	using second = activity.showViewContainerActivity('test', { badge: new NumberBadge(3, () => '3 incoming changes') });
 	const tab = (): HTMLElement => bar.domNode.querySelector('[role="tab"]')!;
 	assert.equal(tab().getAttribute('aria-label'), 'Test, 2 unsaved files, 3 incoming changes');
-	assert.equal(tab().querySelector('.ash-count-badge.small.ash-composite-bar-badge')?.textContent, '5');
+	assert.equal(tab().querySelector('.ash-composite-bar-badge')?.textContent, '5');
 	tab().focus();
 	bar.toggleBadgeEnablement('test');
-	assert.equal(tab().querySelector('.ash-count-badge'), null);
-	assert.equal(otherBar.domNode.querySelector('.ash-count-badge')?.textContent, '5');
+	assert.equal(tab().querySelector('.ash-composite-bar-badge'), null);
+	assert.equal(otherBar.domNode.querySelector('.ash-composite-bar-badge')?.textContent, '5');
 	second.dispose();
 	assert.equal(tab().getAttribute('aria-label'), 'Test, 2 unsaved files');
-	assert.equal(tab().querySelector('.ash-count-badge'), null);
+	assert.equal(tab().querySelector('.ash-composite-bar-badge'), null);
 	bar.toggleBadgeEnablement('test');
-	assert.equal(tab().querySelector('.ash-count-badge')?.textContent, '2');
+	assert.equal(tab().querySelector('.ash-composite-bar-badge')?.textContent, '2');
 	assert.equal(dom.window.document.activeElement, tab());
 	first.dispose();
 	assert.equal(tab().getAttribute('aria-label'), 'Test');
-	assert.equal(tab().querySelector('.ash-count-badge'), null);
+	assert.equal(tab().querySelector('.ash-composite-bar-badge'), null);
 	using remaining = activity.showViewContainerActivity('test', { badge: new NumberBadge(1, () => '1 remaining') });
 	activity.dispose();
-	assert.equal(tab().querySelector('.ash-count-badge'), null);
-	assert.equal(otherBar.domNode.querySelector('.ash-count-badge'), null);
+	assert.equal(tab().querySelector('.ash-composite-bar-badge'), null);
+	assert.equal(otherBar.domNode.querySelector('.ash-composite-bar-badge'), null);
 	remaining.dispose();
 	dom.window.close();
 });
@@ -116,8 +116,8 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		tab.addEventListener('contextmenu', event => bar.showContextMenu(event), { once: true });
 		tab.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		await actions.find(action => action.label === '隐藏徽章')!.run();
-		assert.equal(bar.domNode.querySelector('[data-action-id="badge-first"] .ash-count-badge'), null);
-		assert.equal(bar.domNode.querySelector('[data-action-id="badge-second"] .ash-count-badge')?.textContent, '2');
+		assert.equal(bar.domNode.querySelector('[data-action-id="badge-first"] .ash-composite-bar-badge'), null);
+		assert.equal(bar.domNode.querySelector('[data-action-id="badge-second"] .ash-composite-bar-badge')?.textContent, '2');
 		await storage.flush();
 		using restoredStorage = new BrowserStorageService({ ...options, workspaceId: 'second' });
 		using restoredActivity = new ActivityService(views);
@@ -136,13 +136,13 @@ test('Activity Bar badge menu uses Chinese labels and restores independent visib
 		restoredTab.addEventListener('contextmenu', event => restored.showContextMenu(event), { once: true });
 		restoredTab.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 		await actions.find(action => action.label === '显示徽章')!.run();
-		assert.equal(restored.domNode.querySelector('[data-action-id="badge-first"] .ash-count-badge')?.textContent, '8');
+		assert.equal(restored.domNode.querySelector('[data-action-id="badge-first"] .ash-composite-bar-badge')?.textContent, '8');
 		await restoredStorage.flush();
 		const profileKey = 'ash.storage.profile.default';
 		dom.window.dispatchEvent(new dom.window.StorageEvent('storage', { key: profileKey, newValue: dom.window.localStorage.getItem(profileKey), storageArea: dom.window.localStorage }));
-		assert.equal(bar.domNode.querySelector('[data-action-id="badge-first"] .ash-count-badge')?.textContent, '1');
+		assert.equal(bar.domNode.querySelector('[data-action-id="badge-first"] .ash-composite-bar-badge')?.textContent, '1');
 		updated.dispose();
-		assert.equal(restored.domNode.querySelector('.ash-count-badge'), null);
+		assert.equal(restored.domNode.querySelector('.ash-composite-bar-badge'), null);
 	} finally {
 		dom.window.close();
 	}

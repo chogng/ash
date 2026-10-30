@@ -211,12 +211,8 @@
 }
 
 .ash-theme-color-group-count {
-	flex-shrink: 0;
-	padding: 0 4px;
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-xSmall);
-	font-size: var(--ash-fontSize-label3);
-	color: var(--ash-description-foreground);
+	display: flex;
+	flex: 0 0 auto;
 }
 
 .ash-theme-color-group-chevron {

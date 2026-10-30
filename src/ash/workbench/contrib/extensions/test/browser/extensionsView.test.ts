@@ -344,9 +344,9 @@ suite('extensions browser component', () => {
 				await page.screenshot({ path: `.build/desktop/ui-previews/connections-flat-${locale}-${theme}.png` });
 				const search = page.locator('#extensions').getByRole('searchbox');
 				await search.fill('@connections GitHub'); await search.press('Enter');
-				await expect(pane.locator('.ash-pane-view-header > .ash-count-badge')).toHaveText('2');
+				await expect(pane.locator('.ash-pane-view-header > .ash-extensions-count > .ash-count-badge')).toHaveText('2');
 				await search.press('Escape');
-				await expect(pane.locator('.ash-pane-view-header > .ash-count-badge')).toHaveText('3');
+				await expect(pane.locator('.ash-pane-view-header > .ash-extensions-count > .ash-count-badge')).toHaveText('3');
 				await list.focus();
 				await page.keyboard.press('Home'); await page.keyboard.press('Enter');
 				const details = page.locator('.ash-extension-editor');
@@ -1984,7 +1984,7 @@ suite('extensions browser component', () => {
 
 				const connectors = page.locator('[data-view-id="ash.extensions.mcp"]');
 				await expect(connectors.locator('.ash-pane-view-content')).toHaveAttribute('aria-busy', 'false');
-				const connectorBadge = connectors.locator('.ash-pane-view-header > .ash-count-badge');
+				const connectorBadge = connectors.locator('.ash-pane-view-header > .ash-extensions-count > .ash-count-badge');
 				const previous = Number(await connectorBadge.textContent());
 				await page.evaluate(() => window.ashExtensionsIntegration.addConnector());
 				await expect(connectorBadge).toHaveText(String(previous + 1));

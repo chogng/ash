@@ -479,10 +479,11 @@ export class ScmViewPane extends ViewPane {
 			this.showGroupMenu(group, heading, event as MouseEvent);
 		}));
 		this.renderActionToolbar(heading, group.actions, `${group.label} actions`, resources).classList.add('ash-scm-section-actions');
-		const count = resources.add(new CountBadge(heading, {
+		const countContainer = h(heading.ownerDocument, 'span', { className: 'ash-scm-section-count' });
+		heading.append(countContainer);
+		const count = resources.add(new CountBadge(countContainer, {
 			titleFormat: localize('scm.resourceCount', '{0} changes')
 		}, defaultCountBadgeStyles));
-		count.domNode.classList.add('ash-scm-section-count');
 		count.setCount(group.resources.length);
 		return heading;
 	}

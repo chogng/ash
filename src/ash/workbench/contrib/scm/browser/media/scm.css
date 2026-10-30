@@ -773,6 +773,7 @@
 }
 
 .ash-scm-section-count {
+	display: flex;
 	grid-area: 1 / 2;
 }
 

@@ -108,6 +108,7 @@ export class CustomizeEditorPane extends EditorPane {
 	private message!: HTMLElement;
 	private heading!: HTMLElement;
 	private count!: CountBadge;
+	private countContainer!: HTMLElement;
 	private hero!: HTMLElement;
 	private heroTitle!: HTMLElement;
 	private heroDescription!: HTMLElement;
@@ -372,10 +373,12 @@ export class CustomizeEditorPane extends EditorPane {
 		const title = h(document, 'h2');
 		this.heading = h(document, 'span');
 		title.append(this.heading);
-		this.count = this._register(new CountBadge(title, {
+		this.countContainer = h(document, 'span', { className: 'ash-customize-count' });
+		title.append(this.countContainer);
+		this.count = this._register(new CountBadge(this.countContainer, {
 			titleFormat: localize('customize.count', '{0} resources'),
 		}));
-		this.count.domNode.hidden = true;
+		this.countContainer.hidden = true;
 		header.append(title);
 		const refresh = this._register(
 			new Button(header, {
@@ -552,7 +555,7 @@ export class CustomizeEditorPane extends EditorPane {
 			this.cursor = undefined;
 			this.loadedQuery = queryKey;
 			this.renderCards();
-			this.count.domNode.hidden = true;
+			this.countContainer.hidden = true;
 		}
 		this.panel.setAttribute('aria-busy', 'true');
 		this.loading ??= this._register(
@@ -935,7 +938,7 @@ export class CustomizeEditorPane extends EditorPane {
 			this.grid.append(article);
 		}
 		this.count.setCount(cards.length);
-		this.count.domNode.hidden = false;
+		this.countContainer.hidden = false;
 		const message = [
 			this.note,
 			cards.length

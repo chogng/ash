@@ -826,9 +826,9 @@ test.describe('SCM editor groups', () => {
 	test('Git badges and file decorations update together across Explorer, tabs, Open Editors and SCM', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const gitTab = page.locator('.ash-composite-bar-item[data-action-id="ash.git"]');
-		const activity = gitTab.locator('.ash-count-badge');
+		const activity = gitTab.locator('.ash-composite-bar-badge');
 		await expect(activity).toHaveText('1');
-		await expect(gitTab).toHaveAttribute('aria-label', 'Git, 1 changed file');
+		await expect(gitTab).toHaveAttribute('aria-label', 'Source Control, 1 changed file');
 		const explorerLabel = page.locator('.ash-explorer .ash-icon-label').filter({ has: page.getByText('main.ts', { exact: true }) });
 		await expect(explorerLabel).toHaveAttribute('aria-label', 'main.ts, Modified');
 		await explorerLabel.dblclick();
@@ -846,7 +846,7 @@ test.describe('SCM editor groups', () => {
 		await expect(activity).toHaveText('1');
 		await run('git', ['restore', '--staged', '--worktree', 'main.ts'], { cwd: testWorkspace.directory });
 		await expect(activity).toHaveCount(0);
-		await expect(gitTab).toHaveAttribute('aria-label', 'Git');
+		await expect(gitTab).toHaveAttribute('aria-label', 'Source Control');
 		await expect(editorLabel).toHaveAttribute('aria-label', 'main.ts');
 		await page.locator('.ash-composite-bar-item[data-action-id="ash.sidebar"]').click();
 		await expect(openEditorLabel).toHaveAttribute('aria-label', 'main.ts');

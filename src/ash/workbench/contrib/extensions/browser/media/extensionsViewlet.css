@@ -59,7 +59,8 @@
 	> .ash-pane-view-header-actions {
 	visibility: visible;
 }
-.ash-extensions-view > .ash-pane-view-header > .ash-count-badge {
+.ash-extensions-count {
+	display: flex;
 	order: 1;
 	margin-inline: var(--ash-spacing-size40) var(--ash-spacing-size80);
 }

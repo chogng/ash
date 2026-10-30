@@ -51,6 +51,10 @@
 	font-size: var(--ash-fontSize-label2);
 }
 
+.ash-scm-repository-count {
+	display: flex;
+}
+
 .ash-scm-repository-path {
 	display: none;
 	grid-column: 1 / -1;
