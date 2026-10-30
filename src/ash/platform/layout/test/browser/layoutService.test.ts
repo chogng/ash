@@ -73,3 +73,28 @@ test('BrowserLayoutService rejects invalid dimensions', () => {
 	service.dispose();
 	dom.window.close();
 });
+
+test('BrowserLayoutService preserves fractional root geometry on initial measurement and viewport resize', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	try {
+		const root = dom.window.document.querySelector('main')!;
+		let bounds = { width: 1_000.2, height: 700.8 };
+		root.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, bounds.width, bounds.height);
+		Object.defineProperties(root, {
+			clientWidth: { get: () => Math.round(bounds.width) },
+			clientHeight: { get: () => Math.round(bounds.height) },
+		});
+		using service = new BrowserLayoutService({ root });
+		assert.deepEqual(service.mainContainerDimension, new Dimension(1_000.2, 700.8));
+		const layouts: { readonly width: number; readonly height: number }[] = [];
+		using subscription = service.onDidLayoutMainContainer(size => layouts.push(size));
+		bounds = { width: 900.6, height: 600.4 };
+		dom.window.dispatchEvent(new dom.window.Event('resize'));
+		assert.deepEqual(service.mainContainerDimension, new Dimension(900.6, 600.4));
+		assert.deepEqual(layouts, [new Dimension(900.6, 600.4)]);
+		service.layout();
+		assert.deepEqual(service.mainContainerDimension, new Dimension(900.6, 600.4));
+	} finally {
+		dom.window.close();
+	}
+});

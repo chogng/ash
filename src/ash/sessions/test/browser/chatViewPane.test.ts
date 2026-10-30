@@ -4717,6 +4717,7 @@ class TestChatAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	readonly dom = new JSDOM('<!doctype html><body><main></main></body>');
 	readonly window = this.dom.window as unknown as Window;
 	readonly container = this.dom.window.document.querySelector('main')!;
+	readonly onWillLayout = Event.None;
 	readonly onDidLayout = Event.None;
 	readonly onBeforeUnload = Event.None;
 	private readonly closed = this._register(new Emitter<void>());

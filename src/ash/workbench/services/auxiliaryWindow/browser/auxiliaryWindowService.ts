@@ -12,6 +12,7 @@ import { getIconDefinition } from '../../../../platform/theme/common/iconRegistr
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IAuxiliaryWindowState } from '../../../../platform/window/common/window.js';
 import { localize } from '../../../../nls.js';
+import { getContainerDimension } from '../../../../platform/layout/browser/layoutService.js';
 
 const WORKBENCH_ROOT_CLASSES = ['ash-reduce-motion', 'ash-enable-motion', 'ash-reduce-transparency', 'ash-underline-links', 'hc-black', 'hc-light', 'ash-high-contrast'] as const;
 const WORKBENCH_ROOT_ATTRIBUTES = ['data-os', 'data-runtime', 'data-workbench-state', 'data-color-theme', 'data-color-scheme'] as const;
@@ -49,6 +50,8 @@ export interface IAuxiliaryWindow extends Disposable {
 	readonly id: number;
 	readonly window: Window;
 	readonly container: HTMLElement;
+	/** Participants lay out hosted Parts before completion is published. */
+	readonly onWillLayout: Event<IDimension>;
 	readonly onDidLayout: Event<IDimension>;
 	readonly onBeforeUnload: Event<AuxiliaryWindowBeforeUnloadEvent>;
 	readonly onDidClose: Event<void>;
@@ -146,9 +149,11 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 
 export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	readonly alwaysOnTop: IAuxiliaryWindow['alwaysOnTop'] = undefined;
+	private readonly willLayoutEmitter = this._register(new Emitter<IDimension>());
 	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
 	private readonly beforeUnloadEmitter = this._register(new Emitter<AuxiliaryWindowBeforeUnloadEvent>());
 	private readonly closeEmitter = this._register(new Emitter<void>());
+	readonly onWillLayout = this.willLayoutEmitter.event;
 	readonly onDidLayout = this.layoutEmitter.event;
 	readonly onBeforeUnload = this.beforeUnloadEmitter.event;
 	readonly onDidClose = this.closeEmitter.event;
@@ -209,9 +214,13 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	}
 
 	layout(): void {
-		const width = Math.max(0, this.container.clientWidth || this.window.innerWidth || 0);
-		const height = Math.max(0, this.container.clientHeight || this.window.innerHeight || 0);
-		this.layoutEmitter.fire(new Dimension(width, height));
+		const measured = getContainerDimension(this.container);
+		const dimension = new Dimension(
+			Math.max(0, measured.width || this.window.innerWidth || 0),
+			Math.max(0, measured.height || this.window.innerHeight || 0),
+		);
+		this.willLayoutEmitter.fire(dimension);
+		this.layoutEmitter.fire(dimension);
 	}
 
 	recordFrameOffsets(): void {

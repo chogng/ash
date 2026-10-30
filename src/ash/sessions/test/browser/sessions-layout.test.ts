@@ -80,6 +80,34 @@ function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPart
 	return new Map(sessionsPartIds.map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
 }
 
+test('Sessions Grid follows viewport resize synchronously and retains fractional root dimensions', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = dom.window.document.querySelector('main')!;
+	const parts = createParts(dom.window.document);
+	let bounds = { width: 1_200.2, height: 800.8 };
+	container.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, bounds.width, bounds.height);
+	Object.defineProperties(container, {
+		clientWidth: { get: () => Math.round(bounds.width) },
+		clientHeight: { get: () => Math.round(bounds.height) },
+	});
+	try {
+		using layout = createLayout(container, parts);
+		assert.deepEqual(layout.mainContainerDimension, new Dimension(1_200.2, 800.8));
+		for (const next of [
+			{ width: 1_000.6, height: 700.4 },
+			{ width: 1_300.2, height: 900.8 },
+		]) {
+			bounds = next;
+			dom.window.dispatchEvent(new dom.window.Event('resize'));
+			assert.deepEqual(layout.mainContainerDimension, new Dimension(next.width, next.height));
+			assert.equal(layout.getPartSize('titlebar').width, next.width);
+		}
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
 test('Sessions sidebar clamps at its minimum, snaps closed and restores from the window edge', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);

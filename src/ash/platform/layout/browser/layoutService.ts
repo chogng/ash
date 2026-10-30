@@ -1,5 +1,5 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import { getWindow } from '../../../base/browser/dom.js';
+import { addDisposableListener, getWindow } from '../../../base/browser/dom.js';
 import { Dimension, getClientArea, type IDimension } from '../../../base/browser/dom.js';
 import { observeElementSize } from '../../../base/browser/observer.js';
 import type { BrowserWindow } from '../../../base/browser/window.js';
@@ -62,10 +62,20 @@ export interface BrowserLayoutServiceOptions {
 	readonly focus?: () => void;
 }
 
+/** Measures a root's border box with the same fractional precision as ResizeObserver. */
+export function getContainerDimension(container: HTMLElement): Dimension {
+	const bounds = container.getBoundingClientRect();
+	if (bounds.width > 0 && bounds.height > 0) {
+		return new Dimension(bounds.width, bounds.height);
+	}
+	const fallback = getClientArea(container);
+	return new Dimension(bounds.width || fallback.width, bounds.height || fallback.height);
+}
+
 /**
  * Browser implementation of the platform layout contract for one container.
  *
- * The service owns the root container's ResizeObserver and geometry events. It
+ * The service owns viewport/container size observation and geometry events. It
  * deliberately does not know about Sidebar, Panel, Editor, or Grid topology.
  */
 export class BrowserLayoutService
@@ -96,8 +106,11 @@ export class BrowserLayoutService
 		this.targetWindow = getWindow(this.root);
 		this.getOffset = options.getContainerOffset ?? (() => NoLayoutOffset);
 		this.focusPrimary = options.focus ?? (() => undefined);
-		this.dimension = getClientArea(this.root);
+		this.dimension = getContainerDimension(this.root);
 
+		// Window resize precedes animation callbacks; observing the container also
+		// covers embedding and native client-area changes without a viewport resize.
+		this._register(addDisposableListener(this.targetWindow, 'resize', () => this.layout()));
 		this._register(observeElementSize(this.root, size => this.layout(size)));
 	}
 
@@ -144,7 +157,7 @@ export class BrowserLayoutService
 	}
 
 	/** Lays out the root and publishes the platform geometry events. */
-	layout(dimension: IDimension = getClientArea(this.root)): void {
+	layout(dimension: IDimension = getContainerDimension(this.root)): void {
 		assertDimension(dimension);
 		this.dimension = new Dimension(dimension.width, dimension.height);
 		this._onDidLayoutContainer.fire({

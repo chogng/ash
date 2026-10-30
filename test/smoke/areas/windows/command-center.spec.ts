@@ -1112,6 +1112,72 @@ test('macOS sidebar toggle starts at the window control safe area', { tag: ['@el
 	expect(gap).toBeLessThanOrEqual(4);
 });
 
+test(
+	'macOS titlebar icons stay anchored during continuous native resize',
+	{ tag: ['@electron-ui', '@electron-app-server', '@darwin'] },
+	async ({ application, workbench }) => {
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const page = workbench.page;
+		await expect(page.locator('.ash-titlebar-left-actions button').first()).toBeVisible();
+		const windowHandle = await application.browserWindow(page);
+		try {
+			const [samples] = await Promise.all([
+				page.evaluate(async () => {
+					const titlebar = document.querySelector<HTMLElement>('.ash-electron-titlebar')!;
+					const left = titlebar.querySelector<HTMLElement>('.ash-titlebar-left-actions button')!;
+					const right = [...titlebar.querySelectorAll<HTMLElement>('.ash-titlebar-actions button')]
+						.filter(button => button.getClientRects().length > 0)
+						.at(-1)!;
+					const samples: {
+						width: number;
+						layoutWidthError: number;
+						left: number;
+						right: number;
+						leftY: number;
+						rightY: number;
+					}[] = [];
+					const started = performance.now();
+					while (performance.now() - started < 2_000) {
+						await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+						const leftBounds = left.getBoundingClientRect();
+						const rightBounds = right.getBoundingClientRect();
+						samples.push({
+							width: innerWidth,
+							layoutWidthError: Math.abs(titlebar.getBoundingClientRect().width - innerWidth),
+							left: leftBounds.left,
+							right: innerWidth - rightBounds.right,
+							leftY: leftBounds.top,
+							rightY: rightBounds.top,
+						});
+					}
+					return samples;
+				}),
+				windowHandle.evaluate(async window => {
+					const bounds = window.getBounds();
+					try {
+						// Small, rapid native resizes expose intermediate overlay and Grid geometry.
+						for (let step = 0; step < 80; step++) {
+							const offset = step < 40 ? step : 79 - step;
+							window.setSize(1_280 - offset * 6, bounds.height, false);
+							await new Promise(resolve => setTimeout(resolve, 12));
+						}
+					} finally {
+						window.setBounds(bounds, false);
+					}
+				}),
+			]);
+			expect(new Set(samples.map(sample => sample.width)).size).toBeGreaterThan(10);
+			expect(Math.max(...samples.map(sample => sample.layoutWidthError))).toBeLessThanOrEqual(1);
+			for (const key of ['left', 'right', 'leftY', 'rightY'] as const) {
+				const values = samples.map(sample => sample[key]);
+				expect(Math.max(...values) - Math.min(...values), key).toBeLessThanOrEqual(1);
+			}
+		} finally {
+			await windowHandle.dispose();
+		}
+	},
+);
+
 test('titlebar navigation moves through editor history beside Quick Access', async ({ workbench }) => {
 	const page = workbench.page;
 	const navigation = page.locator('.ash-titlebar-command-center-navigation');
