@@ -41,7 +41,7 @@ export interface TabListItem<T> {
 	readonly primaryAction?: IAction;
 }
 
-/** Flush and inset serve document tabs; navigation and underline fit page categories to their labels. */
+/** Visual treatments; tab sizing and action layout are independent of presentation. */
 export type TabListPresentation = 'flush' | 'inset' | 'navigation' | 'underline';
 /** Fit preserves labels; shrink shares available space; fixed shares bounded equal widths. */
 export type TabListSizing = { readonly mode: 'fit' | 'shrink'; } | { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number; };

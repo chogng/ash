@@ -171,10 +171,8 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			this.closeAction = closeTabAction(this.tabAction, this.onClose, this.closeActionIcon);
 		}
 		const primaryAction = item.primaryAction ?? this.closeAction;
-		const actions = [
-			...(item.actions?.items ?? []),
-			...(primaryAction ? [primaryAction] : []),
-		];
+		const actions = [...(item.actions?.items ?? []), ...(primaryAction ? [primaryAction] : [])];
+		container.classList.toggle('has-actions', actions.length > 0);
 		const hadActionFocus = this.toolbar.value?.element.contains(container.ownerDocument.activeElement);
 		if (actions.length === 0) {
 			this.toolbar.clear();
