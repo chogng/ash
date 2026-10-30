@@ -1134,6 +1134,46 @@ test('moving a terminal to a real desktop window retains its shell PID, cwd, out
 
 for (const reason of ['quit', 'windowClose'] as const) test.describe(`terminal process revival after ${reason}`, () => {
 	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'terminal.integrated.persistentSessionReviveProcess': reason === 'quit' ? 'onExit' : 'onExitAndWindowClose' } });
+	test('replaces the idle zsh prompt while retaining history across repeated revival', { tag: ['@electron-app-server'] }, async ({ workbench, runningApplication, testWorkspace }, testInfo) => {
+		test.skip(process.platform !== 'darwin', 'Exercises the macOS zsh startup prompt.');
+		test.setTimeout(90_000);
+		await writeFile(join(testWorkspace.directory, '.zshrc'), "PS1='ASH_PROMPT_HEADER\nASH_PROMPT> '\n");
+		const settings = await readUserSettings(workbench.page);
+		await writeUserSettings(workbench.page, JSON.stringify({
+			...JSON.parse(settings.content),
+			'terminal.integrated.profiles.osx': { 'Revival Zsh': { path: '/bin/zsh', args: ['-i'], env: { ZDOTDIR: testWorkspace.directory } } },
+			'terminal.integrated.defaultProfile.osx': 'Revival Zsh',
+		}), settings.revision);
+		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+		await expect(workbench.terminal.activeInstance.locator('.ash-terminal-command-status.pending')).toBeVisible();
+		await workbench.terminal.runCommand("printf 'RETAINED_%s\\n' HISTORY");
+		await expect(workbench.terminal.activeInstance.locator('.xterm-rows > div').filter({ hasText: /^RETAINED_HISTORY\s*$/u })).toBeVisible();
+		await expect(workbench.terminal.activeInstance.locator('.ash-terminal-command-status.succeeded')).toHaveCount(1);
+		for (let restart = 0; restart < 2; restart++) {
+			const previousInput = runningApplication.driver.workbench.terminal.activeInstance.locator('.xterm-helper-textarea');
+			await previousInput.focus();
+			await previousInput.pressSequentially('echo UNEXECUTED_DRAFT');
+			const restored = (await runningApplication.reload(reason)).workbench;
+			const terminal = restored.terminal.activeInstance;
+			await expect(terminal.locator('.ash-terminal-command-status.pending')).toBeVisible();
+			const rows = terminal.locator('.xterm-rows > div');
+			// The completed command keeps its historical prompt; exactly one idle
+			// prompt follows the retained output, even after a second restart.
+			await expect(rows.filter({ hasText: /^ASH_PROMPT_HEADER\s*$/u })).toHaveCount(2);
+			await expect(rows.filter({ hasText: /^ASH_PROMPT>\s*$/u })).toHaveCount(1);
+			await expect(rows.filter({ hasText: /^RETAINED_HISTORY\s*$/u })).toHaveCount(1);
+			await expect(rows.filter({ hasText: 'UNEXECUTED_DRAFT' })).toHaveCount(0);
+			const input = terminal.locator('.xterm-helper-textarea');
+			await input.focus();
+			await expect(input).toBeFocused();
+			await restored.page.screenshot({ path: testInfo.outputPath(`terminal-idle-prompt-${reason}-${restart}.png`) });
+		}
+		const restored = runningApplication.driver.workbench;
+		await restored.terminal.runCommand("printf 'RESTORED_%s\\n' INPUT");
+		await expect(restored.terminal.activeInstance.locator('.xterm-rows > div').filter({ hasText: /^RESTORED_INPUT\s*$/u })).toBeVisible();
+		expect(runningApplication.diagnostics.errors).toEqual([]);
+	});
+
 	test('restores output, cwd and split layout with fresh shells without replaying commands', { tag: ['@electron-app-server'] }, async ({ workbench, runningApplication, testWorkspace }, testInfo) => {
 		test.setTimeout(90_000);
 		const directory = join(testWorkspace.directory, 'revived-cwd');

@@ -13,7 +13,7 @@ import * as terminalColors from '../../common/terminalColorRegistry.js';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon, ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
 import type { SerializeAddon } from '@xterm/addon-serialize';
-import type { Terminal, ITheme, ITerminalOptions } from '@xterm/xterm';
+import type { Terminal, IMarker, ITheme, ITerminalOptions } from '@xterm/xterm';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
@@ -328,7 +328,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		return previous ? addon.findPrevious(term, decoratedOptions) : addon.findNext(term, decoratedOptions);
 	}
 
-	async getRangeAsVT(): Promise<string> {
+	async getRangeAsVT(startMarker?: IMarker, endMarker?: IMarker, skipLastLine = false): Promise<string> {
 		await this.initialize();
 		if (!this.serializeAddon) {
 			const Addon = await addonImporter.importAddon('serialize');
@@ -338,7 +338,12 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		}
 		await this.parseWrite('');
 		if (this.isDisposed) throw new CancellationError();
-		return this.serializeAddon.serialize();
+		if (!startMarker && !endMarker && !skipLastLine || startMarker?.isDisposed || endMarker?.isDisposed) return this.serializeAddon.serialize();
+		const start = startMarker?.line ?? 0;
+		const end = (endMarker?.line ?? this.raw.buffer.normal.length - 1) - (skipLastLine ? 1 : 0);
+		if (end < start) return '';
+		// A range is display history, not a checkpoint of the live shell's modes or cursor.
+		return this.serializeAddon.serialize({ range: { start, end }, excludeModes: true, excludeAltBuffer: true });
 	}
 
 	private async loadSearchAddon(): Promise<SearchAddon> {

@@ -86,6 +86,65 @@ suite('terminal browser component', () => {
 		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 	});
 
+	for (const locale of ['en', 'zh-CN']) {
+		for (const prompt of ['fixture> ', `MULTILINE ${'x'.repeat(100)}\r\nfixture> `]) {
+			test(`revival replaces the ${prompt.startsWith('MULTILINE') ? 'wrapped multiline' : 'single-line'} idle prompt and preserves history in ${locale}`, async () => {
+				const { page } = browserTests;
+				await page.goto(`/terminal.html?stream&commandModel&checkpoint&browser&locale=${locale}`);
+				await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+				await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+				await page.evaluate(prompt => {
+					const stream = window.ashTerminalStreamIntegration;
+					stream.feedModel('\r\x1b[2K\r\n\r\n');
+					stream.environmentFrame({ type: 'promptStart' });
+					stream.feedModel(prompt);
+					stream.environmentFrame({ type: 'commandStart' });
+					stream.feedModel('UNEXECUTED_DRAFT');
+				}, prompt);
+				await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('UNEXECUTED_DRAFT|');
+				const startup = '\x1b[1m\x1b[7m%\x1b[0m' + ' '.repeat(79) + '\r \rfixture> ';
+				const revived = await page.evaluate(startup => window.ashTerminalStreamIntegration.checkpoint(true, startup), startup);
+				expect(revived).toBe('$ echo 中文🙂\nresult 中文🙂\n\n\nfixture>');
+				const reconnected = await page.evaluate(() => window.ashTerminalStreamIntegration.checkpoint(false));
+				expect(reconnected).toContain('fixture> UNEXECUTED_DRAFT');
+				if (prompt.startsWith('MULTILINE')) expect(reconnected).toContain('MULTILINE');
+				await expect(page.locator('.xterm-helper-textarea').last()).toBeFocused();
+				await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+			});
+		}
+	}
+
+	test('revival of the first prompt starts with an empty screen', async () => {
+		const { page } = browserTests;
+		await page.goto('/terminal.html?stream&commandModel&checkpoint&browser');
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await page.evaluate(() => {
+			const stream = window.ashTerminalStreamIntegration;
+			stream.feedModel('\x1b[2J\x1b[3J\x1b[H');
+			stream.environmentFrame({ type: 'promptStart' });
+			stream.feedModel('fixture> ');
+			stream.environmentFrame({ type: 'commandStart' });
+		});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('fixture>');
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.checkpoint(true, 'fixture> '))).toBe('fixture>');
+		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	});
+
+	test('revival preserves the last output line of an executing command', async () => {
+		const { page } = browserTests;
+		await page.goto('/terminal.html?stream&commandModel&checkpoint&browser');
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await page.evaluate(() => {
+			const stream = window.ashTerminalStreamIntegration;
+			stream.feedModel('running-command\r\n');
+			stream.environmentFrame({ type: 'commandExecuted', commandId: 'running', command: 'running-command', isTrusted: true, cwd: '/workspace', timestampMillis: 456 });
+			stream.feedModel('OUTPUT_WITHOUT_NEWLINE');
+		});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('OUTPUT_WITHOUT_NEWLINE');
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.checkpoint(true))).toBe('$ echo 中文🙂\nresult 中文🙂\n$ running-command\nOUTPUT_WITHOUT_NEWLINE');
+		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	});
+
 	test('terminal follows new output after erasing retained scrollback while scrolled up', async function () {
 		const { page } = browserTests;
 

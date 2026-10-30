@@ -38,6 +38,7 @@ import Severity from '../../../../base/common/severity.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { TerminalStatus, TerminalStatusList } from './terminalStatusList.js';
 import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import { PromptInputState } from '../../../../platform/terminal/common/capabilities/commandDetection/promptInputModel.js';
 import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { TerminalRecorder } from '../../../../platform/terminal/common/terminalRecorder.js';
 import { NaiveCwdDetectionCapability } from '../../../../platform/terminal/common/capabilities/naiveCwdDetectionCapability.js';
@@ -696,7 +697,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		return this.relaunchTask;
 	}
 
-	async serializeState(): Promise<ITerminalSerializedState> {
+	async serializeState(options?: { readonly revive?: boolean; }): Promise<ITerminalSerializedState> {
 		const child = this.shellProcessManager;
 		if (!child || this.closed || this.relaunchTask || this.connectionPersistence !== 'reconnectable') throw new Error(localize('terminal.reload.unsupported', 'This terminal cannot preserve its process across a window reload.'));
 		const checkpoint = await child.serializeState();
@@ -705,7 +706,17 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (!screen) throw new Error(localize('terminal.reload.screenUnavailable', 'The terminal screen is unavailable for recovery.'));
 		this.frozen = true;
 		screen.raw.options.disableStdin = true;
-		const vt = await screen.getRangeAsVT();
+		const detection = options?.revive ? screen.capabilities.get(TerminalCapability.CommandDetection) : undefined;
+		const prompt = options?.revive && screen.raw.buffer.active.type === 'normal' && detection?.promptInputModel.state === PromptInputState.Input
+			? detection.currentCommand?.promptStartMarker : undefined;
+		const omitPrompt = prompt && !prompt.isDisposed;
+		// Reconnecting the same PTY needs its complete screen. A new shell instead
+		// prints its own prompt; retain only the output before the old input region,
+		// including when that prompt wraps or spans multiple lines in scrollback.
+		const history = await screen.getRangeAsVT(undefined, omitPrompt ? prompt : undefined, !!omitPrompt);
+		// Ranged serialization omits trailing blank rows on an unscrolled screen.
+		// Restore that spacing before the new shell writes at the old prompt boundary.
+		const vt = omitPrompt ? history + (screen.raw.buffer.normal.length <= screen.raw.rows ? `\x1b[${prompt.line + 1};1H` : '\r\n') : history;
 		const cwd = child.cwd ?? await child.getCwd().catch(() => this.initialCwd);
 		if (this.closed) throw new CancellationError();
 		return {

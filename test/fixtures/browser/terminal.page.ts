@@ -980,7 +980,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 		operatingSystem: reviveHistory || new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : undefined,
 		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
 		setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
-		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }; },
+		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: new URLSearchParams(location.search).has('checkpoint') ? 'reconnectable' : 'connectionOwned' }; },
 		write: async options => {
 			if (typeof options.data === 'string') streamInputWrites.push(options.data);
 			if (commandModel && typeof options.data === 'string') queueModel(options.data);
@@ -1103,6 +1103,16 @@ if (new URLSearchParams(location.search).has('stream')) {
 			return { input: capability?.promptInputModel.getCombinedString(), state: capability?.promptInputModel.state, commands: capability?.commands.map(command => ({ id: command.id, text: command.command, output: command.getOutput(), timestamp: command.timestamp, duration: command.duration, trust: command.isTrusted, promptRows: command.getPromptRowCount(), commandRows: command.getCommandRowCount() })) };
 		},
 		observed: () => observed.join(''),
+		checkpoint: async (revive, startup = '') => {
+			const saved = await terminal.serializeState({ revive });
+			terminal.start();
+			const { Terminal } = await import('@xterm/xterm');
+			const restored = new Terminal({ cols: saved.cols, rows: saved.rows, allowProposedApi: true });
+			try {
+				await writeP(restored, saved.vt + startup);
+				return Array.from({ length: restored.buffer.active.length }, (_, row) => restored.buffer.active.getLine(row)!.translateToString(true)).join('\n').trimEnd();
+			} finally { restored.dispose(); }
+		},
 		snapshot: () => screen?.getBufferText(100_000, new AbortController().signal) ?? Promise.resolve(undefined),
 		close: async () => { await terminal.close(); store.dispose(); },
 	};
@@ -1132,6 +1142,7 @@ declare global {
 			};
 			model(): { input: string | undefined; state: number | undefined; commands: { id: string | undefined; text: string; output: string | undefined; timestamp: number; duration: number; trust: boolean; promptRows: number; commandRows: number; }[] | undefined; };
 			observed(): string;
+			checkpoint(revive: boolean, startup?: string): Promise<string>;
 			snapshot(): Promise<string | undefined>;
 			start(): Promise<void>;
 			close(): Promise<void>;

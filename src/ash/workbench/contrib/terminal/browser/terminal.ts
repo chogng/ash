@@ -2,7 +2,7 @@ import type { ITerminalAutoReply } from '../../../../platform/terminal/common/te
 import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { localize } from '../../../../nls.js';
 import type { URI } from '../../../../base/common/uri.js';
-import type { Terminal } from '@xterm/xterm';
+import type { IMarker, Terminal } from '@xterm/xterm';
 import type { ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
 import type { ITerminalConfiguration } from '../common/terminal.js';
 import type { IView } from '../../../common/views.js';
@@ -198,7 +198,8 @@ export interface ITerminalInstance extends IDisposable {
 	clearBuffer(): void;
 	reuseTerminal(shell: IShellLaunchConfig): Promise<void>;
 	refreshProperty<T extends ProcessPropertyType>(property: T): Promise<IProcessPropertyMap[T]>;
-	serializeState(): Promise<ITerminalSerializedState>;
+	/** Revival starts a new shell, so its checkpoint excludes the old idle prompt. */
+	serializeState(options?: { readonly revive?: boolean; }): Promise<ITerminalSerializedState>;
 	close(): Promise<void>;
 }
 
@@ -217,7 +218,7 @@ export interface IXtermTerminal extends IDisposable {
 	fit(): void;
 	dimensions(): ITerminalDimensions;
 	clearBuffer(): void;
-	getRangeAsVT(): Promise<string>;
+	getRangeAsVT(startMarker?: IMarker, endMarker?: IMarker, skipLastLine?: boolean): Promise<string>;
 	getBufferText(maxCharacters: number, signal: AbortSignal): Promise<string | undefined>;
 	findNext(term: string, searchOptions: ISearchOptions): Promise<boolean>;
 	findPrevious(term: string, searchOptions: ISearchOptions): Promise<boolean>;
