@@ -5,7 +5,7 @@ import type { IAction } from '../../common/actions.js';
 import { Separator } from '../../common/actions.js';
 import { Lxicon } from '../../common/lxicons.js';
 import { ActionBar } from '../../browser/ui/actionbar/actionbar.js';
-import { LabelActionViewItem } from '../../browser/ui/actionbar/actionViewItems.js';
+import { ButtonActionViewItem, LabelActionViewItem } from '../../browser/ui/actionbar/actionViewItems.js';
 import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from '../../browser/ui/hover/hoverDelegate.js';
 import { AnchorPosition } from '../../common/layout.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
@@ -225,7 +225,7 @@ suite('ActionBar updated focus availability', () => {
 	});
 });
 
-test('ActionViewItem routes its tooltip through the shared action Hover group', () => {
+test('ActionViewItem shares hover delay within its ActionBar and isolates other toolbars', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const setups: HoverDelegateSetupOptions[] = [];
 	using delegateRegistration = setHoverDelegate({
@@ -247,9 +247,20 @@ test('ActionViewItem routes its tooltip through the shared action Hover group', 
 	assert.equal(setups.length, 1);
 	assert.equal(setups[0]?.target, button);
 	assert.equal(setups[0]?.content, 'open');
-	assert.equal(setups[0]?.groupId, 'actions');
+	assert.ok(setups[0]?.groupId);
 	assert.equal(setups[0]?.anchorPosition, AnchorPosition.Below);
 	assert.equal(button.hasAttribute('title'), false);
+	actionBar.add(action('close'));
+	assert.equal(setups[1]?.groupId, setups[0]?.groupId);
+	using otherBar = new ActionBar(dom.window.document.body, { actions: [action('chat')] });
+	assert.notEqual(setups[2]?.groupId, setups[0]?.groupId);
+	using customBar = new ActionBar(dom.window.document.body, {
+		actions: [action('custom-first'), action('custom-second')],
+		actionViewItemProvider: entry => new ButtonActionViewItem(entry),
+	});
+	assert.ok(setups[3]?.groupId);
+	assert.equal(setups[3]?.groupId, setups[4]?.groupId, 'The host also groups providers that omit constructor options');
+	assert.notEqual(setups[3]?.groupId, setups[0]?.groupId);
 
 	dom.window.close();
 });

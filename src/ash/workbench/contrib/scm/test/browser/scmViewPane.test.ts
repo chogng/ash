@@ -207,6 +207,8 @@ test('SCM history title operations keep refresh and busy state with their starti
 			setupDelayedHover: () => testManagedHover(),
 			setupHover: () => testManagedHover(),
 			showHover: () => testManagedHover(),
+			showManagedHover() { },
+			showAndFocusLastHover() { },
 			hideHover() { },
 		}, testEditorService(), testResourceLabelService(), {
 			show: () => false,
@@ -326,7 +328,10 @@ for (const revisionSource of ['query', 'snapshot', 'id', 'current'] as const) {
 			using ui = createTestComponentServices(undefined, undefined, browser.window.document);
 			using quickInput = new TestQuickInputService({ container: browser.window.document.body });
 			using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.fetched.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
-				setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { },
+				setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(),
+				showManagedHover() { },
+				showAndFocusLastHover() { },
+				hideHover() { },
 			}, testEditorService(), testResourceLabelService(), {
 				show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
 			}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, ui.get(IStorageService), scm);
@@ -435,7 +440,10 @@ test('SCM history reference changes apply immediately and survive dismissal, inc
 		using ui = createTestComponentServices(undefined, undefined, browser.window.document);
 		using quickInput = new TestQuickInputService({ container: browser.window.document.body });
 		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.live-filter.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
-			setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { },
+			setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(),
+			showManagedHover() { },
+			showAndFocusLastHover() { },
+			hideHover() { },
 		}, testEditorService(), testResourceLabelService(), {
 			show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
 		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, ui.get(IStorageService), scm);
@@ -558,7 +566,10 @@ test('SCM history details expose copy and remote actions without extension menu 
 		const hover: IHoverService = {
 			setupDelayedHover: () => testManagedHover(),
 			setupHover: options => { hoverOptions = options; return testManagedHover(); },
-			showHover: () => testManagedHover(), hideHover() { },
+			showHover: () => testManagedHover(),
+			showManagedHover() { },
+			showAndFocusLastHover() { },
+			hideHover() { },
 		};
 		await import('../../browser/scm.contribution.js');
 		using historyConfiguration = new InMemoryConfigurationService();
@@ -661,7 +672,10 @@ test('SCM history restores a late HEAD and moves its marker without reloading or
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using historyQuickInput = new TestQuickInputService({ container: browser.window.document.body });
 		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.lateHead.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
-			setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { },
+			setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(),
+			showManagedHover() { },
+			showAndFocusLastHover() { },
+			hideHover() { },
 		}, testEditorService(), testResourceLabelService(), {
 			show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
 		}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, historyConfiguration, historyQuickInput, historyUiServices.get(IStorageService), scm);
@@ -746,6 +760,8 @@ test('SCMHistoryViewPane loads another history page only on demand', async () =>
 		setupDelayedHover: () => testManagedHover(),
 		setupHover: () => testManagedHover(),
 		showHover: () => testManagedHover(),
+		showManagedHover() { },
+		showAndFocusLastHover() { },
 		hideHover() { },
 	};
 	const status = {
@@ -894,6 +910,8 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 			setupDelayedHover: () => testManagedHover(),
 			setupHover: () => testManagedHover(),
 			showHover: () => testManagedHover(),
+			showManagedHover() { },
+			showAndFocusLastHover() { },
 			hideHover() { }
 		};
 		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'retained-state', title: 'Graph' }, view, new MenuService(new CommandService(services), context), testContextMenuProvider as IContextMenuService, context, hover, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, uiServices.get(IStorageService), scm);
@@ -1025,6 +1043,8 @@ test('SCMHistoryViewPane virtualizes loaded history rows', async () => {
 			return handle;
 		},
 		showHover: () => testManagedHover(),
+		showManagedHover() { },
+		showAndFocusLastHover() { },
 		hideHover() { },
 	};
 
@@ -1165,6 +1185,8 @@ test('SCMHistoryViewPane expands commit files and opens a selected change in the
 		setupDelayedHover: () => testManagedHover(),
 		setupHover: () => testManagedHover(),
 		showHover: () => testManagedHover(),
+		showManagedHover() { },
+		showAndFocusLastHover() { },
 		hideHover() { },
 	};
 	const contextMenus: Array<{
@@ -1410,6 +1432,8 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 			setupDelayedHover: () => testManagedHover(),
 			setupHover: () => testManagedHover(),
 			showHover: () => testManagedHover(),
+			showManagedHover() { },
+			showAndFocusLastHover() { },
 			hideHover() { }
 		};
 		await import('../../browser/scm.contribution.js');

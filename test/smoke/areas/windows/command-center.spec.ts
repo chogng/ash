@@ -502,6 +502,116 @@ test('activity bar remains visible and reopens a selected sidebar view in the li
 	await expect(search).toHaveAttribute('aria-selected', 'true');
 });
 
+test('activity bar hover waits for a deliberate pause and switches promptly between actions', { tag: ['@electron-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	const activitybar = page.locator('[data-part="activitybar"]');
+	const search = activitybar.getByRole('tab', { name: 'Search', exact: true });
+	const explorer = activitybar.getByRole('tab', { name: 'Explorer', exact: true });
+	const tooltip = page.getByRole('tooltip');
+	const delay = process.platform === 'darwin' ? 1_500 : 500;
+	await page.mouse.move(0, 0);
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+
+	await search.hover();
+	await page.clock.runFor(delay - 1);
+	await expect(tooltip).toHaveCount(0);
+	await page.mouse.move(0, 0);
+	await page.clock.runFor(delay);
+	await expect(tooltip).toHaveCount(0);
+
+	await search.hover();
+	await page.clock.runFor(delay - 1);
+	await expect(tooltip).toHaveCount(0);
+	await page.clock.runFor(1);
+	await expect(tooltip).toHaveText('Search');
+	await expect(search).toHaveAttribute('aria-describedby', await tooltip.getAttribute('id') ?? '');
+
+	await explorer.hover();
+	await page.clock.runFor(1);
+	await expect(tooltip).toHaveText('Explorer');
+	await page.mouse.move(0, 0);
+	await page.clock.runFor(300);
+	await expect(tooltip).toHaveCount(0);
+	await expect(explorer).not.toHaveAttribute('aria-describedby');
+
+	await search.hover();
+	await page.clock.runFor(delay - 1);
+	await expect(tooltip).toHaveCount(0);
+	await page.clock.runFor(1);
+	await expect(tooltip).toHaveText('Search');
+});
+
+test('activity bar hover cancels pending hints and releases Option locks', { tag: ['@electron-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	const trigger = page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search', exact: true });
+	const tooltip = page.getByRole('tooltip');
+	const delay = process.platform === 'darwin' ? 1_500 : 500;
+	await page.mouse.move(0, 0);
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+	await trigger.hover();
+	await page.clock.runFor(100);
+	await page.keyboard.press('Escape');
+	await page.clock.runFor(delay);
+	await expect(tooltip).toHaveCount(0);
+
+	await page.mouse.move(0, 0);
+	await trigger.hover();
+	await page.clock.runFor(delay);
+	await expect(tooltip).toHaveText('Search');
+	await page.keyboard.down('Alt');
+	await page.mouse.move(0, 0);
+	await page.clock.runFor(200);
+	await expect(tooltip).toBeVisible();
+	await page.keyboard.up('Alt');
+	await expect(tooltip).toHaveCount(0);
+
+	await trigger.hover();
+	await page.clock.runFor(delay);
+	await expect(tooltip).toBeVisible();
+	await page.keyboard.press('a');
+	await expect(tooltip).toHaveCount(0);
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Workbench hover keyboard and accessible content (${locale})`, { tag: ['@electron-ui'] }, async ({ workbench, restartWorkbench }) => {
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench } = await restartWorkbench());
+		}
+		const page = workbench.page;
+		const chinese = locale === 'zh-CN';
+		const label = chinese ? '搜索' : 'Search';
+		const trigger = page.locator('[data-part="activitybar"]').getByRole('tab', { name: label, exact: true });
+		await trigger.focus();
+		const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+		await page.keyboard.press(`${modifier}+k`);
+		await page.keyboard.press(`${modifier}+i`);
+		const tooltip = page.getByRole('tooltip');
+		await expect(tooltip).toHaveText(label);
+		await expect(tooltip).toBeFocused();
+		await page.keyboard.press('Alt+F2');
+		const view = page.getByRole('dialog', { name: chinese ? '无障碍视图' : 'Accessible View', exact: true });
+		await expect(view.getByRole('textbox')).toHaveValue(label);
+		await page.keyboard.press('Escape');
+		await expect(view).toHaveCount(0);
+		await expect(tooltip).toBeFocused();
+		await page.keyboard.press('Alt+F1');
+		const help = page.getByRole('dialog', { name: chinese ? '无障碍帮助' : 'Accessibility Help', exact: true });
+		await expect(help.getByRole('textbox')).toHaveValue(chinese ? /移动鼠标时按住 Alt 或 Option/u : /Hold Alt or Option while moving the pointer/u);
+		await page.keyboard.press('Escape');
+		await expect(help).toHaveCount(0);
+		await expect(tooltip).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(tooltip).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+	});
+}
+
 test('activity bar hover stays open across its gap and closes outside the shared span', async ({ workbench }) => {
 	const page = workbench.page;
 	const trigger = page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search', exact: true });

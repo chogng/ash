@@ -1,5 +1,9 @@
 {
   "ash": {
+    "hover.accessibilityHelp": "悬停内容\n使用 <keybinding:workbench.action.showHover> 显示或聚焦当前控件的提示。Tab 和 Shift+Tab 在操作之间移动。Escape 关闭当前提示并返回焦点。移动鼠标时按住 Alt 或 Option 可保持提示显示。使用 <keybinding:editor.action.accessibleView> 阅读其内容。",
+    "hover.verbosityInvalid": "悬停内容的无障碍详细提示设置必须为布尔值。",
+    "hover.verbosityTitle": "悬停内容无障碍帮助",
+    "hover.verbosityDescription": "阅读悬停内容时提示如何打开无障碍帮助。",
     "button.moreActions": "更多操作…",
     "debug.stopActions": "更多停止操作",
     "debug.stopActionsHelp": "停止旁的箭头提供全部停止。使用左右方向键在停止按钮与箭头之间移动，按下方向键打开菜单，按 Escape 关闭菜单并返回按钮。",

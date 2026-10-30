@@ -49,6 +49,8 @@ export interface HoverOptions {
 	readonly contextViewProvider?: IContextViewProvider;
 	readonly setupKeyboardEvents?: boolean;
 	readonly trapFocus?: boolean;
+	/** The coordinating owner can include child hover views in this hover's interaction boundary. */
+	readonly isTargetWithin?: (target: Node) => boolean;
 }
 
 let hoverId = 0;
@@ -85,7 +87,12 @@ export class Hover extends Disposable {
 	private targetFocused = false;
 	private readonly targetExitListeners = this._register(new MutableDisposable<DisposableStore>());
 	private hoverFocused = false;
+	private pointerInHover = false;
+	private pointerLocked = false;
+	private hideOnKeyDown = true;
+	private keyboardFocusTrapped = false;
 	private readonly trapFocus: boolean;
+	private readonly isTargetWithin: ((target: Node) => boolean) | undefined;
 
 	constructor(options: HoverOptions) {
 		super();
@@ -94,6 +101,7 @@ export class Hover extends Disposable {
 		this.content = options.content;
 		this.getHoverOptions = options.getHoverOptions;
 		this.trapFocus = options.trapFocus ?? false;
+		this.isTargetWithin = options.isTargetWithin;
 		this.delayMs = options.delayMs ?? 300;
 		this.persistence = options.persistence ?? 'transient';
 		this.enabled = options.enabled;
@@ -145,11 +153,9 @@ export class Hover extends Disposable {
 		if (options.setupKeyboardEvents) {
 			this._register(addDisposableListener(target, 'keydown', (event: KeyboardEvent) => {
 				if (event.key !== ' ' && event.key !== 'Enter') return;
-				this.show();
-				if (this.tooltip) {
-					this.tooltip.tabIndex = -1;
-					this.tooltip.focus();
-				}
+				event.preventDefault();
+				event.stopPropagation();
+				this.show(true);
 			}));
 		}
 	}
@@ -176,14 +182,45 @@ export class Hover extends Disposable {
 			this.releaseTargetExitListeners();
 			if (!this.isInsideHover(event.relatedTarget)) this.scheduleHide();
 		}));
+		listeners.add(addDisposableListener(this.element.ownerDocument, 'keydown', event => {
+			if (event.isComposing || event.defaultPrevented) { return; }
+			if (event.key === 'Alt') {
+				this.pointerLocked = true;
+				this.hideTimer.clear();
+				return;
+			}
+			if (event.key === 'Escape' || (this.hideOnKeyDown && !event.ctrlKey && !event.metaKey && !['Shift', 'Control', 'Meta'].includes(event.key))) {
+				this.hide();
+			}
+		}));
+		listeners.add(addDisposableListener(this.element.ownerDocument, 'keyup', event => {
+			if (event.key !== 'Alt') { return; }
+			this.pointerLocked = false;
+			if (!this.pointerOver && !this.pointerInHover && !this.hoverFocused && this.persistence !== 'sticky') { this.hide(); }
+			this.releaseTargetExitListeners();
+		}));
+		listeners.add(addDisposableListener(getWindow(this.element), 'blur', () => {
+			this.pointerOver = false;
+			this.pointerDown = false;
+			this.targetFocused = false;
+			this.hide();
+			this.releaseTargetExitListeners();
+		}));
 	}
 
 	private releaseTargetExitListeners(): void {
-		if (!this.pointerOver && !this.pointerDown && !this.targetFocused) this.targetExitListeners.clear();
+		if (!this.pointerOver && !this.pointerDown && !this.targetFocused && !this.visible && !this.pointerLocked) {
+			this.targetExitListeners.clear();
+		}
 	}
 
 	get visible(): boolean {
 		return this._visible;
+	}
+
+	/** Current rendered root for coordinating child views; callers must not mutate its content. */
+	get domNode(): HTMLElement | undefined {
+		return this.tooltip;
 	}
 
 	protected override disposeCore(): void {
@@ -192,10 +229,14 @@ export class Hover extends Disposable {
 		super.disposeCore();
 	}
 
-	show(): void {
+	show(focus = false): void {
 		this.showTimer.clear();
 		this.hideTimer.clear();
-		if (this.visible || this.enabled?.() === false) {
+		if (this.visible) {
+			if (focus) { this.focusTooltip(); }
+			return;
+		}
+		if (this.enabled?.() === false) {
 			return;
 		}
 		const ownerDocument = this.element.ownerDocument;
@@ -226,6 +267,7 @@ export class Hover extends Disposable {
 			anchorPosition,
 			gap: this.gap,
 			presentation: 'hover',
+			isTargetWithin: this.isTargetWithin,
 			onHide: (reason) => this.didHide(reason),
 		});
 		if (!shown) {
@@ -235,6 +277,17 @@ export class Hover extends Disposable {
 			return;
 		}
 		this._onDidShow.fire();
+		if (focus) { this.focusTooltip(); }
+	}
+
+	private focusTooltip(): void {
+		if (!this.tooltip) { return; }
+		if (!this.trapFocus && !this.keyboardFocusTrapped) {
+			this.tooltipListeners.add(trapTabFocus(this.tooltip));
+			this.keyboardFocusTrapped = true;
+		}
+		this.tooltip.tabIndex = -1;
+		this.tooltip.focus();
 	}
 
 	hide(): void {
@@ -285,8 +338,12 @@ export class Hover extends Disposable {
 		const ownerDocument = this.element.ownerDocument;
 		this.tooltipListeners.clear();
 		if (this.trapFocus) this.tooltipListeners.add(trapTabFocus(tooltip));
-		this.tooltipListeners.add(addDisposableListener(tooltip, 'pointerenter', () => this.hideTimer.clear()));
+		this.tooltipListeners.add(addDisposableListener(tooltip, 'pointerenter', () => {
+			this.pointerInHover = true;
+			this.hideTimer.clear();
+		}));
 		this.tooltipListeners.add(addDisposableListener(tooltip, 'pointerleave', event => {
+			this.pointerInHover = false;
 			if (isNode(event.relatedTarget) && this.element.contains(event.relatedTarget)) {
 				return;
 			}
@@ -309,7 +366,7 @@ export class Hover extends Disposable {
 
 		this.tooltipListeners.add(addDisposableListener(ownerDocument, 'pointermove', event => this.handlePointerMove(event, tooltip)));
 		const dismissOutsideTooltip = (event: Event) => {
-			if (isNode(event.target) && tooltip.contains(event.target)) {
+			if (this.isInsideHover(event.target)) {
 				return;
 			}
 			this.hide();
@@ -319,16 +376,12 @@ export class Hover extends Disposable {
 	}
 
 	private handlePointerMove(event: PointerEvent, tooltip: HTMLDivElement): void {
-		if (this.persistence === 'sticky' || this.hoverFocused) {
-			return;
-		}
-		if (isNode(event.target) && (this.element.contains(event.target) || tooltip.contains(event.target))) {
-			this.hideTimer.clear();
-			return;
-		}
 		const targetBounds = this.element.getBoundingClientRect();
 		const tooltipBounds = tooltip.getBoundingClientRect();
-		if (isPointInHoverRegion(event.clientX, event.clientY, targetBounds, tooltipBounds)) {
+		this.pointerInHover = this.isInsideHover(event.target) ||
+			isPointInHoverRegion(event.clientX, event.clientY, targetBounds, tooltipBounds);
+		if (this.persistence === 'sticky' || this.hoverFocused || this.pointerLocked) { return; }
+		if (this.pointerInHover || (isNode(event.target) && this.element.contains(event.target))) {
 			this.hideTimer.clear();
 		} else {
 			this.scheduleHide();
@@ -358,6 +411,7 @@ export class Hover extends Disposable {
 		this.showTimer.clear();
 		if (
 			this.persistence === 'sticky' ||
+			this.pointerLocked ||
 			this.hoverFocused ||
 			!this.visible ||
 			this.hideTimer.value
@@ -375,6 +429,7 @@ export class Hover extends Disposable {
 	private renderContent(container: HTMLElement, source: HoverContent = this.content): boolean {
 		this.contentLifetime.clear();
 		const content = typeof source === 'function' ? source(cancelOnDispose(this.contentLifetime)) : source;
+		this.hideOnKeyDown = typeof content === 'string';
 		container.replaceChildren();
 		if (content === undefined || content === '') return false;
 		if (typeof content === 'string') {
@@ -386,7 +441,7 @@ export class Hover extends Disposable {
 	}
 
 	private isInsideHover(candidate: EventTarget | null): boolean {
-		return isNode(candidate) && Boolean(this.tooltip?.contains(candidate));
+		return isNode(candidate) && (Boolean(this.tooltip?.contains(candidate)) || this.isTargetWithin?.(candidate) === true);
 	}
 
 	private applyDescription(id: string): void {
@@ -418,10 +473,15 @@ export class Hover extends Disposable {
 	}
 
 	private didHide(reason?: ContextViewHideReason): void {
+		this.showTimer.clear();
+		this.hideTimer.clear();
 		const wasVisible = this._visible;
 		const returnFocus = reason === ContextViewHideReason.Escape && this.hoverFocused;
 		this._visible = false;
 		this.hoverFocused = false;
+		this.pointerInHover = false;
+		this.pointerLocked = false;
+		this.keyboardFocusTrapped = false;
 		this.tooltip = undefined;
 		this.releaseTargetExitListeners();
 		if (!this.contentLifetime.isDisposed) this.contentLifetime.clear();

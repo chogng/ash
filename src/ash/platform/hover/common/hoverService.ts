@@ -1,5 +1,6 @@
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
+import { isMacintosh } from '../../../base/common/platform.js';
 
 export const MinimumHoverDelay = 0;
 export const MaximumHoverDelay = 2_000;
@@ -10,7 +11,7 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationE
 export const HoverConfiguration = Object.freeze({
 	delay: configurationRegistry.registerConfiguration<number>({
 		key: 'workbench.hover.delay',
-		defaultValue: 500,
+		defaultValue: isMacintosh ? 1_500 : 500,
 		parse: (value) => parseHoverDelay(value, 'workbench.hover.delay'),
 		setting: {
 			valueType: 'number',
@@ -22,7 +23,7 @@ export const HoverConfiguration = Object.freeze({
 	}),
 	reducedDelay: configurationRegistry.registerConfiguration<number>({
 		key: 'workbench.hover.reducedDelay',
-		defaultValue: 30,
+		defaultValue: 500,
 		parse: (value) => parseHoverDelay(
 			value,
 			'workbench.hover.reducedDelay',

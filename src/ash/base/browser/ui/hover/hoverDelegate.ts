@@ -22,7 +22,7 @@ export interface HoverDelegateSetupOptions {
 export interface IManagedHover extends IDisposable {
 	readonly visible: boolean;
 
-	show(): void;
+	show(focus?: boolean): void;
 	hide(): void;
 	update(content: HoverContent): void;
 }

@@ -48,7 +48,7 @@ export class ChatContextUsageWidget extends Disposable {
 		this.domNode.append(ring);
 		this.hoverContent = h(document, 'div');
 		this.hoverContent.className = 'ash-chat-context-usage-hover';
-		this.hover = this._register(getHoverDelegate().setupHover({ target: this.domNode, content: this.hoverContent, groupId: 'actions' }));
+		this.hover = this._register(getHoverDelegate().setupHover({ target: this.domNode, content: this.hoverContent }));
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			this._register(AccessibleViewRegistry.register({
 				type, priority: 95, name: `chatContextUsage-${type}-${createUuid()}`,

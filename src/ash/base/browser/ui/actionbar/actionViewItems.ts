@@ -11,10 +11,10 @@ import type { IDelayedHoverOptions } from '../hover/hover.js';
 import { HoverPosition } from '../hover/hoverWidget.js';
 import { appendIcon } from '../lxicons/lxicon.js';
 
-const ActionHoverGroupId = 'actions';
-
 /** Presentation options shared by every ActionBar item representation. */
 export interface ActionViewItemOptions {
+	/** Adjacent actions share their host's delay history, independently of other toolbars. */
+	readonly hoverGroupId?: string;
 	readonly buttonStyles?: IButtonStyles;
 	/** Selects the shared Button presentation for this action's triggers. */
 	readonly buttonPresentation?: IButtonOptions['presentation'];
@@ -33,11 +33,19 @@ export interface ActionViewItemOptions {
  * resources they create for that representation.
  */
 export abstract class ActionViewItem extends Disposable {
+	private hoverGroupId: string | undefined;
+
 	protected constructor(
 		readonly action: IAction,
 		private readonly actionViewItemOptions: ActionViewItemOptions = {},
 	) {
 		super();
+		this.hoverGroupId = actionViewItemOptions.hoverGroupId;
+	}
+
+	/** The owning ActionBar assigns its delay group before rendering custom or standard items. */
+	public setHoverGroupId(groupId: string | undefined): void {
+		this.hoverGroupId = groupId;
 	}
 
 	get draggable(): boolean {
@@ -59,7 +67,7 @@ export abstract class ActionViewItem extends Disposable {
 			...options,
 			iconOnly: options.iconOnly ?? this.actionViewItemOptions.iconOnly,
 			title: undefined,
-			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
+			hoverGroupId: options.hoverGroupId ?? this.hoverGroupId,
 			hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
 		}));
 		if (options.title) {
@@ -73,7 +81,7 @@ export abstract class ActionViewItem extends Disposable {
 		return this._register(getHoverDelegate().setupDelayedHover(target, () => ({
 			content,
 			...this.getHoverOptions(),
-		}), { groupId: ActionHoverGroupId }));
+		}), { groupId: this.hoverGroupId }));
 	}
 
 	/** Mutable tooltips are retained for items whose labels change while visible. */
@@ -81,7 +89,7 @@ export abstract class ActionViewItem extends Disposable {
 		return this._register(getHoverDelegate().setupHover({
 			target,
 			content,
-			groupId: ActionHoverGroupId,
+			groupId: this.hoverGroupId,
 			anchorPosition: this.actionViewItemOptions.hoverAnchorPosition,
 		}));
 	}

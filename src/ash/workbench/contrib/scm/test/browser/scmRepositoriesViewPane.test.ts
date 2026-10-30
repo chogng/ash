@@ -41,7 +41,12 @@ function fixture(): DisposableStore & { scm: SCMService; views: SCMViewService; 
 	services.registerInstance(ISCMViewService, views);
 	services.registerInstance(IConfigurationService, configuration);
 	const hover = (): IManagedHover => ({ visible: false, show() { }, hide() { }, update() { }, ...toDisposable(() => { }) });
-	services.registerInstance(IHoverService, { setupDelayedHover: hover, setupHover: hover, showHover: hover, hideHover() { } });
+	services.registerInstance(IHoverService, {
+		setupDelayedHover: hover, setupHover: hover, showHover: hover,
+		showManagedHover() { },
+		showAndFocusLastHover() { },
+		hideHover() { }
+	});
 	return Object.assign(resources, { scm, views, services, container, browser });
 }
 

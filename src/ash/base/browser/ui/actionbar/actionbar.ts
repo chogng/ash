@@ -9,6 +9,7 @@ import { DndCssClasses } from '../dnd/dnd.js';
 import type { Event } from '../../../common/event.js';
 import { DropdownMenuActionViewItem } from '../dropdown/dropdownMenuActionViewItem.js';
 import { disposableWindowTimeout } from '../../scheduler.js';
+import { createUuid } from '../../../common/uuid.js';
 
 export type ActionBarOrientation = 'horizontal' | 'vertical';
 export type ActionBarDropPosition = 'before' | 'after';
@@ -92,7 +93,10 @@ export class ActionBar extends Disposable {
 			element.setAttribute('aria-label', options.ariaLabel);
 		}
 		this.actionViewItemProvider = options.actionViewItemProvider;
-		this.actionViewItemOptions = options.actionViewItemOptions ?? {};
+		this.actionViewItemOptions = {
+			...options.actionViewItemOptions,
+			hoverGroupId: options.actionViewItemOptions?.hoverGroupId ?? createUuid(),
+		};
 		this.dragAndDrop = options.dragAndDrop;
 		element.classList.toggle('ash-action-bar-dnd', this.dragAndDrop !== undefined);
 		this._register(addDisposableListener(element, 'keydown', (event) => {
@@ -384,6 +388,7 @@ export class ActionBar extends Disposable {
 			store.add(visibility(visible => this.dropdownVisibilityChanged(item, visible)));
 			store.add(toDisposable(() => this.visibleDropdowns.delete(item)));
 		}
+		item.setHoverGroupId(this.actionViewItemOptions.hoverGroupId);
 		item.render(container);
 		const entry = { action, container, item, store };
 		if (item.draggable) {

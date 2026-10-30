@@ -360,15 +360,14 @@ export function toHistoryItemHoverContent(
 	const openLabel = localize('scm.history.openCommit', 'Open Commit {0}', historyItem.displayId ?? historyItem.id);
 	const hashToolbar = resources.add(new WorkbenchToolBar(hash, contextMenuService, {
 		ariaLabel: openLabel,
-		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: openLabel, tooltip: '' }),
+		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: openLabel, tooltip: openLabel }),
 	}));
 	hashToolbar.setActions([{ id: 'workbench.scm.action.graph.viewChanges', label: historyItem.displayId ?? historyItem.id, tooltip: openLabel, enabled: true, run: () => options.openChanges() }]);
 	const actions = h(document, 'div');
 	actions.className = 'ash-scm-graph-hover-actions';
 	const toolbar = resources.add(new WorkbenchToolBar(actions, contextMenuService, {
 		ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
-		// Action tooltips share the ContextView and would replace their own details card.
-		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip, tooltip: '' }),
+		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip, tooltip: action.tooltip }),
 	}));
 	const copyLabel = localize('scm.history.copyHash', 'Copy Commit Hash');
 	const hoverActions: IAction[] = [{

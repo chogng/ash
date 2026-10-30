@@ -199,6 +199,8 @@ test('ExplorerView opens workspace files on single click', async () => {
 			return testManagedHover(() => { hoverDisposals += 1; });
 		},
 		showHover: () => testManagedHover(),
+		showManagedHover() { },
+		showAndFocusLastHover() { },
 		hideHover() { },
 	};
 
