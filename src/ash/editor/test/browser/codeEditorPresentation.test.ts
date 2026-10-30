@@ -1573,6 +1573,30 @@ suite('textModel browser component', () => {
 		}
 	});
 
+	test('line decoration containers receive pointer input when their icon class ignores it', async function () {
+		const { page } = browserTests;
+		await openEditor(page);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.updateOptions({ folding: false, renderLineHighlight: 'all' });
+			editor.setValue('first\nsecond\nthird');
+			editor.getModel()!.deltaDecorations([], [{
+				range: { startLineNumber: 2, startColumn: 1, endLineNumber: 2, endColumn: 1 },
+				options: { description: 'gutter pointer target', linesDecorationsClassName: 'ash-gutter-pointer-probe ash-icon' },
+			}]);
+			const listener = editor.onMouseDown(event => {
+				if (!event.target.element?.closest('.ash-gutter-pointer-probe')) {
+					return;
+				}
+				listener.dispose();
+				editor.getDomNode().dataset.lineDecorationClick = String(event.target.position?.lineNumber);
+			});
+			editor.focus();
+		});
+		await page.locator('.ash-gutter-pointer-probe').click({ timeout: 5000 });
+		await expect(page.locator('.stanza-editor')).toHaveAttribute('data-line-decoration-click', '2');
+	});
+
 	test('glyph margin, line numbers, and folding controls keep VS Code gutter order', async function () {
 		const { page } = browserTests;
 
