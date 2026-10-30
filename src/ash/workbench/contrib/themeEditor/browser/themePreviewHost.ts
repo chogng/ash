@@ -11,7 +11,7 @@ import { createDisconnectedRendererApi } from '../../../browser/rendererApi.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryFileSystemProvider } from '../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
-import { IFileService, FileKind } from '../../../../platform/files/common/files.js';
+import { IFileService, FileKind, FileSystemProviderCapabilities } from '../../../../platform/files/common/files.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { FileDialogService } from '../../../services/dialogs/browser/fileDialogService.js';
@@ -26,6 +26,18 @@ import { productLanguagePackCatalogs } from '../../../services/localization/comm
 import { parseUserColorTheme } from '../../../services/themes/common/colorThemeData.js';
 import { getThemeColorReferences, themePreviewConfigurationKeys } from './themePreview.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
+
+/** Host seeding writes directly; workbench consumers receive a fixed, read-only workspace. */
+class PreviewFileSystemProvider extends InMemoryFileSystemProvider {
+	override readonly capabilities =
+		FileSystemProviderCapabilities.FileReadWrite |
+		FileSystemProviderCapabilities.PathCaseSensitive |
+		FileSystemProviderCapabilities.Readonly;
+
+	override async stat(resource: URI) {
+		return { ...(await super.stat(resource)), readonly: true };
+	}
+}
 
 /** Both product previews borrow the same memory-only host; no platform bridge is installed. */
 export async function createThemePreviewHost() {
@@ -46,12 +58,13 @@ export async function createThemePreviewHost() {
 		return lifecycle;
 	};
 	const root = document.getElementById('app')!;
-	const workspaceFiles = resources.add(new InMemoryFileSystemProvider());
+	const workspaceFiles = resources.add(new PreviewFileSystemProvider());
 	const workspaceRoot = URI.file('/theme-preview');
 	const samples = [
 		{
-			name: 'palette.ts', text: `// A small workspace for exploring interface and syntax colors.
-// Changes here stay in the theme preview.
+			name: 'palette.ts',
+			text: `// A small workspace for exploring interface and syntax colors.
+// Fixed sample for the theme preview.
 
 export interface Palette {
   readonly name: string;

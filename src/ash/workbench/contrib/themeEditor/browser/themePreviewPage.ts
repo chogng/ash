@@ -23,10 +23,13 @@ import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { createThemePreviewHost, connectThemePreview } from './themePreviewHost.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
 
 const host = await createThemePreviewHost();
 const { resources, root, workspaceFiles, workspaceRoot, samples, storage, api, clipboard, serviceCollection } = host;
-const diffPreview = new URLSearchParams(location.search).get('sample') === 'diff';
+const sample = new URLSearchParams(location.search).get('sample');
+const diffPreview = sample === 'diff';
+const syntaxPreview = sample === 'syntax';
 // Code preview owns no conversations or media. Shared Chat contributions can
 // observe that empty scope without borrowing the enclosing product's history.
 const chatUnavailable = () => new Error(localize('themeEditor.previewChatUnavailable', 'Chat is unavailable in this preview.'));
@@ -80,7 +83,14 @@ const workbench = resources.add(
 		extensionHost: api.extensionHost,
 		workspace: { id: 'theme-preview', folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }] },
 		workspaceFileSystemProvider: workspaceFiles,
-		defaultLayout: { parts: { sidebar: !diffPreview, panel: !diffPreview, auxiliarybar: false, agentSidebar: false } },
+		defaultLayout: {
+			parts: {
+				sidebar: !diffPreview && !syntaxPreview,
+				panel: !diffPreview && !syntaxPreview,
+				auxiliarybar: false,
+				agentSidebar: false,
+			},
+		},
 		// Keep the production Parts and editor rendering without starting
 		// backend observers, history, account, update or extension contributions.
 		contributionIds: [
@@ -118,6 +128,11 @@ const workbench = resources.add(
 );
 await workbench.whenRestored;
 const editorService = services.get(IEditorService);
+// The isolated host has no extension catalog. Register only its sample languages;
+// the production syntax service still owns parsing and token color resolution.
+const languages = services.get(ILanguageService);
+resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'], aliases: ['TypeScript'] }));
+resources.add(languages.registerLanguage({ id: 'json', extensions: ['.json'], aliases: ['JSON'] }));
 if (diffPreview) {
 	// Use the production comparison over memory files so every diff token is
 	// rendered by its real owner, including line and word-level decorations.
@@ -158,10 +173,24 @@ export function withOpacity(color: string): string {
 	for (const [resource, text] of [[original, before], [modified, after]] as const) {
 		await workspaceFiles.writeFile(resource, new TextEncoder().encode(text), { create: true, overwrite: false });
 	}
-	await editorService.openEditor(createDiffEditorInput({ resource: original }, { resource: modified }, localize('themeEditor.diffSample', 'Color changes')), { pinned: true, preserveFocus: true });
+	await editorService.openEditor(
+		createDiffEditorInput(
+			{ resource: original, readOnly: true },
+			{ resource: modified, readOnly: true },
+			localize('themeEditor.diffSample', 'Color changes'),
+		),
+		{ pinned: true, preserveFocus: true },
+	);
 } else {
 	for (const sample of [...samples].reverse()) {
-		await editorService.openEditor({ resource: URI.joinPath(workspaceRoot, sample.name) }, { pinned: true, preserveFocus: true });
+		await editorService.openEditor(
+			{
+				resource: URI.joinPath(workspaceRoot, sample.name),
+				languageId: sample.name.endsWith('.ts') ? 'typescript' : 'json',
+				readOnly: true,
+			},
+			{ pinned: true, preserveFocus: true },
+		);
 	}
 }
 
@@ -174,7 +203,11 @@ resources.add(editorService.onDidActiveEditorChange(publishContent));
 const editorListeners = resources.add(new DisposableStore());
 const bindEditors = (): void => {
 	editorListeners.clear();
-	for (const editor of services.get(ICodeEditorService).listCodeEditors()) editorListeners.add(editor.onDidChangeModelContent(publishContent));
+	for (const editor of services.get(ICodeEditorService).listCodeEditors()) {
+		// Files opened from the sample Explorer or a split share the same fixed-content policy.
+		editor.updateOptions({ readOnly: true });
+		editorListeners.add(editor.onDidChangeModelContent(publishContent));
+	}
 };
 resources.add(editorService.onDidVisibleEditorsChange(bindEditors));
 bindEditors();

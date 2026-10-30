@@ -53,7 +53,6 @@ type ReportedColorTheme = Pick<IColorTheme, 'id' | 'colorScheme' | 'colors' | 's
 export class WorkbenchThemeService extends Disposable implements IWorkbenchThemeService, IResourceIconRenderer {
 	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
 	private colorTheme: IColorTheme;
-	private deferredColorTheme: IColorTheme | undefined;
 	private readonly previews = new Map<object, IColorTheme>();
 	private colorThemeWrites: Promise<void> = Promise.resolve();
 	private pendingSelection: { readonly setting: string; readonly themeId: string; readonly source: ColorThemeChangeSource; } | undefined;
@@ -111,35 +110,53 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		this.iconStyles = iconStyles;
 		this._register(toDisposable(() => iconStyles.remove()));
 		this._register(registerColorThemeSchemas());
-		this._register(this.configurationService.onDidChangeConfiguration(event => {
-			if ([ThemeConfigurationSettings.colorTheme, ThemeConfigurationSettings.preferredDarkColorTheme, ThemeConfigurationSettings.preferredLightColorTheme, ThemeConfigurationSettings.preferredHighContrastColorTheme, ThemeConfigurationSettings.preferredHighContrastLightColorTheme].some(key => event.affectsConfiguration(key))) {
-				this.deferredColorTheme = undefined;
-			}
-			if (Object.values(ThemeConfigurationSettings).some(key => event.affectsConfiguration(key))) {
-				const selection = this.pendingSelection;
-				const source = selection && event.affectsConfiguration(selection.setting) && this.configurationService.getValue(selection.setting) === selection.themeId
-					? selection.source : 'settings';
-				this.updateColorTheme(source);
-			}
-			if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) { this.colorThemeChange.fire(this.colorTheme); }
-			if (event.affectsConfiguration(WorkbenchConfiguration.iconTheme)) { this.updateFileIconTheme(); }
-			if (event.affectsConfiguration(WorkbenchConfiguration.productIconTheme)) { this.updateProductIconTheme(); }
-		}));
+		this._register(
+			this.configurationService.onDidChangeConfiguration(event => {
+				if (Object.values(ThemeConfigurationSettings).some(key => event.affectsConfiguration(key))) {
+					const selection = this.pendingSelection;
+					const source =
+						selection &&
+						event.affectsConfiguration(selection.setting) &&
+						this.configurationService.getValue(selection.setting) === selection.themeId
+							? selection.source
+							: 'settings';
+					this.updateColorTheme(source);
+				}
+				if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) {
+					this.colorThemeChange.fire(this.colorTheme);
+				}
+				if (event.affectsConfiguration(WorkbenchConfiguration.iconTheme)) {
+					this.updateFileIconTheme();
+				}
+				if (event.affectsConfiguration(WorkbenchConfiguration.productIconTheme)) {
+					this.updateProductIconTheme();
+				}
+			}),
+		);
 		this._register(WorkbenchFileIconThemesRegistry.onDidChange(() => this.updateFileIconTheme()));
 		this._register(this.languageService.onDidChange(() => this.resourceIconChange.fire()));
 		this._register(getIconRegistry().onDidChange(() => setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, this.productIconTheme.icons))));
 		this._register(WorkbenchProductIconThemesRegistry.onDidChange(() => this.updateProductIconTheme()));
 		setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons));
-		this._register(toDisposable(() => setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons))));
-		this._register(WorkbenchThemesRegistry.onDidChange(() => {
-			if (this.deferredColorTheme && !WorkbenchThemesRegistry.getColorTheme(this.deferredColorTheme.id)) this.deferredColorTheme = undefined;
-			this.updateColorTheme('themeRegistry');
-		}));
-		this._register(Colors.onDidChange(() => {
-			const previous = this.colorTheme;
-			this.updateColorTheme();
-			if (previous === this.colorTheme) this.colorThemeChange.fire(this.colorTheme);
-		}));
+		this._register(
+			toDisposable(() =>
+				setIconResolver(this.container.ownerDocument, icon =>
+					getIconDefinition(icon, defaultProductIconTheme.icons),
+				),
+			),
+		);
+		this._register(
+			WorkbenchThemesRegistry.onDidChange(() => {
+				this.updateColorTheme('themeRegistry');
+			}),
+		);
+		this._register(
+			Colors.onDidChange(() => {
+				const previous = this.colorTheme;
+				this.updateColorTheme();
+				if (previous === this.colorTheme) this.colorThemeChange.fire(this.colorTheme);
+			}),
+		);
 		this._register(getTokenClassificationRegistry().onDidChange(() => this.colorThemeChange.fire(this.colorTheme)));
 		this._register(this.hostColorScheme.onDidChangeColorScheme(() => this.updateColorTheme('system')));
 		this.updateColorTheme();
@@ -175,7 +192,6 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 				// whole selection keeps their attribution and same-ID reapplication together.
 				await this.configurationService.updateValue(key, themeId);
 				if (!this.isDisposed) {
-					this.deferredColorTheme = undefined;
 					this.updateColorTheme(source);
 				}
 				return this.colorTheme;
@@ -188,13 +204,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		return operation;
 	}
 
-	public deferColorThemeApplication(themeId: string): void {
-		if (this.colorTheme.id === themeId && !this.deferredColorTheme) {
-			this.deferredColorTheme = WorkbenchThemesRegistry.getColorTheme(themeId);
-		}
-	}
-
-	public previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void; } {
+	public previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void } {
 		this.assertNotDisposed();
 		const owner = {};
 		this.previews.set(owner, theme);
@@ -226,10 +236,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		if (this.hostColorScheme.highContrast && this.configurationService.getValue<boolean>(settings.autoDetectHighContrast)) {
 			bootstrap = this.hostColorScheme.dark ? highContrastDarkColorTheme : highContrastLightColorTheme;
 		}
-		// The registry owns the available version; this service owns the version actually applied.
-		const theme = registeredTheme && this.deferredColorTheme?.id === registeredTheme.id
-			? this.deferredColorTheme
-			: registeredTheme ?? WorkbenchThemesRegistry.getColorTheme(bootstrap.id) ?? bootstrap;
+		const theme = registeredTheme ?? WorkbenchThemesRegistry.getColorTheme(bootstrap.id) ?? bootstrap;
 		return applyThemeCustomizations(theme, this.configurationService);
 	}
 

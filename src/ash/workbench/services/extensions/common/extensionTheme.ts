@@ -11,6 +11,18 @@ import { parseJsonc } from './jsonc.js';
 import type { ExtensionThemeContribution } from './extensionManifest.js';
 import { colorThemeSchema } from '../../themes/common/colorThemeSchema.js';
 import { isRecord } from '../../../../base/common/types.js';
+import { URI } from '../../../../base/common/uri.js';
+import type { ExtensionSourceKind } from './extensionService.js';
+
+/** Only the development host publishes checkout locations, independently of installed packages. */
+export function getDevelopmentThemeLocation(
+	extensionId: string,
+	sourceKind: ExtensionSourceKind,
+	locations: Readonly<Record<string, string>> | undefined,
+): URI | undefined {
+	const location = sourceKind === 'builtIn' ? locations?.[extensionId] : undefined;
+	return location ? URI.parse(location) : undefined;
+}
 
 export interface ExtensionThemeDefinition {
 	readonly id: string;

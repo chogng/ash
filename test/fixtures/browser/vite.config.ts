@@ -63,7 +63,10 @@ function fixturePageUrls(): Plugin {
 }
 
 export default defineConfig({
-	define: { __ASH_WEB_APP_SERVER__: 'false' },
+	define: {
+		__ASH_WEB_APP_SERVER__: 'false',
+		'import.meta.env.ASH_BUILTIN_THEME_SOURCES': JSON.stringify({ 'vscode.theme-defaults': 'file:///extension-sources/theme-defaults' }),
+	},
 	// Fixtures use plain CSS; keep dev transforms independent of ancestor PostCSS config discovery.
 	css: { postcss: { plugins: [] } },
 	resolve: { alias: [{ find: /^ash:editor\//u, replacement: resolve(import.meta.dirname, '../../../src/ash') + '/' }, ...rendererDependencyAliases] },

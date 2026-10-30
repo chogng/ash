@@ -69,19 +69,32 @@ export class ThemePreview extends Disposable {
 	private previewColors: readonly PreviewColor[] = [];
 	get colors(): readonly PreviewColor[] { return this.previewColors; }
 
-	constructor(container: HTMLElement, onAccessibleView: (help: boolean) => void, private readonly configuration: IConfigurationService) {
+	constructor(
+		container: HTMLElement,
+		onAccessibleView: (help: boolean) => void,
+		private readonly configuration: IConfigurationService,
+		toolbarContainer: HTMLElement,
+		createActions: (container: HTMLElement) => void,
+	) {
 		super();
 		// Renderer chunks can live in nested assets directories; the page is rooted at the bundle.
 		const root = import.meta.env.DEV ? new URL(import.meta.url).origin + '/' : import.meta.url.slice(0, import.meta.url.lastIndexOf('/assets/') + 1);
 		let token: string;
+		const toolbar = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-toolbar' });
 		const tabsHost = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-tabs' });
-		container.append(tabsHost);
-		const tabs = this._register(new TabList<'workbench' | 'diff' | 'sessions'>(tabsHost, {
-			presentation: 'inset', ariaLabel: localize('themeEditor.previewWindow', 'Preview window'),
-			onActivate: value => selectWindow(value),
-		}));
-		let selected: 'workbench' | 'diff' | 'sessions' | undefined;
-		const selectWindow = (value: 'workbench' | 'diff' | 'sessions'): void => {
+		const actions = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-actions' });
+		toolbar.append(tabsHost, actions);
+		toolbarContainer.append(toolbar);
+		createActions(actions);
+		const tabs = this._register(
+			new TabList<'workbench' | 'diff' | 'sessions' | 'syntax'>(tabsHost, {
+				presentation: 'inset',
+				ariaLabel: localize('themeEditor.previewWindow', 'Preview window'),
+				onActivate: value => selectWindow(value),
+			}),
+		);
+		let selected: 'workbench' | 'diff' | 'sessions' | 'syntax' | undefined;
+		const selectWindow = (value: 'workbench' | 'diff' | 'sessions' | 'syntax'): void => {
 			if (selected === value) return;
 			selected = value;
 			this.connection.clear();
@@ -95,13 +108,37 @@ export class ThemePreview extends Disposable {
 			const url = new URL(`browser/theme-preview/${page}.html`, root);
 			url.searchParams.set('locale', getNLSLanguage());
 			url.searchParams.set('channel', token);
-			if (value === 'diff') url.searchParams.set('sample', 'diff');
+			if (value === 'diff' || value === 'syntax') url.searchParams.set('sample', value);
 			this.element.src = url.href;
-			tabs.setTabs([
-				{ id: 'workbench', value: 'workbench', label: localize('themeEditor.workbenchWindow', 'Workbench'), tabId: 'theme-preview-workbench' },
-				{ id: 'diff', value: 'diff', label: localize('themeEditor.diffPreview', 'Diff'), tabId: 'theme-preview-diff' },
-				{ id: 'sessions', value: 'sessions', label: localize('themeEditor.sessionsWindow', 'Agent Window'), tabId: 'theme-preview-sessions' },
-			], value);
+			tabs.setTabs(
+				[
+					{
+						id: 'workbench',
+						value: 'workbench',
+						label: localize('themeEditor.workbenchWindow', 'Workbench'),
+						tabId: 'theme-preview-workbench',
+					},
+					{
+						id: 'diff',
+						value: 'diff',
+						label: localize('themeEditor.diffPreview', 'Diff'),
+						tabId: 'theme-preview-diff',
+					},
+					{
+						id: 'sessions',
+						value: 'sessions',
+						label: localize('themeEditor.sessionsWindow', 'Agent Window'),
+						tabId: 'theme-preview-sessions',
+					},
+					{
+						id: 'syntax',
+						value: 'syntax',
+						label: localize('themeEditor.syntaxPreview', 'Syntax'),
+						tabId: 'theme-preview-syntax',
+					},
+				],
+				value,
+			);
 		};
 		this.element = h(container.ownerDocument, 'iframe', {
 			className: 'ash-theme-editor-preview',

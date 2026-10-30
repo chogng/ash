@@ -1,12 +1,17 @@
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
+import { FileNotFoundError } from '../../../../platform/files/common/files.js';
 import type { ITextFileService } from '../../textfile/common/textfiles.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
 import { WorkbenchThemesRegistry } from '../../../common/theme.js';
 import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
-import { createExtensionWorkbenchColorTheme, loadExtensionTheme } from '../common/extensionTheme.js';
+import {
+	createExtensionWorkbenchColorTheme,
+	getDevelopmentThemeLocation,
+	loadExtensionTheme,
+} from '../common/extensionTheme.js';
 
 /** Owns manifest-contributed color theme loading and registration for one renderer. */
 export class ExtensionColorThemeService extends Disposable {
@@ -14,6 +19,8 @@ export class ExtensionColorThemeService extends Disposable {
 	private loading: Promise<void> | undefined;
 	private reloadQueued = false;
 	private sourceFiles = new Set<string>();
+	/** The window binds source reads with its save observer after package-based theme bootstrap. */
+	private textFiles: ITextFileService | undefined;
 	private readonly sourceListener = this._register(new MutableDisposable());
 
 	constructor(private readonly api: IExtensionApi, events: IServerEventApi) {
@@ -41,6 +48,7 @@ export class ExtensionColorThemeService extends Disposable {
 
 	/** Source saves refresh the existing registration owner, including included syntax files. */
 	watchSourceSaves(files: ITextFileService): void {
+		this.textFiles = files;
 		this.sourceListener.value = files.onDidSave(event => {
 			if (this.sourceFiles.has(event.resource.toString())) {
 				void this.reload().catch(error => console.error('Extension color theme source refresh failed', error));
@@ -83,13 +91,51 @@ export class ExtensionColorThemeService extends Disposable {
 			const manifest = parseExtensionManifest(extension.manifestJson, extension);
 			for (const [index, contribution] of manifest.contributes.themes.entries()) {
 				loads.push(async () => {
+					const developmentRoot = getDevelopmentThemeLocation(
+						extension.id,
+						extension.sourceKind,
+						import.meta.env?.ASH_BUILTIN_THEME_SOURCES,
+					);
+					const textFiles = this.textFiles;
+					const readSource =
+						developmentRoot && textFiles
+							? async (path: string): Promise<Uint8Array> => {
+									const content = await textFiles.resolve(
+										{ resource: URI.joinPath(developmentRoot, path) },
+										new AbortController().signal,
+									);
+									return new TextEncoder().encode(content.text);
+								}
+							: undefined;
+					let source: Uint8Array | undefined;
+					if (readSource) {
+						try {
+							source = await readSource(contribution.path);
+						} catch (error) {
+							if (!(error instanceof FileNotFoundError)) {
+								throw error;
+							}
+						}
+					}
 					const read = (path: string): Promise<Uint8Array> => {
 						this.assertNotDisposed();
-						if (extension.extensionLocation) sourceFiles.add(URI.joinPath(URI.parse(extension.extensionLocation), path).toString());
+						if (extension.extensionLocation)
+							sourceFiles.add(URI.joinPath(URI.parse(extension.extensionLocation), path).toString());
+						if (developmentRoot) {
+							sourceFiles.add(URI.joinPath(developmentRoot, path).toString());
+						}
 						const key = `${extension.id}\0${path}`;
 						let bytes = resources.get(key);
 						if (!bytes) {
-							bytes = this.api.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
+							if (source === undefined || !readSource) {
+								bytes = this.api.resources.readExtensionResourceBytes({
+									generation: catalog.generation,
+									extensionId: extension.id,
+									path,
+								});
+							} else {
+								bytes = path === contribution.path ? Promise.resolve(source) : readSource(path);
+							}
 							resources.set(key, bytes);
 						}
 						return bytes;

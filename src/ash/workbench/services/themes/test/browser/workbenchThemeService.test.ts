@@ -115,25 +115,24 @@ test('preview updates and restoration do not report changes while committed sele
 	]);
 });
 
-test('same-ID saved content is reported only when applied and equivalent replacements stay silent', async () => {
+test('same-ID saved content refreshes immediately and equivalent replacements stay silent', async () => {
 	using changes = new ThemeChanges();
 	const source = '{"name":"Private theme name","colors":{"editor.background":"#123456"},"semanticTokenColors":{"keyword":"#abcdef"}}';
 	using registration = WorkbenchThemesRegistry.registerColorThemes([parseUserColorTheme(source, 'private-theme')]);
 	await changes.themes.setColorTheme('private-theme', 'themeEditor');
 	changes.events.length = 0;
-	changes.themes.deferColorThemeApplication('private-theme');
 	const replacement = source.replace('#123456', '#654321');
 	registration.replace([parseUserColorTheme(replacement, 'private-theme')]);
-	assert.equal(changes.themes.getColorTheme().getColorCss('editor.background'), '#123456');
-	assert.deepEqual(changes.events, []);
-	await changes.themes.setColorTheme('private-theme', 'themeEditor');
 	assert.equal(changes.themes.getColorTheme().getColorCss('editor.background'), '#654321');
 	registration.replace([parseUserColorTheme(replacement.replace('Private theme name', 'Renamed private theme'), 'private-theme')]);
 	// Token colors are lazy caches, so merely reading a style must not look like a customization.
 	changes.themes.getColorTheme().getTokenStyleMetadata('keyword', [], 'typescript');
 	await changes.themes.setColorTheme('private-theme', 'themePicker');
 	assert.deepEqual(changes.events, [
-		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'content', colorScheme: 'dark' } },
+		{
+			name: 'workbenchColorThemeChanged',
+			data: { source: 'themeRegistry', change: 'content', colorScheme: 'dark' },
+		},
 	]);
 });
 
@@ -214,11 +213,10 @@ test('queued theme selections keep the system preference targeted when each requ
 	]);
 });
 
-test('failed theme writes report nothing, preserve deferred content, and do not poison later selections', async () => {
+test('failed theme writes preserve the current theme and do not poison later selections', async () => {
 	using changes = new ThemeChanges();
 	using registration = WorkbenchThemesRegistry.registerColorThemes([parseUserColorTheme('{"colors":{"editor.background":"#123456"}}', 'private-theme')]);
 	await changes.themes.setColorTheme('private-theme', 'themeEditor');
-	changes.themes.deferColorThemeApplication('private-theme');
 	registration.replace([parseUserColorTheme('{"colors":{"editor.background":"#654321"}}', 'private-theme')]);
 	changes.events.length = 0;
 	const started = new DeferredPromise<void>();
@@ -229,7 +227,7 @@ test('failed theme writes report nothing, preserve deferred content, and do not 
 	await started.p;
 	await release.complete();
 	await rejection;
-	assert.equal(changes.themes.getColorTheme().getColorCss('editor.background'), '#123456');
+	assert.equal(changes.themes.getColorTheme().getColorCss('editor.background'), '#654321');
 	assert.deepEqual(changes.events, []);
 	await changes.configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light');
 	await changes.themes.setColorTheme('ash-dark', 'themeEditor');
