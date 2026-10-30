@@ -21,6 +21,7 @@ ash-utils-home-dir = { workspace = true }
 remote = { package = "ash-remote", path = "../remote" }
 signal-hook = { workspace = true }
 ash-install-context = { workspace = true }
+ash-installation = { workspace = true }
 process-hardening = { workspace = true }
 build-info = { workspace = true }
 dunce = { workspace = true }

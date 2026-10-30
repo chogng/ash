@@ -3,6 +3,17 @@ name: Desktop Electron runtime acceptance
 on:
   workflow_call:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Desktop platform to validate
+        type: choice
+        default: all
+        options: [all, windows, macos]
+      suite:
+        description: Full runtime or delivered installation lifecycle
+        type: choice
+        default: all
+        options: [all, installation]
 
 permissions:
   contents: read
@@ -18,7 +29,7 @@ jobs:
       fail-fast: false
       matrix:
         # The production packager compiles .icon assets with macOS 26's actool.
-        runner: [windows-latest, macos-26]
+        runner: ${{ fromJSON(inputs.platform == 'windows' && '["windows-latest"]' || inputs.platform == 'macos' && '["macos-26"]' || '["windows-latest","macos-26"]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
     env:
@@ -49,7 +60,7 @@ jobs:
           # Keep the verified input archives used to restore pruned native outputs.
           cache-directories: third_party/.cache/v8
           shared-key: desktop-runtime-${{ matrix.runner }}
-          save-if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       - name: Sync locked tools and dependencies
         run: |
@@ -75,13 +86,19 @@ jobs:
       - name: Prepare bundled extension packages
         run: pnpm run prepare:extensions
       - name: Build self-contained backend for Web and headless hosts
+        if: inputs.suite != 'installation'
         run: pnpm run prepare:backend:web
       - name: Build Desktop backend with bundled media
         run: pnpm run prepare:backend
-      - name: Select headless and Desktop runtime packages
+      - name: Select Desktop runtime package
         shell: bash
         run: |
-          node --input-type=module -e "import {appendFileSync} from 'node:fs'; import {developmentAshPackagePath} from './build/desktop/runtimeStore.ts'; appendFileSync(process.env.GITHUB_ENV, 'ASH_ACCEPTANCE_RUNTIME_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'packaged-node') + '\nASH_ACCEPTANCE_DESKTOP_BACKEND_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'host-provided-node') + '\n');"
+          node --input-type=module -e "import {appendFileSync} from 'node:fs'; import {developmentAshPackagePath} from './build/desktop/runtimeStore.ts'; appendFileSync(process.env.GITHUB_ENV, 'ASH_ACCEPTANCE_DESKTOP_BACKEND_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'host-provided-node') + '\n');"
+      - name: Select headless runtime package
+        if: inputs.suite != 'installation'
+        shell: bash
+        run: |
+          node --input-type=module -e "import {appendFileSync} from 'node:fs'; import {developmentAshPackagePath} from './build/desktop/runtimeStore.ts'; appendFileSync(process.env.GITHUB_ENV, 'ASH_ACCEPTANCE_RUNTIME_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'packaged-node') + '\n');"
       - name: Build delivered Desktop bundle without standalone Node
         shell: bash
         run: |
@@ -94,7 +111,7 @@ jobs:
           fi
           node --input-type=module -e "import {appendFileSync,readFileSync} from 'node:fs'; import {resolve,join} from 'node:path'; const mac=process.platform==='darwin'; const bundle=resolve('.build/desktop-runtime-ci', mac ? 'Ash-darwin-'+process.arch+'/Ash.app' : 'Ash-win32-x64'); const electron=mac ? join(bundle,'Contents/MacOS/Ash') : join(bundle,'Ash.exe'); const version=JSON.parse(readFileSync('node_modules/electron/package.json','utf8')).version; appendFileSync(process.env.GITHUB_ENV, 'ASH_PACKAGED_BUNDLE='+bundle+'\nASH_TEST_ELECTRON_PATH='+electron+'\nASH_TEST_ELECTRON_VERSION='+version+'\n');"
       - name: Save verified desktop addon artifacts
-        if: github.ref == 'refs/heads/main' && steps.desktop-addons.outputs.cache-hit != 'true'
+        if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') && steps.desktop-addons.outputs.cache-hit != 'true'
         uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
           path: .build/desktop-addons
@@ -103,16 +120,66 @@ jobs:
         run: ./node_modules/.bin/bun check -p test/automation/tsconfig.json --all
       - name: Verify real Desktop startup, quit, file and terminal operations
         run: pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/packaged-app.spec.ts
+      - name: Verify native installer cleanup guards
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $env:ISCC_PATH = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $env:ISCC_PATH)) { throw 'Inno Setup compiler is required for installer acceptance' }
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "ISCC_PATH=$env:ISCC_PATH"
+          $env:ASH_INSTALLATION_TEST_DAEMON = Join-Path $env:ASH_PACKAGED_BUNDLE 'resources/bin/ash-app-server-daemon.exe'
+          node test/smoke/run.ts electron-release test/smoke/areas/windows/installation-cleanup.spec.ts
+          exit $LASTEXITCODE
+      - name: Build complete Windows candidate installer
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          pnpm package:win32:installer --bundle $env:ASH_PACKAGED_BUNDLE --output .build/installer-acceptance *> .build/installer-candidate.log
+          $installerExitCode = $LASTEXITCODE
+          Get-Content -LiteralPath .build/installer-candidate.log -Tail 40
+          exit $installerExitCode
+      - name: Build complete Windows previous-version fixture
+        if: runner.os == 'Windows'
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          node build/desktop/installerAcceptance.ts *> .build/installer-previous.log
+          $installerExitCode = $LASTEXITCODE
+          Get-Content -LiteralPath .build/installer-previous.log -Tail 40
+          exit $installerExitCode
+      - name: Verify complete Windows installation, upgrade and both removal modes
+        if: runner.os == 'Windows'
+        timeout-minutes: 25
+        shell: pwsh
+        run: |
+          $env:ASH_RELEASE_VERSION = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $env:ASH_RELEASE_ARCHIVE = (Resolve-Path ".build/installer-acceptance/AshSetup-$env:ASH_RELEASE_VERSION-win32-x64.exe").Path
+          $env:ASH_RELEASE_PREVIOUS_VERSION = '0.0.0'
+          $env:ASH_RELEASE_PREVIOUS_ARCHIVE = (Resolve-Path '.build/installer-acceptance/AshSetup-0.0.0-win32-x64.exe').Path
+          node test/smoke/run.ts electron-release test/smoke/areas/windows/release-package.spec.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify background, TUI restart, crash recovery, binding upgrade and rollback
+        if: inputs.suite != 'installation'
         shell: bash
         run: python -B build/desktop/runtime_acceptance.py --bundle "$ASH_PACKAGED_BUNDLE" --standalone-package "$ASH_ACCEPTANCE_RUNTIME_PACKAGE" --report .build/desktop-runtime-acceptance.json
       - name: Test publication, daemon and capability contracts
-        run: just test ash-app-server-daemon -p ash-package-store -p ash-lsp-server-provider -p ash-external-ext --lib --profile ci-test --locked
+        if: inputs.suite != 'installation'
+        run: just test ash-app-server-daemon -p ash-installation -p ash-package-store -p ash-lsp-server-provider -p ash-external-ext --lib --profile ci-test --locked
+      - name: Verify managed CLI install and uninstall through real processes
+        if: inputs.suite != 'installation'
+        run: |
+          python -B scripts/cargo.py build -p ash-app-server-daemon --bin ash-app-server-daemon --profile ci-test --locked
+          just test-processes ash-cli --test installation --profile ci-test --locked
       - name: Verify real Electron language-server initialization and shutdown
+        if: inputs.suite != 'installation'
         run: just test-processes ash-lsp-server-provider --test electron_runtime --profile ci-test --locked -- --ignored
       - name: Verify real Electron extensions retain separate window lifetimes
+        if: inputs.suite != 'installation'
         run: just test ash-app-server-runtime --lib --profile ci-test --locked standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate
       - name: Verify disabled MCP stays disabled across process restart
+        if: inputs.suite != 'installation'
         run: just test-processes ash-app-server --test mcp_restart --profile ci-test --locked
       - name: Upload runtime and application diagnostics
         if: always()
@@ -121,5 +188,7 @@ jobs:
           name: desktop-runtime-${{ matrix.runner }}
           path: |
             .build/desktop-runtime-acceptance.json
+            .build/installer-candidate.log
+            .build/installer-previous.log
             .build/desktop/playwright/
           if-no-files-found: warn

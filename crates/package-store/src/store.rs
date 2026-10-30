@@ -365,7 +365,9 @@ impl PackageLease {
         Ok(Self { _file: file })
     }
 
-    fn try_exclusive(package_root: &Path) -> io::Result<Option<Self>> {
+    /// Acquires an exclusive lease before a distribution removes an unused package.
+    /// A live process holding a shared lease makes reclamation skip that package.
+    pub fn try_exclusive(package_root: &Path) -> io::Result<Option<Self>> {
         let file = open_lease(&package_root.join(LEASE_FILE))?;
         match file.try_lock_exclusive() {
             Ok(()) => Ok(Some(Self { _file: file })),

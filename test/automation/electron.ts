@@ -17,6 +17,8 @@ export interface ElectronLaunchOptions {
 	/** Total budget for process launch and Workbench restoration. */
 	readonly startupTimeout?: number;
 	readonly userDataDirectory: string;
+	/** Installation tests keep OS-owned home files separate from removable application data. */
+	readonly homeDirectory?: string;
 	readonly profileDirectory?: string;
 	/** Explicit opt-in for real-model scenarios; ordinary tests keep account storage isolated. */
 	readonly externalCodexHome?: string;
@@ -61,19 +63,20 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 			? join(bundle, 'Contents', 'MacOS', 'Ash')
 			: join(bundle, 'Ash.exe')
 		: resolveDevelopmentElectronExecutable(desktopDirectory);
+	const homeDirectory = options.homeDirectory ?? options.userDataDirectory;
 	const environment = createTestEnvironment(
-		options.userDataDirectory,
+		homeDirectory,
 		options.environment ?? process.env,
 		options.externalCodexHome,
 	);
 	if (process.platform === 'win32') {
 		// Known-folder APIs verify this directory exists before returning LocalAppData
 		// to backend services such as the cross-process Git operation lock.
-		mkdirSync(join(options.userDataDirectory, 'AppData', 'Local'), { recursive: true });
+		mkdirSync(join(homeDirectory, 'AppData', 'Local'), { recursive: true });
 		// Windows cannot begin a Jump List transaction without its destination stores
 		// beneath the isolated USERPROFILE. Keep Shell data inside the test home too.
 		for (const store of ['AutomaticDestinations', 'CustomDestinations']) {
-			mkdirSync(join(options.userDataDirectory, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Recent', store), {
+			mkdirSync(join(homeDirectory, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Recent', store), {
 				recursive: true,
 			});
 		}
@@ -88,6 +91,8 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		delete environment.ASH_DESKTOP_UI_ONLY;
 	}
 	environment.ASH_HOME = options.profileDirectory ?? resolve(options.userDataDirectory, 'profile');
+	environment.ASH_INSTALLATION_REGISTRY =
+		options.environment?.ASH_INSTALLATION_REGISTRY ?? join(options.userDataDirectory, 'installation-registry');
 	if (options.productServicesPath) environment.ASH_PRODUCT_SERVICES_PATH = options.productServicesPath;
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;

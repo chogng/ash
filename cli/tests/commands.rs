@@ -1021,6 +1021,8 @@ fn managed_installer_reinstalls_and_launches_from_unicode_paths() {
             .arg(&install_root)
             .arg("--bin-dir")
             .arg(&launchers)
+            .env("ASH_INSTALLATION_REGISTRY", root.join("registry"))
+            .env("ASH_HOME", root.join("profile"))
             .env("LC_ALL", "zh_CN.UTF-8")
             .output()
             .unwrap();

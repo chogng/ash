@@ -527,9 +527,9 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			.then(async () => {
 				if (!configuration.useDevelopmentUrl) {
 					if (cancellation.signal.aborted) return;
-					await (new URL(configuration.url).search
-						? this.win.loadURL(configuration.url)
-						: this.win.loadFile(configuration.file));
+					// Load the exact URL registered with the IPC gates. loadFile uses different
+					// escaping for Windows short paths ("~" versus "%7E") and rejects a trusted renderer.
+					await this.win.loadURL(configuration.url);
 					return;
 				}
 				let waiting = false;

@@ -2,7 +2,8 @@ import { AshApplication, type AppServerStartupMode } from './app.js';
 import { isCancellationError } from '../../base/common/errors.js';
 import { app, protocol } from 'electron/main';
 import { Schemas } from '../../base/common/network.js';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
 import {
 	AshApplicationId,
 	AshApplicationName,
@@ -47,6 +48,7 @@ export async function startElectronApplication(): Promise<void> {
 		new ServiceCollection([IGPUProcessMainService, new SyncDescriptor(GPUProcessMainService, [app])]),
 	);
 	let application: AshApplication | undefined;
+	let releaseInstallation: (() => void) | undefined;
 	try {
 		// Capture GPU exit/recovery before profile I/O or window startup can yield.
 		mainServices.get(IGPUProcessMainService);
@@ -57,6 +59,74 @@ export async function startElectronApplication(): Promise<void> {
 			},
 		]);
 		const profileRoot = resolveHome();
+		configureApplicationDataPaths();
+		if (app.isPackaged) {
+			// Record the actual paths before profile migration creates them.
+			// The shared maintenance host protects profiles used by another product.
+			const installation =
+				process.platform === 'darwin' ? resolve(process.resourcesPath, '..', '..') : dirname(process.execPath);
+			const lease = spawn(
+				join(
+					process.resourcesPath,
+					'bin',
+					process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon',
+				),
+				[
+					'installation',
+					'lease',
+					'--product',
+					'desktop',
+					'--root',
+					installation,
+					'--profile',
+					profileRoot,
+					'--user-data',
+					app.getPath('userData'),
+				],
+				{ windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
+			);
+			let closing = false;
+			releaseInstallation = () => {
+				closing = true;
+				lease.stdin.end();
+			};
+			// will-quit can be prevented while Main flushes state and closes its
+			// services. Keep ownership until that shutdown has actually completed.
+			app.once('quit', releaseInstallation);
+			lease.stdin.on('error', error => {
+				if (!closing) {
+					console.error('Installation lease disconnected', error);
+					app.quit();
+				}
+			});
+			await new Promise<void>((done, fail) => {
+				const timeout = setTimeout(() => {
+					lease.kill();
+					fail(new Error('Installation registration timed out'));
+				}, 30_000);
+				let output = '';
+				let errors = '';
+				lease.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+					output = (output + chunk).slice(-4096);
+					if (output === 'ready\n') {
+						clearTimeout(timeout);
+						done();
+					}
+				});
+				lease.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+					errors = (errors + chunk).slice(-4096);
+				});
+				lease.once('error', error => {
+					clearTimeout(timeout);
+					fail(error);
+				});
+				lease.once('exit', code => {
+					clearTimeout(timeout);
+					fail(new Error(`Installation registration exited with ${code}: ${errors}`));
+					if (!closing && output === 'ready\n') app.quit();
+				});
+			});
+		}
 		const migrationConflict = await migrateLegacyLocalProfile({
 			legacyUserDataRoot: app.getPath('userData'),
 			profileRoot,
@@ -75,7 +145,6 @@ export async function startElectronApplication(): Promise<void> {
 			process.env.ASH_DESKTOP_UI_ONLY === '1' ? 'disabled' : 'required';
 
 		app.setName(AshApplicationName);
-		configureApplicationDataPaths();
 		const initialLaunchArguments = parseMainProcessArgv({
 			arguments: process.argv,
 			packaging: app.isPackaged ? 'packaged' : 'development',
@@ -125,7 +194,13 @@ export async function startElectronApplication(): Promise<void> {
 		void startup(application, developmentLauncher);
 	} finally {
 		// Once created, the application owns this scope through shutdown/failure cleanup.
-		if (!application) mainServices.dispose();
+		if (!application) {
+			if (releaseInstallation) {
+				app.removeListener('quit', releaseInstallation);
+				releaseInstallation();
+			}
+			mainServices.dispose();
+		}
 	}
 }
 

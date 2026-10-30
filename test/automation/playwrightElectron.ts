@@ -12,6 +12,8 @@ import { isProcessRunning, registerRunResource } from '../../build/processes.ts'
 
 export interface ElectronApplicationLaunchResult {
 	readonly application: ElectronApplication;
+	/** Retained before Playwright releases its channel if Main exits during startup. */
+	readonly process: ChildProcess;
 	readonly diagnostics: WorkbenchDiagnostics;
 	/** Runs the product quit handshake, including renderer shutdown participants and state saves. */
 	quit(): Promise<void>;
@@ -74,7 +76,6 @@ export async function launchElectronApplication(
 	application.context().once('close', () => application.context().off('page', observeDialogs));
 	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
 	const electronProcess = application.process();
-	await resource.process(electronProcess);
 	let closing: Promise<void> | undefined;
 	const shutdown = (kind: 'quit' | 'destroy'): Promise<void> =>
 		(closing ??= (async () => {
@@ -166,7 +167,23 @@ export async function launchElectronApplication(
 				throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
 			await resource.dispose();
 		})());
-	return { application, diagnostics, quit: () => shutdown('quit'), close: () => shutdown('destroy') };
+	try {
+		await resource.process(electronProcess);
+	} catch (error) {
+		try {
+			await shutdown('destroy');
+		} catch (cleanup) {
+			throw new AggregateError([error, cleanup], 'Electron process registration and cleanup failed');
+		}
+		throw error;
+	}
+	return {
+		application,
+		process: electronProcess,
+		diagnostics,
+		quit: () => shutdown('quit'),
+		close: () => shutdown('destroy'),
+	};
 }
 
 /** Launches Ash Desktop through Playwright's Electron adapter and waits for Workbench readiness. */
@@ -176,9 +193,8 @@ export async function launchElectron(
 ): Promise<ElectronLaunchResult> {
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
 	const session = await launchElectronApplication(options);
-	const { application, diagnostics, close } = session;
+	const { application, process: electronProcess, diagnostics, close } = session;
 	onMilestone?.('electron-launch-resolved');
-	const electronProcess = application.process();
 	const startupResources = new DisposableStore();
 	let processErrors = '';
 	const onProcessError = (chunk: Buffer): void => {
@@ -251,7 +267,12 @@ export async function launchElectron(
 	} catch (error) {
 		// A deadline can win before the readiness call rejects. Collect the document
 		// here while the process is still alive, with a separate bounded read.
-		const page = application.windows()[0];
+		// Main may have exited and released Playwright's channel before startup
+		// diagnostics run. Keep that failure from hiding the original launch error.
+		const page =
+			electronProcess.exitCode === null && electronProcess.signalCode === null
+				? application.windows()[0]
+				: undefined;
 		const text = page
 			? await beforeDeadline(
 					page.evaluate(() =>

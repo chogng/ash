@@ -68,6 +68,14 @@ pub struct ProfileSecretStore {
 }
 
 impl ProfileSecretStore {
+    /// Removes this profile's encryption key after its owned ciphertext has been
+    /// purged. Other logical keys in the injected store remain untouched.
+    pub fn delete_encryption_key(
+        keyring: &dyn SecretStore,
+    ) -> Result<DeleteSecretOutcome, SecretStoreError> {
+        keyring.delete(&SecretKey::new(MASTER_KEY_NAME).expect("fixed internal secret key"))
+    }
+
     /// Opens private directories without accessing the keyring or displaying system prompts.
     ///
     /// The first availability check, write, or operation on existing data initializes encryption

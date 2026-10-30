@@ -6,6 +6,29 @@ fn main() -> ExitCode {
         std::process::exit(1);
     }
 
+    if std::env::args().nth(1).as_deref() == Some("installation") {
+        return match ash_installation::run_command(std::env::args().skip(2), |profile| {
+            let options = ash_app_server_daemon::ConnectionOptions::new(
+                profile,
+                None,
+                ash_app_server_daemon::GrantSource::UserConfig,
+                None,
+            );
+            ash_app_server_daemon::run_lifecycle(
+                ash_app_server_daemon::LifecycleCommand::Stop,
+                options,
+                &std::env::current_exe()?,
+            )
+            .map(|_| ())
+            .map_err(std::io::Error::other)
+        }) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("ash-app-server-daemon: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     let _package_lease = match std::env::current_exe()
         .and_then(ash_package_store::acquire_package_lease_for_executable)
     {

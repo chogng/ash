@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { AshApplicationId } from '../../src/ash/code/common/application.ts';
+import { writeInstallationManifest } from './installationManifest.ts';
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../.build/protocol/typescript/protocol.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
@@ -263,6 +264,7 @@ async function installer(options: Map<string, string>): Promise<void> {
 	requireWindows();
 	const bundle = options.get('--bundle') ?? bundledApplication;
 	await validateBundle(bundle);
+	await writeInstallationManifest(bundle);
 	const output = options.get('--output') ?? outputRoot;
 	await mkdir(output, { recursive: true });
 	const compiler = process.env.ISCC_PATH ?? 'ISCC.exe';

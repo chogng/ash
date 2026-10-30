@@ -1,0 +1,7 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "installation",
+    crate_name = "ash_installation",
+    data = ["src/windows_cleanup.ps1"],
+)

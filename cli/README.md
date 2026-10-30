@@ -156,6 +156,16 @@ Windows PowerShell uses:
 irm https://chogng.github.io/ash/cli/install.ps1 | iex
 ```
 
+### 卸载与保留数据
+
+`ash uninstall` 卸载当前托管 CLI，默认保留设置、账户和历史；`ash uninstall --purge` 同时清除该安装独占的 Ash 数据及其凭据加密密钥。先关闭使用该安装的终端。卸载助手等待当前命令退出后执行，命令打印报告路径；报告的 `status` 为 `complete` 才表示完成，`failed` 包含可重试的错误，`retained` 列出保留项。Windows 桌面卸载器提供相同选择，静默卸载使用 `/ASHDATAMODE=keep-data` 或 `/ASHDATAMODE=purge`。
+
+安装记录追踪实际使用过的 profile。其他桌面/CLI 仍在使用的目录和共享组件始终保留；未登记的历史 profile 或 Electron 数据目录、未知文件、改过的启动器、工作树、仓库和外部目录链接也保留。彻底卸载不会删除用户代码、其他产品的账户目录或独立 Remote 安装。Windows 系统规则和沙箱需要同一账户的管理员权限；清理不了时保留安装记录并报告失败。沙箱只在默认安装记录能够确认本用户的默认 profile 已没有其他消费者时清理，其他用户的运行时会阻止服务卸载。
+
+安装记录和卸载报告保存在系统本地数据目录下的 `Ash/installation-registry`，共享启动器锁保留用于串行化其他安装。这些少量记录是有意保留的诊断信息。保留数据后重装仍可选择彻底卸载。CLI 升级回收确认空闲的旧包，保留当前版本、一个回退版本和运行中使用的版本；不删除无归属标记的临时目录。Windows 桌面升级按文件清单和哈希清理旧版本淘汰的文件，修改过的文件保留。
+
+Windows 原生清理验收使用生产 Inno 脚本、当前构建的 `ash-app-server-daemon.exe`、独立 AppId 和快捷方式名称。设置 `ISCC_PATH`、`ASH_INSTALLATION_TEST_DAEMON` 后，运行 `node test/smoke/run.ts electron-release test/smoke/areas/windows/installation-cleanup.spec.ts`，覆盖升级、两种卸载方式、重装、运行锁、目录链接、共享数据及系统登记清理；测试数据全部位于独立临时目录。完整发布包的窗口、编辑和重启验收仍由 `release-package.spec.ts` 在一次性 CI 主机执行。
+
 ### Startup announcements
 
 Ash Code fetches `announcement_tip.toml` from `chogng/ash`'s `main` branch once per
