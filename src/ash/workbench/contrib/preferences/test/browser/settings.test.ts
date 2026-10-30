@@ -19,6 +19,8 @@ import snapshotMessages from '../../../../../../../extensions/snapshot/package.n
 import snapshotManifest from '../../../../../../../extensions/snapshot/package.json' with { type: 'json' };
 import { localizeManifest } from '../../../../../platform/extensionManagement/common/extensionNls.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import manifest from '../../../../../../../extensions/git/package.json' with { type: 'json' };
 import { readFile } from 'node:fs/promises';
@@ -2254,6 +2256,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 		listModelProviders: () => providers,
 		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
+		isModelPinned: () => false,
 		isModelVisible: () => true,
 	} as unknown as IChatService;
 	const services = disposables.add(new InstantiationService());
@@ -2294,6 +2297,9 @@ test('Models Settings keeps loading API connections when the model catalog chang
 		dispose() { },
 		[Symbol.dispose]() { },
 	});
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 	const panel = disposables.add(services.createInstance(ModelSettingsRenderer, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsSectionReference>());
 	disposables.add(
@@ -2356,6 +2362,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => catalog,
 		listCustomModelProviders: async () => [],
+		pinModel: async () => { }, unpinModel: async () => { }, removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [],
@@ -2363,6 +2370,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		removeModelProviderApiKey: async () => { },
 		listAdvisorModels: async () => [],
 		refreshModels: async () => catalog,
+		isModelPinned: () => false,
 		isModelVisible: model => catalog.some(entry => entry.model.provider === model.provider && entry.model.model === model.model && enabled.has(entry.displayName)),
 		setModelVisible: async (model, visible) => {
 			const entry = catalog.find(entry => entry.model.provider === model.provider && entry.model.model === model.model)!;
@@ -2408,6 +2416,9 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		dispose() { },
 		[Symbol.dispose]() { },
 	});
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	const tree = resources.add(new SettingsTreeModel<SettingsSectionReference>());
 	resources.add(
@@ -2426,7 +2437,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	await nextTurn();
 	const names = (query?: InstanceType<typeof SettingsSearchQuery>): string[] => {
 		content.getNodes(query);
-		return [...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent!);
+		return [...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent!);
 	};
 	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
 	// Enable in reverse order so activation order cannot masquerade as catalog order.
@@ -2663,6 +2674,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 				apiKeyConfigured: savedKeys.length > 0,
 			},
 		],
+		isModelPinned: () => false,
 		isModelVisible: (entry: typeof model) => (entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model)),
 		setModelVisible: async (_model: typeof model, visible: boolean) => {
 			modelWrites.push(visible);
@@ -2952,6 +2964,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
 	editorServices.registerInstance(IEditorPart, editor);
 	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));
+	editorServices.registerSingleton(IMenuService, () => editorServices.createInstance(MenuService));
 	editorServices.registerInstance(IEditorService, disposables.add(new BrowserEditorService(editor)));
 	const preferences = disposables.add(
 		new PreferencesService(
@@ -3699,6 +3712,15 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
 	await preferences.openSettings({ section: 'models' });
 	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'models');
+	await preferences.openSettings({ section: 'models', query: '', sectionQuery: '@provider:openai @capability:vision', focusSearch: true });
+	const scopedSearch = root.querySelector<HTMLInputElement>('.ash-chat-models-catalog [role="combobox"]')!;
+	assert.equal(scopedSearch.value, '@provider:openai @capability:vision');
+	assert.equal(search.value, '');
+	assert.equal(ownerDocument.activeElement, scopedSearch);
+	await preferences.openSettings({ section: 'models', sectionQuery: '', focusSearch: false });
+	assert.equal(ownerDocument.activeElement, scopedSearch);
+	await assert.rejects(preferences.openSettings({ section: 'general', sectionQuery: 'unsupported' }), /does not provide its own search/);
+
 
 	using language = editorServices.get(ILanguageService).registerLanguage({ id: 'settings-test-language' });
 	await commands.executeCommand('workbench.action.openSettings', {
@@ -3899,7 +3921,9 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			})),
 		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
+		isModelPinned: () => false,
 		isModelVisible: () => true,
+		pinModel: async () => { }, unpinModel: async () => { }, removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async (provider: (typeof saved)[number]) => {
 			saved.push(provider);
 		},
@@ -3949,6 +3973,9 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 		dispose() { },
 		[Symbol.dispose]() { },
 	});
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 	const content = disposables.add(services.createInstance(ModelSettingsRenderer, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsSectionReference>());
 	disposables.add(
@@ -3975,15 +4002,20 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	content.setVisible(true);
 	await nextTurn();
 	assert.deepEqual(
-		[...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent),
+		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
 		['Newest OpenAI', 'Opus'],
 	);
 	const expand = root.querySelector<HTMLButtonElement>('.ash-models-settings-expand button')!;
 	expand.click();
 	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 3);
 	assert.equal(expand.getAttribute('aria-expanded'), 'true');
+	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 2);
+	assert.equal(root.querySelector<HTMLDetailsElement>('.ash-chat-models-filters')!.hidden, false);
+	[...root.querySelectorAll<HTMLButtonElement>('.ash-chat-models-catalog > button')].find(button => button.textContent === 'Collapse All')!.click();
+	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 0);
 	expand.click();
 	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 2);
+	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 0);
 	assert.equal(
 		content
 			.getNodes(new SettingsSearchQuery('Older'))
@@ -3992,7 +4024,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 		true,
 	);
 	assert.deepEqual(
-		[...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent),
+		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
 		['Older OpenAI'],
 	);
 	content.getNodes();
@@ -4004,7 +4036,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	search.focus();
 	searchModels('OPENAI/OLDER');
 	assert.deepEqual(
-		[...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent),
+		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
 		['Older OpenAI'],
 	);
 	assert.equal(document.activeElement, search);
@@ -4015,7 +4047,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	assert.equal(document.activeElement, search);
 	searchModels('');
 	assert.deepEqual(
-		[...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent),
+		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
 		['Newest OpenAI', 'Opus'],
 	);
 	assert.equal(root.querySelectorAll('.ash-models-settings-api-row').length, 1);
@@ -4197,6 +4229,9 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 			return { confirmed };
 		},
 	} as unknown as IDialogService);
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	content.setVisible(true);
 	await nextTurn();

@@ -2030,7 +2030,13 @@ use crate::protocol::model::ContextToolDefinition;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogEntry;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelCatalogIssue;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogScope;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelCatalogSource;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelCatalogStatus;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelListParams;
 #[cfg(any(test, feature = "export"))]
@@ -2362,6 +2368,8 @@ use crate::protocol::syntax::SyntaxTokenDto;
 use crate::protocol::syntax::SyntaxTokenKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelCatalogFreshness;
 
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::CodeSnapshot;
@@ -2843,6 +2851,8 @@ use ash_protocol::ModelInvocationRecord;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelInvocationTiming;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelMetadataQuality;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelMoneyAmount;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelOutputTransport;
@@ -2864,6 +2874,8 @@ use ash_protocol::ModelServiceTier;
 use ash_protocol::ModelSettings;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelSpeed;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelTokenPricing;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelToolOutputLimit;
 #[cfg(any(test, feature = "export"))]
@@ -6999,6 +7011,8 @@ typescript_bindings! {
     ModelAcceleration,
     ModelAccelerationOption,
     ModelRetirement,
+    ModelMetadataQuality,
+    ModelTokenPricing,
     ModelToolOutputLimit,
     ReasoningEffort,
     ModelReasoningEffortOption,
@@ -7006,6 +7020,10 @@ typescript_bindings! {
     ReasoningReplayContext,
     Personality,
     ModelCatalogEntry,
+    ModelCatalogSource,
+    ModelCatalogStatus,
+    ModelCatalogIssue,
+    ModelCatalogFreshness,
     ModelListParams,
     ModelCatalogScope,
     ModelListResult,

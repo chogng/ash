@@ -130,6 +130,10 @@ pub enum ModelAccess {
 #[serde(rename_all = "snake_case")]
 pub struct ModelCapabilities {
     pub tools: CapabilitySupport,
+    /// Explicit catalog declaration of Agent-loop support, independent of tool calling.
+    #[serde(default = "unknown_capability_support")]
+    #[ts(as = "Option<CapabilitySupport>", optional)]
+    pub agent_mode: CapabilitySupport,
     pub reasoning: CapabilitySupport,
     pub parallel_tool_calls: CapabilitySupport,
     pub personality: CapabilitySupport,
@@ -143,6 +147,7 @@ pub struct ModelCapabilities {
 impl ModelCapabilities {
     pub const UNKNOWN: Self = Self {
         tools: CapabilitySupport::Unknown,
+        agent_mode: CapabilitySupport::Unknown,
         reasoning: CapabilitySupport::Unknown,
         parallel_tool_calls: CapabilitySupport::Unknown,
         personality: CapabilitySupport::Unknown,
@@ -252,4 +257,23 @@ pub struct ModelPreset {
     pub model: ModelRef,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub personality: Option<Personality>,
+}
+
+/// Published reference token rates for an exact model, tier, region and input interval.
+/// Amounts are decimal currency units per million tokens, never subscription credits or invoices.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ModelTokenPricing {
+    pub currency: String,
+    pub service_tier: String,
+    pub region: String,
+    pub min_input_tokens: u32,
+    pub max_input_tokens: Option<u32>,
+    pub input: Option<String>,
+    pub output: Option<String>,
+    pub cache_read: Option<String>,
+    pub cache_write: Option<String>,
+    pub revision: String,
+    pub reviewed_at: String,
+    pub source_urls: Vec<String>,
 }

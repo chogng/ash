@@ -24,13 +24,14 @@ pub(crate) struct CatalogRecord {
     availability: ModelAvailability,
     lifecycle: ModelLifecycle,
     provenance: ModelMetadataProvenance,
-    observed_live: bool,
+    observation: Option<MetadataSource>,
 }
 
 impl CatalogRecord {
     fn from_seed(info: ModelInfo) -> Self {
         let capabilities = ModelCapabilitiesProvenance {
             tools: known_capability_source(info.capabilities.tools),
+            agent_mode: known_capability_source(info.capabilities.agent_mode),
             reasoning: known_capability_source(info.capabilities.reasoning),
             parallel_tool_calls: known_capability_source(info.capabilities.parallel_tool_calls),
             personality: known_capability_source(info.capabilities.personality),
@@ -73,7 +74,7 @@ impl CatalogRecord {
             availability: ModelAvailability::Unverified,
             lifecycle: ModelLifecycle::Unknown,
             provenance,
-            observed_live: false,
+            observation: None,
         }
     }
 
@@ -84,13 +85,13 @@ impl CatalogRecord {
             availability: ModelAvailability::Available,
             lifecycle: ModelLifecycle::Unknown,
             provenance: ModelMetadataProvenance::default(),
-            observed_live: true,
+            observation: None,
         }
     }
 
     pub(crate) fn entry(&self, provider: &ProviderId) -> ModelCatalogEntry {
-        let quality = if self.observed_live {
-            ModelMetadataQuality::ProviderLive
+        let quality = if let Some(source) = self.observation {
+            source.quality()
         } else {
             highest_metadata_source(&self.provenance)
                 .map(MetadataSource::quality)
@@ -121,6 +122,7 @@ pub(crate) fn seed_records(definition: &ProviderDefinition) -> BTreeMap<ModelId,
 pub(crate) fn apply_discovery(
     records: &mut BTreeMap<ModelId, CatalogRecord>,
     catalog: &DiscoveredCatalog,
+    source: MetadataSource,
 ) {
     if catalog.coverage == DiscoveryCoverage::CompleteAgentCatalog {
         for record in records.values_mut() {
@@ -131,10 +133,10 @@ pub(crate) fn apply_discovery(
         let record = records
             .entry(discovered.id.clone())
             .or_insert_with(|| CatalogRecord::discovered(discovered.id.clone()));
-        record.observed_live = true;
+        record.observation = Some(source);
         record.catalog_order = Some(order);
         record.availability = ModelAvailability::Available;
-        apply_live_patch(record, &discovered.metadata);
+        apply_patch(record, &discovered.metadata, source);
     }
 }
 
@@ -146,15 +148,14 @@ pub(crate) fn mark_unverified(records: &mut BTreeMap<ModelId, CatalogRecord>) {
     }
 }
 
-fn apply_live_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch) {
+fn apply_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch, source: MetadataSource) {
     if patch.settings != ash_protocol::ModelSettings::default() {
         merge_settings(&mut record.info.settings, &patch.settings);
-        record.provenance.settings = Some(MetadataSource::ProviderLive);
+        record.provenance.settings = Some(source);
     }
     if let Some(access) = patch.access {
         record.info.access = access;
     }
-    let source = MetadataSource::ProviderLive;
     // A live withdrawal must remove persisted evidence too; omission is not a withdrawal.
     match &patch.retirement {
         ash_protocol::Patch::Missing => {}
@@ -187,6 +188,12 @@ fn apply_live_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch) {
         record.info.auto_compact_token_limit = Some(limit);
         record.provenance.auto_compact_token_limit = Some(source);
     }
+    apply_capability(
+        &mut record.info.capabilities.agent_mode,
+        &mut record.provenance.capabilities.agent_mode,
+        patch.capabilities.agent_mode,
+        source,
+    );
     apply_capability(
         &mut record.info.capabilities.tools,
         &mut record.provenance.capabilities.tools,
@@ -284,6 +291,7 @@ fn highest_metadata_source(provenance: &ModelMetadataProvenance) -> Option<Metad
         provenance.context_window,
         provenance.auto_compact_token_limit,
         provenance.capabilities.tools,
+        provenance.capabilities.agent_mode,
         provenance.capabilities.reasoning,
         provenance.capabilities.parallel_tool_calls,
         provenance.capabilities.personality,

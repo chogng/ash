@@ -562,3 +562,36 @@ fn context_at(
         started_at_unix_ms,
     )
 }
+
+#[test]
+fn catalog_prices_keep_exact_amounts_intervals_tiers_and_evidence_without_usage() {
+    let card = RateCard::from_json(TEST_RATE_CARD).unwrap();
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-5.6-sol").unwrap(),
+    );
+    let prices = card.catalog_prices(&model, 1_790_000_000_000);
+    assert_eq!(prices.len(), 3);
+    assert_eq!(prices[0].currency, "USD");
+    assert_eq!(prices[0].input.as_deref(), Some("4"));
+    assert_eq!(prices[0].cache_read.as_deref(), Some("0.4"));
+    assert_eq!(prices[0].max_input_tokens, Some(272001));
+    assert_eq!(prices[1].min_input_tokens, 272001);
+    assert_eq!(prices[2].service_tier, "priority");
+    assert_eq!(prices[0].reviewed_at, "2026-09-04");
+    assert!(!prices[0].source_urls.is_empty());
+    let unknown = ModelRef::new(ProviderId::new("custom-endpoint").unwrap(), model.model);
+    assert!(card.catalog_prices(&unknown, 1_790_000_000_000).is_empty());
+    assert!(
+        RateCard::bundled_accelerated_public_prices()
+            .unwrap()
+            .catalog_prices(
+                &ModelRef::new(
+                    ProviderId::new("openai").unwrap(),
+                    ModelId::new("gpt-5.6-sol").unwrap()
+                ),
+                0
+            )
+            .is_empty()
+    );
+}

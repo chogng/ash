@@ -9,6 +9,7 @@ import { INotificationService, Severity } from '../../../../../platform/notifica
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import type { CustomModelProvider } from '../../../../../platform/agentHost/common/agentModels.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { ILanguageModelsService } from '../../../chat/common/languageModels.js';
@@ -23,9 +24,10 @@ function setup(resources: DisposableStore, configuration = provider) {
 	const services = resources.add(new InstantiationService());
 	const notifications = resources.add(new TestNotificationService());
 	const enabled = new Set<string>();
-	const calls = { discovery: 0, probes: [] as string[], writes: [] as CustomModelProvider[] };
-	const source = { catalog: [] as readonly ModelCatalogEntry[], failDiscovery: false, failSave: false, probe: undefined as Promise<{ type: 'passed'; }> | undefined };
+	const calls = { discovery: 0, removals: [] as string[], probes: [] as string[], writes: [] as CustomModelProvider[] };
+	const source = { catalog: [] as readonly ModelCatalogEntry[], failDiscovery: false, failSave: false, confirmed: false, failRemove: false, probe: undefined as Promise<{ type: 'passed'; }> | undefined };
 	services.registerInstance(INotificationService, notifications);
+	services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: source.confirmed }) } as unknown as IDialogService);
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
 	const models: Partial<ILanguageModelsService> = {
 		onDidChangeModels: Event.None,
@@ -33,6 +35,7 @@ function setup(resources: DisposableStore, configuration = provider) {
 		refreshModels: async () => source.catalog,
 		isModelVisible: model => enabled.has(model.model),
 		setModelVisible: async (model, visible) => { if (visible) { enabled.add(model.model); } else { enabled.delete(model.model); } },
+		removeCustomModelProvider: async connection => { if (source.failRemove) { throw new Error('Removal rejected'); } calls.removals.push(connection); },
 		saveCustomModelProvider: async value => { if (source.failSave) { throw new Error('Write rejected'); } calls.writes.push(value); },
 		testProviderModel: async (_provider, id) => { calls.probes.push(id); return source.probe ?? (id === 'rejected' ? { type: 'failed', message: 'Not authorized' } : { type: 'passed' }); },
 		discoverProviderModels: async () => { calls.discovery++; if (source.failDiscovery) { throw new Error('Endpoint unavailable'); } return source.catalog; },
@@ -42,7 +45,7 @@ function setup(resources: DisposableStore, configuration = provider) {
 	document.body.append(card.domNode);
 	resources.add(toDisposable(() => card.domNode.remove()));
 	const button = (label: string): HTMLButtonElement => [...card.domNode.querySelectorAll('button')].find(button => button.textContent === label || button.getAttribute('aria-label') === label)!;
-	return { card, notifications, enabled, calls, source, button };
+	return { card, notifications, enabled, calls, source, button, models };
 }
 
 test('Provider Test models discovers an empty table once and tests every row without enabling models', async () => {
@@ -129,4 +132,49 @@ test('Disposing a provider form prevents its pending probe from announcing a lat
 	await probe.complete({ type: 'passed' });
 	await nextTurn();
 	assert.equal(notifications.model.getNotifications().length, 0);
+});
+
+
+test('Provider deletion requires confirmation, reports failures and emits removal only after domain success', async () => {
+	using resources = new DisposableStore();
+	const { card, source, calls, button } = setup(resources);
+	let removed = 0;
+	resources.add(card.onDidDelete(() => removed++));
+	button('Delete provider').click();
+	await nextTurn();
+	assert.deepEqual(calls.removals, []);
+	assert.equal(removed, 0);
+	source.confirmed = true;
+	source.failRemove = true;
+	button('Delete provider').click();
+	await nextTurn();
+	assert.equal(removed, 0);
+	assert.match(card.getAccessibleContent(), /Removal rejected/);
+	assert.equal(button('Delete provider').disabled, false);
+	source.failRemove = false;
+	button('Delete provider').click();
+	await nextTurn();
+	assert.deepEqual(calls.removals, ['custom-test']);
+	assert.equal(removed, 1);
+});
+
+
+test('Provider deletion waits for a credential save already started by blur', async () => {
+	using resources = new DisposableStore();
+	const { card, source, calls, button, models } = setup(resources);
+	source.confirmed = true;
+	const saved = new DeferredPromise<void>();
+	const started = new DeferredPromise<void>();
+	models.setModelProviderApiKey = async () => { await started.complete(); await saved.p; };
+	const key = card.domNode.querySelector<HTMLInputElement>('input[type="password"]')!;
+	key.value = 'test-key';
+	key.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	key.dispatchEvent(new browserEnvironment.window.Event('blur'));
+	await started.p;
+	button('Delete provider').click();
+	await nextTurn();
+	assert.deepEqual(calls.removals, []);
+	await saved.complete();
+	await nextTurn();
+	assert.deepEqual(calls.removals, ['custom-test']);
 });

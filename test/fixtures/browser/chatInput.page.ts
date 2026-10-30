@@ -407,6 +407,7 @@ services.registerInstance(ILanguageModelsService, {
 	saveReasoningEffort: async () => { },
 	listModelCatalog: async () => models,
 	listCustomModelProviders: async () => [],
+	isModelPinned: () => false, pinModel: async () => { }, unpinModel: async () => { }, removeCustomModelProvider: async () => { },
 	saveCustomModelProvider: async () => { },
 	testProviderModel: async () => ({ type: 'passed' }),
 	listModelProviders: async () => [{ connection: 'private-endpoint', provider: 'custom', displayName: 'Team endpoint',

@@ -53,6 +53,7 @@ impl MetadataSource {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ModelCapabilitiesProvenance {
     pub tools: Option<MetadataSource>,
+    pub agent_mode: Option<MetadataSource>,
     pub reasoning: Option<MetadataSource>,
     pub parallel_tool_calls: Option<MetadataSource>,
     pub personality: Option<MetadataSource>,

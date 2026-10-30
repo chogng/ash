@@ -133,7 +133,7 @@ impl RateCard {
     }
 }
 
-fn public_api_dimensions(
+pub(crate) fn public_api_dimensions(
     provider: &ash_protocol::ProviderId,
 ) -> Option<(&'static str, &'static str)> {
     match provider.as_str() {

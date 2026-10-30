@@ -236,8 +236,11 @@ fn advisor_model_command_selects_a_configured_provider_model() {
         .map(|config| (config.provider.clone(), config.connection.clone()))
         .collect();
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![ModelCatalogEntry {
+            source: None,
+            pricing: Vec::new(),
             retirement: None,
             description: None,
             discovered: None,

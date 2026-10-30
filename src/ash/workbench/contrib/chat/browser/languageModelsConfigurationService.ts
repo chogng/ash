@@ -26,6 +26,7 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ModelCatalogConfiguration.hiddenModels)) { this.acceptHiddenModels(configuration.getValue(ModelCatalogConfiguration.hiddenModels)); }
 			if (event.affectsConfiguration(this.preferences.defaultModelSetting)) { this.changed.fire(); }
+			if (event.affectsConfiguration(ModelCatalogConfiguration.pinnedModels)) { this.changed.fire(); }
 		}));
 	}
 	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[], savedModel?: ModelRef | null): ModelRef | undefined {
@@ -64,6 +65,28 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 			const models = [...this.modelVisibility.values()].filter(candidate => modelRefIdentity(candidate) !== identity);
 			if (visible !== isModelVisibleByDefault(model)) { models.push(visible ? { ...model, visible: true } : { ...model }); }
 			await this.configuration.updateValue(ModelCatalogConfiguration.hiddenModels, models);
+		});
+	}
+
+	public isModelPinned(model: ModelRef): boolean {
+		return this.configuration.getValue<readonly ModelRef[]>(ModelCatalogConfiguration.pinnedModels).some(entry => modelRefIdentity(entry) === modelRefIdentity(model));
+	}
+
+	public setModelPinned(model: ModelRef, pinned: boolean): Promise<void> {
+		return this.visibilityUpdates.schedule(async () => {
+			if (pinned === this.isModelPinned(model)) { return; }
+			const models = this.configuration.getValue<readonly ModelRef[]>(ModelCatalogConfiguration.pinnedModels).filter(entry => modelRefIdentity(entry) !== modelRefIdentity(model));
+			await this.configuration.updateValue(ModelCatalogConfiguration.pinnedModels, pinned ? [...models, model] : models);
+		});
+	}
+
+	public removeProviderPreferences(connection: string): Promise<void> {
+		return this.visibilityUpdates.schedule(async () => {
+			for (const key of [ModelCatalogConfiguration.hiddenModels, ModelCatalogConfiguration.pinnedModels]) {
+				const models = this.configuration.getValue<readonly ModelVisibilityPreference[]>(key);
+				const retained = models.filter(model => model.provider !== connection);
+				if (retained.length !== models.length) { await this.configuration.updateValue(key, retained); }
+			}
 		});
 	}
 

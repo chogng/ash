@@ -3120,6 +3120,41 @@ impl ModelCatalog for ConfigBackedModelService {
         }
         Ok(ash_app_server_protocol::protocol::model::ModelListResult {
             models,
+            catalog_statuses: contexts
+                .catalog_snapshots()
+                .map(|(connection, snapshot)| {
+                    use ash_app_server_protocol::protocol::model::ModelCatalogIssue;
+                    use ash_app_server_protocol::protocol::model::ModelCatalogStatus;
+                    use ash_models_manager::CatalogWarningCode;
+                    ModelCatalogStatus {
+                        provider: snapshot.scope().provider().to_string(),
+                        connection: connection.to_owned(),
+                        freshness: snapshot.freshness(),
+                        issues: snapshot
+                            .warnings()
+                            .iter()
+                            .map(|warning| match warning.code() {
+                                CatalogWarningCode::RefreshFailed => {
+                                    ModelCatalogIssue::RefreshFailed
+                                }
+                                CatalogWarningCode::DiscoveryUnsupported => {
+                                    ModelCatalogIssue::DiscoveryUnsupported
+                                }
+                                CatalogWarningCode::AuthenticationRequired => {
+                                    ModelCatalogIssue::AuthenticationRequired
+                                }
+                                CatalogWarningCode::StaleCatalog => ModelCatalogIssue::StaleCatalog,
+                                CatalogWarningCode::UnknownCapability => {
+                                    ModelCatalogIssue::UnknownCapability
+                                }
+                                CatalogWarningCode::UnlistedModel => {
+                                    ModelCatalogIssue::UnlistedModel
+                                }
+                            })
+                            .collect(),
+                    }
+                })
+                .collect(),
             catalog_scopes: Some(scopes),
         })
     }
@@ -3220,6 +3255,35 @@ fn runtime_catalog_entry(
         entry.model().clone(),
         &context.info,
     );
+    result.source = Some(
+        ash_app_server_protocol::protocol::model::ModelCatalogSource {
+            provider_id: provider_config.provider.clone(),
+            connection_id: provider_config.connection.clone(),
+            metadata: entry.metadata_quality(),
+        },
+    );
+    // Public API reference prices do not describe subscriptions, custom gateways or endpoint overrides.
+    if provider_config.custom.is_none()
+        && provider_config.access_mode() == model_provider_info::ProviderAccessMode::Api
+        && provider_config
+            .base_url
+            .as_deref()
+            .is_none_or(|url| url.trim().is_empty())
+    {
+        static PRICES: std::sync::LazyLock<ash_model_accounting::RateCard> =
+            std::sync::LazyLock::new(|| {
+                ash_model_accounting::RateCard::bundled_accelerated_public_prices()
+                    .expect("bundled reference rate card is valid")
+            });
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| CoreError::Model(error.to_string()))?
+            .as_millis();
+        result.pricing = PRICES.catalog_prices(
+            entry.model(),
+            i64::try_from(now).map_err(|error| CoreError::Model(error.to_string()))?,
+        );
+    }
     result.maximum_context_window = context.maximum_window;
     result.long_context = entry.long_context(provider_config);
     result.selected_acceleration = provider_config

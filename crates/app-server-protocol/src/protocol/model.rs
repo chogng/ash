@@ -89,6 +89,14 @@ pub struct ModelCatalogEntry {
     #[ts(optional = nullable)]
     pub available_context_window: Option<u32>,
     pub capabilities: ModelCapabilities,
+    /// Provenance and access of this catalog row; never credentials or an execution endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub source: Option<ModelCatalogSource>,
+    /// Published reference rates for the active public API connection. Empty means unknown.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<ash_protocol::ModelTokenPricing>>", optional)]
+    pub pricing: Vec<ash_protocol::ModelTokenPricing>,
     pub supported_reasoning_efforts: Vec<ash_protocol::ModelReasoningEffortOption>,
     /// Catalog default, used when no reasoning effort is selected for the invocation.
     pub default_reasoning_effort: Option<ReasoningEffort>,
@@ -131,6 +139,8 @@ impl ModelCatalogEntry {
             auto_compact_token_limit: info.auto_compact_token_limit,
             available_context_window: None,
             capabilities: info.capabilities,
+            source: None,
+            pricing: Vec::new(),
             supported_reasoning_efforts: info.supported_reasoning_efforts.clone(),
             default_reasoning_effort: info.default_reasoning_effort,
             default_personality: info.default_personality,
@@ -164,10 +174,35 @@ pub struct ModelPreferencesUpdateParams {
 #[serde(rename_all = "snake_case")]
 pub struct ModelListResult {
     pub models: Vec<ModelCatalogEntry>,
+    /// Cached discovery state for each active connection; independent of invocation readiness.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<ModelCatalogStatus>>", optional)]
+    pub catalog_statuses: Vec<ModelCatalogStatus>,
     /// Current external credential scopes captured with these cached model rows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub catalog_scopes: Option<Vec<ModelCatalogScope>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct ModelCatalogStatus {
+    pub provider: String,
+    pub connection: String,
+    pub freshness: ash_protocol::ModelCatalogFreshness,
+    /// Stable categories only: raw discovery errors may contain endpoint or credential details.
+    pub issues: Vec<ModelCatalogIssue>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelCatalogIssue {
+    RefreshFailed,
+    DiscoveryUnsupported,
+    AuthenticationRequired,
+    StaleCatalog,
+    UnknownCapability,
+    UnlistedModel,
 }
 
 /// Opaque identity of a catalog authority; an absent identity means unavailable credentials.
@@ -181,3 +216,13 @@ pub struct ModelCatalogScope {
 #[cfg(test)]
 #[path = "model_tests.rs"]
 mod tests;
+
+/// Source identity is server-owned and scoped to the actual connection; vendor labels cannot claim it.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ModelCatalogSource {
+    #[ts(type = "string")]
+    pub provider_id: ash_protocol::ProviderId,
+    pub connection_id: ash_protocol::ModelConnectionId,
+    pub metadata: ash_protocol::ModelMetadataQuality,
+}

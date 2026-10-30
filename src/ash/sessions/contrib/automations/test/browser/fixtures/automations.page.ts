@@ -236,7 +236,8 @@ const endpointChanges = resources.add(new Emitter<void>());
 const endpoints = new Map<string, IRendererAgentHostConnection>();
 services.registerInstance(ILanguageModelsConfigurationService, {
 	onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined, rememberSelectedModel: () => { },
-	isModelVisible: () => true, setModelVisible: async () => { },
+	isModelPinned: () => false, setModelPinned: async () => { }, removeProviderPreferences: async () => { },
+		isModelVisible: () => true, setModelVisible: async () => { },
 });
 const renderer: IRendererHost = parameters.has('hosts') ? {
 	...disconnected, automation: backend,

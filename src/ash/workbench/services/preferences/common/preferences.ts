@@ -135,6 +135,8 @@ export interface IOpenSettingsOptions extends IEditorOptions {
 	readonly query?: string;
 	/** Ash Settings page or section identity; independent of the configuration target. */
 	readonly section?: string;
+	/** Raw query for the selected graphical section's search, independent of Settings metadata search. */
+	readonly sectionQuery?: string;
 	/** Reveals a setting in JSONC, or filters the graphical editor to its ID. */
 	readonly revealSetting?: { readonly key: string; readonly edit?: boolean; };
 }
@@ -145,7 +147,7 @@ export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidOptions' }, 'Settings opening options must be an object.'));
 	}
 	const supported = [
-		'query', 'section', 'target', 'folderUri', 'focusSearch', 'jsonEditor', 'revealSetting', 'openToSide', 'groupId',
+		'query', 'section', 'sectionQuery', 'target', 'folderUri', 'focusSearch', 'jsonEditor', 'revealSetting', 'openToSide', 'groupId',
 		'pinned', 'preserveFocus', 'forceReload', 'revealIfOpened', 'ignoreError', 'source',
 	];
 	const unsupported = Object.keys(options).find(key => !supported.includes(key));
@@ -189,6 +191,9 @@ export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}
 	}
 	if (options.section !== undefined && (typeof options.section !== 'string' || options.section.trim().length === 0)) {
 		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidSection' }, 'The Settings section must be a non-empty string.'));
+	}
+	if (options.sectionQuery !== undefined && (typeof options.sectionQuery !== 'string' || !options.section || options.jsonEditor === true)) {
+		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidSectionQuery' }, 'A section query must be a string with a graphical Settings section.'));
 	}
 	if (options.target !== undefined && ![ConfigurationTarget.USER, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.WORKSPACE, ConfigurationTarget.WORKSPACE_FOLDER].includes(options.target)) {
 		throw new Error(localize({ bundle: 'ash.settings', key: 'open.unsupportedTarget' }, 'This Settings editor supports local user, workspace and folder settings.'));

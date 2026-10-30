@@ -30,6 +30,8 @@ import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js'
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../platform/github/common/githubService.js';
 import { IAccountPolicyService } from '../../../workbench/services/policies/common/accountPolicyService.js';
+import { IManagedSettingsUpdateService } from '../../../workbench/services/policies/common/managedSettingsUpdate.js';
+import { ManagedSettingsUpdateService } from '../../../workbench/services/policies/browser/managedSettingsUpdateService.js';
 import { IGitHubConnectionService } from '../../../workbench/services/accounts/common/gitHubConnectionService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../workbench/contrib/github/browser/githubReviewModel.js';
 import '../../contrib/projects/browser/projects.contribution.js';
@@ -128,6 +130,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: false, apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
+		isModelPinned: () => false,
 		isModelVisible: () => visible,
 		setModelProviderApiKey: async (_connection: string, key: string) => { savedKeys.push(key); },
 		removeModelProviderApiKey: async (connection: string) => { removedKeys.push(connection); },
@@ -262,6 +265,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
+	services.registerSingleton(IManagedSettingsUpdateService, () => services.createInstance(ManagedSettingsUpdateService));
 	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 	using githubReview = services.createInstance(GitHubReviewModel);
 	services.registerInstance(IGitHubReviewModel, githubReview);
@@ -422,6 +426,15 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.deepEqual(removedKeys, ['openai']);
 	const modelSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]');
 	assert.ok(modelSearch);
+	await preferences.open({ section: 'models', query: '', sectionQuery: '@provider:openai @capability:vision', focusSearch: true });
+	const scopedSearch = window.document.querySelector<HTMLInputElement>('.ash-chat-models-catalog [role="combobox"]')!;
+	assert.equal(scopedSearch.value, '@provider:openai @capability:vision');
+	assert.equal(modelSearch.value, '');
+	assert.equal(window.document.activeElement, scopedSearch);
+	await preferences.open({ section: 'models', query: '', sectionQuery: '', focusSearch: false });
+	assert.equal(window.document.activeElement, scopedSearch);
+	await assert.rejects(preferences.open({ section: 'general', sectionQuery: 'unsupported' }), /does not provide its own search/);
+
 	await import('../../../workbench/contrib/preferences/browser/preferencesActions.js');
 	await commands.executeCommand('workbench.action.openSettings', 'chat.disableAIFeatures');
 	assert.equal(window.document.querySelector('.ash-sessions-settings-search input[type="search"]'), modelSearch);

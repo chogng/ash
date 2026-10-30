@@ -8,6 +8,7 @@
       "context_window": 1048576,
       "capabilities": {
         "tools": true,
+        "agent_mode": true,
         "reasoning": true,
         "parallel_tool_calls": true
       },

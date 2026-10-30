@@ -188,6 +188,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
 		setApprovalReviewModel: async () => { },
 		listCustomModelProviders: async () => [],
+		isModelPinned: () => false, pinModel: async () => { }, unpinModel: async () => { }, removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		async setModelProviderApiKey() { },

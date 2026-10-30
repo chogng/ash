@@ -5,6 +5,7 @@ export type {
 	ModelAccelerationOption,
 	ModelRetirement,
 	ModelCatalogEntry,
+	ModelCatalogStatus,
 } from '../../../../platform/agentHost/common/agentModels.js';
 
 export function modelRefIdentity(model: ModelRef): string {

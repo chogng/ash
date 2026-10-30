@@ -20,6 +20,7 @@ import type { CustomModelProvider, ModelProviderApiFormat } from '../../../../pl
 import { SecretStorageError } from '../../../../platform/secrets/common/secrets.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import { Emitter } from '../../../../base/common/event.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 
 // A stored credential is represented by a mask, never retrieved into the settings renderer.
 const SavedKeyMask = '••••••••';
@@ -95,6 +96,8 @@ export class ProviderApiKeyInput extends Disposable {
 /** Owns the provider form and table DOM; the view model owns declarations and test progress. */
 export class ModelProviderSettingsRenderer extends Disposable {
 	public readonly domNode: HTMLElement;
+	private readonly deleted = this._register(new Emitter<void>());
+	public readonly onDidDelete = this.deleted.event;
 	private readonly viewModel: ProviderModelsViewModel;
 	private readonly name: InputBox;
 	private readonly baseUrl: InputBox;
@@ -118,11 +121,14 @@ export class ModelProviderSettingsRenderer extends Disposable {
 	private structure = '';
 	private editing = false;
 	private savingModel = false;
+	private deleting = false;
 	private credentialStorageAvailable = true;
+	private readonly removeProvider: Button;
 
 	constructor(document: Document, provider: CustomModelProvider, configured: boolean, private readonly isNew: boolean,
 		@IContextViewService contextView: IContextViewService,
 		@IInstantiationService instantiation: IInstantiationService,
+		@IDialogService dialogs: IDialogService,
 	) {
 		super();
 		this.viewModel = this._register(instantiation.createInstance(ProviderModelsViewModel, provider, this.isNew));
@@ -149,6 +155,32 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		const actions = h(document, 'div');
 		actions.className = 'ash-chat-models-actions';
 		toolbar.append(title, actions);
+		this.removeProvider = this._register(new Button(actions, { ...defaultButtonStyles, label: localize('models.provider.deleteProvider', 'Delete provider'), presentation: 'quiet' }));
+		this._register(this.removeProvider.onDidClick(() => {
+			void (async () => {
+				if (this.deleting) { return; }
+				const focused = document.activeElement;
+				this.deleting = true;
+				this.render();
+				try {
+					const result = await dialogs.confirm({ message: localize('models.provider.deleteConfirm', 'Delete provider {0} and its saved API key?', this.name.value) });
+					if (!result.confirmed || this.isDisposed) { return; }
+					// Blurring a dirty credential can start a save. Finish it before removal so it cannot recreate the provider.
+					await this.key.save();
+					if (this.isDisposed) { return; }
+					await this.viewModel.deleteProvider();
+					if (!this.isDisposed) { this.deleted.fire(); }
+				}
+				catch (error) { if (!this.isDisposed) { this.viewModel.report(error); } }
+				finally {
+					if (!this.isDisposed) {
+						this.deleting = false;
+						this.render();
+						if (this.domNode.contains(focused) && document.activeElement === document.body) { (focused as HTMLElement).focus(); }
+					}
+				}
+			})();
+		}));
 		this.refresh = this._register(new Button(actions, {
 			...defaultButtonStyles,
 			label: localize('models.provider.refresh', 'Refresh models'),
@@ -261,7 +293,16 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		if (!this.isNew) { await this.viewModel.initialize(); }
 	}
 
+	public get isDraft(): boolean { return !this.viewModel.isSaved; }
+	/** Catalog invalidation can remove this card before the initiating delete promise settles. */
+	public get isDeleting(): boolean { return this.deleting; }
+
 	public focus(): void { this.name.focus(); }
+	public focusModel(id: string): void {
+		const model = this.viewModel.rows.find(row => row.id === id);
+		if (model) { this.openEditor(model); }
+		else { this.focus(); }
+	}
 	public get title(): string { return this.name.value.trim() || localize('models.provider.new', 'New provider'); }
 	public updateKeyConfigured(configured: boolean): void { this.key.updateConfigured(configured); }
 	public setCredentialStorageAvailable(available: boolean): void {
@@ -330,7 +371,8 @@ export class ModelProviderSettingsRenderer extends Disposable {
 	}
 
 	private render(): void {
-		const busy = this.viewModel.busy || this.savingModel;
+		const busy = this.viewModel.busy || this.savingModel || this.deleting;
+		this.removeProvider.enabled = !busy && this.viewModel.isSaved;
 		for (const control of [this.name, this.baseUrl, this.format, this.test, this.refresh, this.add, this.cancel, this.saveModel]) { control.enabled = !busy; }
 		this.key.setEnabled(this.credentialStorageAvailable && !busy);
 		this.modelId.enabled = !busy && !this.editing;
@@ -448,6 +490,7 @@ class ProviderModelsViewModel extends Disposable {
 	}
 
 	public get provider(): CustomModelProvider { return this.configuration; }
+	public get isSaved(): boolean { return this.saved !== ''; }
 	public get rows(): readonly ProviderModelItem[] { return this.items; }
 	public get busy(): boolean { return this._busy; }
 	public get message(): string { return this._message; }
@@ -528,6 +571,13 @@ class ProviderModelsViewModel extends Disposable {
 	}
 
 	public save(): Promise<void> { return this.write(this.provider); }
+
+	public async deleteProvider(): Promise<void> {
+		this._busy = true;
+		this.changed.fire();
+		try { await this.models.removeCustomModelProvider(this.provider.id); }
+		finally { this._busy = false; if (!this.isDisposed) { this.changed.fire(); } }
+	}
 
 	private write(config: CustomModelProvider): Promise<void> {
 		const fingerprint = JSON.stringify(config);

@@ -973,6 +973,12 @@ fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor()
             .iter()
             .any(|entry| entry.model.provider == provider)
     );
+    assert!(
+        subscribed
+            .iter()
+            .filter(|entry| entry.model.provider == provider)
+            .all(|entry| entry.pricing.is_empty())
+    );
     secrets.delete(&oauth_key).unwrap();
     assert_eq!(
         service
@@ -997,6 +1003,21 @@ fn kimi_discovered_catalog_tracks_the_active_connection_and_persists_by_vendor()
     kimi.capabilities.fast_mode = ash_protocol::CapabilitySupport::Unsupported;
     // The API connection cannot expose the subscription's high-speed model route.
     kimi.acceleration_options.clear();
+    let reference_prices =
+        ash_model_accounting::RateCard::bundled_accelerated_public_prices().unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+        .try_into()
+        .unwrap();
+    for entry in &mut api_catalog {
+        if entry.model.provider == provider {
+            entry.source.as_mut().unwrap().connection_id =
+                ash_protocol::ModelConnectionId::new("kimi").unwrap();
+            entry.pricing = reference_prices.catalog_prices(&entry.model, now);
+        }
+    }
     assert_eq!(service.list().unwrap(), api_catalog);
     assert_eq!(
         service.config.read_snapshot().unwrap().values.providers[&provider]
@@ -4339,6 +4360,19 @@ fn custom_provider_discovery_controls_discovered_view_without_mutating_config() 
     assert_eq!(model.list().unwrap(), built_in);
     assert_eq!(model.config.read_snapshot().unwrap(), configured);
     assert_eq!(client.calls.load(std::sync::atomic::Ordering::SeqCst), 3);
+    let snapshot = model.catalog_snapshot().unwrap();
+    let status = snapshot
+        .catalog_statuses
+        .iter()
+        .find(|status| status.connection == provider.as_str())
+        .unwrap();
+    assert_eq!(status.provider, provider.as_str());
+    assert!(status.issues.contains(
+        &ash_app_server_protocol::protocol::model::ModelCatalogIssue::AuthenticationRequired
+    ));
+    let wire = serde_json::to_string(status).unwrap();
+    assert!(!wire.contains("secret-response"));
+    assert!(!wire.contains("example.test"));
     assert_eq!(
         model
             .refresh(&ash_protocol::ModelConnectionId::new(provider.as_str()).unwrap())
@@ -5194,7 +5228,13 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
             );
         }
         previous = Some(frozen);
-        assert_eq!(service.list().unwrap(), catalog);
+        let mut expected_catalog = catalog.clone();
+        for entry in &mut expected_catalog {
+            if entry.model.provider.as_str() == "glm" {
+                entry.source.as_mut().unwrap().connection_id = ModelConnectionId::new(*id).unwrap();
+            }
+        }
+        assert_eq!(service.list().unwrap(), expected_catalog);
         assert_eq!(
             config
                 .read_snapshot()
@@ -6133,4 +6173,46 @@ fn native_web_directory_consent_does_not_load_directory_configuration() {
         },
     );
     assert!(tracker.read_authorized(&snapshot).unwrap().is_none());
+}
+
+#[test]
+fn catalog_reference_prices_are_scoped_to_public_api_connections_without_endpoint_overrides() {
+    let registry = ProviderConfigRegistry::builtin();
+    let runtime = ModelProviderRuntime::new(registry.clone());
+    let manager = ModelsManager::new(registry.clone());
+    let model = ash_protocol::ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-5.6-terra").unwrap(),
+    );
+    let entry = manager
+        .resolve_static(&model, &ModelRequirements::agent())
+        .unwrap();
+    let mut config = ResolvedConfig::default();
+    let public = runtime_catalog_entry(entry.entry(), &config, &registry, &runtime).unwrap();
+    assert!(!public.pricing.is_empty());
+    assert_eq!(
+        public.source.as_ref().unwrap().connection_id.as_str(),
+        "openai"
+    );
+    let subscription = ModelProviderConfig::for_connection(
+        ash_protocol::ModelConnectionId::new("chatgpt-subscription").unwrap(),
+    );
+    config
+        .providers
+        .insert(model.provider.clone(), subscription);
+    let subscribed = runtime_catalog_entry(entry.entry(), &config, &registry, &runtime).unwrap();
+    assert!(subscribed.pricing.is_empty());
+    assert_eq!(
+        subscribed.source.unwrap().connection_id.as_str(),
+        "chatgpt-subscription"
+    );
+    let mut custom_endpoint = ModelProviderConfig::new(model.provider.clone());
+    custom_endpoint.base_url = Some("https://example.test/v1".into());
+    config.providers.insert(model.provider, custom_endpoint);
+    assert!(
+        runtime_catalog_entry(entry.entry(), &config, &registry, &runtime)
+            .unwrap()
+            .pricing
+            .is_empty()
+    );
 }

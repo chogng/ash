@@ -101,7 +101,8 @@ export class SessionsPreferences extends Disposable {
 	private dialogVisible = false;
 	private focusDialog: (() => void) | undefined;
 	private navigate: ((categoryId: string) => void) | undefined;
-	private applyQuery: ((query: string) => void) | undefined;
+	private applyQuery: ((query: string, focus: boolean) => void) | undefined;
+	private applySectionQuery: ((options: IOpenSettingsOptions) => void) | undefined;
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -135,7 +136,7 @@ export class SessionsPreferences extends Disposable {
 		if (validated.openToSide || validated.groupId !== undefined || validated.folderUri || validated.target === ConfigurationTarget.WORKSPACE || validated.target === ConfigurationTarget.WORKSPACE_FOLDER || new SettingsSearchQuery(validated.query ?? '').languageFilter) {
 			// Sessions owns product preferences; resource and language editing belongs to the shared Workbench pane.
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
-			const jsonEditor = validated.jsonEditor ?? this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json';
+			const jsonEditor = validated.jsonEditor ?? (validated.sectionQuery === undefined && this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json');
 			this.dialog?.dispose();
 			const inGroup = validated.openToSide || validated.groupId !== undefined;
 			// Revealing Code selects its document group. Settle that layout before opening and focusing the requested pane.
@@ -144,7 +145,7 @@ export class SessionsPreferences extends Disposable {
 			if (jsonEditor && !inGroup) await this.showEditor();
 			return;
 		}
-		if (validated.jsonEditor ?? this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json') {
+		if (validated.jsonEditor ?? (validated.sectionQuery === undefined && this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json')) {
 			this.dialog?.dispose();
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 			await preferences.openUserSettings({ ...validated, jsonEditor: true });
@@ -154,9 +155,10 @@ export class SessionsPreferences extends Disposable {
 		const categoryId = validated.section;
 		const query = validated.query ?? (validated.revealSetting ? `@id:${validated.revealSetting.key}` : undefined);
 		if (this.dialogVisible) {
+			if (validated.sectionQuery !== undefined) { this.applySectionQuery?.(validated); return; }
 			if (categoryId) { this.navigate?.(categoryId); }
-			if (query !== undefined) this.applyQuery?.(query);
-			else this.focusDialog?.();
+			if (query !== undefined) this.applyQuery?.(query, !validated.preserveFocus && validated.focusSearch !== false);
+			else if (!validated.preserveFocus && validated.focusSearch !== false) this.focusDialog?.();
 			return;
 		}
 		// Release the closed modal's menus and accessibility registrations before
@@ -301,7 +303,7 @@ export class SessionsPreferences extends Disposable {
 			},
 		};
 		const renderer = resources.add(contentServices.createInstance(SettingsRenderer, list, settingOptions));
-		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsRenderer, list));
+		const modelContent = resources.add(contentServices.createInstance(ModelSettingsRenderer, list));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsRenderer, list));
 		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.dispose(); }, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
 		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsRenderer, list));
@@ -434,8 +436,13 @@ export class SessionsPreferences extends Disposable {
 			}
 			pageScrollable.layout();
 		};
-		for (const category of categories) {
+		for (const [index, category] of categories.entries()) {
 			if (category.content) resources.add(category.content.onDidChange(render));
+			if (category.content?.onDidRequestReveal) resources.add(category.content.onDidRequestReveal(() => {
+				activeCategory = index;
+				searchInput.value = '';
+				render();
+			}));
 		}
 		resources.add(this.configurationService.onDidChangeConfiguration(() => {
 			if (new SettingsSearchQuery(searchInput.value).hasModifiedFilter) render();
@@ -482,9 +489,17 @@ export class SessionsPreferences extends Disposable {
 			render();
 			pageScrollable.scrollTo(0, 0);
 		}));
-		this.applyQuery = query => {
+		this.applyQuery = (query, focus) => {
 			searchInput.value = query;
-			searchInput.focus();
+			if (focus) searchInput.focus();
+		};
+		this.applySectionQuery = options => {
+			const sectionSearch = categories[categoryIndex(options.section)].content?.sectionSearch;
+			if (!sectionSearch) { throw new RangeError(localize({ bundle: 'ash.settings', key: 'open.unsupportedSectionSearch' }, 'This Settings section does not provide its own search.')); }
+			this.navigate?.(options.section!);
+			if (options.query !== undefined) { this.applyQuery?.(options.query, false); }
+			sectionSearch.search(options.sectionQuery!);
+			if (!options.preserveFocus && options.focusSearch !== false) { sectionSearch.focus(); }
 		};
 		render();
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.SessionsSettings);
@@ -508,7 +523,8 @@ export class SessionsPreferences extends Disposable {
 		this.activeDialog.value = resources;
 		try {
 			const shown = dialog.show();
-			if (query !== undefined) searchInput.focus();
+			if (validated.sectionQuery !== undefined) this.applySectionQuery(validated);
+			else if (query !== undefined) searchInput.focus();
 			await shown;
 		} finally {
 			// Closing can be followed by another open before this promise settles.
@@ -516,6 +532,7 @@ export class SessionsPreferences extends Disposable {
 			if (this.dialog === dialog) {
 				this.navigate = undefined;
 				this.applyQuery = undefined;
+				this.applySectionQuery = undefined;
 				this.dialog = undefined;
 				this.focusDialog = undefined;
 				this.dialogVisible = false;

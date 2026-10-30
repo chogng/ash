@@ -31,6 +31,51 @@ export function matchesSubString(word: string, wordToMatchAgainst: string): IMat
 	return matches;
 }
 
+/** Matches a contiguous prefix at a word boundary, or prefixes across successive words. */
+export function matchesWords(word: string, target: string, contiguous = false): IMatch[] | null {
+	if (!target) { return null; }
+	if (!contiguous) { return matchWordPrefixes(word, target); }
+	for (const start of wordStarts(target)) {
+		const match = matchesContiguousSubString(word, target.slice(start));
+		if (match?.[0]?.start === 0) { return match.map(range => ({ start: start + range.start, end: start + range.end })); }
+	}
+	return null;
+}
+
+/** Matches identifier word prefixes, including initials across camel-case transitions. */
+export function matchesCamelCase(word: string, camelCaseWord: string): IMatch[] | null {
+	return camelCaseWord ? matchWordPrefixes(word, camelCaseWord) : null;
+}
+
+function wordStarts(value: string): number[] {
+	const starts: number[] = [];
+	let offset = 0;
+	let previous = '';
+	for (const character of value) {
+		if (/[\p{L}\p{N}]/u.test(character) && (!/[\p{L}\p{N}]/u.test(previous) || /\p{Ll}/u.test(previous) && /\p{Lu}/u.test(character) || /\p{L}/u.test(previous) && /\p{N}/u.test(character))) { starts.push(offset); }
+		offset += character.length;
+		previous = character;
+	}
+	return starts;
+}
+
+function matchWordPrefixes(word: string, target: string): IMatch[] | null {
+	const pattern = word.replace(/\s+/gu, '').toLowerCase();
+	if (!pattern) { return []; }
+	const starts = wordStarts(target);
+	const matches: IMatch[] = [];
+	let cursor = 0;
+	for (const [index, start] of starts.entries()) {
+		const end = starts[index + 1] ?? target.length;
+		const segment = lowercaseLabel(target.slice(start, end));
+		let length = 0;
+		while (cursor < pattern.length && segment.text[length] === pattern[cursor]) { length++; cursor++; }
+		if (length) { const range = sourceRange(segment, 0, length); matches.push({ start: start + range.start, end: start + range.end }); }
+		if (cursor === pattern.length) { return matches; }
+	}
+	return null;
+}
+
 interface LowercaseLabel {
 	readonly text: string;
 	readonly sourceRanges?: readonly IMatch[];

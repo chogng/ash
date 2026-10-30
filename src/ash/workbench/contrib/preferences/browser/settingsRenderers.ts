@@ -64,6 +64,9 @@ export abstract class SettingsPageRenderer<T extends ISetting | SettingsSectionR
 	public abstract readonly categoryId: string;
 	public get settingIds(): readonly string[] | undefined { return undefined; }
 	public abstract readonly onDidChange: Event<void>;
+	/** Requests that the host reveal this category without its global search filter. */
+	public readonly onDidRequestReveal?: Event<void>;
+	public readonly sectionSearch?: { readonly search: (query: string) => void; readonly focus: () => void; };
 	private readonly elements = new Map<string, HTMLElement>();
 
 	public getNodes(query = new SettingsSearchQuery('')): readonly SettingsTreeNode<T>[] {

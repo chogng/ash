@@ -85,6 +85,7 @@ pub(crate) trait ModelCatalog: Send + Sync {
     ) -> Result<ash_app_server_protocol::protocol::model::ModelListResult, CoreError> {
         Ok(ash_app_server_protocol::protocol::model::ModelListResult {
             models: self.list()?,
+            catalog_statuses: Vec::new(),
             catalog_scopes: None,
         })
     }

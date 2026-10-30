@@ -262,6 +262,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
 		setApprovalReviewModel: async () => { },
 		listCustomModelProviders: async () => [],
+		isModelPinned: () => false, pinModel: async () => { }, unpinModel: async () => { }, removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		setModelProviderApiKey: () => pending as Promise<void>,

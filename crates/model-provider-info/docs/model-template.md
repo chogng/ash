@@ -434,3 +434,15 @@ models-manager 合并并记录来源，App Server 输出可选 retirement，前�
 4. 只有文档或明确测试支持的固定文本、客户端版本及请求头才作为接入限制记录。未知限制标为待确认；新增声明不能代替实际编码和验收。
 
 本节仅记录调研、已有验证和待补能力，没有修改上述编码缺口，也没有为 SIWC、旧 Codex 后端、Kimi 各网关和所有套餐新增实连验证。
+
+## 12. 管理目录的能力、来源与参考价格（2026-10-30）
+
+`capabilities.tools` 与新增的 `capabilities.agent_mode` 都保留 supported / unsupported / unknown 三态；编辑目录用 true / false / null 表达。`agent_mode` 是独立的 Agent-loop 声明，不由工具调用、厂商、型号前缀或提示词推导，也不改变请求参数或 Core 的权限判断。未填写的现有条目保持未知。Muse Spark 1.3 的明确声明依据 [Meta 型号说明](https://dev.meta.ai/docs/models)中该准确型号的多步工具／Agent 工作流说明；这里不据此批量声明其他版本或第三方接入。
+
+本次接口对比发现：[OpenAI model/list](https://developers.openai.com/api/reference/resources/models/methods/list) 与 [API 价格](https://developers.openai.com/api/docs/pricing)是分开的信息源；[Claude Models](https://platform.claude.com/docs/en/api/models/list)的细分服务端能力不等于自定义工具或 Ash Agent 能力；[Gemini models](https://ai.google.dev/api/models)的 supportedGenerationMethods 也不表达 Agent 支持。[GLM](https://docs.z.ai/api-reference/llm/chat-completion)、[Kimi](https://platform.kimi.ai/docs/api/chat)、[Grok](https://docs.x.ai/developers/models)、[DeepSeek](https://api-docs.deepseek.com/quick_start/pricing)的工具请求字段和订阅接入分别核对，不能从同名参数外推能力或套餐价格。
+
+App Server 的 `ModelCatalogEntry.source` 提供真实 provider_id、connection_id 和目录已有的 metadata quality。`models-manager` 区分实时返回和磁盘恢复，后者及其字段 provenance 为 PersistedObservation；声明来源不是扩展认证或账户可用性证明。前端不允许供应商名称认领受信图标或其他连接的身份。
+
+`ModelCatalogEntry.pricing` 来自 `model-accounting` 的同一份已校验价目表，携带精确十进制字符串、币种、服务等级、区域、输入 token 区间、价目表版本、核对日期和来源 URL。单位固定为每百万 token 的货币金额，与 VS Code 的 Copilot credits 分开。仅匹配当前生效的准确模型和公开 API 平台；订阅、显式端点覆盖和自定义网关不继承厂商公开价格。空列表表示未知，零金额仍是已知价格，不表示账户免费权益。本轮没有更新价目表金额，UI 明示现有 2026-09-04 参考卡的核对日期；参考价不替代实际调用的计价记录或账单。
+
+上述字段通过既有 `model/list` 和生成 decoder 进入前端领域契约，由 Models 筛选、Hover 和 Accessible View 消费；管理行仅保留已确认的简短能力摘要，完整来源与价格按需查看。目录刷新比较包含这些字段，单独撤回来源或价格也会通知消费者。

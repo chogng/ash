@@ -509,7 +509,7 @@
     "settings.models.chatDefault.label": "聊天",
     "settings.models.chatDefault.description": "选择新聊天使用的模型。",
     "accessibility.chatModelConfigurationVerbosityTitle": "聊天模型配置无障碍帮助",
-    "accessibility.chatModelConfigurationVerbosityDescription": "焦点进入模型控件或语言模型管理时，提示如何打开无障碍帮助。",
+    "accessibility.chatModelConfigurationVerbosityDescription": "焦点进入模型控件或模型设置时，提示如何打开无障碍帮助。",
     "settings.dictation.group": "语音输入",
     "settings.dictation.groupDescription": "选择语音输入的转写方式。",
     "quickCommand.label": "命令面板",

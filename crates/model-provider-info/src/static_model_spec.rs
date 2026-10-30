@@ -157,6 +157,7 @@ fn model_capabilities<'de, D: serde::Deserializer<'de>>(
     let declaration = ModelCapabilitiesDeclaration::deserialize(deserializer)?;
     Ok(ModelCapabilities {
         tools: capability_support(declaration.tools),
+        agent_mode: capability_support(declaration.agent_mode),
         reasoning: capability_support(declaration.reasoning),
         parallel_tool_calls: capability_support(declaration.parallel_tool_calls),
         image_detail_original: capability_support(declaration.image_detail_original),
@@ -169,6 +170,8 @@ fn model_capabilities<'de, D: serde::Deserializer<'de>>(
 #[serde(deny_unknown_fields)]
 struct ModelCapabilitiesDeclaration {
     tools: Option<bool>,
+    /// Explicit Agent-loop support; omission stays unknown even when tools are supported.
+    agent_mode: Option<bool>,
     reasoning: Option<bool>,
     parallel_tool_calls: Option<bool>,
     /// Whether original-detail image requests are supported; image input is declared separately.

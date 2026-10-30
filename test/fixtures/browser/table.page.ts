@@ -176,6 +176,7 @@ services.registerInstance(ILanguageModelsService, {
 	readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }), saveReasoningEffort: async () => { },
 	setModelVisible: async () => { }, setModelPreferences: async () => { },
 	readApprovalReviewModel: async () => ({ type: 'automatic' }), setApprovalReviewModel: async () => { },
+	isModelPinned: () => false, pinModel: async () => { }, unpinModel: async () => { }, removeCustomModelProvider: async () => { },
 	saveCustomModelProvider: async () => { }, testProviderModel: async () => ({ type: 'passed' }),
 	setModelProviderApiKey: async () => { }, removeModelProviderApiKey: async () => { }, discoverProviderModels: async () => [],
 });

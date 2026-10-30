@@ -124,6 +124,62 @@ impl RateCard {
         self.rules.len()
     }
 
+    /// Returns effective reference prices without inventing usage or choosing a service tier.
+    /// The caller must establish that the connection uses the matching first-party public API.
+    pub fn catalog_prices(
+        &self,
+        model: &ash_protocol::ModelRef,
+        at_unix_ms: i64,
+    ) -> Vec<ash_protocol::ModelTokenPricing> {
+        let Some((platform, _)) = crate::pricing::public_api_dimensions(&model.provider) else {
+            return Vec::new();
+        };
+        self.rules
+            .iter()
+            .filter(|rule| {
+                rule.selector.billing_platform.as_str() == platform
+                    && rule.selector.provider == model.provider
+                    && rule.selector.model == model.model
+                    && rule.selector.operation.as_str() == "text_generation"
+                    && rule.selector.pricing_variant.as_str() == "default"
+                    && rule.effective_range.contains(at_unix_ms)
+            })
+            .filter_map(|rule| {
+                let amount = |dimension: &str| {
+                    rule.rates
+                        .iter()
+                        .find(|(key, _)| key.as_str() == dimension)
+                        .map(|(_, rate)| {
+                            let units = rate.pico_units_per_token();
+                            format!("{}.{:06}", units / 1_000_000, units % 1_000_000)
+                                .trim_end_matches('0')
+                                .trim_end_matches('.')
+                                .to_owned()
+                        })
+                };
+                Some(ash_protocol::ModelTokenPricing {
+                    currency: rule.currency.to_string(),
+                    service_tier: rule.selector.service_tier.to_string(),
+                    region: rule.selector.region.to_string(),
+                    min_input_tokens: u32::try_from(rule.input_range.min_inclusive).ok()?,
+                    max_input_tokens: rule
+                        .input_range
+                        .max_exclusive
+                        .map(u32::try_from)
+                        .transpose()
+                        .ok()?,
+                    input: amount(TokenDimension::UNCACHED_INPUT),
+                    output: amount(TokenDimension::OUTPUT),
+                    cache_read: amount(TokenDimension::CACHED_INPUT),
+                    cache_write: amount(TokenDimension::CACHE_WRITE_INPUT),
+                    revision: self.revision().to_string(),
+                    reviewed_at: self.metadata.reviewed_at.clone(),
+                    source_urls: self.metadata.source_urls.clone(),
+                })
+            })
+            .collect()
+    }
+
     pub fn rate(
         &self,
         context: &ModelBillingContext,

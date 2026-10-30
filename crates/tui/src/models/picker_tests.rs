@@ -44,6 +44,7 @@ fn provider_config(provider: &str) -> ProviderConfigDto {
 #[test]
 fn fixed_models_remain_available_when_connections_change() {
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
     };
@@ -64,6 +65,7 @@ fn fixed_models_remain_available_when_connections_change() {
 #[test]
 fn model_without_effort_shows_name_only_and_keeps_selection_identity_and_pin_state() {
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
     };
@@ -103,6 +105,7 @@ fn subscription_models_share_one_list_without_provider_names() {
     let chatgpt = catalog_entry("openai", "gpt-ash", "GPT Ash");
     let xai = catalog_entry("xai", "grok-ash", "Grok Ash");
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![chatgpt, xai],
     };
@@ -130,6 +133,7 @@ fn subscription_models_share_one_list_without_provider_names() {
 #[test]
 fn pinned_models_lead_the_same_searchable_list_without_duplicate_entries() {
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![
             catalog_entry("openai", "gpt-first", "Shared name"),
@@ -174,6 +178,7 @@ fn pinned_models_lead_the_same_searchable_list_without_duplicate_entries() {
 #[test]
 fn model_picker_keeps_all_builtin_models_selectable_before_configuration() {
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![
             catalog_entry("openai", "gpt-ash", "GPT Ash"),
@@ -221,6 +226,7 @@ fn model_picker_keeps_all_builtin_models_selectable_before_configuration() {
 #[test]
 fn model_picker_without_configured_connections_still_offers_builtin_models() {
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![catalog_entry("openai", "gpt-ash", "GPT Ash")],
     };
@@ -241,6 +247,7 @@ fn effort_values_do_not_change_model_name_search() {
     entry.default_reasoning_effort = Some(ash_protocol::ReasoningEffort::High);
     let choices = model_choices(
         &ModelListResult {
+            catalog_statuses: Vec::new(),
             catalog_scopes: None,
             models: vec![entry],
         },
@@ -281,6 +288,7 @@ fn effort_labels_align_across_models_with_different_level_counts() {
     entries[2].default_reasoning_effort = Some(ReasoningEffort::None);
     let choices = model_choices(
         &ModelListResult {
+            catalog_statuses: Vec::new(),
             catalog_scopes: None,
             models: entries.into(),
         },
@@ -329,6 +337,7 @@ fn effort_labels_align_across_models_with_different_level_counts() {
 #[test]
 fn configured_model_is_selected_when_picker_opens() {
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![
             catalog_entry("openai", "gpt-first", "First"),
@@ -359,6 +368,7 @@ fn model_hints_follow_selected_pin_state_capabilities_and_search_focus() {
         ash_protocol::ReasoningEffort::High.into(),
     ];
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![adjustable, catalog_entry("openai", "simple", "Simple")],
     };
@@ -433,6 +443,7 @@ fn model_controls_share_keyboard_and_pointer_actions_without_consuming_search_in
     entry.maximum_context_window = Some(872_000);
     entry.context_window = Some(272_000);
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![entry, catalog_entry("openai", "gpt-4o", "GPT-4o")],
     };
@@ -518,6 +529,7 @@ fn assert_model_controls(width: u16, language: crate::nls::Language) {
     entry.maximum_context_window = Some(872_000);
     entry.context_window = Some(272_000);
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![entry, catalog_entry("openai", "gpt-4o", "GPT-4o")],
     };
@@ -613,6 +625,7 @@ fn other_provider_controls_follow_capabilities_and_saved_preferences() {
         ("glm", "glm-5.3", "GLM-5.3", false, Some(1_000_000)),
     ];
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: rows
             .iter()
@@ -777,6 +790,7 @@ fn model_tab_cycles_only_editable_settings_resets_on_movement_and_removes_none()
         models.push(entry);
     }
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models,
     };
@@ -910,6 +924,7 @@ fn model_settings_refresh_keeps_field_focus_and_unconfirmed_effort() {
     entry.maximum_context_window = Some(872_000);
     entry.context_window = Some(272_000);
     let mut catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![entry],
     };
@@ -986,6 +1001,7 @@ fn model_tab_focus_is_visible_for_each_setting_in_chinese_and_on_narrow_terminal
     entry.maximum_context_window = Some(872_000);
     entry.context_window = Some(272_000);
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![entry],
     };
@@ -1047,6 +1063,7 @@ fn missing_model_capabilities_leave_empty_aligned_columns() {
     use ratatui::layout::Position;
     use ratatui::layout::Rect;
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: [4, 2, 7, 6, 5, 3, 1, 0]
             .into_iter()
@@ -1190,6 +1207,7 @@ fn acceleration_control_cycles_catalog_ids_in_both_directions() {
         })
         .collect();
     let mut catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![entry],
     };
@@ -1261,6 +1279,7 @@ fn selected_acceleration_uses_catalog_names_in_english_and_chinese() {
             entry.selected_acceleration = selected.map(str::to_owned);
             let choices = model_choices(
                 &ModelListResult {
+                    catalog_statuses: Vec::new(),
                     catalog_scopes: None,
                     models: vec![entry],
                 },
@@ -1300,6 +1319,7 @@ fn denied_saved_acceleration_can_be_cleared_without_any_available_options() {
     let config = crate::test_support::empty_config_snapshot();
     let choices = model_choices(
         &ModelListResult {
+            catalog_statuses: Vec::new(),
             catalog_scopes: None,
             models: vec![entry],
         },

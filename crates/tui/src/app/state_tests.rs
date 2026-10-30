@@ -1549,6 +1549,7 @@ fn config_owns_the_advisor_model_picker() {
         advisor: advisor_choices(
             &config,
             &ash_app_server_protocol::protocol::model::ModelListResult {
+                catalog_statuses: Vec::new(),
                 catalog_scopes: None,
                 models: vec![],
             },

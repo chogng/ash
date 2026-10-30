@@ -115,7 +115,7 @@ export class TabbedModelPicker extends Disposable {
 					}
 				}
 				return {
-					items: buildModelPickerItems(destination.models, current, {
+					items: buildModelPickerItems([...destination.models].sort((left, right) => Number(this.languageModels.isModelPinned(right.model)) - Number(this.languageModels.isModelPinned(left.model))), current, {
 						selectedEffort: this.delegate.getSelectedReasoningEffort(),
 						onOpenDetails: entry => this.showDetails(entry),
 					}),

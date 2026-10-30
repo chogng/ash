@@ -14,9 +14,12 @@ use std::path::Path;
 fn wide_header_keeps_pet_and_identity_information_together() {
     let mut model = WelcomeModel::for_workspace(Path::new("/work/ash"));
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                source: None,
+                pricing: Vec::new(),
                 retirement: None,
                 description: None,
                 discovered: None,

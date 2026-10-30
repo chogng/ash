@@ -75,7 +75,8 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	services.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
 	services.registerInstance(ILanguageModelsConfigurationService, {
 		onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined,
-		rememberSelectedModel: () => { }, isModelVisible: () => true, setModelVisible: async () => { },
+		rememberSelectedModel: () => { }, isModelPinned: () => false, setModelPinned: async () => { }, removeProviderPreferences: async () => { },
+		isModelVisible: () => true, setModelVisible: async () => { },
 	});
 	const hostChanges = lifetime.add(new Emitter<void>());
 	const hosts = new Map<string, IRendererAgentHostConnection>();

@@ -38,3 +38,29 @@ test('Persisted Auto intent inherits the configured backend runtime without repl
 		{ get: () => 'auto', onDidChangeValue: Event.None } as unknown as IStorageService);
 	assert.equal(preferences.getDefaultNewChatModel(catalog, second), undefined);
 });
+
+
+test('Pins persist independently of visibility, survive a new service and clean up by exact provider ID', async () => {
+	using configuration = new InMemoryConfigurationService();
+	const storage = { onDidChangeValue: Event.None } as IStorageService;
+	using preferences = new LanguageModelsConfigurationService(ChatModelPreferences, configuration, storage);
+	const custom = { provider: 'custom-one', model: 'one' };
+	const other = { provider: 'custom-one-extra', model: 'two' };
+	let changes = 0;
+	using listener = preferences.onDidChangeModels(() => changes++);
+	await Promise.all([preferences.setModelPinned(custom, true), preferences.setModelPinned(other, true)]);
+	assert.equal(preferences.isModelPinned(custom), true);
+	assert.equal(preferences.isModelVisible(custom), false);
+	await preferences.setModelVisible(custom, true);
+	await preferences.setModelVisible(other, true);
+	using restored = new LanguageModelsConfigurationService(ChatModelPreferences, configuration, storage);
+	assert.equal(restored.isModelPinned(custom), true);
+	await preferences.removeProviderPreferences('custom-one');
+	assert.equal(restored.isModelPinned(custom), false);
+	assert.equal(restored.isModelVisible(custom), false);
+	assert.equal(restored.isModelPinned(other), true);
+	assert.equal(restored.isModelVisible(other), true);
+	await restored.setModelPinned(other, false);
+	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.pinnedModels), []);
+	assert.ok(changes >= 6);
+});

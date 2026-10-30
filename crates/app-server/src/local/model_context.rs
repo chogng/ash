@@ -32,6 +32,7 @@ pub(super) struct ModelContextCatalog {
     entries: HashMap<ModelRef, ModelCatalogEntry>,
     discovered: BTreeMap<ProviderId, Vec<ModelCatalogEntry>>,
     scopes: BTreeMap<String, Option<String>>,
+    snapshots: BTreeMap<String, std::sync::Arc<ash_models_manager::ModelCatalogSnapshot>>,
 }
 
 impl ModelContextCatalog {
@@ -52,6 +53,7 @@ impl ModelContextCatalog {
         let mut entries = HashMap::new();
         let mut discovered = BTreeMap::new();
         let mut scopes = BTreeMap::new();
+        let mut snapshots = BTreeMap::new();
         for provider in config.providers.values() {
             let seed = manager
                 .static_snapshot(&provider.provider)
@@ -75,6 +77,12 @@ impl ModelContextCatalog {
                     .map(|binding| binding.scope().source_scope().as_str().to_owned()),
             );
             if let Some(binding) = binding {
+                snapshots.insert(
+                    provider.connection.to_string(),
+                    manager
+                        .snapshot(binding.scope())
+                        .map_err(|error| CoreError::Model(error.to_string()))?,
+                );
                 let observed = manager
                     .list_discovered(&[binding.scope().clone()], &CatalogQuery::all())
                     .map_err(|error| CoreError::Model(error.to_string()))?;
@@ -92,11 +100,20 @@ impl ModelContextCatalog {
             entries,
             discovered,
             scopes,
+            snapshots,
         })
     }
 
     pub(super) fn scope(&self, connection: &str) -> Option<String> {
         self.scopes.get(connection).cloned().flatten()
+    }
+
+    pub(super) fn catalog_snapshots(
+        &self,
+    ) -> impl Iterator<Item = (&str, &ash_models_manager::ModelCatalogSnapshot)> {
+        self.snapshots
+            .iter()
+            .map(|(connection, snapshot)| (connection.as_str(), snapshot.as_ref()))
     }
 
     pub(super) fn discovered(&self, provider: &ProviderId) -> &[ModelCatalogEntry] {

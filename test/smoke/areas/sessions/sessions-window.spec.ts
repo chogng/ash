@@ -1873,7 +1873,7 @@ test(
 			.locator('.ash-models-settings-model-copy > span')
 			.first()
 			.textContent())!.trim();
-		const catalogSearch = settings.getByRole('searchbox', { name: 'Search models', exact: true });
+		const catalogSearch = settings.getByRole('combobox', { name: 'Search models', exact: true });
 		await catalogSearch.fill('openai/gpt-6-astra');
 		await expect(modelRows).toHaveCount(1);
 		await expect(modelRows).toContainText(['GPT-6 Astra']);
@@ -2064,7 +2064,7 @@ test(
 		await navigation.getByRole('button', { name: 'Models' }).click();
 		await expect(settings.getByRole('heading', { name: 'Models', exact: true })).toBeVisible();
 		await expect(settings.getByRole('searchbox', { name: 'Search settings' })).toBeVisible();
-		await expect(settings.getByRole('searchbox', { name: 'Search models', exact: true })).toBeVisible();
+		await expect(settings.getByRole('combobox', { name: 'Search models', exact: true })).toBeVisible();
 		await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
 		await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
 		if (target.appServerMode === 'required') {

@@ -150,6 +150,7 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 	});
 	services.registerInstance(ILanguageModelsConfigurationService, {
 		onDidChangeModels: Event.None,
+		isModelPinned: () => false, setModelPinned: async () => { }, removeProviderPreferences: async () => { },
 		isModelVisible: () => true,
 		setModelVisible: async () => { source.selectionWrites++; },
 		getDefaultNewChatModel: () => undefined,
@@ -837,4 +838,75 @@ test('A config notification racing a confirmed model save cannot turn its readba
 	assert.equal(writes, 1);
 	assert.equal(remembered, 1);
 	assert.deepEqual(await models.readModelDefaults(), defaults);
+});
+
+
+test('Config notifications refresh a cached catalog after a provider is removed in another window', async () => {
+	using resources = new DisposableStore();
+	const { source, models, events } = catalogFixture(resources);
+	source.catalog = [modelEntry('custom', 'custom-gateway'), modelEntry('builtin', 'openai')];
+	await models.listModelCatalog();
+	source.catalog = [modelEntry('builtin', 'openai')];
+	events.fire({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	await settleCatalogEvents();
+	assert.deepEqual((await models.listModelCatalog()).map(entry => entry.model.provider), ['openai']);
+	assert.equal(source.catalogReads, 2);
+});
+
+
+test('Catalog adapters preserve source, capability unknowns and exact published rates, and notify metadata-only changes', async () => {
+	using resources = new DisposableStore();
+	const { source, models } = catalogFixture(resources);
+	const dto = modelEntry('priced');
+	dto.capabilities.agent_mode = 'supported';
+	dto.source = { provider_id: 'openai', connection_id: 'openai', metadata: 'providerLive' };
+	dto.pricing = [{ currency: 'USD', service_tier: 'default', region: 'global', min_input_tokens: 0, max_input_tokens: 272001, input: '0', output: '2.000001', cache_read: null, cache_write: null, reviewed_at: '2026-09-04', revision: 'fixture', source_urls: ['https://example.test/pricing'] }];
+	source.catalog = [dto];
+	const first = (await models.refreshModels())[0];
+	assert.deepEqual(first.source, { providerId: 'openai', connectionId: 'openai', metadata: 'providerLive' });
+	assert.equal(first.capabilities?.agentMode, 'supported');
+	assert.equal(first.pricing?.[0].input, '0');
+	assert.equal(first.pricing?.[0].output, '2.000001');
+	assert.equal(Object.isFrozen(first.pricing?.[0].sourceUrls), true);
+	let changes = source.changes;
+	dto.capabilities.agent_mode = 'unsupported';
+	await models.refreshModels();
+	assert.equal(source.changes, ++changes);
+	dto.source.metadata = 'persistedObservation';
+	await models.refreshModels();
+	assert.equal(source.changes, ++changes);
+	dto.pricing[0].output = '3';
+	await models.refreshModels();
+	assert.equal(source.changes, ++changes);
+	assert.equal(first.pricing?.[0].output, '2.000001');
+	dto.pricing = [];
+	assert.equal((await models.refreshModels())[0].pricing?.length, 0);
+	assert.equal(source.changes, ++changes);
+});
+
+test('Discovery-only status changes notify consumers, attach to the exact connection and withdraw cleanly', async () => {
+	using resources = new DisposableStore();
+	const wire: ModelListResult = { models: [modelEntry()], catalog_statuses: [] };
+	const providers: ProviderListResult = { providers: [{ provider: 'openai', connection: 'openai', access: 'apiKey', active: true, configured: true, ready: true, displayName: 'OpenAI', apiKeyPolicy: 'required', apiKeyConfigured: true }] };
+	const models = resources.add(new LanguageModelsService(
+		modelCatalogApi(async () => wire, async () => providers),
+		{ onConnectionState: () => ({ dispose() { } }) } as unknown as IAppServerApi,
+		{ subscribe: () => ({ dispose() { } }) } as unknown as IServerEventApi,
+		{ onDidChangeModels: Event.None } as unknown as ILanguageModelsConfigurationService,
+		{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService,
+	));
+	let changes = 0;
+	resources.add(models.onDidChangeModels(() => changes++));
+	await models.refreshModels();
+	const initial = changes;
+	wire.catalog_statuses = [{ provider: 'openai', connection: 'openai', freshness: 'staleUsable', issues: ['refreshFailed'] }];
+	await models.refreshModels();
+	assert.equal(changes, initial + 1);
+	assert.deepEqual((await models.listModelProviders())[0].catalog, wire.catalog_statuses[0]);
+	await models.refreshModels();
+	assert.equal(changes, initial + 1);
+	wire.catalog_statuses = [];
+	await models.refreshModels();
+	assert.equal(changes, initial + 2);
+	assert.equal((await models.listModelProviders())[0].catalog, undefined);
 });

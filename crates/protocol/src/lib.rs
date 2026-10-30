@@ -195,6 +195,7 @@ pub use model::ModelServiceTier;
 pub use model::ModelSettings;
 pub use model::ModelSpeed;
 pub use model::ModelStreamEvent;
+pub use model::ModelTokenPricing;
 pub use model::ModelToolOutputLimit;
 pub use model::ModelUsage;
 pub use model::ModelUsageSummary;

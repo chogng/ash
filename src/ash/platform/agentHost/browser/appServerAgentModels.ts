@@ -21,6 +21,7 @@ export function createDisconnectedAgentModelsService(unavailable: UnavailableOpe
 		setModelPreferences: () => unavailable('model.setModelPreferences'),
 		listCustomProviders: () => unavailable('model.listCustomProviders'),
 		saveCustomProvider: () => unavailable('model.saveCustomProvider'),
+		removeCustomProvider: () => unavailable('model.removeCustomProvider'),
 		testProviderModel: () => unavailable('model.testProviderModel'),
 		listModels: () => unavailable('model.listModels'),
 		listProviders: () => unavailable('model.listProviders'),
@@ -134,6 +135,11 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 				}
 			});
 		},
+		removeCustomProvider: async (provider) => {
+			const snapshot = await appServerRequest(connection, 'config/read', {});
+			if (!provider.startsWith('custom-') || !snapshot.connections[provider]?.custom) { throw new TypeError(localize('models.provider.removeCustomOnly', 'Only a configured custom provider can be removed.')); }
+			await withSecretStorageErrors(appServerRequest(connection, 'provider/remove', { commandId: createUuid(), expectedRevision: snapshot.revision, connection: provider }));
+		},
 		testProviderModel: async (provider, model) => {
 			const result = await appServerRequest(connection, 'provider/probe', {
 				config: customProviderConfig(provider),
@@ -146,6 +152,9 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 			const result = await withSecretStorageErrors(appServerRequest(connection, 'model/list', {}));
 			return {
 				models: result.models.map(modelCatalogEntry),
+				statuses: Object.freeze((result.catalog_statuses ?? []).map(status => Object.freeze({
+					...status, issues: Object.freeze([...status.issues]),
+				}))),
 				scopes: result.catalog_scopes?.map((scope) => ({ ...scope }))
 			};
 		},
@@ -246,6 +255,14 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
 		displayName: entry.display_name,
+		capabilities: Object.freeze({ toolCalling: entry.capabilities.tools, agentMode: entry.capabilities.agent_mode ?? 'unknown' }),
+		source: entry.source ? Object.freeze({ providerId: entry.source.provider_id, connectionId: entry.source.connection_id, metadata: entry.source.metadata }) : undefined,
+		pricing: Object.freeze((entry.pricing ?? []).map(price => Object.freeze({
+			currency: price.currency, serviceTier: price.service_tier, region: price.region,
+			minInputTokens: price.min_input_tokens, maxInputTokens: price.max_input_tokens,
+			input: price.input, output: price.output, cacheRead: price.cache_read, cacheWrite: price.cache_write,
+			revision: price.revision, reviewedAt: price.reviewed_at, sourceUrls: Object.freeze([...price.source_urls]),
+		}))),
 		inputModalities: entry.settings.input_modalities ? Object.freeze([...entry.settings.input_modalities]) : null,
 		retirement: entry.retirement ? Object.freeze({ shutdownDate: entry.retirement.shutdown_date }) : undefined,
 		description: entry.description,

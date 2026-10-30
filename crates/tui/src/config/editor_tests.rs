@@ -309,6 +309,7 @@ fn advisor_choices_are_localized_and_config_owned() {
     let choices = advisor_choices(
         &empty_config_snapshot(),
         &ash_app_server_protocol::protocol::model::ModelListResult {
+            catalog_statuses: Vec::new(),
             catalog_scopes: None,
             models: vec![],
         },
@@ -370,8 +371,11 @@ fn configured_advisor_model_is_selected_when_opening_config() {
     let mut config = empty_config_snapshot();
     config.advisor = Some(AdvisorConfig::new(model.clone()));
     let mut catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![ModelCatalogEntry {
+            source: None,
+            pricing: Vec::new(),
             retirement: None,
             description: None,
             discovered: None,
@@ -494,6 +498,7 @@ fn advisor_switch_refreshes_in_place_and_keeps_the_model() {
     advisor.enabled = false;
     config.advisor = Some(advisor.clone());
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![],
     };
