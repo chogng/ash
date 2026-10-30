@@ -78,43 +78,20 @@
 }
 
 .ash-customize-tools {
-	flex: 1 1 280px;
+	flex: 1 1 auto;
 	justify-content: flex-end;
 	gap: var(--ash-spacing-size80);
 }
 
-.ash-customize-tools > .ash-input-box {
-	flex: 1 1 200px;
-	max-width: 360px;
-	min-width: 100px;
-}
-
-.ash-customize .ash-customize-search {
-	position: relative;
-	border-radius: var(--ash-cornerRadius-large);
-}
-
-.ash-customize .ash-customize-search > .ash-icon {
-	position: absolute;
-	inset-inline-start: var(--ash-spacing-size80);
-	top: 50%;
-	translate: 0 -50%;
-	color: var(--ash-input-placeholderForeground);
-	pointer-events: none;
-}
-
-.ash-customize .ash-customize-search > input {
-	padding-inline-start: calc(
-		var(--ash-lxiconFontSize) + 2 * var(--ash-spacing-size80)
-	);
-}
-
 .ash-customize-actions {
-	flex-shrink: 0;
+	flex: 0 1 auto;
+	min-width: 0;
 	--ash-actionBar-gap: var(--ash-spacing-size80);
 }
 
-.ash-customize-actions .ash-button-quiet {
+.ash-customize-actions
+	> .ash-action-view-item:not(.ash-toolbar-search-action)
+	> .ash-button-quiet {
 	width: 28px;
 	padding: 0;
 }
@@ -227,7 +204,8 @@
 	padding: 0;
 	min-height: 28px;
 	text-align: left;
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-weight: var(--ash-fontWeight-regular);
+	color: var(--ash-sessions-customize-cardNameForeground);
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
@@ -237,11 +215,11 @@
 	display: -webkit-box;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 2;
-	height: 3em;
+	height: 2.8em;
 	overflow: hidden;
-	line-height: 1.5;
-	margin: var(--ash-spacing-size40) 0;
-	color: var(--ash-description-foreground);
+	line-height: 1.4;
+	margin: 0;
+	color: var(--ash-sessions-customize-cardDescriptionForeground);
 	overflow-wrap: anywhere;
 }
 
@@ -297,10 +275,6 @@
 
 .ash-customize.narrow .ash-customize-tools {
 	flex-basis: 100%;
-}
-
-.ash-customize.narrow .ash-customize-tools > .ash-input-box {
-	max-width: none;
 }
 
 .hc-black .ash-customize-card,

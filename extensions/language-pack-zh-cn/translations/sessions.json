@@ -63,7 +63,7 @@
     "sessions.search.verbosityInvalid": "搜索无障碍详细提示必须为布尔值",
     "sessions.search.verbosityTitle": "搜索无障碍帮助",
     "sessions.search.verbosityDescription": "搜索获得焦点时，播报如何打开无障碍帮助。",
-    "sessions.search.help": "搜索按名称查找已保存的会话、已加载的 ChatGPT 会话、草稿、项目和计划。ChatGPT 会话显示在“全部”和“会话”分类中，也可按所属项目名称匹配。输入文字可筛选结果。使用上、下方向键选择结果，按 Enter 打开。按 Tab 进入分类按钮，使用左、右方向键聚焦分类，按 Enter 或空格选择。按下方向键返回搜索输入框。按 Escape 关闭搜索并恢复原来的焦点。",
+    "sessions.search.help": "搜索按名称查找已保存的会话、已加载的 ChatGPT 会话、草稿、项目和计划。ChatGPT 会话显示在“全部”和“会话”分类中，也可按所属项目名称匹配。输入文字可筛选结果。使用上、下方向键选择结果，按 Enter 打开。按 Tab 进入分类标签页，使用左、右方向键聚焦分类，按 Enter 或空格选择。按下方向键返回搜索输入框。按 Escape 关闭搜索并恢复原来的焦点。",
     "sessions.search.navigationHelp": "新建下方的搜索入口可打开分类搜索面板。输入名称筛选会话、项目和计划，使用方向键选择结果并按 Enter 打开；Escape 关闭面板并恢复原来的焦点。",
     "sessions.activity.sidebarHelp": "展开侧栏时，导航会显示图标与名称，账户入口位于底部。使用标题栏的侧栏开关可隐藏整个侧栏，包括导航、账户入口和界面模式切换控件；重新展开会恢复这些内容。桌面端 Chat 模式的新建打开 ChatGPT 并聚焦消息输入框；Code 模式和浏览器端的新建仍创建 Agent 会话。下方列表分为置顶、项目、聊天大组，Code 将聊天改为最近使用。Enter 或空格切换分组，左方向键收起，右方向键展开。Code 的小组使用文件夹图标，会话标题前显示图标。使用上下方向键、Home 和 End 在可见行间移动。右键点击聊天或按 Shift+F10 可置顶或取消置顶。Chat 与 Code 分别记住分组的展开状态；“在会话中新增聊天”和“分叉对话”位于当前聊天的更多操作菜单。输入提示位于消息输入框下方。",
     "sessions.provider.unavailable": "会话宿主不可用：{0}",
@@ -985,6 +985,8 @@
     "sessions.modelPicker.maximumForeground": "突出显示的模型预设的文本颜色。",
     "sessions.modelPicker.maximumBackground": "突出显示的模型预设的主要填充颜色。",
     "sessions.modelPicker.maximumBackgroundAccent": "突出显示的模型预设的渐变强调色。",
+    "sessions.customize.cardNameForeground": "自定义卡片中资源名称的文本颜色。",
+    "sessions.customize.cardDescriptionForeground": "自定义卡片中描述的文本颜色。",
     "sessions.changes.followUpTitle": "PR 自动跟进",
     "sessions.changes.followUpDescription": "每分钟检查 CI，每个提交版本最多在此聊天中请求一次修复。使用正常的 Agent 权限，关闭窗口后继续运行。",
     "sessions.changes.followUpHistory": "跟进历史",
@@ -1003,6 +1005,7 @@
     "customize.yours": "你的",
     "customize.discover": "发现",
     "customize.search": "搜索",
+    "customize.closeSearch": "关闭搜索",
     "customize.filter": "筛选来源",
     "customize.allSources": "全部来源",
     "customize.sort": "资源排序",
@@ -1066,7 +1069,7 @@
     "customize.activityHelp": "自定义页面集中显示技能、连接器和插件。切换“你的”和“发现”，搜索资源并打开详情进行管理。",
     "customize.detailHelp": "使用详情上方的返回按钮回到资源列表。分类、搜索、排序和滚动位置会保留，焦点会返回资源卡片。",
     "customize.backToCollection": "返回{0}",
-    "customize.help": "自定义页面集中显示技能、连接器和插件。在分类标签上使用左右方向键移动，按 Enter 选择。“你的”列出当前资源，“发现”搜索目录。“发现”中的技能卡片有“安装”按钮；查看并确认后即可安装。绿色勾表示已安装，激活后可查看详情。安装成功时会显示通知。使用 Tab 访问搜索、操作工具栏和资源卡片。在工具栏中，使用左右方向键在来源筛选、排序和添加之间移动，使用上下方向键打开当前菜单。在搜索框中按向下方向键可聚焦第一张卡片。在卡片名称之间使用方向键、Home 和 End 移动，按 Enter 在自定义页面中打开资源详情，以安装、授权或启用资源。使用详情上方的返回按钮可回到原来的分类、搜索、排序和滚动位置，并将焦点恢复到资源卡片。在技能分类中，“添加”提供“上传技能”（SKILL.md 文件或技能文件夹）、“创建技能”和“用 Ash 创建”。上传和创建会保存个人技能，创建后在编辑器中打开指令。“用 Ash 创建”打开使用技能创建器的新聊天草稿，不自动发送。其他分类提供目录浏览、连接配置或插件安装。“加载更多”继续读取目录结果，“刷新”重新读取当前状态，“重试”重复失败的读取。按 Escape 关闭菜单并恢复焦点。页面打开时仍可使用全局导航。"
+    "customize.help": "自定义页面集中显示技能、连接器和插件。在分类标签上使用左右方向键移动，按 Enter 选择。“你的”列出当前资源，“发现”搜索目录。使用 Tab 访问操作工具栏和资源卡片。激活“搜索”展开输入框；按 Escape 或“关闭搜索”会清空并收起输入框，将焦点返回“搜索”。空搜索框失去焦点时也会收起。在工具栏中，使用左右方向键在搜索、来源筛选、排序和添加之间移动，使用上下方向键打开当前菜单。在搜索框中按向下方向键可聚焦第一张卡片。在卡片名称之间使用方向键、Home 和 End 移动，按 Enter 在自定义页面中打开资源详情，以安装、授权或启用资源。使用详情上方的返回按钮可回到原来的分类、搜索、排序和滚动位置，并将焦点恢复到资源卡片。在技能分类中，“添加”提供“上传技能”（SKILL.md 文件或技能文件夹）、“创建技能”和“用 Ash 创建”。上传和创建会保存个人技能，创建后在编辑器中打开指令。“用 Ash 创建”打开使用技能创建器的新聊天草稿，不自动发送。其他分类提供目录浏览、连接配置或插件安装。“加载更多”继续读取目录结果，“刷新”重新读取当前状态，“重试”重复失败的读取。按 Escape 关闭菜单并恢复焦点。页面打开时仍可使用全局导航。"
   },
   "ash.sessions": {
     "sessions.runtime.unavailable": "此连接不支持会话运行时 Provider。",

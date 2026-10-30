@@ -58,13 +58,22 @@
 }
 
 .ash-sessions-search-categories {
+	--ash-tab-height: var(--ash-spacing-size280);
+	--ash-tab-border-radius: var(--ash-cornerRadius-large);
+	--ash-tabList-itemContentInset: var(--ash-spacing-size120);
+	--ash-actionBar-gap: var(--ash-spacing-size40);
+	--ash-tabList-activeBackground: var(--ash-toolbar-hoverBackground);
+	--ash-tabList-hoverBackground: color-mix(
+		in srgb,
+		var(--ash-tabList-activeBackground) 50%,
+		transparent
+	);
+
 	flex: 0 0 auto;
 	padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size160);
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
-}
-
-.ash-sessions-search-categories > .ash-segmented-control {
-	max-width: 100%;
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
 }
 
 .ash-sessions-search-body {

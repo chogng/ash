@@ -218,6 +218,8 @@
 		"--ash-sessions-accentGlow",
 		"--ash-sessions-activityBar-foreground",
 		"--ash-sessions-activityBar-inactiveForeground",
+		"--ash-sessions-customize-cardDescriptionForeground",
+		"--ash-sessions-customize-cardNameForeground",
 		"--ash-sessions-design-chromeBackground",
 		"--ash-sessions-design-chromeForeground",
 		"--ash-sessions-inputShadow",

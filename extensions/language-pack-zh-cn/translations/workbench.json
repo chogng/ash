@@ -1,8 +1,8 @@
 {
   "ash": {
-    "debug.stopActionsHelp": "停止旁的箭头提供全部停止。使用左右方向键在停止按钮与箭头之间移动，按下方向键打开菜单，按 Escape 关闭菜单并返回按钮。",
-    "debug.stopActions": "更多停止操作",
     "button.moreActions": "更多操作…",
+    "debug.stopActions": "更多停止操作",
+    "debug.stopActionsHelp": "停止旁的箭头提供全部停止。使用左右方向键在停止按钮与箭头之间移动，按下方向键打开菜单，按 Escape 关闭菜单并返回按钮。",
     "disconnectStatus": "与进程的连接已断开",
     "workbench.panel.opensMaximized.title": "面板打开时最大化",
     "workbench.panel.opensMaximized.description": "选择面板打开时是否最大化，或恢复上次的最大化状态。",
@@ -2858,6 +2858,8 @@
     "openEditors": "打开的编辑器"
   },
   "ash.workbench": {
+    "browser.reloadMenu": "更多刷新操作",
+    "browser.hardReload": "忽略缓存重新加载",
     "browser.auth.title": "浏览器身份验证",
     "browser.auth.proxy": "登录代理 {0}",
     "browser.auth.site": "登录 {0}",

@@ -1,7 +1,7 @@
 import { registerColor, transparent } from '../../platform/theme/common/colorUtils.js';
 import { primaryButtonBackground } from '../../platform/theme/common/colors/inputColors.js';
 import { hoverBorder } from '../../platform/theme/common/colors/componentColors.js';
-import { accentForeground } from '../../platform/theme/common/colors/baseColors.js';
+import { accentForeground, foreground } from '../../platform/theme/common/colors/baseColors.js';
 import { localize } from '../../nls.js';
 
 // Sessions-only colors stay here; Agent colors shared by both windows belong in workbench/common/agentsColors.ts.
@@ -56,6 +56,30 @@ registerColor('sessions.selectionBackground', {
 	hcDark: '#333333',
 	hcLight: '#dddddd',
 }, { description: 'Selected item background in the Sessions window.', owner: 'sessions' });
+
+registerColor(
+	'sessions.customize.cardNameForeground',
+	{ dark: '#eeeeee', light: '#202020', hcDark: foreground, hcLight: foreground },
+	{
+		description: localize(
+			'sessions.customize.cardNameForeground',
+			'Text color of resource names in Customize cards.',
+		),
+		owner: 'sessions.customize',
+	},
+);
+
+registerColor(
+	'sessions.customize.cardDescriptionForeground',
+	{ dark: '#a0a0a0', light: '#707070', hcDark: foreground, hcLight: foreground },
+	{
+		description: localize(
+			'sessions.customize.cardDescriptionForeground',
+			'Text color of descriptions in Customize cards.',
+		),
+		owner: 'sessions.customize',
+	},
+);
 
 // Input cards keep their elevation when a theme changes the shadow of general floating widgets.
 registerColor('sessions.inputShadow', {

@@ -9,13 +9,77 @@ suite('Projects toolbar', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`renames from the breadcrumb with selection, cancellation and failure recovery (${locale})`, async () => {
+			const { page, info } = browser;
+			const chinese = locale === 'zh-CN';
+			await page.goto(`/sessions.html?search&locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('.ash-projects-card').click();
+			const breadcrumb = page.locator('.ash-projects-breadcrumb');
+			const rename = breadcrumb.getByRole('button', {
+				name: chinese ? '重命名项目 Search project fixture' : 'Rename project Search project fixture',
+				exact: true,
+			});
+			const input = breadcrumb.getByRole('textbox', { name: chinese ? '项目名称' : 'Project name', exact: true });
+			await expect(rename).toHaveAttribute('aria-current', 'page');
+			await rename.click();
+			await expect(input).toBeFocused();
+			expect(
+				await input.evaluate(element => ({
+					start: (element as HTMLInputElement).selectionStart,
+					end: (element as HTMLInputElement).selectionEnd,
+				})),
+			).toEqual({ start: 0, end: 'Search project fixture'.length });
+			await input.fill('Discard this draft');
+			await input.press('Escape');
+			await expect(input).toHaveCount(0);
+			await expect(rename).toBeFocused();
+			await rename.press('Space');
+			await input.fill('   ');
+			await input.press('Enter');
+			await expect(rename).toBeFocused();
+			await expect(page.locator('.ash-projects h1')).toHaveText('Search project fixture');
+			await rename.press('Enter');
+			await input.fill('Retain this draft');
+			await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+			await expect(input).toHaveValue('Retain this draft');
+			await expect(page.locator('.ash-projects-feedback')).toBeHidden();
+			await input.press('Enter');
+			await expect(page.locator('.ash-projects-feedback')).toBeVisible();
+			await expect(input).toHaveValue('Retain this draft');
+			await expect(input).toBeEditable();
+			await expect(input).toBeFocused();
+			await input.press('Escape');
+			await expect(rename).toBeFocused();
+			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+				await rename.press('Enter');
+				await expect(input).toHaveCSS('border-radius', '6px');
+				await expect(input).toHaveCSS('-webkit-app-region', 'no-drag');
+				await expect(input).toHaveCSS('outline-style', 'solid');
+				await page.screenshot({ path: info.outputPath(`projects-rename-${locale}-${theme}.png`) });
+				await input.press('Escape');
+			}
+			await rename.press('Alt+F1');
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
+				chinese
+					? /激活面包屑中的项目名称可原地重命名/
+					: /Activate the project name in the breadcrumb to rename it in place/,
+			);
+			await page.keyboard.press('Escape');
+			await expect(rename).toBeFocused();
+		});
+
 		test(`shows localized update times and refreshes them without replacing focused cards (${locale})`, async () => {
 			const { page, info } = browser;
 			const chinese = locale === 'zh-CN';
 			const updatedAt = new Date('2026-10-25T18:00:00Z');
 			const createdAt = updatedAt.getTime() - 5 * 86_400_000;
 			await page.clock.install({ time: updatedAt });
-			await page.goto(`/sessions.html?search&locale=${locale}&projectUpdatedAt=${updatedAt.getTime()}&projectCreatedAt=${createdAt}`);
+			await page.goto(
+				`/sessions.html?search&locale=${locale}&projectUpdatedAt=${updatedAt.getTime()}&projectCreatedAt=${createdAt}`,
+			);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.projects"] button').click();
 			const card = page.locator('.ash-projects-card');
@@ -53,12 +117,55 @@ suite('Projects toolbar', () => {
 			await expect(caption).toHaveCount(0);
 		});
 
+		test(`shows a concise pin action and swaps the pinned glyph in place on hover and focus (${locale})`, async () => {
+			const { page, info } = browser;
+			const chinese = locale === 'zh-CN';
+			await page.goto(`/sessions.html?search&locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			const row = page.locator('.ash-projects-row');
+			const pin = row.getByRole('button', { name: chinese ? '置顶' : 'Pin', exact: true });
+			const unpin = row.getByRole('button', { name: chinese ? '取消置顶' : 'Unpin', exact: true });
+			await expect(row.getByRole('toolbar')).toHaveAccessibleName(
+				chinese ? 'Search project fixture 的项目操作' : 'Actions for Search project fixture',
+			);
+			await pin.click();
+			await expect(unpin).toHaveAttribute('aria-pressed', 'true');
+			const heading = page.locator('.ash-projects h1');
+			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+				await heading.click();
+				const bounds = (await unpin.boundingBox())!;
+				await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
+				await expect(unpin.locator('.ash-icon')).toHaveCSS('width', '18px');
+				await unpin.hover();
+				await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'unpin');
+				await expect(page.getByRole('tooltip')).toHaveText(chinese ? '取消置顶' : 'Unpin');
+				expect(await unpin.boundingBox()).toEqual(bounds);
+				await page.screenshot({ path: info.outputPath(`projects-unpin-${locale}-${theme}.png`) });
+				await page.mouse.move(0, 0);
+				await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
+				await row.locator('.ash-projects-card').focus();
+				await page.keyboard.press('Tab');
+				await expect(unpin).toBeFocused();
+				await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'unpin');
+				expect(await unpin.boundingBox()).toEqual(bounds);
+			}
+			await unpin.press('Enter');
+			await expect(pin).toHaveAttribute('aria-pressed', 'false');
+			await expect(pin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pinned');
+			await expect(row.locator('.ash-projects-card-name')).toHaveText('Search project fixture');
+		});
+
 		test(`uses the Sessions menu geometry without changing shared menu defaults (${locale})`, async () => {
 			const { page, info } = browser;
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.projects"] button').click();
-			const sort = page.getByRole('button', { name: locale === 'zh-CN' ? '项目排序' : 'Sort projects', exact: true });
+			const sort = page.getByRole('button', {
+				name: locale === 'zh-CN' ? '项目排序' : 'Sort projects',
+				exact: true,
+			});
 			await expect(sort.locator('.ash-icon-sort')).toHaveCSS('font-size', '18px');
 			for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
@@ -77,7 +184,7 @@ suite('Projects toolbar', () => {
 				}
 				const check = selected.locator('.ash-menu-leading-check > .ash-icon');
 				await expect(check).toHaveClass(/ash-icon-check/);
-				await expect(check).toHaveCSS('font-size', '20px');
+				await expect(check).toHaveCSS('font-size', '18px');
 				const checkBounds = (await check.boundingBox())!;
 				const textBounds = (await selected.locator('.ash-button-label').boundingBox())!;
 				expect(checkBounds.x).toBeGreaterThanOrEqual(textBounds.x + textBounds.width);
@@ -117,8 +224,14 @@ suite('Projects toolbar', () => {
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.projects"] button').click();
 			const projects = page.locator('.ash-projects');
-			const search = projects.getByRole('button', { name: chinese ? '搜索项目' : 'Search projects', exact: true });
-			const close = projects.getByRole('button', { name: chinese ? '关闭项目搜索' : 'Close project search', exact: true });
+			const search = projects.getByRole('button', {
+				name: chinese ? '搜索项目' : 'Search projects',
+				exact: true,
+			});
+			const close = projects.getByRole('button', {
+				name: chinese ? '关闭项目搜索' : 'Close project search',
+				exact: true,
+			});
 			const input = projects.getByRole('searchbox', { includeHidden: true });
 			const sort = projects.getByRole('button', { name: chinese ? '项目排序' : 'Sort projects', exact: true });
 			const heading = projects.locator('h1');
@@ -158,7 +271,9 @@ suite('Projects toolbar', () => {
 			await expect(search).toBeFocused();
 			await search.click();
 			await input.press('Alt+F1');
-			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /空搜索框失去焦点后会收起/ : /An empty search collapses when focus leaves it/);
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
+				chinese ? /空搜索框失去焦点后会收起/ : /An empty search collapses when focus leaves it/,
+			);
 			await expect(input).toBeHidden();
 			await page.keyboard.press('Escape');
 			await expect(search).toBeFocused();
@@ -199,14 +314,21 @@ suite('Projects toolbar', () => {
 			await expect(create).toBeFocused();
 			await page.keyboard.press('Enter');
 			const dialog = page.getByRole('dialog', { name: chinese ? '创建项目' : 'Create a project', exact: true });
-			await expect(dialog.getByRole('textbox', { name: chinese ? '你正在做什么？' : 'What are you working on?', exact: true })).toBeFocused();
+			await expect(
+				dialog.getByRole('textbox', {
+					name: chinese ? '你正在做什么？' : 'What are you working on?',
+					exact: true,
+				}),
+			).toBeFocused();
 			await page.keyboard.press('Escape');
 			await expect(dialog).toHaveCount(0);
 			await expect(create).toBeFocused();
 			await expect(toolbar.locator('button[tabindex="0"]')).toHaveCount(1);
 
 			await create.press('Enter');
-			await dialog.getByRole('textbox', { name: chinese ? '你正在做什么？' : 'What are you working on?', exact: true }).fill('Unavailable project save');
+			await dialog
+				.getByRole('textbox', { name: chinese ? '你正在做什么？' : 'What are you working on?', exact: true })
+				.fill('Unavailable project save');
 			const submit = dialog.getByRole('button', { name: chinese ? '创建项目' : 'Create project', exact: true });
 			await submit.click();
 			await expect(dialog.locator('.ash-projects-form-error')).not.toBeEmpty();
@@ -218,7 +340,11 @@ suite('Projects toolbar', () => {
 
 			await page.keyboard.press('Home');
 			await page.keyboard.press('Enter');
-			const input = page.getByRole('searchbox', { name: chinese ? '搜索项目' : 'Search projects', exact: true, includeHidden: true });
+			const input = page.getByRole('searchbox', {
+				name: chinese ? '搜索项目' : 'Search projects',
+				exact: true,
+				includeHidden: true,
+			});
 			await expect(input).toBeFocused();
 			await input.fill('Search project');
 			await expect(input).toBeFocused();
@@ -231,7 +357,9 @@ suite('Projects toolbar', () => {
 			expect(await input.evaluate(element => (element as HTMLInputElement).selectionStart)).toBe(1);
 			await expect(input).toBeFocused();
 			await page.keyboard.press('Tab');
-			await expect(toolbar.getByRole('button', { name: chinese ? '关闭项目搜索' : 'Close project search', exact: true })).toBeFocused();
+			await expect(
+				toolbar.getByRole('button', { name: chinese ? '关闭项目搜索' : 'Close project search', exact: true }),
+			).toBeFocused();
 			await page.keyboard.press('Escape');
 			await expect(input).toBeHidden();
 			await expect(search).toBeFocused();
@@ -243,7 +371,11 @@ suite('Projects toolbar', () => {
 			await page.keyboard.press('Escape');
 			await expect(sort).toBeFocused();
 			await page.keyboard.press('Alt+F1');
-			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(chinese ? /使用左右方向键在搜索、排序和新建项目之间移动/ : /Left and Right Arrow to move between Search, Sort and New project/);
+			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
+				chinese
+					? /使用左右方向键在搜索、排序和新建项目之间移动/
+					: /Left and Right Arrow to move between Search, Sort and New project/,
+			);
 			await page.keyboard.press('Escape');
 			await expect(sort).toBeFocused();
 		});
@@ -255,8 +387,14 @@ suite('Projects toolbar', () => {
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.projects"] button').click();
 			const projects = page.locator('.ash-projects');
-			const search = projects.getByRole('button', { name: chinese ? '搜索项目' : 'Search projects', exact: true });
-			const close = projects.getByRole('button', { name: chinese ? '关闭项目搜索' : 'Close project search', exact: true });
+			const search = projects.getByRole('button', {
+				name: chinese ? '搜索项目' : 'Search projects',
+				exact: true,
+			});
+			const close = projects.getByRole('button', {
+				name: chinese ? '关闭项目搜索' : 'Close project search',
+				exact: true,
+			});
 			const input = projects.getByRole('searchbox', { includeHidden: true });
 			const sort = projects.getByRole('button', { name: chinese ? '项目排序' : 'Sort projects', exact: true });
 			const create = projects.getByRole('button', { name: chinese ? '新建项目' : 'New project', exact: true });
@@ -269,8 +407,14 @@ suite('Projects toolbar', () => {
 					const createBefore = (await create.boundingBox())!;
 					await search.click();
 					await expect(input).toBeFocused();
-					await expect.poll(async () => projects.locator('.ash-projects-search-action').evaluate(element => element.getAnimations().length)).toBe(0);
-					const field = (await projects.locator('.ash-projects-search-field').boundingBox())!;
+					await expect
+						.poll(async () =>
+							projects
+								.locator('.ash-toolbar-search-action')
+								.evaluate(element => element.getAnimations().length),
+						)
+						.toBe(0);
+					const field = (await projects.locator('.ash-toolbar-search-field').boundingBox())!;
 					expect(field.width).toBeLessThanOrEqual(260);
 					const heading = (await projects.locator('h1').boundingBox())!;
 					expect(field.x).toBeGreaterThanOrEqual(heading.x + heading.width);
@@ -285,7 +429,9 @@ suite('Projects toolbar', () => {
 					await input.fill('Search project');
 					await expect(page.locator('.ash-projects-card-name')).toHaveText(['Search project fixture']);
 					if (theme === 'ash-light') {
-						await page.screenshot({ path: browser.info.outputPath(`projects-inline-search-${locale}-${width}.png`) });
+						await page.screenshot({
+							path: browser.info.outputPath(`projects-inline-search-${locale}-${width}.png`),
+						});
 					}
 					await input.fill('No matching project');
 					await expect(page.locator('.ash-projects-card-name')).toHaveCount(0);
@@ -309,35 +455,44 @@ suite('Projects toolbar', () => {
 		const search = projects.getByRole('button', { name: 'Search projects', exact: true });
 		const close = projects.getByRole('button', { name: 'Close project search', exact: true });
 		const input = projects.getByRole('searchbox', { includeHidden: true });
-		const slot = projects.locator('.ash-projects-search-action');
+		const slot = projects.locator('.ash-toolbar-search-action');
 		const collapsedWidth = (await slot.boundingBox())!.width;
-		const sample = async (trigger: typeof search) => trigger.evaluate(element => {
-			(element as HTMLButtonElement).click();
-			const slot = element.closest('.ash-projects-search-action')!;
-			const animation = slot.getAnimations().find(animation => animation instanceof CSSTransition && animation.transitionProperty === 'width');
-			if (!animation) { throw new Error('Search width transition did not start'); }
-			const duration = Number(animation.effect!.getTiming().duration);
-			animation.pause();
-			animation.currentTime = duration / 2;
-			return { duration, width: slot.getBoundingClientRect().width };
-		});
+		const sample = async (trigger: typeof search) =>
+			trigger.evaluate(element => {
+				(element as HTMLButtonElement).click();
+				const slot = element.closest('.ash-toolbar-search-action')!;
+				const animation = slot
+					.getAnimations()
+					.find(animation => animation instanceof CSSTransition && animation.transitionProperty === 'width');
+				if (!animation) {
+					throw new Error('Search width transition did not start');
+				}
+				const duration = Number(animation.effect!.getTiming().duration);
+				animation.pause();
+				animation.currentTime = duration / 2;
+				return { duration, width: slot.getBoundingClientRect().width };
+			});
 		const opening = await sample(search);
 		expect(opening.duration).toBe(120);
 		expect(opening.width).toBeGreaterThan(collapsedWidth);
 		expect(opening.width).toBeLessThan(260);
-		await slot.evaluate(element => element.getAnimations({ subtree: true }).forEach(animation => animation.finish()));
+		await slot.evaluate(element =>
+			element.getAnimations({ subtree: true }).forEach(animation => animation.finish()),
+		);
 		await expect(slot).toHaveCSS('width', '260px');
 		await expect(input).toBeFocused();
 		const closing = await sample(close);
 		expect(closing.width).toBeGreaterThan(collapsedWidth);
 		expect(closing.width).toBeLessThan(260);
-		await expect(projects.locator('.ash-projects-search-field')).toHaveAttribute('inert', '');
+		await expect(projects.locator('.ash-toolbar-search-field')).toHaveAttribute('inert', '');
 		await expect(search).toBeFocused();
 		await search.click();
-		await slot.evaluate(element => element.getAnimations({ subtree: true }).forEach(animation => animation.finish()));
+		await slot.evaluate(element =>
+			element.getAnimations({ subtree: true }).forEach(animation => animation.finish()),
+		);
 		await expect(input).toBeFocused();
 		await expect(slot).toHaveCSS('width', '260px');
-		await expect(projects.locator('.ash-projects-search-field')).not.toHaveAttribute('inert', '');
+		await expect(projects.locator('.ash-toolbar-search-field')).not.toHaveAttribute('inert', '');
 		await page.emulateMedia({ reducedMotion: 'reduce' });
 		await input.press('Escape');
 		await expect(input).toBeHidden();
@@ -361,14 +516,25 @@ suite('Projects loading states', () => {
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			const holdList = () => page.evaluateHandle(() => {
-				const projects = globalThis.ashWebWorkbenchHost!.api.projects;
-				const original = projects.list;
-				let finish!: () => void;
-				const pending = new Promise<void>(resolve => { finish = resolve; });
-				projects.list = async () => { await pending; return original.call(projects); };
-				return { release: () => { projects.list = original; finish(); } };
-			});
+			const holdList = () =>
+				page.evaluateHandle(() => {
+					const projects = globalThis.ashWebWorkbenchHost!.api.projects;
+					const original = projects.list;
+					let finish!: () => void;
+					const pending = new Promise<void>(resolve => {
+						finish = resolve;
+					});
+					projects.list = async () => {
+						await pending;
+						return original.call(projects);
+					};
+					return {
+						release: () => {
+							projects.list = original;
+							finish();
+						},
+					};
+				});
 			const projects = page.locator('.ash-projects');
 			const body = projects.locator('.ash-projects-body');
 			const skeleton = projects.locator('.ash-projects-skeleton');
@@ -385,9 +551,16 @@ suite('Projects loading states', () => {
 					await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 					const block = skeleton.locator('.ash-projects-skeleton-name').first();
 					await expect(block).toBeVisible();
-					const colors = await block.evaluate(element => ({ fill: getComputedStyle(element).backgroundColor, canvas: getComputedStyle(element.closest('.ash-projects')!).backgroundColor, outline: getComputedStyle(element).outlineStyle }));
-					if (theme.includes('contrast')) { expect(colors.outline).toBe('solid'); }
-					else { expect(colors.fill).not.toBe(colors.canvas); }
+					const colors = await block.evaluate(element => ({
+						fill: getComputedStyle(element).backgroundColor,
+						canvas: getComputedStyle(element.closest('.ash-projects')!).backgroundColor,
+						outline: getComputedStyle(element).outlineStyle,
+					}));
+					if (theme.includes('contrast')) {
+						expect(colors.outline).toBe('solid');
+					} else {
+						expect(colors.fill).not.toBe(colors.canvas);
+					}
 					await page.screenshot({ path: info.outputPath(`projects-list-loading-${locale}-${theme}.png`) });
 				}
 				const before = (await skeleton.locator('.ash-projects-skeleton-card').first().boundingBox())!;
@@ -405,18 +578,26 @@ suite('Projects loading states', () => {
 			try {
 				await projects.getByRole('button', { name: 'Search project fixture', exact: true }).click();
 				await expect(skeleton).toHaveClass(/ash-projects-detail/);
-				await expect(projects.locator('h1')).toHaveAccessibleName(chinese ? '正在加载项目…' : 'Loading projects…');
+				await expect(projects.locator('h1')).toHaveAccessibleName(
+					chinese ? '正在加载项目…' : 'Loading projects…',
+				);
 				await expect(page.locator('.ash-projects-breadcrumb-name')).toHaveClass(/ash-projects-placeholder/);
 				await expect(page.locator('.ash-projects-breadcrumb-name')).toHaveAttribute('aria-hidden', 'true');
 				await expect(page.locator('.ash-projects-breadcrumb-name')).toHaveCSS('opacity', '1');
-				await expect(page.locator('.ash-projects-breadcrumb-name')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(page.locator('.ash-projects-breadcrumb-name')).not.toHaveCSS(
+					'background-color',
+					'rgba(0, 0, 0, 0)',
+				);
 				for (const width of [1280, 720]) {
 					await page.setViewportSize({ width, height: 720 });
 					await page.emulateMedia({ reducedMotion: 'reduce' });
 					const overview = (await skeleton.locator('.ash-projects-overview').boundingBox())!;
 					const materials = (await skeleton.locator('.ash-projects-materials').boundingBox())!;
-					if (width === 720) { expect(materials.y).toBeGreaterThanOrEqual(overview.y + overview.height); }
-					else { expect(materials.y).toBe(overview.y); }
+					if (width === 720) {
+						expect(materials.y).toBeGreaterThanOrEqual(overview.y + overview.height);
+					} else {
+						expect(materials.y).toBe(overview.y);
+					}
 					expect(await skeleton.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 					expect(await skeleton.evaluate(element => element.getAnimations({ subtree: true }).length)).toBe(0);
 					await page.screenshot({ path: info.outputPath(`projects-detail-loading-${locale}-${width}.png`) });
@@ -435,9 +616,14 @@ suite('Projects loading states', () => {
 				await page.locator('[data-action-id="sessions.open.projects"] button').click();
 				await expect(body).toHaveAttribute('aria-busy', 'true');
 				await expect(projects.locator('h1')).toHaveText('Search project fixture');
-				await expect(projects.locator('.ash-projects-description')).toHaveText('Synthetic project for Search navigation');
+				await expect(projects.locator('.ash-projects-description')).toHaveText(
+					'Synthetic project for Search navigation',
+				);
 				await expect(skeleton).toHaveCount(0);
-				await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true }).click();
+				await page
+					.locator('.ash-projects-breadcrumb')
+					.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true })
+					.click();
 				await expect(body).toHaveAttribute('aria-busy', 'true');
 				await expect(projects.locator('.ash-projects-card-name')).toHaveText('Search project fixture');
 				await expect(skeleton).toHaveCount(0);

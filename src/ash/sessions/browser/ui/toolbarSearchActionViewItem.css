@@ -1,0 +1,93 @@
+.ash-action-bar > .ash-toolbar-search-action {
+	position: relative;
+	flex-shrink: 1;
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	transition: width var(--ash-animation-durationFast) ease-out;
+}
+
+.ash-action-bar > .ash-toolbar-search-action.expanded {
+	width: 260px;
+}
+
+.ash-toolbar-search-action > .ash-button {
+	position: absolute;
+	inset-inline-end: 0;
+}
+
+.ash-toolbar-search-field {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	padding-inline-start: var(--ash-spacing-size80);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	opacity: 1;
+	overflow: clip;
+	transition:
+		opacity var(--ash-animation-durationFast) ease-out,
+		display var(--ash-animation-durationFast) allow-discrete;
+}
+
+.ash-toolbar-search-field[hidden] {
+	opacity: 0;
+}
+
+@starting-style {
+	.ash-toolbar-search-field {
+		opacity: 0;
+	}
+}
+
+.ash-toolbar-search-field:focus-within {
+	border-color: var(--ash-focusBorder);
+}
+
+.ash-toolbar-search-field > span {
+	display: flex;
+	flex-shrink: 0;
+	color: var(--ash-input-placeholderForeground);
+}
+
+.ash-toolbar-search-field > span > .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-toolbar-search-input {
+	width: 100%;
+	min-width: 0;
+	border: 0;
+	padding: var(--ash-spacing-size40) 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	user-select: text;
+	appearance: none;
+}
+
+.ash-toolbar-search-field > .ash-toolbar-search-input:focus-visible {
+	outline: none;
+}
+
+.ash-toolbar-search-input::-webkit-search-cancel-button {
+	appearance: none;
+}
+
+.ash-toolbar-search-input::placeholder {
+	color: var(--ash-input-placeholderForeground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-action-bar > .ash-toolbar-search-action,
+	.ash-toolbar-search-field {
+		transition: none;
+	}
+}

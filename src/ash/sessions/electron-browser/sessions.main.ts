@@ -23,7 +23,7 @@ import { onUnexpectedError } from '../../base/common/errors.js';
 import { createElectronRendererApi } from '../../workbench/electron-browser/rendererApi.js';
 import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { DirectoryPermissionDialog } from '../../workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
-import { ElectronContextMenuService } from '../../workbench/services/contextmenu/electron-browser/contextMenuService.js';
+import { BrowserContextMenuService } from '../../platform/contextview/browser/contextMenuService.js';
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import type { Workbench } from '../browser/workbench.js';
 import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
@@ -281,8 +281,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				},
 				createUserDataFileSystemProvider: async () =>
 					new FileUserDataProvider(api.localFiles, api.userDataHome),
-				createContextMenuService: services =>
-					services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
+				// Keep content menus in the window's themed DOM, independently of IDE menu preferences.
+				createContextMenuService: services => services.createInstance(BrowserContextMenuService),
 				createHostColorSchemeService: services => {
 					const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
 					void colors.initialize().catch(onUnexpectedError);
