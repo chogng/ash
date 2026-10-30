@@ -29,6 +29,7 @@ export enum BrowserViewCommandId {
 	HideFind = 'workbench.action.browser.hideFind',
 	FindNext = 'workbench.action.browser.findNext',
 	FindPrevious = 'workbench.action.browser.findPrevious',
+	ToggleDevTools = 'workbench.action.browser.toggleDevTools',
 }
 
 export const IBrowserViewService = createServiceIdentifier<IBrowserViewService>('browserViewService');
@@ -146,6 +147,7 @@ export interface IBrowserViewNavigateRequest
 
 /** Serializable host-authoritative state for one embedded browser. */
 export interface IBrowserViewState {
+	readonly isDevToolsOpen: boolean;
 	readonly permissions?: ISerializedBrowserPermissionsSnapshot;
 	readonly browserZoomIndex?: number;
 	readonly deviceEmulation?: IBrowserDeviceProfile;
@@ -157,6 +159,10 @@ export interface IBrowserViewState {
 	readonly canGoForward: boolean;
 	readonly visible: boolean;
 	readonly errorDescription?: string;
+}
+
+export interface IBrowserViewDevToolsStateEvent {
+	readonly isDevToolsOpen: boolean;
 }
 
 export type BrowserViewEvent =

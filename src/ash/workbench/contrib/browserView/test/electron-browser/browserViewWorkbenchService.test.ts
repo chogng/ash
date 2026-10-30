@@ -19,8 +19,16 @@ import { ITelemetryService } from '../../../../../platform/telemetry/common/tele
 import { NullTelemetryServiceShape } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { IBrowserViewWorkbenchService } from '../../common/browserView.js';
+import { BrowserViewEditorId, IBrowserViewWorkbenchService } from '../../common/browserView.js';
 import '../../electron-browser/features/browserTabManagementFeatures.js';
+import '../../electron-browser/features/browserDevToolsFeature.js';
+import { ActiveEditorContext } from '../../../../common/contextkeys.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { MenuId } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { BrowserEditor, CONTEXT_BROWSER_HAS_ERROR, CONTEXT_BROWSER_HAS_URL } from '../../electron-browser/browserEditor.js';
+import { CONTEXT_BROWSER_DEVTOOLS_OPEN } from '../../electron-browser/features/browserDevToolsFeature.js';
 import { DialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
 import { readFile } from 'node:fs/promises';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
@@ -28,7 +36,7 @@ import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 const id = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 const info: IBrowserViewInfo = {
 	id, host: { windowId: 1 }, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace },
-	state: { targetId: id, url: 'https://example.test/', title: 'Original page', loading: false, visible: false, canGoBack: false, canGoForward: false },
+	state: { isDevToolsOpen: false, targetId: id, url: 'https://example.test/', title: 'Original page', loading: false, visible: false, canGoBack: false, canGoForward: false },
 };
 
 suite('Browser Workbench page lifecycle', () => {
@@ -115,6 +123,47 @@ suite('Browser Workbench page lifecycle', () => {
 			await f.services.invokeFunction(CommandsRegistry.getCommand('workbench.action.browser.' + command)!);
 		}
 		assert.deepEqual(calls, ['back', 'forward', 'reload', 'hard']);
+	});
+
+	test('browser developer tools are offered only for a browser editor and toggle its page', async () => {
+		using f = fixture();
+		await f.views.initialize();
+		using contexts = new ContextKeyService();
+		const activeEditor = ActiveEditorContext.bindTo(contexts);
+		const hasUrl = CONTEXT_BROWSER_HAS_URL.bindTo(contexts);
+		const hasError = CONTEXT_BROWSER_HAS_ERROR.bindTo(contexts);
+		const devToolsOpen = CONTEXT_BROWSER_DEVTOOLS_OPEN.bindTo(contexts);
+		using commands = new CommandService(f.services);
+		const menus = new MenuService(commands, contexts);
+		const developerTools = () => menus.getMenuActions(MenuId.CommandPalette)
+			.flatMap(([, actions]) => actions)
+			.find(action => action.id === 'workbench.action.browser.toggleDevTools');
+		assert.equal(developerTools(), undefined);
+		activeEditor.set(BrowserViewEditorId);
+		assert.equal(developerTools(), undefined);
+		hasUrl.set(true);
+		hasError.set(true);
+		assert.equal(developerTools(), undefined);
+		hasError.set(false);
+		f.active = f.views.getKnownBrowserViews().get(id);
+		const toggled: string[] = [];
+		f.service.toggleDevTools = async targetId => { toggled.push(targetId); };
+		const action = developerTools();
+		assert.ok(action?.enabled);
+		const pane = Object.create(BrowserEditor.prototype, { model: { value: await f.views.getKnownBrowserViews().get(id)!.resolve() } });
+		const toolbarAction = () => menus.getMenuActions(MenuId.BrowserActionsToolbar, { arg: pane })
+			.flatMap(([, actions]) => actions)
+			.find(candidate => candidate.id === 'workbench.action.browser.toggleDevTools');
+		assert.equal(toolbarAction()?.checked, false);
+		await toolbarAction()!.run();
+		assert.deepEqual(toggled, [id]);
+		devToolsOpen.set(true);
+		assert.equal(toolbarAction()?.checked, true);
+		hasError.set(true);
+		assert.equal(toolbarAction()?.enabled, false);
+		activeEditor.set('workbench.editor.theme');
+		f.active = undefined;
+		assert.equal(developerTools(), undefined);
 	});
 
 	test('the browser tab command lists contextual pages and rechecks ownership before opening a stale selection', async () => {

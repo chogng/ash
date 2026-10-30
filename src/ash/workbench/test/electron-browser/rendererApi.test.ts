@@ -28,7 +28,7 @@ test('Electron renderer assembles its connection Worker dependency before Workbe
 			},
 		},
 		ipcMessagePort: { acquire: () => { throw new Error('connection must not open before profile initialization'); } },
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 	const mainProcess: IMainProcessService = {

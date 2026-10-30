@@ -26,7 +26,7 @@ suite('App Server MessagePort transport', () => {
 			on: () => ({ dispose() { } }),
 		},
 		ipcMessagePort: { acquire: (_channel, nonce) => { registrations.add(nonce); return { dispose: () => { registrations.delete(nonce); } }; } },
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 	suiteSetup(async () => {

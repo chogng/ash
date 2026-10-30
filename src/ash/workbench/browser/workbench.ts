@@ -1269,7 +1269,7 @@ export class Workbench extends Disposable {
 		this._register(layout.onDidChangePartVisibility(({ partId, visible }) => {
 			if (partId === 'sidebar') activitybar.setSidebarVisible(visible);
 		}));
-		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined));
+		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined, services.get(IWorkbenchEnvironmentService)));
 		const paneParts = new Map<ViewContainerLocation, PaneCompositePart>([
 			[ViewContainerLocation.Sidebar, sidebar],
 			[ViewContainerLocation.Panel, panel],

@@ -2196,7 +2196,7 @@ export class AshApplication extends Disposable {
 			preload: app.isPackaged
 				? join(app.getAppPath(), 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs')
 				: developmentArtifactsPath(app.getAppPath(), 'preload', 'src/ash/base/parts/sandbox/electron-browser/preload.cjs'),
-			additionalArguments: [],
+			additionalArguments: app.isPackaged ? ['--ash-is-built'] : [],
 		};
 	}
 

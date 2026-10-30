@@ -20,7 +20,7 @@ suite('Electron context menu transport', () => {
 			on: () => { throw new Error('Unexpected subscription'); },
 		},
 		ipcMessagePort: { acquire: () => { throw new Error('Unexpected port acquisition'); } },
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 

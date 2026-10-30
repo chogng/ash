@@ -7,3 +7,4 @@ export const IsMacContext = new RawContextKey<boolean>('isMac', isMacintosh);
 export const IsLinuxContext = new RawContextKey<boolean>('isLinux', isLinux);
 export const IsWebContext = new RawContextKey<boolean>('isWeb', isWeb);
 export const IsNativeContext = new RawContextKey<boolean>('isNative', isNative);
+export const IsDevelopmentContext = new RawContextKey<boolean>('isDevelopment', false);

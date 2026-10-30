@@ -163,7 +163,7 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 		textSearch: async () => { throw new Error('Terminal fixture does not search file contents'); },
 	});
 	if (!services.has(IWorkbenchEnvironmentService)) services.registerInstance(IWorkbenchEnvironmentService, {
-		argvResource: URI.from({ scheme: 'vscode-userdata', path: '/user/argv.json' }),
+		isBuilt: true, argvResource: URI.from({ scheme: 'vscode-userdata', path: '/user/argv.json' }),
 		webviewExternalEndpoint: 'http://{{uuid}}.localhost',
 		expectsTerminalTransfer: new URLSearchParams(location.search).has('transfer'),
 	});

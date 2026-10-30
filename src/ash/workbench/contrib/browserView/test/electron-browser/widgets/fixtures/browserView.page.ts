@@ -21,7 +21,7 @@ import { INotificationService } from '../../../../../../../platform/notification
 import { TestNotificationService } from '../../../../../../../../../test/fixtures/browser/notificationFixture.js';
 import { IStorageService } from '../../../../../../../platform/storage/common/storage.js';
 import { bindTestColorTheme } from '../../../../../../../../../test/fixtures/browser/themeFixture.js';
-import { darkColorTheme } from '../../../../../../../platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../../../../platform/theme/common/colorTheme.js';
 import { getIconDefinition } from '../../../../../../../platform/theme/common/iconRegistry.js';
 import { IThemeService } from '../../../../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../../../../platform/theme/test/common/testThemeService.js';
@@ -57,6 +57,9 @@ declare global {
 			setSearch(engine: string): Promise<void>;
 			history(back: boolean, forward: boolean): void;
 			loading(value: boolean): void;
+			devTools(open: boolean): void;
+			loadError(message?: string): void;
+			theme(id: string): void;
 			commands(): readonly string[];
 			attach(page: 'first' | 'second'): Promise<void>;
 			oldPageStatus(): void;
@@ -124,7 +127,7 @@ services.registerInstance(IBrowserAutoReloadService, {
 });
 const info: IBrowserViewInfo = {
 	id: 'browser_target_00000000-0000-0000-0000-000000000000', host: { windowId: 1 }, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace },
-	state: { targetId: 'browser_target_00000000-0000-0000-0000-000000000000', url: 'https://example.com/', title: 'Browser layout', loading: false, canGoBack: true, canGoForward: true, visible: true },
+	state: { isDevToolsOpen: false, targetId: 'browser_target_00000000-0000-0000-0000-000000000000', url: 'https://example.com/', title: 'Browser layout', loading: false, canGoBack: true, canGoForward: true, visible: true },
 };
 const pageEvents = resources.add(new Emitter<BrowserViewEvent>());
 // Main-owned page operations stop at the service boundary; renderer, toolbar and context menu remain real.
@@ -136,6 +139,7 @@ services.registerInstance(IBrowserViewService, {
 	goBack: async () => { calls.push('back'); }, goForward: async () => { calls.push('forward'); },
 	reload: async (_id: string, hard?: boolean) => { calls.push(hard ? 'hardReload' : 'reload'); },
 	stop: async () => { calls.push('stop'); },
+	toggleDevTools: async () => { calls.push('devTools'); },
 	toggleElementSelection: async () => { }, toggleAreaSelection: async () => { }, stopFindInPage: async () => { },
 	setElementComments: async () => { },
 	layout: async () => { }, setVisible: async () => { }, getSharing: async () => [],
@@ -156,6 +160,9 @@ window.ashBrowserViewIntegration = {
 	setSearch: engine => services.get(IConfigurationService).updateValue(BrowserSearchEngineSettingId, engine, ConfigurationTarget.MEMORY),
 	history: (canGoBack, canGoForward) => { pageEvents.fire({ type: 'stateChanged', state: { ...editor.model!.state, canGoBack, canGoForward } }); },
 	loading: loading => { pageEvents.fire({ type: 'stateChanged', state: { ...editor.model!.state, loading } }); },
+	devTools: isDevToolsOpen => { pageEvents.fire({ type: 'stateChanged', state: { ...editor.model!.state, isDevToolsOpen } }); },
+	loadError: errorDescription => { pageEvents.fire({ type: 'stateChanged', state: { ...editor.model!.state, errorDescription } }); },
+	theme: id => { theme.setColorTheme([darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme].find(theme => theme.id === id)!); },
 	commands: () => services.get(IMenuService).getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).filter(action => action.enabled && ['workbench.action.browser.goBack', 'workbench.action.browser.goForward'].includes(action.id)).map(action => action.id),
 	attach: async page => { await editor.setInput(page === 'first' ? input : second, new AbortController().signal); },
 	oldPageStatus: () => { pageEvents.fire({ type: 'stateChanged', state: { ...info.state, title: 'Retired page', loading: true } }); },

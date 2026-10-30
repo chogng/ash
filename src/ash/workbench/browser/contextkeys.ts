@@ -1,7 +1,8 @@
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import type { IContextKey } from '../../platform/contextkey/common/contextkey.js';
 import type { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
-import { IsLinuxContext, IsMacContext, IsNativeContext, IsWebContext, IsWindowsContext } from '../../platform/contextkey/common/contextkeys.js';
+import { IsDevelopmentContext, IsLinuxContext, IsMacContext, IsNativeContext, IsWebContext, IsWindowsContext } from '../../platform/contextkey/common/contextkeys.js';
+import type { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
 import { type IWorkspaceContextService, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
 import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarMaximizedContext, AuxiliaryBarVisibleContext, BrowserLocalFolderSupportContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, OpenFolderWorkspaceSupportContext, PanelMaximizedContext, PanelVisibleContext, PanelPositionContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
 import type { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
@@ -20,9 +21,13 @@ export class WorkbenchContextKeysHandler extends Disposable {
 		private readonly workingCopyService: IWorkingCopyService,
 		private readonly openFolderWorkspaceSupported: boolean,
 		private readonly browserLocalFolderSupported: boolean,
+		environmentService: IWorkbenchEnvironmentService,
 	) {
 		super();
 		contextKeyService.bufferChangeEvents(() => {
+			const development = IsDevelopmentContext.bindTo(contextKeyService);
+			development.set(!environmentService.isBuilt);
+			this._register(toDisposable(() => development.reset()));
 			this.bindPlatformKeys(contextKeyService);
 			this.bindWorkspaceKeys(contextKeyService, workspaceContextService);
 			this.bindOpenFolderKey(contextKeyService);

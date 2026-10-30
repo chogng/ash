@@ -94,6 +94,29 @@ function fixture() {
 
 suite('browserView browser component', () => {
 	const browserTests = useBrowserTests();
+	test('developer tools keep keyboard focus and expose actual state in every theme', async () => {
+		const { page } = browserTests;
+		await page.goto('/browserView.html');
+		await page.waitForFunction(() => !!window.ashBrowserViewIntegration);
+		const button = page.getByRole('button', { name: 'Developer Tools', exact: true });
+		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(id => window.ashBrowserViewIntegration.theme(id), theme);
+			await expect(button).toBeEnabled();
+			await expect(button).toHaveAttribute('aria-pressed', 'false');
+			await button.focus();
+			await button.press('Enter');
+			await expect(button).toHaveAttribute('aria-pressed', 'false');
+			await page.evaluate(() => window.ashBrowserViewIntegration.devTools(true));
+			await expect(button).toHaveAttribute('aria-pressed', 'true');
+			await expect(button).toBeFocused();
+			await page.evaluate(() => window.ashBrowserViewIntegration.loadError(''));
+			await expect(button).toBeDisabled();
+			await page.evaluate(() => { window.ashBrowserViewIntegration.loadError(); window.ashBrowserViewIntegration.devTools(false); });
+		}
+		expect(await page.evaluate(() => [...window.ashBrowserViewIntegration.calls])).toEqual(['devTools', 'devTools', 'devTools', 'devTools']);
+		await page.evaluate(() => window.ashBrowserViewIntegration.detach());
+		await expect(button).toBeDisabled();
+	});
 	test('reload split button localizes its menu and returns focus in Chinese', async () => {
 		const { page } = browserTests;
 		await page.goto('/browserView.html?locale=zh-CN');

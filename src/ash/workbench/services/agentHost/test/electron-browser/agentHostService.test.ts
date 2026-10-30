@@ -121,7 +121,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 			},
 		},
 		ipcMessagePort: { acquire: () => ({ dispose() { } }) },
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 

@@ -6,6 +6,7 @@ export const IWorkbenchEnvironmentService = createServiceIdentifier<IWorkbenchEn
 
 /** The host supplies a separate origin for each webview, with {{uuid}} as its identity. */
 export interface IWorkbenchEnvironmentService {
+	readonly isBuilt: boolean;
 	readonly webviewExternalEndpoint: string;
 	readonly argvResource: URI;
 	/** The host opened this window to receive an existing terminal process. */

@@ -104,6 +104,8 @@ import { AppServerAvailableContext, IsSessionsWindowContext, WorkspaceFolderCoun
 import { EditorPanes } from '../../workbench/browser/editor.js';
 import { EditorContextKeyController } from '../../workbench/browser/parts/editor/editorContextKeys.js';
 import { WorkbenchEditorContextKeysHandler } from '../../workbench/browser/contextkeys.js';
+import { IsDevelopmentContext } from '../../platform/contextkey/common/contextkeys.js';
+import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
 import '../../workbench/browser/parts/editor/editorActions.js';
 import '../../workbench/browser/parts/editor/editorCommands.js';
 import { IAppServerApi as AppServerApiId, IServerEventApi as ServerEventApiId } from '../../platform/agentHost/common/appServerApi.js';
@@ -674,6 +676,7 @@ export abstract class Workbench extends Disposable {
 			this._register(CommandsRegistry.register(OPEN_ASH_WINDOW_COMMAND_ID, () => options.returnToWorkbench()));
 		}
 		const contextKeys = this._register(new ContextKeyService());
+		IsDevelopmentContext.bindTo(contextKeys).set(!services.get(IWorkbenchEnvironmentService).isBuilt);
 		AppServerAvailableContext.bindTo(contextKeys).set(options.api.hasAppServer);
 		IsSessionsWindowContext.bindTo(contextKeys).set(true);
 		const workspaceFolderCount = WorkspaceFolderCountContext.bindTo(contextKeys);

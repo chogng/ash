@@ -50,6 +50,7 @@
 		process: {
 			platform: process.platform,
 			arch: process.arch,
+			isBuilt: process.argv.includes('--ash-is-built'),
 		},
 		webUtils: {
 			getPathForFile: (file) => webUtils.getPathForFile(file),

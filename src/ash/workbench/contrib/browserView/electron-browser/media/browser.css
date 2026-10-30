@@ -23,6 +23,7 @@
 	flex: 0 0 auto;
 }
 .ash-browser-page-actions {
+	display: flex;
 	margin-left: auto;
 }
 .ash-browser-address {

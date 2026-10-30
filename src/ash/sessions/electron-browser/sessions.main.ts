@@ -110,7 +110,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		// Release automation dependencies before their Main IPC connection during window shutdown.
 		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		const mainProcessService = profileServices.get(IMainProcessService);
-		const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'));
+		const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'), false, sandboxProcess.isBuilt);
 		profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 		const playwrightService = profileServices.get(IPlaywrightService);
 		serviceCollection.set(IMainProcessService, mainProcessService);
@@ -319,3 +319,4 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 }
 import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
 import { ElectronWorkbenchEnvironmentService } from '../../workbench/services/environment/electron-browser/environmentService.js';
+import { sandboxProcess } from '../../base/parts/sandbox/electron-browser/globals.js';

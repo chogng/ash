@@ -233,7 +233,7 @@ function info(id: string, thread: string): IBrowserViewInfo {
 	return {
 		id, host: { windowId: 1 }, owner: { type: 'agent', sessionId: thread },
 		session: { scope: BrowserViewStorageScope.Agent, affinity: thread }, canvas: { sessionId: 'session-one', instanceId: 'preview', title: 'Preview' },
-		state: { targetId: id, url: 'https://secret.test/app?token=private', title: '', loading: false, visible: false, canGoBack: false, canGoForward: false },
+		state: { isDevToolsOpen: false, targetId: id, url: 'https://secret.test/app?token=private', title: '', loading: false, visible: false, canGoBack: false, canGoForward: false },
 	};
 }
 

@@ -31,7 +31,7 @@ suite('workspace trust during directory opening', () => {
 			},
 		},
 		ipcMessagePort: { acquire: () => ({ dispose() { } }) },
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 	suiteSetup(async () => {

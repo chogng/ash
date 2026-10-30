@@ -35,6 +35,25 @@ import {
 } from '../../../../workbench/services/commands/common/commandService.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { OpenFolderWorkspaceSupportContext } from '../../../../workbench/common/contextkeys.js';
+import { KeybindingRuleKind, KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { logicalKey } from '../../../../base/common/keybindings.js';
+import { isMacintosh } from '../../../../base/common/platform.js';
+import { createTestWorkbenchContextKeysHandler } from '../../../test/common/testWorkbenchContextKeys.js';
+
+test('the desktop inspector shortcut follows the host development context', () => {
+	using contexts = new ContextKeyService();
+	const rule = KeybindingsRegistry.getKeybindings().find(rule => rule.kind === KeybindingRuleKind.Command && rule.command === ToggleDeveloperToolsCommandId);
+	assert.ok(rule);
+	assert.deepEqual(rule.keybinding.chords, [logicalKey('i', isMacintosh ? { primaryKey: true, altKey: true } : { primaryKey: true, shiftKey: true })]);
+	assert.equal(contexts.contextMatchesRules(rule.when), false);
+	{
+		using development = createTestWorkbenchContextKeysHandler(contexts, { isBuilt: false });
+		assert.equal(contexts.contextMatchesRules(rule.when), true);
+	}
+	assert.equal(contexts.contextMatchesRules(rule.when), false);
+	using packaged = createTestWorkbenchContextKeysHandler(contexts, { isBuilt: true });
+	assert.equal(contexts.contextMatchesRules(rule.when), false);
+});
 
 test('native host routes validate folder picking and developer tools', async () => {
 	let pickedFolder: string | undefined;

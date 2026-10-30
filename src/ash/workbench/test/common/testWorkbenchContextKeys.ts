@@ -9,6 +9,8 @@ import type { EditorGroupState } from '../../services/editor/common/editorState.
 import { Position, type IWorkbenchLayoutService } from '../../services/layout/browser/layoutService.js';
 import type { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
 import { emptyEditorServiceState } from './testEditorService.js';
+import { URI } from '../../../base/common/uri.js';
+import { Schemas } from '../../../base/common/network.js';
 
 export interface TestWorkbenchContextKeyServices {
 	readonly workspaceContextService?: IWorkspaceContextService;
@@ -18,6 +20,7 @@ export interface TestWorkbenchContextKeyServices {
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly openFolderWorkspaceSupported?: boolean;
 	readonly browserLocalFolderSupported?: boolean;
+	readonly isBuilt?: boolean;
 }
 
 /** Creates the production handler with explicit no-op services for unrelated test domains. */
@@ -31,6 +34,7 @@ export function createTestWorkbenchContextKeysHandler(contextKeyService: IContex
 		services.workingCopyService ?? emptyWorkingCopyService,
 		services.openFolderWorkspaceSupported ?? false,
 		services.browserLocalFolderSupported ?? false,
+		{ isBuilt: services.isBuilt ?? true, argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }), webviewExternalEndpoint: 'https://{{uuid}}.example.test' },
 	);
 }
 

@@ -1,5 +1,5 @@
 import type { VSBuffer } from '../../../../base/common/buffer.js';
-import type { IBrowserViewFindInPageOptions, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions } from '../../../../platform/browserView/common/browserView.js';
+import type { IBrowserViewDevToolsStateEvent, IBrowserViewFindInPageOptions, IBrowserElementSelectionOptions, IBrowserElementCommentsUpdate, IBrowserViewCaptureScreenshotOptions } from '../../../../platform/browserView/common/browserView.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { IBrowserViewService, type BrowserViewEvent, type IBrowserViewBounds, type IBrowserViewCreateOptions, type IBrowserViewInfo, type IBrowserViewOwner, type IBrowserViewState } from '../../../../platform/browserView/common/browserView.js';
@@ -43,6 +43,9 @@ export interface IBrowserViewWorkbenchService {
 }
 
 export interface IBrowserViewModel extends IDisposable {
+	readonly isDevToolsOpen: boolean;
+	readonly onDidChangeDevToolsState: Event<IBrowserViewDevToolsStateEvent>;
+	toggleDevTools(): Promise<void>;
 	getConsoleLogs(): Promise<string>;
 	getSelectedText(): Promise<string>;
 	findInPage(text: string, options?: IBrowserViewFindInPageOptions): Promise<void>;
@@ -77,6 +80,8 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 	public readonly onWillDispose = this.disposing.event;
 	private readonly stateChanges = this._register(new Emitter<IBrowserViewState>());
 	public readonly onDidChangeState = this.stateChanges.event;
+	private readonly devToolsChanges = this._register(new Emitter<IBrowserViewDevToolsStateEvent>());
+	public readonly onDidChangeDevToolsState = this.devToolsChanges.event;
 	private readonly closed = this._register(new Emitter<void>());
 	public readonly onDidClose = this.closed.event;
 	private readonly events = this._register(new Emitter<BrowserViewEvent>());
@@ -94,12 +99,10 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 			if (event.type === 'canvasOpened') {
 				this.viewInfo = event.info;
 				this.stateRevision++;
-				this.currentState = event.info.state;
-				this.stateChanges.fire(this.currentState);
+				this.updateState(event.info.state);
 			} else if (event.type === 'stateChanged' && event.state.targetId === this.id) {
 				this.stateRevision++;
-				this.currentState = event.state;
-				this.stateChanges.fire(event.state);
+				this.updateState(event.state);
 			} else if (event.type === 'closed' && event.targetId === this.id) {
 				this.isClosed = true;
 				this.closed.fire();
@@ -110,6 +113,7 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 
 	public get id(): string { return this.viewInfo.id; }
 	public get state(): IBrowserViewState { return this.currentState; }
+	public get isDevToolsOpen(): boolean { return this.state.isDevToolsOpen; }
 	public get info(): IBrowserViewInfo { return { ...this.viewInfo, state: this.currentState }; }
 
 	public async initialize(): Promise<void> {
@@ -119,10 +123,18 @@ export class BrowserViewModel extends Disposable implements IBrowserViewModel {
 		this.assertNotDisposed();
 		if (this.isClosed) { throw new Error('BrowserTargetUnavailable'); }
 		if (revision === this.stateRevision) {
-			this.currentState = state;
-			this.stateChanges.fire(state);
+			this.updateState(state);
 		}
 	}
+
+	private updateState(state: IBrowserViewState): void {
+		const devToolsChanged = state.isDevToolsOpen !== this.currentState.isDevToolsOpen;
+		this.currentState = state;
+		if (devToolsChanged) { this.devToolsChanges.fire({ isDevToolsOpen: state.isDevToolsOpen }); }
+		this.stateChanges.fire(state);
+	}
+
+	public toggleDevTools(): Promise<void> { return this.service.toggleDevTools(this.id); }
 
 	public getConsoleLogs(): Promise<string> { return this.service.getConsoleLogs(this.id); }
 	public getSelectedText(): Promise<string> { return this.service.getSelectedText(this.id); }

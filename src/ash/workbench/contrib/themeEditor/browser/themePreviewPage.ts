@@ -164,6 +164,7 @@ const workbench = resources.add(
 		},
 		// Webviews are not part of the sample. The disconnected host supplies no remote resources.
 		environmentService: {
+			isBuilt: true,
 			webviewExternalEndpoint: 'https://{{uuid}}.invalid',
 			argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }),
 		},

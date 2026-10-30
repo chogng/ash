@@ -231,10 +231,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('innerWidth'))).toBe(390);
 				await pick(labels.emulation, labels.off);
 				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('innerWidth'))).toBeGreaterThan(390);
-				await select(labels.devTools);
+				const developerTools = editor.getByRole('button', { name: labels.devTools, exact: true });
+				await expect(developerTools).toHaveAttribute('aria-pressed', 'false');
+				await developerTools.click();
 				await expect.poll(() => view.evaluate(view => view.webContents.isDevToolsOpened())).toBe(true);
-				await select(labels.devTools);
+				await expect(developerTools).toHaveAttribute('aria-pressed', 'true');
+				await developerTools.click();
 				await expect.poll(() => view.evaluate(view => view.webContents.isDevToolsOpened())).toBe(false);
+				await expect(developerTools).toHaveAttribute('aria-pressed', 'false');
 				await select(labels.favorite);
 				await address.fill(`${url}other`); await address.press('Enter');
 				await expect(editor.getByRole('status')).toHaveText('Other page');

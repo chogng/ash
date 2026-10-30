@@ -95,6 +95,7 @@ test('browser view proxies preserve validated commands, subscriptions and backen
 	using events = new Emitter<BrowserViewEvent>();
 	const received: BrowserViewEvent[] = [];
 	const state: IBrowserViewState = {
+		isDevToolsOpen: false,
 		targetId,
 		url: 'https://example.com/',
 		title: '',

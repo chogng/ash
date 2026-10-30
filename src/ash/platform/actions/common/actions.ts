@@ -67,6 +67,7 @@ export class MenuId {
 	private static readonly instances = new Map<string, MenuId>();
 
 	static readonly CommandPalette = new MenuId('CommandPalette');
+	static readonly BrowserActionsToolbar = new MenuId('BrowserActionsToolbar');
 	static readonly CommandCenter = new MenuId('CommandCenter');
 	static readonly GlobalActivity = new MenuId('GlobalActivity');
 	static readonly SidebarTitle = new MenuId('SidebarTitle');

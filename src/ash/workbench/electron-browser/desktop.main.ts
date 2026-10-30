@@ -72,6 +72,7 @@ import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-
 import { IAgentHostCanvasCollection } from '../contrib/canvases/common/agentHostCanvas.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
+import { sandboxProcess } from '../../base/parts/sandbox/electron-browser/globals.js';
 
 /** Owns desktop startup and the resources of one renderer window. */
 export class DesktopMain extends Disposable {
@@ -104,7 +105,7 @@ export class DesktopMain extends Disposable {
 			const mainProcessService = profileServices.get(IMainProcessService);
 			const expectsTerminalTransfer = await invoke<unknown>(WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL);
 			if (typeof expectsTerminalTransfer !== 'boolean') throw new TypeError('Invalid terminal window startup intent');
-			const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'), expectsTerminalTransfer);
+			const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'), expectsTerminalTransfer, sandboxProcess.isBuilt);
 			profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 			const logger = this._register(profileServices.createInstance(NativeLogService, 'workbench'));
 			const playwrightService = profileServices.get(IPlaywrightService);

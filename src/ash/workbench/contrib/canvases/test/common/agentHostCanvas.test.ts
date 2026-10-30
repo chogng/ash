@@ -42,7 +42,7 @@ suite('Agent Canvas provider ownership', () => {
 			getOrCreateBrowserView: async (id: string, options: IBrowserViewCreateOptions) => {
 				const info: IBrowserViewInfo = {
 					id, owner: options.owner, host: { windowId: 1 }, session: options.session, canvas: options.canvas,
-					state: { targetId: id, title: '', url: options.initialUrl, loading: false, visible: false, canGoBack: false, canGoForward: false }
+					state: { isDevToolsOpen: false, targetId: id, title: '', url: options.initialUrl, loading: false, visible: false, canGoBack: false, canGoForward: false }
 				};
 				pages.set(id, info); events.fire({ type: 'created', info }); return info;
 			},
@@ -102,7 +102,7 @@ suite('Agent Canvas provider ownership', () => {
 						assert.deepEqual(options.owner, { type: 'user' });
 						const info: IBrowserViewInfo = {
 							id, owner: options.owner, host: { windowId: 1 }, session: options.session, canvas: options.canvas,
-							state: { targetId: id, title: '', url: options.initialUrl, loading: false, visible: false, canGoBack: false, canGoForward: false }
+							state: { isDevToolsOpen: false, targetId: id, title: '', url: options.initialUrl, loading: false, visible: false, canGoBack: false, canGoForward: false }
 						};
 						pages.set(id, info); events.fire({ type: 'created', info }); return info;
 					},
@@ -124,7 +124,7 @@ suite('Agent Canvas provider ownership', () => {
 					id: 'agent-page', owner: { type: 'agent', sessionId: 'one' }, host: { windowId: 1 },
 					session: { scope: BrowserViewStorageScope.Agent, affinity: 'one' },
 					canvas: { sessionId: 'one', instanceId: 'preview', extensionId: 'fixture', canvasId: 'board', title: 'Original board' },
-					state: { targetId: 'agent-page', title: '', url: source.url, loading: false, visible: false, canGoBack: false, canGoForward: false }
+					state: { isDevToolsOpen: false, targetId: 'agent-page', title: '', url: source.url, loading: false, visible: false, canGoBack: false, canGoForward: false }
 				};
 				pages.set(info.id, info); events.fire({ type: 'canvasOpened', targetId: info.id, info });
 				const request = context.openRequests!.get().get('preview');

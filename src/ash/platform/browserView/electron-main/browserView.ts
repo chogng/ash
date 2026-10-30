@@ -756,6 +756,9 @@ export class BrowserView extends Disposable {
 
 	private listen(): void {
 		const contents = this.view.webContents;
+		// Closing the detached inspector is a Chromium event, not a renderer toggle.
+		this.on(contents, 'devtools-opened', () => this.emitState());
+		this.on(contents, 'devtools-closed', () => this.emitState());
 		this.on(contents, 'login', (event: ElectronEvent, details: Electron.AuthenticationResponseDetails, auth: Electron.AuthInfo, callback: (username?: string, password?: string) => void) => {
 			event.preventDefault();
 			let settled = false;
@@ -938,6 +941,7 @@ export class BrowserView extends Disposable {
 		const history = contents.navigationHistory;
 		return {
 			targetId: this.id,
+			isDevToolsOpen: contents.isDevToolsOpened(),
 			permissions: this.session.permissions.snapshot(contents),
 			browserZoomIndex: browserZoomFactors.reduce<number>((best, factor, index) => Math.abs(factor - contents.getZoomFactor()) < Math.abs(browserZoomFactors[best]! - contents.getZoomFactor()) ? index : best, browserZoomDefaultIndex),
 			deviceEmulation: this.deviceEmulation,

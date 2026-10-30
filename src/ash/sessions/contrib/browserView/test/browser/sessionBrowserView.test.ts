@@ -178,7 +178,7 @@ function fixture() {
 		getOrCreateBrowserView: async (id, options) => {
 			const existing = f.pages.get(id);
 			if (existing) { return existing; }
-			const info: IBrowserViewInfo = { id, host: { windowId: 1 }, owner: options.owner, session: options.session, state: { targetId: id, url: options.initialUrl, title: '', loading: false, canGoBack: false, canGoForward: false, visible: false } };
+			const info: IBrowserViewInfo = { id, host: { windowId: 1 }, owner: options.owner, session: options.session, state: { isDevToolsOpen: false, targetId: id, url: options.initialUrl, title: '', loading: false, canGoBack: false, canGoForward: false, visible: false } };
 			f.pages.set(id, info);
 			events.fire({ type: 'created', info });
 			return info;

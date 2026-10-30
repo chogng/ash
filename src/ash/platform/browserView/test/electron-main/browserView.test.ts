@@ -206,6 +206,20 @@ const signal = () => new AbortController().signal;
 suite('Browser view ownership and operations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('developer tools publish Chromium open and manual close state and release their listeners', async () => {
+		using f = fixture();
+		const page = await f.create();
+		assert.equal(page.getState().isDevToolsOpen, false);
+		const channel = browserViewChannel(f.manager, { call: async () => null, listen: () => Event.None } as unknown as import('../../../../base/parts/ipc/common/ipc.js').IChannel);
+		await channel.call('window:1', 'toggleDevTools', [id]);
+		assert.equal(page.getState().isDevToolsOpen, true);
+		page.webContents.closeDevTools();
+		assert.deepEqual(f.events.filter(event => event.type === 'stateChanged').map(event => event.state.isDevToolsOpen), [true, false]);
+		await f.manager.destroyBrowserView(id);
+		assert.equal(page.webContents.listenerCount('devtools-opened'), 0);
+		assert.equal(page.webContents.listenerCount('devtools-closed'), 0);
+	});
+
 	test('rendering rules cross validated IPC, reach only the main frame and survive document replacement', async () => {
 		using f = fixture(); await f.create();
 		const sent: unknown[] = [];
@@ -753,8 +767,12 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 			const pageContents = children.size === 0 ? contents : new EventEmitter();
 			let destroyed = false;
 			let zoomFactor = 1;
+			let devToolsOpen = false;
 			let bounds = { x: 0, y: 0, width: 0, height: 0 };
 			Object.assign(pageContents, {
+				isDevToolsOpened: () => devToolsOpen,
+				openDevTools: () => { devToolsOpen = true; pageContents.emit('devtools-opened'); },
+				closeDevTools: () => { devToolsOpen = false; pageContents.emit('devtools-closed'); },
 				getZoomFactor: () => zoomFactor, setZoomFactor: (value: number) => { zoomFactor = value; },
 				id: children.size + 1,
 				setWebRTCIPHandlingPolicy: () => { },
