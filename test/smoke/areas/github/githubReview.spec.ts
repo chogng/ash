@@ -35,7 +35,7 @@ test('Workbench and Sessions open the shared GitHub editor and restore focus aft
 });
 
 
-test('GitHub settings share the Preferences renderer in Workbench and Sessions and restore help focus', async ({ workbench, target, application }) => {
+test('GitHub settings share the Preferences renderer in Workbench and Sessions and restore help focus', async ({ workbench, target }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectCategory('github');
@@ -50,7 +50,7 @@ test('GitHub settings share the Preferences renderer in Workbench and Sessions a
 	await page.keyboard.press('Escape');
 	await expect(workbench.settingsEditor.element).toBeHidden();
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
-	await new Menus(sessionsPage).select(application, () => sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().click(), ['Settings']);
+	await new QuickAccess(sessionsPage).runCommand('workbench.action.openSettings');
 	const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings', exact: true });
 	await settings.getByRole('button', { name: 'Git & PRs', exact: true }).click();
 	const sessionsSection = settings.locator('.ash-settings-section');

@@ -1474,9 +1474,11 @@ Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存�
 
 ## GitHub 仓库管理
 
-`initialize.capabilities.github` 与 `contracts.github.version = 1` 表示后端提供内置 GitHub 能力。
+`initialize.capabilities.github` 与 `contracts.github.version = 2` 表示后端提供内置 GitHub 能力；版本 2 将托管设置刷新状态统一交给 Provider。
 [`github.rs`](../crates/app-server-protocol/src/protocol/github.rs) 定义 `github/*` 请求和结果。
 请求直接携带 host/owner/name，不要求本地工作目录；登录复用已有 GitHub 账号入口，凭据不进入协议。
+
+`github/account/managedSettings` 使用准确的 `accountId`、可取消的 `operationId` 和 `mode`（`automatic` / `retry`）。GitHub API 扩展按 host、account 和授权 grant 统一拥有托管设置快照、刷新时间与失败状态；自动读取共享一分钟内的成功结果，失败后共享原结果，显式重试才发起新的远端尝试。并发读取合并，同一窗口取消等待不取消其他窗口的读取；网络尝试取消不记为共享失败。结果包含最后一次成功的 `settings` 和当前 `refresh`，404 成功响应撤销旧设置。Workbench 的 `AccountPolicyService` 只将快照映射到已注册的界面配置并展示状态；模型与工具的执行授权仍由对应后端领域拥有。
 
 接口覆盖仓库信息、Issue 读写、Issue/PR 讨论评论、PR 列表/详情/创建/修改/文件/评审/合并/自动合并、提交检查、标签和可分配负责人。
 前端消费者使用 `IGitHubService`，由 Renderer Host 在 Web 与 Electron 中绑定现有 App Server 连接，并注册到 Workbench 服务容器。

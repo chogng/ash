@@ -388,6 +388,80 @@ fn github_account_rpc_connects_without_oauth_selects_host_credentials_and_logs_o
     assert_eq!(remaining["result"]["accounts"][0]["id"], "ghe.example/42");
 }
 
+#[test]
+fn github_managed_settings_rpc_shares_backend_history_across_connections_and_withdraws_policy() {
+    let http = Arc::new(RepositoryHttp::default());
+    let accounts = github_authentication::GitHubOAuth::tokens(
+        http.clone(),
+        Arc::new(ash_secrets::MemorySecretStore::default()),
+    );
+    let login = Arc::new(ash_login::LoginService::deferred(accounts.clone()));
+    let events: Arc<dyn ash_login::extension::AuthenticationEvents> = login.clone();
+    accounts.install_events(&events);
+    let server = server()
+        .with_login_service(login)
+        .with_github_accounts(accounts.clone())
+        .with_github_http(accounts, http.clone())
+        .unwrap();
+    let mut first = server.connection();
+    let mut second = server.connection();
+    initialize(&server, &mut first);
+    initialize(&server, &mut second);
+    http.reply(200, serde_json::json!({"id":42,"login":"policy-user"}));
+    let connected = call(
+        &server,
+        &mut first,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":2, "method":"github/account/connect",
+            "params":{"operationId":"connect-policy", "host":"github.com", "token":"policy-token"}
+        }),
+    );
+    assert_eq!(connected["result"]["id"], "42");
+    let request = |id: u64, operation: &str, mode: &str| {
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":id, "method":"github/account/managedSettings",
+            "params":{"operationId":operation, "accountId":"42", "mode":mode}
+        })
+    };
+    http.reply(200, serde_json::json!({"model":"managed"}));
+    let ready = call(&server, &mut first, request(3, "first", "automatic"));
+    assert_eq!(ready["result"]["refresh"]["state"], "ready");
+    assert_eq!(ready["result"]["settings"]["model"], "managed");
+    assert_eq!(
+        call(&server, &mut second, request(3, "second", "automatic"))["result"],
+        ready["result"]
+    );
+    http.reply(
+        466,
+        serde_json::json!({"message":"private-compatibility-body"}),
+    );
+    let failed = call(&server, &mut first, request(4, "retry", "retry"));
+    assert_eq!(
+        failed["result"]["refresh"]["failure"], "updateRequired",
+        "{failed}"
+    );
+    assert_eq!(
+        failed["result"]["refresh"]["lastSuccessAt"],
+        ready["result"]["refresh"]["lastSuccessAt"]
+    );
+    assert_eq!(failed["result"]["settings"], ready["result"]["settings"]);
+    assert!(!failed.to_string().contains("private"));
+    server.close_connection(first);
+    assert_eq!(
+        call(&server, &mut second, request(4, "after-close", "automatic"))["result"],
+        failed["result"]
+    );
+    assert_eq!(http.requests.lock().unwrap().len(), 3);
+    http.reply(404, serde_json::Value::Null);
+    let withdrawn = call(&server, &mut second, request(5, "withdraw", "retry"));
+    assert!(withdrawn["result"]["settings"].is_null());
+    assert_eq!(withdrawn["result"]["refresh"]["state"], "ready");
+    let invalid = call(&server, &mut second, request(6, "invalid", "unknown"));
+    assert_eq!(invalid["error"]["code"], -32602);
+    assert_eq!(http.requests.lock().unwrap().len(), 4);
+    server.close_connection(second);
+}
+
 struct CancelledRepositoryHttp {
     entered: std::sync::mpsc::Sender<()>,
     confirmed: bool,

@@ -1,5 +1,6 @@
 use crate::GitHub;
 use crate::GitHubIssueReporter;
+use crate::managed_settings::ManagedSettingsStore;
 use ash_async_utils::CancellationToken;
 use ash_http_client::HttpClient;
 use github::*;
@@ -10,10 +11,27 @@ use std::sync::Arc;
 pub struct ApiProvider {
     credentials: Arc<dyn GitHubCredentialProvider>,
     http: Arc<dyn HttpClient>,
+    managed_settings: Arc<ManagedSettingsStore>,
 }
 impl ApiProvider {
     pub fn new(credentials: Arc<dyn GitHubCredentialProvider>, http: Arc<dyn HttpClient>) -> Self {
-        Self { credentials, http }
+        Self {
+            credentials,
+            http,
+            managed_settings: Arc::default(),
+        }
+    }
+
+    pub(crate) fn with_managed_settings(
+        credentials: Arc<dyn GitHubCredentialProvider>,
+        http: Arc<dyn HttpClient>,
+        managed_settings: Arc<ManagedSettingsStore>,
+    ) -> Self {
+        Self {
+            credentials,
+            http,
+            managed_settings,
+        }
     }
 }
 impl GitHubProvider for ApiProvider {
@@ -55,6 +73,12 @@ impl GitHubProvider for ApiProvider {
                     http: self.http.clone(),
                     cancellation: cancellation.clone(),
                 };
+                if let GitHubRequest::ManagedSettings { mode } = request {
+                    return self
+                        .managed_settings
+                        .read(&client, mode)
+                        .map(GitHubResponse::ManagedSettings);
+                }
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_time()
                     .build()

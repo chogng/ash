@@ -38,7 +38,7 @@ export function createTestInitializeResult(): InitializeResult {
 			mcp: true,
 			mcpOAuth: true,
 			contracts: {
-				github: { version: 1 },
+				github: { version: 2 },
 			},
 		},
 	};

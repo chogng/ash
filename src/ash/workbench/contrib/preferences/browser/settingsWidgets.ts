@@ -127,6 +127,7 @@ export interface SettingWidget extends IDisposable {
 
 interface SettingActionsOptions {
 	readonly reference: SettingReference;
+	readonly canReset: () => boolean;
 	readonly onError: (error: unknown) => void;
 	readonly copySettingAsJSON?: () => string;
 	readonly editInJSON?: () => Promise<void>;
@@ -177,7 +178,7 @@ class SettingActions extends Disposable {
 				id: 'settings.resetSetting',
 				label: localize({ bundle: 'ash.settings', key: 'actions.reset' }, 'Reset Setting'),
 				tooltip: '',
-				enabled: !this.options.reference.isDefault(),
+				enabled: this.options.canReset() && !this.options.reference.isDefault(),
 				run: () => this.run(() => this.options.reference.reset()),
 			},
 			{
@@ -223,6 +224,10 @@ class SettingActions extends Disposable {
 		void operation().catch(error => this.options.onError(error));
 	}
 
+	focus(): void {
+		this.trigger.focus();
+	}
+
 	private setOpen(open: boolean): void {
 		this.actionsDomNode.classList.toggle('is-open', open);
 		this.trigger.domNode.setAttribute('aria-expanded', String(open));
@@ -242,7 +247,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	private readonly titleDomNode: HTMLSpanElement;
 	private pendingFocus: HTMLElement | undefined;
 
-	protected constructor(container: HTMLElement, descriptor: TSetting, binding: SettingValueBinding<TValue>, private readonly options: SettingWidgetOptions, configurationService: IConfigurationService, contextViewProvider: IContextViewProvider, instantiationService: IInstantiationService, kind?: 'select' | 'toggle') {
+	protected constructor(container: HTMLElement, descriptor: TSetting, binding: SettingValueBinding<TValue>, private readonly options: SettingWidgetOptions, private readonly configuration: IConfigurationService, contextViewProvider: IContextViewProvider, instantiationService: IInstantiationService, kind?: 'select' | 'toggle') {
 		super();
 		const document = container.ownerDocument;
 		this.descriptor = descriptor;
@@ -264,7 +269,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			? localize({ bundle: 'ash.settings', key: 'status.configuredLanguage' }, 'Configured for {0} in the selected target.', options.configurationOverrides.overrideIdentifier)
 			: options.configurationTarget === ConfigurationTarget.WORKSPACE || options.configurationTarget === ConfigurationTarget.WORKSPACE_FOLDER
 				? localize({ bundle: 'ash.settings', key: 'status.configuredTarget' }, 'Configured in the selected target.') : undefined;
-		this.indicators = this._register(new SettingsTreeIndicatorsLabel(this.copyDomNode, contextViewProvider, () => configurationService.getValue<number>(HoverConfiguration.delay), configuredText));
+		this.indicators = this._register(new SettingsTreeIndicatorsLabel(this.copyDomNode, contextViewProvider, () => configuration.getValue<number>(HoverConfiguration.delay), configuredText));
 		this.copyDomNode.prepend(this.titleDomNode, this.descriptionDomNode);
 		this.updateCopy(descriptor);
 
@@ -276,11 +281,12 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 					isDefault: () => this.model.isDefault(),
 					reset: () => this.resetSetting(),
 				},
+				canReset: () => !this.hasPolicyValue,
 				editInJSON: descriptor.binding || !options.onOpenSettings ? undefined : () => options.onOpenSettings!(this.descriptor.id),
 				onError: (error: unknown) => this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
 				copySettingAsJSON: descriptor.binding ? undefined : () => {
 					const setting = this.descriptor.configuration;
-					const inspected = configurationService.inspect(setting.key, options.configurationOverrides);
+					const inspected = configuration.inspect(setting.key, options.configurationOverrides);
 					const value = binding.isDefault?.() ? binding.defaultValue : getConfigValueInTarget(inspected, options.configurationTarget ?? ConfigurationTarget.USER_LOCAL);
 					return `${JSON.stringify(setting.key)}: ${JSON.stringify(value, null, 2)}`;
 				},
@@ -309,15 +315,26 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		const render = (state: SettingState<TValue>): void => {
 			// Domain bindings own their own defaults; they do not represent local user configuration.
 			const isConfigured = !this.descriptor.binding && !state.isDefault;
-			this.indicators.update({ isPending: state.isPending, isConfigured });
+			this.indicators.update({ isPending: state.isPending, isConfigured, hasPolicyValue: this.hasPolicyValue });
 			this.domNode.classList.toggle('is-configured', isConfigured);
 			this.updateIndicatorDescriptions();
 			const document = this.domNode.ownerDocument;
+			const activeBeforeRender = getActiveElement(document);
 			if (state.isPending && !this.pendingFocus) {
 				const active = getActiveElement(document);
 				if (active instanceof document.defaultView!.HTMLElement && this.domNode.contains(active)) this.pendingFocus = active;
 			}
 			renderState(state);
+			if (
+				this.hasPolicyValue &&
+				activeBeforeRender instanceof document.defaultView!.HTMLElement &&
+				this.domNode.contains(activeBeforeRender) &&
+				getActiveElement(document) === document.body
+			) {
+				// A policy arriving during editing disables the control. Keep keyboard
+				// focus in this row, where its description and remaining actions are available.
+				this.actions.focus();
+			}
 			if (!state.isPending && this.pendingFocus) {
 				// Disabling a saving control blurs it. Restore focus only if the user has not moved elsewhere.
 				if (getActiveElement(document) === document.body && this.pendingFocus.isConnected) this.pendingFocus.focus();
@@ -325,7 +342,17 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			}
 		};
 		this._register(this.model.onDidChange(render));
+		// SettingModel tracks value and local override presence. Policy can change
+		// editability independently, including for host-specific configuration bindings.
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(this.descriptor.id, this.options.configurationOverrides)) render(this.model.state);
+		}));
 		render(this.model.state);
+	}
+
+	protected get hasPolicyValue(): boolean {
+		return this.descriptor.configuration.policy !== undefined &&
+			this.configuration.inspect(this.descriptor.id, this.options.configurationOverrides).policyValue !== undefined;
 	}
 
 	protected reportStatus(message: string, isError: boolean): void {
@@ -363,7 +390,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	}
 
 	private updateIndicatorDescriptions(): void {
-		const ids = [this.domNode.classList.contains('is-configured') ? this.indicators.configuredDescriptionId : undefined, this.indicators.maturityDescriptionId].filter(Boolean);
+		const ids = [this.domNode.classList.contains('is-configured') ? this.indicators.configuredDescriptionId : undefined, this.indicators.maturityDescriptionId, this.indicators.policyDescriptionId].filter(Boolean);
 		if (ids.length) this.domNode.setAttribute('aria-describedby', ids.join(' '));
 		else this.domNode.removeAttribute('aria-describedby');
 	}
@@ -389,6 +416,7 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 		this.bindState(state => {
 			this.toggle.checked = state.value;
 			this.toggle.busy = state.isPending;
+			this.toggle.enabled = !this.hasPolicyValue;
 		});
 		this._register(this.toggle.onDidChange(checked => void this.updateSetting(checked)));
 	}
@@ -431,8 +459,8 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 		this.updateControl(descriptor);
 		this.bindState(state => {
 			this.input.value = String(state.value);
-			if (this.inputBox) this.inputBox.enabled = !state.isPending;
-			else this.input.disabled = state.isPending;
+			if (this.inputBox) this.inputBox.enabled = !state.isPending && !this.hasPolicyValue;
+			else this.input.disabled = state.isPending || this.hasPolicyValue;
 		});
 		this._register(addDisposableListener(this.input, 'change', () => this.acceptValue()));
 	}
@@ -513,10 +541,10 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 		const index = this.descriptor.options.findIndex(option => option.value === state.value);
 		this.inputBox.value = typeof state.value === 'number' ? String(state.value) : '';
 		this.inputBox.inputElement.placeholder = index >= 0 ? this.descriptor.options[index].label : '';
-		this.inputBox.enabled = !state.isPending;
+		this.inputBox.enabled = !state.isPending && !this.hasPolicyValue;
 		if (this.select) {
 			this.select.value = index < 0 ? 'custom' : String(index);
-			this.select.enabled = !state.isPending;
+			this.select.enabled = !state.isPending && !this.hasPolicyValue;
 		}
 	}
 
@@ -590,7 +618,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 		}
 		if (!sameSelectOptions(this.select.options, options)) this.select.setOptions(options);
 		this.select.value = String(state.value);
-		this.select.enabled = !state.isPending;
+		this.select.enabled = !state.isPending && !this.hasPolicyValue;
 	}
 }
 
@@ -611,7 +639,7 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 		this.updateControl(descriptor);
 		this.bindState(state => {
 			this.input.value = state.value;
-			this.input.disabled = state.isPending;
+			this.input.disabled = state.isPending || this.hasPolicyValue;
 		});
 		this._register(addDisposableListener(this.input, 'change', () => void this.updateSetting(this.input.value)));
 	}

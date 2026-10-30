@@ -189,6 +189,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					}
 					: undefined,
 				contributionIds: [
+					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
 					'status.languageStatus',
 					'workbench.contrib.opener',

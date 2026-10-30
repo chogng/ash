@@ -185,10 +185,12 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 		this.appliedPolicy = this.policy.configurationModel;
 		const current = this.effective;
 		const policy = this.appliedPolicy;
-		const changed = (key: string, identifier?: string): boolean => !equals(
-			this.resolve(previous, previousPolicy, identifier).getValue(key),
-			this.resolve(current, policy, identifier).getValue(key),
-		);
+		// Acquiring or releasing policy changes editability even when the effective value is equal.
+		const changed = (key: string, identifier?: string): boolean =>
+			!equals(previousPolicy.getValue(key), policy.getValue(key)) || !equals(
+				this.resolve(previous, previousPolicy, identifier).getValue(key),
+				this.resolve(current, policy, identifier).getValue(key),
+			);
 		const keys = [...new Set([...previous.keys, ...current.keys, ...previousPolicy.keys, ...policy.keys])].filter(key => changed(key));
 		const blocks = [...previous.overrides, ...current.overrides];
 		const overrides: [string, string[]][] = [...new Set(blocks.flatMap(block => block.identifiers))].map(identifier => [

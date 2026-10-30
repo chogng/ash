@@ -3,13 +3,14 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IAccountService, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
-import { GitHubError, GitHubErrorCode, IGitHubService, type GitHubAccount } from '../../../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, GitHubManagedSettingsReadMode, IGitHubService, type GitHubAccount, type GitHubManagedSettingsSnapshot } from '../../../../../platform/github/common/githubService.js';
+import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { JsonValue } from '../../../../../base/common/jsonValue.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { LogEntry } from '../../../../../platform/log/common/log.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import type { PolicyValue } from '../../../../../base/common/policy.js';
-import { AbstractPolicyService, type PolicyDefinition } from '../../../../../platform/policy/common/policy.js';
+import { AbstractPolicyService, PolicyValueSource, type PolicyDefinition } from '../../../../../platform/policy/common/policy.js';
 import { MultiplexPolicyService } from '../../../../../platform/policy/common/multiplexPolicyService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { PolicyConfiguration } from '../../../../../platform/configuration/common/configurations.js';
@@ -33,8 +34,11 @@ function accountServices(events: Emitter<AccountState>): IAccountService {
 	};
 }
 
-function githubServices(read: IGitHubService['readManagedSettings'], list: () => Promise<readonly GitHubAccount[]> = async () => [account]): IGitHubService {
-	return { ...createDisconnectedGitHubService(), listAccounts: list, readManagedSettings: read };
+function githubServices(read: (id: string, token?: CancellationToken) => Promise<Readonly<Record<string, JsonValue>> | null>, list: () => Promise<readonly GitHubAccount[]> = async () => [account]): IGitHubService {
+	return {
+		...createDisconnectedGitHubService(), listAccounts: list,
+		readManagedSettings: async (id, token) => ({ settings: await read(id, token), refresh: { state: 'ready', lastAttemptAt: Date.now(), lastSuccessAt: Date.now() } }),
+	};
 }
 
 test('Registered account mappings resolve real provider fields and system policy has priority', async () => {
@@ -57,9 +61,11 @@ test('Registered account mappings resolve real provider fields and system policy
 	using configuration = new PolicyConfiguration(registry, policies, log);
 	await configuration.initialize();
 	assert.deepEqual([configuration.configurationModel.getValue('ui.managedFeature'), accounts.getPolicyValue('ManagedFeature'), ids], [false, true, ['first']]);
+	assert.deepEqual([policies.getPolicyValueSource('ManagedFeature'), accounts.getPolicyValueSource('ManagedFeature')], [PolicyValueSource.Device, PolicyValueSource.ServerManagedSettings]);
 	system.candidate = {};
 	await system.updatePolicyDefinitions(binding);
 	assert.equal(configuration.configurationModel.getValue('ui.managedFeature'), true);
+	assert.equal(policies.getPolicyValueSource('ManagedFeature'), PolicyValueSource.ServerManagedSettings);
 });
 
 test('Account read failures and malformed replacements retain policy, while authoritative absence removes it', async () => {
@@ -111,42 +117,34 @@ test('Failed account discovery suppresses automatic requests until explicit retr
 	assert.equal(source.state.phase, 'ready');
 });
 
-test('Failed managed settings stay scoped to account, host and credentials and explicit retry recovers retained policy', async () => {
+test('Windows project the same backend failure, retained settings and timestamps and forward explicit retry', async () => {
 	using changes = new Emitter<AccountState>();
-	let selected = account;
-	let failure: Error | undefined;
-	let reads = 0;
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
-		reads++;
-		if (failure) throw failure;
-		return { strictPluginOnlyCustomization: true };
-	}, async () => [selected]), log);
-	await source.updatePolicyDefinitions(binding);
-	failure = new GitHubError(GitHubErrorCode.Unavailable);
-	await source.refresh();
-	const failed = source.state;
-	await source.refresh();
-	assert.deepEqual(source.state, failed);
-	assert.equal(reads, 2);
-	assert.equal(source.getPolicyValue('ManagedFeature'), true);
-
-	selected = { ...account, credentialRevision: 2n };
-	await source.refresh();
-	assert.equal(reads, 3);
-	selected = { ...selected, host: 'enterprise.example' };
-	await source.refresh();
-	assert.equal(reads, 4);
-	selected = { ...selected, id: 'second' };
-	await source.refresh();
-	assert.equal(reads, 5);
-	selected = account;
-	await source.refresh();
-	assert.equal(reads, 5);
-	failure = undefined;
-	await source.refresh({ retryManagedSettings: true });
-	assert.equal(reads, 6);
-	assert.equal(source.state.phase, 'ready');
-	assert.equal(source.getPolicyValue('ManagedFeature'), true);
+	let snapshot: GitHubManagedSettingsSnapshot = {
+		settings: { strictPluginOnlyCustomization: true },
+		refresh: { state: 'failed', lastAttemptAt: 200, lastSuccessAt: 100, failure: GitHubErrorCode.ManagedSettingsUpdateRequired },
+	};
+	const modes: (GitHubManagedSettingsReadMode | undefined)[] = [];
+	const github: IGitHubService = {
+		...githubServices(async () => ({})),
+		readManagedSettings: async (_id, _token, mode) => { modes.push(mode); return snapshot; },
+	};
+	using first = new AccountPolicyService(accountServices(changes), github, log);
+	using second = new AccountPolicyService(accountServices(changes), github, log);
+	await first.updatePolicyDefinitions(binding);
+	await second.updatePolicyDefinitions(binding);
+	assert.deepEqual(first.state, second.state);
+	assert.deepEqual(first.state, {
+		phase: 'failed', scope: { accountId: 'first', host: 'github.com', credentialRevision: 1n },
+		lastAttemptAt: 200, lastSuccessAt: 100, failure: GitHubErrorCode.ManagedSettingsUpdateRequired, retainsPolicy: true,
+	});
+	assert.deepEqual([first.getPolicyValue('ManagedFeature'), second.getPolicyValue('ManagedFeature')], [true, true]);
+	snapshot = { settings: null, refresh: { state: 'ready', lastAttemptAt: 300, lastSuccessAt: 400 } };
+	await first.refresh({ retryManagedSettings: true });
+	await second.refresh();
+	assert.deepEqual(modes, [GitHubManagedSettingsReadMode.Automatic, GitHubManagedSettingsReadMode.Automatic, GitHubManagedSettingsReadMode.Retry, GitHubManagedSettingsReadMode.Automatic]);
+	assert.deepEqual(first.state, second.state);
+	assert.equal(first.state.lastSuccessAt, 400);
+	assert.deepEqual([first.getPolicyValue('ManagedFeature'), second.getPolicyValue('ManagedFeature')], [undefined, undefined]);
 });
 
 test('Logout cancels pending policy reads and prevents a late response from restoring restrictions', async () => {

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { test } from 'mocha';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IPCClient } from '../../../../base/parts/ipc/common/ipc.js';
 import { ConfigurationService } from '../../common/configurationService.js';
@@ -17,7 +17,10 @@ import { DiskFileSystemProviderChannel } from '../../../files/electron-main/disk
 import { DiskFileSystemProvider } from '../../../files/node/diskFileSystemProvider.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../log/common/log.js';
-import { IPolicyService, NullPolicyService } from '../../../policy/common/policy.js';
+import { AbstractPolicyService, IPolicyService, NullPolicyService } from '../../../policy/common/policy.js';
+import { InMemoryFileSystemProvider } from '../../../files/common/inMemoryFilesystemProvider.js';
+import { Registry } from '../../../registry/common/platform.js';
+import { Extensions, type IConfigurationNode, type IConfigurationRegistry } from '../../common/configurationRegistry.js';
 
 function connect(resources: DisposableStore, disk: DiskFileSystemProvider, root: URI, identity: string) {
 	const incoming = resources.add(new Emitter<VSBuffer>());
@@ -37,6 +40,42 @@ function connect(resources: DisposableStore, disk: DiskFileSystemProvider, root:
 	const configuration = resources.add(services.createInstance(ConfigurationService, resource));
 	return { configuration, resource, files };
 }
+
+test('Single-resource configuration reports policy acquisition and withdrawal when the value is unchanged', async () => {
+	using resources = new DisposableStore();
+	const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+	const node: IConfigurationNode = { properties: { 'policy.equalValue': { type: 'string', default: 'same', policy: { name: 'EqualValuePolicy' } } } };
+	registry.updateConfigurations({ add: [node], remove: [] });
+	resources.add(toDisposable(() => registry.updateConfigurations({ add: [], remove: [node] })));
+	const files = resources.add(new FileService());
+	const provider = resources.add(new InMemoryFileSystemProvider());
+	resources.add(files.registerProvider('file', provider));
+	const resource = URI.file('/policy/settings.json');
+	await files.createDirectory(URI.file('/policy'));
+	await files.writeFile({ resource, content: '{ "policy.equalValue": "same" }' });
+	class Source extends AbstractPolicyService {
+		set(managed: boolean): void { this.accept(managed ? { EqualValuePolicy: 'same' } : {}); }
+		protected async refresh(): Promise<void> { }
+	}
+	const source = resources.add(new Source());
+	const configuration = resources.add(new ConfigurationService(resource, files, source, new NullLoggerService()));
+	await configuration.initialize();
+	const observations: unknown[] = [];
+	resources.add(configuration.onDidChangeConfiguration(event => observations.push({
+		keys: [...event.affectedKeys], parent: event.affectsConfiguration('policy'),
+		language: event.affectsConfiguration('policy.equalValue', { overrideIdentifier: 'typescript' }),
+		value: configuration.getValue('policy.equalValue'), managed: configuration.inspect('policy.equalValue').policyValue,
+	})));
+	source.set(true);
+	await assert.rejects(configuration.updateValue('policy.equalValue', undefined), /administrator policy/);
+	source.set(true);
+	source.set(false);
+	assert.deepEqual(observations, [
+		{ keys: ['policy.equalValue'], parent: true, language: true, value: 'same', managed: 'same' },
+		{ keys: ['policy.equalValue'], parent: true, language: true, value: 'same', managed: undefined },
+	]);
+	assert.equal((await files.readFile(resource)).content, '{ "policy.equalValue": "same" }');
+});
 
 test('configuration uses the ordinary file IPC for two hosts, opaque conflicts and restart', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-settings-files-'));

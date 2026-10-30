@@ -42,6 +42,8 @@ import '../workbench/services/path/browser/pathService.js';
 // Terminal profiles resolve execution-side configuration in either Workbench mode.
 import '../workbench/services/configurationResolver/browser/configurationResolverService.js';
 import '../workbench/services/dataChannel/browser/dataChannelService.js';
+import '../workbench/services/policies/browser/managedSettingsUpdateService.js';
+import '../workbench/services/policies/browser/policyTelemetry.contribution.js';
 import '../workbench/api/browser/mainThreadDataChannels.contribution.js';
 import '../workbench/api/browser/mainThreadUriOpeners.js';
 import '../workbench/contrib/github/browser/githubLinkPresentation.contribution.js';

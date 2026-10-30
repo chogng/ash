@@ -13,13 +13,56 @@ use serde::Serialize;
 pub struct GitHubManagedSettingsParams {
     pub operation_id: String,
     pub account_id: String,
+    pub mode: GitHubManagedSettingsReadMode,
 }
 
-/// Provider data only; UI setting meanings and policy mappings belong to the client registry.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubManagedSettingsReadMode {
+    Automatic,
+    Retry,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum GitHubManagedSettingsFailure {
+    AuthenticationRequired,
+    PermissionDenied,
+    RateLimited,
+    UpdateRequired,
+    InvalidResponse,
+    Unavailable,
+    TimedOut,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "state",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum GitHubManagedSettingsRefresh {
+    Ready {
+        #[ts(type = "number")]
+        last_attempt_at: u64,
+        #[ts(type = "number")]
+        last_success_at: u64,
+    },
+    Failed {
+        #[ts(type = "number")]
+        last_attempt_at: u64,
+        #[ts(type = "number | null")]
+        last_success_at: Option<u64>,
+        failure: GitHubManagedSettingsFailure,
+    },
+}
+
+/// Grant-scoped provider snapshot; UI policy mappings remain in the client registry.
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitHubManagedSettingsResult {
     pub settings: Option<serde_json::Value>,
+    pub refresh: GitHubManagedSettingsRefresh,
 }
 
 /// A durable PR identity; live state and account credentials are resolved separately.

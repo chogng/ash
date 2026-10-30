@@ -154,7 +154,7 @@ ChangesViewService 当前只拥有上述展示状态及修订绑定的 read mark
 
 共享 multi-diff 的来源替换会取消旧模型的就绪等待；等待捕获所属代次的取消信号，防止已经释放的模型让编辑器一直停在 pending。SessionChangesEditor 在加载子比较前提供视口，并传递宿主输入取消信号。Turn / commit 源、来源操作和内容标签仍在已确认的共享 Sessions core 中，服务 Code 和 Cowork。
 
-CI 操作沿 `ChecksViewModel → IGitHubService → AppServerGitHubService → GitHubRequestProcessor → github.api.v1 Provider` 执行，GitHub HTTP 仅由独立扩展拥有。每次操作捕获账号、仓库、PR、head SHA 与 check ID；扩展重新读取 PR 和 check 身份。重新运行还确认 Actions job 的 `check_run_url`、仓库及 SHA，GitHub 决定该账号的 Actions 写权限。普通 commit statuses 和外部检查没有伪造的 Actions 操作。
+CI 操作沿 `ChecksViewModel → IGitHubService → AppServerGitHubService → GitHubRequestProcessor → github.api.v2 Provider` 执行，GitHub HTTP 仅由独立扩展拥有。每次操作捕获账号、仓库、PR、head SHA 与 check ID；扩展重新读取 PR 和 check 身份。重新运行还确认 Actions job 的 `check_run_url`、仓库及 SHA，GitHub 决定该账号的 Actions 写权限。普通 commit statuses 和外部检查没有伪造的 Actions 操作。
 
 Read annotations 展示纯文本输出及文件行号，沿现有 Changes Accessible View 读取。Download logs 仅在用户点击时取得 GitHub Actions 的一分钟下载能力链接；不保存到会话、Agent 上下文或持久存储，也不携带 Bearer 跟随跨域跳转。Ask agent to fix CI 显式把捕获的失败检查、head 和有界注释交给发起 Thread；先核对可写状态及 sequence，空闲时 startTurn、已有 Turn 时 queueTurn，沿用普通权限。读取检查不会提交消息；会话／账号变化或迟到读取不能转投其他对话。
 

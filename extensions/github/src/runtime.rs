@@ -1,4 +1,5 @@
 use crate::ApiProvider;
+use crate::managed_settings::ManagedSettingsStore;
 use crate::services::CoreServices;
 use ash_async_utils::CancellationSource;
 use external_ext_sdk::Extension;
@@ -9,7 +10,7 @@ use github::GitHubProvider;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Stateless GitHub API provider; authentication sessions remain in their own extension.
+/// GitHub API provider; grant-scoped refresh results live for this activation.
 #[derive(Default)]
 pub struct GitHubExtension;
 impl Extension for GitHubExtension {
@@ -18,8 +19,9 @@ impl Extension for GitHubExtension {
     }
     fn activate(&mut self, context: &mut ExtensionContext) -> Result<(), ExtensionError> {
         let client = context.client.clone();
+        let managed_settings = Arc::new(ManagedSettingsStore::default());
         context.data_channels.register(
-            "github.api.v1",
+            "github.api.v2",
             move |invocation: GitHubInvocation, token| {
                 token.check_cancelled()?;
                 let services = Arc::new(CoreServices {
@@ -27,7 +29,11 @@ impl Extension for GitHubExtension {
                     token: token.clone(),
                     authorization: invocation.authorization.clone(),
                 });
-                let provider = ApiProvider::new(services.clone(), services);
+                let provider = ApiProvider::with_managed_settings(
+                    services.clone(),
+                    services,
+                    managed_settings.clone(),
+                );
                 let source = CancellationSource::new();
                 // The HTTP worker and the SDK callback share cancellation. Join the monitor
                 // before returning, including when the API finishes without network IO.

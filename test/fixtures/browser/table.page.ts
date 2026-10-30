@@ -42,7 +42,7 @@ import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import '../../../src/ash/base/browser/ui/sash/sash.css';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { DictationConfiguration } from '../../../src/ash/workbench/contrib/chat/common/constants.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -80,10 +80,17 @@ import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/pa
 import { ModelSettingsRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/modelSettingsRenderer.js';
 import { SettingsTreeModel, type SettingsSectionReference } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsTree } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTree.js';
+import { ConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
+import { AbstractPolicyService } from '../../../src/ash/platform/policy/common/policy.js';
+import { DefaultSettings } from '../../../src/ash/workbench/services/preferences/common/settingsModels.js';
+import { createSettingWidget } from '../../../src/ash/workbench/contrib/preferences/browser/settingsWidgets.js';
 
 declare global {
 	interface Window {
 		ashTableIntegration: {
+			showPolicySettings(presentation: 'editor' | 'general'): Promise<void>;
+			setSettingsPolicy(managed: boolean): void;
+			readPolicySettings(): Promise<string>;
 			showCredentialSettings(): void;
 			showSearchSettings(): void;
 			readonly searchSaved: readonly string[];
@@ -325,7 +332,38 @@ resources.add(speechExtensions.registerActivationHandler(async (event, signal) =
 	speechBridge.update(speechSnapshot(true));
 }));
 const searchSaved: string[] = [];
+let policySettings: WorkbenchConfigurationService | undefined;
+let setSettingsPolicy: ((managed: boolean) => void) | undefined;
 window.ashTableIntegration = {
+	showPolicySettings: async presentation => {
+		const registry = new ConfigurationRegistry();
+		registry.registerConfiguration({ key: 'policy.flag', defaultValue: false, parse: value => value as boolean, policy: { name: 'ManagedFlag' }, setting: { valueType: 'boolean', title: 'Flag', description: '' } });
+		registry.registerConfiguration({ key: 'policy.count', defaultValue: 0, parse: value => value as number, policy: { name: 'ManagedCount' }, setting: { valueType: 'number', title: 'Count', description: '', minimum: 0, maximum: 10 } });
+		registry.registerConfiguration({ key: 'policy.text', defaultValue: 'same', parse: value => value as string, policy: { name: 'ManagedText' }, setting: { valueType: 'text', title: 'Text', description: '', placeholder: '' } });
+		registry.registerConfiguration({ key: 'policy.channel', defaultValue: 'stable', parse: value => value as string, policy: { name: 'ManagedChannel' }, setting: { valueType: 'select', title: 'Channel', description: '', options: [{ value: 'stable', label: 'Stable' }, { value: 'latest', label: 'Latest' }] } });
+		class Policies extends AbstractPolicyService {
+			set(managed: boolean): void { this.accept(managed ? { ManagedFlag: false, ManagedCount: 0, ManagedText: 'same', ManagedChannel: 'stable' } : {}); }
+			protected async refresh(): Promise<void> { }
+		}
+		const policies = resources.add(new Policies());
+		policySettings = resources.add(new WorkbenchConfigurationService({ registry, source: '{ "policy.flag": false, "policy.count": 0, "policy.text": "same", "policy.channel": "stable" }' }));
+		await policySettings.initialize(policySettings.fileService, policies);
+		setSettingsPolicy = managed => policies.set(managed);
+		const scope = services.createChild();
+		resources.add(scope);
+		scope.registerInstance(IConfigurationService, policySettings);
+		const root = document.createElement('div');
+		root.id = 'policy-settings';
+		root.style.width = '720px';
+		document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		for (const setting of new DefaultSettings(registry).all) {
+			const widget = resources.add(createSettingWidget(root, { ...setting, presentation }, { onStatus: (message, error) => { if (error) throw new Error(message); } }, scope));
+			root.append(widget.domNode);
+		}
+	},
+	setSettingsPolicy: managed => setSettingsPolicy!(managed),
+	readPolicySettings: async () => (await policySettings!.read()).source,
 	get searchSaved() { return searchSaved; },
 	showSearchSettings: () => {
 		let engine: 'tgrep' | 'ripgrep' = 'tgrep';

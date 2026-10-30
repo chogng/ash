@@ -7,13 +7,87 @@ import { FileService } from '../../../files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../files/common/inMemoryFilesystemProvider.js';
 import { NullLoggerService } from '../../../log/common/log.js';
 import { FilePolicyService } from '../../common/filePolicyService.js';
-import { AbstractPolicyService, validatePolicyDefinitions } from '../../common/policy.js';
+import { AbstractPolicyService, NullPolicyService, PolicyValueSource, validatePolicyDefinitions } from '../../common/policy.js';
+import { MultiplexPolicyService } from '../../common/multiplexPolicyService.js';
 import { PolicyChannel, PolicyChannelClient } from '../../common/policyIpc.js';
 import { SystemPolicyService } from '../../node/systemPolicyService.js';
 import { ConfigurationRegistry } from '../../../configuration/common/configurationRegistry.js';
 import { PolicyConfiguration } from '../../../configuration/common/configurations.js';
 
 const log = new NullLoggerService();
+
+class MutablePolicySource extends AbstractPolicyService {
+	private candidate: Record<string, import('../../../../base/common/policy.js').PolicyValue> = {};
+	private origin = PolicyValueSource.Device;
+	replace(values: typeof this.candidate, source = this.origin): void {
+		this.candidate = values;
+		this.origin = source;
+		this.accept(values, source);
+	}
+	protected async refresh(): Promise<void> { this.accept(this.candidate, this.origin); }
+}
+
+test('Policy serialization removes callbacks, detaches metadata and includes unset definitions', async () => {
+	using source = new MutablePolicySource();
+	await source.updatePolicyDefinitions({
+		Mapped: { type: 'boolean', managedSettings: { flag: { type: 'boolean' } }, value: () => true },
+		Unset: { type: 'string' },
+	});
+	source.replace({ Mapped: false }, PolicyValueSource.ServerManagedSettings);
+	const snapshot = source.serialize();
+	assert.deepEqual(structuredClone(snapshot), {
+		Mapped: { definition: { type: 'boolean', managedSettings: { flag: { type: 'boolean' } } }, value: false },
+		Unset: { definition: { type: 'string' }, value: undefined },
+	});
+	assert.notEqual(snapshot.Mapped!.definition.managedSettings, source.policyDefinitions.Mapped!.managedSettings);
+	snapshot.Mapped = { definition: { type: 'number' }, value: 5 };
+	assert.equal(source.getPolicyValue('Mapped'), false);
+	assert.equal(source.getPolicyValueSource('Unset'), undefined);
+	assert.equal(new NullPolicyService().serialize(), undefined);
+});
+
+test('Equal policy values still notify when precedence changes their source', async () => {
+	using device = new MutablePolicySource();
+	using account = new MutablePolicySource();
+	device.replace({ Enabled: false });
+	account.replace({ Enabled: false }, PolicyValueSource.ServerManagedSettings);
+	using combined = new MultiplexPolicyService([device, account]);
+	await combined.updatePolicyDefinitions({ Enabled: { type: 'boolean' } });
+	const changes: (readonly string[])[] = [];
+	using listener = combined.onDidChange(names => changes.push(names));
+	assert.equal(combined.getPolicyValueSource('Enabled'), PolicyValueSource.Device);
+	device.replace({});
+	assert.equal(combined.getPolicyValue('Enabled'), false);
+	assert.equal(combined.getPolicyValueSource('Enabled'), PolicyValueSource.ServerManagedSettings);
+	account.replace({ Enabled: false }, PolicyValueSource.ServerManagedSettings);
+	account.replace({});
+	assert.equal(combined.getPolicyValueSource('Enabled'), undefined);
+	assert.deepEqual(changes, [['Enabled'], ['Enabled']]);
+});
+
+test('Main IPC propagates source-only changes and rejects a malformed snapshot atomically', async () => {
+	using source = new MutablePolicySource();
+	source.replace({ Enabled: false });
+	using server = new PolicyChannel(source);
+	let malformed = false;
+	const channel: IChannel = {
+		call: async <T>(command: string, argument?: unknown) => malformed
+			? { Enabled: { value: true, source: 'untrusted-source' } } as T
+			: server.call<T>('window:1', command, argument),
+		listen: event => server.listen('window:1', event),
+	};
+	using client = new PolicyChannelClient(channel);
+	await client.updatePolicyDefinitions({ Enabled: { type: 'boolean' } });
+	assert.equal(client.getPolicyValueSource('Enabled'), PolicyValueSource.Device);
+	let changes = 0;
+	using listener = client.onDidChange(() => changes++);
+	source.replace({ Enabled: false }, PolicyValueSource.ServerManagedSettings);
+	assert.equal(client.getPolicyValueSource('Enabled'), PolicyValueSource.ServerManagedSettings);
+	assert.equal(changes, 1);
+	malformed = true;
+	await assert.rejects(client.updatePolicyDefinitions({}), /Invalid policy source/);
+	assert.deepEqual([client.getPolicyValue('Enabled'), client.getPolicyValueSource('Enabled'), changes], [false, PolicyValueSource.ServerManagedSettings, 1]);
+});
 
 test('System file source crosses Main IPC and enforces a registered configuration policy', async () => {
 	using provider = new InMemoryFileSystemProvider();
@@ -65,13 +139,17 @@ test('A notification during the initial policy snapshot preserves unchanged keys
 	const response = new Promise<unknown>(resolve => { finish = resolve; });
 	const channel: IChannel = { call: async <T>() => await response as T, listen: <T>() => notifications.event as import('../../../../base/common/event.js').Event<T> };
 	using client = new PolicyChannelClient(channel);
-	const initializing = client.updatePolicyDefinitions({ First: { type: 'string' }, Second: { type: 'string' } });
-	notifications.fire({ Second: 'new' });
-	finish({ First: 'unchanged', Second: 'old' });
+	const initializing = client.updatePolicyDefinitions({ First: { type: 'string' }, Second: { type: 'string' }, Removed: { type: 'boolean' } });
+	notifications.fire({ Second: { value: 'new', source: PolicyValueSource.ServerManagedSettings }, Removed: null });
+	finish({ First: { value: 'unchanged', source: PolicyValueSource.Device }, Second: { value: 'old', source: PolicyValueSource.Device }, Removed: { value: true, source: PolicyValueSource.Device } });
 	await initializing;
 	assert.deepEqual([client.getPolicyValue('First'), client.getPolicyValue('Second')], ['unchanged', 'new']);
+	assert.deepEqual([client.getPolicyValueSource('First'), client.getPolicyValueSource('Second')], [PolicyValueSource.Device, PolicyValueSource.ServerManagedSettings]);
+	assert.equal(client.getPolicyValue('Removed'), undefined);
+	assert.equal(client.getPolicyValueSource('Removed'), undefined);
 	notifications.fire({ Second: null });
 	assert.equal(client.getPolicyValue('Second'), undefined);
+	assert.equal(client.getPolicyValueSource('Second'), undefined);
 });
 
 test('System source retains the last valid snapshot on read failure and releases polling on disposal', async () => {

@@ -3,6 +3,7 @@
 mod credentials;
 mod error;
 mod follow_up;
+mod managed_settings;
 mod models;
 mod provider;
 mod reporter;
@@ -10,10 +11,10 @@ use ash_async_utils::CancellationToken;
 pub use credentials::*;
 pub use error::Error;
 pub use follow_up::PullRequestFollowUp;
+pub use managed_settings::*;
 pub use models::*;
 pub use provider::*;
 pub use reporter::GitHubIssueReporter;
-use serde_json::Value;
 use std::sync::Arc;
 pub type Result<T> = std::result::Result<T, Error>;
 /// A consumer bound to an exact account grant; it owns no GitHub IO or session state.
@@ -1164,8 +1165,11 @@ impl GitHub {
             _ => Err(Error::SubmissionUncertain),
         }
     }
-    pub async fn managed_settings(&self) -> Result<Option<Value>> {
-        match self.invoke(GitHubRequest::ManagedSettings).await? {
+    pub async fn managed_settings(
+        &self,
+        mode: ManagedSettingsReadMode,
+    ) -> Result<ManagedSettingsSnapshot> {
+        match self.invoke(GitHubRequest::ManagedSettings { mode }).await? {
             GitHubResponse::ManagedSettings(value) => Ok(value),
             _ => Err(Error::InvalidResponse(
                 "GitHub provider returned a different operation".into(),

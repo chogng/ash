@@ -1,5 +1,6 @@
 {
   "ash": {
+    "managedSettingsUpdate.title": "托管设置兼容性",
     "github.files.searchReadOnly": "搜索仓库文件；按 Enter 只读打开，按 Escape 取消。",
     "github.files.attach": "添加到当前 Agent 上下文",
     "github.files.noAgent": "请先打开一个 Agent 对话，再添加文件。",

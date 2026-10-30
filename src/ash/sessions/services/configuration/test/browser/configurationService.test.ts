@@ -23,7 +23,7 @@ import { CancellationError } from '../../../../../base/common/errors.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import type { PolicyValue } from '../../../../../base/common/policy.js';
-import type { IPolicyService, PolicyDefinition } from '../../../../../platform/policy/common/policy.js';
+import { PolicyValueSource, toSerializablePolicyDefinition, type IPolicyService, type PolicyDefinition } from '../../../../../platform/policy/common/policy.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { BrowserWorkingCopyService } from '../../../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import type { IWorkingCopy } from '../../../../../workbench/services/workingCopy/common/workingCopyService.js';
@@ -41,6 +41,37 @@ class TestPolicyService implements IPolicyService {
 		return Object.fromEntries(this.values);
 	}
 	getPolicyValue(name: string): PolicyValue | undefined { return this.values.get(name); }
+	getPolicyValueSource(name: string): PolicyValueSource | undefined { return this.values.has(name) ? PolicyValueSource.Device : undefined; }
+	serialize() { return Object.fromEntries(Object.entries(this.policyDefinitions).map(([name, definition]) => [name, { definition: toSerializablePolicyDefinition(definition), value: this.getPolicyValue(name) }])); }
+}
+
+for (const [host, Service] of [['Workbench', WorkspaceService], ['Sessions', ConfigurationService]] as const) {
+	test(`${host} configuration notifies scoped controls when equal-value policy changes editability`, async () => {
+		const registry = new ConfigurationRegistry();
+		registry.registerConfiguration({ key: 'policy.equalValue', defaultValue: 'same', parse: value => value as string, policy: { name: 'EqualValuePolicy' } });
+		using configuration = new Service({ registry, source: '{ "policy.equalValue": "same" }' });
+		const policies = new TestPolicyService();
+		using policyCleanup = policies.changes;
+		await configuration.initialize(configuration.fileService, policies);
+		const observations: unknown[] = [];
+		using listener = configuration.onDidChangeConfiguration(event => observations.push({
+			keys: [...event.affectedKeys],
+			parent: event.affectsConfiguration('policy'),
+			resource: event.affectsConfiguration('policy.equalValue', { resource: URI.file('/workspace/file.ts'), overrideIdentifier: 'typescript' }),
+			value: configuration.getValue('policy.equalValue'), managed: configuration.inspect('policy.equalValue').policyValue,
+		}));
+		policies.values.set('EqualValuePolicy', 'same');
+		policies.changes.fire(['EqualValuePolicy']);
+		await assert.rejects(configuration.updateValue('policy.equalValue', undefined), /administrator policy/);
+		policies.changes.fire(['EqualValuePolicy']);
+		policies.values.clear();
+		policies.changes.fire(['EqualValuePolicy']);
+		assert.deepEqual(observations, [
+			{ keys: ['policy.equalValue'], parent: true, resource: true, value: 'same', managed: 'same' },
+			{ keys: ['policy.equalValue'], parent: true, resource: true, value: 'same', managed: undefined },
+		]);
+		assert.equal((await configuration.read()).source, '{ "policy.equalValue": "same" }');
+	});
 }
 
 async function createLayeredConfiguration(policies?: IPolicyService, fileService = new FileService(), fileProvider = new InMemoryFileSystemProvider()) {

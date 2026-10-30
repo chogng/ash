@@ -41,7 +41,8 @@ fn git_file_history_pages_roundtrip_and_keep_legacy_first_page_requests() {
 fn github_managed_settings_is_account_bound_read_only_and_cancellable() {
     use crate::protocol::github::GitHubManagedSettingsParams;
     let definition = super::client_method_definition("github/account/managedSettings").unwrap();
-    let params = serde_json::json!({"operationId":"read-policy", "accountId":"primary"});
+    let params =
+        serde_json::json!({"operationId":"read-policy", "accountId":"primary", "mode":"automatic"});
     let request: GitHubManagedSettingsParams = serde_json::from_value(params.clone()).unwrap();
     assert_eq!(serde_json::to_value(request).unwrap(), params);
     assert_eq!(
@@ -57,11 +58,21 @@ fn github_managed_settings_is_account_bound_read_only_and_cancellable() {
     );
     assert!(
         serde_json::from_value::<GitHubManagedSettingsParams>(
-            serde_json::json!({"operationId":"read-policy"})
+            serde_json::json!({"operationId":"read-policy", "mode":"automatic"})
         )
         .is_err()
     );
-    assert!(serde_json::from_value::<GitHubManagedSettingsParams>(serde_json::json!({"operationId":"read-policy", "accountId":"primary", "token":"forbidden"})).is_err());
+    assert!(serde_json::from_value::<GitHubManagedSettingsParams>(serde_json::json!({"operationId":"read-policy", "accountId":"primary", "mode":"automatic", "token":"forbidden"})).is_err());
+    assert!(serde_json::from_value::<GitHubManagedSettingsParams>(serde_json::json!({"operationId":"read-policy", "accountId":"primary", "mode":"automatic", "settings":{"model":"untrusted"}})).is_err());
+    assert!(serde_json::from_value::<GitHubManagedSettingsParams>(serde_json::json!({"operationId":"read-policy", "accountId":"primary", "mode":"unknown"})).is_err());
+    let retry: GitHubManagedSettingsParams = serde_json::from_value(
+        serde_json::json!({"operationId":"retry-policy", "accountId":"primary", "mode":"retry"}),
+    )
+    .unwrap();
+    assert_eq!(
+        retry.mode,
+        crate::protocol::github::GitHubManagedSettingsReadMode::Retry
+    );
 }
 
 #[test]

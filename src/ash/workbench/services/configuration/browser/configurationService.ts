@@ -523,7 +523,10 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		const models = [previous.base, previous.workspace, previous.policy, ...previous.folders.map(folder => folder.model), current.base, current.workspace, current.policy, ...current.folders.map(folder => folder.model)];
 		const resources = [undefined, ...previous.folders.map(folder => folder.root), ...current.folders.map(folder => folder.root)];
 		const identifiers = [...new Set(models.flatMap(model => model.overrides.flatMap(block => block.identifiers)))];
-		const changed = (key: string, identifier?: string): boolean => resources.some(resource => !equals(resolveConfiguration(previous, key, { resource, overrideIdentifier: identifier }), resolveConfiguration(current, key, { resource, overrideIdentifier: identifier })));
+		// Policy changes also affect editability when every resource resolves to the same value.
+		const changed = (key: string, identifier?: string): boolean =>
+			!equals(previous.policy.getValue(key), current.policy.getValue(key)) ||
+			resources.some(resource => !equals(resolveConfiguration(previous, key, { resource, overrideIdentifier: identifier }), resolveConfiguration(current, key, { resource, overrideIdentifier: identifier })));
 		const keys = [...new Set(models.flatMap(model => model.keys))].filter(key => changed(key) || identifiers.some(identifier => changed(key, identifier)));
 		const overrides: [string, string[]][] = identifiers.map(identifier => [identifier, keys.filter(key => changed(key, identifier))]);
 		if (keys.length) this.changeEmitter.fire(configurationChangeEvent({ keys, overrides: overrides.filter(([, keys]) => keys.length) }, previous, current, target));
@@ -616,7 +619,7 @@ function configurationChangeEvent(
 			if (!overrides) return true;
 			const before = resolveConfiguration(previous, configuration, overrides);
 			const after = resolveConfiguration(current, configuration, overrides);
-			return !equals(before, after);
+			return !equals(previous.policy.getValue(configuration), current.policy.getValue(configuration)) || !equals(before, after);
 		},
 	});
 }

@@ -13,6 +13,7 @@ import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerMethod, MethodParams, MethodResult } from '../../../../../.build/protocol/typescript/index.js';
 import { GitHubError, GitHubErrorCode, GitHubDiffSide, GitHubReviewerChange } from '../common/githubService.js';
+import { GitHubManagedSettingsReadMode, type GitHubManagedSettingsSnapshot } from '../common/githubService.js';
 import type { IGitHubService, GitHubAccount, GitHubNotificationFilter, GitHubNotification, GitHubCreateFork, GitHubFork, GitHubRequestedReviewers, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel, GitHubFileContent, GitHubReviewDiff, GitHubReviewThreads, GitHubReviewComments, GitHubReviewComment, GitHubReviewThreadState } from '../common/githubService.js';
 
 type GitHubMethod = Exclude<Extract<AppServerMethod, `github/${string}`>, 'github/cancel' | `github/session/${string}`>;
@@ -79,11 +80,25 @@ export class AppServerGitHubService implements IGitHubService {
 	public async listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]> {
 		return (await this.request('github/account/list', {}, RequestKind.Read, token)).accounts.map(account => ({ ...account, credentialRevision: BigInt(account.credentialRevision) }));
 	}
-	public async readManagedSettings(accountId: string, token?: CancellationToken) {
-		const settings = (await this.request('github/account/managedSettings', { accountId }, RequestKind.Read, token)).settings;
-		if (settings === null) return null;
-		if (typeof settings !== 'object' || Array.isArray(settings)) throw new GitHubError(GitHubErrorCode.Unavailable);
-		return settings;
+	public async readManagedSettings(accountId: string, token?: CancellationToken, mode = GitHubManagedSettingsReadMode.Automatic): Promise<GitHubManagedSettingsSnapshot> {
+		const { settings, refresh } = await this.request('github/account/managedSettings', { accountId, mode }, RequestKind.Read, token);
+		if (settings !== null && (typeof settings !== 'object' || Array.isArray(settings))) {
+			throw new GitHubError(GitHubErrorCode.Unavailable);
+		}
+		if (refresh.state === 'ready') {
+			return { settings, refresh };
+		}
+		let failure: GitHubErrorCode | 'invalidResponse';
+		switch (refresh.failure) {
+			case 'authenticationRequired': failure = GitHubErrorCode.AuthenticationRequired; break;
+			case 'permissionDenied': failure = GitHubErrorCode.PermissionDenied; break;
+			case 'rateLimited': failure = GitHubErrorCode.RateLimited; break;
+			case 'updateRequired': failure = GitHubErrorCode.ManagedSettingsUpdateRequired; break;
+			case 'invalidResponse': failure = 'invalidResponse'; break;
+			case 'unavailable': failure = GitHubErrorCode.Unavailable; break;
+			case 'timedOut': failure = GitHubErrorCode.TimedOut; break;
+		}
+		return { settings, refresh: { ...refresh, failure } };
 	}
 	public async connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount> {
 		const account = await this.request('github/account/connect', { host, token: accessToken }, RequestKind.Write, token);
@@ -248,7 +263,7 @@ export class AppServerGitHubService implements IGitHubService {
 
 	private async request<M extends GitHubMethod>(method: M, params: Omit<MethodParams<M>, 'operationId'>, kind: RequestKind, token: CancellationToken = CancellationToken.None): Promise<MethodResult<M>> {
 		if (token.isCancellationRequested) { throw new CancellationError(); }
-		if (this.connection.state !== 'ready' || this.connection.capabilities?.github !== true || this.connection.capabilities.contracts.github?.version !== 1) { throw new GitHubError(GitHubErrorCode.Unavailable); }
+		if (this.connection.state !== 'ready' || this.connection.capabilities?.github !== true || this.connection.capabilities.contracts.github?.version !== 2) { throw new GitHubError(GitHubErrorCode.Unavailable); }
 		const operationId = generateUuid();
 		const bound = 'repository' in params ? params.repository as GitHubRepository : undefined;
 		const wire = bound ? { ...params, ...(method === 'github/share/link' ? {} : { accountId: bound.accountId }), repository: { host: bound.host, owner: bound.owner, name: bound.name } } : params;

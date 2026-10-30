@@ -397,6 +397,7 @@ suite('githubReview browser component', () => {
 		await expect(section).not.toContainText('Previously accepted settings are retained.');
 		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/account/managedSettings').length)).toBe(3);
 		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/account/managedSettings').map(request => request.params.accountId))).toEqual(['alice', 'alice', 'alice']);
+		expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/account/managedSettings').map(request => request.params.mode))).toEqual(['automatic', 'retry', 'retry']);
 	});
 
 	test('Chinese managed settings distinguishes first-fetch compatibility refusal and recovers without an update action', async function () {

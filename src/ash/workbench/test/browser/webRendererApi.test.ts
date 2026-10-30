@@ -15,7 +15,7 @@ import { connectWebRendererApi } from '../../browser/webRendererApi.js';
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../platform/agentHost/common/appServerTransport.js';
 import { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
-import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod } from '../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod, GitHubManagedSettingsReadMode } from '../../../platform/github/common/githubService.js';
 import type { BrowserCreateParams } from '../../../../../.build/protocol/typescript/index.js';
 import { createAppServerAppServerApi, createAppServerSkillOperations } from '../../../platform/agentHost/browser/appServerApi.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
@@ -498,6 +498,37 @@ test('GitHub rejects an unavailable contract before dispatching a mutation', asy
 	const count = transport.requests.length;
 	await assert.rejects(connected.api.github.deleteComment(githubRepository, 9), (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Unavailable);
 	assert.equal(transport.requests.length, count);
+});
+
+test('GitHub managed settings forwards retry intent and preserves provider timestamps and failure categories', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const automatic = connected.api.github.readManagedSettings('primary');
+	assert.equal(transport.requests.at(-1)!.method, 'github/account/managedSettings');
+	assert.equal((transport.requests.at(-1)!.params as { mode: string; }).mode, 'automatic');
+	const ready = { settings: { model: 'managed' }, refresh: { state: 'ready', lastAttemptAt: 100, lastSuccessAt: 200 } };
+	transport.respondAt(-1, ready);
+	assert.deepEqual(await automatic, ready);
+	const retry = connected.api.github.readManagedSettings('primary', undefined, GitHubManagedSettingsReadMode.Retry);
+	assert.equal((transport.requests.at(-1)!.params as { mode: string; }).mode, 'retry');
+	transport.respondAt(-1, {
+		settings: ready.settings,
+		refresh: { state: 'failed', lastAttemptAt: 300, lastSuccessAt: 200, failure: 'updateRequired' },
+	});
+	assert.deepEqual(await retry, {
+		settings: ready.settings,
+		refresh: { state: 'failed', lastAttemptAt: 300, lastSuccessAt: 200, failure: GitHubErrorCode.ManagedSettingsUpdateRequired },
+	});
+});
+
+test('GitHub rejects the old refresh contract before issuing a request', async () => {
+	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, github: { version: 1 } } } }));
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const before = transport.requests.length;
+	await assert.rejects(connected.api.github.readManagedSettings('primary'), (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Unavailable);
+	assert.equal(transport.requests.length, before);
 });
 
 const connectorHostServices = {

@@ -33,6 +33,8 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../../../platform/github/common/githubService.js';
 import { IAccountPolicyService } from '../../../../services/policies/common/accountPolicyService.js';
+import { IManagedSettingsUpdateService } from '../../../../services/policies/common/managedSettingsUpdate.js';
+import { ManagedSettingsUpdateService } from '../../../../services/policies/browser/managedSettingsUpdateService.js';
 import { IGitHubConnectionService } from '../../../../../workbench/services/accounts/common/gitHubConnectionService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../../../workbench/contrib/github/browser/githubReviewModel.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
@@ -1146,6 +1148,67 @@ test('Configured markers follow explicit local user overrides and expose one acc
 	assert.equal(maturity.hidden, true);
 	assert.equal(widgets[0]!.domNode.hasAttribute('aria-describedby'), false);
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Policy controls show managed values and preserve overrides through equal-value policy changes (${locale})`, async () => {
+		using resources = new DisposableStore();
+		const { AbstractPolicyService } = await import('../../../../../platform/policy/common/policy.js');
+		const { BrowserClipboardService } = await import('../../../../../platform/clipboard/browser/clipboardService.js');
+		const { configurationSettingBinding } = await import('../../../../services/preferences/common/settingsModels.js');
+		const registry = new ConfigurationRegistry();
+		registry.registerConfiguration({ key: 'policy.flag', defaultValue: false, parse: value => value as boolean, policy: { name: 'ManagedFlag' }, setting: { valueType: 'boolean', title: 'Flag', description: '' } });
+		registry.registerConfiguration({ key: 'policy.count', defaultValue: 0, parse: value => value as number, policy: { name: 'ManagedCount' }, setting: { valueType: 'number', title: 'Count', description: '', minimum: 0, maximum: 10 } });
+		registry.registerConfiguration({ key: 'policy.text', defaultValue: '', parse: value => value as string, policy: { name: 'ManagedText' }, setting: { valueType: 'text', title: 'Text', description: '', placeholder: '' } });
+		registry.registerConfiguration({ key: 'policy.channel', defaultValue: 'stable', parse: value => value as string, policy: { name: 'ManagedChannel' }, setting: { valueType: 'select', title: 'Channel', description: '', options: [{ value: 'stable', label: 'Stable' }, { value: 'latest', label: 'Latest' }] } });
+		const source = '{ "policy.flag": false, "policy.count": 0, "policy.text": "", "policy.channel": "stable" }';
+		const configuration = resources.add(new WorkspaceService({ registry, source }));
+		class Policies extends AbstractPolicyService {
+			set(managed: boolean): void { this.accept(managed ? { ManagedFlag: false, ManagedCount: 0, ManagedText: '', ManagedChannel: 'stable' } : {}); }
+			protected async refresh(): Promise<void> { }
+		}
+		const policies = resources.add(new Policies());
+		await configuration.initialize(configuration.fileService, policies);
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		if (locale === 'zh-CN') setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		try {
+			const root = h(browserEnvironment.window.document, 'div');
+			browserEnvironment.window.document.body.replaceChildren(root);
+			resources.add(toDisposable(() => root.remove()));
+			const contextView = resources.add(new BrowserContextViewService(root));
+			const clipboard = resources.add(new BrowserClipboardService(undefined));
+			let actions: readonly IAction[] = [];
+			const widgets = new DefaultSettings(registry).all.map(setting => {
+				// Host-specific bindings, such as Desktop updates, still honor configuration policy.
+				if (setting.valueType === 'text') setting = { ...setting, binding: configurationSettingBinding(configuration, setting.configuration) };
+				const widget = resources.add(createSettingWidget(resources, root, setting, {
+					configurationService: configuration, contextViewProvider: contextView, clipboardService: clipboard,
+					contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); delegate.onHide?.(false); } },
+					onStatus: message => assert.equal(message, ''),
+				}));
+				root.append(widget.domNode);
+				return widget;
+			});
+			for (const managed of [true, false]) {
+				policies.set(managed);
+				for (const widget of widgets) {
+					const control = widget.domNode.querySelector<HTMLInputElement | HTMLButtonElement>('input[data-configuration-key], [data-configuration-key] button')!;
+					assert.equal(control.disabled, managed);
+					assert.equal(control.hasAttribute('aria-busy'), false, 'policy management does not mean a save is pending');
+					const description = widget.domNode.querySelector<HTMLElement>('.ash-settings-policy')!;
+					assert.equal(description.hidden, !managed);
+					assert.equal(description.textContent, locale === 'zh-CN' ? '由管理员策略管理，无法在此更改。' : 'Managed by administrator policy. This value cannot be changed here.');
+					assert.equal(widget.domNode.getAttribute('aria-describedby')?.split(' ').includes(description.id) ?? false, managed);
+					widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
+					assert.equal(actions.find(action => action.id === 'settings.resetSetting')!.enabled, !managed);
+				}
+				assert.equal((await configuration.read()).source, source);
+			}
+			for (const widget of widgets) widget.dispose();
+			policies.set(true);
+			assert.equal(root.querySelectorAll('.ash-configuration-setting').length, 0);
+		} finally { resetNlsResolver(); }
+	});
+}
 
 test('Copy Setting as JSON reads the latest local user values and preserves falsy and structured values', async () => {
 	using resources = new DisposableStore();
@@ -2920,6 +2983,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidChangeState: Event.None,
 		refresh: async () => { },
 	});
+	services.registerSingleton(IManagedSettingsUpdateService, () => services.createInstance(ManagedSettingsUpdateService));
 	services.registerInstance(IGitHubConnectionService, {
 		isConnecting: false,
 		connect: async () => { },

@@ -531,7 +531,7 @@ App 可预装并按认证请求激活 GitHub 扩展；TUI 默认不加载、不�
 仓库已经有 [`IGitHubService`](../src/ash/platform/github/common/githubService.ts) 和
 [`AppServerGitHubService`](../src/ash/platform/github/browser/appServerGitHubService.ts)，
 后者通过生成协议调用 [`App Server GitHub processor`](../crates/app-server/src/server/request_processors/github.rs)
-和 [`crates/github`](../crates/github/README.md) 的领域消费者代理。认证由根 [`extensions/github-authentication`](../extensions/github-authentication/README.md) 的独立 Rust executable 拥有；REST／GraphQL API 已迁到 [`extensions/github`](../extensions/github/README.md) 的 `github.api.v1` 能力，API processor 仅做产品协议转换。试点复用 `ash-external-ext-sdk` 的 typed DataChannel／核心 Services 和 `ExtensionHostSupervisor`，App 的领域接口与账号 RPC 保持不变。profile runtime 为认证和 API 各持有一个监管器，API 按需启动；目录代理映射交互 ID，核心把完成通知送至发起连接，并同步脱敏账号视图。断连取消该连接的在途登录，保留 profile 共享账号。默认 TUI 组合没有此 Provider。
+和 [`crates/github`](../crates/github/README.md) 的领域消费者代理。认证由根 [`extensions/github-authentication`](../extensions/github-authentication/README.md) 的独立 Rust executable 拥有；REST／GraphQL API 已迁到 [`extensions/github`](../extensions/github/README.md) 的 `github.api.v2` 能力，API processor 仅做产品协议转换。试点复用 `ash-external-ext-sdk` 的 typed DataChannel／核心 Services 和 `ExtensionHostSupervisor`，App 的领域接口隔离传输类型，托管设置快照随 v2 契约接入。profile runtime 为认证和 API 各持有一个监管器，API 按需启动；目录代理映射交互 ID，核心把完成通知送至发起连接，并同步脱敏账号视图。断连取消该连接的在途登录，保留 profile 共享账号。默认 TUI 组合没有此 Provider。
 
 产品打包包含独立 executable 和根扩展 manifest。产品 launcher 只接受安装目录中选定的 executable，不把受信任产品程序宣称为已受 OS 沙箱隔离的第三方包。通用第三方 Rust 安装／授权、TS 共享认证与公共账号／scope 授权仍未完成；旧 `AuthenticationSession.accessToken` 兼容桥已退出目标。
 

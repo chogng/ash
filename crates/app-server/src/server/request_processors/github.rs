@@ -15,7 +15,10 @@ use ash_app_server_protocol::protocol::github::GitHubFileReadParams;
 use ash_app_server_protocol::protocol::github::GitHubForkBranches;
 use ash_app_server_protocol::protocol::github::GitHubForkCreateParams;
 use ash_app_server_protocol::protocol::github::GitHubForkResult;
+use ash_app_server_protocol::protocol::github::GitHubManagedSettingsFailure;
 use ash_app_server_protocol::protocol::github::GitHubManagedSettingsParams;
+use ash_app_server_protocol::protocol::github::GitHubManagedSettingsReadMode;
+use ash_app_server_protocol::protocol::github::GitHubManagedSettingsRefresh;
 use ash_app_server_protocol::protocol::github::GitHubManagedSettingsResult;
 use ash_app_server_protocol::protocol::github::GitHubNotification;
 use ash_app_server_protocol::protocol::github::GitHubNotificationFilter;
@@ -521,10 +524,16 @@ impl GitHubRequestProcessor {
                 })
             }
             ClientMethod::GitHubManagedSettings => {
-                let _: GitHubManagedSettingsParams = decode(params)?;
-                result(&GitHubManagedSettingsResult {
-                    settings: client.managed_settings().await.map_err(github_error)?,
-                })
+                let p: GitHubManagedSettingsParams = decode(params)?;
+                let mode = match p.mode {
+                    GitHubManagedSettingsReadMode::Automatic => {
+                        github::ManagedSettingsReadMode::Automatic
+                    }
+                    GitHubManagedSettingsReadMode::Retry => github::ManagedSettingsReadMode::Retry,
+                };
+                result(&managed_settings_snapshot(
+                    client.managed_settings(mode).await.map_err(github_error)?,
+                ))
             }
             ClientMethod::GitHubNotificationsList => {
                 let p: GitHubNotificationsParams = decode(params)?;
@@ -1220,6 +1229,56 @@ pub(super) fn github_authentication_error(error: ash_login::LoginError) -> RpcEr
         | ash_login::LoginErrorKind::Driver => {
             RpcError::new(-32030, AppServerErrorName::AccountOperationFailed)
         }
+    }
+}
+
+fn managed_settings_snapshot(
+    snapshot: github::ManagedSettingsSnapshot,
+) -> GitHubManagedSettingsResult {
+    let refresh = match snapshot.refresh {
+        github::ManagedSettingsRefresh::Ready {
+            last_attempt_at,
+            last_success_at,
+        } => GitHubManagedSettingsRefresh::Ready {
+            last_attempt_at,
+            last_success_at,
+        },
+        github::ManagedSettingsRefresh::Failed {
+            last_attempt_at,
+            last_success_at,
+            failure,
+        } => {
+            let failure = match failure {
+                github::ManagedSettingsFailure::AuthenticationRequired => {
+                    GitHubManagedSettingsFailure::AuthenticationRequired
+                }
+                github::ManagedSettingsFailure::PermissionDenied => {
+                    GitHubManagedSettingsFailure::PermissionDenied
+                }
+                github::ManagedSettingsFailure::RateLimited => {
+                    GitHubManagedSettingsFailure::RateLimited
+                }
+                github::ManagedSettingsFailure::UpdateRequired => {
+                    GitHubManagedSettingsFailure::UpdateRequired
+                }
+                github::ManagedSettingsFailure::InvalidResponse => {
+                    GitHubManagedSettingsFailure::InvalidResponse
+                }
+                github::ManagedSettingsFailure::Unavailable => {
+                    GitHubManagedSettingsFailure::Unavailable
+                }
+                github::ManagedSettingsFailure::TimedOut => GitHubManagedSettingsFailure::TimedOut,
+            };
+            GitHubManagedSettingsRefresh::Failed {
+                last_attempt_at,
+                last_success_at,
+                failure,
+            }
+        }
+    };
+    GitHubManagedSettingsResult {
+        settings: snapshot.settings,
+        refresh,
     }
 }
 

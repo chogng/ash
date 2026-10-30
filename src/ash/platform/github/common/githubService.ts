@@ -30,6 +30,16 @@ export class GitHubError extends Error {
 
 export interface GitHubAccount { readonly id: string; readonly host: string; readonly login: string; readonly status: AccountStatus; readonly credentialRevision: bigint; }
 
+export enum GitHubManagedSettingsReadMode { Automatic = 'automatic', Retry = 'retry' }
+
+/** Provider-owned refresh history and last successful settings for the selected grant. */
+export interface GitHubManagedSettingsSnapshot {
+	readonly settings: Readonly<Record<string, JsonValue>> | null;
+	readonly refresh:
+	| { readonly state: 'ready'; readonly lastAttemptAt: number; readonly lastSuccessAt: number; }
+	| { readonly state: 'failed'; readonly lastAttemptAt: number; readonly lastSuccessAt: number | null; readonly failure: GitHubErrorCode | 'invalidResponse'; };
+}
+
 /** Durable association without account credentials or cached remote status. */
 export interface GitHubPullRequestReference {
 	readonly repository: { readonly host: string; readonly owner: string; readonly name: string; };
@@ -184,7 +194,7 @@ export interface IGitHubService {
 	detachSessionIssue(sessionId: string, reference: GitHubIssueReference): Promise<void>;
 	/** Primary grant first; explicit selection does not change other consumers' primary grant. */
 	listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]>;
-	readManagedSettings(accountId: string, token?: CancellationToken): Promise<Readonly<Record<string, JsonValue>> | null>;
+	readManagedSettings(accountId: string, token?: CancellationToken, mode?: GitHubManagedSettingsReadMode): Promise<GitHubManagedSettingsSnapshot>;
 	connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount>;
 	listNotifications(accountId: string, filter: GitHubNotificationFilter, page: number, token?: CancellationToken): Promise<GitHubPage<GitHubNotification>>;
 	markNotificationRead(accountId: string, threadId: string, token?: CancellationToken): Promise<void>;

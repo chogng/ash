@@ -11,6 +11,25 @@ export interface PolicyDefinition extends IManagedSettingPolicyDefinition {
 	readonly value?: (data: IPolicyData) => PolicyValue | undefined;
 }
 
+/** Origin of an effective value, independent of the configuration setting it controls. */
+export enum PolicyValueSource {
+	Device = 'device',
+	NativeMdm = 'nativeMdm',
+	ServerManagedSettings = 'serverManagedSettings',
+	FileManagedSettings = 'fileManagedSettings',
+	MixedManagedSettings = 'mixedManagedSettings',
+	Account = 'account',
+	AccountGate = 'accountGate',
+}
+
+/** Mapping callbacks are window-owned and must never cross IPC or diagnostic boundaries. */
+export function toSerializablePolicyDefinition(definition: PolicyDefinition): PolicyDefinition {
+	return {
+		type: definition.type,
+		...(definition.managedSettings && { managedSettings: Object.fromEntries(Object.entries(definition.managedSettings).map(([name, field]) => [name, { type: field.type }])) }),
+	};
+}
+
 /** Host-owned administrator policy. User and workspace settings cannot write to this service. */
 export interface IPolicyService {
 	readonly _serviceBrand: undefined;
@@ -18,6 +37,8 @@ export interface IPolicyService {
 	readonly policyDefinitions: IStringDictionary<PolicyDefinition>;
 	updatePolicyDefinitions(definitions: IStringDictionary<PolicyDefinition>): Promise<IStringDictionary<PolicyValue>>;
 	getPolicyValue(name: string): PolicyValue | undefined;
+	getPolicyValueSource(name: string): PolicyValueSource | undefined;
+	serialize(): IStringDictionary<{ definition: PolicyDefinition; value: PolicyValue | undefined; }> | undefined;
 }
 
 export const IPolicyService = createServiceIdentifier<IPolicyService>('policyService');
@@ -29,6 +50,7 @@ export abstract class AbstractPolicyService extends Disposable implements IPolic
 	readonly onDidChange = this.changes.event;
 	private definitions: IStringDictionary<PolicyDefinition> = {};
 	private values: IStringDictionary<PolicyValue> = {};
+	private valueSources: IStringDictionary<PolicyValueSource> = {};
 	protected stopped = false;
 
 	get policyDefinitions(): IStringDictionary<PolicyDefinition> { return this.definitions; }
@@ -46,12 +68,19 @@ export abstract class AbstractPolicyService extends Disposable implements IPolic
 	}
 
 	getPolicyValue(name: string): PolicyValue | undefined { return Object.hasOwn(this.values, name) ? this.values[name] : undefined; }
+	getPolicyValueSource(name: string): PolicyValueSource | undefined { return Object.hasOwn(this.valueSources, name) ? this.valueSources[name] : undefined; }
 
-	protected accept(values: IStringDictionary<PolicyValue>): void {
+	serialize(): IStringDictionary<{ definition: PolicyDefinition; value: PolicyValue | undefined; }> {
+		return Object.fromEntries(Object.entries(this.definitions).map(([name, definition]) => [name, { definition: toSerializablePolicyDefinition(definition), value: this.getPolicyValue(name) }]));
+	}
+
+	protected accept(values: IStringDictionary<PolicyValue>, source: PolicyValueSource | IStringDictionary<PolicyValueSource> = PolicyValueSource.Device): void {
 		if (this.stopped) return;
+		const sources = Object.fromEntries(Object.keys(values).map(name => [name, typeof source === 'string' ? source : source[name]]));
 		const keys = new Set([...Object.keys(this.values), ...Object.keys(values)]);
-		const changed = [...keys].filter(name => !Object.is(this.values[name], values[name]));
+		const changed = [...keys].filter(name => !Object.is(this.getPolicyValue(name), Object.hasOwn(values, name) ? values[name] : undefined) || this.getPolicyValueSource(name) !== sources[name]);
 		this.values = Object.freeze({ ...values });
+		this.valueSources = Object.freeze(sources);
 		if (changed.length) this.changes.fire(changed);
 	}
 
@@ -92,4 +121,6 @@ export class NullPolicyService implements IPolicyService {
 	readonly policyDefinitions = {};
 	async updatePolicyDefinitions(): Promise<IStringDictionary<PolicyValue>> { return {}; }
 	getPolicyValue(): undefined { return undefined; }
+	getPolicyValueSource(): undefined { return undefined; }
+	serialize(): undefined { return undefined; }
 }

@@ -4,6 +4,8 @@ import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { GitHubSettingsModel } from '../../../browser/githubSettingsModel.js';
 import { AccountPolicyService, IAccountPolicyService } from '../../../../../services/policies/common/accountPolicyService.js';
+import { IManagedSettingsUpdateService } from '../../../../../services/policies/common/managedSettingsUpdate.js';
+import { ManagedSettingsUpdateService } from '../../../../../services/policies/browser/managedSettingsUpdateService.js';
 import { ILogService, NullLoggerService } from '../../../../../../platform/log/common/log.js';
 import { SettingsSectionRenderer } from '../../../../preferences/browser/settingsSectionRenderer.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
@@ -60,6 +62,7 @@ const file = { filename: 'new.rs', previousFilename: 'old.rs', status: 'renamed'
 const comment = { id: 'comment-1', author: 'Alice', body: 'Please explain', url: 'https://github.com/team/repo/pull/7#discussion', canUpdate: true, canDelete: true };
 class ReviewTransport implements AppServerTransport {
 	public managedFailure: string | undefined;
+	private managedSuccessAt: number | null = null;
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	public readonly requests: Request[] = [];
 	public accountCatalog = [{ id: 'alice', host: 'github.com', login: 'Alice', status: 'ready', credentialRevision: '1' }, { id: 'ghe.example/42', host: 'ghe.example', login: 'EnterpriseAlice', status: 'ready', credentialRevision: '1' }];
@@ -89,7 +92,17 @@ class ReviewTransport implements AppServerTransport {
 	private dispatch(request: Request): void {
 		if (this.failure && (request.method === 'github/pullRequest/review' || request.method === 'github/comment/create')) { this.respond(request, undefined, this.failure); return; }
 		switch (request.method) {
-			case 'github/account/managedSettings': this.respond(request, { settings: { model: 'audit/model' } }, this.managedFailure); break;
+			case 'github/account/managedSettings': {
+				if (!this.managedFailure) { this.managedSuccessAt = 200; }
+				this.respond(request, {
+					settings: this.managedSuccessAt === null ? null : { model: 'audit/model' },
+					refresh: this.managedFailure
+						? { state: 'failed', lastAttemptAt: 300, lastSuccessAt: this.managedSuccessAt,
+							failure: this.managedFailure === 'GitHubManagedSettingsUpdateRequired' ? 'updateRequired' : 'unavailable' }
+						: { state: 'ready', lastAttemptAt: 100, lastSuccessAt: this.managedSuccessAt },
+				});
+				break;
+			}
 			case 'initialize': this.respond(request, createTestInitializeResult()); break;
 			case 'github/account/list': this.respond(request, { accounts: this.accountCatalog }); break;
 			case 'github/notifications/list': this.respond(request, { notifications: this.notificationReadAll ? [] : [{ id: String(request.params.page), title: request.params.page === 1 ? 'Review requested' : 'Issue mentioned', subjectType: 'PullRequest', unread: !this.notificationRead, reason: 'review_requested', updatedAt: 'now', repository: { host: request.params.accountId === 'alice' ? 'github.com' : 'ghe.example', owner: 'team', name: 'repo' }, url: 'https://github.com/team/repo/pull/7' }], nextPage: request.params.page === 1 ? 2 : null }); break;
@@ -157,6 +170,7 @@ services.registerInstance(IGitHubConnectionService, { isConnecting: false, conne
 services.registerInstance(ILogService, new NullLoggerService());
 const accountPolicies = resources.add(services.createInstance(AccountPolicyService));
 services.registerInstance(IAccountPolicyService, accountPolicies);
+services.registerSingleton(IManagedSettingsUpdateService, () => services.createInstance(ManagedSettingsUpdateService));
 await accountPolicies.updatePolicyDefinitions({ ChatDefaultModel: { type: 'string', managedSettings: { model: { type: 'string' } } } });
 services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 services.registerInstance(ITextModelResourceService, resources.add(uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText!, revision: undefined }), save: async () => { throw new Error('Review snapshots are read-only'); } } satisfies ITextResourceStore, {})));

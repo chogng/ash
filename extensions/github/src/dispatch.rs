@@ -417,10 +417,9 @@ pub(crate) async fn dispatch(client: &GitHub, request: GitHubRequest) -> Result<
             .mark_notifications_read()
             .await
             .map(GitHubResponse::MarkNotificationsRead),
-        GitHubRequest::ManagedSettings => client
-            .managed_settings()
-            .await
-            .map(GitHubResponse::ManagedSettings),
+        GitHubRequest::ManagedSettings { .. } => Err(Error::InvalidInput(
+            "Managed settings require the provider-owned refresh store".into(),
+        )),
         GitHubRequest::ReporterSearch { .. } | GitHubRequest::ReporterSubmit { .. } => Err(
             Error::InvalidInput("reporter requires its product target".into()),
         ),

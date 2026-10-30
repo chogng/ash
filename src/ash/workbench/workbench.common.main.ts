@@ -16,6 +16,8 @@ import './services/dialogs/common/dialogService.js';
 import './services/path/browser/pathService.js';
 import './services/configurationResolver/browser/configurationResolverService.js';
 import './services/dataChannel/browser/dataChannelService.js';
+import './services/policies/browser/managedSettingsUpdateService.js';
+import './services/policies/browser/policyTelemetry.contribution.js';
 import './api/browser/mainThreadDataChannels.contribution.js';
 import './api/browser/mainThreadUriOpeners.js';
 import './contrib/bulkEdit/browser/bulkEditService.js';

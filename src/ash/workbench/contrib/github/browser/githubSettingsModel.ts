@@ -9,6 +9,7 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IAccountPolicyService } from '../../../services/policies/common/accountPolicyService.js';
+import { IManagedSettingsUpdateService } from '../../../services/policies/common/managedSettingsUpdate.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
 import { IGitHubReviewModel } from './githubReviewModel.js';
@@ -40,6 +41,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 		@IOpenerService private readonly opener: IOpenerService,
 		@IAppServerRemoteAgentService remote: IAppServerRemoteAgentService,
 		@IAccountPolicyService private readonly policies: IAccountPolicyService,
+		@IManagedSettingsUpdateService private readonly managedSettingsUpdate: IManagedSettingsUpdateService,
 	) {
 		super();
 		this.readOperation = this._register(new MutableDisposable<CancellationTokenSource>());
@@ -117,7 +119,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 						message = localize('github.settings.managedRateLimited', 'GitHub limited managed settings requests. Wait before retrying.');
 						break;
 					case GitHubErrorCode.ManagedSettingsUpdateRequired:
-						message = localize('github.settings.managedCompatibility', 'GitHub rejected this client’s compatibility for managed settings. Contact your administrator.');
+						message = this.managedSettingsUpdate.updateInfo.get()!.message;
 						break;
 					case 'invalidResponse':
 						message = localize('github.settings.managedInvalid', 'GitHub returned invalid managed settings. Retry or contact your administrator.');

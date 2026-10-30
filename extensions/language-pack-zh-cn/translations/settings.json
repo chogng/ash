@@ -1,5 +1,6 @@
 {
   "ash.settings": {
+    "status.policy": "由管理员策略管理，无法在此更改。",
     "categories.settings-editor.label": "设置编辑器",
     "categories.settings-editor.description": "配置 Ash 如何打开和编辑设置。",
     "editor.title": "默认设置编辑器",

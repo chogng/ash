@@ -194,7 +194,7 @@ test('closing repository search on account changes cancels reads and never clone
 test('repository transport validates anonymous links and keeps lost create replies uncertain', async () => {
 	const sent: { method: string; params: Record<string, unknown>; }[] = [];
 	const github = new AppServerGitHubService({
-		state: 'ready', capabilities: { github: true, contracts: { github: { version: 1 } } },
+		state: 'ready', capabilities: { github: true, contracts: { github: { version: 2 } } },
 		request: async (definition: { method: string; }, params: Record<string, unknown>) => {
 			decodeAppServerRequestParams(definition.method as 'github/share/link', params);
 			sent.push({ method: definition.method, params });
