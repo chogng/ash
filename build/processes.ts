@@ -1,6 +1,6 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
@@ -229,10 +229,16 @@ async function processes(): Promise<Map<number, ProcessIdentity>> {
 	return entries;
 }
 
-/** Installs cancellation before any work starts and owns the cross-process registry. */
+/**
+ * Installs cancellation before any work starts and owns the cross-process registry.
+ * Pass the supplied environment to children; callbacks creating temporary files
+ * or registering resources in this process must use its directories explicitly.
+ */
 export async function withProcessRun(cwd: string, action: (run: ProcessRun, environment: NodeJS.ProcessEnv) => Promise<void>): Promise<void> {
 	const inherited = process.env.ASH_SMOKE_RUN_DIRECTORY;
-	const directory = inherited ?? await mkdtemp(join(tmpdir(), 'ash-process-run-'));
+	// Keep the path short enough for Chromium's temporary Unix sockets.
+	const directory = inherited ?? await mkdtemp(join(tmpdir(), 'ash-run-'));
+	const temporaryDirectory = join(directory, 'tmp');
 	const run = new ProcessRun(cwd, directory);
 	let interruption: number | undefined;
 	const interrupt = (signal: NodeJS.Signals): void => {
@@ -246,7 +252,16 @@ export async function withProcessRun(cwd: string, action: (run: ProcessRun, envi
 	let actionFailed = false;
 	let actionFailure: unknown;
 	try {
-		await action(run, { ...process.env, ASH_SMOKE_RUN_DIRECTORY: directory });
+		await mkdir(temporaryDirectory, { recursive: true });
+		// Killed workers and native helpers cannot run their own temporary-file
+		// destructors. Their supervisor removes this tree after all processes exit.
+		await action(run, {
+			...process.env,
+			ASH_SMOKE_RUN_DIRECTORY: directory,
+			TMPDIR: temporaryDirectory,
+			TMP: temporaryDirectory,
+			TEMP: temporaryDirectory,
+		});
 	} catch (error) {
 		// Worker cleanup also stops the run; only an observed signal makes
 		// a subsequent operation failure part of cancellation.
@@ -266,7 +281,7 @@ export async function withProcessRun(cwd: string, action: (run: ProcessRun, envi
 		finally {
 			process.off('SIGINT', onInterrupt);
 			process.off('SIGTERM', onTerminate);
-			if (!inherited) await rm(directory, { force: true, recursive: true });
+			if (!inherited) await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 		}
 	}
 }
