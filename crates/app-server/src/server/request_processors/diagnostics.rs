@@ -13,6 +13,7 @@ pub(super) struct DiagnosticsRequestProcessor<'a> {
     analytics: &'a super::Arc<analytics::Analytics>,
     config: &'a Option<super::Arc<super::ConfigStore>>,
     diagnostics: &'a diagnostics::Diagnostics,
+    build_info: &'a build_info::BuildInfo,
     feedback: &'a feedback::Feedback,
     telemetry: &'a ash_otel::Telemetry,
     home: &'a Option<super::Arc<ash_home::AshHome>>,
@@ -24,6 +25,7 @@ impl<'a> DiagnosticsRequestProcessor<'a> {
         analytics: &'a super::Arc<analytics::Analytics>,
         config: &'a Option<super::Arc<super::ConfigStore>>,
         diagnostics: &'a diagnostics::Diagnostics,
+        build_info: &'a build_info::BuildInfo,
         feedback: &'a feedback::Feedback,
         telemetry: &'a ash_otel::Telemetry,
         home: &'a Option<super::Arc<ash_home::AshHome>>,
@@ -33,6 +35,7 @@ impl<'a> DiagnosticsRequestProcessor<'a> {
             analytics,
             config,
             diagnostics,
+            build_info,
             feedback,
             telemetry,
             home,
@@ -118,7 +121,7 @@ impl<'a> DiagnosticsRequestProcessor<'a> {
         result(
             &self
                 .diagnostics
-                .snapshot(build_identity::current(), self.analytics.snapshot()),
+                .snapshot(self.build_info.clone(), self.analytics.snapshot()),
         )
     }
 
@@ -136,7 +139,7 @@ impl<'a> DiagnosticsRequestProcessor<'a> {
                 connection.connection_id,
                 &params.endpoint,
                 self.diagnostics
-                    .snapshot(build_identity::current(), self.analytics.snapshot()),
+                    .snapshot(self.build_info.clone(), self.analytics.snapshot()),
             )
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         result(&prepared)

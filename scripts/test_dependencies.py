@@ -145,6 +145,32 @@ class DependencyTests(unittest.TestCase):
             "forbidden dependency path: ash-app-server -> bridge -> ash-tui", errors
         )
 
+    def test_git_build_identity_stays_in_the_product_host(self):
+        identity = self.package("ash-build-identity", "crates/build-identity")
+        adapter = self.package(
+            "adapter",
+            "crates/adapter",
+            deps=[{"name": "ash-build-identity", "kind": None}],
+        )
+        for name in ("ash-app-server-runtime", "ash-app-server"):
+            with self.subTest(consumer=name):
+                consumer = self.package(
+                    name,
+                    f"crates/{name}",
+                    deps=[{"name": "adapter", "kind": None}],
+                )
+                errors = dependencies.boundary_errors(
+                    self.root, self.metadata(consumer, adapter, identity)
+                )
+                self.assertEqual(
+                    errors,
+                    [
+                        f"forbidden dependency path: {name} -> adapter -> ash-build-identity"
+                    ]
+                    if name == "ash-app-server-runtime"
+                    else [],
+                )
+
     def test_dev_edges_do_not_become_product_edges(self):
         app = self.package(
             "ash-app-server",

@@ -144,6 +144,17 @@ fn daemon_keeps_a_directory_connection_open_after_initialize() {
     let response = read_response(&mut reader, 1);
     assert_eq!(response["result"]["serverInfo"]["name"], "ash-app-server");
     assert!(response["result"]["schemaHash"].as_str().is_some());
+    writeln!(
+        stream,
+        "{}",
+        json!({"jsonrpc":"2.0","id":20,"method":"diagnostics/read","params":{}})
+    )
+    .unwrap();
+    stream.flush().unwrap();
+    assert_eq!(
+        read_response(&mut reader, 20)["result"]["build"],
+        serde_json::to_value(build_identity::current()).unwrap()
+    );
 
     std::thread::sleep(Duration::from_millis(100));
     writeln!(

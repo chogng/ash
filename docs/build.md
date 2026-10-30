@@ -574,6 +574,18 @@ python -B scripts/check_blob_size.py --head HEAD
 
 ### 历史测量与适用范围
 
+#### 2026-10-30：App Server 避免无源码变化的重建
+
+macOS 对 `Cargo.lock` 的访问或加锁会产生原生 `change` 通知；监听器原先只在 Windows 过滤访问通知，因此一次后端构建可能通过再次访问锁文件触发下一次构建。现在所有平台按 inode、大小、mtime 和 ctime 去重，继续识别保留大小与 mtime 的真实写入，并处理重命名、删除和不可读输入。真实监听场景中，三次只读 Cargo metadata 命令产生 26 个锁文件通知，未触发后端构建；随后触碰宿主源码时间戳只触发一次构建，没有继续自触发。日志和结果见下述目录中的 `watch-scenario.log` 与 `watch-scenario.json`；下述计时只覆盖身份依赖调整，不包含监听修复的额外收益。
+
+App Server runtime 原先直接依赖 `ash-build-identity`，因此只有 Git commit 更新时也会重编整个 runtime。现在产品宿主通过既有 `BuildInfo` 契约传入身份，独立启动、内嵌服务和 managed 目录共用该身份；版本输出、诊断及反馈继续返回编译时的 provenance。依赖检查禁止 runtime 直接或间接引入 Git 身份包。
+
+在 macOS arm64、Rust 1.99.1、`dev-small`、默认 Cargo 并发和已有缓存下，交替设置两个实际提交的 `ASH_BUILD_COMMIT`，各测三轮真实 Desktop 后端构建与 generation 发布，复用已准备的协议。仅身份变化的中位数为 9.26 → 5.63 秒，减少约 39%；修改前每轮重编 runtime，修改后只重编身份包、App Server 宿主和 Remote Server。无改动重跑为 2.95 → 2.83 秒，均没有编译单元失效，不将这点差异解释为稳定提速。身份变化时最大 RSS 中位数为 1718 → 1398 MiB；这是 `time` 的单进程最大值，不是所有编译进程内存之和。App Server 程序为 236096432 → 236092528 字节。
+
+此结果覆盖 Git 身份更新后的后端准备阶段，不包含协议生成、前端或窗口启动，也不代表真实 Rust 功能编辑或其他平台的提速。未调整优化、LTO、codegen units、增量编译或发布配置。初次复测受到独立后端监听子进程干扰，整组样本已排除；原始日志、Cargo timings、测量脚本及汇总位于 `.build/build-health/app-server-identity-20261030/`，有效对照为 `baseline.json` 与 `isolated.json`。
+
+另以 `just bench-build ash-app-server --profile dev-small --jobs 12 --source crates/app-server-host/src/lib.rs` 对默认功能集执行三轮独立空输出目录构建，新版本冷构建、无改动和宿主源码时间戳触碰的中位数分别为 175.43、2.15 和 3.70 秒。无改动样本为 2.15／1.98／8.36 秒，均没有重编译，保留该波动；触碰样本只重编宿主。旧版这组包级基线采样时，独立后端监听进程未完整暂停，因此不据此给出冷构建提速结论。两组报告分别为 `.build/build-health/ash-app-server-dev-small-wpcc7d5w/report.json` 和 `.build/build-health/ash-app-server-dev-small-93kljy1u/report.json`，临时编译目录已由测量入口清理。
+
 #### 2026-10-29：macOS 开发包避免相同 LiveKit 产物使缓存失效
 
 macOS 源码构建 LiveKit 后，原先无条件替换缓存程序；连续三次产物 SHA-256 相同，但 mtime 每次变化，导致开发包的第二层输入摘要失效。现在通过既有内容校验发布函数保留相同产物，继续执行 Go 构建、锁定源码校验及最终二进制比较；新产物或损坏的缓存仍会替换。

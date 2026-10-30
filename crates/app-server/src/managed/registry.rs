@@ -100,13 +100,19 @@ impl ProfileAppServerRegistry {
         host: ConnectionOptions,
         diff_handler: crate::DiffRequestHandler,
     ) -> Result<Self, String> {
-        Self::open_with_terminal_host(host, diff_handler, None)
+        Self::open_with_terminal_host(
+            host,
+            diff_handler,
+            None,
+            build_info::BuildInfo::new(None, None),
+        )
     }
 
     pub(super) fn open_with_terminal_host(
         host: ConnectionOptions,
         diff_handler: crate::DiffRequestHandler,
         terminal_host: Option<PathBuf>,
+        build_info: build_info::BuildInfo,
     ) -> Result<Self, String> {
         if let Some(path) = host.product_services() {
             LocalProductServicesConfig::load(path, host.profile_root())
@@ -118,6 +124,7 @@ impl ProfileAppServerRegistry {
             profile_runtime = profile_runtime.with_trace_exporter(exporter);
         }
         profile_runtime.terminal_host = terminal_host;
+        profile_runtime.build_info = build_info;
         let profile_runtime = Arc::new(profile_runtime);
         let servers = Arc::new(Mutex::new(BTreeMap::new()));
         let startup = DirectoryStartup::start(

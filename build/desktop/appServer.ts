@@ -89,9 +89,10 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 	function requestBuild(watchRoot: string, file: string | null, event: string, shouldRebuild: (file: string | null) => boolean): void {
 		if (stopped || file === null || !shouldRebuild(file)) return;
 		const source = resolve(watchRoot, file.replaceAll('\\', '/'));
-		if (process.platform === 'win32' && event === 'change') {
+		if (event === 'change') {
 			try {
-				// NTFS access-time notifications can accompany RA/source hashing.
+				// Cargo lock accesses and source reads can emit native change events
+				// without a write on macOS as well as Windows.
 				// Content writes change ctime even when size/mtime are preserved.
 				// Renames and unreadable/deleted inputs always reach the build gate.
 				const stat = statSync(source);

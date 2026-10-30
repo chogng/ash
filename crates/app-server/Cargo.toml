@@ -65,7 +65,6 @@ task-delivery = { workspace = true, features = ["runtime"] }
 ash-otel = { workspace = true }
 otel-trace-websocket = { workspace = true }
 build-info = { workspace = true }
-build-identity = { workspace = true }
 analytics = { workspace = true }
 diagnostics = { workspace = true }
 feedback = { workspace = true }

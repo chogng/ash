@@ -98,7 +98,14 @@ fn websocket_command_requires_loopback_token_auth_and_startup_record() {
 fn websocket_connections_initialize_and_close_independently() {
     let profile = tempfile::tempdir().unwrap();
     let options = StartupOptions::new(profile.path(), None, GrantSource::HostConfiguration, None);
-    let server = Arc::new(open_server(&options, ash_app_server_diff::compute).unwrap());
+    let server = Arc::new(
+        open_server(
+            &options,
+            ash_app_server_diff::compute,
+            build_info::BuildInfo::new(None, None),
+        )
+        .unwrap(),
+    );
     runtime().block_on(async move {
         let connection_server = Arc::clone(&server);
         let listener = start_websocket_acceptor(

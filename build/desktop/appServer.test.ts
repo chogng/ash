@@ -282,37 +282,41 @@ test('saves consumed by a queued live batch cannot later trigger an empty backen
 	assert.deepEqual(commands, ['build/desktop/develop.py', 'build/desktop/live.py']);
 });
 
-test('Windows access notifications do not rebuild, while a write with preserved size and mtime does', { skip: process.platform !== 'win32' }, async t => {
-	t.mock.timers.enable({ apis: ['setTimeout'] });
-	const completed = Promise.withResolvers<void>();
-	const commands: string[] = [];
-	mockProtocolDirectories(t);
-	const save = mockSourceChanges(t);
-	let changeTime = 1;
-	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 12, mtimeMs: 1, ctimeMs: changeTime } as fs.Stats));
-	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args[1]!);
-		const child = new ChildProcess();
-		setImmediate(() => child.emit('close', 0, null));
-		return child;
+for (const workspaceManifest of [false, true]) {
+	test(`${workspaceManifest ? 'manifest' : 'source'} access notifications do not rebuild, while a write with preserved size and mtime does`, async t => {
+		t.mock.timers.enable({ apis: ['setTimeout'] });
+		const completed = Promise.withResolvers<void>();
+		const commands: string[] = [];
+		mockProtocolDirectories(t);
+		const save = mockSourceChanges(t);
+		const source = workspaceManifest ? 'Cargo.lock' : 'diff/src/lib.rs';
+		const expected = workspaceManifest ? ['build/protocol/generate.py', 'build/desktop/develop.py'] : ['build/desktop/develop.py'];
+		let changeTime = 1;
+		t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 12, mtimeMs: 1, ctimeMs: changeTime } as fs.Stats));
+		t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+			commands.push(args[1]!);
+			const child = new ChildProcess();
+			setImmediate(() => child.emit('close', 0, null));
+			return child;
+		});
+		syncBuiltinESMExports();
+		const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
+		t.after(stop);
+		save(source, workspaceManifest);
+		t.mock.timers.tick(250);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(commands, []);
+		changeTime = Date.now() + 1;
+		save(source, workspaceManifest);
+		t.mock.timers.tick(250);
+		await completed.promise;
+		assert.deepEqual(commands, expected);
+		save(source, workspaceManifest);
+		t.mock.timers.tick(250);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(commands.length, expected.length);
 	});
-	syncBuiltinESMExports();
-	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
-	t.after(stop);
-	save('diff/src/lib.rs');
-	t.mock.timers.tick(250);
-	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(commands, []);
-	changeTime = Date.now() + 1;
-	save('diff/src/lib.rs');
-	t.mock.timers.tick(250);
-	await completed.promise;
-	assert.deepEqual(commands, ['build/desktop/develop.py']);
-	save('diff/src/lib.rs');
-	t.mock.timers.tick(250);
-	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.equal(commands.length, 1);
-});
+}
 
 test('app-server watcher excludes a custom Cargo target directory inside Rust sources', () => {
 	const sourceRoot = join('/workspace', 'ash', 'crates');

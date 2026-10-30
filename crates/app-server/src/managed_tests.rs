@@ -13,6 +13,7 @@ fn invalid_profile_config_is_rejected_before_daemon_socket_is_bound() {
         profile.path().to_path_buf(),
         None,
         ash_app_server_diff::compute,
+        build_info::BuildInfo::new(None, None),
     )
     .unwrap_err();
 

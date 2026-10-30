@@ -16,6 +16,7 @@ doctest = false
 rust-live = ["dep:ash-dev-build", "dep:serde_json", "dep:ash-app-server-protocol"]
 
 [dependencies]
+build-identity = { workspace = true }
 ash-app-server-runtime = { workspace = true }
 ash-app-server-diff = { workspace = true }
 ash-cloud-codebase = { workspace = true }
