@@ -199,6 +199,10 @@ EditorGroupModel 是数字组 ID 的分配 owner；组操作、命令上下文�
 
 ## 已有验证与限制
 
+2026-10-29 修复 macOS 打开 Settings 失败：生产 Canvas contribution 已注册 `chat.canvases.enabled`，但 Settings 分类表遗漏该项，完整性检查因此中止窗口创建。将其纳入 Agent Defaults 的 Editing 分类，并让 Settings 单测加载真实 Canvas 注册；新增注册先复现相同错误，修复后该文件 49 项全部通过。正常 Desktop 构建及真实 App Server 的模型持久化／窗口重开场景随后通过。诊断、红绿测试和构建日志位于 `.build/macos-model-acceptance-20261029/`。
+
+2026-10-29 已用隔离 HOME、profile 和合成工作区实际启动本地 Code OSS 1.145.0，并通过命令面板打开可见 Settings。该可运行性探针解除旧的“本地无可运行构建”阻塞，不覆盖目标／语言／重置／JSON 草稿和编辑器组的完整窗口配对。运行时为 Electron 43.8.3／Chromium 150.0.7871.250；源码检出为 `6c21985de64`，未重新构建上游，因此不以该 SHA 证明已运行产物对应某个源码版本。截图仍有内置 git-base、Emmet 和 GitHub Authentication 的缺模块通知；仅确认 Settings 基础窗口可运行，涉及这些扩展的配对须先补齐上游构建。探针脚本、结果、截图和 trace 位于 `.build/macos-todo-20261029/upstream-preferences-*`。首轮在打开 Settings 后因探针将搜索控件误识别为 textbox 而失败；最终探针仅断言本次需要确认的启动和 Settings 可见性，保留首轮产物于 `upstream-first/`。
+
 2026-10-18 在 `e6b5688e5` 加本批改动上闭合配置迁移窗口复核。修复设置值在编辑器获焦前被选中时辅助 live 文本滞后：View 在收到获焦事件时读取当前选区，失焦时不覆盖帮助提示。修正 Browser 外部写入测试辅助工具的文件类型，使用 `FileKind.File`，避免重载把设置文件识别为非文件。设置菜单的 JSON 编辑入口改由真实动作回归；选择内置主题的测试依赖真实扩展宿主，断开后端的 UI 测试不假设已加载内置主题。
 
 该批通过 55 项定向单测（4 文件）、5 项 Browser smoke（中英文 JSON 选区、外部更新／跨窗口重读、非法值保存、脏草稿／冲突与中英文缺失主题回退），以及 6 项 macOS Desktop App Server smoke（上述场景及已安装 Ash Dark 的选择）。缺失主题保留原 ID，返回 System 后删除默认值覆盖；没有重现 `Unknown select option`。Web／Desktop 构建、Renderer 4,205 文件及自动化 2,872 文件类型检查、formatter 和 Editor CSS ownership audit 通过。Browser 通过记录分布在 `.build/todo-preferences/current-browser-complete.log` 的 3 个未受后续测试断言修改影响的场景及 `current-browser-appearance-final.log` 的 2 个场景；Desktop 记录为 `current-desktop-complete.log`，单测为 `current-unit.log`。

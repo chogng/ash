@@ -361,3 +361,15 @@ pnpm run test:smoke:desktop:no-compile test/smoke/areas/windows/font-cache.spec.
 
 证据保存在 `.build/local-todo-retirement/{first,retry}-test-results/` 与对应 `*-smoke.log`。
 本轮收窄了历史问题的验证缺口，但仍需定位这次偶发退出停留；根待办继续保留。
+
+### 2026-10-29 macOS 退出有界复测
+
+本检出 `3d1fee43f` 加当时工作树修改、macOS arm64、Node 24.21.0、Electron 44.4.5，重新运行正常后端和 Desktop 准备，再执行：
+
+```sh
+pnpm run test:smoke:desktop:no-compile test/smoke/areas/windows/font-cache.spec.ts --grep 'Desktop migrates' --repeat-each=5 --max-failures=1 --output=.build/macos-todo-20261029/startup-quit-results --reporter=list
+```
+
+单窗口与自动恢复 Agents 各 5 轮，10/10 通过（2.2 分钟）；每轮三次启动均完成正常退出，迁移、原文归档、字体和布局恢复断言通过，保留的窗口日志没有 error 记录或旧 `IPC connection closed`。
+自动恢复变体第二次启动的退出请求分别晚于 `Agents restored` 5、6、4、11、5 ms，因此这组没有再次命中恢复尚未完成时退出的时序，也没有复现 10 月 21 日的退出停留，不能据此关闭根因待办。
+准备日志、逐次窗口日志和独立时序汇总在 `.build/macos-todo-20261029/{prepare.log,startup-quit.log,startup-quit-results/,startup-quit-analysis.json}`；随后另一批格式变更导致构建身份变化，已另存第二次准备日志，不混写本批来源。

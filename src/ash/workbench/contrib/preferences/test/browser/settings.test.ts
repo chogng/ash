@@ -188,6 +188,7 @@ const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
 await import('../../browser/preferencesActions.js');
 await import('../../../../browser/actions/layoutActions.js');
 await import('../../../extensions/browser/extensions.contribution.js');
+await import('../../../canvases/electron-browser/canvases.contribution.js');
 const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
 
 // The canonical module above captures English. Chinese metadata tests need the
@@ -1763,6 +1764,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
 	assert.equal(findSettingCategory(layout, 'chat.editing.autoAcceptDelay'), 'agent-defaults');
+	assert.equal(findSettingCategory(layout, 'chat.canvases.enabled'), 'agent-defaults');
 	assert.equal(defaults.get('chat.editing.autoAcceptDelay').valueType, 'number');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, 'workbench.tips.enabled'), 'appearance');

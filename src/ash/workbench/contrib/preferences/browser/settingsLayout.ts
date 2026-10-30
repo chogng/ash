@@ -646,7 +646,7 @@ export const SettingsNavigation = [
 						id: 'chat-editing',
 						label: localize('settings.chatEditing.label', 'Editing'),
 						description: localize('settings.chatEditing.description', 'Choose how Agent edits are reviewed.'),
-						settings: ['chat.editing.autoAcceptDelay'],
+						settings: ['chat.editing.autoAcceptDelay', 'chat.canvases.enabled'],
 					},
 					{
 						id: 'customization-discovery',

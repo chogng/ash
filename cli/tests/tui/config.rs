@@ -23,6 +23,212 @@ fn open_provider(process: &mut TuiProcess, label: &str) {
 }
 
 #[test]
+#[cfg(target_os = "macos")]
+#[ignore = "requires pinned installed Codex CLI and three real five-minute subscription ticks"]
+fn actual_tui_subscription_catalog_updates_open_picker_across_account_changes() {
+    use crate::subscription_catalog::Account;
+    use crate::subscription_catalog::Catalog;
+    use ash_app_server_protocol::protocol::provider::ProviderModelsAuthorityDto;
+    use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
+    use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
+    use ash_app_server_protocol::protocol::provider::ProviderModelsUpdated;
+    use std::time::Duration;
+
+    fn belongs_to(update: &ProviderModelsUpdated, account: Account) -> bool {
+        update.connection == "chatgpt-subscription"
+            && matches!(&update.authority, ProviderModelsAuthorityDto::Subscription {
+                account_id, organization: Some(organization), plan: Some(plan),
+            } if account_id == account.id() && organization == account.id() && plan == "plus")
+    }
+
+    fn has_model(update: &ProviderModelsUpdated, name: &str) -> bool {
+        matches!(&update.result, ProviderModelsListResult::Models { models }
+            if models.len() == 1 && models[0].display_name == name)
+    }
+
+    fn failed(update: &ProviderModelsUpdated) -> bool {
+        matches!(&update.result, ProviderModelsListResult::Failed { failure }
+            if failure.code == ProviderModelsListFailureCodeDto::InvalidResponse)
+    }
+
+    fn expect_effort(process: &mut TuiProcess, name: &str, effort: &str) {
+        process.wait_for_stable_screen(name);
+        let screen = process.screen();
+        let row = screen.lines().find(|line| line.contains(name)).unwrap();
+        assert!(row.contains('>'), "model focus was lost: {row}");
+        assert!(row.contains(effort), "expected {effort}: {row}");
+        assert!(screen.contains("│ TUI catalog "), "search query was lost");
+        assert!(screen.contains("─ Model ─"), "model picker closed");
+    }
+
+    let fixture = Fixture::new().with_isolated_home();
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    let mut cache = Catalog::new(fixture.codex_home());
+    cache.set_model("gpt-6.1-sol", "TUI catalog initial", "medium");
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Ash Code v");
+    let mut observer = fixture.connect();
+    let events = observer.take_events().unwrap();
+    let mut client = observer.client();
+    cache.switch_account(Account::A);
+    client.read_accounts().unwrap();
+    cache.wait_for(&events, Duration::from_secs(90), |update| {
+        belongs_to(update, Account::A) && has_model(update, "TUI catalog initial")
+    });
+    let account_a = client.read_accounts().unwrap();
+    assert_eq!(
+        account_a
+            .accounts
+            .iter()
+            .map(|account| account.account_id.as_str())
+            .collect::<Vec<_>>(),
+        vec![Account::A.id()]
+    );
+    let config = client.read_config().unwrap();
+    process.submit("/model");
+    process.wait_for_screen("Search models");
+    select_config_item(&mut process, "TUI catalog");
+    expect_effort(&mut process, "TUI catalog initial", "Medium");
+    process.right();
+    expect_effort(&mut process, "TUI catalog initial", "Low");
+    process.left();
+    expect_effort(&mut process, "TUI catalog initial", "Medium");
+    println!("Initial open picker:\n{}", process.screen());
+
+    cache.set_model("gpt-6.1-sol", "TUI catalog updated", "high");
+    println!("Waiting for metadata at the normal five-minute observer tick.");
+    cache.wait_for(&events, Duration::from_secs(370), |update| {
+        belongs_to(update, Account::A) && has_model(update, "TUI catalog updated")
+    });
+    expect_effort(&mut process, "TUI catalog updated", "High");
+    assert!(!process.screen().contains("TUI catalog initial"));
+    process.right();
+    expect_effort(&mut process, "TUI catalog updated", "Low");
+    process.right();
+    expect_effort(&mut process, "TUI catalog updated", "High");
+    let updated = client.list_models().unwrap();
+    let metadata = updated
+        .models
+        .iter()
+        .find(|entry| entry.display_name == "TUI catalog updated")
+        .unwrap()
+        .clone();
+    assert_eq!(
+        metadata.default_reasoning_effort,
+        Some(ash_protocol::ReasoningEffort::High)
+    );
+    assert_eq!(
+        metadata
+            .supported_reasoning_efforts
+            .iter()
+            .map(|option| option.effort)
+            .collect::<Vec<_>>(),
+        vec![
+            ash_protocol::ReasoningEffort::Low,
+            ash_protocol::ReasoningEffort::High
+        ]
+    );
+    assert_eq!(client.read_accounts().unwrap(), account_a);
+    println!("Updated open picker:\n{}", process.screen());
+
+    // The real CLI returns this row, then the Ash ModelId boundary rejects its whitespace slug.
+    cache.set_model(" ", "TUI catalog invalid", "high");
+    println!("Waiting for invalidResponse at the next normal five-minute tick.");
+    cache.wait_for(&events, Duration::from_secs(370), |update| {
+        belongs_to(update, Account::A) && failed(update)
+    });
+    expect_effort(&mut process, "TUI catalog updated", "High");
+    process.left();
+    expect_effort(&mut process, "TUI catalog updated", "Low");
+    process.right();
+    expect_effort(&mut process, "TUI catalog updated", "High");
+    assert_eq!(
+        client
+            .list_models()
+            .unwrap()
+            .models
+            .iter()
+            .find(|entry| entry.display_name == "TUI catalog updated"),
+        Some(&metadata)
+    );
+    assert_eq!(client.read_accounts().unwrap(), account_a);
+    println!(
+        "Same-account failure retained picker:\n{}",
+        process.screen()
+    );
+
+    // A new identity with failed discovery must retire A, rather than apply A's failure-retention rule.
+    cache.switch_account(Account::B);
+    cache.wait_for(&events, Duration::from_secs(90), |update| {
+        belongs_to(update, Account::B) && failed(update)
+    });
+    process.wait_for_screen_to_omit("TUI catalog updated");
+    assert!(process.screen().contains("─ Model ─"));
+    assert!(
+        !client
+            .list_models()
+            .unwrap()
+            .models
+            .iter()
+            .any(|entry| entry.display_name.starts_with("TUI catalog"))
+    );
+    let account_b = client.read_accounts().unwrap();
+    assert_ne!(account_a, account_b);
+    assert_eq!(
+        account_b
+            .accounts
+            .iter()
+            .map(|account| account.account_id.as_str())
+            .collect::<Vec<_>>(),
+        vec![Account::B.id()]
+    );
+    println!(
+        "New identity failure retired old catalog:\n{}",
+        process.screen()
+    );
+
+    cache.set_model("gpt-6-astra", "TUI catalog account B", "medium");
+    println!("Waiting for B's catalog at the next normal five-minute tick.");
+    cache.wait_for(&events, Duration::from_secs(370), |update| {
+        belongs_to(update, Account::B) && has_model(update, "TUI catalog account B")
+    });
+    expect_effort(&mut process, "TUI catalog account B", "Medium");
+    assert!(!process.screen().contains("TUI catalog updated"));
+    process.right();
+    expect_effort(&mut process, "TUI catalog account B", "Low");
+    process.right();
+    expect_effort(&mut process, "TUI catalog account B", "Medium");
+    let final_config = client.read_config().unwrap();
+    assert_eq!(
+        (
+            final_config.revision,
+            final_config.model,
+            final_config.model_reasoning_effort,
+            final_config.gui,
+            final_config.tui
+        ),
+        (
+            config.revision,
+            config.model,
+            config.model_reasoning_effort,
+            config.gui,
+            config.tui
+        )
+    );
+    assert_eq!(client.read_accounts().unwrap(), account_b);
+    assert!(
+        server.request_bodies().is_empty(),
+        "viewing model choices must not start a Turn"
+    );
+    println!("Account B open picker:\n{}", process.screen());
+    process.assert_snapshot("subscription_catalog_open_picker_account_b");
+    process.escape();
+    process.quit();
+    observer.shutdown().unwrap();
+}
+
+#[test]
 fn actual_tui_ctrl_g_starts_configured_dictation_through_the_pty() {
     let fixture = Fixture::new().with_missing_voice_host();
     let server = ScenarioServer::start([]);

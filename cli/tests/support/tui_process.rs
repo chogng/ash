@@ -155,6 +155,7 @@ pub struct Fixture {
     app_server: PathBuf,
     product_services: Option<PathBuf>,
     voice_host: Option<PathBuf>,
+    isolated_home: Option<PathBuf>,
     announcement_url: String,
     #[cfg(unix)]
     model_download_proxy: Option<std::net::SocketAddr>,
@@ -227,6 +228,7 @@ impl Fixture {
             app_server,
             product_services: None,
             voice_host: None,
+            isolated_home: None,
             announcement_url: String::new(),
             #[cfg(unix)]
             model_download_proxy: None,
@@ -260,6 +262,14 @@ impl Fixture {
         self
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn with_isolated_home(mut self) -> Self {
+        let home = self.root.join("home");
+        fs::create_dir_all(home.join(".config")).unwrap();
+        self.isolated_home = Some(home);
+        self
+    }
+
     #[cfg(unix)]
     pub fn with_model_download_proxy(mut self, address: std::net::SocketAddr) -> Self {
         self.model_download_proxy = Some(address);
@@ -290,6 +300,10 @@ impl Fixture {
                 self.app_server.clone().into_os_string(),
             ),
         ];
+        if let Some(home) = &self.isolated_home {
+            environment.push(("HOME", home.clone().into_os_string()));
+            environment.push(("XDG_CONFIG_HOME", home.join(".config").into_os_string()));
+        }
         if let Some(path) = &self.product_services {
             environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone().into_os_string()));
         }
@@ -398,7 +412,7 @@ contextWindow = 128000
         find_named(&self.root, name)
     }
 
-    pub fn sessions(&self) -> Vec<ash_protocol::Session> {
+    pub fn connect(&self) -> AppServerSession {
         let mut command = StdioAppServerCommand::new(&self.ash)
             .with_argument("app-server")
             .with_argument("connect");
@@ -406,7 +420,7 @@ contextWindow = 128000
             command = command.with_environment_variable(name, value);
         }
         eprintln!("PTY inspector: connecting");
-        let session = AppServerSession::start_stdio(
+        AppServerSession::start_stdio(
             command,
             ClientInfo {
                 name: "ash-tui-real-scenario-inspector".into(),
@@ -414,7 +428,11 @@ contextWindow = 128000
             },
             ash_tui::client_capabilities(),
         )
-        .unwrap();
+        .unwrap()
+    }
+
+    pub fn sessions(&self) -> Vec<ash_protocol::Session> {
+        let session = self.connect();
         eprintln!("PTY inspector: listing sessions");
         let sessions = session.client().list_sessions().unwrap().sessions;
         eprintln!("PTY inspector: shutting down");
@@ -641,6 +659,11 @@ impl TuiProcess {
 
     pub fn right(&mut self) {
         self.send_input(b"\x1b[C");
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn left(&mut self) {
+        self.send_input(b"\x1b[D");
     }
 
     pub fn space(&mut self) {

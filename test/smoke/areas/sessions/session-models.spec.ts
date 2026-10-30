@@ -362,13 +362,16 @@ for (const scenario of [
 			await expect(sourceChat.locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);
 			await expect.poll(async () => (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session?.model).toEqual(rootModel);
 			expect((await client.request(APP_SERVER_METHODS['config/read'], {})).model).toEqual(childModel);
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).click();
+			// Collab hosts the shared Cowork renderer; the Chat workspace opens ChatGPT.
+			await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
 			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);
-			await page.locator('.ash-sessions-list-item').filter({ hasText: 'No persisted model' }).click();
+			await new QuickAccess(page).runCommand('workbench.action.chat.showHistory');
+			await page.locator('.ash-quick-pick .ash-list-row').filter({ hasText: 'No persisted model' }).click();
 			await active().locator('.ash-chat-input-model-action').press('ArrowDown');
 			await expect(page.getByRole('dialog', { name: 'Choose a chat model', exact: true }).getByRole('switch', { name: 'Auto', exact: true })).not.toBeChecked();
 			await page.keyboard.press('Escape');
-			await page.locator('.ash-sessions-list-item').filter({ hasText: 'Persisted model choices' }).click();
+			await new QuickAccess(page).runCommand('workbench.action.chat.showHistory');
+			await page.locator('.ash-quick-pick .ash-list-row').filter({ hasText: 'Persisted model choices' }).filter({ hasText: historyDescription(rootThreadId) }).click();
 			page = await agentsWorkbench.reopenAgentsWindow(application, page);
 			await expect(active()).toHaveAttribute('data-thread-id', rootThreadId);
 			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(rootModel.model);
@@ -442,8 +445,8 @@ async function verifySubscriptionUpdates(
 	testInfo: TestInfo,
 ): Promise<void> {
 	const cli = '/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex';
-	const cliVersion = '0.163.0-alpha.10.2';
-	const cacheVersion = '0.163.0';
+	const cliVersion = '0.165.0-alpha.1.2';
+	const cacheVersion = '0.165.0';
 	expect(execFileSync(cli, ['--version'], { encoding: 'utf8' }).trim()).toBe(`codex-cli ${cliVersion}`);
 	const home = web ? web.profileDirectory : 'evaluate' in application ? await application.evaluate(() => process.env.HOME) : undefined;
 	if (!home) throw new Error('Expected the fixture launcher-owned HOME');
@@ -597,14 +600,13 @@ async function verifySubscriptionUpdates(
 	expect(config.model).toEqual(profileModel);
 	// Code and Cowork retain separate composer modes. Keep an explicit Auto
 	// choice in Agents Code while both manually selected pickers remain open.
-	const activity = cowork.locator('.ash-sessions-activity-content');
 	await cowork.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
 	const codeAuto = cowork.getByRole('dialog', { name: 'Choose a chat model', exact: true }).getByRole('switch', { name: 'Auto', exact: true });
 	if (!(await codeAuto.isChecked())) await codeAuto.press('Space');
 	await expect(codeAuto).toBeChecked();
 	await cowork.keyboard.press('Escape');
-	await activity.getByRole('button', { name: 'Chat', exact: true }).click();
+	await cowork.locator('[data-action-id="sessions.open.collaboration"] button').click();
 	await selectModel(source, sourceChat, initial);
 	await selectModel(cowork, coworkChat, initial);
 	await expect(sourceChat.locator('.ash-chat-input-configuration-action')).toHaveText('Medium');
@@ -626,7 +628,7 @@ async function verifySubscriptionUpdates(
 		await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await expect(codeAuto).toBeChecked();
 		await cowork.keyboard.press('Escape');
-		await activity.getByRole('button', { name: 'Chat', exact: true }).click();
+		await cowork.locator('[data-action-id="sessions.open.collaboration"] button').click();
 		await expect(coworkChat.locator('.ash-chat-input-model-action')).toHaveText(updated);
 		await coworkChat.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await picker(cowork).getByRole('combobox').fill('Synthetic catalog');
@@ -880,7 +882,7 @@ for (const locale of ['en', 'zh-CN']) {
 				if (!primary || !advisor) throw new Error('Expected the real product model metadata');
 				expect(primary.supported_reasoning_efforts.some(option => option.effort === 'high')).toBe(true);
 				let page = await workbench.openAgentsWindow(target.kind);
-				await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+				await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 				const composer = (): ReturnType<Page['locator']> => page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 				await composer().locator('.ash-chat-input-model-action').press('ArrowDown');
 				const picker = page.getByRole('dialog', { name: copy.picker, exact: true });
@@ -939,7 +941,8 @@ for (const locale of ['en', 'zh-CN']) {
 				const input = composer().locator('.stanza-editor-input');
 				await input.focus();
 				await page.keyboard.insertText(`defaults-fixture-consult-${locale}: Check the saved defaults.`);
-				await composer().locator('[data-action-id="ash.chat.input.send"] button').click();
+				// Code submits from the editor; its composer has no send button.
+				await input.press('Enter');
 				await expect(composer()).toHaveAttribute('data-thread-id', /.+/);
 				const threadId = (await composer().getAttribute('data-thread-id'))!;
 				const sessionId = (await composer().getAttribute('data-session-id'))!;
