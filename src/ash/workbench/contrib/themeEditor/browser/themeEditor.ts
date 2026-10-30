@@ -137,6 +137,13 @@ export class ThemeEditor extends EditorPane {
 	private empty: HTMLElement | undefined;
 	private readonly groups: ThemeColorGroup[] = [];
 	private filtering = false;
+	private allColors = false;
+	private scopeButton: Button | undefined;
+	private inspectorScope = 'workbench:interface';
+	private readonly inspectorStates = new Map<
+		string,
+		{ query: string; allColors: boolean; scrollTop: number; expanded: boolean[] }
+	>();
 	private scrollable: ScrollableElement | undefined;
 	private split: SplitView | undefined;
 	private preview: ThemePreview | undefined;
@@ -316,6 +323,20 @@ export class ThemeEditor extends EditorPane {
 				this.renderRows();
 			}),
 		);
+		this.scopeButton = this._register(
+			new Button(searchHost, {
+				...defaultButtonStyles,
+				label: localize('themeEditor.allColors', 'All colors'),
+				size: 'small',
+				checked: false,
+				onClick: () => {
+					this.allColors = !this.allColors;
+					this.scopeButton!.checked = this.allColors;
+					this.scrollable?.scrollTo(0, 0);
+					this.renderRows();
+				},
+			}),
+		);
 		const scrollHost = h(doc, 'div');
 		scrollHost.className = 'ash-theme-editor-scroll';
 		panel.append(scrollHost);
@@ -330,6 +351,18 @@ export class ThemeEditor extends EditorPane {
 		this._register(addDisposableListener<KeyboardEvent>(this.list, 'keydown', event => this.navigateRows(event)));
 		this._register(addDisposableListener(this.list, 'focusout', () => this.scheduleViewport()));
 		const groups = [
+			{ id: 'sessions', label: localize('themeEditor.group.sessions', 'Agent Window'), pattern: /^sessions\./u },
+			{
+				id: 'syntax',
+				label: localize('themeEditor.group.syntax', 'Syntax highlighting'),
+				pattern: /^(?:editor\.(?:token|semanticToken)\.|semanticTokenColors\.)/u,
+			},
+			{
+				id: 'diff',
+				label: localize('themeEditor.group.diff', 'Diff'),
+				pattern:
+					/^(?:diffEditor|diff\.|editorGutter\.(?:added|deleted|modified)|editorOverviewRuler\.(?:added|deleted|modified))/u,
+			},
 			{
 				id: 'surface',
 				label: localize('themeEditor.group.surface', 'Surface'),
@@ -387,16 +420,22 @@ export class ThemeEditor extends EditorPane {
 				label: localize('themeEditor.group.scrollbar', 'Scrollbar and minimap'),
 				pattern: /^(?:scrollbar|scrollView|scrollShadow|minimap)/u,
 			},
-			{ id: 'sessions', label: localize('themeEditor.group.sessions', 'Agent Window'), pattern: /^sessions\./u },
 			{ id: 'other', label: localize('themeEditor.group.other', 'Other'), pattern: /./u },
 		];
 		for (const group of groups) {
 			this.groups.push(
 				this._register(
-					new ThemeColorGroup(this.list, group.id, group.label, group.pattern, group.id === 'surface', () => {
-						this.picker?.cancel();
-						this.renderRows();
-					}),
+					new ThemeColorGroup(
+						this.list,
+						group.id,
+						group.label,
+						group.pattern,
+						['surface', 'syntax', 'diff', 'sessions'].includes(group.id),
+						() => {
+							this.picker?.cancel();
+							this.renderRows();
+						},
+					),
 				),
 			);
 		}
@@ -443,6 +482,7 @@ export class ThemeEditor extends EditorPane {
 			),
 		);
 		this._register(this.preview.onDidChangeColors(() => this.renderRows()));
+		this._register(this.preview.onDidChangeSelection(() => this.switchInspectorScope()));
 		this.split = this._register(new SplitView(this.body, 'horizontal'));
 		const editor = this;
 		// Keep the source model and undo history, without rendering a hidden JSON viewport.
@@ -889,6 +929,60 @@ export class ThemeEditor extends EditorPane {
 			: (parseColorThemeDocument(source).colors ?? {});
 	}
 
+	private switchInspectorScope(): void {
+		this.picker?.cancel();
+		this.inspectorStates.set(this.inspectorScope, {
+			query: this.search?.value ?? '',
+			allColors: this.allColors,
+			scrollTop: this.scrollable?.scrollableElement.scrollTop ?? 0,
+			expanded: this.groups.map(group => (this.filtering ? group.expandedBeforeFiltering : group.expanded)),
+		});
+		this.inspectorScope = this.preview!.scope;
+		const state = this.inspectorStates.get(this.inspectorScope);
+		// Search expansion is temporary; restore each scene's ordinary category state first.
+		this.filtering = false;
+		for (const [index, group] of this.groups.entries()) {
+			group.setFiltering(false);
+			group.setExpanded(state?.expanded[index] ?? ['surface', 'syntax', 'diff', 'sessions'].includes(group.id));
+		}
+		if (this.search) this.search.value = state?.query ?? '';
+		this.allColors = state?.allColors ?? false;
+		if (this.scopeButton) this.scopeButton.checked = this.allColors;
+		this.renderRows();
+		this.scrollable?.scrollTo(0, state?.scrollTop ?? 0);
+		this.renderViewport();
+	}
+
+	private includesColor(id: string): boolean {
+		if (this.allColors) return true;
+		const selection = this.preview?.selection;
+		const syntax = /^(?:editor\.(?:token|semanticToken)\.|semanticTokenColors\.)/u.test(id);
+		const diff =
+			/^(?:diffEditor|diff\.|editorGutter\.(?:added|deleted|modified)|editorOverviewRuler\.(?:added|deleted|modified))/u.test(
+				id,
+			);
+		if (selection?.scene === 'code')
+			return !diff && (syntax || /^(?:editor(?!Group)|minimap|scrollbar|scrollShadow)/u.test(id));
+		if (selection?.scene === 'diff')
+			return diff || syntax || /^(?:editor\.(?:background|foreground)$|scrollbar)/u.test(id);
+		if (syntax || diff) return false;
+		if (selection?.window === 'sessions') {
+			return /^(?:sessions\.|background$|foreground$|description\.|muted\.|disabled|accent\.|error\.|warning\.|success\.|focusBorder$|contrast|border$|icon\.|selection\.|text|widget\.|input|button|checkbox|radio|dropdown|toolbar|keybinding|sash|badge|list\.|tree\.|menu\.|quickInput|quickPick|scrollbar|scrollShadow)/u.test(
+				id,
+			);
+		}
+		return !id.startsWith('sessions.');
+	}
+
+	private colorPath(id: string, tree = parseTree(this.textEditor.getValue())): string[] {
+		if (!id.startsWith('semanticTokenColors.')) return ['colors', id];
+		const selector = id.slice('semanticTokenColors.'.length);
+		const node = findNodeAtLocation(tree, ['semanticTokenColors', selector]);
+		return node?.type === 'object'
+			? ['semanticTokenColors', selector, 'foreground']
+			: ['semanticTokenColors', selector];
+	}
+
 	private renderRows(): void {
 		if (!this.list) return;
 		let colors: Readonly<Record<string, string>> = {};
@@ -911,6 +1005,7 @@ export class ThemeEditor extends EditorPane {
 		for (const group of this.groups) group.entries = [];
 		const current = this.compiled;
 		for (const entry of entries) {
+			if (!this.includesColor(entry.id)) continue;
 			const group = this.groups.find(group => group.pattern.test(entry.id))!;
 			if (query && !`${entry.id} ${entry.description} ${group.label}`.toLowerCase().includes(query)) continue;
 			group.entries.push({
@@ -919,6 +1014,23 @@ export class ThemeEditor extends EditorPane {
 				authored: colors[entry.id],
 				effective: previewColors.get(entry.id)?.value ?? current?.getColor(entry.id),
 				references: 'defaults' in entry ? current && getThemeColorReferences(current, entry) : entry.references,
+			});
+		}
+		const tree = parseTree(this.textEditor.getValue());
+		const syntaxGroup = this.groups.find(group => group.id === 'syntax')!;
+		for (const rule of current?.semanticTokenRules ?? []) {
+			const id = `semanticTokenColors.${rule.selector}`;
+			if (!this.includesColor(id) || (query && !`${id} ${syntaxGroup.label}`.toLowerCase().includes(query)))
+				continue;
+			const authored = findNodeAtLocation(tree, this.colorPath(id, tree));
+			syntaxGroup.entries.push({
+				id,
+				description: rule.selector,
+				authored: typeof authored?.value === 'string' ? authored.value : undefined,
+				effective: rule.foreground
+					? Color.fromHex(rule.foreground)
+					: current?.getColor(`editor.token.${rule.type}Foreground`),
+				references: undefined,
 			});
 		}
 		for (const group of this.groups) group.setCount(group.entries.length);
@@ -1052,6 +1164,8 @@ export class ThemeEditor extends EditorPane {
 	private revealDesignToken(id: string): void {
 		if (!this.search) return;
 		this.search.value = '';
+		this.allColors = true;
+		if (this.scopeButton) this.scopeButton.checked = true;
 		// Clearing a search restores expansion first. Materialize the target
 		// category before resolving its row; it may never have been constructed.
 		this.renderRows();
@@ -1069,7 +1183,7 @@ export class ThemeEditor extends EditorPane {
 		const control = this.getControl();
 		const model = control?.getModel();
 		if (!model || !control) return;
-		const edits = setProperty(model.getText(), ['colors', id], value, {
+		const edits = setProperty(model.getText(), this.colorPath(id), value, {
 			insertSpaces: !/^\t/mu.test(model.getText()),
 			tabSize: 2,
 			eol: model.getText().includes('\r\n') ? '\r\n' : '\n',
@@ -1145,7 +1259,7 @@ export class ThemeEditor extends EditorPane {
 		const control = this.getControl();
 		const model = control?.getModel();
 		if (!control || !model) return;
-		const node = findNodeAtLocation(parseTree(model.getText()), ['colors', id]);
+		const node = findNodeAtLocation(parseTree(model.getText()), this.colorPath(id));
 		if (!node) return;
 		const range = Range.fromPositions(
 			model.getPositionAt(node.offset),
@@ -1161,11 +1275,16 @@ export class ThemeEditor extends EditorPane {
 		const selection = this.getControl()?.getSelections()?.[0];
 		if (!model || !selection) return;
 		const offset = model.getOffsetAt(selection.getStartPosition());
-		const colors = findNodeAtLocation(parseTree(model.getText()), ['colors']);
+		const tree = parseTree(model.getText());
 		let selected: string | undefined;
-		for (const property of colors?.children ?? [])
-			if (offset >= property.offset && offset <= property.offset + property.length)
-				selected = String(property.children?.[0]?.value);
+		for (const field of ['colors', 'semanticTokenColors']) {
+			for (const property of findNodeAtLocation(tree, [field])?.children ?? []) {
+				if (offset >= property.offset && offset <= property.offset + property.length) {
+					const id = String(property.children?.[0]?.value);
+					selected = field === 'colors' ? id : `semanticTokenColors.${id}`;
+				}
+			}
+		}
 		this.selectedColor = selected;
 		for (const [id, row] of this.rows) row.element.classList.toggle('selected', id === selected);
 	}
@@ -1238,7 +1357,7 @@ class ThemeColorGroup extends Disposable {
 
 	constructor(
 		parent: HTMLElement,
-		id: string,
+		public readonly id: string,
 		public readonly label: string,
 		public readonly pattern: RegExp,
 		expanded: boolean,
@@ -1283,6 +1402,14 @@ class ThemeColorGroup extends Disposable {
 	public setCount(count: number): void {
 		if (this.count.textContent !== String(count)) this.count.textContent = String(count);
 		if (this.element.hidden !== (count === 0)) this.element.hidden = count === 0;
+	}
+
+	public get expanded(): boolean {
+		return !this.body.hidden;
+	}
+
+	public get expandedBeforeFiltering(): boolean {
+		return this.expandedBeforeSearch;
 	}
 
 	public setFiltering(filtering: boolean): void {

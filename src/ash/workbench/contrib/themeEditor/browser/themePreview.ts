@@ -71,7 +71,8 @@ export function getThemeColorReferences(
 	return tokens.size ? { kind: typeof value === 'string' ? 'linked' : 'derived', tokens: [...tokens] } : undefined;
 }
 
-type PreviewWindow = 'workbench' | 'diff' | 'sessions' | 'syntax';
+type PreviewWindow = 'workbench' | 'sessions';
+type PreviewScene = 'interface' | 'code' | 'diff';
 
 /** One retained document owns its channel and reported state until the editor closes. */
 class ThemePreviewFrame extends Disposable {
@@ -106,10 +107,20 @@ class ThemePreviewFrame extends Disposable {
 	}
 }
 
-/** Lazily owns up to four isolated documents and synchronizes their theme and presentation preferences. */
+/** Lazily owns isolated window scenes and synchronizes their theme and presentation preferences. */
 export class ThemePreview extends Disposable {
-	private readonly frames = this._register(new DisposableMap<PreviewWindow, ThemePreviewFrame>());
+	private readonly frames = this._register(new DisposableMap<string, ThemePreviewFrame>());
 	private active: ThemePreviewFrame | undefined;
+	private window: PreviewWindow = 'workbench';
+	private readonly scenes = new Map<PreviewWindow, PreviewScene>();
+	public get selection(): { readonly window: PreviewWindow; readonly scene: PreviewScene } {
+		return { window: this.window, scene: this.scenes.get(this.window) ?? 'interface' };
+	}
+	public get scope(): string {
+		return `${this.selection.window}:${this.selection.scene}`;
+	}
+	private readonly selectionChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeSelection = this.selectionChanged.event;
 	private readonly ownerWindow: Window;
 	public get element(): HTMLIFrameElement | undefined {
 		return this.active?.domNode;
@@ -123,7 +134,11 @@ export class ThemePreview extends Disposable {
 	private readonly colorsChanged = this._register(new Emitter<void>());
 	readonly onDidChangeColors = this.colorsChanged.event;
 	get colors(): readonly PreviewColor[] {
-		return this.active?.colors ?? [];
+		// Keep discovered token definitions available in All colors after changing windows.
+		const colors = new Map<string, PreviewColor>();
+		for (const [, frame] of this.frames) for (const color of frame.colors) colors.set(color.id, color);
+		for (const color of this.active?.colors ?? []) colors.set(color.id, color);
+		return [...colors.values()];
 	}
 
 	constructor(
@@ -151,6 +166,7 @@ export class ThemePreview extends Disposable {
 		};
 		const toolbar = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-toolbar' });
 		const tabsHost = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-tabs' });
+		const scenesHost = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-scenes' });
 		const actions = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-actions' });
 		toolbar.append(tabsHost, actions);
 		toolbarContainer.append(toolbar);
@@ -159,10 +175,18 @@ export class ThemePreview extends Disposable {
 			new TabList<PreviewWindow>(tabsHost, {
 				presentation: 'inset',
 				ariaLabel: localize('themeEditor.previewWindow', 'Preview window'),
-				onActivate: value => selectWindow(value),
+				onActivate: value => selectPreview(value, this.scenes.get(value) ?? 'interface'),
 			}),
 		);
-		let selected: PreviewWindow | undefined;
+		const sceneTabs = this._register(
+			new TabList<PreviewScene>(scenesHost, {
+				presentation: 'inset',
+				ariaLabel: localize('themeEditor.previewScene', 'Preview scene'),
+				onActivate: value => selectPreview(this.window, value),
+			}),
+		);
+		toolbarContainer.append(scenesHost);
+		let selected: string | undefined;
 		let loading: ThemePreviewFrame | undefined;
 		const loadSelected = (): void => {
 			const frame = this.active;
@@ -173,22 +197,25 @@ export class ThemePreview extends Disposable {
 			frame.started = true;
 			frame.domNode.src = frame.url;
 		};
-		const selectWindow = (value: PreviewWindow): void => {
-			if (selected === value) return;
-			selected = value;
+		const selectPreview = (value: PreviewWindow, scene: PreviewScene): void => {
+			const key = `${value}:${scene}`;
+			if (selected === key) return;
+			selected = key;
+			this.window = value;
+			this.scenes.set(value, scene);
 			if (this.active) {
 				this.active.domNode.classList.add('hidden');
 				this.active.domNode.inert = true;
 			}
-			let frame = this.frames.get(value);
+			let frame = this.frames.get(key);
 			if (!frame) {
 				const token = crypto.randomUUID();
 				const page = value === 'sessions' ? 'sessionsThemePreview' : 'themePreview';
 				const url = new URL(`browser/theme-preview/${page}.html`, root);
 				url.searchParams.set('locale', getNLSLanguage());
 				url.searchParams.set('channel', token);
-				if (value === 'diff' || value === 'syntax') url.searchParams.set('sample', value);
-				frame = this.frames.set(value, new ThemePreviewFrame(container.ownerDocument, token, url.href));
+				url.searchParams.set('sample', scene);
+				frame = this.frames.set(key, new ThemePreviewFrame(container.ownerDocument, token, url.href));
 				resize(frame);
 				viewport.append(frame.domNode);
 			}
@@ -197,20 +224,13 @@ export class ThemePreview extends Disposable {
 			frame.domNode.inert = false;
 			loadSelected();
 			this.sendTheme();
-			this.colorsChanged.fire();
 			tabs.setTabs(
 				[
 					{
 						id: 'workbench',
 						value: 'workbench',
-						label: localize('themeEditor.workbenchWindow', 'Workbench'),
+						label: localize('themeEditor.ideWindow', 'IDE'),
 						tabId: 'theme-preview-workbench',
-					},
-					{
-						id: 'diff',
-						value: 'diff',
-						label: localize('themeEditor.diffPreview', 'Diff'),
-						tabId: 'theme-preview-diff',
 					},
 					{
 						id: 'sessions',
@@ -218,15 +238,33 @@ export class ThemePreview extends Disposable {
 						label: localize('themeEditor.sessionsWindow', 'Agent Window'),
 						tabId: 'theme-preview-sessions',
 					},
-					{
-						id: 'syntax',
-						value: 'syntax',
-						label: localize('themeEditor.syntaxPreview', 'Syntax'),
-						tabId: 'theme-preview-syntax',
-					},
 				],
 				value,
 			);
+			sceneTabs.setTabs(
+				[
+					{
+						id: 'interface',
+						value: 'interface',
+						tabId: 'theme-scene-interface',
+						label: localize('themeEditor.interfaceScene', 'Interface'),
+					},
+					{
+						id: 'code',
+						value: 'code',
+						tabId: 'theme-scene-code',
+						label: localize('themeEditor.codeScene', 'Code'),
+					},
+					{
+						id: 'diff',
+						value: 'diff',
+						tabId: 'theme-scene-diff',
+						label: localize('themeEditor.diffPreview', 'Diff'),
+					},
+				],
+				scene,
+			);
+			this.selectionChanged.fire();
 		};
 		// Preserve desktop layout density when the inspector leaves a narrow preview canvas.
 		// Only the frame is scaled; its document still lays out in desktop CSS pixels.
@@ -358,7 +396,7 @@ export class ThemePreview extends Disposable {
 				viewport.remove();
 			}),
 		);
-		selectWindow('workbench');
+		selectPreview('workbench', 'interface');
 		this._register(
 			configuration.onDidChangeConfiguration(event => {
 				if (themePreviewConfigurationKeys.some(key => event.affectsConfiguration(key))) this.scheduleUpdate();

@@ -1,4 +1,17 @@
+import { parseJsonc } from '../../../src/ash/base/common/jsonc.js';
 import { test, expect, type Page, type Locator } from '@playwright/test';
+
+async function selectPreview(popup: Page, name: string): Promise<void> {
+	const windows = popup.getByRole('tablist', { name: 'Preview window', exact: true });
+	await windows.getByRole('tab', { name: name === 'Agent Window' ? name : 'IDE', exact: true }).press('Enter');
+	await popup
+		.getByRole('tablist', { name: 'Preview scene', exact: true })
+		.getByRole('tab', {
+			name: name === 'Workbench' || name === 'Agent Window' ? 'Interface' : name === 'Syntax' ? 'Code' : name,
+			exact: true,
+		})
+		.press('Enter');
+}
 
 async function editColor(field: Locator, value: string): Promise<void> {
 	await field.fill(value);
@@ -143,7 +156,7 @@ for (const locale of ['en', 'zh-CN']) {
 	}, testInfo) => {
 		const popup = await openEditor(page, locale);
 		const source = await page.evaluate(() => window.themeEditorTest.source());
-		const tab = popup.getByRole('tab', { name: locale === 'zh-CN' ? '语法' : 'Syntax', exact: true });
+		const tab = popup.getByRole('tab', { name: locale === 'zh-CN' ? '代码' : 'Code', exact: true });
 		await tab.focus();
 		await tab.press('Enter');
 		await expect(tab).toHaveAttribute('aria-selected', 'true');
@@ -228,11 +241,11 @@ for (const [theme, locale] of [
 		await editColor(popup.locator('.ash-theme-color').getByRole('textbox'), '#b51234');
 		await expect(terminal.locator('[data-color="terminal.ansiRed"]')).toHaveCSS('color', 'rgb(181, 18, 52)');
 		const tabs = popup.getByRole('tablist', {
-			name: locale === 'zh-CN' ? '预览窗口' : 'Preview window',
+			name: locale === 'zh-CN' ? '预览场景' : 'Preview scene',
 			exact: true,
 		});
-		await tabs.getByRole('tab', { name: locale === 'zh-CN' ? '桌面工作台' : 'Workbench', exact: true }).focus();
-		await popup.keyboard.press('ArrowRight');
+		await tabs.getByRole('tab', { name: locale === 'zh-CN' ? '界面' : 'Interface', exact: true }).focus();
+		await popup.keyboard.press('End');
 		const diffTab = tabs.getByRole('tab', { name: locale === 'zh-CN' ? '差异对比' : 'Diff', exact: true });
 		await expect(diffTab).toBeFocused();
 		await diffTab.press('Enter');
@@ -253,7 +266,7 @@ for (const [theme, locale] of [
 			['diffEditor.removedTextBackground', '#e4aaa5', '.stanza-diff-inline-removed', 'rgb(228, 170, 165)'],
 		] as const) {
 			const row = popup
-				.locator('#theme-color-group-editor .ash-theme-color')
+				.locator('#theme-color-group-diff .ash-theme-color')
 				.filter({ has: popup.locator('.ash-theme-color-name').getByText(id, { exact: true }) });
 			const field = row.getByRole('textbox');
 			await expect(field).toBeEnabled();
@@ -286,7 +299,7 @@ test('diff preview keeps its sample fixed through theme undo, redo and switching
 	const popup = await openEditor(page);
 	const source = await page.evaluate(() => window.themeEditorTest.source());
 	const persisted = await page.evaluate(() => window.themeEditorTest.persisted());
-	const tabs = popup.getByRole('tablist', { name: 'Preview window', exact: true });
+	const tabs = popup.getByRole('tablist', { name: 'Preview scene', exact: true });
 	const diffTab = tabs.getByRole('tab', { name: 'Diff', exact: true });
 	await diffTab.press('Space');
 	const frame = popup.frameLocator('.ash-theme-editor-preview:visible');
@@ -321,7 +334,7 @@ test('diff preview keeps its sample fixed through theme undo, redo and switching
 		.poll(() => page.evaluate(() => window.themeEditorTest.accessibleContent()))
 		.not.toContain('preview_only');
 
-	await tabs.getByRole('tab', { name: 'Workbench', exact: true }).press('Enter');
+	await tabs.getByRole('tab', { name: 'Interface', exact: true }).press('Enter');
 	await expect(frame.getByRole('textbox', { name: 'palette.ts', exact: true })).toBeVisible();
 	await diffTab.press('Space');
 	await expect(highlight).toHaveCSS('background-color', 'rgb(18, 52, 86)');
@@ -366,11 +379,7 @@ for (const [locale, theme] of [
 		const chinese = locale === 'zh-CN';
 		const toolbar = popup.locator('.ash-theme-editor-preview-toolbar');
 		const tabs = toolbar.getByRole('tab');
-		await expect(tabs).toHaveText(
-			chinese
-				? ['桌面工作台', '差异对比', 'Agent 窗口', '语法']
-				: ['Workbench', 'Diff', 'Agent Window', 'Syntax'],
-		);
+		await expect(tabs).toHaveText(chinese ? ['IDE', 'Agent 窗口'] : ['IDE', 'Agent Window']);
 		await expect(popup.getByRole('button', { name: /^(Save and Apply|保存并应用)$/ })).toHaveCount(0);
 		await expect(toolbar.locator('.ash-toolbar')).toHaveCount(0);
 		await expect(toolbar.getByRole('button', { name: /More Actions|更多操作/u })).toHaveCount(0);
@@ -1367,6 +1376,8 @@ test('color list keyboard traversal reaches recycled rows and crosses group boun
 	}
 	await expect(heading).toBeFocused();
 	await popup.keyboard.press('Shift+Tab');
+	await expect(popup.getByRole('button', { name: 'All colors', exact: true })).toBeFocused();
+	await popup.keyboard.press('Shift+Tab');
 	await expect(popup.getByRole('searchbox')).toBeFocused();
 	await popup.getByRole('searchbox').fill('');
 	const textHeading = popup.getByRole('button', { name: 'Text and borders', exact: true });
@@ -1625,9 +1636,7 @@ test('switches to the production Agent Window, edits its colors and reuses isola
 	});
 	const tabs = popup.getByRole('tablist', { name: 'Preview window', exact: true });
 	const agent = tabs.getByRole('tab', { name: 'Agent Window', exact: true });
-	await tabs.getByRole('tab', { name: 'Workbench', exact: true }).focus();
-	await popup.keyboard.press('ArrowRight');
-	await expect(tabs.getByRole('tab', { name: 'Diff', exact: true })).toBeFocused();
+	await tabs.getByRole('tab', { name: 'IDE', exact: true }).focus();
 	await popup.keyboard.press('ArrowRight');
 	await expect(agent).toBeFocused();
 	await popup.keyboard.press('Enter');
@@ -1660,7 +1669,7 @@ test('switches to the production Agent Window, edits its colors and reuses isola
 	await navigation.getByRole('button', { name: 'New', exact: true }).click();
 	await expect(navigation.getByRole('button', { name: 'New', exact: true })).toHaveAttribute('aria-current', 'page');
 	await popup.screenshot({ path: testInfo.outputPath('agent-window-theme-preview.png') });
-	await tabs.getByRole('tab', { name: 'Workbench', exact: true }).click();
+	await tabs.getByRole('tab', { name: 'IDE', exact: true }).click();
 	await expect(frame.locator('body')).toHaveAttribute('data-ready', 'true');
 	await expect(frame.locator('.ash-sessions-window')).toHaveCount(0);
 	await expect(popup.locator('iframe.ash-theme-editor-preview')).toHaveCount(2);
@@ -1684,9 +1693,8 @@ for (const theme of ['ash-light', 'ash-high-contrast-dark']) {
 	test(`Agent Window switch is localized and keyboard accessible in ${theme}`, async ({ page }, testInfo) => {
 		const popup = await openEditor(page, 'zh-CN', theme);
 		const tabs = popup.getByRole('tablist', { name: '预览窗口', exact: true });
-		await tabs.getByRole('tab', { name: '桌面工作台', exact: true }).focus();
+		await tabs.getByRole('tab', { name: 'IDE', exact: true }).focus();
 		await popup.keyboard.press('End');
-		await popup.keyboard.press('ArrowLeft');
 		const agent = tabs.getByRole('tab', { name: 'Agent 窗口', exact: true });
 		await expect(agent).toBeFocused();
 		await popup.keyboard.press('Space');
@@ -1721,7 +1729,7 @@ test('preview tabs load lazily, retain their documents and release all frames on
 	const panel = frame.getByRole('region', { name: 'Panel', exact: true });
 	await expect(panel).toBeHidden();
 	for (const [index, name] of ['Diff', 'Syntax', 'Agent Window'].entries()) {
-		await tabs.getByRole('tab', { name, exact: true }).click();
+		await selectPreview(popup, name);
 		await expect(frame.locator('body')).toHaveAttribute('data-ready', 'true');
 		await expect(frames).toHaveCount(index + 2);
 		identities.set(name, await frame.locator('body').evaluate(() => performance.timeOrigin));
@@ -1733,7 +1741,7 @@ test('preview tabs load lazily, retain their documents and release all frames on
 	await expect(frame.locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
 	for (let cycle = 0; cycle < 3; cycle++) {
 		for (const name of ['Workbench', 'Diff', 'Syntax', 'Agent Window']) {
-			await tabs.getByRole('tab', { name, exact: true }).press('Enter');
+			await selectPreview(popup, name);
 			await expect(frame.locator('body')).toHaveAttribute('data-ready', 'true');
 			expect(await frame.locator('body').evaluate(() => performance.timeOrigin)).toBe(identities.get(name));
 			await expect(frame.locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
@@ -1760,20 +1768,22 @@ test('rapid tab switches keep late preview startup and accessibility content in 
 }) => {
 	const popup = await openEditor(page);
 	const tabs = popup.getByRole('tablist', { name: 'Preview window', exact: true });
-	// Request three cold previews without waiting for any of their handshakes.
-	await tabs.evaluate(element => {
-		for (const name of ['Diff', 'Agent Window', 'Syntax']) {
-			const tab = [...element.querySelectorAll<HTMLElement>('[role="tab"]')].find(
-				tab => tab.textContent === name,
-			)!;
-			tab.click();
-		}
+	// Request three cold scenes without waiting for any of their handshakes.
+	await popup.locator('.ash-theme-editor-header').evaluate(element => {
+		const activate = (list: string, name: string) => {
+			const host = element.querySelector(`[aria-label="${list}"]`)!;
+			[...host.querySelectorAll<HTMLElement>('[role="tab"]')].find(tab => tab.textContent === name)!.click();
+		};
+		activate('Preview scene', 'Diff');
+		activate('Preview window', 'Agent Window');
+		activate('Preview window', 'IDE');
+		activate('Preview scene', 'Code');
 	});
 	const frame = popup.frameLocator('.ash-theme-editor-preview:visible');
 	await expect(frame.locator('body')).toHaveAttribute('data-ready', 'true');
 	await expect(frame.getByRole('textbox', { name: 'palette.ts', exact: true })).toBeVisible();
 	for (const name of ['Diff', 'Agent Window', 'Syntax', 'Workbench']) {
-		await tabs.getByRole('tab', { name, exact: true }).press('Space');
+		await selectPreview(popup, name);
 		await expect(frame.locator('body')).toHaveAttribute('data-ready', 'true');
 		if (name === 'Agent Window') {
 			await expect(frame.locator('.ash-sessions-window')).toBeVisible();
@@ -1790,4 +1800,129 @@ test('rapid tab switches keep late preview startup and accessibility content in 
 	await expect(accessible).not.toHaveValue(/palette.after.ts/u);
 	await popup.keyboard.press('Escape');
 	await expect(popup.locator('iframe.ash-theme-editor-preview')).toHaveCount(4);
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`window and scene selection scopes the inspector and restores its state (${locale})`, async ({
+		page,
+	}, testInfo) => {
+		const popup = await openEditor(page, locale);
+		const chinese = locale === 'zh-CN';
+		const windows = popup.getByRole('tablist', { name: chinese ? '预览窗口' : 'Preview window', exact: true });
+		const scenes = popup.getByRole('tablist', { name: chinese ? '预览场景' : 'Preview scene', exact: true });
+		await expect(windows.getByRole('tab')).toHaveText(['IDE', chinese ? 'Agent 窗口' : 'Agent Window']);
+		await expect(scenes.getByRole('tab')).toHaveText(
+			chinese ? ['界面', '代码', '差异对比'] : ['Interface', 'Code', 'Diff'],
+		);
+		const search = popup.getByRole('searchbox');
+		const all = popup.getByRole('button', { name: chinese ? '全部颜色' : 'All colors', exact: true });
+		await search.fill('editor.token.keywordForeground');
+		await expect(popup.locator('.ash-theme-editor-empty')).toBeVisible();
+		const restingBackground = await all.evaluate(element => getComputedStyle(element).backgroundColor);
+		await all.press('Space');
+		await expect(all).not.toHaveCSS('background-color', restingBackground);
+		await expect(popup.getByRole('textbox', { name: /editor.token.keywordForeground/u })).toBeVisible();
+		await expect(all).toHaveAttribute('aria-pressed', 'true');
+		await scenes.getByRole('tab', { name: chinese ? '代码' : 'Code', exact: true }).press('Enter');
+		await expect(search).toHaveValue('');
+		await expect(all).toHaveAttribute('aria-pressed', 'false');
+		await search.fill('editor.token.keywordForeground');
+		await expect(popup.getByRole('textbox', { name: /editor.token.keywordForeground/u })).toBeVisible();
+		await scenes.getByRole('tab', { name: chinese ? '差异对比' : 'Diff', exact: true }).press('Space');
+		await search.fill('diffEditor.insertedTextBackground');
+		await expect(popup.getByRole('textbox', { name: /diffEditor.insertedTextBackground/u })).toBeVisible();
+		await windows.getByRole('tab', { name: chinese ? 'Agent 窗口' : 'Agent Window', exact: true }).press('Enter');
+		await expect(search).toHaveValue('');
+		await search.fill('sessions.');
+		await expect(popup.locator('.ash-theme-color-name').first()).toHaveText(/^sessions\./u);
+		await search.fill('titleBar.background');
+		await expect(popup.locator('.ash-theme-editor-empty')).toBeVisible();
+		await windows.getByRole('tab', { name: 'IDE', exact: true }).press('Enter');
+		await expect(scenes.getByRole('tab', { selected: true })).toHaveText(chinese ? '差异对比' : 'Diff');
+		await expect(search).toHaveValue('diffEditor.insertedTextBackground');
+		await scenes.getByRole('tab', { name: chinese ? '代码' : 'Code', exact: true }).press('Enter');
+		await expect(search).toHaveValue('editor.token.keywordForeground');
+		await scenes.getByRole('tab', { name: chinese ? '界面' : 'Interface', exact: true }).press('Enter');
+		await expect(search).toHaveValue('editor.token.keywordForeground');
+		await expect(all).toHaveAttribute('aria-pressed', 'true');
+		await popup.screenshot({ path: testInfo.outputPath('theme-window-scenes.png') });
+	});
+}
+
+test('code and Diff scenes in both windows edit one theme document and undo history', async ({ page }) => {
+	const popup = await openEditor(page);
+	const persisted = await page.evaluate(() => window.themeEditorTest.persisted());
+	await page.evaluate(() =>
+		window.themeEditorTest.setSource(
+			window.themeEditorTest
+				.source()
+				.replace('{', '{"semanticTokenColors":{"keyword":{"foreground":"#b51234","bold":true}},'),
+		),
+	);
+	await selectPreview(popup, 'Syntax');
+	await popup.getByRole('searchbox').fill('semanticTokenColors.keyword');
+	const field = popup.getByRole('textbox', { name: 'Hex color for semanticTokenColors.keyword', exact: true });
+	await editColor(field, '#123456');
+	const source = parseJsonc(await page.evaluate(() => window.themeEditorTest.source()), 'Theme document') as {
+		semanticTokenColors: Record<string, unknown>;
+		colors: Record<string, string>;
+	};
+	expect(source.semanticTokenColors.keyword).toEqual({ foreground: '#123456', bold: true });
+	expect(source.colors['semanticTokenColors.keyword']).toBeUndefined();
+	const windows = popup.getByRole('tablist', { name: 'Preview window', exact: true });
+	const scenes = popup.getByRole('tablist', { name: 'Preview scene', exact: true });
+	await windows.getByRole('tab', { name: 'Agent Window', exact: true }).press('Enter');
+	await scenes.getByRole('tab', { name: 'Code', exact: true }).press('Space');
+	const frame = popup.frameLocator('.ash-theme-editor-preview:visible');
+	await expect(frame.locator('.ash-sessions-window')).toBeVisible();
+	await expect(frame.getByRole('textbox', { name: 'palette.ts', exact: true })).toBeVisible();
+	await expect
+		.poll(() =>
+			frame
+				.locator('.view-line span')
+				.evaluateAll(spans => spans.some(span => getComputedStyle(span).color === 'rgb(18, 52, 86)')),
+		)
+		.toBe(true);
+	await popup.getByRole('searchbox').fill('semanticTokenColors.keyword');
+	await expect(field).toHaveValue('123456');
+	await chooseThemeAction(popup, 'Undo');
+	await expect(field).toHaveValue('B51234');
+	await chooseThemeAction(popup, 'Redo');
+	await expect(field).toHaveValue('123456');
+	await scenes.getByRole('tab', { name: 'Diff', exact: true }).press('Enter');
+	await expect(frame.locator('.ash-sessions-window')).toBeVisible();
+	await expect(frame.getByRole('textbox', { name: 'Modified', exact: true })).toBeVisible();
+	await popup.getByRole('searchbox').fill('diffEditor.insertedTextBackground');
+	await editColor(
+		popup.getByRole('textbox', { name: 'Hex color for diffEditor.insertedTextBackground', exact: true }),
+		'#654321',
+	);
+	await expect(frame.locator('.stanza-diff-inline-added').first()).toHaveCSS('background-color', 'rgb(101, 67, 33)');
+	await windows.getByRole('tab', { name: 'IDE', exact: true }).press('Enter');
+	await scenes.getByRole('tab', { name: 'Diff', exact: true }).press('Enter');
+	await expect(frame.locator('.stanza-diff-inline-added').first()).toHaveCSS('background-color', 'rgb(101, 67, 33)');
+	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toBe(persisted);
+});
+
+test('each scene restores its category expansion and inspector scroll position', async ({ page }) => {
+	const popup = await openEditor(page);
+	const scenes = popup.getByRole('tablist', { name: 'Preview scene', exact: true });
+	const viewport = popup.locator('.ash-theme-editor-scroll .ash-scrollbar-viewport');
+	await scenes.getByRole('tab', { name: 'Code', exact: true }).press('Enter');
+	const syntax = popup.getByRole('button', { name: 'Syntax highlighting', exact: true });
+	await expect(syntax).toHaveAttribute('aria-expanded', 'true');
+	await viewport.evaluate(element => {
+		element.scrollTop = 400;
+	});
+	await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(400);
+	await scenes.getByRole('tab', { name: 'Diff', exact: true }).press('Enter');
+	await expect(viewport).toHaveJSProperty('scrollTop', 0);
+	const diff = popup.getByRole('button', { name: 'Diff', exact: true });
+	await diff.press('Enter');
+	await expect(diff).toHaveAttribute('aria-expanded', 'false');
+	await scenes.getByRole('tab', { name: 'Code', exact: true }).press('Enter');
+	await expect(viewport).toHaveJSProperty('scrollTop', 400);
+	await expect(syntax).toHaveAttribute('aria-expanded', 'true');
+	await scenes.getByRole('tab', { name: 'Diff', exact: true }).press('Enter');
+	await expect(diff).toHaveAttribute('aria-expanded', 'false');
 });

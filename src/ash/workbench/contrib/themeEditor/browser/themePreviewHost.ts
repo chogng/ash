@@ -25,6 +25,9 @@ import type { IWorkbenchThemeService } from '../../../services/themes/common/wor
 import { productLanguagePackCatalogs } from '../../../services/localization/common/localizationCatalogs.js';
 import { parseUserColorTheme } from '../../../services/themes/common/colorThemeData.js';
 import { getThemeColorReferences, themePreviewConfigurationKeys } from './themePreview.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { createDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
 
 /** Host seeding writes directly; workbench consumers receive a fixed, read-only workspace. */
@@ -186,6 +189,86 @@ console.log(describeTheme(palette));
 		}));
 	};
 	return { resources, root, workspaceFiles, workspaceRoot, samples, storage, api, clipboard, serviceCollection, fileDialogDescriptor, restrictOpeners, createLifecycleService };
+}
+
+/** Open fixed read-only samples through the selected product's own editor service. */
+export async function openThemePreviewEditors(
+	host: Awaited<ReturnType<typeof createThemePreviewHost>>,
+	services: IInstantiationService,
+	scene: 'code' | 'diff',
+): Promise<void> {
+	const editorService = services.get(IEditorService);
+	// The isolated host has no extension catalog. Register only its sample languages;
+	// the production syntax service still owns parsing and token color resolution.
+	const languages = services.get(ILanguageService);
+	host.resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'], aliases: ['TypeScript'] }));
+	host.resources.add(languages.registerLanguage({ id: 'json', extensions: ['.json'], aliases: ['JSON'] }));
+	if (scene === 'diff') {
+		// Use the production comparison over memory files so every diff token is
+		// rendered by its real owner, including line and word-level decorations.
+		const original = URI.joinPath(host.workspaceRoot, 'palette.before.ts');
+		const modified = URI.joinPath(host.workspaceRoot, 'palette.after.ts');
+		const before = `export const palette = {
+  name: "Ocean",
+  accent: "#0078d4",
+  opacity: 0.85,
+};
+
+export function formatColor(value: string): string {
+  return value.toUpperCase();
+}
+
+export function legacyColor(): string {
+  return "gray";
+}
+
+export const spacing = [4, 8, 12, 16];
+`;
+		const after = `export const palette = {
+  name: "Forest",
+  accent: "#107c10",
+  opacity: 0.95,
+};
+
+export function formatColor(value: string): string {
+  return value.toLowerCase();
+}
+
+export const spacing = [4, 8, 12, 16];
+
+export function withOpacity(color: string): string {
+  return color + "cc";
+}
+`;
+		for (const [resource, text] of [
+			[original, before],
+			[modified, after],
+		] as const) {
+			await host.workspaceFiles.writeFile(resource, new TextEncoder().encode(text), {
+				create: true,
+				overwrite: false,
+			});
+		}
+		await editorService.openEditor(
+			createDiffEditorInput(
+				{ resource: original, readOnly: true },
+				{ resource: modified, readOnly: true },
+				localize('themeEditor.diffSample', 'Color changes'),
+			),
+			{ pinned: true, preserveFocus: true },
+		);
+	} else {
+		for (const sample of [...host.samples].reverse()) {
+			await editorService.openEditor(
+				{
+					resource: URI.joinPath(host.workspaceRoot, sample.name),
+					languageId: sample.name.endsWith('.ts') ? 'typescript' : 'json',
+					readOnly: true,
+				},
+				{ pinned: true, preserveFocus: true },
+			);
+		}
+	}
 }
 
 /** The owning preview document applies themes and exposes only presentation data to its editor. */
