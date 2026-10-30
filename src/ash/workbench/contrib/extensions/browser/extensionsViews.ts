@@ -48,7 +48,6 @@ import { URI } from '../../../../base/common/uri.js';
 import { getExtensionAttribution } from '../common/extensionAttribution.js';
 import { IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
-import { extensionUiTargetsLabel } from '../../../../platform/extensionManagement/common/extensionNls.js';
 import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -123,7 +122,6 @@ class ExtensionsContent extends Disposable {
 			accessibilityProvider: {
 				getAriaLabel: item => [
 					item.summary.displayName,
-					extensionUiTargetsLabel(item.summary.uiTargets),
 					...this.isPluginsPane ? [item.attribution, item.summary.description] : [item.summary.version, item.summary.description],
 					item.enabled === false ? localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled') : '',
 				].filter(Boolean).join(', ')
@@ -187,8 +185,8 @@ class ExtensionsContent extends Disposable {
 		}
 		const body = h(mainWindow.document, 'div'); body.className = 'extension-body';
 		const labels: readonly [string, string | undefined][] = this.isPluginsPane
-			? [['extension-name', item.summary.displayName], ['extension-metadata', [extensionUiTargetsLabel(item.summary.uiTargets), item.attribution].filter(Boolean).join(' · ')], ['extension-description', item.summary.description]]
-			: [['extension-name', item.summary.displayName], ['extension-description', item.summary.description], ['extension-metadata', `${extensionUiTargetsLabel(item.summary.uiTargets)} · ${item.summary.id} · ${item.summary.version}`]];
+			? [['extension-name', item.summary.displayName], ['extension-metadata', item.attribution], ['extension-description', item.summary.description]]
+			: [['extension-name', item.summary.displayName], ['extension-description', item.summary.description], ['extension-metadata', `${item.summary.id} · ${item.summary.version}`]];
 		for (const [className, value] of labels) {
 			if (!value) { continue; }
 			const label = resources.add(new IconLabel(body, { label: value, title: value, hideIcon: true }));
@@ -660,10 +658,9 @@ export class RecommendedExtensionsView extends ExtensionsListViewPane {
 					const details = await this.extensions.get(recommendation.extensionId);
 					summary = { id: details.package.id, version: details.package.version, packageType: details.packageType, displayName: details.displayName, description: details.description, uiTargets: details.uiTargets };
 				} catch { /* Keep declared IDs visible while their catalog source is unavailable. */ }
-				const audience = extensionUiTargetsLabel(summary ? summary.uiTargets : recommendation.uiTargets);
 				return {
 					target: { kind: 'recommendation' as const, id: recommendation.extensionId, summary }, name: summary?.displayName ?? recommendation.extensionId,
-					description: recommendation.reason.reasonText, metadata: [audience, summary?.id ?? localize({ bundle: 'ash.extensions', key: 'recommendationNotFound' }, 'Unavailable from enabled sources')].filter(Boolean).join(' · '),
+					description: recommendation.reason.reasonText, metadata: summary?.id ?? localize({ bundle: 'ash.extensions', key: 'recommendationNotFound' }, 'Unavailable from enabled sources'),
 				};
 			})));
 		}
