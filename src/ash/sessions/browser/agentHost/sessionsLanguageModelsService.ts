@@ -98,21 +98,6 @@ export class SessionsLanguageModelsService extends Disposable implements ILangua
 		const scope = this.scopes.getScope(); scope.assertCurrent();
 		return scope.services.models.discoverProviderModels(...args);
 	}
-	isModelPinned(...args: Parameters<ILanguageModelsService['isModelPinned']>): ReturnType<ILanguageModelsService['isModelPinned']> {
-		const scope = this.scopes.getScope(); scope.assertCurrent();
-		return scope.services.models.isModelPinned(...args);
-	}
-
-	pinModel(...args: Parameters<ILanguageModelsService['pinModel']>): ReturnType<ILanguageModelsService['pinModel']> {
-		const scope = this.scopes.getScope(); scope.assertCurrent();
-		return scope.services.models.pinModel(...args);
-	}
-
-	unpinModel(...args: Parameters<ILanguageModelsService['unpinModel']>): ReturnType<ILanguageModelsService['unpinModel']> {
-		const scope = this.scopes.getScope(); scope.assertCurrent();
-		return scope.services.models.unpinModel(...args);
-	}
-
 	removeCustomModelProvider(...args: Parameters<ILanguageModelsService['removeCustomModelProvider']>): ReturnType<ILanguageModelsService['removeCustomModelProvider']> {
 		const scope = this.scopes.getScope(); scope.assertCurrent();
 		return scope.services.models.removeCustomModelProvider(...args);

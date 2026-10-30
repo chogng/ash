@@ -35,9 +35,6 @@ export interface ILanguageModelsService {
 	refreshModels(): Promise<readonly ModelCatalogEntry[]>;
 	isModelVisible(model: ModelRef): boolean;
 	setModelVisible(model: ModelRef, visible: boolean): Promise<void>;
-	isModelPinned(model: ModelRef): boolean;
-	pinModel(model: ModelRef): Promise<void>;
-	unpinModel(model: ModelRef): Promise<void>;
 	removeCustomModelProvider(connection: string): Promise<void>;
 	discoverProviderModels(connection: string): Promise<readonly ModelCatalogEntry[]>;
 }
@@ -173,9 +170,6 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	}
 	public isModelVisible(model: ModelRef): boolean { return this.preferences.isModelVisible(model); }
 	public setModelVisible(model: ModelRef, visible: boolean): Promise<void> { return this.preferences.setModelVisible(model, visible); }
-	public isModelPinned(model: ModelRef): boolean { return this.preferences.isModelPinned(model); }
-	public pinModel(model: ModelRef): Promise<void> { return this.preferences.setModelPinned(model, true); }
-	public unpinModel(model: ModelRef): Promise<void> { return this.preferences.setModelPinned(model, false); }
 	public async removeCustomModelProvider(connection: string): Promise<void> {
 		await this.modelApi.removeCustomProvider(connection);
 		try { await this.preferences.removeProviderPreferences(connection); }

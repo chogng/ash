@@ -198,7 +198,7 @@ Windows／macOS 的进程级 `SystemPolicyService` 每 2 秒检查变化，命�
 
 仅 managed-settings 请求的 HTTP 466 映射为领域 `ManagedSettingsUpdateRequired` 和 RPC `GitHubManagedSettingsUpdateRequired`；不解析或转发错误正文及其他客户端的版本要求，也不触发 Ash 更新。它作为失败保留已有策略，成功或权威撤回后恢复状态。本链没有强制新鲜度或 AI 执行门禁；刷新失败不会写入 `chat.disableAIFeatures`。
 
-`AccountPolicyService` 只解释 registry 声明的映射。`ChatDefaultModel` 将顶层 `model` 或旧 `permissions.model` 映射到 `chat.defaultModel`；顶层非空字符串优先，空白视为缺省。实际选择仍由模型目录和聊天偏好服务负责。`ChatAIDisabled` 仅为系统策略，不伪造 Copilot 字段。`MultiplexPolicyService` 组合系统优先、账户其次；映射函数留在 renderer，Main 只传类型声明和策略值。
+`AccountPolicyService` 只解释 registry 声明的映射。新聊天模型恢复 Chat Input 上次选择，不再注册 `chat.defaultModel` 或其默认模型策略映射。`ChatAIDisabled` 仅为系统策略，不伪造 Copilot 字段。`MultiplexPolicyService` 组合系统优先、账户其次；映射函数留在 renderer，Main 只传类型声明和策略值。
 
 ## 页面与公开契约的边界
 

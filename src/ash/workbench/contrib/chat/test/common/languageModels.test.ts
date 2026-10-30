@@ -150,7 +150,7 @@ function catalogFixture(resources: DisposableStore, omitAccounts = false) {
 	});
 	services.registerInstance(ILanguageModelsConfigurationService, {
 		onDidChangeModels: Event.None,
-		isModelPinned: () => false, setModelPinned: async () => { }, removeProviderPreferences: async () => { },
+		removeProviderPreferences: async () => { },
 		isModelVisible: () => true,
 		setModelVisible: async () => { source.selectionWrites++; },
 		getDefaultNewChatModel: () => undefined,

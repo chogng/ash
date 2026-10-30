@@ -36,7 +36,6 @@ function setup(resources: DisposableStore, read: () => Promise<readonly ModelCat
 	const services = resources.add(createTestEditorServices());
 	const notifications = resources.add(new TestNotificationService());
 	const changes = resources.add(new Emitter<void>());
-	const pinned = new Set<string>();
 	const enabled = new Set(['newest']);
 	const writes = { fail: false };
 	const menus: IContextMenuDelegate[] = [];
@@ -52,9 +51,6 @@ function setup(resources: DisposableStore, read: () => Promise<readonly ModelCat
 	});
 	const models: Partial<ILanguageModelsService> = {
 		onDidChangeModels: changes.event, listModelCatalog: read, listModelProviders: async () => [],
-		isModelPinned: model => pinned.has(model.model),
-		pinModel: async model => { if (writes.fail) { throw new Error('Write failed'); } pinned.add(model.model); changes.fire(); },
-		unpinModel: async model => { pinned.delete(model.model); changes.fire(); },
 		isModelVisible: model => enabled.has(model.model),
 		setModelVisible: async (model, value) => {
 			if (writes.fail) { throw new Error('Write failed'); }
@@ -68,7 +64,7 @@ function setup(resources: DisposableStore, read: () => Promise<readonly ModelCat
 	const root = document.createElement('main');
 	document.body.append(root);
 	resources.add(toDisposable(() => root.remove()));
-	return { services, root, enabled, pinned, notifications, changes, settings, writes, models, menus };
+	return { services, root, enabled, notifications, changes, settings, writes, models, menus };
 }
 
 const nextTurn = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
@@ -144,6 +140,7 @@ test('Expanded Models settings exposes filters and connection-scoped group contr
 	expand.click();
 	assert.equal(filters.hidden, false);
 	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 2);
+	assert.equal(root.querySelector('button[aria-label^="Pin "], button[aria-label^="Unpin "]'), null);
 	widget.search('older');
 	const group = root.querySelector<HTMLElement>('.ash-chat-models-provider')!;
 	const toggle = group.querySelector<HTMLInputElement>('input[role="switch"]')!;
@@ -270,9 +267,9 @@ test('A hidden or disposed catalog ignores pending results and no longer observe
 });
 
 
-test('Catalog selections support ranges, keyboard navigation and bulk visibility and pinning across providers', async () => {
+test('Catalog selections support ranges, keyboard navigation and bulk visibility across providers', async () => {
 	using resources = new DisposableStore();
-	const { services, root, enabled, pinned, writes } = setup(resources);
+	const { services, root, enabled, writes } = setup(resources);
 	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
 	root.append(widget.element);
 	widget.render();
@@ -288,15 +285,14 @@ test('Catalog selections support ranges, keyboard navigation and bulk visibility
 	button('Hide selected').click();
 	await nextTurn();
 	assert.deepEqual([...enabled], []);
-	button('Pin selected').focus();
-	button('Pin selected').click();
+	button('Show selected').focus();
+	button('Show selected').click();
 	await nextTurn();
-	assert.equal(document.activeElement, button('Pin selected'));
-	assert.deepEqual([...pinned], ['newest', 'older', 'opus']);
-	assert.equal(root.querySelector('button[aria-label="Unpin Opus"]')?.getAttribute('aria-pressed'), 'true');
-	button('Unpin selected').click();
+	assert.equal(document.activeElement, button('Show selected'));
+	assert.deepEqual([...enabled], ['newest', 'older', 'opus']);
+	button('Hide selected').click();
 	await nextTurn();
-	assert.deepEqual([...pinned], []);
+	assert.deepEqual([...enabled], []);
 	button('Clear selection').click();
 	assert.equal(button('Show selected').disabled, true);
 	widget.search('older');
@@ -305,11 +301,13 @@ test('Catalog selections support ranges, keyboard navigation and bulk visibility
 	await nextTurn();
 	assert.deepEqual([...enabled], ['older']);
 	writes.fail = true;
-	button('Pin selected').click();
+	button('Hide selected').focus();
+	button('Hide selected').click();
 	await nextTurn();
-	assert.deepEqual([...pinned], []);
+	assert.deepEqual([...enabled], ['older']);
 	assert.equal(root.querySelector('.ash-models-settings-status[role="alert"]')?.textContent, 'Could not save model preferences.');
-	assert.equal(button('Pin selected').disabled, false);
+	assert.equal(button('Hide selected').disabled, false);
+	assert.equal(document.activeElement, button('Hide selected'));
 });
 
 test('Model filter completions expose an accessible active option and Escape dismisses before clearing', async () => {
@@ -361,7 +359,7 @@ test('Inserting an exact provider filter dismisses suggestions for connections s
 });
 
 
-test('Management rows keep confirmed capabilities brief and Accessible View retains translated metadata and prices', async () => {
+test('Management rows omit capability labels and Accessible View retains translated metadata and prices', async () => {
 	initializeTestLocalization('zh-CN');
 	try {
 		using resources = new DisposableStore();
@@ -383,10 +381,10 @@ test('Management rows keep confirmed capabilities brief and Accessible View reta
 		root.append(widget.element);
 		widget.render();
 		await nextTurn();
-		const summaries = [...root.querySelectorAll<HTMLElement>('.ash-models-settings-model-metadata')];
-		assert.deepEqual([...summaries[0].querySelectorAll<HTMLButtonElement>('button')].filter(button => !button.hidden).map(button => button.textContent), ['工具调用', '图像输入']);
-		assert.equal(summaries[0].hidden, false);
-		assert.ok(summaries.slice(1).every(summary => summary.hidden));
+		const rows = [...root.querySelectorAll<HTMLElement>('.ash-models-settings-model-row')];
+		assert.equal(rows.length, 3);
+		for (const row of rows) { assert.doesNotMatch(row.textContent ?? '', /工具调用|图像输入|Agent 模式/); }
+		assert.equal(root.querySelector('.ash-models-settings-model-metadata'), null);
 		widget.focusSearch();
 		const implementation = AccessibleViewRegistry.getImplementations().find(candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.View)!;
 		const provider = services.invokeFunction(implementation.getProvider.bind(implementation))!;
@@ -402,9 +400,9 @@ test('Management rows keep confirmed capabilities brief and Accessible View reta
 	} finally { resetNlsResolver(); }
 });
 
-test('Keyboard ranges and context menus operate on the current selection and capability buttons preserve the query', async () => {
+test('Keyboard ranges and context menus operate on the current selection and search filters preserve the query', async () => {
 	using resources = new DisposableStore();
-	const { services, root, menus, pinned } = setup(resources);
+	const { services, root, menus, enabled: visibleModels } = setup(resources);
 	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
 	root.append(widget.element); widget.render(); await nextTurn();
 	const select = root.querySelector<HTMLInputElement>('input[aria-label="Select Newest OpenAI"]')!;
@@ -414,20 +412,20 @@ test('Keyboard ranges and context menus operate on the current selection and cap
 	(document.activeElement as HTMLElement).dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }));
 	assert.equal(root.querySelectorAll('input[type="checkbox"]:checked:not([role="switch"])').length, 3);
 	select.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
-	await menus.at(-1)!.getActions().find(action => action.id === 'pin')!.run();
-	assert.deepEqual([...pinned], ['newest', 'older', 'opus']);
+	assert.deepEqual(menus.at(-1)!.getActions().map(action => action.id), ['visibility']);
+	await menus.at(-1)!.getActions().find(action => action.id === 'visibility')!.run();
+	assert.deepEqual([...visibleModels], []);
 	widget.search('@provider:openai Newest');
-	const vision = [...root.querySelectorAll<HTMLButtonElement>('.ash-models-settings-model-metadata button')].find(button => button.textContent === 'Image input')!;
+	const filters = root.querySelector<HTMLDetailsElement>('.ash-chat-models-filters')!;
+	filters.open = true;
+	const vision = [...filters.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === '@capability:vision')!;
 	const enabled = root.querySelector<HTMLInputElement>('input[aria-label="Show Newest OpenAI in model picker"]')!.checked;
 	vision.click();
 	const search = root.querySelector<HTMLInputElement>('[role="combobox"]')!;
 	assert.equal(search.value, '@provider:openai Newest @capability:vision');
-	assert.equal(vision.getAttribute('aria-pressed'), 'true');
-	assert.ok(vision.classList.contains('is-active'));
+	assert.equal(filters.open, false);
 	assert.equal(document.activeElement, search);
 	assert.equal(root.querySelector<HTMLInputElement>('input[aria-label="Show Newest OpenAI in model picker"]')!.checked, enabled);
-	vision.click();
-	assert.equal(search.value, '@provider:openai Newest');
 });
 
 test('Model menus save supported preferences and configuration shortcuts use the actual connection', async () => {

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import type { Locator } from '@playwright/test';
-import { readUserSettings } from '../../../automation/settings.js';
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { expect, test } from '../../../automation/test.js';
 
@@ -289,7 +289,7 @@ test('Models Settings saves enabled choices, preserves keyboard focus and restor
 	await expect(chineseSettings.getByRole('switch', { name: '在模型选择器中显示Gemini 3.8 Flash', exact: true })).toBeChecked();
 	await chineseSearch.focus();
 	await chineseSearch.press('Alt+F1');
-	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/置顶模型排在最前，其次是已开启的模型；各组内部保持目录原序/);
+	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/已开启的模型排在前面；各组内部保持目录原序/);
 	await page.keyboard.press('Escape');
 });
 
@@ -306,7 +306,7 @@ test('Models Settings offers provider creation with compact fields and keyboard 
 	await search.focus();
 	await search.press('Alt+F1');
 	const searchHelp = page.getByRole('dialog', { name: 'Accessibility Help' });
-	await expect(searchHelp.getByRole('textbox')).toHaveValue(/Pinned models appear first[\s\S]*Search models filters the full list/);
+	await expect(searchHelp.getByRole('textbox')).toHaveValue(/Enabled models appear first[\s\S]*Search models filters the full list/);
 	await searchHelp.getByRole('button', { name: 'Close', exact: true }).click();
 	await expect(search).toBeFocused();
 	const heading = settings.locator('.ash-settings-tree-group-title:has(.ash-models-settings-provider-title)');
@@ -563,7 +563,7 @@ test('Model descriptions retain provider copy after restarting in Chinese', { ta
 
 
 for (const host of ['Workbench', 'Sessions']) {
-	test(`${host} model command preserves raw filters and selected pins survive Desktop restart`, { tag: ['@electron-app-server'] }, async ({ workbench, target, runningApplication }) => {
+	test(`${host} model command preserves raw filters and visibility choices survive Desktop restart`, { tag: ['@electron-app-server'] }, async ({ workbench, target, runningApplication }) => {
 		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 		const editor = workbench.editors.groupAt(0).editor.input;
 		await editor.press('ControlOrMeta+A');
@@ -595,16 +595,18 @@ for (const host of ['Workbench', 'Sessions']) {
 		const rows = catalog.locator('.ash-models-settings-model-row');
 		await expect(rows.nth(2)).toBeVisible();
 		const chosen = await rows.locator('.ash-models-settings-model-copy > span').allTextContents();
-		const names = chosen.slice(1, 3);
+		const names = chosen.slice(-2);
 		await catalog.getByRole('checkbox', { name: `Select ${names[0]}`, exact: true }).click();
 		await catalog.getByRole('checkbox', { name: `Select ${names[1]}`, exact: true }).click({ modifiers: ['Shift'] });
 		await expect(catalog.getByRole('status').filter({ hasText: '2 models selected' })).toBeVisible();
 		await catalog.getByRole('button', { name: 'Show selected', exact: true }).click();
-		await expect(catalog.getByRole('button', { name: 'Pin selected', exact: true })).toBeEnabled();
-		await catalog.getByRole('button', { name: 'Pin selected', exact: true }).click();
-		for (const name of names) { await expect(catalog.getByRole('button', { name: `Unpin ${name}`, exact: true })).toHaveAttribute('aria-pressed', 'true'); }
-		await expect.poll(async () => JSON.parse((await readUserSettings(page)).content)['models.pinned']?.length).toBe(2);
-		await test.info().attach(`models-selected-pins-${host}`, { body: await page.screenshot(), contentType: 'image/png' });
+		for (const name of names) { await expect(catalog.getByRole('switch', { name: `Show ${name} in model picker`, exact: true })).toBeChecked(); }
+		await expect.poll(async () => {
+			const settings = JSON.parse((await readUserSettings(page)).content);
+			return settings['models.hidden']?.filter((entry: { provider: string; model: string; visible?: boolean; }) => entry.provider === 'openai' && entry.visible === true).length;
+		}).toBe(2);
+		await expect(catalog.getByRole('button', { name: /^(Pin|Unpin) / })).toHaveCount(0);
+		await test.info().attach(`models-selected-visibility-${host}`, { body: await page.screenshot(), contentType: 'image/png' });
 		({ workbench } = await runningApplication.reload('quit'));
 		page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await (host === 'Workbench' ? page.getByRole('button', { name: 'Manage', exact: true }) : page.locator('.ash-sessions-activity-bottom button').last()).focus();
@@ -616,10 +618,9 @@ for (const host of ['Workbench', 'Sessions']) {
 		await search.fill('@provider:openai');
 		await catalog.getByRole('button', { name: 'viewall models', exact: true }).click();
 		for (const name of names) {
-			await expect(catalog.getByRole('button', { name: `Unpin ${name}`, exact: true })).toHaveAttribute('aria-pressed', 'true');
 			await expect(catalog.getByRole('switch', { name: `Show ${name} in model picker`, exact: true })).toBeChecked();
 		}
-		await expect(catalog.getByRole('status').filter({ hasText: '0 models selected' })).toBeVisible();
+		await expect(catalog.getByRole('checkbox', { checked: true })).toHaveCount(0);
 		await search.fill('');
 		await search.press('Escape');
 		await expect(settings).toBeHidden();
@@ -635,7 +636,8 @@ for (const host of ['Workbench', 'Sessions']) {
 		if (await automatic.isChecked()) { await automatic.press('Space'); }
 		await expect(picker.getByRole('tab', { name: 'GPT', exact: true })).toBeVisible();
 		await picker.getByRole('tab', { name: 'GPT', exact: true }).click();
-		await expect(picker.getByRole('menuitemradio').first()).toHaveAccessibleName(names[0]);
+		await expect(picker.getByRole('menuitemradio').first()).toHaveAccessibleName(chosen[0]);
+		for (const name of names) { await expect(picker.getByRole('menuitemradio', { name, exact: true })).toBeVisible(); }
 	});
 }
 
@@ -645,22 +647,26 @@ for (const host of ['Workbench', 'Sessions']) {
 		await new QuickAccess(page).runCommand('workbench.action.chat.manage');
 		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Sessions Settings', exact: true });
 		const catalog = settings.locator('.ash-chat-models-catalog');
+		await expect(catalog.locator('.ash-models-settings-model-row').first()).toBeVisible();
+		await expect(catalog.locator('.ash-models-settings-model-row').filter({ hasText: /Tools|Image input|Agent mode/ })).toHaveCount(0);
+		await test.info().attach(`models-overview-${host}`, { body: await page.screenshot({ path: test.info().outputPath(`models-overview-${host}.png`) }), contentType: 'image/png' });
 		await catalog.getByRole('button', { name: 'viewall models', exact: true }).click();
 		const search = catalog.getByRole('combobox', { name: 'Search models', exact: true });
 		await search.fill('@capability:tools');
 		const toolModel = catalog.locator('.ash-models-settings-model-row').filter({ has: page.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true }) });
-		await expect(toolModel.locator('.ash-models-settings-model-metadata button:visible')).toHaveText(['Tools', 'Image input']);
+		await expect(toolModel).toBeVisible();
+		await expect(toolModel).not.toContainText(/Tools|Image input|Agent mode/);
 		await search.fill('@capability:agent');
 		await expect(catalog.locator('.ash-models-settings-model-copy > span')).toHaveText(['Muse Spark 1.3']);
-		await expect(catalog.locator('.ash-models-settings-model-metadata')).toContainText('Agent mode');
+		await expect(catalog.locator('.ash-models-settings-model-row')).not.toContainText('Agent mode');
 		await search.fill('openai/gpt-5.6-terra');
-		const metadata = catalog.locator('.ash-models-settings-model-metadata');
-		await expect(metadata.locator('button:visible')).toHaveText(['Tools', 'Image input']);
-		await expect(catalog.locator('.ash-models-settings-model-row')).not.toContainText(/Unknown|Reference prices|Tier:|Source:/);
+		await expect(catalog.locator('.ash-models-settings-model-metadata')).toHaveCount(0);
+		const modelRow = catalog.locator('.ash-models-settings-model-row');
+		await expect(modelRow).not.toContainText(/Tools|Image input|Agent mode|Unknown|Reference prices|Tier:|Source:/);
 		const catalogBounds = await catalog.boundingBox();
-		const metadataBounds = await metadata.boundingBox();
-		expect(metadataBounds!.x + metadataBounds!.width).toBeLessThanOrEqual(catalogBounds!.x + catalogBounds!.width);
-		expect(await metadata.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		const rowBounds = await modelRow.boundingBox();
+		expect(rowBounds!.x + rowBounds!.width).toBeLessThanOrEqual(catalogBounds!.x + catalogBounds!.width);
+		expect(await modelRow.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 
 		const modelSwitch = catalog.getByRole('switch', { name: 'Show GPT-5.6 Terra in model picker', exact: true });
 		await modelSwitch.focus();
@@ -705,15 +711,17 @@ for (const host of ['Workbench', 'Sessions']) {
 		expect(await selections.count()).toBeGreaterThan(2);
 		for (const selection of await selections.all()) { await expect(selection).toBeChecked(); }
 		await selections.first().press('Shift+F10');
-		await page.getByRole('menuitem', { name: 'Pin selected', exact: true }).click();
-		await expect(catalog.getByRole('button', { name: 'Unpin GPT-6.1 Sol', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await page.getByRole('menuitem', { name: 'Hide selected', exact: true }).click();
+		for (const modelSwitch of await catalog.getByRole('switch', { name: /^Show / }).all()) { await expect(modelSwitch).not.toBeChecked(); }
 		await catalog.getByRole('button', { name: 'Clear selection', exact: true }).click();
 		await expect(catalog.getByRole('button', { name: 'Select all results', exact: true })).toBeFocused();
-		await expect(catalog.getByRole('button', { name: 'Pin selected', exact: true })).toBeHidden();
+		await expect(catalog.getByRole('button', { name: 'Hide selected', exact: true })).toBeHidden();
 		await search.fill('openai/gpt-6.1-sol');
 		const modelSwitch = catalog.getByRole('switch', { name: 'Show GPT-6.1 Sol in model picker', exact: true });
 		const visible = await modelSwitch.isChecked();
-		await catalog.getByRole('button', { name: 'Image input', exact: true }).click();
+		const filters = catalog.locator('.ash-chat-models-filters');
+		await filters.locator('summary').click();
+		await filters.getByRole('button', { name: '@capability:vision', exact: true }).click();
 		await expect(search).toHaveValue('openai/gpt-6.1-sol @capability:vision');
 		await expect(modelSwitch).toBeChecked({ checked: visible });
 		await expect(search).toBeFocused();
@@ -795,5 +803,64 @@ for (const host of ['Workbench', 'Sessions']) {
 			server.closeAllConnections();
 			await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 		}
+	});
+}
+
+for (const host of ['Workbench', 'Sessions']) {
+	test(`${host} Chat Input restores its last model and Auto for new chats after Desktop restart`, { tag: ['@electron-app-server'] }, async ({ workbench, target, runningApplication }) => {
+		let page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+		const openCode = async (): Promise<void> => {
+			if (host === 'Sessions') { await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click(); }
+			else if (!await page.locator('.ash-chat-view-pane').isVisible()) { await new QuickAccess(page).runCommand('workbench.action.toggleAuxiliaryBar'); }
+		};
+		const composer = (): Locator => page.locator(host === 'Workbench' ? '.ash-chat-view-pane .ash-chat:visible' : '.ash-sessions-chat-slot.active:visible .ash-chat');
+		const trigger = (): Locator => composer().locator('.ash-chat-input-model-action');
+		const newChat = async (): Promise<void> => {
+			const previous = await composer().getAttribute('data-untitled-session-id');
+			if (host === 'Sessions') { await page.locator('[data-action-id="sessions.newSession"] button').click(); }
+			else { await new QuickAccess(page).runCommand('workbench.action.chat.new'); }
+			await expect(composer()).toHaveAttribute('data-untitled-session-id', /.+/);
+			await expect(composer()).not.toHaveAttribute('data-untitled-session-id', previous!);
+		};
+		await new QuickAccess(page).runCommand('workbench.action.chat.manage');
+		const settings = page.getByRole('dialog', { name: host === 'Workbench' ? 'Ash Settings' : 'Sessions Settings', exact: true });
+		await expect(settings.locator('.ash-chat-models-catalog')).toBeVisible();
+		await expect(settings.getByRole('textbox', { name: 'Default chat model', exact: true })).toHaveCount(0);
+		await expect(settings.locator('[data-settings-item-id="chat.defaultModel"]')).toHaveCount(0);
+		const saved = await readUserSettings(page);
+		await writeUserSettings(page, JSON.stringify({ ...JSON.parse(saved.content), 'chat.defaultModel': 'openai/gpt-6.1-sol' }), saved.revision);
+		await test.info().attach(`models-without-default-${host}`, { body: await page.screenshot({ path: test.info().outputPath(`models-without-default-${host}.png`) }), contentType: 'image/png' });
+		await settings.getByRole('combobox', { name: 'Search models', exact: true }).press('Escape');
+		await expect(settings).toBeHidden();
+		await openCode();
+		await trigger().press('ArrowDown');
+		let picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
+		const automatic = picker.getByRole('switch', { name: 'Auto', exact: true });
+		if (await automatic.isChecked()) { await automatic.press('Space'); }
+		await picker.getByRole('tab', { name: 'Claude', exact: true }).click();
+		await picker.getByRole('menuitemradio', { name: 'Claude Sonnet 5.5', exact: true }).click();
+		await expect(trigger()).toHaveText('Claude Sonnet 5.5');
+		await newChat();
+		await expect(trigger()).toHaveText('Claude Sonnet 5.5');
+		if (host === 'Sessions') { await page.close(); }
+		({ workbench } = await runningApplication.reload('quit'));
+		page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+		await openCode();
+		await newChat();
+		await expect(trigger()).toHaveText('Claude Sonnet 5.5');
+		await trigger().press('ArrowDown');
+		picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
+		await picker.getByRole('switch', { name: 'Auto', exact: true }).press('Space');
+		await page.keyboard.press('Escape');
+		await expect(trigger()).toHaveText('Auto');
+		await newChat();
+		await expect(trigger()).toHaveText('Auto');
+		if (host === 'Sessions') { await page.close(); }
+		({ workbench } = await runningApplication.reload('quit'));
+		page = host === 'Workbench' ? workbench.page : await workbench.openAgentsWindow(target.kind);
+		await openCode();
+		await newChat();
+		await expect(trigger()).toHaveText('Auto');
+		if (host === 'Sessions') { await page.close(); }
 	});
 }

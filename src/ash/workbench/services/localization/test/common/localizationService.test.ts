@@ -137,14 +137,14 @@ suite('Workbench localization', () => {
 		);
 		assert.deepEqual(
 			[
-				localize('sessions.layout.togglePanel', ''),
+				localize('sessions.layout.toggleTerminal', ''),
 				localize('sessions.layout.hideEditor', ''),
 				localize('sessions.layout.showEditor', ''),
 				localize('sessions.layout.openChanges', ''),
 			],
-			['切换 Code 底部面板', '隐藏编辑器', '显示编辑器', '打开更改标签'],
+			['切换终端', '隐藏编辑器', '显示编辑器', '打开更改标签'],
 		);
-		assert.match(localize('sessions.changes.editorHelp', ''), /按 Alt\+F2 阅读更改前后的内容/u);
+		assert.match(localize('sessions.changes.editorHelp', ''), /按 Alt\+F2 阅读文件列表和更改前后的内容/u);
 		assert.match(localize('sessions.activity.help', ''), /每个会话恢复自己的编辑器标签/u);
 	});
 
@@ -459,7 +459,6 @@ suite('Workbench localization', () => {
 			localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }),
 			'上下文：128,000 个词元',
 		);
-		assert.equal(localization.translate('ash', 'chat.defaultModel.title', 'Default chat model'), '默认聊天模型');
 		assert.deepEqual(
 			[
 				localization.translate('ash', 'chat.modelPicker.auto', 'Auto'),

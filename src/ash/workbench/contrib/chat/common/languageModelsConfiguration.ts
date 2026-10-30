@@ -2,9 +2,8 @@ import type { Event } from '../../../../base/common/event.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { isRecord } from '../../../../base/common/types.js';
-import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { localize } from '../../../../nls.js';
 import type { ModelRef } from '../../../services/chat/common/chatService.js';
 
 const MaximumHiddenModels = 2_048;
@@ -26,30 +25,6 @@ export interface ModelVisibilityPreference extends ModelRef {
 
 /** User-owned presentation preferences for the shared model catalog. */
 export const ModelCatalogConfiguration = Object.freeze({
-	defaultModel: configurationRegistry.registerConfiguration<string>({
-		key: 'chat.defaultModel',
-		policy: {
-			name: 'ChatDefaultModel',
-			managedSettings: { model: { type: 'string' }, 'permissions.model': { type: 'string' } },
-			// Copilot's top-level model supersedes its legacy nested field; blank values withdraw the default.
-			value: data => {
-				const model = data.managedSettings?.model;
-				const legacy = data.managedSettings?.['permissions.model'];
-				return (typeof model === 'string' ? model.trim() : '') || (typeof legacy === 'string' ? legacy.trim() : '') || undefined;
-			},
-		},
-		defaultValue: '',
-		parse(value: unknown): string {
-			if (typeof value !== 'string') throw new TypeError('Default chat model must be a string');
-			return value.trim();
-		},
-		setting: {
-			title: localize('chat.defaultModel.title', 'Default chat model'),
-			description: localize('chat.defaultModel.description', 'The model for new chats. Use auto for automatic selection, or enter a provider/model ID. You can still change the model within a chat.'),
-			valueType: 'text',
-			placeholder: localize('chat.defaultModel.placeholder', 'auto or provider/model'),
-		},
-	}),
 	hiddenModels: configurationRegistry.registerConfiguration<readonly ModelVisibilityPreference[]>({
 		key: 'models.hidden',
 		defaultValue: Object.freeze([]),
@@ -58,27 +33,7 @@ export const ModelCatalogConfiguration = Object.freeze({
 			? { provider: model.provider, model: model.model, visible: true }
 			: { provider: model.provider, model: model.model }),
 	}),
-	pinnedModels: configurationRegistry.registerConfiguration<readonly ModelRef[]>({
-		key: 'models.pinned', scope: ConfigurationScope.APPLICATION, defaultValue: Object.freeze([]),
-		parse: parsePinnedModels,
-		serialize: models => models.map(({ provider, model }) => ({ provider, model })),
-	}),
 });
-
-function parsePinnedModels(value: unknown): readonly ModelRef[] {
-	if (!Array.isArray(value) || value.length > MaximumHiddenModels) {
-		throw new TypeError(localize('models.pinned.invalidArray', 'Pinned models must be an array with at most {0} entries.', MaximumHiddenModels));
-	}
-	const models = new Map<string, ModelRef>();
-	for (const candidate of value) {
-		if (!isRecord(candidate) || typeof candidate.provider !== 'string' || !candidate.provider.trim() || typeof candidate.model !== 'string' || !candidate.model.trim()) {
-			throw new TypeError(localize('models.pinned.invalidEntry', 'Pinned models require non-empty provider and model IDs.'));
-		}
-		const model = Object.freeze({ provider: candidate.provider, model: candidate.model });
-		models.set(modelRefIdentity(model), model);
-	}
-	return Object.freeze([...models.values()].sort(compareModelRefs));
-}
 
 export function isModelVisibleByDefault(model: ModelRef): boolean {
 	return DefaultVisibleModels.has(modelRefIdentity(model));
@@ -117,8 +72,6 @@ export interface ILanguageModelsConfigurationService {
 	rememberSelectedModel(model: ModelRef | undefined | null): void;
 	isModelVisible(model: ModelRef): boolean;
 	setModelVisible(model: ModelRef, visible: boolean): Promise<void>;
-	isModelPinned(model: ModelRef): boolean;
-	setModelPinned(model: ModelRef, pinned: boolean): Promise<void>;
 	removeProviderPreferences(connection: string): Promise<void>;
 }
 export const ILanguageModelsConfigurationService = createServiceIdentifier<ILanguageModelsConfigurationService>('languageModelsConfigurationService');

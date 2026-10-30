@@ -130,7 +130,6 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: false, apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
-		isModelPinned: () => false,
 		isModelVisible: () => visible,
 		setModelProviderApiKey: async (_connection: string, key: string) => { savedKeys.push(key); },
 		removeModelProviderApiKey: async (connection: string) => { removedKeys.push(connection); },

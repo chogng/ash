@@ -37,10 +37,7 @@ interface ModelRow {
 	readonly name: HTMLElement;
 	readonly toggle: Switch;
 	readonly select: Checkbox;
-	readonly pin: Button;
 	readonly nameLabel: IconLabel;
-	readonly metadata: HTMLElement;
-	readonly capabilities: ReadonlyMap<string, Button>;
 	readonly menu: Button;
 }
 
@@ -253,8 +250,6 @@ export class ChatModelsWidget extends Disposable {
 		const actions = [
 			{ label: localize('models.catalog.showSelected', 'Show selected'), run: () => this.runSelection(entries => this.viewModel.setModelsHidden(entries, false)) },
 			{ label: localize('models.catalog.hideSelected', 'Hide selected'), run: () => this.runSelection(entries => this.viewModel.setModelsHidden(entries, true)) },
-			{ label: localize('models.catalog.pinSelected', 'Pin selected'), run: () => this.runSelection(entries => this.viewModel.setModelsPinned(entries, true)) },
-			{ label: localize('models.catalog.unpinSelected', 'Unpin selected'), run: () => this.runSelection(entries => this.viewModel.setModelsPinned(entries, false)) },
 			{ label: localize('models.catalog.clearSelection', 'Clear selection'), run: () => { this.selection.clear(); this.updateRows(); } },
 		];
 		for (const action of actions) {
@@ -298,8 +293,8 @@ export class ChatModelsWidget extends Disposable {
 					if (this.element.hidden || !this.element.isConnected || !isHTMLElement(focused) || !this.element.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
 						() => type === AccessibleViewType.Help
-							? this.host.compact && !this.expanded ? localize('models.catalog.help', 'Models shows the newest model from each provider. Pinned models appear first, followed by enabled models; each group keeps the catalog order. Turning an unpinned model off restores its place among disabled models. Search models filters the full list by model name or provider/model ID. Escape clears the search and restores the list. Use viewall models to show the full catalog with provider groups, provider switches and Search filters, or return to the overview. Use Tab and Shift+Tab to move between search, model switches, and buttons. Space toggles whether a model appears in the chat picker. The API key section in Models settings configures provider credentials and custom models.')
-								: localize('models.catalog.managementHelp', 'Models settings lists models by provider. Search matches names and IDs, including word prefixes and camel-case initials. Use @provider: followed by a connection ID or quoted provider name to filter providers, and @capability:vision, @capability:tools or @capability:agent to require explicitly supported capabilities. Search filters offers buttons that insert supported filters. Type @ for suggestions; use Up and Down then Enter to insert a filter. Escape dismisses suggestions before clearing the search. Enter or Space on a provider button expands or collapses its models; Collapse All closes all groups. A provider switch changes all models of that connection, including models outside the current search. Model switches control individual picker visibility. Select model checkboxes for Show selected, Hide selected, Pin selected or Unpin selected. Shift-click selects a range; Up, Down, Home and End move between selection checkboxes. Select all results selects the visible rows. Within a model row, Ctrl+A or Command+A selects all visible models; Shift+Up and Shift+Down extend a range. The search input keeps its text-selection shortcuts. Row action buttons and right-click open menus for the current selection; Shift+F10 opens the focused model menu. Context size and Speed menus update only this model’s supported preferences. Configure model and Configure provider reveal the existing settings, or open account management for subscription connections. Provider menus offer Refresh models and preserve known models if discovery fails. Capability buttons toggle filters without changing model visibility or other query terms. Clear selection returns focus to Select all results. Pin buttons save picker priority independently of visibility. Rows show only confirmed capabilities. Hover a model switch or focus it and use <keybinding:workbench.action.showHover> for its full description, source and reference prices; Accessible View also includes this information. Tool calling and Agent mode are independent; unknown is not unsupported. Reference prices retain currency, tier, region, input interval and review date; they do not describe subscription bills. Use viewall models to return to the overview. Use Tab and Shift+Tab to move between controls. The API key section configures provider credentials and custom models.')
+							? this.host.compact && !this.expanded ? localize('models.catalog.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or provider/model ID. Escape clears the search and restores the list. Use viewall models to show the full catalog with provider groups, provider switches and Search filters, or return to the overview. Use Tab and Shift+Tab to move between search, model switches, and buttons. Space toggles whether a model appears in the chat picker. The API key section in Models settings configures provider credentials and custom models.')
+								: localize('models.catalog.managementHelp', 'Models settings lists models by provider. Search matches names and IDs, including word prefixes and camel-case initials. Use @provider: followed by a connection ID or quoted provider name to filter providers, and @capability:vision, @capability:tools or @capability:agent to require explicitly supported capabilities. Search filters offers buttons that insert supported filters. Type @ for suggestions; use Up and Down then Enter to insert a filter. Escape dismisses suggestions before clearing the search. Enter or Space on a provider button expands or collapses its models; Collapse All closes all groups. A provider switch changes all models of that connection, including models outside the current search. Model switches control individual picker visibility. Select model checkboxes for Show selected or Hide selected. Shift-click selects a range; Up, Down, Home and End move between selection checkboxes. Select all results selects the visible rows. Within a model row, Ctrl+A or Command+A selects all visible models; Shift+Up and Shift+Down extend a range. The search input keeps its text-selection shortcuts. Row action buttons and right-click open menus for the current selection; Shift+F10 opens the focused model menu. Context size and Speed menus update only this model’s supported preferences. Configure model and Configure provider reveal the existing settings, or open account management for subscription connections. Provider menus offer Refresh models and preserve known models if discovery fails. Clear selection returns focus to Select all results. Hover a model switch or focus it and use <keybinding:workbench.action.showHover> for its full description, capabilities, source and reference prices; Accessible View also includes this information. Tool calling and Agent mode are independent; unknown is not unsupported. Reference prices retain currency, tier, region, input interval and review date; they do not describe subscription bills. Use viewall models to return to the overview. Use Tab and Shift+Tab to move between controls. The API key section configures provider credentials and custom models.')
 							: this.accessibleContent(),
 						() => { if (focused.isConnected) { focused.focus(); } else { this.focusSearch(); } },
 						AccessibilityVerbositySettingId.ChatModelConfiguration);
@@ -369,27 +364,10 @@ export class ChatModelsWidget extends Disposable {
 			const row = previous.get(entry.id) ?? this.createRow(entry, entry.id);
 			row.entry = entry;
 			row.nameLabel.setLabel(entry.model.displayName, undefined, { matches: entry.modelNameMatches });
-			const supported = new Set<string>();
-			if (entry.model.capabilities?.toolCalling === 'supported') { supported.add('tools'); }
-			if (entry.model.inputModalities?.includes('image')) { supported.add('vision'); }
-			if (entry.model.capabilities?.agentMode === 'supported') { supported.add('agent'); }
-			for (const [id, button] of row.capabilities) {
-				button.domNode.hidden = !supported.has(id);
-				const aliases = id === 'tools' ? 'tools|toolcalling' : id === 'agent' ? 'agent|agentmode' : 'vision';
-				const active = new RegExp(`@capability:(?:${aliases})(?:\\s|$)`, 'iu').test(this.searchInput.value);
-				button.domNode.setAttribute('aria-pressed', String(active));
-				button.toggleClassName('is-active', active);
-			}
-			row.metadata.hidden = !grouped || supported.size === 0;
 			row.select.input.setAttribute('aria-label', localize('models.catalog.selectModel', 'Select {0}', entry.model.displayName));
 			row.select.element.hidden = !grouped;
-			row.pin.domNode.hidden = !grouped;
 			row.menu.domNode.hidden = !grouped;
 			row.menu.enabled = !this.operationPending;
-			row.pin.label = entry.model.pinned ? localize('models.catalog.unpinModel', 'Unpin {0}', entry.model.displayName) : localize('models.catalog.pinModel', 'Pin {0}', entry.model.displayName);
-			row.pin.icon = entry.model.pinned ? Lxicon.pinned : Lxicon.pin;
-			row.pin.domNode.setAttribute('aria-pressed', String(entry.model.pinned));
-			row.pin.enabled = !this.operationPending;
 			row.select.enabled = !this.operationPending;
 			row.toggle.enabled = !this.operationPending;
 			row.element.title = entry.model.displayName;
@@ -405,7 +383,7 @@ export class ChatModelsWidget extends Disposable {
 			providers.add(model.model.provider);
 			return (!this.host.compact || this.expanded || filtering || first) && (this.host.matches?.(model) ?? true);
 		});
-		if (this.host.compact) { shown = shown.sort((a, b) => Number(b.entry.model.pinned) - Number(a.entry.model.pinned) || Number(a.entry.model.hidden) - Number(b.entry.model.hidden)); }
+		if (this.host.compact) { shown = shown.sort((a, b) => Number(a.entry.model.hidden) - Number(b.entry.model.hidden)); }
 		const desired: HTMLElement[] = [];
 		if (!grouped) { desired.push(...shown.map(row => row.element)); }
 		else {
@@ -614,13 +592,6 @@ export class ChatModelsWidget extends Disposable {
 		this.notifications.error(this.status.textContent);
 	}
 
-	private toggleCapability(capability: string): void {
-		const aliases = capability === 'tools' ? 'tools|toolcalling' : capability === 'agent' ? 'agent|agentmode' : 'vision';
-		const filter = new RegExp(`@capability:(?:${aliases})(?=\\s|$)`, 'giu');
-		const query = this.searchInput.value;
-		this.search(filter.test(query) ? query.replace(filter, '').trim() : `${query.trim()} @capability:${capability}`.trim());
-	}
-
 	private menuAction(id: string, label: string, run: () => unknown, checked?: boolean): IAction {
 		return { id, label, tooltip: '', enabled: !this.operationPending, checked, run };
 	}
@@ -648,10 +619,8 @@ export class ChatModelsWidget extends Disposable {
 			this.selection.clear(); this.selection.add(row.entry.id); this.selectionAnchor = row.entry.id; this.updateRows();
 		}
 		const entries = this.visibleRows().filter(candidate => this.selection.has(candidate.entry.id)).map(candidate => candidate.entry);
-		const pinned = entries.every(entry => entry.model.pinned);
 		const hidden = entries.every(entry => entry.model.hidden);
 		const actions: IAction[] = [
-			this.menuAction('pin', pinned ? localize('models.catalog.unpinSelected', 'Unpin selected') : localize('models.catalog.pinSelected', 'Pin selected'), () => this.runOperation(() => this.viewModel.setModelsPinned(entries, !pinned))),
 			this.menuAction('visibility', hidden ? localize('models.catalog.showSelected', 'Show selected') : localize('models.catalog.hideSelected', 'Hide selected'), () => this.runOperation(() => this.viewModel.setModelsHidden(entries, !hidden))),
 		];
 		if (entries.length === 1) {
@@ -719,8 +688,6 @@ export class ChatModelsWidget extends Disposable {
 		copy.className = 'ash-models-settings-model-copy';
 		const name = h(document, 'span');
 		const nameLabel = resources.add(new IconLabel(name, { label: entry.model.displayName }));
-		const metadata = h(document, 'small');
-		metadata.className = 'ash-models-settings-model-metadata';
 		copy.append(name);
 		const select = resources.add(new Checkbox(element, { ...defaultCheckboxStyles, ariaLabel: localize('models.catalog.selectModel', 'Select {0}', entry.model.displayName) }));
 		const content = h(document, 'div');
@@ -731,29 +698,15 @@ export class ChatModelsWidget extends Disposable {
 			ariaLabel: localize('sessions.settings.modelVisibility', 'Show {0} in model picker', entry.model.displayName),
 			checked: !entry.model.hidden, content: copy, contentPlacement: 'before-control',
 		}));
-		content.append(metadata);
-		const capabilities = new Map<string, Button>();
-		for (const [id, label] of [
-			['tools', localize('models.metadata.toolCalling', 'Tools')],
-			['vision', localize('models.metadata.vision', 'Image input')],
-			['agent', localize('models.metadata.agentMode', 'Agent mode')],
-		]) {
-			const button = resources.add(new Button(metadata, { ...defaultButtonStyles, label, presentation: 'quiet' }));
-			button.domNode.setAttribute('aria-pressed', 'false');
-			resources.add(button.onDidClick(() => this.toggleCapability(id)));
-			capabilities.set(id, button);
-		}
-		const pin = resources.add(new Button(element, { ...defaultButtonStyles, label: localize('models.catalog.pinModel', 'Pin {0}', entry.model.displayName), icon: Lxicon.pin, iconOnly: true, presentation: 'quiet' }));
 		const menu = resources.add(new Button(element, { ...defaultButtonStyles, label: localize('models.catalog.modelActions', 'Actions for {0}', entry.model.displayName), icon: Lxicon.toolBarMore, iconOnly: true, presentation: 'quiet' }));
 		menu.domNode.setAttribute('aria-haspopup', 'menu');
-		const row = { entry, element, name, nameLabel, select, toggle, pin, metadata, capabilities, menu };
+		const row = { entry, element, name, nameLabel, select, toggle, menu };
 		resources.add(menu.onDidClick(() => this.showModelMenu(row, menu.domNode)));
 		resources.add(addDisposableListener(element, 'contextmenu', event => { event.preventDefault(); this.showModelMenu(row, { x: event.clientX, y: event.clientY, targetWindow: document.defaultView! }); }));
 		resources.add(addDisposableListener(element, 'keydown', event => {
 			if (event.key === 'F10' && event.shiftKey || event.key === 'ContextMenu') { event.preventDefault(); event.stopPropagation(); this.showModelMenu(row, menu.domNode); }
 			if (event.key.toLowerCase() === 'a' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); event.stopPropagation(); for (const candidate of this.visibleRows()) { this.selection.add(candidate.entry.id); } this.updateRows(); }
 		}));
-		resources.add(pin.onDidClick(() => { void this.runOperation(() => this.viewModel.setModelsPinned([row.entry], !row.entry.model.pinned)); }));
 		resources.add(addDisposableListener(select.input, 'click', event => {
 			const visible = this.visibleRows();
 			const current = visible.indexOf(row);

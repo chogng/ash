@@ -1835,7 +1835,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
-	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
+	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), undefined);
 	assert.equal(findSettingCategory(layout, 'chat.editing.autoAcceptDelay'), 'agent-defaults');
 	assert.equal(findSettingCategory(layout, 'chat.canvases.enabled'), 'agent-defaults');
 	assert.equal(defaults.get('chat.editing.autoAcceptDelay').valueType, 'number');
@@ -2264,7 +2264,6 @@ test('Models Settings keeps loading API connections when the model catalog chang
 		listModelProviders: () => providers,
 		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
-		isModelPinned: () => false,
 		isModelVisible: () => true,
 	} as unknown as IChatService;
 	const services = disposables.add(new InstantiationService());
@@ -2370,7 +2369,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => catalog,
 		listCustomModelProviders: async () => [],
-		pinModel: async () => { }, unpinModel: async () => { }, removeCustomModelProvider: async () => { },
+		removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [],
@@ -2378,7 +2377,6 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		removeModelProviderApiKey: async () => { },
 		listAdvisorModels: async () => [],
 		refreshModels: async () => catalog,
-		isModelPinned: () => false,
 		isModelVisible: model => catalog.some(entry => entry.model.provider === model.provider && entry.model.model === model.model && enabled.has(entry.displayName)),
 		setModelVisible: async (model, visible) => {
 			const entry = catalog.find(entry => entry.model.provider === model.provider && entry.model.model === model.model)!;
@@ -2682,7 +2680,6 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 				apiKeyConfigured: savedKeys.length > 0,
 			},
 		],
-		isModelPinned: () => false,
 		isModelVisible: (entry: typeof model) => (entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model)),
 		setModelVisible: async (_model: typeof model, visible: boolean) => {
 			modelWrites.push(visible);
@@ -3930,9 +3927,8 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			})),
 		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
-		isModelPinned: () => false,
 		isModelVisible: () => true,
-		pinModel: async () => { }, unpinModel: async () => { }, removeCustomModelProvider: async () => { },
+		removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async (provider: (typeof saved)[number]) => {
 			saved.push(provider);
 		},

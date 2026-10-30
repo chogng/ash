@@ -21,7 +21,6 @@ const catalog: readonly ModelCatalogEntry[] = [
 function setup(resources: DisposableStore) {
 	const services = resources.add(new InstantiationService());
 	const changed = resources.add(new Emitter<void>());
-	const pinned = new Set<string>();
 	const enabled = new Set([modelRefIdentity(catalog[0].model)]);
 	const writes: { provider: string; model: string; visible: boolean; }[] = [];
 	const source = {
@@ -36,9 +35,6 @@ function setup(resources: DisposableStore) {
 		onDidChangeModels: changed.event,
 		listModelCatalog: () => source.read(),
 		listModelProviders: () => source.providers(),
-		isModelPinned: model => pinned.has(model.model),
-		pinModel: async model => { if (source.failWrite) { throw new Error('Write failed'); } pinned.add(model.model); changed.fire(); },
-		unpinModel: async model => { pinned.delete(model.model); changed.fire(); },
 		isModelVisible: model => enabled.has(modelRefIdentity(model)),
 		setModelVisible: async (model, visible) => {
 			if (source.failWrite) { throw new Error('Write rejected'); }
@@ -49,7 +45,7 @@ function setup(resources: DisposableStore) {
 	} as ILanguageModelsService);
 	const view = resources.add(services.createInstance(ChatModelsViewModel));
 	const models = (filter: string): ILanguageModelEntry[] => view.filter(filter).filter((entry): entry is ILanguageModelEntry => entry.type === 'model');
-	return { view, source, changed, enabled, pinned, writes, models };
+	return { view, source, changed, enabled, writes, models };
 }
 
 test('Catalog construction requires its domain service and refresh produces real splice events', async () => {
@@ -221,23 +217,6 @@ test('Provider filters use exact identities and fuzzy model searches retain sour
 		[{ start: 0, end: 1 }, { start: 7, end: 8 }, { start: 12, end: 13 }],
 	]);
 });
-
-test('Pinning a selected subset changes only those model preferences and retains domain truth on failure', async () => {
-	using resources = new DisposableStore();
-	const { view, source, models, pinned, enabled } = setup(resources);
-	await view.refresh();
-	const before = [...enabled];
-	await view.setModelsPinned([models('older')[0], models('other')[0]], true);
-	assert.deepEqual([...pinned], ['older', 'other']);
-	assert.deepEqual([...enabled], before);
-	assert.equal(models('older')[0].model.pinned, true);
-	await view.setModelsPinned(models('other'), false);
-	assert.deepEqual([...pinned], ['older']);
-	source.failWrite = true;
-	await assert.rejects(view.setModelsPinned(models('newest'), true), /Write failed/);
-	assert.equal(models('newest')[0].model.pinned, false);
-});
-
 
 test('Tools and Agent filters require independent affirmative declarations and support their aliases', async () => {
 	using resources = new DisposableStore();

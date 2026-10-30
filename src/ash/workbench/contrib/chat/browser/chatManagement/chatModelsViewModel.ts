@@ -22,7 +22,6 @@ export interface ILanguageModel extends ModelCatalogEntry {
 	readonly identifier: string;
 	readonly provider: ILanguageModelProvider;
 	readonly hidden: boolean;
-	readonly pinned: boolean;
 }
 
 export interface ILanguageModelEntry {
@@ -140,15 +139,6 @@ export class ChatModelsViewModel extends Disposable {
 
 	public toggleModelHidden(entry: ILanguageModelEntry): Promise<void> { return this.setModelsHidden([entry], !entry.model.hidden); }
 
-	public async setModelsPinned(entries: readonly ILanguageModelEntry[], pinned: boolean): Promise<void> {
-		try {
-			for (const entry of entries) {
-				if (pinned) { await this.models.pinModel(entry.model.model); }
-				else { await this.models.unpinModel(entry.model.model); }
-			}
-		} finally { if (!this.isDisposed) { this.rebuild(); } }
-	}
-
 	public async toggleGroupHidden(entry: ILanguageModelProviderEntry): Promise<void> {
 		const models = this.getModelsForGroup(entry);
 		await this.setModelsHidden(models.map(model => this.entry(model)), !models.every(model => model.hidden));
@@ -188,7 +178,7 @@ export class ChatModelsViewModel extends Disposable {
 	}
 
 	private model(entry: ModelCatalogEntry): ILanguageModel {
-		return { ...entry, identifier: modelRefIdentity(entry.model), provider: this.provider(entry.model.provider), hidden: !this.models.isModelVisible(entry.model), pinned: this.models.isModelPinned(entry.model) };
+		return { ...entry, identifier: modelRefIdentity(entry.model), provider: this.provider(entry.model.provider), hidden: !this.models.isModelVisible(entry.model) };
 	}
 
 	private entry(model: ILanguageModel): ILanguageModelEntry {

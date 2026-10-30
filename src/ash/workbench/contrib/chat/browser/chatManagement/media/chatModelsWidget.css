@@ -163,21 +163,3 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
-
-.ash-chat-models-catalog .ash-models-settings-model-metadata {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--ash-spacing-size40);
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-}
-
-.ash-models-settings-model-metadata > .ash-button {
-	font-size: inherit;
-}
-
-.ash-models-settings-model-metadata > .ash-button.is-active {
-	background: var(--ash-button-secondaryBackground);
-	color: var(--ash-button-foreground);
-	border-color: var(--ash-contrastBorder);
-}

@@ -15,7 +15,7 @@
 - Chat 选择器的 Add Models → `ICommandService.executeCommand(MANAGE_CHAT_COMMAND_ID)` → `chatManagement.contribution.ts` → `IPreferencesService.openSettings({ section: 'models', query: '', sectionQuery, jsonEditor: false, focusSearch: true })` → Workbench / Sessions 的 Models 设置 → `ModelSettingsRenderer` → `ChatModelsWidget` → `ChatModelsViewModel` → `ILanguageModelsService`。
 - 目录读取、供应商名称和动态失效来自模型服务。ViewModel 只持有当前窗口的目录投影、查询、分组折叠和选中项，不另存模型目录或可见性配置。
 - 单模型开关 → `toggleModelHidden` → `setModelsHidden` → `ILanguageModelsService.setModelVisible` → 原 `ILanguageModelsConfigurationService`。供应商开关通过 `getModelsForGroup` 使用连接 ID 限定范围，不按显示名称合并，也不只修改当前搜索结果。
-- Preferences → `ModelSettingsRenderer` → 同一个 Widget / 目录 ViewModel；设置页默认展示首模型概览，展开后提供分组、组开关、折叠与筛选建议。可见行按置顶、已开启和目录原序排序，完整列表在各连接内应用同一排序。返回概览或修改设置页全局搜索时展开分组，避免匹配内容被旧折叠状态隐藏。
+- Preferences → `ModelSettingsRenderer` → 同一个 Widget / 目录 ViewModel；设置页默认展示首模型概览，展开后提供分组、组开关、折叠与筛选建议。可见行按已开启和目录原序排序，完整列表在各连接内应用同一排序。返回概览或修改设置页全局搜索时展开分组，避免匹配内容被旧折叠状态隐藏。
 - 供应商表单 → 私有 `ProviderModelsViewModel` → 原模型服务的发现、配置保存和探测操作；凭据仍由原 secret store 保存。
 - 编辑器 working set → 通用恢复过程跳过已移除的 `workbench.input.modelsManagement` 输入；不保留独立管理 pane、输入 serializer 或第二份模型状态。
 
@@ -46,13 +46,13 @@
 
 - 模型命令使用分区搜索，两个设置宿主保留原始筛选词；全局设置搜索和模型搜索仍由各自 owner 负责。`@provider:` 对连接 ID、供应商 ID、显示名称和组名称做不区分大小写的精确匹配，多个供应商为 OR，避免前缀相同的连接互相命中。
 - 模型名称和 ID 支持连续文本、词首及驼峰首字母匹配；名称高亮使用原字符串 UTF-16 范围。输入 `@` 提供受支持的能力和实际连接建议，方向键选择、Enter 插入、Escape 先关闭建议再清空搜索。
-- Widget 拥有临时多选集合，提供范围选择、选择全部可见结果、显示/隐藏及置顶/取消置顶；切换搜索或折叠后移除不可见选项。焦点选择仍由 ViewModel 的 `selectedEntry` 管理。
-- `setModelsPinned` → `ILanguageModelsService` → 原 `ILanguageModelsConfigurationService` → 用户设置 `models.pinned`。模型引用由 provider/model 标识，和 `models.hidden` 分别持久化；置顶不会自动启用模型。Chat 选择器在各供应商内优先显示置顶的可见模型。
-- 自定义供应商删除经确认后走 `removeCustomModelProvider` → `IAgentModelsService.removeCustomProvider` → 既有 `provider/remove`，后端仍拥有供应商配置和密钥删除。UI 等待进行中的凭据保存完成，再删除供应商；清理该连接的本地可见性/置顶偏好，两个窗口通过已有模型变更刷新卡片。内置供应商不提供删除操作。
+- Widget 拥有临时多选集合，提供范围选择、选择全部可见结果、显示/隐藏；切换搜索或折叠后移除不可见选项。焦点选择仍由 ViewModel 的 `selectedEntry` 管理。
+- 模型显示由开关及批量显隐操作统一管理，Chat Input 选择器按目录原序列出可见模型；不再提供 Pin 或独立置顶偏好。旧 `models.pinned` 记录不再读取或写入，不映射为可见性，保留已有开关选择。
+- 自定义供应商删除经确认后走 `removeCustomModelProvider` → `IAgentModelsService.removeCustomProvider` → 既有 `provider/remove`，后端仍拥有供应商配置和密钥删除。UI 等待进行中的凭据保存完成，再删除供应商；清理该连接的本地可见性偏好，两个窗口通过已有模型变更刷新卡片。内置供应商不提供删除操作。
 
 ## 2026-10-30 元数据契约闭合
 
-`model/list` 现在传递独立的 tools / agent_mode 三态、实际 provider / connection 身份及目录 provenance，并投影计价服务的已发布参考价。前端 adapter 转成领域类型，Models 的筛选、悬停说明和无障碍视图消费这些事实；元数据单独变化或撤回也触发目录通知。管理行仅展示已确认的简短能力提示，完整来源、三态和价格按需查看，保留管理操作的视觉优先级。旧目录缺少新增字段时保留未知，不从工具调用推断 Agent 能力。已有工具能力不再在适配器中丢失。
+`model/list` 现在传递独立的 tools / agent_mode 三态、实际 provider / connection 身份及目录 provenance，并投影计价服务的已发布参考价。前端 adapter 转成领域类型，Models 的筛选、悬停说明和无障碍视图消费这些事实；元数据单独变化或撤回也触发目录通知。管理行不展示能力标签，完整能力、来源、三态和价格通过悬停说明与无障碍视图按需查看。旧目录缺少新增字段时保留未知，不从工具调用推断 Agent 能力。已有工具能力不再在适配器中丢失。
 
 价格复用 `model-accounting` 的不可变价目表，保留货币、服务等级、区域、输入区间和版本／核对日期，仅适用于匹配的公开 API 连接。订阅与自定义端点不继承这些金额，也不转换成 Copilot credits；空价格是未知。磁盘恢复的模型事实标成已保存的供应商目录，不再声称实时读取。多 provider 对照和字段归属见通用模型声明规范第 12 节。
 
@@ -70,7 +70,7 @@
 | `buildAddModelsDropdownActions`、Copilot 登录 / 启用与扩展配置动作                                                           | Ash 没有上游 configurable-vendor / harness 扩展配置契约，也没有 Copilot 扩展产品宿主。实际入口为直接打开 Models 设置的管理命令，供应商配置通过原表单和服务完成；不导出无调用方的同名 dropdown helper。            |
 | Open Language Models JSON 及 `configureLanguageModels`                                                                       | Ash 的界面模型选择存于 Settings JSON，自定义供应商与凭据由后端配置和 secret store 持有，没有一个对应上游 `languageModels.json` 的共同配置 owner。管理页进入现有设置，不能用只含显隐设置的 JSON 冒充完整模型配置。 |
 
-验证覆盖原始命令筛选、精确供应商匹配、词首及驼峰高亮、搜索补全、多选显隐、置顶持久化与选择器顺序、供应商确认删除和凭据清理、目录过滤与事件重放、同名供应商隔离、单行和整组显隐、折叠和选中项、失败及异步退休、供应商表单原行为、真实命令及 Chat 选择器直达设置、退休标签跳过恢复、两个设置宿主的分组与筛选、中文无障碍内容、焦点恢复与高对比度键盘路径。实际运行结果以本次任务报告为准，不将静态 API 清单作为行为验证。
+验证覆盖原始命令筛选、精确供应商匹配、词首及驼峰高亮、搜索补全、多选显隐、可见性持久化与选择器目录顺序、供应商确认删除和凭据清理、目录过滤与事件重放、同名供应商隔离、单行和整组显隐、折叠和选中项、失败及异步退休、供应商表单原行为、真实命令及 Chat 选择器直达设置、退休标签跳过恢复、两个设置宿主的分组与筛选、中文无障碍内容、焦点恢复与高对比度键盘路径。实际运行结果以本次任务报告为准，不将静态 API 清单作为行为验证。
 
 ## 2026-10-30 管理行为复核
 
@@ -78,19 +78,19 @@
 
 | 优先级         | 值得补齐的行为                                                         | VS Code 的可观察行为及证据                                                                                                                    | Ash 当前依据、owner 与实施边界                                                                                                                                                                                                                                                                                        |
 | -------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 高             | 从目录直达对应供应商或模型配置                                         | `chatModelsWidget.ts` 的供应商和单模型操作提供 Manage、Configure，以及更新密钥、添加模型、重命名等组操作；`ILanguageModelsService` 承接配置。 | Ash 的目录供应商行只有展开和显隐，模型行只有选择、显隐和置顶；配置表单在同一设置页下方，需自行寻找。可由 Preferences 宿主定位现有连接卡片或模型编辑器，Widget 只发起语义操作，不访问其他组件的私有 DOM。已有表单和服务继续拥有编辑、保存及凭据。                                                                      |
+| 高             | 从目录直达对应供应商或模型配置                                         | `chatModelsWidget.ts` 的供应商和单模型操作提供 Manage、Configure，以及更新密钥、添加模型、重命名等组操作；`ILanguageModelsService` 承接配置。 | Ash 的目录供应商行只有展开和显隐，模型行只有选择和显隐；配置表单在同一设置页下方，需自行寻找。可由 Preferences 宿主定位现有连接卡片或模型编辑器，Widget 只发起语义操作，不访问其他组件的私有 DOM。已有表单和服务继续拥有编辑、保存及凭据。                                                                            |
 | 高             | 在管理目录里调整已有单模型偏好                                         | 上游 `getModelConfigurationActions` 将已有配置 schema 转成当前值、默认项和可用项受限的菜单，目录行和单行菜单都有入口。                        | Ash 已通过 Chat 选择器调用 `setModelPreferences` 保存加速、长上下文偏好，管理目录没有入口。适合复用该领域契约，只呈现当前连接实际提供的选项。推理深度在当前选择器还涉及聊天选择，应保留其原有作用域，不能顺手改成全局偏好。                                                                                           |
 | 高，需先补契约 | 在对应供应商下显示目录加载或刷新失败，即使没有模型也保留该供应商的状态 | 上游目录组可同时持有模型与 `status`；`chatModelsViewModel.test.ts` 验证 Ollama 的 fetch failed 状态与其他厂商模型并存。                       | Ash 的目录 ViewModel 只有一个全局 failure，供应商组从已有模型推导；自定义供应商表单已有发现错误、空结果和重试反馈，但未接入统一目录。共享后端已有 freshness、warnings 和刷新错误，当前 `model/list` 只带模型和 scope 身份，需先投影有来源、按连接限定的状态，再由目录消费。不能以已存密钥或一次模型测试替代目录状态。 |
 | 中             | 行菜单、上下文批量操作和键盘范围选择                                   | 上游表格菜单复用当前选中项，按选择状态提供显隐、置顶和配置；标准列表命令支持 Shift+方向键扩选及 Ctrl/Cmd+A。                                  | Ash 已有复选框、Shift 点击、全选按钮、上下方向键导航和批量操作，不缺多选本身；缺少行菜单、键盘扩选和列表内全选快捷键。应继续由 Widget 拥有临时选中集合，菜单复用现有服务操作；搜索框中的全选仍应选择文本。未选择时可收起无可用动作的批量按钮，选择后再提供操作。                                                      |
-| 中，改动较小   | 点击能力提示切换筛选条件                                               | 上游 Tools、Vision 按钮触发 `onDidClickCapability`，通过 `toggleFilter` 保留其他查询并切换对应能力条件。                                      | Ash 已有能力查询、建议和筛选按钮，但模型行的能力摘要是纯文本。可复用现有过滤规则，增加从已确认能力进入筛选的捷径，保留当前供应商和文本查询；不能把交互按钮嵌进显隐开关的标签而误触开关。                                                                                                                              |
+| 中，改动较小   | 点击能力提示切换筛选条件                                               | 上游 Tools、Vision 按钮触发 `onDidClickCapability`，通过 `toggleFilter` 保留其他查询并切换对应能力条件。                                      | Ash 使用能力查询、建议和搜索筛选按钮提供能力筛选；模型行不再展示 Tools、Image input 等能力按钮，保持模型名称和显隐操作清晰。                                                                                                                                                                                          |
 
-新增／编辑／删除手工模型、上下文声明与 upstream 映射、供应商重命名、密钥保存、测试及刷新，在 Ash 的 `ModelProviderSettingsRenderer` 及其测试中已有对应行为，不再列为待补。默认新聊天模型也已有设置及服务契约，不能仅因目录没有按钮就声称 Ash 缺少默认模型能力。
+新增／编辑／删除手工模型、上下文声明与 upstream 映射、供应商重命名、密钥保存、测试及刷新，在 Ash 的 `ModelProviderSettingsRenderer` 及其测试中已有对应行为，不再列为待补。新聊天通过共享模型服务恢复 Chat Input 上次选择，Auto 意图由 UI profile 状态保存；不再提供独立的默认聊天模型设置。
 
-建议先做目录配置捷径和已有模型偏好，再补供应商状态；行菜单／键盘多选及能力提示筛选可作为后续体验补齐。Copilot 专属登录、credits、harness 分流、受信扩展来源注册及完整 Language Models JSON 仍不列入本次管理能力的实施建议。
+建议先做目录配置捷径和已有模型偏好，再补供应商状态；行菜单／键盘多选可作为后续体验补齐。Copilot 专属登录、credits、harness 分流、受信扩展来源注册及完整 Language Models JSON 仍不列入本次管理能力的实施建议。
 
 ### 本轮已接入的管理行为
 
-上述五项现已接入共享目录：供应商／自定义模型配置定位、长上下文与加速菜单、按连接显示目录状态、行菜单与键盘多选、能力按钮筛选。配置导航由 Preferences 宿主负责，菜单复用原有模型服务；Widget 只保存当前查询、临时选择与请求进度。推理深度继续使用聊天作用域，计费与参考价格保留原归属。
+共享目录已接入供应商／自定义模型配置定位、长上下文与加速菜单、按连接显示目录状态、行菜单与键盘多选；能力筛选通过搜索及筛选建议提供。配置导航由 Preferences 宿主负责，菜单复用原有模型服务；Widget 只保存当前查询、临时选择与请求进度。推理深度继续使用聊天作用域，计费与参考价格保留原归属。
 
 `ModelContextCatalog` 捕获 `models-manager` 的连接快照，App Server 在既有 `model/list` 响应中投影 `catalog_statuses`：provider、connection、freshness 和问题分类。只暴露稳定分类，不暴露原始网络错误、端点和凭据。生成协议及 decoder 后，平台 adapter 转成领域类型，`LanguageModelsService` 持有目录快照并在状态单独变化、撤回和作用域失效时通知消费者；ViewModel 将状态放回对应分组。旧响应缺少状态时保持未知，TUI 构造样例同步补齐默认值而不新增 TUI 管理行为。
 

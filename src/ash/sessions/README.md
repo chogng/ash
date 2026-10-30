@@ -321,12 +321,12 @@ joins pending attachment resolution before flushing storage.
    adds it to a project, or moves it to a group. Organization creates a Session
    record without submitting a request; the retained composer keeps its input,
    attachments and choices while the existing model adopts the durable identity.
-   After the model catalog loads, an untitled Chat uses `chat.defaultModel`
-   when it names an available model, then the user's last manual model choice.
-   `auto` selects the App Server's default. A manual choice, including Auto,
-   stays with that Chat; existing Threads keep their own model. The last manual
-   choice is stored in the TypeScript UI profile state, while
-   `chat.defaultModel` is a registered setting.
+   After the model catalog loads, a new Chat restores the last model selected
+   in Chat Input. Manual selections are saved through the shared model service
+   to the App Server profile; the TypeScript UI profile stores the Auto intent.
+   Auto inherits the App Server's configured runtime model. A manual choice,
+   including Auto, stays with that Chat; existing Threads keep their own model.
+   There is no separate default chat model setting.
 6. `SessionsPart` reconciles every visible selection with a retained `SessionView`.
    `SessionGridLayout` hosts these views directly in a `SerializableGrid`, without
    document editor inputs, panes, groups or tab title controls. Ordinary opens

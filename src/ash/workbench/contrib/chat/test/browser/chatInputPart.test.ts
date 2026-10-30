@@ -159,7 +159,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => [],
 		listCustomModelProviders: async () => [],
-		isModelPinned: () => false, pinModel: async () => { }, unpinModel: async () => { }, removeCustomModelProvider: async () => { },
+		removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [],

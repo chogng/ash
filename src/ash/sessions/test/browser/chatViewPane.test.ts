@@ -2768,9 +2768,9 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	const fake = fakeApi({ models: [codeModel, coworkModel], createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
 	using configuration = new WorkbenchConfigurationService();
 	using storage = createTestStorage();
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'openai/gpt-6.1-sol');
 	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, 'anthropic/claude-opus-5-5');
 	using chat = createChatService(fake.api, configuration, storage);
+	await modelsFor(chat).rememberSelectedModel(codeModel.model);
 	using sessions = new SessionsManagementService(fake.api);
 	const draft = sessions.createUntitledSession();
 	using code = createWidgetModel(chat, { kind: 'untitled', session: draft }, sessions);
@@ -2795,7 +2795,6 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [coworkModel.model, codeModel.model]);
 	await code.selectModel(codeModel.model);
 	await cowork.selectModel(coworkModel.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, '');
 	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, '');
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
 	using restoredCoworkPreferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
@@ -2820,7 +2819,7 @@ test('Cowork default model settings use the Chinese catalog and reject invalid v
 	} finally { resetNlsResolver(); }
 });
 
-test('New chats use the configured model before the remembered picker choice', async () => {
+test('New chats restore the last picker model across services and remember Auto', async () => {
 	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First' };
 	const second = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Second' };
 	const fake = fakeApi({
@@ -2832,37 +2831,35 @@ test('New chats use the configured model before the remembered picker choice', a
 	using storage = createTestStorage();
 	using chat = createChatService(fake.api, configuration, storage);
 	using sessions = new SessionsManagementService(fake.api);
-	await modelsFor(chat).rememberSelectedModel(first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-opus-5-5');
-	const configuredDraft = sessions.createUntitledSession();
-	using configured = createWidgetModel(chat, { kind: 'untitled', session: configuredDraft }, sessions);
-	await configured.initialize();
-	assert.deepEqual(configured.selectedModel, second.model);
-	await configured.send('Use the configured model');
-	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, second.model);
+	using picker = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await picker.initialize();
+	await picker.selectModel(first.model);
+	using remembered = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await remembered.initialize();
+	assert.deepEqual(remembered.selectedModel, first.model);
+	await remembered.send('Use the last picker model');
+	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, first.model);
 	assert.ok(fake.skillListRequests.includes(undefined));
 	assert.equal(fake.skillListRequests.at(-1), 'created');
 
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, '');
-	const rememberedDraft = sessions.createUntitledSession();
-	using remembered = createWidgetModel(chat, { kind: 'untitled', session: rememberedDraft }, sessions);
-	await remembered.initialize();
-	assert.deepEqual(remembered.selectedModel, first.model);
-	await remembered.send('Use the remembered model');
-	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, first.model);
+	await picker.selectModel(second.model);
 	using restoredChatService = createChatService(fake.api, configuration, storage);
-	await modelsFor(restoredChatService).readModelDefaults();
-	assert.deepEqual(modelsFor(restoredChatService).getDefaultNewChatModel(await modelsFor(restoredChatService).listModels()), first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'missing/model');
-	assert.deepEqual(modelsFor(chat).getDefaultNewChatModel(await modelsFor(chat).listModels()), first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'auto');
-	const automaticDraft = sessions.createUntitledSession();
-	using automatic = createWidgetModel(chat, { kind: 'untitled', session: automaticDraft }, sessions);
+	using restored = createWidgetModel(restoredChatService, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await restored.initialize();
+	assert.deepEqual(restored.selectedModel, second.model);
+	await restored.send('Use the latest picker model after restoring');
+	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, second.model);
+	await picker.selectAutomaticModel();
+	using automatic = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await automatic.initialize();
 	assert.equal(automatic.isAutomaticModel, true);
+	using restoredAutomaticService = createChatService(fake.api, configuration, storage);
+	using restoredAutomatic = createWidgetModel(restoredAutomaticService, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await restoredAutomatic.initialize();
+	assert.equal(restoredAutomatic.isAutomaticModel, true);
 });
 
-test('A manual model choice stays with its chat while later new chats use the new default', async () => {
+test('Existing chats keep their choice while new chats follow the last picker selection', async () => {
 	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First' };
 	const second = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Second' };
 	const fake = fakeApi({ models: [first, second] });
@@ -2870,25 +2867,23 @@ test('A manual model choice stays with its chat while later new chats use the ne
 	using storage = createTestStorage();
 	using chat = createChatService(fake.api, configuration, storage);
 	using sessions = new SessionsManagementService(fake.api);
-	const firstDraft = sessions.createUntitledSession();
-	using firstChat = createWidgetModel(chat, { kind: 'untitled', session: firstDraft }, sessions);
+	using firstChat = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await firstChat.initialize();
 	await firstChat.selectModel(first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-opus-5-5');
-	await waitFor(() => firstChat.models.length === 2);
-	assert.deepEqual(firstChat.selectedModel, first.model);
-	const secondDraft = sessions.createUntitledSession();
-	using secondChat = createWidgetModel(chat, { kind: 'untitled', session: secondDraft }, sessions);
+	using secondChat = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await secondChat.initialize();
-	assert.deepEqual(secondChat.selectedModel, second.model);
-
-	await secondChat.selectAutomaticModel();
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'openai/gpt-6.1-sol');
-	assert.equal(secondChat.isAutomaticModel, true);
-	const thirdDraft = sessions.createUntitledSession();
-	using thirdChat = createWidgetModel(chat, { kind: 'untitled', session: thirdDraft }, sessions);
+	assert.deepEqual(secondChat.selectedModel, first.model);
+	await secondChat.selectModel(second.model);
+	assert.deepEqual(firstChat.selectedModel, first.model);
+	using thirdChat = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await thirdChat.initialize();
-	assert.deepEqual(thirdChat.selectedModel, first.model);
+	assert.deepEqual(thirdChat.selectedModel, second.model);
+	await secondChat.selectAutomaticModel();
+	assert.equal(secondChat.isAutomaticModel, true);
+	assert.deepEqual(firstChat.selectedModel, first.model);
+	using fourthChat = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await fourthChat.initialize();
+	assert.equal(fourthChat.isAutomaticModel, true);
 });
 
 test('Model discovery refreshes the picker after an older catalog request completes', async () => {
@@ -2981,9 +2976,8 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const root = thread('Root answer');
 		let currentThread = { ...root, turns: root.turns.map(turn => ({ ...turn, model: rootModel })) };
 		const fake = fakeApi({ sessions: [durable], models: [rootModel, childModel, defaultModel].map(model => ({ model, displayName: model.model })), thread: () => currentThread });
-		fake.api.model.readModel = async () => defaultModel;
+		await fake.api.model.configureDefaults({ model: defaultModel }, (await fake.api.model.readDefaults()).revision);
 		using configuration = new WorkbenchConfigurationService();
-		await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'provider/default-c');
 		await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, 'provider/default-c');
 		using chat = createChatService(fake.api, configuration);
 		using sessions = new SessionsManagementService(fake.api);

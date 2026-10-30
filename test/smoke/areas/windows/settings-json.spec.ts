@@ -1252,9 +1252,11 @@ test.describe('Settings configuration scopes', () => {
 			let insertedCategories: string[] = [];
 			try {
 				await switchTarget(chinese ? '工作区' : 'Workspace');
-				await expect(settings.locator('[data-settings-item-id="chat.defaultModel"]')).toBeVisible();
+				await expect(settings.locator('[data-active-settings-category="models"]')).toBeVisible();
+				await expect(settings.locator('[data-settings-item-id="chat.defaultModel"]')).toHaveCount(0);
 				await switchTarget(chinese ? '用户' : 'User');
 				await expect(settings.locator('[data-active-settings-category="models"]')).toBeVisible();
+				await expect(settings.locator('.ash-chat-models-catalog')).toBeVisible();
 			} finally {
 				insertedCategories = await settingsTree.evaluate(element => {
 					const observed = element as HTMLElement & { finishCategoryObservation?: () => string[]; };

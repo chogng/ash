@@ -16,11 +16,6 @@ import { ConfigurationRegistry } from '../../../../../platform/configuration/com
 import { PolicyConfiguration } from '../../../../../platform/configuration/common/configurations.js';
 import { AccountPolicyService, type AccountPolicyRefreshState } from '../../common/accountPolicyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
-import { TestConfigurationFiles } from '../../../configuration/test/common/testServices.js';
-import { UserDataProfileService } from '../../../userDataProfile/browser/userDataProfileService.js';
-import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../../contrib/chat/browser/languageModelsConfigurationService.js';
-import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
 
 const log = new NullLoggerService();
 const account: GitHubAccount = { id: 'first', host: 'github.com', login: 'first', status: 'ready', credentialRevision: 1n };
@@ -181,31 +176,6 @@ test('Account callbacks see only declared fields and missing fields do not creat
 	raw = {};
 	await source.updatePolicyDefinitions(definitions);
 	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
-});
-
-test('Copilot model policy reaches the real configuration and new-chat consumer, with legacy fallback and withdrawal', async () => {
-	using changes = new Emitter<AccountState>();
-	let raw: Readonly<Record<string, JsonValue>> = { model: ' anthropic/claude-opus-5-5 ', permissions: { model: 'openai/gpt-6.1-sol' } };
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => raw), log);
-	using files = new TestConfigurationFiles('{"chat.defaultModel":"openai/gpt-6.1-sol"}');
-	const profile = new UserDataProfileService();
-	using configuration = new ConfigurationService(profile.currentProfile.settingsResource, files, source, log);
-	await configuration.initialize();
-	using preferences = new LanguageModelsConfigurationService(ChatModelPreferences, configuration,
-		{ get: () => undefined, onDidChangeValue: Event.None } as unknown as IStorageService);
-	const first = { provider: 'openai', model: 'gpt-6.1-sol' };
-	const second = { provider: 'anthropic', model: 'claude-opus-5-5' };
-	const catalog = [first, second].map(model => ({ model, displayName: model.model, longContext: null }));
-	assert.equal(configuration.inspect('chat.defaultModel').policyValue, 'anthropic/claude-opus-5-5');
-	assert.deepEqual(preferences.getDefaultNewChatModel(catalog), second);
-	await assert.rejects(configuration.updateValue('chat.defaultModel', 'auto'), /policy/);
-	raw = { model: ' ', permissions: { model: 'openai/gpt-6.1-sol' } };
-	await source.updatePolicyDefinitions({});
-	assert.equal(configuration.inspect('chat.defaultModel').policyValue, 'openai/gpt-6.1-sol');
-	raw = {};
-	await source.updatePolicyDefinitions({});
-	assert.equal(configuration.inspect('chat.defaultModel').policyValue, undefined);
-	assert.deepEqual(preferences.getDefaultNewChatModel(catalog), first);
 });
 
 test('Explicit refresh exposes cold failure, joins in-flight requests, retains old values and recovers on withdrawal', async () => {
