@@ -308,7 +308,10 @@ async function generate(check: boolean): Promise<boolean> {
 	for (const entry of (await readdir(resolve(repository, 'extensions'), { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 		if (!entry.isDirectory()) continue;
 		const packageRoot = resolve(repository, 'extensions', entry.name);
-		const source = await readFile(resolve(packageRoot, 'package.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return undefined; throw error; });
+		const source = await readFile(resolve(packageRoot, 'package.json'), 'utf8').catch(error => {
+			if (error.code === 'ENOENT') return undefined;
+			throw error;
+		});
 		if (!source) continue;
 		const manifest = JSON.parse(source);
 		if (!manifest?.contributes || manifest.contributes.localizations === undefined) continue;
@@ -421,7 +424,10 @@ async function generate(check: boolean): Promise<boolean> {
 		}
 	}
 	let changed = false;
-	for (const file of await readdir(directory).catch(error => { if (error.code === 'ENOENT') return []; throw error; })) {
+	for (const file of await readdir(directory).catch(error => {
+		if (error.code === 'ENOENT') return [];
+		throw error;
+	})) {
 		if (/^localization(?:Catalog|Messages)\..+\.ts$/u.test(file) && !outputs.some(output => output.file === file)) {
 			await rm(resolve(directory, file));
 			changed = true;

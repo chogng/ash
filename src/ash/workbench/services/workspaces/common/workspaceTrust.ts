@@ -279,7 +279,10 @@ export class WorkspaceTrustRequestService extends Disposable implements IWorkspa
 			else if (startup) this.startupRequests.fire();
 			else this.requests.fire(options);
 		}).catch(error => {
-			if (this.pending === pending) { this.cancelWorkspaceTrustRequest(); this.notifications.error(getErrorMessage(error)); }
+			if (this.pending === pending) {
+				this.cancelWorkspaceTrustRequest();
+				this.notifications.error(getErrorMessage(error));
+			}
 		});
 		return pending.response.p;
 	}

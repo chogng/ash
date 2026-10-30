@@ -453,7 +453,10 @@ test('Design color preview cancels without editing and one committed range gestu
 	assert.equal(view.domNode.querySelector('rect[data-shape-id]')!.getAttribute('fill'), '#808080');
 	assert.equal(browser.window.document.activeElement, fillButton);
 	fillButton.click();
-	for (const value of ['90', '70', '50']) { alpha.value = value; alpha.dispatchEvent(new browser.window.Event('input')); }
+	for (const value of ['90', '70', '50']) {
+		alpha.value = value;
+		alpha.dispatchEvent(new browser.window.Event('input'));
+	}
 	alpha.dispatchEvent(new browser.window.Event('change'));
 	assert.equal(model.value.shapes[0].fill, '#80808080');
 	view.designEditors.document.model.undo();

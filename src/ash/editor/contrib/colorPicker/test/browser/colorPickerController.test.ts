@@ -223,7 +223,12 @@ test('color picker disables old edits while a provider resolves the latest color
 	});
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const errors: unknown[] = [];
-	using editor = createTestCodeEditor({ container, model, languageFeaturesService: features, onLanguageError: error => errors.push(error) });
+	using editor = createTestCodeEditor({
+		container,
+		model,
+		languageFeaturesService: features,
+		onLanguageError: error => errors.push(error)
+	});
 	editor.layout({ width: 500, height: 160 });
 	const controller = editor.getContribution<ColorPickerController>('editor.contrib.colorPicker')!;
 	await controller.showAtPosition(new Position(1, 2));

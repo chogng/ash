@@ -66,7 +66,11 @@ test('code editor reports vertical scroll changes for linked editor views', () =
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel(Array.from({ length: 100 }, (_, index) => `line ${index}`).join('\n'));
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		lineHeight: 20
+	});
 	editor.layout({ width: 320, height: 80 });
 	const changes: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }[] = [];
 	using listener = editor.onDidScrollChange(event => changes.push(event));

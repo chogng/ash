@@ -17,7 +17,12 @@ test('development and production resolve the same canonical package entrypoint',
 	writeFileSync(join(developmentRoot, 'manifests', '00000000000000000001.json'), JSON.stringify({ formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${build}` }));
 	try {
 		const connection = createAppServerDaemonLauncher({
-			packageLocation: { appPath, isPackaged: false, platform: 'linux', resourcesPath: '/installed/resources' },
+			packageLocation: {
+				appPath,
+				isPackaged: false,
+				platform: 'linux',
+				resourcesPath: '/installed/resources'
+			},
 			sourceEnvironment: {}, profileRoot: '/profile', electronExecutable: '/electron', role: 'workbench',
 		});
 		assert.deepStrictEqual({ executable: connection.launcher.executable, args: connection.launcher.options.args, backend: connection.launcher.environment.ASH_APP_SERVER_PATH, generationFile: connection.generationFile }, {

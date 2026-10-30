@@ -137,7 +137,10 @@ export class ThemeEditor extends EditorPane {
 		super(ThemeEditorId, themeService, storageService);
 		this._register(toDisposable(() => this.clearInput()));
 		this._register(textEditor);
-		this._register(toDisposable(() => { for (const row of this.rows.values()) row.dispose(); this.rows.clear(); }));
+		this._register(toDisposable(() => {
+			for (const row of this.rows.values()) row.dispose();
+			this.rows.clear();
+		}));
 		// Validation and applied-version retention belong to the shared save path,
 		// including close confirmation, Save All and another JSON view of this file.
 		this._register(models.addSaveParticipant({
@@ -425,7 +428,10 @@ export class ThemeEditor extends EditorPane {
 				tooltip: sourceLabel,
 				icon: showColors ? Lxicon.settings : Lxicon.goToFile,
 				enabled: !!this.input,
-				run: () => { this.selectSettings(showColors ? 'colors' : 'json'); this.focus(); },
+				run: () => {
+					this.selectSettings(showColors ? 'colors' : 'json');
+					this.focus();
+				},
 			},
 		];
 	}
@@ -552,7 +558,12 @@ export class ThemeEditor extends EditorPane {
 			dialogStyles: defaultDialogStyles,
 			cancelId: 1,
 			renderBody: body => body.append(content),
-			buttonOptions: [{ styleButton: button => { save = button; save.enabled = name.value.trim().length > 0 && name.value.trim().length <= 256; } }],
+			buttonOptions: [{
+				styleButton: button => {
+					save = button;
+					save.enabled = name.value.trim().length > 0 && name.value.trim().length <= 256;
+				}
+			}],
 		}));
 		lifetime.add(name.onDidChange(value => { save.enabled = value.trim().length > 0 && value.trim().length <= 256; }));
 		try { return (await dialog.show()).button === 0 ? name.value.trim() : undefined; }
@@ -726,7 +737,10 @@ export class ThemeEditor extends EditorPane {
 			}
 		}
 		if (this.pickerRow && !rendered.has(this.pickerRow.id)) this.picker?.cancel();
-		for (const [id, row] of this.rows) if (!rendered.has(id)) { row.dispose(); this.rows.delete(id); }
+		for (const [id, row] of this.rows) if (!rendered.has(id)) {
+			row.dispose();
+			this.rows.delete(id);
+		}
 		this.scrollable.layout();
 	}
 
@@ -740,7 +754,10 @@ export class ThemeEditor extends EditorPane {
 			let next: HTMLElement | undefined;
 			for (let i = index + 1; i < group.entries.length; i++) {
 				const candidate = this.rows.get(group.entries[i]!.id)?.element;
-				if (candidate?.parentElement === group.body) { next = candidate; break; }
+				if (candidate?.parentElement === group.body) {
+					next = candidate;
+					break;
+				}
 			}
 			group.body.insertBefore(row.element, next ?? null);
 		}
@@ -826,12 +843,18 @@ export class ThemeEditor extends EditorPane {
 				show: (anchor, panel, onHide) => {
 					const visible = this.contextViews.show({
 						anchor, content: panel, presentation: 'plain', focusRestore: ContextViewFocusRestore.Previous, onHide: () => {
-							if (this.picker === picker) { this.picker = undefined; this.pickerRow = undefined; }
+							if (this.picker === picker) {
+								this.picker = undefined;
+								this.pickerRow = undefined;
+							}
 							onHide(false);
 							this.scheduleViewport();
 						}
 					});
-					if (visible) { this.picker = picker; this.pickerRow = row; }
+					if (visible) {
+						this.picker = picker;
+						this.pickerRow = row;
+					}
 					return visible;
 				},
 				hide: () => this.contextViews.hide(),
@@ -852,8 +875,12 @@ export class ThemeEditor extends EditorPane {
 		const node = findNodeAtLocation(parseTree(model.getText()), ['colors', id]);
 		if (!node) return;
 		const range = Range.fromPositions(model.getPositionAt(node.offset), model.getPositionAt(node.offset + node.length));
-		control.setSelection(range); control.revealRange?.(range);
-		if (focus) { this.selectSettings('json'); control.focus(); }
+		control.setSelection(range);
+		control.revealRange?.(range);
+		if (focus) {
+			this.selectSettings('json');
+			control.focus();
+		}
 	}
 
 	private syncSelection(): void {
@@ -871,7 +898,10 @@ export class ThemeEditor extends EditorPane {
 		if (this.saving) return;
 		this.saving = true;
 		this.updateTitleArea();
-		await action().catch(error => this.showMessage(localize('themeEditor.saveError', 'Could not save the theme. {0}', error instanceof Error ? error.message : String(error)), true)).finally(() => { this.saving = false; this.updateTitleArea(); });
+		await action().catch(error => this.showMessage(localize('themeEditor.saveError', 'Could not save the theme. {0}', error instanceof Error ? error.message : String(error)), true)).finally(() => {
+			this.saving = false;
+			this.updateTitleArea();
+		});
 	}
 	private showMessage(message: string, error = false): void {
 		if (!this.message) return;
@@ -925,7 +955,10 @@ class ThemeColorGroup extends Disposable {
 		this.element.append(this.header, this.body);
 		parent.append(this.element);
 		this.setExpanded(expanded);
-		this._register(addDisposableListener(this.header, 'click', () => { this.setExpanded(!!this.body.hidden); changed(); }));
+		this._register(addDisposableListener(this.header, 'click', () => {
+			this.setExpanded(!!this.body.hidden);
+			changed();
+		}));
 		this._register(toDisposable(() => this.element.remove()));
 	}
 

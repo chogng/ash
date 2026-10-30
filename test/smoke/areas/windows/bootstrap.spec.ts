@@ -291,7 +291,12 @@ test('tray Quit honors a window veto, keeps services usable, and restores drafts
 	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), JSON.stringify({ 'workbench.locale': 'zh-cn' }));
 	const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory });
 	const entry = await writeShellEntry(testInfo);
-	const options = { executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: configuration.env };
+	const options = {
+		executablePath: configuration.executablePath,
+		args: configuration.args.map(argument => argument === desktop ? entry : argument),
+		cwd: configuration.cwd,
+		env: configuration.env
+	};
 	let application = await _electron.launch(options);
 	try {
 		const page = await application.firstWindow();

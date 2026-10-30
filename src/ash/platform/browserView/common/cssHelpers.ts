@@ -116,7 +116,9 @@ export function formatMatchedStyles(matched: IMatchedStyles): IFormattedStyles {
 		append(rule.selectorList.selectors.map(selector => selector.text).join(', '), rule.style, rule.origin === 'user-agent');
 	}
 	for (const pseudo of matched.pseudoElements ?? []) {
-		for (const { rule } of pseudo.matches) { append(rule.selectorList.selectors.map(selector => selector.text).join(', '), rule.style, rule.origin === 'user-agent'); }
+		for (const { rule } of pseudo.matches) {
+			append(rule.selectorList.selectors.map(selector => selector.text).join(', '), rule.style, rule.origin === 'user-agent');
+		}
 	}
 	for (const parent of matched.inherited ?? []) {
 		if (parent.inlineStyle) { append('inherited element.style', parent.inlineStyle, false, true); }

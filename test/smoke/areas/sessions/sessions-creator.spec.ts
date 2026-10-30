@@ -212,9 +212,21 @@ test('Sessions Design vector booleans keep editable operands, holes, history and
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	let canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
 	let properties = page.locator('[data-part="auxiliarybar"]');
-	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
-	await canvas.press('r'); await field('X', '0'); await field('Y', '0'); await field('Width', '200'); await field('Height', '160');
-	await canvas.press('e'); await field('X', '50'); await field('Y', '40'); await field('Width', '100'); await field('Height', '80');
+	const field = async (name: string, value: string): Promise<void> => {
+		const input = properties.getByRole('spinbutton', { name, exact: true });
+		await input.fill(value);
+		await input.press('Tab');
+	};
+	await canvas.press('r');
+	await field('X', '0');
+	await field('Y', '0');
+	await field('Width', '200');
+	await field('Height', '160');
+	await canvas.press('e');
+	await field('X', '50');
+	await field('Y', '40');
+	await field('Width', '100');
+	await field('Height', '80');
 	await canvas.press('ControlOrMeta+a'); await properties.getByRole('button', { name: 'Subtract selection', exact: true }).click();
 	const result = () => canvas.locator('.ash-sessions-design-shapes > svg[data-shape-id] > path');
 	await expect(result()).toHaveCount(1); await expect(result()).not.toHaveAttribute('d', '');
@@ -255,11 +267,22 @@ test('Sessions Design vector booleans keep editable operands, holes, history and
 
 test('Sessions Design edits four gradient types, canvas stops and paint stacks through save and reopen', async ({ target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click(); await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
+	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
-	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
-	await canvas.press('r'); await field('X', '100'); await field('Y', '100'); await field('Width', '240'); await field('Height', '160'); await paintColor(page, '#ff0000');
-	const type = properties.getByRole('combobox', { name: 'Fill type', exact: true }); await type.selectOption('linear');
+	const field = async (name: string, value: string): Promise<void> => {
+		const input = properties.getByRole('spinbutton', { name, exact: true });
+		await input.fill(value);
+		await input.press('Tab');
+	};
+	await canvas.press('r');
+	await field('X', '100');
+	await field('Y', '100');
+	await field('Width', '240');
+	await field('Height', '160');
+	await paintColor(page, '#ff0000');
+	const type = properties.getByRole('combobox', { name: 'Fill type', exact: true });
+	await type.selectOption('linear');
 	await expect(canvas.locator('linearGradient')).toHaveCount(1); await expect(canvas.locator('[data-gradient-stop]')).toHaveCount(2);
 	await properties.getByRole('button', { name: 'Add gradient stop', exact: true }).click(); await field('Gradient stop position (%)', '50'); await paintColor(page, '#0000ff');
 	const stops = properties.getByRole('combobox', { name: 'Gradient stop', exact: true }); await expect(stops.locator('option')).toHaveCount(3);
@@ -286,9 +309,19 @@ test('Sessions Design smooths corners and preserves aligned strokes around holes
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
-	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
-	await canvas.press('r'); await field('X', '0'); await field('Y', '0'); await field('Width', '200'); await field('Height', '100');
-	await properties.getByRole('button', { name: 'Convert to path', exact: true }).click(); await canvas.press('Escape'); await field('Node corner radius', '20');
+	const field = async (name: string, value: string): Promise<void> => {
+		const input = properties.getByRole('spinbutton', { name, exact: true });
+		await input.fill(value);
+		await input.press('Tab');
+	};
+	await canvas.press('r');
+	await field('X', '0');
+	await field('Y', '0');
+	await field('Width', '200');
+	await field('Height', '100');
+	await properties.getByRole('button', { name: 'Convert to path', exact: true }).click();
+	await canvas.press('Escape');
+	await field('Node corner radius', '20');
 	const plain = canvas.locator('.ash-sessions-design-shapes > path[data-shape-id]'); const circular = await plain.getAttribute('d');
 	await properties.getByRole('button', { name: 'iOS smoothing (60%)', exact: true }).click();
 	await expect(properties.getByRole('spinbutton', { name: 'Corner smoothing (%)', exact: true })).toHaveValue('60'); await expect(plain).not.toHaveAttribute('d', circular!);
@@ -317,8 +350,17 @@ test('Sessions Design edits independent arrow endpoints, preserves network endpo
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), viewport = canvas.locator('.ash-canvas-viewport');
-	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
-	await canvas.press('p'); await viewport.click({ position: { x: 100, y: 180 } }); await viewport.click({ position: { x: 340, y: 180 } }); await canvas.press('Enter'); await canvas.press('v'); await canvas.press('Tab');
+	const field = async (name: string, value: string): Promise<void> => {
+		const input = properties.getByRole('spinbutton', { name, exact: true });
+		await input.fill(value);
+		await input.press('Tab');
+	};
+	await canvas.press('p');
+	await viewport.click({ position: { x: 100, y: 180 } });
+	await viewport.click({ position: { x: 340, y: 180 } });
+	await canvas.press('Enter');
+	await canvas.press('v');
+	await canvas.press('Tab');
 	await field('Stroke width', '12');
 	const start = properties.getByRole('combobox', { name: 'Start endpoint', exact: true }), end = properties.getByRole('combobox', { name: 'End endpoint', exact: true });
 	await start.selectOption('round'); await end.selectOption('triangle-arrow');
@@ -349,8 +391,16 @@ test('Sessions Design rounds editable nodes and previews signed offsets with hol
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
-	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
-	await canvas.press('r'); await field('X', '0'); await field('Y', '0'); await field('Width', '200'); await field('Height', '100');
+	const field = async (name: string, value: string): Promise<void> => {
+		const input = properties.getByRole('spinbutton', { name, exact: true });
+		await input.fill(value);
+		await input.press('Tab');
+	};
+	await canvas.press('r');
+	await field('X', '0');
+	await field('Y', '0');
+	await field('Width', '200');
+	await field('Height', '100');
 	await properties.getByRole('button', { name: 'Convert to path', exact: true }).click();
 	await canvas.press('Escape'); await field('Node corner radius', '20');
 	const artwork = canvas.locator('.ash-sessions-design-shapes > path[data-shape-id]');
@@ -389,9 +439,19 @@ test('Sessions Design variable width supports canvas points, numeric editing, ou
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), viewport = canvas.locator('.ash-canvas-viewport');
-	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
-	await canvas.press('p'); await viewport.click({ position: { x: 100, y: 180 } }); await viewport.click({ position: { x: 340, y: 180 } }); await canvas.press('Enter'); await canvas.press('v'); await canvas.press('Tab');
-	await field('Stroke width', '20'); await properties.getByRole('combobox', { name: 'Width profile', exact: true }).selectOption('both');
+	const field = async (name: string, value: string): Promise<void> => {
+		const input = properties.getByRole('spinbutton', { name, exact: true });
+		await input.fill(value);
+		await input.press('Tab');
+	};
+	await canvas.press('p');
+	await viewport.click({ position: { x: 100, y: 180 } });
+	await viewport.click({ position: { x: 340, y: 180 } });
+	await canvas.press('Enter');
+	await canvas.press('v');
+	await canvas.press('Tab');
+	await field('Stroke width', '20');
+	await properties.getByRole('combobox', { name: 'Width profile', exact: true }).selectOption('both');
 	const points = properties.getByRole('combobox', { name: 'Width point', exact: true }); await expect(points.locator('option')).toHaveCount(3);
 	await points.selectOption({ index: 1 }); await field('Width at point', '60');
 	const ribbon = canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path'); await expect(ribbon).toHaveCount(1);
@@ -505,10 +565,23 @@ test('Sessions Design resolves overlapping lines, self-crossing cubics and tange
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click(); await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]'), viewport = canvas.locator('.ash-canvas-viewport');
 	const nodes = properties.getByRole('combobox', { name: 'Path node', exact: true }), segments = properties.getByRole('combobox', { name: 'Network segment', exact: true });
-	const draw = async (points: { x: number; y: number; }[], closed = false): Promise<void> => { await canvas.press('p'); for (const position of points) { await viewport.click({ position }); } if (!closed) { await canvas.press('Enter'); } await canvas.press('v'); await canvas.press('Tab'); await canvas.press('Enter'); };
-	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
+	const draw = async (points: { x: number; y: number; }[], closed = false): Promise<void> => {
+		await canvas.press('p');
+		for (const position of points) { await viewport.click({ position }); }
+		if (!closed) { await canvas.press('Enter'); }
+		await canvas.press('v');
+		await canvas.press('Tab');
+		await canvas.press('Enter');
+	};
+	const field = async (name: string, value: string): Promise<void> => {
+		const input = properties.getByRole('spinbutton', { name, exact: true });
+		await input.fill(value);
+		await input.press('Tab');
+	};
 	await draw([{ x: 100, y: 150 }, { x: 300, y: 150 }, { x: 200, y: 150 }, { x: 400, y: 150 }]);
-	await properties.getByRole('button', { name: 'Add intersection nodes', exact: true }).click(); await expect(nodes.locator('option')).toHaveCount(4); await expect(segments.locator('option')).toHaveCount(3);
+	await properties.getByRole('button', { name: 'Add intersection nodes', exact: true }).click();
+	await expect(nodes.locator('option')).toHaveCount(4);
+	await expect(segments.locator('option')).toHaveCount(3);
 	await canvas.press('Escape'); await canvas.press('Delete');
 	await draw([{ x: 120, y: 180 }, { x: 320, y: 180 }]);
 	await properties.getByRole('button', { name: 'Convert to vector network', exact: true }).click();
@@ -648,9 +721,17 @@ test('Sessions Design stacks shadow and blur effects with cutouts, spread, undo 
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Artifacts', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true }), properties = page.locator('[data-part="auxiliarybar"]');
-	const field = async (name: string, value: string): Promise<void> => { const input = properties.getByRole('spinbutton', { name, exact: true }); await input.fill(value); await input.press('Tab'); };
+	const field = async (name: string, value: string): Promise<void> => {
+		const input = properties.getByRole('spinbutton', { name, exact: true });
+		await input.fill(value);
+		await input.press('Tab');
+	};
 	const action = (name: string) => properties.getByRole('button', { name, exact: true }).click();
-	const color = async (value: string): Promise<void> => { const input = properties.getByRole('textbox', { name: 'Shadow color', exact: true }); await input.fill(value); await input.press('Tab'); };
+	const color = async (value: string): Promise<void> => {
+		const input = properties.getByRole('textbox', { name: 'Shadow color', exact: true });
+		await input.fill(value);
+		await input.press('Tab');
+	};
 	await canvas.press('r'); await field('X', '160'); await field('Y', '160'); await field('Width', '200'); await field('Height', '140'); await paintColor(page, '#ffffff00');
 	await action('Add effect'); await field('Effect blur', '0'); await field('Shadow X', '0'); await field('Shadow Y', '0'); await field('Shadow spread', '20'); await color('#ff0000ff');
 	const layer = canvas.locator('.ash-sessions-design-shapes > [data-shape-id]').last();

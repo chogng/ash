@@ -252,7 +252,10 @@ test('Compact async chains retain selection and loaded expansion across branchin
 test('IndexTreeModel owns index locations and atomic splice', () => {
 	const model = new IndexTreeModel<TestNode>({ id: 'root', label: 'Root', expanded: true });
 	model.setChildren([
-		{ element: { id: 'parent', label: 'Parent', expanded: false }, children: [{ element: { id: 'child', label: 'Child', expanded: false } }] },
+		{
+			element: { id: 'parent', label: 'Parent', expanded: false },
+			children: [{ element: { id: 'child', label: 'Child', expanded: false } }]
+		},
 		{ element: { id: 'sibling', label: 'Sibling', expanded: false } },
 	]);
 	assert.equal(model.getNode([0]).element.id, 'parent');
@@ -1399,7 +1402,10 @@ test('ObjectTree routes HTML drag and drop through hierarchy-aware policy', () =
 			return label;
 		},
 	});
-	tree.setChildren([{ element: { id: 'first', label: 'First', expanded: false } }, { element: { id: 'second', label: 'Second', expanded: false } }]);
+	tree.setChildren([
+		{ element: { id: 'first', label: 'First', expanded: false } },
+		{ element: { id: 'second', label: 'Second', expanded: false } }
+	]);
 	const first = tree.element.querySelector<HTMLElement>("[data-tree-id='first']")!;
 	const second = tree.element.querySelector<HTMLElement>("[data-tree-id='second']")!;
 	assert.equal(first.draggable, true);

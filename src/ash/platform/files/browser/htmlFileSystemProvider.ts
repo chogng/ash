@@ -395,8 +395,14 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 			} else if (WebFileSystemAccess.isFileSystemFileHandle(from)) {
 				const file = await toParent.getFileHandle(toName, { create: true });
 				const writable = await file.createWritable();
-				try { await writable.write(await from.getFile()); await writable.close(); }
-				catch (error) { await writable.abort(); throw error; }
+				try {
+					await writable.write(await from.getFile());
+					await writable.close();
+				}
+				catch (error) {
+					await writable.abort();
+					throw error;
+				}
 			}
 		};
 		try { await copyEntry(sourceHandle, parent, name); }

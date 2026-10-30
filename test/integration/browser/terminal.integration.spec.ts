@@ -641,7 +641,10 @@ for (const clipboardFirst of [false, true]) test(`terminal clipboard paste uses 
 	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.reads())).toBe(1);
 	await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b[?2004h'));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.pasteMode())).toBe(true);
-	await page.evaluate(async () => { window.ashTerminalInputIntegration.clear(); await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste'); });
+	await page.evaluate(async () => {
+		window.ashTerminalInputIntegration.clear();
+		await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste');
+	});
 	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x1b[200~中文\rsecond\x1b[201~']);
 	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
 	await page.getByRole('textbox', { name: 'Outside terminal' }).focus();
@@ -805,7 +808,10 @@ for (const transition of ['close', 'switch', 'disconnect'] as const) {
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finish())).toBeUndefined();
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
 		if (transition === 'switch') {
-			await page.evaluate(async () => { window.ashTerminalClipboardIntegration.setText('fresh'); await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste'); });
+			await page.evaluate(async () => {
+				window.ashTerminalClipboardIntegration.setText('fresh');
+				await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste');
+			});
 			expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['fresh']);
 		}
 		if (transition !== 'close') await page.evaluate(() => window.ashTerminalInputIntegration.close());

@@ -74,7 +74,9 @@ export class CallStackView extends ViewPane {
 			session.selectThread(inspection.threadId);
 			this.threads = inspection.threads;
 			this.frames = inspection.frames;
-		} catch (error) { if (this.isCurrentInspection(session, generation)) this.notifications.error(message(error)); }
+		} catch (error) {
+			if (this.isCurrentInspection(session, generation)) this.notifications.error(message(error));
+		}
 		if (this.isCurrentInspection(session, generation)) this.render();
 	}
 	private isCurrentInspection(session: IDebugSession, generation: number): boolean {

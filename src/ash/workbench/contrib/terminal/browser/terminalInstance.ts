@@ -802,8 +802,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this._state === 'running') this.setState('disconnected');
 		if (replacement) {
 			// Old reads must stop before release yields; the retained screen belongs to the new process next.
-			try { await this.closeProcess(); }
-			catch (error) { this.handleProcessError(error); throw error; }
+			try {
+				await this.closeProcess();
+			}
+			catch (error) {
+				this.handleProcessError(error);
+				throw error;
+			}
 		} else {
 			await this.closeProcess().catch(() => { });
 		}

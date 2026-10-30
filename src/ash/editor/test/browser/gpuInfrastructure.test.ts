@@ -366,7 +366,10 @@ for (const failure of ['initialization', 'device-loss'] as const) {
 		} as unknown as ViewContext;
 		ViewGpuContext.device = ready.p;
 		ViewGpuContext.deviceSync = undefined;
-		Object.defineProperty(ViewGpuContext, 'atlas', { configurable: true, get: () => ({ onDidDeleteGlyphs: deletedGlyphs.event }) });
+		Object.defineProperty(ViewGpuContext, 'atlas', {
+			configurable: true,
+			get: () => ({ onDidDeleteGlyphs: deletedGlyphs.event })
+		});
 		const gpuContext = {
 			canvas: { domNode: h(browserEnvironment.window.document, 'canvas') },
 			canvasDevicePixelDimensions: observableValue('canvasDimensions', { width: 800, height: 300 }),

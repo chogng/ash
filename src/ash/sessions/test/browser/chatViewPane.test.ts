@@ -437,7 +437,11 @@ test('Chat title and history switching retain conversations and drafts', async (
 	services.registerInstance(IConfigurationService, configuration);
 	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
 	using chat = createChatService(api);
-	using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
+	using quickInput = new TestQuickInputService({
+		instantiationService: services,
+		container: dom.window.document.body,
+		contextKeyService: contextKeys
+	});
 	using keybindingFiles = new KeybindingTestServices();
 	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
 	editorServices.registerInstance(IDialogService, recordingDialogService([]));
@@ -2415,7 +2419,14 @@ for (const reconnect of [false, true]) {
 		const fake = fakeApi();
 		const pending = new DeferredPromise<Awaited<ReturnType<typeof fake.api.thread.subscribe>>>();
 		const released: string[] = [];
-		const chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, subscribe: () => pending.p, unsubscribe: async ({ threadId }) => { released.push(threadId); } } });
+		const chat = createChatService({
+			...fake.api,
+			thread: {
+				...fake.api.thread,
+				subscribe: () => pending.p,
+				unsubscribe: async ({ threadId }) => { released.push(threadId); }
+			}
+		});
 		const subscribing = chat.subscribeThread('session-1', 'thread-1', 0, {});
 		const rejected = assert.rejects(subscribing, isCancellationError);
 		chat.dispose();
@@ -4755,7 +4766,15 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 		...session('session-1', 'thread-1', 'Navigation fixture'),
 		chats: [
 			{ threadId: 'thread-1', origin: { type: 'root' }, status: 'active' },
-			{ threadId: 'thread-2', origin: { type: 'fork', parentThreadId: 'thread-1', parentSequence: 1 }, status: 'active' },
+			{
+				threadId: 'thread-2',
+				origin: {
+					type: 'fork',
+					parentThreadId: 'thread-1',
+					parentSequence: 1
+				},
+				status: 'active'
+			},
 		],
 	};
 	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });

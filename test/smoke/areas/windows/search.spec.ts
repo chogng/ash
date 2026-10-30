@@ -939,7 +939,9 @@ test('Search Copy uses result selection, explicit context rows and collapsed fol
 	} else {
 		await (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.writeText('ash-selected-copy-fixture'));
 	}
-	const readCopied = () => target.kind === 'browser' ? page.evaluate(() => navigator.clipboard.readText()) : (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
+	const readCopied = () => target.kind === 'browser'
+		? page.evaluate(() => navigator.clipboard.readText())
+		: (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
 	await workbench.search.open();
 	await workbench.search.search('ash_copy_selected_token');
 	await expect(workbench.search.status).toHaveText('4 results');
@@ -1055,7 +1057,9 @@ test('Search Copy Path copies file and folder paths through real search and the 
 	} else {
 		await (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.writeText('ash-copy-path-fixture'));
 	}
-	const readCopied = () => target.kind === 'browser' ? page.evaluate(() => navigator.clipboard.readText()) : (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
+	const readCopied = () => target.kind === 'browser'
+		? page.evaluate(() => navigator.clipboard.readText())
+		: (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText());
 	const pathLabel = (path: string) => join(testWorkspace.directory, path).replace(/^([a-z]):/i, (_prefix, drive: string) => drive.toUpperCase() + ':');
 	await workbench.search.open();
 	await workbench.search.search('ash_copy_path_token');

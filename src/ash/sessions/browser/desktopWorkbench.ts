@@ -693,7 +693,9 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 			if (available) this.unavailableParts.delete(partId);
 			else this.unavailableParts.add(partId);
 			this.grid.setViewVisible(this.view('sessions'), available);
-			if (available && !this.isDocked) { this.grid.resizeView(this.view('sessions'), new Dimension(this.conversationWidth, this.grid.getViewSize(this.view('sessions')).height)); }
+			if (available && !this.isDocked) {
+				this.grid.resizeView(this.view('sessions'), new Dimension(this.conversationWidth, this.grid.getViewSize(this.view('sessions')).height));
+			}
 			if (this.isDocked) {
 				this.updateDockedVisibility();
 			} else {

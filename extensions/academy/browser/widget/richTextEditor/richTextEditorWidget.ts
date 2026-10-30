@@ -305,7 +305,9 @@ export class RichTextEditorWidget extends Disposable {
 				if (this.isReadOnly() || this.composition) throw new Error(localize('document.api.readOnly', 'The document is read-only or input is still being composed.'));
 				const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 				if (!blockId) throw new Error(localize('document.api.selection', 'Choose an editable document position first.'));
-				const selection = model.selection?.kind === 'all' || model.selection?.kind === 'node' ? model.selection : this.readActiveDocumentTextSelection(model, blockId) ?? model.selection;
+				const selection = model.selection?.kind === 'all' || model.selection?.kind === 'node'
+					? model.selection
+					: this.readActiveDocumentTextSelection(model, blockId) ?? model.selection;
 				const result = handler({ model, blockId, selection }, payload);
 				signal.throwIfAborted();
 				if (result.command) this.dispatchCommand(model, result.command, undefined, 'preserve-focus');

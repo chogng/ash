@@ -116,7 +116,11 @@ test('fold headers stay on their physical line after Enter moves a tracked gutte
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('{\n  value\n}');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		lineHeight: 20
+	});
 	editor.layout({ width: 320, height: 120 });
 	editor.view.render(true, false);
 	const firstHeader = () => model.getAllDecorations().find(decoration => decoration.options.description === 'folding-expanded')?.range.startLineNumber;

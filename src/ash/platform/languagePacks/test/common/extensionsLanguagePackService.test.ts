@@ -153,7 +153,11 @@ test('metered startup retains cached language resources and resumes one catalog 
 test('explicit language listing and refresh bypass metered startup deferral', async () => {
 	using changes = new Emitter<boolean>();
 	let isMetered = true;
-	const policy: IMeteredConnectionService = { _serviceBrand: undefined, get isConnectionMetered() { return isMetered; }, onDidChangeIsConnectionMetered: changes.event };
+	const policy: IMeteredConnectionService = {
+		_serviceBrand: undefined,
+		get isConnectionMetered() { return isMetered; },
+		onDidChangeIsConnectionMetered: changes.event
+	};
 	const catalog: LanguagePackCatalog = { schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } } };
 	const extensionManagement = createExtensions([catalog]);
 	const listInstalled = extensionManagement.listInstalled.bind(extensionManagement);

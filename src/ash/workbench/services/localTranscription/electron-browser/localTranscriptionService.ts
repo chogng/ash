@@ -271,7 +271,9 @@ class ModelOperation extends Disposable implements ILocalTranscriptionModelOpera
 	}
 
 	protected override disposeCore(): void {
-		if (!this.completion.isSettled) { void this.completion.error(new Error(localize('dictation.connectionLost', 'Dictation connection lost'))); }
+		if (!this.completion.isSettled) {
+			void this.completion.error(new Error(localize('dictation.connectionLost', 'Dictation connection lost')));
+		}
 		super.disposeCore();
 	}
 }

@@ -403,7 +403,13 @@ test('A mixed attachment batch keeps the caret after each reference and retains 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using resources = new DisposableStore();
 	const services = createChatInputServices(resources);
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Review  please';
@@ -626,7 +632,13 @@ test('References constrain mouse, keyboard and API selections to whole model and
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using resources = new DisposableStore();
 	const services = createChatInputServices(resources);
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Before  after';
@@ -674,7 +686,13 @@ test('Reference icons borrow the file theme, refresh with it and leave non-file 
 		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }),
 		renderFileIcon: (resource, container) => { container.dataset.fileIcon = `${resource.path}:${version}`; },
 	});
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	for (const [id, uri] of [['file', 'file:///workspace/settings.json'], ['output', 'output:/rust-analyzer'], ['debug', 'inmemory:/debug-console'], ['anonymous', 'inmemory:/console']] as const) {
@@ -705,7 +723,13 @@ test('Reference previews shorten the shared snapshot without exposing output ide
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	const resource = URI.parse('output:/language-server.rust-analyzer.internal-id#3,1-33,1');
@@ -731,7 +755,13 @@ test('Late reference previews cannot restore removed references or decorate anot
 	using editorServices = new DisposableStore();
 	const opened: string[] = [];
 	const services = createChatInputServices(editorServices, async input => { opened.push(input.resource.toString()); });
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	let finish!: (value: { name: string; content: string; }) => void;
@@ -755,7 +785,13 @@ test('Opening saved references isolates same-name snapshots and reuses the same 
 	using editorServices = new DisposableStore();
 	const opened: import('../../../../common/editor.js').IResourceEditorInput[] = [];
 	const services = createChatInputServices(editorServices, async input => { opened.push(input); });
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	for (const content of ['First saved version', 'Second saved version']) {
@@ -783,7 +819,13 @@ test('Inline code references track edits, atomic deletion, undo and redo in the 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Explain  please';

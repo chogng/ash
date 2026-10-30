@@ -74,7 +74,10 @@ export class MarkedKatexSupport extends Disposable {
 		});
 		this._register(toDisposable(() => connection.dispose()));
 		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration('markdown.math')) { this.snapshot = undefined; this.clearBatches(); }
+			if (event.affectsConfiguration('markdown.math')) {
+				this.snapshot = undefined;
+				this.clearBatches();
+			}
 		}));
 		this._register(toDisposable(() => this.clearBatches()));
 	}

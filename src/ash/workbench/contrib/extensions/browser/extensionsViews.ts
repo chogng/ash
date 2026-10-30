@@ -765,7 +765,9 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 		// Package identity enriches backend status; installation alone says nothing about connection state.
 		const items: ExtensionsListItem[] = installed.flatMap(installation => installation.capabilities.filter(capability => capability.kind === 'mcp' && !linkedServers.has(`marketplace:${installation.package.id}:mcp:${capability.id}`)).map(capability => ({
 			target: { kind: 'mcp' as const, serverId: `marketplace:${installation.package.id}:mcp:${capability.id}`, installationId: installation.installationId, capabilityId: capability.reference.id },
-			name: capability.id, description: `${installation.package.id} · ${installation.package.version}`, metadata: installation.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'),
+			name: capability.id, description: `${installation.package.id} · ${installation.package.version}`, metadata: installation.state === 'pendingRemoval'
+				? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending')
+				: localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'),
 		})));
 		for (const connector of connectors) {
 			items.push({

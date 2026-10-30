@@ -39,7 +39,10 @@ for (const mode of ['none', 'keep', 'brackets', 'advanced', 'full'] as const) {
 test('Full typing adjusts each cursor indentation in one transaction', () => {
 	using model = new TextModel('block {\n  \nblock {\n  ', { languageId: 'demo', tabSize: 2, indentSize: 2, insertSpaces: true });
 	using configurations = new TestLanguageConfigurationService();
-	using rules = configurations.register('demo', { brackets: [['{', '}']], indentationRules: { increaseIndentPattern: /\{\s*$/, decreaseIndentPattern: /^\s*\}/ } });
+	using rules = configurations.register('demo', {
+		brackets: [['{', '}']],
+		indentationRules: { increaseIndentPattern: /\{\s*$/, decreaseIndentPattern: /^\s*\}/ }
+	});
 	const original = [Selection.fromPositions(new Position(2, 3)), Selection.fromPositions(new Position(4, 3))];
 	using selections = createTestCursorsController(model, original, { autoIndent: 'full' }, configurations);
 	const version = model.version;

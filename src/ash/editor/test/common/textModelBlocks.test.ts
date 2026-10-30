@@ -161,7 +161,10 @@ test('Document plugins can atomically filter user, undo, and redo transactions',
 
 test('Stanza maps decoration ranges through one transaction and drops ranges with no text', () => {
 	const schema = createDefaultDocumentSchema();
-	const first = schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hello', { id: 'text-1' })] });
+	const first = schema.createNode('paragraph', {
+		id: 'paragraph-1',
+		content: [schema.createText('Hello', { id: 'text-1' })]
+	});
 	const second = schema.createNode('paragraph', { id: 'paragraph-2', content: [schema.createText('World', { id: 'text-2' })] });
 	const document = schema.createDocument([first, second], 'document-1');
 	const decorations = new DocumentDecorationSet([
@@ -231,7 +234,10 @@ test('TextModel applies text transactions and preserves transaction-level undo',
 
 test('TextModel maps implicit selections through text edits and node removal', () => {
 	const schema = createDefaultDocumentSchema();
-	const first = schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hello', { id: 'text-1' })] });
+	const first = schema.createNode('paragraph', {
+		id: 'paragraph-1',
+		content: [schema.createText('Hello', { id: 'text-1' })]
+	});
 	const second = schema.createNode('paragraph', { id: 'paragraph-2', content: [schema.createText('World', { id: 'text-2' })] });
 	using model = DocumentTextModel.create(schema, schema.createDocument([first, second], 'document-1'), { selection: textSelection({ nodeId: 'text-1', offset: 5 }) });
 

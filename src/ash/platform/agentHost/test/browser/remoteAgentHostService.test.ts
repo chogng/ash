@@ -50,7 +50,11 @@ test('remote service reacquires its endpoint and reinitializes extensions after 
 	const sockets: RemotePeer[] = [];
 	using registration = services.get(IRemoteSocketFactoryService).register(RemoteConnectionType.Managed, {
 		supports: connection => connection.id === 17,
-		connect: async () => { const socket = new RemotePeer(); sockets.push(socket); return socket; },
+		connect: async () => {
+			const socket = new RemotePeer();
+			sockets.push(socket);
+			return socket;
+		},
 	});
 	let initialized = 0;
 	let resolutions = 0;
@@ -338,7 +342,10 @@ suite('remote extension initialization retirement', () => {
 				getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
 				onDidReconnectLocal: localRestart.event,
 				initialize: async () => {
-					if (++initialized === 2) { await entered.complete(); await obsolete.p; }
+					if (++initialized === 2) {
+						await entered.complete();
+						await obsolete.p;
+					}
 				},
 			} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 			await service.connect();
@@ -357,7 +364,9 @@ suite('remote extension initialization retirement', () => {
 			assert.equal(service.client.state, 'ready');
 			assert.equal(service.recovery.status, 'idle');
 			assert.deepEqual(sockets.map(socket => socket.isDisposed), [true, true, false]);
-		} finally { mock.timers.reset(); }
+		} finally {
+			mock.timers.reset();
+		}
 	});
 
 	test('disposing during extension initialization rejects the connection wait before a late reply', async () => {
@@ -378,7 +387,10 @@ suite('remote extension initialization retirement', () => {
 			getAddress: async () => ({ connectTo: new ManagedRemoteConnection(17), connectionToken: undefined }),
 			getMetadata: () => ({ protocolVersion: 1, workspaceId: 'remote', workspaceRoot: '/remote' }),
 			onDidReconnectLocal: localRestart.event,
-			initialize: async () => { await entered.complete(); await obsolete.p; },
+			initialize: async () => {
+				await entered.complete();
+				await obsolete.p;
+			},
 		} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 		let rejected = false;
 		const result = assert.rejects(service.connect(), error => {

@@ -486,7 +486,12 @@ test('SCM history distinguishes automatic fetch and completed foreground synchro
 	assert.deepEqual(changes, [{ silent: true }]);
 	value.bridge.set(source, 'ash.scm', 3, [{ ...background, historyOperationRevision: 1 }]);
 	assert.deepEqual(changes, [{ silent: true }, { silent: false }], 'A no-op sync remains observable when its in-progress publication was coalesced');
-	value.bridge.set(source, 'ash.scm', 4, [{ ...background, historyRevision: 3, historyChangeSilent: false, historyOperationRevision: 1 }]);
+	value.bridge.set(source, 'ash.scm', 4, [{
+		...background,
+		historyRevision: 3,
+		historyChangeSilent: false,
+		historyOperationRevision: 1
+	}]);
 	assert.deepEqual(changes, [{ silent: true }, { silent: false }, { silent: false }]);
 	assert.throws(() => value.bridge.set(source, 'ash.scm', 6, [{ ...background, historyChangeSilent: 'yes' }]), /history change origin/u);
 	assert.throws(() => value.bridge.set(source, 'ash.scm', 7, [{ ...background, historyOperationRevision: -1 }]), /history operation revision/u);

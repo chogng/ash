@@ -55,7 +55,10 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 			void this.openSocket();
 			return;
 		}
-		if (event === WEB_APP_SERVER_DISCONNECT_EVENT) { this.handleClose(); return; }
+		if (event === WEB_APP_SERVER_DISCONNECT_EVENT) {
+			this.handleClose();
+			return;
+		}
 		if (event !== WEB_APP_SERVER_FRAME_EVENT || this.closed) { return; }
 		if (!isRecord(payload) || typeof payload.frame !== 'string' || !this.socket || this.socket.readyState !== WebSocket.OPEN
 			|| this.socket.bufferedAmount + new TextEncoder().encode(payload.frame).byteLength > maxBufferedBytes) {
@@ -104,9 +107,15 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 	}
 
 	private readonly handleMessage = (event: MessageEvent): void => {
-		if (typeof event.data !== 'string') { this.handleClose(); return; }
+		if (typeof event.data !== 'string') {
+			this.handleClose();
+			return;
+		}
 		const byteLength = new TextEncoder().encode(event.data).byteLength;
-		if (byteLength > maxBufferedBytes) { this.handleClose(); return; }
+		if (byteLength > maxBufferedBytes) {
+			this.handleClose();
+			return;
+		}
 		this.emit(WEB_APP_SERVER_FRAME_EVENT, new AppServerFrame(event.data, byteLength));
 	};
 

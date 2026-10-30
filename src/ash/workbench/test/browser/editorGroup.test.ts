@@ -161,7 +161,12 @@ test('EditorGroupView selects a range of tabs and resolves close-command targets
 		const { EditorPaneRegistry } = await import('../../browser/editor.js');
 		const { resolveCommandsContext } = await import('../../browser/parts/editor/editorCommandsContext.js');
 		const registry = new EditorPaneRegistry();
-		registry.registerEditorPane({ id: 'test.editor', name: 'Test Editor', canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane() });
+		registry.registerEditorPane({
+			id: 'test.editor',
+			name: 'Test Editor',
+			canOpen: () => EditorPaneMatch.Default,
+			create: () => new TestEditorPane()
+		});
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
 		const group = services.createInstance(EditorGroupView, dom.window.document.body, { registry });
 		try {

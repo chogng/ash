@@ -1196,5 +1196,8 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await hostCall('close', { targetId: slow.targetId });
 		await expect(page.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(0);
 		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).length).toBe(0);
-	} finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
 });

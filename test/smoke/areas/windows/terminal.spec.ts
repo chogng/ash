@@ -1438,7 +1438,14 @@ test.describe('terminal contributions execution chain', () => {
 });
 
 interface LifetimeIdentity { pid: number; shell: number; child: number; count: number; }
-const lifetimePidAlive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const lifetimePidAlive = (pid: number): boolean => {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+};
 
 async function readTerminalHeartbeat<T>(path: string): Promise<T> {
 	// Append complete records instead of replacing a file while Windows readers

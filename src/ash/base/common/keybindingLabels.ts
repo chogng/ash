@@ -100,7 +100,11 @@ function singleModifierLabel(
 	}
 	if (style === KeybindingLabelStyle.UserSettings) {
 		return key === 'meta'
-			? operatingSystem === OperatingSystem.Macintosh ? 'cmd' : operatingSystem === OperatingSystem.Windows ? 'win' : 'meta'
+			? operatingSystem === OperatingSystem.Macintosh
+				? 'cmd'
+				: operatingSystem === OperatingSystem.Windows
+					? 'win'
+					: 'meta'
 			: key;
 	}
 	const labels = style === KeybindingLabelStyle.Aria

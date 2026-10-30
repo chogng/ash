@@ -425,7 +425,15 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			if (generation !== this.generation) { return; }
 			this.restoreHistory(history);
 			this.rememberConversation(id);
-		} catch (error) { if (generation === this.generation) { this.update({ busy: false, loading: undefined, error: this.errorText(error) }); } }
+		} catch (error) {
+			if (generation === this.generation) {
+				this.update({
+					busy: false,
+					loading: undefined,
+					error: this.errorText(error)
+				});
+			}
+		}
 	}
 
 	private restoreHistory(history: ChatGPTHistory): void {
@@ -461,7 +469,15 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			for (const item of result.items) { this.recentIds.add(item.id); }
 			const existing = new Set(state.conversations.map(item => item.id));
 			this.update({ conversations: [...state.conversations, ...result.items.filter(item => !existing.has(item.id))], hasMore: result.hasMore, busy: false, loading: undefined });
-		} catch (error) { if (generation === this.generation) { this.update({ busy: false, loading: undefined, error: this.errorText(error) }); } }
+		} catch (error) {
+			if (generation === this.generation) {
+				this.update({
+					busy: false,
+					loading: undefined,
+					error: this.errorText(error)
+				});
+			}
+		}
 	}
 
 	public async send(): Promise<void> {

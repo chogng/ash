@@ -270,7 +270,13 @@ test('theme service creation requires the host telemetry registration', () => {
 test('selected product icon theme refreshes retained icon nodes and returns to defaults', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
+		Object.defineProperty(browser.window, 'matchMedia', {
+			value: () => ({
+				matches: false,
+				addEventListener: () => { },
+				removeEventListener: () => { }
+			})
+		});
 		const icon = registerIcon('test-workbench-product-icon', { fontCharacter: 'A' }, 'Workbench product icon test');
 		using registration = WorkbenchProductIconThemesRegistry.registerThemes();
 		registration.replace([{ id: 'test-workbench-font', label: 'Test font', icons: new Map([[icon.id, { fontCharacter: 'B' }]]) }]);
@@ -385,7 +391,13 @@ test('temporary previews update bound windows, keep settings unchanged, and rest
 test('persisted color customizations override themes, update live, and restore themed colors when removed', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
+		Object.defineProperty(browser.window, 'matchMedia', {
+			value: () => ({
+				matches: false,
+				addEventListener: () => { },
+				removeEventListener: () => { }
+			})
+		});
 		const theme = parseUserColorTheme(JSON.stringify({ ...document, colors: { 'editor.selectionBackground': '#123456', 'editor.selectionForeground': '#abcdef' } }), 'selection-colors');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService({
@@ -458,7 +470,13 @@ test('user and extension themes preserve semantic token selectors and styles', (
 test('active semantic theme styles follow the selected theme', async () => {
 	const browser = new JSDOM('<!doctype html><body><div class="stanza-editor"><span class="stanza-editor-token" data-ash-semantic-type="function" data-ash-semantic-modifiers="declaration" data-ash-semantic-language="typescript">call</span></div></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
+		Object.defineProperty(browser.window, 'matchMedia', {
+			value: () => ({
+				matches: false,
+				addEventListener: () => { },
+				removeEventListener: () => { }
+			})
+		});
 		const theme = parseUserColorTheme(JSON.stringify({ name: 'Semantic', type: 'dark', semanticHighlighting: true, semanticTokenColors: { '*': '#112233', 'function.declaration:typescript': { foreground: '#abcdef', bold: true } } }), 'test-semantic-active');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService();
@@ -481,7 +499,9 @@ test('active semantic theme styles follow the selected theme', async () => {
 		assert.equal(presentation().foreground, '#abcdef');
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light');
 		assert.deepEqual(presentation(), token.syntaxPresentation);
-	} finally { browser.window.close(); }
+	} finally {
+		browser.window.close();
+	}
 });
 
 test('user themes resolve colors across component domains and their dependent defaults', () => {
@@ -579,7 +599,13 @@ test('high contrast theme types round trip through user documents and color defa
 test('active user themes apply overrides for colors registered after theme loading', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => { }, removeEventListener: () => { } }) });
+		Object.defineProperty(browser.window, 'matchMedia', {
+			value: () => ({
+				matches: false,
+				addEventListener: () => { },
+				removeEventListener: () => { }
+			})
+		});
 		const theme = parseUserColorTheme(JSON.stringify({ ...document, colors: { 'editorCursor.foreground': '#aabbcc', 'test.workbenchLate': '#fedcba' } }), 'late-workbench-colors');
 		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
 		using configuration = new WorkbenchConfigurationService();

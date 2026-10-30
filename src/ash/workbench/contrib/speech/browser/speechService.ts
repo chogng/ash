@@ -289,7 +289,11 @@ export class SpeechService extends Disposable implements ISpeechService {
 					if (recording.subscribed && event.status !== SpeechToTextStatus.Stopped) recording.events.fire(event);
 					else if (event.status === SpeechToTextStatus.Error) recording.pendingError = event;
 					if (event.status === SpeechToTextStatus.Stopped || event.status === SpeechToTextStatus.Error) {
-						if (!recording.stopping) { this.recording = undefined; this.endRecording(recording); this.stateChanged.fire(); }
+						if (!recording.stopping) {
+							this.recording = undefined;
+							this.endRecording(recording);
+							this.stateChanged.fire();
+						}
 					}
 				});
 				if (recording.lifetime.isDisposed) listener.dispose();

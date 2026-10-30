@@ -123,12 +123,16 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			this.suspended.delete(key);
 			changed = true;
 			for (const page of this.pages.get() ?? []) {
-				if (page.canvas?.extensionId === extensionId && page.canvas.canvasId === definition.canvasId) { void this.browser.destroyBrowserView(page.id).catch(() => { }); }
+				if (page.canvas?.extensionId === extensionId && page.canvas.canvasId === definition.canvasId) {
+					void this.browser.destroyBrowserView(page.id).catch(() => { });
+				}
 			}
 		}
 		if (changed) { this.changed.fire(); }
 		for (const page of this.pages.get() ?? []) {
-			if (page.canvas?.extensionId === extensionId && this.disconnectedPages.has(page.id) && !this.providers.has(JSON.stringify([extensionId, page.canvas.canvasId]))) { void this.browser.destroyBrowserView(page.id).catch(() => { }); }
+			if (page.canvas?.extensionId === extensionId && this.disconnectedPages.has(page.id) && !this.providers.has(JSON.stringify([extensionId, page.canvas.canvasId]))) {
+				void this.browser.destroyBrowserView(page.id).catch(() => { });
+			}
 		}
 	}
 

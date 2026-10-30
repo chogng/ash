@@ -86,7 +86,9 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		const raw = storage.get(visibilityKey, StorageScope.PROFILE) ?? storage.get('sessions.layout.modeState', StorageScope.PROFILE);
 		if (raw !== undefined) {
 			const value: unknown = JSON.parse(raw);
-			if (!isRecord(value)) { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
+			if (!isRecord(value)) {
+				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
+			}
 			for (const [id, state] of Object.entries(value)) {
 				if (!isRecord(state) || ['details', 'panel', 'documents'].some(field => typeof state[field] !== 'boolean')) {
 					throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));

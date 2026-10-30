@@ -83,7 +83,10 @@ test('keybinding hold mode follows the invoking shortcut, suppresses repeats and
 	const registry = new KeybindingRegistry();
 	const commands = new CommandRegistry();
 	const contexts = resources.add(new ContextKeyService());
-	const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows }));
+	const layouts = resources.add(new BrowserKeyboardLayoutService({
+		navigator: fakeNavigator(),
+		operatingSystem: OperatingSystem.Windows
+	}));
 	const service = resources.add(new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
 		commandService: resources.add(new CommandService(resources.add(new InstantiationService()), commands)),
@@ -265,7 +268,10 @@ test('browser layout observation preserves a chord ending with Shift+Enter', asy
 	using cleanup = toDisposable(() => dom.window.close());
 	using registrations = new DisposableStore();
 	using contexts = new ContextKeyService();
-	using layouts = new BrowserKeyboardLayoutService({ navigator: fakeNavigator(usLetterLayout()), operatingSystem: OperatingSystem.Windows });
+	using layouts = new BrowserKeyboardLayoutService({
+		navigator: fakeNavigator(usLetterLayout()),
+		operatingSystem: OperatingSystem.Windows
+	});
 	await layouts.refreshKeyboardLayout();
 	const registry = new KeybindingRegistry();
 	const commands = new CommandRegistry();
@@ -1102,7 +1108,10 @@ test('keybinding schema registration updates conditional command arguments and r
 	const dom = new JSDOM('<body></body>');
 	using close = toDisposable(() => dom.window.close());
 	using contexts = new ContextKeyService();
-	using layouts = new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows });
+	using layouts = new BrowserKeyboardLayoutService({
+		navigator: fakeNavigator(),
+		operatingSystem: OperatingSystem.Windows
+	});
 	using services = new InstantiationService();
 	const registry = new CommandRegistry();
 	using commands = new CommandService(services, registry);
@@ -1153,7 +1162,10 @@ test('registered command metadata drives nested batch validation, completion and
 	const dom = new JSDOM('<body></body>');
 	using close = toDisposable(() => dom.window.close());
 	using contexts = new ContextKeyService();
-	using layouts = new BrowserKeyboardLayoutService({ navigator: fakeNavigator(), operatingSystem: OperatingSystem.Windows });
+	using layouts = new BrowserKeyboardLayoutService({
+		navigator: fakeNavigator(),
+		operatingSystem: OperatingSystem.Windows
+	});
 	using services = new InstantiationService();
 	const registry = new CommandRegistry();
 	using commands = new CommandService(services, registry);

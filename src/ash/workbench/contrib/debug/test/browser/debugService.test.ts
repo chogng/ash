@@ -2840,7 +2840,9 @@ for (const change of ['continued', 'explicit selection', 'session switch', 'work
 		processes.requestHandler = request => request.command === 'threads' ? { threads: [{ id: 0, name: 'main' }] }
 			: request.command === 'stackTrace' ? { stackFrames: [{ id: 0, name: 'entry', line: 1, column: 1 }] } : {};
 		const focused = new DeferredPromise<void>();
-		resources.add(service.getViewModel().onDidFocusStackFrame(({ stackFrame }) => { if (stackFrame) void focused.complete(); }));
+		resources.add(service.getViewModel().onDidFocusStackFrame(({ stackFrame }) => {
+			if (stackFrame) void focused.complete();
+		}));
 		processes.event('debug-1', 'stopped', { threadId: 0 });
 		await focused.p;
 		const sourceRequested = new DeferredPromise<void>();

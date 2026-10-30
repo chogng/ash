@@ -588,7 +588,10 @@ suite('terminal browser component', () => {
 
 		let release!: () => void;
 		const gate = new Promise<void>(resolve => { release = resolve; });
-		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => { await gate; await route.continue(); });
+		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => {
+			await gate;
+			await route.continue();
+		});
 		try {
 			await page.goto('/terminal.html?stream');
 			await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
@@ -1209,7 +1212,10 @@ suite('terminal browser component', () => {
 
 		let release!: () => void;
 		const gate = new Promise<void>(resolve => { release = resolve; });
-		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => { await gate; await route.continue(); });
+		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => {
+			await gate;
+			await route.continue();
+		});
 		try {
 			await page.goto('/terminal.html?stream&cwd&history');
 			await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));

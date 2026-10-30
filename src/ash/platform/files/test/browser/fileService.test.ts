@@ -206,7 +206,12 @@ test('AgentHostFileSystemProvider maps wire entries back to resource URIs', asyn
 			createFile: async ({ path }) => ({ fileType: 'file', sizeBytes: path.length - path.length, readonly: false, modifiedAtMillis: null }),
 			createDirectory: async ({ path }) => {
 				assert.equal(path, 'new-folder');
-				return { fileType: 'directory', sizeBytes: 0, readonly: false, modifiedAtMillis: null };
+				return {
+					fileType: 'directory',
+					sizeBytes: 0,
+					readonly: false,
+					modifiedAtMillis: null
+				};
 			},
 			copy: async () => { throw new Error('not used'); },
 			pasteSystemFiles: async () => false,

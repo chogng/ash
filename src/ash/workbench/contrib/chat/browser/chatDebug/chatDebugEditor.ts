@@ -508,7 +508,9 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			this.statusDomNode.textContent = localize('agentTrace.imported', 'Imported · {0}', file.name);
 			this.render();
 		} catch (error) {
-			if (revision === this.revision && selection === this.importSelection && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); }
+			if (revision === this.revision && selection === this.importSelection && !this.isDisposed) {
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
+			}
 		}
 	}
 
@@ -803,7 +805,11 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			const blob = new Blob([serialized], { type: 'application/json' });
 			if (blob.size > 64 * 1024 * 1024) { throw new Error(localize('agentTrace.fileSize', 'Trace files must be smaller than 64 MiB.')); }
 			triggerDownload(blob, 'session.agent-trace.json', this.domNode.ownerDocument);
-		} catch (error) { if (revision === this.revision && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
+		} catch (error) {
+			if (revision === this.revision && !this.isDisposed) {
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
+			}
+		}
 		finally {
 			// An older export must not unlock a replacement input's operation.
 			if (this.exportOperation === operation) {

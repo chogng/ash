@@ -68,7 +68,12 @@ for (const retainedAtStart of [true, false]) {
 			}],
 		});
 
-		assert.equal(store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: result }), LanguageResultAcceptance.Applied);
+		assert.equal(store.accept({
+			requestId: 2,
+			textModel: model,
+			modelVersion: model.version,
+			value: result
+		}), LanguageResultAcceptance.Applied);
 		assert.deepEqual(index.lines.map(line => line.tokens[0]), tokens);
 		assert.equal(index.getLineTokens(retainedLine), retained);
 	});

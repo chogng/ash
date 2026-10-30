@@ -825,7 +825,10 @@ test('Diff editor status follows the selected side and ignores the inactive side
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = createDiffServices(services);
-	using pane = container.createInstance(DiffEditorPane, resourceStore, { modelService: models, createComputationService: () => new PaneTestDiffComputationService() });
+	using pane = container.createInstance(DiffEditorPane, resourceStore, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService()
+	});
 	pane.create(parent);
 	pane.layout({ width: 600, height: 300 });
 	const input = createDiffEditorInput(

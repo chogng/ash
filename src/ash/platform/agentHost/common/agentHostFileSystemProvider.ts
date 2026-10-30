@@ -740,7 +740,13 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const route = this.connectionRoute(resource);
 		if (route) { return this.onRoute(route, provider => provider.createFile(resource, existing)); }
 		const result = await this.onFileTarget(resource, target => this.api.createFile({ ...target, existing }));
-		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
+		return {
+			resource,
+			kind: fileKind(result.fileType),
+			sizeBytes: result.sizeBytes,
+			readonly: result.readonly,
+			modifiedAtMillis: result.modifiedAtMillis ?? undefined
+		};
 	}
 
 	async createDirectory(resource: URI): Promise<IFileStat> {
@@ -757,7 +763,13 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			return { resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
 		}
 		const result = await this.onFileTarget(resource, target => this.api.createDirectory(target), assertScope);
-		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
+		return {
+			resource,
+			kind: fileKind(result.fileType),
+			sizeBytes: result.sizeBytes,
+			readonly: result.readonly,
+			modifiedAtMillis: result.modifiedAtMillis ?? undefined
+		};
 	}
 
 	async copy(source: URI, target: URI): Promise<void> {

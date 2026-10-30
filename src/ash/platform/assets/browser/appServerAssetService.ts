@@ -47,7 +47,9 @@ export class AppServerAssetService implements IAssetService {
 			while (offset < request.bytes.length) {
 				const chunk = request.bytes.subarray(offset, offset + start.maxChunkBytes);
 				const result = await appServerRequest(this.connection, 'asset/import/write', { versionId: request.versionId, offset, dataBase64: bytesToBase64(chunk) });
-				if (result.nextOffset !== offset + chunk.length) { throw new Error(localize('assets.invalidResponse', 'The asset service returned inconsistent content.')); }
+				if (result.nextOffset !== offset + chunk.length) {
+					throw new Error(localize('assets.invalidResponse', 'The asset service returned inconsistent content.'));
+				}
 				offset = result.nextOffset;
 			}
 			// Finish consumes the upload, including validation failures. Cancellation only applies

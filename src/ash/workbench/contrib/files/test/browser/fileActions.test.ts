@@ -424,7 +424,14 @@ test('Explorer paste forwards copy and move requests to the system file transfer
 		const destination = URI.file('/project/destination');
 		using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 		using explorer = createExplorerService(workspace);
-		using view = explorer.registerView({ refresh: async () => { }, getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { }, hasFocus: () => false });
+		using view = explorer.registerView({
+			refresh: async () => { },
+			getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)],
+			getAccessibleContent: () => '',
+			selectResource: async () => { },
+			focus() { },
+			hasFocus: () => false
+		});
 		const pastes: { directory: string; moveRequested: boolean; }[] = [];
 		using services = createFileActionServices();
 		services.registerInstance(IWorkspaceContextService, workspace);
@@ -468,7 +475,14 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		});
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		using explorer = createExplorerService(workspace);
-		using view = explorer.registerView({ refresh: async () => { }, getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { }, hasFocus: () => false });
+		using view = explorer.registerView({
+			refresh: async () => { },
+			getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)],
+			getAccessibleContent: () => '',
+			selectResource: async () => { },
+			focus() { },
+			hasFocus: () => false
+		});
 		const writes: { resource: string; bytes: number[]; }[] = [];
 		const attemptedTransfers: string[] = [];
 		using services = createFileActionServices();

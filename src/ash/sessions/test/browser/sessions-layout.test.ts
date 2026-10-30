@@ -787,5 +787,8 @@ test('Sessions banner stays above conversation and panel compositions without en
 		layout.hidePart('banner');
 		assert.equal(layout.mainContainerOffset.top, WorkbenchWindowBarHeight);
 		assert.equal('banner' in layout.state, false);
-	} finally { for (const part of parts.values()) part.dispose(); dom.window.close(); }
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
 });

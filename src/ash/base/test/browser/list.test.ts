@@ -580,10 +580,18 @@ test('List Home and End reveal the focused row even when its focus and selection
 	using list = new List<string>(dom.window.document.body, {
 		scrolling: 'managed', keyboardNavigation: true, loopNavigation: false,
 		getId: item => item, getHeight: () => 22,
-		renderItem: item => { const label = h(dom.window.document, 'span'); label.textContent = item; return label; },
+		renderItem: item => {
+			const label = h(dom.window.document, 'span');
+			label.textContent = item;
+			return label;
+		},
 	});
 	const viewport = list.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
-	Object.defineProperties(viewport, { clientWidth: { value: 100 }, clientHeight: { value: 44 }, scrollHeight: { value: 2_200 } });
+	Object.defineProperties(viewport, {
+		clientWidth: { value: 100 },
+		clientHeight: { value: 44 },
+		scrollHeight: { value: 2_200 }
+	});
 	list.items = Array.from({ length: 100 }, (_, index) => String(index));
 	for (const [key, index, scrollTop] of [['Home', 0, 0], ['End', 99, 2_156]] as const) {
 		list.setActiveIndex(index);

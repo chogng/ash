@@ -640,7 +640,13 @@ function projectWorkspaceDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto)
 	const code = typeof diagnostic.code === 'string' ? diagnostic.code.trim() || undefined : typeof diagnostic.code === 'number' && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
 	try {
 		const range = Range.fromPositions(new Position((diagnostic.range.start.lineIndex) + 1, (diagnostic.range.start.columnIndex) + 1), new Position((diagnostic.range.end.lineIndex) + 1, (diagnostic.range.end.columnIndex) + 1));
-		return [Object.freeze({ range, severity: diagnostic.severity as LanguageDiagnosticSeverity, message, ...(code === undefined ? {} : { code }), ...(source === undefined ? {} : { source }) })];
+		return [Object.freeze({
+			range,
+			severity: diagnostic.severity as LanguageDiagnosticSeverity,
+			message,
+			...(code === undefined ? {} : { code }),
+			...(source === undefined ? {} : { source })
+		})];
 	} catch {
 		return [];
 	}

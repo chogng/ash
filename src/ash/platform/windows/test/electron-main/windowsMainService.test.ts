@@ -910,7 +910,13 @@ test('managed windows share activation, sizing and last-closed placement without
 	const display = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
 	const handler = new WindowsStateHandler({
 		workspace: createEmptyWorkspaceIdentifier(),
-		stateService: { getItem: () => undefined, setItem: () => { }, removeItem: () => { }, flush: async () => { }, close: async () => { } },
+		stateService: {
+			getItem: () => undefined,
+			setItem: () => { },
+			removeItem: () => { },
+			flush: async () => { },
+			close: async () => { }
+		},
 		displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
 	});
 	assert.deepEqual(service.getNewWindowState(handler, { 'window.newWindowDimensions': 'offset' }, false), {

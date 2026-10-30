@@ -294,7 +294,9 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('the production SSH renderer restores current workspace directories only after its execution carrier reconnects', async () => {
-		using renderer = await createRendererApi([], { browser: false }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false }, {
+			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
+		}, mainProcess);
 		assert.deepEqual(directoryBindings, [{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] }]);
 		const localReconnected = new DeferredPromise<void>();
 		onInitialized = channel => { if (channel === 'ash:app-server:local:initialized') void localReconnected.complete(); };
@@ -346,7 +348,9 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('workspace rebind failure remains failed and concurrent retries restore directories without reconnecting the ready carrier', async () => {
-		using renderer = await createRendererApi([], { browser: false }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false }, {
+			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
+		}, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		const states: string[] = [];
 		const failedState = new DeferredPromise<void>();
@@ -386,7 +390,9 @@ suite('Desktop Workbench Agent Host selection', () => {
 	});
 
 	test('a retired workspace restoration cannot fail a newer ready connection', async () => {
-		using renderer = await createRendererApi([], { browser: false }, { requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		using renderer = await createRendererApi([], { browser: false }, {
+			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
+		}, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		const entered = new DeferredPromise<void>();
 		const carrierSettled = new DeferredPromise<void>();

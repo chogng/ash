@@ -23,12 +23,20 @@
 			inspector: address, pid: process.pid, cwd: process.cwd(), script: process.argv[1] || '', flagged
 		});
 		if (process.env.ASH_JS_DEBUG_CHILDREN === '0') delete process.env.ASH_JS_DEBUG_TOKEN;
-		if (Buffer.byteLength(payload) > 8192) { if (!flagged) inspector.close(); return; }
+		if (Buffer.byteLength(payload) > 8192) {
+			if (!flagged) inspector.close();
+			return;
+		}
 		const child = require('node:child_process').spawn(helper, ['--auto-attach'], { env: { ...environment, ASH_JS_DEBUG_REQUEST: payload }, stdio: 'ignore', windowsHide: true });
 		child.on('error', () => { });
-		if (!child.pid) { if (!flagged) inspector.close(); return; }
+		if (!child.pid) {
+			if (!flagged) inspector.close();
+			return;
+		}
 		child.unref();
 		// The Rust helper resumes this wait on rejection, timeout or a dead broker.
 		inspector.waitForDebugger();
-	} catch { if (!flagged) inspector.close(); }
+	} catch {
+		if (!flagged) inspector.close();
+	}
 })();

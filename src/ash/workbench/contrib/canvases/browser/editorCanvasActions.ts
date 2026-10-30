@@ -43,7 +43,11 @@ registerAction2(class ReopenCanvasAction extends Action2 {
 		picker.items = items;
 		picker.placeholder = picker.ariaLabel = localize('canvas.pick', 'Open a Canvas from a visible conversation');
 		resources.add(canvases.reopenableCanvases.onDidChange(() => {
-			picker.items = canvases.reopenableCanvases.get().map(target => ({ label: target.canvas.title, description: target.canvas.instanceId, target }));
+			picker.items = canvases.reopenableCanvases.get().map(target => ({
+				label: target.canvas.title,
+				description: target.canvas.instanceId,
+				target
+			}));
 		}));
 		const selected = await new Promise<typeof items[number] | undefined>(resolve => {
 			resources.add(picker.onDidAccept(() => { resolve(picker.selectedItems[0] ?? picker.activeItems[0]); picker.hide(); }));

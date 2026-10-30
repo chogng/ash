@@ -20,7 +20,10 @@ test('appendIcon creates isolated native glyph nodes in each document', () => {
 		first.dataset.ashIconCharacter = 'X';
 		assert.equal(second.dataset.ashIconCharacter, '\ue001');
 		assert.equal(appendIcon(icon, secondDocument.body).dataset.ashIconCharacter, '\ue001');
-	} finally { firstDocument.defaultView?.close(); secondDocument.defaultView?.close(); }
+	} finally {
+		firstDocument.defaultView?.close();
+		secondDocument.defaultView?.close();
+	}
 });
 
 test('native font icons retain their identity through font theme overrides', () => {

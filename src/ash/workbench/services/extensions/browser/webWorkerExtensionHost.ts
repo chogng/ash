@@ -107,7 +107,9 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 		const connectionRevision = this.remoteConnectionRevision;
 		const activated = await this.remote.activateByEvent(request);
 		this.assertNotDisposed();
-		if (connectionRevision !== this.remoteConnectionRevision) { throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation')); }
+		if (connectionRevision !== this.remoteConnectionRevision) {
+			throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation'));
+		}
 		// The activation reply is a complete fleet. Retire in-flight older reads so first use
 		// cannot return dormant metadata while a notification refresh is still pending.
 		this.remoteRevision++;
@@ -172,11 +174,15 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				const source = await this.extensions.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
 				this.assertNotDisposed();
 				worker = this.instantiation.createInstance(BrowserExtensionWorker, extension.id, source, async (message: unknown, signal: AbortSignal) => {
-					if (this.workers.get(extension.id) !== worker) { throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation')); }
+					if (this.workers.get(extension.id) !== worker) {
+						throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation'));
+					}
 					const operation = message as ExtensionClientOperation;
 					if (!this.clientHandler) throw new Error('No extension client handler is registered');
 					const result = await this.clientHandler(operation, signal, { extensionId: extension.id, activationGeneration: generation, incarnation: generation });
-					if (this.workers.get(extension.id) !== worker) { throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation')); }
+					if (this.workers.get(extension.id) !== worker) {
+						throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation'));
+					}
 					if (operation.operation === 'setStatusBarEntries' && result.result === 'done' && !signal.aborted) {
 						// Reconnect snapshots retain only the current acknowledged value, never activation's old arguments.
 						this.snapshot = {

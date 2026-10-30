@@ -365,7 +365,13 @@ test('window state falls back to defaults when persisted data is invalid', () =>
 
 	assert.deepEqual(
 		createHandler(stateService, folderWorkspace).getNewWindowState(defaultOptions),
-		{ ...defaultWindowState(WorkbenchState.FOLDER), x: 360, y: 140, displayId: primaryDisplay.id, workArea: primaryDisplay.workArea },
+		{
+			...defaultWindowState(WorkbenchState.FOLDER),
+			x: 360,
+			y: 140,
+			displayId: primaryDisplay.id,
+			workArea: primaryDisplay.workArea
+		},
 	);
 });
 
@@ -402,7 +408,13 @@ test('new window defaults are centered and constrained to the current logical wo
 			const display = { id: 1, bounds: workArea, workArea };
 			const handler = new WindowsStateHandler({
 				stateService: new TestStateService(), workspace,
-				displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
+				displayService: {
+					onDidChangeDisplays: Event.None,
+					getAllDisplays: () => [display],
+					getPrimaryDisplay: () => display,
+					getCursorDisplay: () => display,
+					getDisplayMatching: () => display
+				},
 			});
 			const width = Math.min(size.width, workArea.width);
 			const height = Math.min(size.height, workArea.height);
@@ -968,7 +980,13 @@ test('display changes preserve fullscreen mode and normal bounds for leaving ful
 	let display = primaryDisplay;
 	const handler = new WindowsStateHandler({
 		stateService: new TestStateService(), workspace: folderWorkspace,
-		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
+		displayService: {
+			onDidChangeDisplays: changes.event,
+			getAllDisplays: () => [display],
+			getPrimaryDisplay: () => display,
+			getCursorDisplay: () => display,
+			getDisplayMatching: () => display
+		},
 	});
 	const window = new TestWindow();
 	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
@@ -1073,7 +1091,13 @@ test('work areas smaller than the default minimum remain reachable through Elect
 	let display = primaryDisplay;
 	const handler = new WindowsStateHandler({
 		stateService: new TestStateService(), workspace: folderWorkspace,
-		displayService: { onDidChangeDisplays: changes.event, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
+		displayService: {
+			onDidChangeDisplays: changes.event,
+			getAllDisplays: () => [display],
+			getPrimaryDisplay: () => display,
+			getCursorDisplay: () => display,
+			getDisplayMatching: () => display
+		},
 	});
 	const window = new TestWindow();
 	window.bounds = { x: 120, y: 80, width: 1100, height: 760 };
@@ -1085,7 +1109,13 @@ test('work areas smaller than the default minimum remain reachable through Elect
 	});
 	const options = resolveBrowserWindowOptions({
 		state: { mode: WindowMode.Normal, ...window.bounds, workArea: display.workArea },
-		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: 'preload.js', additionalArguments: [] },
+		webPreferences: {
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: true,
+			preload: 'preload.js',
+			additionalArguments: []
+		},
 	});
 	assert.deepEqual({ width: options.minWidth, height: options.minHeight }, window.minimumSize);
 });

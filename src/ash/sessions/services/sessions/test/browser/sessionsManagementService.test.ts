@@ -837,7 +837,14 @@ function session(sessionId: string, threadId: string): SessionDto {
 
 function emptyUsage(): ModelUsageSummary {
 	const total = { reported: 0, complete: true };
-	return { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total };
+	return {
+		modelInvocations: 0,
+		inputTokens: total,
+		outputTokens: total,
+		cachedInputTokens: total,
+		cacheWriteInputTokens: total,
+		reasoningTokens: total
+	};
 }
 
 function agentNode(): AgentTreeNodeProjection {

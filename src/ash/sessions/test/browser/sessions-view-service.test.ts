@@ -252,7 +252,16 @@ test('new Sessions replace the active slot and preserve siblings across navigati
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using storage = createTestStorage();
 	const visible = sessions.sessions.map(session => ({ kind: 'session', sessionId: session.sessionId, threadId: session.chats[0]!.threadId }));
-	storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: { chat: { visible, active: 0 }, code: { visible: [visible[1]], active: 0 } } }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	storage.store('sessions.viewState', JSON.stringify({
+		version: 1,
+		pages: {
+			chat: { visible, active: 0 },
+			code: {
+				visible: [visible[1]],
+				active: 0
+			}
+		}
+	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using view = createView(sessions, storage);
 	await view.initialize();
 	view.activateSelection(view.visibleSelections[1]!);
@@ -504,7 +513,16 @@ test('invalid persisted Sessions arrangements are rejected at service creation',
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([]);
 	for (const visible of [[{ kind: 'session', sessionId: '', threadId: 'thread' }], [{ kind: 'untitled', session: { untitledSessionId: 'draft', title: 'Draft', workspace: { type: 'ssh', root: '/workspace' } } }]]) {
-		storage.store('sessions.viewState', JSON.stringify({ version: 1, pages: { chat: { visible, active: 0 }, code: { visible: [], active: -1 } } }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		storage.store('sessions.viewState', JSON.stringify({
+			version: 1,
+			pages: {
+				chat: { visible, active: 0 },
+				code: {
+					visible: [],
+					active: -1
+				}
+			}
+		}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		assert.throws(() => createView(sessions, storage), /Invalid stored/);
 	}
 });

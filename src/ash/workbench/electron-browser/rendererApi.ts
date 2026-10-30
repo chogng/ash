@@ -261,7 +261,11 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				if (hostResources.isDisposed) { throw new CancellationError(); }
 				let api = createRendererHost(lease.client, {
 					externalOpener: { openExternal: value => invoke<boolean>('ash:host:openExternal', value) },
-					callbackHost: { listen: options => invoke('ash:oauth-callback:listen', options), wait: id => invoke('ash:oauth-callback:wait', { id }), close: id => invoke('ash:oauth-callback:close', { id }) },
+					callbackHost: {
+						listen: options => invoke('ash:oauth-callback:listen', options),
+						wait: id => invoke('ash:oauth-callback:wait', { id }),
+						close: id => invoke('ash:oauth-callback:close', { id })
+					},
 					clipboardService: new ElectronRendererClipboardService(),
 				}, [], target.host, lease.recovery);
 				hostResources.add(api.mcpServerManagement);
@@ -394,5 +398,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			workspace: workspaceApi,
 			workspaceConfigurationFiles: workspaceApi.configurationFiles,
 		};
-	} catch (error) { resources.dispose(); throw error; }
+	} catch (error) {
+		resources.dispose();
+		throw error;
+	}
 }

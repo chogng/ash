@@ -285,7 +285,11 @@ test('force retokenize action refreshes the active model through its syntax prov
 	assert.equal(model.tokenization.getLanguageTokens(0)[0]?.tokenType, 'string');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	try {
 		const action = editor.getAction('editor.action.forceRetokenize');
 		assert.ok(action);
@@ -371,7 +375,11 @@ test('move selected text actions update text, selection and undo through the edi
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('012345');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	try {
 		const left = editor.getAction('editor.action.moveCarretLeftAction');
 		const right = editor.getAction('editor.action.moveCarretRightAction');
@@ -430,7 +438,11 @@ test('insert final new line action appends the model EOL and keeps the selection
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	try {
 		const action = editor.getAction('editor.action.insertFinalNewLine');
 		assert.ok(action);
@@ -691,7 +703,11 @@ test('embedded editor content height shrinks below the viewport when lines are h
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\ntwo\nthree\nfour\nfive');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		lineHeight: 20
+	});
 	editor.layout({ width: 240, height: 300 });
 	const heights: number[] = [];
 	using listener = editor.onDidContentSizeChange(event => {
@@ -713,7 +729,11 @@ test('common editor reveal modes scroll without changing selection or borrowing 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	using model = new TextModel(Array.from({ length: 60 }, () => 'line').join('\n'));
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		lineHeight: 20
+	});
 	const control: IEditor = editor;
 	control.layout({ width: 300, height: 100 });
 	control.setPosition(new Position(2, 2));
@@ -1164,7 +1184,11 @@ test('trigger dispatches actions and commands in the receiving editor with its c
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
 	using otherModel = new TextModel('beta');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	using other = createTestCodeEditor({ container: requiredElement(dom.window.document, 'aside'), model: otherModel, contributions: [] });
 	const context = editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
 	context.setContext('test.trigger.enabled', false);
@@ -1199,7 +1223,11 @@ test('trigger reports synchronous command errors and rejected action promises', 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	const previous = errorHandler.getUnexpectedErrorHandler();
 	const errors: unknown[] = [];
 	setUnexpectedErrorHandler(error => errors.push(error));

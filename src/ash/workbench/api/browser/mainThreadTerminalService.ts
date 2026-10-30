@@ -337,8 +337,13 @@ export class MainThreadTerminalService extends Disposable {
 			const lifetime = new DisposableStore();
 			const controller = new AbortController();
 			lifetime.add(toDisposable(() => controller.abort()));
-			try { lifetime.add(register(descriptor, lifetime, controller)); }
-			catch (error) { lifetime.dispose(); throw error; }
+			try {
+				lifetime.add(register(descriptor, lifetime, controller));
+			}
+			catch (error) {
+				lifetime.dispose();
+				throw error;
+			}
 			registrations.set(key, lifetime);
 			descriptors.set(key, descriptor);
 		}

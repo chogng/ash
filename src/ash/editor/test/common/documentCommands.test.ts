@@ -102,7 +102,10 @@ test('Stanza inline mark commands split text runs and preserve the selection', (
 
 test('Stanza stores collapsed mark toggles for subsequent text insertion', () => {
 	const schema = createDefaultDocumentSchema();
-	const paragraph = schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hello', { id: 'text-1' })] });
+	const paragraph = schema.createNode('paragraph', {
+		id: 'paragraph-1',
+		content: [schema.createText('Hello', { id: 'text-1' })]
+	});
 	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], 'document-1'), { selection: textSelection({ nodeId: 'text-1', offset: 5 }) });
 
 	const toggle = createToggleMarkCommand(schema, model.document, 'paragraph-1', 'text-1', model.selection!, 'strong');
@@ -416,7 +419,10 @@ test('Stanza exits an empty list item at the list boundary', () => {
 
 test('Stanza block format commands change block and list types without replacing content', () => {
 	const schema = createDefaultDocumentSchema();
-	const paragraph = schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hello', { id: 'text-1' })] });
+	const paragraph = schema.createNode('paragraph', {
+		id: 'paragraph-1',
+		content: [schema.createText('Hello', { id: 'text-1' })]
+	});
 	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], 'document-1'));
 
 	const heading = createSetBlockTypeCommand(model.document, 'paragraph-1', 'heading');
@@ -443,7 +449,10 @@ test('Stanza block format commands change block and list types without replacing
 
 test('Stanza inserts validated tables and inline images', () => {
 	const schema = createDefaultDocumentSchema();
-	const paragraph = schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hello', { id: 'text-1' })] });
+	const paragraph = schema.createNode('paragraph', {
+		id: 'paragraph-1',
+		content: [schema.createText('Hello', { id: 'text-1' })]
+	});
 	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], 'document-1'));
 
 	const table = createInsertTableCommand(schema, model.document, 'paragraph-1', 2, 3);

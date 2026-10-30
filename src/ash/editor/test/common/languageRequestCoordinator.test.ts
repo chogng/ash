@@ -509,7 +509,12 @@ test('a model closed during worker creation releases the newly created worker', 
 	});
 	const outcome = await coordinator.runLatest('tokens', { label: 'closing' }, () => assert.fail('Closed model must not receive results'));
 	assert.deepEqual({ outcome, disposed: worker.disposed, requests: worker.requests.length }, {
-		outcome: { status: LanguageRequestStatus.Cancelled, requestId: 1, modelVersion: 1, reason: LanguageRequestCancellationReason.ModelUnavailable },
+		outcome: {
+			status: LanguageRequestStatus.Cancelled,
+			requestId: 1,
+			modelVersion: 1,
+			reason: LanguageRequestCancellationReason.ModelUnavailable
+		},
 		disposed: true,
 		requests: 0,
 	});

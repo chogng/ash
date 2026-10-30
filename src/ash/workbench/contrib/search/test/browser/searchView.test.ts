@@ -1167,7 +1167,12 @@ test('Copy leaves no-selection and inactive calls alone but honors dismissed exp
 				return { resultCount: 2, limitHit: false, error: undefined };
 			}
 		});
-		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { if (rejectWrite) { throw denied; } written.push(value); } } as Clipboard));
+		services.registerInstance(IClipboardService, new BrowserClipboardService({
+			writeText: async value => {
+				if (rejectWrite) { throw denied; }
+				written.push(value);
+			}
+		} as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
 		await import('../../browser/searchActionsRemoveReplace.js');

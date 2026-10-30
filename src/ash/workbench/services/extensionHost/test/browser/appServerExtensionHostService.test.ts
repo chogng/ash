@@ -2209,7 +2209,13 @@ test('terminal completion and quick fix registrations bind the original instance
 	await services.get(IExtensionService).start();
 	using stateChanged = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').TerminalInstanceState>();
 	using removed = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance>();
-	const instance = { id: 'terminal-1', title: 'Shell', processId: 42, state: 'running', onDidChangeState: stateChanged.event } as import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance;
+	const instance = {
+		id: 'terminal-1',
+		title: 'Shell',
+		processId: 42,
+		state: 'running',
+		onDidChangeState: stateChanged.event
+	} as import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance;
 	Object.assign(services.get(ITerminalService), { instances: [instance], onDidDisposeInstance: removed.event });
 	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 	await host.start();

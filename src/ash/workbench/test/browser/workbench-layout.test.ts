@@ -2152,7 +2152,12 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
-	const storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
+	const storage = new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		workspaceId: 'test',
+		backend: dom.window.localStorage,
+		flushInterval: 0
+	});
 	const firstBar = new DisposableStore();
 	let actions: readonly IAction[] = [];
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu(options) { actions = options.getActions(); } };
@@ -2894,7 +2899,10 @@ test('Panel position commands rotate the actual Grid, retain focus and restore b
 			restored.layout.setPanelPosition(Position.TOP);
 			assert.equal(restored.layout.getPartSize('panel').height, 230);
 		} finally { restored.disposables.dispose(); }
-	} finally { harness.disposables.dispose(); dom.window.close(); }
+	} finally {
+		harness.disposables.dispose();
+		dom.window.close();
+	}
 });
 
 test('Panel default setting applies to new workspaces while saved workspace position wins', async () => {
@@ -2937,5 +2945,8 @@ test('Workbench banner occupies transient space and survives topology rebuilds',
 		assert.equal(harness.layout.mainContainerOffset.top, 35);
 		assert.equal(harness.layout.getPartSize('editor').height, before);
 		assert.equal('banner' in harness.layout.state, false);
-	} finally { harness.disposables.dispose(); dom.window.close(); }
+	} finally {
+		harness.disposables.dispose();
+		dom.window.close();
+	}
 });

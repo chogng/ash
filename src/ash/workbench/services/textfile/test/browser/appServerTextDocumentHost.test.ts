@@ -310,7 +310,15 @@ test('restarting retains shared attribution and rebases edits made while the win
 	host.files.contents.set(resource.toString(), 'first\nseparator\nlast');
 	for (const [threadId, text] of [['first-chat', 'agent first\nseparator\nlast'], ['second-chat', 'agent first\nseparator\nagent last']] as const) {
 		const id = await snapshot(host.transport, resource);
-		await host.transport.call('textDocument/apply', { threadId, turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text }] });
+		await host.transport.call('textDocument/apply', {
+			threadId,
+			turnId: 'turn',
+			changes: [{
+				kind: 'update',
+				snapshot: id,
+				text
+			}]
+		});
 	}
 	const { backend } = host;
 	const contents = new Map(host.files.contents);

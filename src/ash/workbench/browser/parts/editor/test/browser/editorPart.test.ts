@@ -2733,7 +2733,10 @@ test('comparison labels update in every group, survive restoration and release l
 		await editor.applyWorkingSet(workingSet);
 		assert.equal(editor.domNode.querySelector('.ash-tab .ash-icon-label-text')?.textContent, 'Still open ↔ After');
 		assert.equal(changes.isDisposed, false);
-	} finally { editor.dispose(); dom.window.close(); }
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
 });
 
 test('working-set restoration preserves the custom editor for an untitled JSON draft', async () => {

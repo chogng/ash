@@ -572,7 +572,12 @@ export class AshApplication extends Disposable {
 			}
 			return service;
 		}));
-		const remoteExecutable = remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath });
+		const remoteExecutable = remoteExecutablePath({
+			appPath: app.getAppPath(),
+			isPackaged: app.isPackaged,
+			platform: process.platform,
+			resourcesPath: process.resourcesPath
+		});
 		const tunnelServices = this._register(this.windowServices.createChild(new ServiceCollection([ILogService, this.logService])));
 		const coordinator = this._register(tunnelServices.createInstance(TunnelProcessCoordinator, {
 			executable: join(dirname(remoteExecutable), process.platform === 'win32' ? 'ash-remote-host.exe' : 'ash-remote-host'),
@@ -1738,7 +1743,12 @@ export class AshApplication extends Disposable {
 		return this.appServerStartupMode === 'disabled'
 			? UnavailableRemoteConnectionApi
 			: new RemoteConnections({
-				remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
+				remoteExecutable: remoteExecutablePath({
+					appPath: app.getAppPath(),
+					isPackaged: app.isPackaged,
+					platform: process.platform,
+					resourcesPath: process.resourcesPath
+				}),
 				environment: { ...process.env, ASH_HOME: this.profileRoot },
 				scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
 			});

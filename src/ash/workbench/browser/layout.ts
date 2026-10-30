@@ -349,7 +349,10 @@ export class WorkbenchLayout
 			this.domNode,
 			createWorkbenchGridDescriptor(this.views, dimension, state, this.activityBarLocation, this.sideBarLocation, editorVisible, bannerVisible),
 			{ fromJSON: data => this.view(parseWorkbenchPartId(data)) },
-			{ sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER_SIZE } : undefined, edgeSnapping: true },
+			{
+				sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER_SIZE } : undefined,
+				edgeSnapping: true
+			},
 		);
 		this.gridHandle.value = this.grid;
 		this.grid.setViewVisible(this.view('statusbar'), this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false);

@@ -450,7 +450,10 @@ test('Editor status uses the Chinese language pack', () => {
 	using pane = new TestStatusPane(dom.window.document, workingCopy);
 	const editorPart = { domNode: dom.window.document.body, activeInput: { resource: URI.file('/status.ts') }, activePane: pane, onDidChangeEditors: Event.None } as unknown as IEditorPart;
 	using statusbar = new StatusbarService();
-	using contribution = new EditorStatusContribution(editorPart, statusbar, { onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false } as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput, emptyFileModels);
+	using contribution = new EditorStatusContribution(editorPart, statusbar, {
+		onDidChangeScreenReaderOptimized: Event.None,
+		isScreenReaderOptimized: () => false
+	} as unknown as IAccessibilityService, emptyCodeEditors, emptyCommands, testLanguages, emptyQuickInput, emptyFileModels);
 	assert.ok(statusTexts(statusbar).includes('行 4，列 9'));
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right).find(item => item.id === 'ash.status.editor.eol')?.entry.tooltip, '选择行尾序列');
 	workingCopy.markDirty();

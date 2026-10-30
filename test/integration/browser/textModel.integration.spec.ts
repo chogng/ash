@@ -842,7 +842,10 @@ test('format on type uses the input event and is one undo step with the typed tr
 test('formatter choice cancels on cursor changes and readonly formatting does not open a picker', async ({ page }) => {
 	await page.goto('/textModel.html');
 	await page.waitForFunction(() => !!window.ashTextModelIntegration);
-	await page.evaluate(() => { window.ashTextModelIntegration.enableFormatting('en'); void window.ashTextModelIntegration.formatDocument(); });
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.enableFormatting('en');
+		void window.ashTextModelIntegration.formatDocument();
+	});
 	await expect(page.locator('.ash-quick-pick')).toBeVisible();
 	await page.evaluate(() => window.ashTextModelIntegration.getControl().setPosition({ lineNumber: 2, column: 1 }));
 	await expect(page.locator('.ash-quick-pick')).not.toBeVisible();

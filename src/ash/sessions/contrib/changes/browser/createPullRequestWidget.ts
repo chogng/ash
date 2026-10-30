@@ -113,7 +113,12 @@ export class CreatePullRequestWidget extends Disposable {
 		this.merge = h(ownerDocument, 'select');
 		this.merge.setAttribute('aria-label', localize('sessions.changes.prMerge', 'Merge mode'));
 		this.merge.hidden = true;
-		this._register(addDisposableListener(this.draft, 'change', () => { this.merge.disabled = this.draft.checked; if (this.draft.checked) { this.merge.value = ''; } }));
+		this._register(addDisposableListener(this.draft, 'change', () => {
+			this.merge.disabled = this.draft.checked;
+			if (this.draft.checked) {
+				this.merge.value = '';
+			}
+		}));
 		this.domNode.append(this.merge);
 		this.primaryAction = options.onSendToChat && preferences.primaryAction === 'sendToChat' ? 'sendToChat' : 'create';
 		this.message = h(ownerDocument, 'p');
@@ -155,15 +160,28 @@ export class CreatePullRequestWidget extends Disposable {
 		} else {
 			this.submit = this._register(new Button(actions, submitOptions));
 		}
-		this._register(addDisposableListener(this.domNode, 'submit', event => { event.preventDefault(); void this.create(); }));
+		this._register(addDisposableListener(this.domNode, 'submit', event => {
+			event.preventDefault();
+			void this.create();
+		}));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); options.onCancel(); }
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				event.stopPropagation();
+				options.onCancel();
+			}
 			if (event.key === 'Tab') {
 				const targets = [...this.domNode.querySelectorAll<HTMLElement>('input:not(:disabled), textarea:not(:disabled), select:not(:disabled), button:not(:disabled)')].filter(element => !element.hidden);
 				const first = targets[0];
 				const last = targets.at(-1);
-				if (event.shiftKey && ownerDocument.activeElement === first) { event.preventDefault(); last?.focus(); }
-				if (!event.shiftKey && ownerDocument.activeElement === last) { event.preventDefault(); first?.focus(); }
+				if (event.shiftKey && ownerDocument.activeElement === first) {
+					event.preventDefault();
+					last?.focus();
+				}
+				if (!event.shiftKey && ownerDocument.activeElement === last) {
+					event.preventDefault();
+					first?.focus();
+				}
 			}
 		}));
 		this.ready = this.prepare();

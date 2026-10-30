@@ -2028,7 +2028,10 @@ test('call document joins use a separate untitled working copy and preserve the 
 		assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Keep typing while the room opens');
 		pane.clearInput();
 		assert.equal(pane.getCollaborationDocument(), undefined);
-	} finally { pane.dispose(); environment.window.close(); }
+	} finally {
+		pane.dispose();
+		environment.window.close();
+	}
 });
 
 

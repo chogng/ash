@@ -125,7 +125,10 @@ test('A declared commit character accepts completion and text as one isolated un
 	using store = createLanguageCompletionStore(model);
 	using session = new SuggestModel(store, editor);
 	accept(store, model, 1, [{
-		...completion('console', 'console', false, Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1))),
+		...completion('console', 'console', false, Range.fromPositions(
+			new Position((0) + 1, (0) + 1),
+			new Position((0) + 1, (3) + 1)
+		)),
 		commitCharacters: ['.'],
 	}]);
 

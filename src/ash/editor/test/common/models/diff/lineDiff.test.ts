@@ -19,7 +19,11 @@ suite('Frontend line diff', () => {
 
 	test('returns standard line and character mappings with whitespace options', () => {
 		const computer = new DefaultLinesDiffComputer();
-		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
+		const options = {
+			ignoreTrimWhitespace: false,
+			maxComputationTimeMs: 0,
+			computeMoves: false
+		};
 		const diff = computer.computeDiff(['same', 'old value', 'tail'], ['same', 'new value', 'tail'], options);
 		assert.deepEqual(diff.changes.map(change => ({
 			original: [change.original.startLineNumber, change.original.endLineNumberExclusive],
@@ -108,7 +112,11 @@ suite('Frontend line diff', () => {
 		const original = ['head', 'const source = new ExplorerDataSource(files, config);', 'tail'];
 		const modified = ['head', 'using workspace = new WorkspaceContextService(project);', 'const getValue = config.getValue.bind(config);', 'config.getValue = section => getValue(section);', 'using source = new ExplorerDataSource(config);', 'tail'];
 		const computer = new DefaultLinesDiffComputer();
-		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: false };
+		const options = {
+			ignoreTrimWhitespace: false,
+			maxComputationTimeMs: 0,
+			computeMoves: false
+		};
 		const result = computer.computeDiff(original, modified, options);
 		assert.deepEqual(await computer.computeDiffAsync(original, modified, options, new AbortController().signal), result);
 		const diff = toLineDiff(result, original.length, modified.length);
@@ -173,7 +181,11 @@ suite('Frontend line diff', () => {
 		const stay = Array.from({ length: 6 }, (_, index) => `stay ${index}`);
 		const original = ['head', ...block, ...stay, 'tail'];
 		const modified = ['head', ...stay, ...edited, 'tail'];
-		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: true };
+		const options = {
+			ignoreTrimWhitespace: false,
+			maxComputationTimeMs: 0,
+			computeMoves: true
+		};
 		const diff = new DefaultLinesDiffComputer().computeDiff(original, modified, options);
 		assert.deepEqual(diff.moves.map(move => ({
 			original: [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.original.endLineNumberExclusive],
@@ -192,7 +204,11 @@ suite('Frontend line diff', () => {
 
 	test('does not infer moves from in-place edits or shared punctuation', () => {
 		const computer = new DefaultLinesDiffComputer();
-		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: true };
+		const options = {
+			ignoreTrimWhitespace: false,
+			maxComputationTimeMs: 0,
+			computeMoves: true
+		};
 		assert.deepEqual(computer.computeDiff(['const before = 1;', '}'], ['const after = 2;', '}'], options).moves, []);
 		assert.deepEqual(computer.computeDiff(['aaa();', '{', '}', 'keep 1', 'keep 2', 'keep 3'], ['keep 1', 'keep 2', 'keep 3', 'bbb();', '{', '}'], options).moves, []);
 	});
@@ -214,7 +230,11 @@ suite('Frontend line diff', () => {
 		edited[1] = '  const pendingRecords = prepareRecords(updatedInput);';
 		const stay = Array.from({ length: 12 }, (_, index) => `stable record ${index}`);
 		const other = ['function other() {', '  return unrelated();', '}'];
-		const options = { ignoreTrimWhitespace: false, maxComputationTimeMs: 0, computeMoves: true };
+		const options = {
+			ignoreTrimWhitespace: false,
+			maxComputationTimeMs: 0,
+			computeMoves: true
+		};
 		for (const reverse of [false, true]) {
 			const before = ['head', ...block, ...stay, 'tail'];
 			const after = ['head', ...stay, ...other, ...edited, 'tail'];

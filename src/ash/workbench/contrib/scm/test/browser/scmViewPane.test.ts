@@ -880,7 +880,12 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 		await configuration.updateValue('scm.graph.pageOnScroll', false);
 		using uiServices = createTestComponentServices(undefined, undefined, browser.window.document);
 		using quickInput = new TestQuickInputService({ container: browser.window.document.body });
-		const hover: IHoverService = { setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { } };
+		const hover: IHoverService = {
+			setupDelayedHover: () => testManagedHover(),
+			setupHover: () => testManagedHover(),
+			showHover: () => testManagedHover(),
+			hideHover() { }
+		};
 		using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'retained-state', title: 'Graph' }, view, new MenuService(new CommandService(services), context), testContextMenuProvider as IContextMenuService, context, hover, testEditorService(), testResourceLabelService(), { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, uiServices.get(IStorageService), scm);
 		pane.setVisible(true);
 		const graph = pane.element.querySelector<HTMLElement>('.ash-scm-graph')!;
@@ -1391,7 +1396,12 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 	try {
 		using history = createHistoryViewFixture(git);
 		services.registerInstance(ISCMService, history.scmService);
-		const hover: IHoverService = { setupDelayedHover: () => testManagedHover(), setupHover: () => testManagedHover(), showHover: () => testManagedHover(), hideHover() { } };
+		const hover: IHoverService = {
+			setupDelayedHover: () => testManagedHover(),
+			setupHover: () => testManagedHover(),
+			showHover: () => testManagedHover(),
+			hideHover() { }
+		};
 		await import('../../browser/scm.contribution.js');
 		using historyConfiguration = new InMemoryConfigurationService();
 		using historyUiServices = createTestComponentServices(undefined, undefined, browser.window.document);

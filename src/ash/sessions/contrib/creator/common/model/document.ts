@@ -412,7 +412,9 @@ function parseLayoutProperties(value: Record<string, unknown>): Pick<DesignShape
 	if (constraints !== undefined && (!isRecord(constraints) || !modes.includes(constraints.horizontal as string) || !modes.includes(constraints.vertical as string) || Object.keys(constraints).some(key => !['horizontal', 'vertical'].includes(key)))) {
 		throw new TypeError(localize('sessions.design.invalidConstraints', 'Invalid layer constraints'));
 	}
-	if (value.kind === 'group' && isRecord(sizing) && (sizing.width === 'fill' || sizing.height === 'fill')) { throw new TypeError(localize('sessions.design.invalidSizing', 'Invalid layer sizing')); }
+	if (value.kind === 'group' && isRecord(sizing) && (sizing.width === 'fill' || sizing.height === 'fill')) {
+		throw new TypeError(localize('sessions.design.invalidSizing', 'Invalid layer sizing'));
+	}
 	const limits = value.sizeLimits;
 	if (limits !== undefined && (value.kind === 'group' || !isRecord(limits)
 		|| Object.entries(limits).some(([key, limit]) => !['minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(key) || !isFiniteNumber(limit) || limit < (key.startsWith('min') ? 0 : 0.001))

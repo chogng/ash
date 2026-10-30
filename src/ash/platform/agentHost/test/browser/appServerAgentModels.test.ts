@@ -116,7 +116,10 @@ test('Profile model defaults preserve an unset model and clear effort without cl
 	assert.notEqual(snapshot.model, configured.model);
 	await api.configureDefaults({ reasoningEffort: null }, snapshot.revision);
 	await api.configureDefaults({ model: null, reasoningEffort: null }, snapshot.revision);
-	assert.deepEqual(writes.map(({ commandId, ...write }) => { assert.ok(commandId); return write; }), [
+	assert.deepEqual(writes.map(({ commandId, ...write }) => {
+		assert.ok(commandId);
+		return write;
+	}), [
 		{ expectedRevision: 12, modelReasoningEffort: null },
 		{ expectedRevision: 12, model: null, modelReasoningEffort: null },
 	]);

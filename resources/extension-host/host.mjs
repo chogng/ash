@@ -501,15 +501,24 @@ export const speech = Object.freeze({
 							}
 							const value = { status: event.status, ...(event.text === undefined ? {} : { text: event.text }) };
 							const bytes = JSON.stringify(value).length;
-							if (state.events.length >= 128 || state.bytes + bytes > 262144) { release(id); return; }
-							state.events.push(value); state.bytes += bytes;
+							if (state.events.length >= 128 || state.bytes + bytes > 262144) {
+								release(id);
+								return;
+							}
+							state.events.push(value);
+							state.bytes += bytes;
 							if (state.kind === 'speechToText' && (event.status === 4 || event.status === 5) || state.kind === 'keywordRecognition' && event.status === 2) state.closed = true;
 						});
 						if (typeof state.listener?.dispose !== 'function') throw new TypeError('Speech event subscription must be disposable');
 						if (sessions.get(id) !== state) { state.listener.dispose(); throw new Error('Speech session was released while subscribing'); }
 						return {};
-					} catch (error) { release(id); throw error; }
-					finally { cancellation.dispose(); }
+					} catch (error) {
+						release(id);
+						throw error;
+					}
+					finally {
+						cancellation.dispose();
+					}
 				}
 				const state = sessions.get(id);
 				if (!state) throw new Error('Speech session is unavailable');

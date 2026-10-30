@@ -228,7 +228,10 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				this.write(data, resolve);
 			});
 		} finally {
-			if (release) { this._store.delete(release); release.dispose(); }
+			if (release) {
+				this._store.delete(release);
+				release.dispose();
+			}
 		}
 	}
 
