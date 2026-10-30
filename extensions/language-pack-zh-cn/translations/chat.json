@@ -892,6 +892,7 @@
     "chat.changes.invalidIdentity": "查看变更需要一个会话。",
     "chat.changes.unavailable": "此会话已不可用。",
     "chat.input.changesHelp": "新建聊天时，输入框上方的变更按钮显示工作区变更；进入会话后显示当前检查点的净变更。撤销和重做会更新摘要。使用 Tab 聚焦按钮，按 Enter 或空格打开变更。会话没有变更时不会显示工作区变更。没有变更或摘要不可用时，按钮会隐藏。",
+    "chat.input.canvasHelp": "当前会话存在可打开的 Canvas 时，使用新建聊天旁的下拉菜单 > Canvas，或添加上下文 > Canvas…。在工具栏中用左右方向键聚焦新建聊天的下拉按钮，按 Enter 或空格打开菜单，再用方向键选择 Canvas。Escape 关闭菜单并返回按钮。打开 Canvas 不会发送或更改草稿。未启用 Canvas、没有活动会话或没有可用 Canvas 时，菜单项会隐藏。",
     "chat.transcript.label": "聊天记录",
     "chat.tool.failed": "{0} · 失败",
     "chat.tool.completed": "{0} · 已完成",

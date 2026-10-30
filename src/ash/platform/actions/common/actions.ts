@@ -98,6 +98,7 @@ export class MenuId {
 	static readonly DiffEditorHunkToolbar = new MenuId('DiffEditorHunkToolbar');
 	static readonly DiffEditorSelectionToolbar = new MenuId('DiffEditorSelectionToolbar');
 	static readonly ChatTitle = new MenuId('ChatTitle');
+	static readonly ChatNewMenu = new MenuId('ChatNewMenu');
 	static readonly ChatTitleLayout = new MenuId('ChatTitleLayout');
 	static readonly ChatInputSecondary = new MenuId('ChatInputSecondary');
 	static readonly ChatInputStatus = new MenuId('ChatInputStatus');

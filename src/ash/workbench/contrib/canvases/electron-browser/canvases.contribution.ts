@@ -17,7 +17,7 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { EditorInputSerializers, UnknownEditorInputSerializerError } from '../../../services/editor/common/editorInputSerializer.js';
 import { CanvasInput, ICanvasService, ICanvasContextService } from '../common/canvas.js';
-import { CanvasAvailableContext, CanvasOwnerAvailableContext } from '../browser/editorCanvasActions.js';
+import { CanvasAvailableContext, registerEditorCanvasActions } from '../browser/editorCanvasActions.js';
 import { CanvasService } from './canvasService.js';
 import { CanvasEditor, SessionCanvasFocusedContext } from './canvasEditor.js';
 import { registerCanvasCommands } from './canvasCommands.js';
@@ -44,10 +44,9 @@ registerWorkbenchContribution('workbench.contrib.canvases', WorkbenchPhase.Block
 	const instantiation = accessor.get(IInstantiationService);
 	const canvases = accessor.get(ICanvasService);
 	const available = CanvasAvailableContext.bindTo(accessor.get(IContextKeyService));
-	const ownerAvailable = CanvasOwnerAvailableContext.bindTo(accessor.get(IContextKeyService));
 	const contexts = accessor.get(ICanvasContextService);
 	resources.add(registerCanvasContextPicker(accessor));
-	resources.add(autorun(reader => ownerAvailable.set(canvases.enabled.read(reader) && contexts.contexts.read(reader).some(context => contexts.isOwnerVisible(context.owner)))));
+	resources.add(registerEditorCanvasActions(accessor));
 	resources.add(autorun(reader => available.set(canvases.reopenableCanvases.read(reader).length > 0)));
 	resources.add(EditorPanes.registerEditorPane({
 		id: CanvasInput.EDITOR_ID, name: localize('canvas.editorName', 'Canvas'),

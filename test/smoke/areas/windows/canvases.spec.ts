@@ -165,16 +165,29 @@ exports.activate = context => {
 		if (!await details.getByRole('switch').isChecked()) { await details.getByRole('switch').focus(); await details.getByRole('switch').press('Space'); }
 		await expect(details.getByRole('switch')).toBeChecked();
 		await workbench.quickaccess.runCommand('workbench.action.chat.open');
+		await workbench.quickaccess.runCommand('workbench.action.chat.new');
+		const newChatMenu = () => page.locator('.ash-chat-title-actions .ash-dropdown-with-primary-dropdown button').click();
+		const menus = new Menus(page);
+		expect((await menus.inspect(application, newChatMenu)).map(item => item.label)).not.toContain('Canvas');
+		await expect(page.locator('.ash-chat-title-actions [data-action-id="workbench.action.chat.openCanvas"], .ash-chat-secondary-toolbar [data-action-id="workbench.action.chat.openCanvas"]')).toHaveCount(0);
 		if (!await page.locator('.ash-chat-sessions-sidebar').isVisible()) { await workbench.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar'); }
 		await page.locator('.ash-agent-session-row').filter({ hasText: source.title }).click();
 		await expect(page.locator(`[data-thread-id="${source.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
+		await expect.poll(async () => (await menus.inspect(application, newChatMenu)).some(item => item.label === 'Canvas')).toBe(true);
+		const dropdown = page.locator('.ash-chat-title-actions .ash-dropdown-with-primary-dropdown button');
+		await dropdown.focus();
+		await dropdown.press('Enter');
+		await expect(page.getByRole('menuitem', { name: 'Canvas', exact: true })).toBeVisible();
+		await testInfo.attach('canvas-new-chat-menu', { body: await page.screenshot(), contentType: 'image/png' });
+		await page.keyboard.press('Escape');
+		await expect(dropdown).toBeFocused();
 		await installMainChannelTestClient(page);
 		const views = () => page.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
 		const chat = page.locator(`[data-thread-id="${source.threads[0]!.threadId}"]:visible`).first();
 		const message = chat.getByRole('textbox', { name: 'Chat message', exact: true });
 		await message.focus(); await page.keyboard.insertText('Keep my draft while opening Canvas');
 		await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
-		await workbench.quickaccess.select('Open Canvas…');
+		await workbench.quickaccess.select('Canvas…');
 		await expect(page.getByRole('option', { name: /Needs input/ })).toHaveCount(0);
 		await workbench.quickaccess.select('Fixture board');
 		const canvas = page.locator('.ash-session-canvas:visible');
@@ -195,8 +208,7 @@ exports.activate = context => {
 		await workbench.quickaccess.runCommand('acme.canvas.pending');
 		await workbench.quickaccess.runCommand('acme.canvas.ready');
 		await expect(canvas).toHaveCount(0);
-		await workbench.quickaccess.runCommand('workbench.action.chat.openCanvas');
-		await workbench.quickaccess.select('Updated board');
+		await menus.select(application, newChatMenu, ['Canvas', 'Fixture board']);
 		await expect(canvas).toBeVisible();
 		await expect(page.getByRole('tab', { name: 'Updated board', exact: true })).toHaveCount(1);
 		await expect(page.locator('.ash-browser-editor')).toHaveCount(0);
@@ -224,11 +236,18 @@ exports.activate = context => {
 		await expect(agents.locator('.ash-session-canvas-page:visible')).toBeVisible();
 		await expect.poll(async () => (await agentViews()).find(view => view.id === agentNative.id)?.state.visible).toBe(true);
 		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-		await page.locator('[data-package-id="acme/canvas-smoke"]').dblclick();
+		await page.bringToFront();
+		await page.getByRole('searchbox', { name: 'Search extensions', exact: true }).fill('Canvas provider smoke');
+		await page.locator('[data-package-id="acme/canvas-smoke"]').click();
+		await expect(details).toBeVisible();
 		await details.getByRole('switch').focus(); await details.getByRole('switch').press('Space');
 		await expect(details.getByRole('switch')).not.toBeChecked();
 		await expect.poll(async () => (await views()).some(view => view.id === native.id)).toBe(false);
 		await expect.poll(async () => (await agentViews()).some(view => view.id === agentNative.id)).toBe(false);
+		await expect.poll(async () => (await menus.inspect(application, newChatMenu)).some(item => item.label === 'Canvas')).toBe(false);
+		await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await expect(page.getByRole('option', { name: 'Canvas…', exact: true })).toHaveCount(0);
+		await page.keyboard.press('Escape');
 	} finally {
 		await connection.close(); origin.closeAllConnections(); await new Promise<void>(resolve => origin.close(() => resolve()));
 	}

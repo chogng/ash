@@ -3,7 +3,7 @@ import { onUnexpectedError } from '../../../base/common/errors.js';
 import { localize, localize2 } from '../../../nls.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
-import { Action2, MenuId, registerAction2 } from '../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import type { SessionId, ThreadId } from '../../services/sessions/common/session.js';
@@ -24,9 +24,10 @@ registerAction2(class NewChatAction extends Action2 {
 			icon: Lxicon.add,
 			f1: true,
 			menu: {
-				id: MenuId.ChatTitle,
-				group: 'navigation',
+				id: MenuId.ChatNewMenu,
+				group: '1_open',
 				order: 1,
+				when: ChatContextKeys.enabled.isEqualTo(true),
 			},
 		});
 	}
@@ -38,6 +39,15 @@ registerAction2(class NewChatAction extends Action2 {
 		sessionService.createUntitledSession();
 		return viewsService.focusView(CHAT_VIEW_ID);
 	}
+});
+
+MenusRegistry.appendMenuItem(MenuId.ChatTitle, {
+	submenu: MenuId.ChatNewMenu,
+	title: localize2({ bundle: 'ash.sessions', key: 'command.NewChatAction' }, 'New Chat'),
+	isSplitButton: true,
+	when: ChatContextKeys.enabled.isEqualTo(true),
+	group: 'navigation',
+	order: 1,
 });
 
 type ChatHistoryQuickPickItem = IQuickPickItem & (
