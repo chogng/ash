@@ -138,7 +138,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		await this.tabs.removeFilesLandingTab();
 		if (this.isDisposed) { return; }
 		this.editor.activateGroup(this.documentGroups[0]!.id);
-		if (this.documentGroups.every(group => group.inputs.length === 0)) { this.layout.hidePart('editor'); }
+		// Switching working sets preserves shared Editor visibility, even when the incoming session has no documents.
 		await this.tabs.reconcile(selection, !this.documentsVisible && this.layout.isPartVisible('auxiliarybar'));
 		if (this.isDisposed) { return; }
 		await this.detailPanel.update(false);

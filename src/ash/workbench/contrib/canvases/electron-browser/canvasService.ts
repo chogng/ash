@@ -186,10 +186,12 @@ export class CanvasService extends Disposable implements ICanvasService {
 				continue;
 			}
 			if (!this.contexts.isOwnerVisible(entry.input.reference)) { continue; }
-			if (!entry.input.canvas.get().source) { continue; }
-			if (!isOpen && !entry.opening && entry.dismissed) { targets.push({ reference: entry.input.reference, canvas: entry.input.canvas.get() }); }
+			const hasSource = !!entry.input.canvas.get().source;
+			// An admitted live page can restore its reconnecting placeholder before its provider confirms a source.
+			if (!hasSource && !entry.admitted) { continue; }
+			if (hasSource && !isOpen && !entry.opening && entry.dismissed) { targets.push({ reference: entry.input.reference, canvas: entry.input.canvas.get() }); }
 			if (this.contexts.workingSets?.state.get().restoring) { continue; }
-			if (entry.requested && !entry.dismissed) {
+			if (hasSource && entry.requested && !entry.dismissed) {
 				entry.requested = false;
 				if (isOpen) { continue; }
 				void this.revealCanvas(entry.input.reference).catch(error => {

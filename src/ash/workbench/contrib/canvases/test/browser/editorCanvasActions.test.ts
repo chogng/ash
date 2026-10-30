@@ -6,6 +6,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { constObservable, observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
+import { Separator } from '../../../../../base/common/actions.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { MenuId, SubmenuItemAction } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
@@ -145,6 +146,28 @@ suite('Canvas menu actions', () => {
 		assert.deepEqual(f.reopened, ['canvas:/saved']);
 		f.reopenable.set([], undefined);
 		assert.deepEqual(f.menu(), []);
+	});
+
+	test('long conversation identities keep distinct Canvas commands within the registry limit', async () => {
+		using f = fixture();
+		const id = 'session-' + 'a'.repeat(200);
+		const context = { ...f.context, owner: owner(id) };
+		const targets = ['one', 'two'].map(name => {
+			const resource = URI.parse('agent-host-canvas:/browser_target_' + name);
+			return { reference: { ...context.owner, canvas: resource }, canvas: { resource, instanceId: name, title: name, source: URI.parse('https://example.test') } };
+		});
+		f.contexts.set([context], undefined);
+		f.select(id);
+		await settle();
+		f.reopenable.set(targets, undefined);
+		const actions = f.menu()[0]!.actions.filter(action => !(action instanceof Separator));
+		assert.deepEqual(actions.map(action => action.label), ['Board', 'one', 'two']);
+		assert.equal(new Set(actions.map(action => action.id)).size, 3);
+		assert.ok(actions.every(action => action.id.length <= 256));
+		for (const action of actions) { await action.run(); }
+		assert.equal(f.opened.length, 1);
+		assert.deepEqual(f.reopened, targets.map(target => target.reference.canvas.toString()));
+		assert.deepEqual(f.errors, []);
 	});
 
 	test('a late availability read and a retained context choice cannot cross conversations', async () => {

@@ -2768,6 +2768,7 @@
     "canvas.mainWindowOnly": "请将 Canvas 保留在其所属的会话窗口中。",
     "canvas.initializeFailed": "无法加载会话 Canvas：{0}",
     "canvas.openFailed": "无法打开 Canvas：{0}",
+    "canvas.sourceChanged": "Canvas {0} 的地址已更改。请从 Canvas 菜单再次打开它以加载更新后的页面。",
     "canvas.hiddenOwner": "打开此 Canvas 所属的会话以查看其内容。",
     "canvas.pageLabel": "Canvas：{0}",
     "canvas.help": "此 Canvas 是所属会话的交互页面。按 Tab 在页面控件之间移动。使用 <keybinding:workbench.action.focusNextPart> 离开页面。关闭标签页会隐藏 Canvas。使用 <keybinding:workbench.action.chat.reopenCanvas> 重新打开。“关闭 Canvas”会结束页面。按 Escape 关闭无障碍视图并返回 Canvas。",

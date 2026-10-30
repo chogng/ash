@@ -176,10 +176,8 @@ exports.activate = context => {
 		await expect.poll(async () => (await menus.inspect(application, newChatMenu)).some(item => item.label === 'Canvas')).toBe(true);
 		const dropdown = page.locator('.ash-chat-title-actions .ash-dropdown-with-primary-dropdown button');
 		await dropdown.focus();
-		await dropdown.press('Enter');
-		await expect(page.getByRole('menuitem', { name: 'Canvas', exact: true })).toBeVisible();
+		expect((await menus.inspect(application, () => dropdown.press('Enter'))).find(item => item.label === 'Canvas')).toMatchObject({ enabled: true });
 		await testInfo.attach('canvas-new-chat-menu', { body: await page.screenshot(), contentType: 'image/png' });
-		await page.keyboard.press('Escape');
 		await expect(dropdown).toBeFocused();
 		await installMainChannelTestClient(page);
 		const views = () => page.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
@@ -248,6 +246,82 @@ exports.activate = context => {
 		await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 		await expect(page.getByRole('option', { name: 'Canvas…', exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
+	} finally {
+		await connection.close(); origin.closeAllConnections(); await new Promise<void>(resolve => origin.close(() => resolve()));
+	}
+});
+
+test('Agent Canvas provider URL changes retain the old page until the user opens the new source', { tag: '@electron-app-server' }, async ({ application, webAppServer, workbench, testWorkspace }, testInfo) => {
+	test.setTimeout(120_000);
+	const origin = createServer((_request, response) => { response.setHeader('Content-Type', 'text/html'); response.end('<title>Provider page</title><button>Provider button</button>'); });
+	await new Promise<void>(resolve => origin.listen(0, '127.0.0.1', resolve));
+	const address = origin.address();
+	if (!address || typeof address === 'string') { throw new Error('Missing Canvas fixture origin'); }
+	const url = `http://127.0.0.1:${address.port}`;
+	const root = join(testWorkspace.directory, 'canvas-refresh-extension');
+	await mkdir(join(root, '.ash-plugin'), { recursive: true });
+	await writeFile(join(root, '.ash-plugin/plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/canvas-refresh', version: '1.0.0', displayName: 'Canvas refresh fixture', compatibility: { ash: '>=0.1.0' }, permissions: [], contributions: { editorExtensions: [{ id: 'canvas', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDemand', capability: 'dataChannel' }], capabilities: ['command', 'dataChannel'] }] } }));
+	await writeEditorExtensionFixture(root, `
+const ash = require('@ash/sdk');
+exports.activate = context => {
+ const changes = new ash.EventEmitter(); let moved = false;
+ const resolve = () => ({ url: ${JSON.stringify(url)} + (moved ? '/updated' : '/original'), title: moved ? 'Updated board' : 'Fixture board' });
+ context.subscriptions.push(changes, ash.window.registerCanvasProvider('board', { openCanvas: resolve, resolveCanvas: resolve, onDidChangeCanvases: changes.event }),
+ ash.commands.register('acme.canvas.move', () => { moved = true; changes.fire(); }));
+};`);
+	const packagePath = join(root, 'package.json');
+	const manifest = JSON.parse(await readFile(packagePath, 'utf8'));
+	manifest.activationEvents = ['onDemand:dataChannel'];
+	manifest.contributes.canvases = [{ id: 'board', displayName: 'Fixture board', description: 'Canvas refresh fixture' }];
+	await writeFile(packagePath, JSON.stringify(manifest));
+	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
+	try {
+		const source = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'canvas-refresh', title: 'Canvas refresh session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
+		const page = workbench.page;
+		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+		const install = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+		await install.getByRole('textbox').fill('canvas-refresh-extension');
+		await workbench.dialogs.expectMessage(application, 'Information', () => install.getByRole('textbox').press('Enter'));
+		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+		await page.locator('[data-package-id="acme/canvas-refresh"]').click();
+		const details = page.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/canvas-refresh' });
+		await workbench.dialogs.confirm(application, 'Canvas refresh fixture', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
+		await expect(details).toHaveAttribute('aria-busy', 'false');
+		if (!await details.getByRole('switch').isChecked()) { await details.getByRole('switch').focus(); await details.getByRole('switch').press('Space'); }
+		await expect(details.getByRole('switch')).toBeChecked();
+		await workbench.quickaccess.runCommand('workbench.action.chat.open');
+		if (!await page.locator('.ash-chat-sessions-sidebar').isVisible()) { await workbench.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar'); }
+		await page.locator('.ash-agent-session-row').filter({ hasText: source.title }).click();
+		const threadId = source.threads[0]!.threadId;
+		await expect(page.locator(`[data-thread-id="${threadId}"]:visible`).first()).toBeVisible();
+		const menus = new Menus(page);
+		const openMenu = () => page.locator('.ash-chat-title-actions .ash-dropdown-with-primary-dropdown button').click();
+		await expect.poll(async () => (await menus.inspect(application, openMenu)).some(item => item.label === 'Canvas')).toBe(true);
+		await menus.select(application, openMenu, ['Canvas', 'Fixture board']);
+		await expect(page.getByRole('tab', { name: 'Fixture board', exact: true })).toHaveCount(1);
+		await installMainChannelTestClient(page);
+		const views = () => page.evaluate(() => globalThis.ashTestMainProcess.call<IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
+		const selected = (await views()).find(view => view.canvas?.canvasId === 'board')!;
+		await page.evaluate(id => globalThis.ashTestMainProcess.call('browserView', 'destroyBrowserView', [id]), selected.id);
+		await installBrowserNetworkPolicy(application as ElectronApplication, url);
+		const agentPage = await page.evaluate(({ sessionId, threadId, url, canvas, token }) => globalThis.ashTestMainProcess.call<{ targetId: string; }>('browserHost', 'create', {
+			id: crypto.randomUUID(), params: { threadId, url, networkToken: token, canvas: { sessionId, instanceId: canvas.instanceId, title: 'Agent board', definition: { extensionId: canvas.extensionId!, canvasId: canvas.canvasId! } } },
+		}), { sessionId: source.sessionId, threadId, url: url + '/original', canvas: selected.canvas!, token: browserNetworkToken });
+		await expect(page.getByRole('tab', { name: 'Agent board', exact: true })).toHaveCount(1);
+		await workbench.quickaccess.runCommand('acme.canvas.move');
+		await expect(page.getByRole('article').getByText('Canvas Fixture board has a new address. Open it again from the Canvas menu to load the updated page.', { exact: true })).toBeVisible();
+		const retained = (await views()).find(view => view.id === agentPage.targetId)!;
+		expect(retained.owner.type).toBe('agent');
+		expect(retained.state.url).toBe(url + '/original');
+		await expect(page.getByRole('tab', { name: 'Agent board', exact: true })).toHaveCount(1);
+		await testInfo.attach('canvas-source-change-retained', { body: await page.screenshot(), contentType: 'image/png' });
+		await menus.select(application, openMenu, ['Canvas', 'Fixture board']);
+		await expect(page.getByRole('tab', { name: 'Updated board', exact: true })).toHaveCount(1);
+		const reopened = (await views()).find(view => view.canvas?.canvasId === 'board')!;
+		expect(reopened.owner.type).toBe('user');
+		expect(reopened.state.url).toBe(url + '/updated');
+		expect((await views()).some(view => view.id === agentPage.targetId)).toBe(false);
+		await testInfo.attach('canvas-source-change-reopened', { body: await page.screenshot(), contentType: 'image/png' });
 	} finally {
 		await connection.close(); origin.closeAllConnections(); await new Promise<void>(resolve => origin.close(() => resolve()));
 	}

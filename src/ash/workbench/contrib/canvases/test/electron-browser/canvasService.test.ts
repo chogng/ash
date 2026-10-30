@@ -161,6 +161,41 @@ suite('Conversation Canvas presentation', () => {
 		assert.equal(suppressions, 0);
 	});
 
+	test('working-set restoration retains an admitted Canvas while its provider is reconnecting', async () => {
+		const page = info('one', 'thread-one');
+		const owner = { providerId: 'local-agent-host', session: URI.parse('ash-session:/session-one'), chat: URI.parse('ash-thread:/thread-one') };
+		const canvas = { resource: URI.parse('agent-host-canvas:/one'), instanceId: 'preview', title: 'Preview', source: URI.parse(page.state.url) as URI | undefined };
+		const canvases = observableValue('test', [canvas]);
+		const state = observableValue<ICanvasWorkingSetState>('test', { owner: undefined, restoring: false, applying: false });
+		using f = fixture([page], undefined, {
+			contexts: constObservable([{ owner, canvases }]),
+			workingSets: { state, registerEditorToRetain: () => Disposable.None, suppressEditorPartAutoVisibility: () => Disposable.None },
+		});
+		await settle();
+		const input = f.opened[0] as CanvasInput;
+		canvases.set([{ ...canvas, source: undefined }], undefined);
+		state.set({ owner: undefined, restoring: true, applying: true }, undefined);
+		await f.group.closeEditor(input, { reason: 'reset' });
+		f.visible.clear(); f.visibility.fire();
+		state.set({ owner: undefined, restoring: false, applying: false }, undefined);
+		await settle();
+		assert.equal(f.opened.length, 1);
+		state.set({ owner: undefined, restoring: true, applying: true }, undefined);
+		f.visible.add('thread-one'); f.visibility.fire();
+		state.set({ owner: undefined, restoring: false, applying: false }, undefined);
+		await settle();
+		assert.deepEqual(f.inputs, [input]);
+		assert.equal(f.opened.length, 2);
+		assert.equal(f.options[1]?.preserveFocus, true);
+		assert.equal(input.canvas.get().source, undefined);
+		assert.equal(f.canvases.restoreCanvasInput(input.serializationId), input);
+		canvases.set([canvas], undefined);
+		await settle();
+		assert.deepEqual(f.inputs, [input]);
+		assert.equal(f.opened.length, 2, 'source recovery does not open a second editor');
+		assert.deepEqual(f.failures, []);
+	});
+
 	test('dismissal after an explicit open starts wins over that request completing', async () => {
 		const page = info('one', 'thread-one');
 		const owner = { providerId: 'local-agent-host', session: URI.parse('ash-session:/session-one'), chat: URI.parse('ash-thread:/thread-one') };
@@ -242,7 +277,7 @@ function fixture(snapshot: readonly IBrowserViewInfo[] = [], pendingSnapshot?: P
 		openEditor: async (input, settings) => {
 			opened.push(input);
 			options.push(settings ?? {});
-			if (input instanceof CanvasInput) { await canvases.resolveCanvasModel(input.reference, input.canvas.get().source!); }
+			if (input instanceof CanvasInput && input.canvas.get().source) { await canvases.resolveCanvasModel(input.reference, input.canvas.get().source!); }
 			await f.waitForOpen;
 			if (!inputs.includes(input)) { inputs.push(input); }
 		},

@@ -7,6 +7,8 @@ import { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { BrowserViewStorageScope, IBrowserViewService, normalizeBrowserViewUrl, type BrowserViewEvent, type IBrowserViewInfo } from '../../../../platform/browserView/common/browserView.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { localize } from '../../../../nls.js';
 import { canvasOwnerKey, type ICanvas, type ICanvasContext, type ICanvasDefinition, type ICanvasOpenRequest, type ICanvasOwner } from './canvas.js';
 import type { IAgentCanvasHost, IAgentCanvasOpenRequest } from '../../../../platform/agentHost/common/agentService.js';
 
@@ -58,7 +60,8 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 		return toDisposable(() => { this.definitionLoads--; this.changed.fire(); });
 	}
 
-	constructor(@IBrowserViewService private readonly browser: IBrowserViewService, @IExtensionService private readonly extensions: IExtensionService) {
+	constructor(@IBrowserViewService private readonly browser: IBrowserViewService, @IExtensionService private readonly extensions: IExtensionService,
+		@INotificationService private readonly notifications: INotificationService) {
 		super();
 		this._register(browser.onDidEvent(event => {
 			if (!this.initialized) { this.buffered.push(event); } else { this.accept(event); }
@@ -241,7 +244,14 @@ export class AgentHostCanvasCollection extends Disposable implements IAgentHostC
 			if (this.isDisposed || signal.aborted || this.providerRevisions.get(provider) !== revision || !this.pages.get()?.some(current => current.id === page.id)) { return; }
 			if (source === 'unchanged') { return; }
 			if (source === null) { await this.browser.destroyBrowserView(page.id); return; }
-			if (source && !this.hasSource(page, source.url)) { await this.browser.loadURL(page.id, normalizeBrowserViewUrl(source.url)); }
+			if (source && !this.hasSource(page, source.url)) {
+				// Provider invalidation has no Agent execution authority. Retain the old page until the user opens the new source.
+				if (page.owner.type === 'agent') {
+					this.notifications.warn(localize('canvas.sourceChanged', 'Canvas {0} has a new address. Open it again from the Canvas menu to load the updated page.', provider.definition.displayName));
+					return;
+				}
+				await this.browser.loadURL(page.id, normalizeBrowserViewUrl(source.url));
+			}
 			if (signal.aborted || this.providerRevisions.get(provider) !== revision || !this.pages.get()?.some(current => current.id === page.id)) { return; }
 			if (source) { this.disconnectedPages.delete(page.id); }
 			this.setPresentation(page.id, source);

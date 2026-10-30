@@ -13,6 +13,7 @@ import { showCanvasContextPicker } from './canvasContextPicker.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { autorun, derived, observableSignalFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { Event } from '../../../../base/common/event.js';
+import { StringSHA1 } from '../../../../base/common/hash.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -73,7 +74,7 @@ export function registerEditorCanvasActions(accessor: ServicesAccessor): IDispos
 			rendered = '';
 			return;
 		}
-		const ownerKey = encodeURIComponent(canvasOwnerKey(context.owner));
+		const ownerKey = canvasCommandKey(canvasOwnerKey(context.owner));
 		const registered = definitions.definitions.read(reader);
 		const reopenable = canvases.reopenableCanvases.read(reader).filter(target => isCanvasOwner(target.reference, context.owner)
 			&& !registered.some(definition => getCanvasDefinitionInstanceId(definition) === target.canvas.instanceId));
@@ -89,7 +90,7 @@ export function registerEditorCanvasActions(accessor: ServicesAccessor): IDispos
 				},
 			})),
 			...reopenable.map((target, index) => ({
-				id: `${REOPEN_EDITOR_CANVAS_COMMAND_ID}.${ownerKey}.${encodeURIComponent(target.reference.canvas.toString())}`,
+				id: `${REOPEN_EDITOR_CANVAS_COMMAND_ID}.${ownerKey}.${canvasCommandKey(target.reference.canvas.toString())}`,
 				label: titles[index]!, group: '2_open',
 				run: async () => {
 					if (canvases.isOwnerPresentable(target.reference)) await canvases.reopenCanvas(target.reference);
@@ -119,6 +120,13 @@ export function registerEditorCanvasActions(accessor: ServicesAccessor): IDispos
 		}
 	}));
 	return resources;
+}
+
+/** Keep dynamic menu commands within the registry's ID limit for long owner and page identities. */
+function canvasCommandKey(identity: string): string {
+	const hash = new StringSHA1();
+	hash.update(identity);
+	return hash.digest();
 }
 
 export const REOPEN_EDITOR_CANVAS_COMMAND_ID = 'workbench.action.chat.reopenCanvas';
