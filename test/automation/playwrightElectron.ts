@@ -35,14 +35,14 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 	const resource = await registerRunResource(
 		options.appServerMode === 'required' && options.profileDirectory === undefined
 			? () => ({
-					executable: appServerDaemonExecutablePath({
-						appPath: configuration.cwd,
-						isPackaged: options.packagedBundle !== undefined,
-						platform: process.platform,
-						resourcesPath: configuration.resourcesPath,
-					}),
-					profile: resolve(options.userDataDirectory, 'profile'),
-				})
+				executable: appServerDaemonExecutablePath({
+					appPath: configuration.cwd,
+					isPackaged: options.packagedBundle !== undefined,
+					platform: process.platform,
+					resourcesPath: configuration.resourcesPath,
+				}),
+				profile: resolve(options.userDataDirectory, 'profile'),
+			})
 			: undefined,
 	);
 	const application = await _electron.launch({
@@ -61,7 +61,7 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 			// Main coordinates product-document reloads. CDP's automatic dismissal
 			// otherwise races its will-prevent-unload decision and can force navigation.
 			if (dialog.type() === 'beforeunload' && /\/(?:workbench|sessions)\.html(?:[?#].*)?$/u.test(page.url())) return;
-			if (getEventListeners(page as unknown as EventEmitter, 'dialog').length === 1) void dialog.dismiss().catch(() => {});
+			if (getEventListeners(page as unknown as EventEmitter, 'dialog').length === 1) void dialog.dismiss().catch(() => { });
 		});
 	};
 	for (const page of application.context().pages()) observeDialogs(page);
@@ -71,80 +71,80 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 	const electronProcess = application.process();
 	let closing: Promise<void> | undefined;
 	const shutdown = (kind: 'quit' | 'destroy'): Promise<void> =>
-		(closing ??= (async () => {
-			const exited =
-				electronProcess.exitCode !== null || electronProcess.signalCode !== null ? Promise.resolve() : new Promise<void>(resolveExit => electronProcess.once('exit', () => resolveExit()));
-			let termination: Promise<void> | undefined;
-			const shutdownTimer = setTimeout(() => {
-				termination = terminateElectronProcess(electronProcess);
-			}, 10_000);
+	(closing ??= (async () => {
+		const exited =
+			electronProcess.exitCode !== null || electronProcess.signalCode !== null ? Promise.resolve() : new Promise<void>(resolveExit => electronProcess.once('exit', () => resolveExit()));
+		let termination: Promise<void> | undefined;
+		const shutdownTimer = setTimeout(() => {
+			termination = terminateElectronProcess(electronProcess);
+		}, 10_000);
+		try {
 			try {
-				try {
-					// End the renderer before stopping its daemon, so it cannot reconnect.
-					if (kind === 'destroy' && electronProcess.exitCode === null && electronProcess.signalCode === null) {
-						try {
-							await application.evaluate(({ app }) => {
-								// Let Electron own forced window teardown. Destroying windows first
-								// can reenter Cocoa key-window changes during pending close events.
-								// exit() bypasses vetoes; quit() exercises the product handshake.
-								app.exit(0);
-							});
-						} catch (error) {
-							// Forced exit can close Main before its inspector sends the reply.
-							// Accept a confirmed clean exit or the fixture's deliberate force
-							// termination, never an unrelated process crash.
-							if (!(error instanceof Error) || !error.message.includes('Target page, context or browser has been closed')) throw error;
-							await exited;
-							if (electronProcess.exitCode !== 0 && !termination) {
-								throw new Error(`Fixture destruction observed an unexpected Main exit: code=${electronProcess.exitCode}; signal=${electronProcess.signalCode}`, { cause: error });
-							}
+				// End the renderer before stopping its daemon, so it cannot reconnect.
+				if (kind === 'destroy' && electronProcess.exitCode === null && electronProcess.signalCode === null) {
+					try {
+						await application.evaluate(({ app }) => {
+							// Let Electron own forced window teardown. Destroying windows first
+							// can reenter Cocoa key-window changes during pending close events.
+							// exit() bypasses vetoes; quit() exercises the product handshake.
+							app.exit(0);
+						});
+					} catch (error) {
+						// Forced exit can close Main before its inspector sends the reply.
+						// Accept a confirmed clean exit or the fixture's deliberate force
+						// termination, never an unrelated process crash.
+						if (!(error instanceof Error) || !error.message.includes('Target page, context or browser has been closed')) throw error;
+						await exited;
+						if (electronProcess.exitCode !== 0 && !termination) {
+							throw new Error(`Fixture destruction observed an unexpected Main exit: code=${electronProcess.exitCode}; signal=${electronProcess.signalCode}`, { cause: error });
 						}
 					}
-				} finally {
-					// Electron's process exit ends its renderers. A daemon can keep inherited
-					// pipes open, so stop it on exit instead of awaiting Playwright's pipe-close event.
-					const stopDaemon = async (): Promise<void> => {
-						if (options.appServerMode !== 'required' || options.profileDirectory !== undefined) return;
-						const daemon = appServerDaemonExecutablePath({
-							appPath: configuration.cwd,
-							isPackaged: options.packagedBundle !== undefined,
-							platform: process.platform,
-							resourcesPath: configuration.resourcesPath,
-						});
-						await promisify(execFile)(daemon, ['stop'], {
-							env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') },
-							windowsHide: true,
-							timeout: 30_000,
-						}).catch(error => {
-							throw new Error(`Test daemon shutdown failed: code=${error.code}; signal=${error.signal}; killed=${error.killed}; stdout=${error.stdout}; stderr=${error.stderr}`, {
-								cause: error,
-							});
-						});
-					};
-					await Promise.all([
-						application.close(),
-						exited.then(async () => {
-							clearTimeout(shutdownTimer);
-							await stopDaemon();
-						}),
-					]);
 				}
-			} catch (error) {
-				if (termination && kind === 'quit')
-					throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated', {
-						cause: error,
-					});
-				throw error;
 			} finally {
-				try {
-					await Promise.all([exited, termination]);
-				} finally {
-					clearTimeout(shutdownTimer);
-				}
+				// Electron's process exit ends its renderers. A daemon can keep inherited
+				// pipes open, so stop it on exit instead of awaiting Playwright's pipe-close event.
+				const stopDaemon = async (): Promise<void> => {
+					if (options.appServerMode !== 'required' || options.profileDirectory !== undefined) return;
+					const daemon = appServerDaemonExecutablePath({
+						appPath: configuration.cwd,
+						isPackaged: options.packagedBundle !== undefined,
+						platform: process.platform,
+						resourcesPath: configuration.resourcesPath,
+					});
+					await promisify(execFile)(daemon, ['stop'], {
+						env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') },
+						windowsHide: true,
+						timeout: 30_000,
+					}).catch(error => {
+						throw new Error(`Test daemon shutdown failed: code=${error.code}; signal=${error.signal}; killed=${error.killed}; stdout=${error.stdout}; stderr=${error.stderr}`, {
+							cause: error,
+						});
+					});
+				};
+				await Promise.all([
+					application.close(),
+					exited.then(async () => {
+						clearTimeout(shutdownTimer);
+						await stopDaemon();
+					}),
+				]);
 			}
-			if (termination && kind === 'quit') throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
-			await resource.dispose();
-		})());
+		} catch (error) {
+			if (termination && kind === 'quit')
+				throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated', {
+					cause: error,
+				});
+			throw error;
+		} finally {
+			try {
+				await Promise.all([exited, termination]);
+			} finally {
+				clearTimeout(shutdownTimer);
+			}
+		}
+		if (termination && kind === 'quit') throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
+		await resource.dispose();
+	})());
 	try {
 		await resource.process(electronProcess);
 	} catch (error) {
@@ -242,10 +242,10 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 				: undefined;
 		const text = page
 			? await beforeDeadline(
-					page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n')),
-					Date.now() + 1_000,
-					'Startup document diagnostics timed out',
-				).catch(error => String(error))
+				page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n')),
+				Date.now() + 1_000,
+				'Startup document diagnostics timed out',
+			).catch(error => String(error))
 			: 'No Electron window opened';
 		const details = [...diagnostics.consoleErrors.slice(-8), ...diagnostics.pageErrors, ...failedRequests, ...[...pendingRequests].map(request => `Pending: ${request.url()}`)].join('\n');
 		const bufferedError = electronProcess.stderr?.read();

@@ -84,7 +84,7 @@
     "actions.pasteSelectionClipboard": "粘贴选区剪贴板",
     "diffEditor.lineHeight.invalid": "差异编辑器行高必须是非负有限数值。",
     "editor.lineHeight.title": "行高",
-    "editor.lineHeight.description": "设置编辑器每行的像素高度。设为 0 时根据字号自动计算，小于 8 的值表示字号的倍数。",
+    "editor.lineHeight.description": "编辑器每行的高度（像素）。",
     "editor.lineHeight.invalid": "编辑器行高必须是 0 到 80 之间的整数；收到 {0}。",
     "peek.submenu": "速览",
     "goToDefinition.label": "转到定义",

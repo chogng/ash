@@ -1704,6 +1704,74 @@ test('file opening preferences have a translated group and correctly typed contr
 	}
 });
 
+test('editor line height displays pixels and preserves automatic settings until edited', async () => {
+	using resources = new DisposableStore();
+	const configuration = resources.add(new WorkspaceService());
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	let actions: readonly IAction[] = [];
+	const errors: string[] = [];
+	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings().get('editor.lineHeight'), {
+		configurationService: configuration,
+		contextViewProvider: resources.add(new BrowserContextViewService(root)),
+		contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); } },
+		clipboardService: {
+			triggerPaste: () => undefined,
+			read: async () => [],
+			readText: async () => '',
+			writeText: async () => { },
+			readFindText: async () => '',
+			writeFindText: async () => { },
+			readImage: async () => new Uint8Array(),
+			readResources: async () => ({ resources: [], operation: 'copy' }),
+			writeResources: async () => { },
+			hasResources: async () => false,
+		},
+		onStatus: (message, error) => { if (error) errors.push(message); },
+	}));
+	root.append(widget.domNode);
+	const input = widget.domNode.querySelector<HTMLInputElement>('input')!;
+	const { isMacintosh } = await import('../../../../../base/common/platform.js');
+	assert.ok(input.valueAsNumber >= 8);
+	assert.equal(configuration.inspect('editor.lineHeight').userLocalValue, undefined);
+	assert.equal(widget.domNode.classList.contains('is-configured'), false);
+	assert.equal(input.getAttribute('aria-label'), 'Line height');
+	assert.equal(input.min, '8');
+	await configuration.write('{ "editor.fontSize": 20, "editor.lineHeight": 0 }');
+	assert.equal(input.value, isMacintosh ? '30' : '27');
+	assert.equal(configuration.getValue('editor.lineHeight'), 0);
+	assert.equal(widget.domNode.classList.contains('is-configured'), true);
+	await configuration.write('{ "editor.fontSize": 20, "editor.lineHeight": 2 }');
+	assert.equal(input.value, '40');
+	input.value = '24';
+	await configuration.updateValue('editor.fontSize', 21);
+	assert.equal(input.value, '24', 'font size changes preserve an uncommitted line height edit');
+	const change = async (value: string) => {
+		input.value = value;
+		input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+		await nextTurn();
+	};
+	await change('24');
+	assert.equal(configuration.getValue('editor.lineHeight'), 24);
+	await configuration.updateValue('editor.fontSize', 30);
+	assert.equal(input.value, '24');
+	for (const invalid of ['0', '7', '81', '']) {
+		await change(invalid);
+		assert.equal(input.value, '24');
+		assert.equal(configuration.getValue('editor.lineHeight'), 24);
+	}
+	assert.equal(errors.length, 4);
+	widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
+	await actions.find(action => action.id === 'settings.resetSetting')!.run();
+	await nextTurn();
+	assert.equal(input.value, isMacintosh ? '45' : '41');
+	assert.equal(configuration.inspect('editor.lineHeight').userLocalValue, undefined);
+	assert.equal(widget.domNode.classList.contains('is-configured'), false);
+	await configuration.updateValue('editor.fontSize', 20);
+	assert.equal(input.value, isMacintosh ? '30' : '27');
+});
+
 test('font preferences show translated labels and the actual platform defaults', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
@@ -1725,6 +1793,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.equal(family.valueType === 'text' && family.placeholder, '系统默认');
 		assert.ok(family.description.includes(EDITOR_FONT_DEFAULTS.fontFamily));
 		assert.ok(defaults.get('editor.fontSize').description.includes(String(EDITOR_FONT_DEFAULTS.fontSize)));
+		assert.equal(defaults.get('editor.lineHeight').description, '编辑器每行的高度（像素）。');
 		const input = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-input')!;
 		assert.equal(input.groups[0]?.title, '消息输入');
 		assert.deepEqual(

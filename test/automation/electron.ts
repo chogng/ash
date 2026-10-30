@@ -29,7 +29,7 @@ export interface ElectronLaunchOptions {
 	readonly extraArgs?: readonly string[];
 	readonly recordVideo?: {
 		readonly directory: string;
-		readonly size: { readonly width: number; readonly height: number };
+		readonly size: { readonly width: number; readonly height: number; };
 	};
 	/** Repository application root. Scenario bundles pass this explicitly because their output lives elsewhere. */
 	readonly desktopDirectory?: string;

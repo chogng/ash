@@ -174,6 +174,7 @@ test('editor and Chat input font settings apply independently and persist in Chi
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectEditorCategory('editor-fonts');
 	const settings = workbench.settingsEditor.element;
+	await expect(settings.locator('[data-configuration-key="editor.lineHeight"]')).toHaveValue(String(Math.round(defaultSize * (process.platform === 'darwin' ? 1.5 : 1.35))));
 	await settings.locator('[data-configuration-key="editor.fontFamily"]').fill('Arial');
 	await settings.locator('[data-configuration-key="editor.fontFamily"]').press('Tab');
 	await settings.locator('[data-configuration-key="editor.fontSize"]').fill('18');
@@ -185,8 +186,8 @@ test('editor and Chat input font settings apply independently and persist in Chi
 	await expect.poll(() => editor.element.evaluate(element => getComputedStyle(element).fontFamily)).toMatch(/^Arial,/u);
 	await expect(chat).toHaveCSS('font-size', '13px');
 	expect(await chat.evaluate(element => getComputedStyle(element).fontFamily)).toBe(chatFamily);
-	await settings.locator('[data-configuration-key="editor.lineHeight"]').fill('0');
-	await settings.locator('[data-configuration-key="editor.lineHeight"]').press('Tab');
+	await workbench.menus.select(application, () => settings.locator('[data-settings-item-id="editor.lineHeight"] .ash-setting-item-actions-trigger').press('Enter'), ['Reset Setting']);
+	await expect(settings.locator('[data-configuration-key="editor.lineHeight"]')).toHaveValue(String(Math.round(18 * (process.platform === 'darwin' ? 1.5 : 1.35))));
 	await expect(editor.element).toHaveCSS('line-height', `${Math.round(18 * (process.platform === 'darwin' ? 1.5 : 1.35))}px`);
 	await workbench.settingsEditor.selectGroup('agents');
 	await workbench.settingsEditor.selectCategory('chat-input');
@@ -238,8 +239,8 @@ test('editor and Chat input font settings apply independently and persist in Chi
 	await expect(workbench.settingsEditor.element.getByRole('textbox', { name: '字体', exact: true })).toBeVisible();
 	await expect(workbench.settingsEditor.element.getByRole('spinbutton', { name: '字号', exact: true })).toHaveValue('18');
 	const row = workbench.settingsEditor.element.locator('[data-settings-item-id="editor.lineHeight"]');
-	await expect(row).toContainText('设为 0 时根据字号自动计算');
-	await expect(row.locator('input')).toHaveValue('0');
+	await expect(row.locator('.ash-editor-setting-description')).toHaveText('编辑器每行的高度（像素）。');
+	await expect(row.locator('input')).toHaveValue(String(Math.round(18 * (process.platform === 'darwin' ? 1.5 : 1.35))));
 	await expect(workbench.settingsEditor.element.getByRole('textbox', { name: '字体', exact: true })).toHaveAttribute('placeholder', '系统默认');
 	await workbench.settingsEditor.selectGroup('agents');
 	await workbench.settingsEditor.selectCategory('chat-input');

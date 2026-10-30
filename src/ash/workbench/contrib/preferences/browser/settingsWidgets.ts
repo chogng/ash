@@ -33,6 +33,11 @@ import type { IBooleanSetting, IComplexSetting, INumberSetting, INumberWithOptio
 import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/settingsModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
 import { SettingsTreeIndicatorsLabel } from './settingsEditorSettingIndicators.js';
+import { MINIMUM_LINE_HEIGHT } from '../../../../editor/common/config/fontInfo.js';
+import { createBareFontInfoFromRawSettings } from '../../../../editor/common/config/fontInfoFromSettings.js';
+import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
 
 interface SettingsSearchWidgetOptions {
 	readonly ariaControls: string;
@@ -429,6 +434,8 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> {
 	private readonly input: HTMLInputElement;
 	private readonly inputBox: InputBox | undefined;
+	private readonly fontSize: SettingValueBinding<number> | undefined;
+	private renderedValue = '';
 
 	constructor(container: HTMLElement, descriptor: INumberSetting, options: SettingWidgetOptions,
 		@IConfigurationService configurationService: IConfigurationService,
@@ -436,6 +443,9 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
+		this.fontSize = descriptor.id === CodeEditorConfiguration.lineHeight
+			? configurationSettingBinding(configurationService, Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(CodeEditorConfiguration.fontSize) as IRegisteredConfiguration<number>, options.configurationOverrides, options.configurationTarget)
+			: undefined;
 		this.domNode.append(this.copyDomNode);
 		if (this.presentation === 'editor') {
 			this.inputBox = this._register(new InputBox(this.domNode, {
@@ -458,25 +468,38 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 		this.input.dataset.configurationKey = descriptor.configuration.key;
 		this.updateControl(descriptor);
 		this.bindState(state => {
-			this.input.value = String(state.value);
+			this.renderValue(state.value);
 			if (this.inputBox) this.inputBox.enabled = !state.isPending && !this.hasPolicyValue;
 			else this.input.disabled = state.isPending || this.hasPolicyValue;
 		});
+		if (this.fontSize?.onDidChange) this._register(this.fontSize.onDidChange(() => {
+			// A font-size save may finish while the user is already editing line height.
+			if (this.input.value === this.renderedValue) this.renderValue(this.model.state.value);
+		}));
 		this._register(addDisposableListener(this.input, 'change', () => this.acceptValue()));
 	}
 
 	protected updateControl(descriptor: INumberSetting): void {
-		this.input.min = String(descriptor.minimum);
+		this.input.min = String(this.fontSize ? MINIMUM_LINE_HEIGHT : descriptor.minimum);
 		this.input.max = String(descriptor.maximum);
 		this.input.setAttribute('aria-label', descriptor.title);
 	}
 
+	private renderValue(value: number): void {
+		// Resolve automatic and legacy multiplier values without persisting the projection.
+		this.renderedValue = String(this.fontSize
+			? createBareFontInfoFromRawSettings({ fontSize: this.fontSize.getValue(), lineHeight: value }, 1, true).lineHeight
+			: value);
+		this.input.value = this.renderedValue;
+	}
+
 	private acceptValue(): void {
 		const value = this.input.valueAsNumber;
-		if (!Number.isFinite(value) || value < this.descriptor.minimum || value > this.descriptor.maximum) {
+		const minimum = Number(this.input.min);
+		if (!Number.isFinite(value) || value < minimum || value > this.descriptor.maximum) {
 			this.model.refresh();
-			this.input.value = String(this.model.state.value);
-			this.reportStatus(localize({ bundle: 'ash.settings', key: 'status.numberRange' }, '{0} must be between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum), true);
+			this.renderValue(this.model.state.value);
+			this.reportStatus(localize({ bundle: 'ash.settings', key: 'status.numberRange' }, '{0} must be between {1} and {2}.', this.descriptor.title, minimum, this.descriptor.maximum), true);
 			return;
 		}
 		void this.updateSetting(value);
