@@ -420,9 +420,7 @@ test('editor focus updates the view overlay presentation', () => {
 	dom.window.close();
 });
 
-test('browser EditContext reattaches its editing object after DOM ownership changes', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+function installTestNativeEditContext(dom: JSDOM) {
 	class TestEditContext extends dom.window.EventTarget implements EditContext {
 		public text = '';
 		public selectionStart = 0;
@@ -445,6 +443,13 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 		}
 	}
 	Object.defineProperty(dom.window, 'EditContext', { configurable: true, value: TestEditContext });
+	return TestEditContext;
+}
+
+test('browser EditContext reattaches its editing object after DOM ownership changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const TestEditContext = installTestNativeEditContext(dom);
 	using model = new TextModel('alpha');
 	using services = new InstantiationService();
 	services.registerInstance(ILogService, new NullLoggerService());
@@ -461,8 +466,8 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	editor.layout({ width: 320, height: 80 });
 	assert.strictEqual(NativeEditContextRegistry.get(ownerId), editContext);
 	assert.ok(editContext.nativeContext.updateSelectionBounds);
-	assert.ok((editContext.nativeContext as TestEditContext).selectionBounds);
-	assert.ok((editContext.nativeContext as TestEditContext).controlBounds);
+	assert.ok((editContext.nativeContext as InstanceType<typeof TestEditContext>).selectionBounds);
+	assert.ok((editContext.nativeContext as InstanceType<typeof TestEditContext>).controlBounds);
 	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown; };
 	assert.strictEqual(input.editContext, editContext.nativeContext);
 	editContext.focus();
@@ -488,7 +493,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.notStrictEqual(richContent, simpleContent);
 	assert.equal(simpleContent.isConnected, false);
 	assert.equal(richContent.querySelector('span[data-line-index="0"]')?.textContent, 'alpha');
-	const nativeComposition = editContext.nativeContext as TestEditContext;
+	const nativeComposition = editContext.nativeContext as InstanceType<typeof TestEditContext>;
 	nativeComposition.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { data: '' }));
 	assert.equal(editor.inComposition, true);
 	const textUpdate = Object.assign(new dom.window.Event('textupdate'), {
@@ -535,6 +540,70 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	adoptedDom.window.close();
 	dom.window.close();
 });
+
+for (const backend of ['textarea', 'native'] as const) {
+	for (const completion of ['commit', 'empty cancellation', 'Escape cancellation'] as const) {
+		test(`${backend} IME ${completion} preserves backward selection and transaction history`, () => {
+			const dom = new JSDOM('<!doctype html><body><main></main></body>');
+			dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+			if (backend === 'native') installTestNativeEditContext(dom);
+			try {
+				using model = new TextModel('A原文B');
+				using services = new InstantiationService();
+				services.registerInstance(ILogService, new NullLoggerService());
+				using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, instantiationService: services });
+				editor.executeEdits('test', [{ range: new Range(1, 5, 1, 5), text: '!' }]);
+				editor.pushUndoStop();
+				const selection = new Selection(1, 4, 1, 2);
+				editor.setSelection(selection);
+				const editContext = editor.controller.editContext;
+				assert.equal(editContext instanceof NativeEditContext, backend === 'native');
+				editContext.focus();
+				const candidate = '日本語🙂';
+				const input = editContext.domNode.domNode;
+				const events = editContext instanceof NativeEditContext ? editContext.nativeContext : input;
+				events.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { data: '' }));
+				if (editContext instanceof NativeEditContext) {
+					events.dispatchEvent(Object.assign(new dom.window.Event('textupdate'), {
+						text: candidate, updateRangeStart: 1, updateRangeEnd: 3,
+						selectionStart: 1 + candidate.length, selectionEnd: 1 + candidate.length,
+					}));
+				} else {
+					const textArea = input as HTMLTextAreaElement;
+					textArea.value = `A${candidate}B!`;
+					textArea.setSelectionRange(1 + candidate.length, 1 + candidate.length);
+					events.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: candidate }));
+				}
+				assert.equal(editor.inComposition, true);
+				assert.equal(model.getText(), `A${candidate}B!`);
+				if (completion === 'Escape cancellation') {
+					input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true }));
+				}
+				events.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: completion === 'empty cancellation' ? '' : candidate }));
+				assert.equal(editor.inComposition, false);
+				assert.equal(model.getAllDecorations().some(decoration => decoration.options.description === 'composition-decoration'), false);
+				if (completion === 'commit') {
+					assert.equal(model.getText(), `A${candidate}B!`);
+					editor.controller.undo();
+					assert.equal(model.getText(), 'A原文B!');
+					assert.deepEqual(editor.getSelection(), selection);
+					editor.controller.redo();
+					assert.equal(model.getText(), `A${candidate}B!`);
+				} else {
+					assert.equal(model.getText(), 'A原文B!');
+					assert.deepEqual(editor.getSelection(), selection);
+					// Cancellation must leave the earlier edit as the next undoable transaction.
+					editor.controller.undo();
+					assert.equal(model.getText(), 'A原文B');
+					editor.controller.redo();
+					assert.equal(model.getText(), 'A原文B!');
+				}
+			} finally {
+				dom.window.close();
+			}
+		});
+	}
+}
 
 test('ScreenReaderSupport projects one model and screen-reader selection returns through its content owner', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

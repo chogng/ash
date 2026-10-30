@@ -125,8 +125,8 @@ the original DOM. Text IDs, inline marks and event owners remain intact; UTF-16
 positions resolve across the split DOM Text nodes for native selection and input.
 Metric changes preserve selection and wait for composition to finish. Zoom is
 view-local and never changes wrapping or document versions. Advanced page structures
-and viewport virtualization remain outside this slice; see the [root TODO](../../TODO.md#work--通用文档--todo) for
-platform acceptance work.
+and viewport virtualization remain outside this slice; see the
+[validation scope](#validation-scope) for platform coverage.
 
 Sections, review and file conversion remain package-owned. Root `documentSection`
 containers override page intent without changing descendant identities. Comments use
@@ -147,5 +147,23 @@ running text. Text is not searchable. It shares the page view, waits for resourc
 and cleans up on completion, failure or cancellation. Limits are 256 pages and
 64 MiB; DOCX also bounds expanded ZIP data to 64 MiB and 2,000 parts. See the
 [roadmap](./design.md#64-打印与-pdf) for supported semantics
-and the [root TODO](../../TODO.md#work--通用文档--todo) for remaining
-target-application/platform acceptance work.
+and the [validation scope](#validation-scope) for target-application/platform coverage.
+
+## Validation scope
+
+On 2026-10-30, all seven `documentOutput.test.ts` cases passed on Windows x64
+at `473f5cd4ea`. They cover standard-part roundtrips, changed-content snapshot
+invalidation, comments and revisions, archive/cancellation rejection, Academy
+profile and citation identity, and inherited styles. The log is
+`.build/todo-acceptance-code-contracts.log`. This is codec acceptance; opening,
+editing and saving in the installed Word application remains unverified.
+
+The subsequent Windows x64 code audit passed all 48 document-pane cases, 12 import/export
+cases, 7 output cases and 4 profile cases, including real SDK registration in English and
+Chinese. The independent Academy SDK process test also passed. Shared-host evidence and
+the initial preparation failure/retest are recorded in
+[extension validation](../../docs/editor-extensions.md#10-实现证据与验证).
+The document-host TODO is retired under the code-and-tests acceptance scope. This run did
+not exercise a signed distribution installation, real Electron multi-window/remote use,
+physical IME or screen readers, or Word open/edit/save. The installed Word application was
+available; codec tests do not establish application interoperability.

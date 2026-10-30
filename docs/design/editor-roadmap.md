@@ -1,6 +1,6 @@
 # Stanza 编辑器设计与演进
 
-本文维护 Stanza 通用文本机制的职责与演进依赖。未完成动作与平台验收见[根 TODO](../../TODO.md#stanza-编辑器--todo)，当前实现见 [Editor](../../src/ash/editor/README.md)。
+本文维护 Stanza 通用文本机制的职责与演进依赖。未完成动作与平台验收见[根 TODO](../../TODO.md)，当前实现见 [Editor](../../src/ash/editor/README.md)。
 
 ## 目标边界与依赖方向
 

@@ -43,6 +43,8 @@ Workbench、独立编辑器窗口和 Code Sessions 使用共享应用身份及�
 
 标题服务通过 `createAuxiliaryTitlebarPart` 创建并登记辅助标题栏，窗口关闭时释放标题监听并移除登记。辅助窗口布局预留标题栏和状态栏高度。环境属性通过 `updateProperties` 传播；调试会话暂停且应用失焦时，调试贡献设置红点前缀。Electron Main 读取桌面进程权限，并校验打包清单中的安装文件；构建流程在打包目录写入 `package.json.checksums`，覆盖 `dist/` 与 `resources/`。完整性结果由 `IIntegrityService` 返回，实际不一致时进入现有通知中心。开发运行没有发布校验清单，`isPure` 保持未定义。此检查用于发现安装文件变化，不代替操作系统签名；Rust App Server 的权限和安装状态独立于桌面应用。
 
+2026-10-30 在 Windows x64、`a174f34dfd` 上完成窗口缩放布局的代码验收：平台 LayoutService 同步发布 resize，主窗口与 Sessions Grid 保留小数尺寸，辅助窗口先完成 hosted Part 布局再发布容器通知；紧凑模式、菜单焦点恢复和关闭释放均有生产调用与回归。布局、EditorPart、标题栏及 Sessions Preferences 的 6 个测试文件共 268 项通过，窗口控件策略另通过 6 项；日志在 `.build/todo-code-audit-layout-preferences.log` 与 `.build/todo-code-audit-workflows.log`。原 macOS 的 268 项单测、2 项原生回归和 3 个真实窗口场景记录仍保留于 `.build/ash-playwright-mcp/titlebar-resize/foundation-fix/validation.json`，含 Agents 106 帧和 IDE 113 帧采样。本轮按源码与定向测试收口，未新增 Windows 100%／125%／150%／200% 的实机拖动矩阵证据。
+
 Code Sessions 保持独立页面。Workbench 通过 Titlebar action 请求打开 Agents 窗口；Main 持有窗口创建、复用与关闭，Sessions 使用自己的会话状态。`sessions` 可以复用 `workbench` 能力，`workbench` 不反向导入 `sessions`。详情见 [Sessions 说明](../src/ash/sessions/README.md)。
 
 ## 构建与验证

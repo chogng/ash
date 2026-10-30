@@ -2,7 +2,7 @@
 
 > 适用范围：Ash TypeScript Workbench 与 Sessions 的偏好入口和编辑页面。配置存储背景见 [Browser foundation](browser-foundation.md#configuration-architecture)，设置接入规则见 [Preferences README](../src/ash/workbench/contrib/preferences/README.md)。
 
-Preferences 负责打开偏好资源，Settings 是其中一种内容。配置读写、用户设置 JSONC 和快捷键独立资源的主链已接通；图形设置已接通用户、Workspace / Folder 目标、语言覆盖和编辑器组选项；真实系统 Policy、上游窗口配对和跨平台验收仍未完成。具体动作统一维护在 [Configuration / Preferences TODO](../TODO.md#configuration--preferences--todo)。本文描述当前架构，不作为全部 VS Code 契约已对齐或当前 HEAD 验收通过的声明。
+Preferences 负责打开偏好资源，Settings 是其中一种内容。配置读写、用户设置 JSONC 和快捷键独立资源的主链已接通；用户、Workspace / Folder 目标、语言覆盖、编辑器组选项和 Policy 已完成所选行为的代码验收。真实系统与外部账号的覆盖边界见[已有验证与限制](#已有验证与限制)。本文描述当前架构，不作为全部 VS Code 契约已对齐的声明。
 
 ## 打开路径
 
@@ -195,9 +195,15 @@ Sessions 保留其产品设置宿主；Workspace / Folder、语言查询以及�
 
 EditorGroupModel 是数字组 ID 的分配 owner；组操作、命令上下文、扩展边界和 Sessions 文档布局消费同一身份。旧工作集的字符串 ID 在 EditorPart 恢复边界验证并转换，保存只输出数字；嵌套布局、标签顺序和活动组随同恢复，与保留的 Sessions 产品页组冲突时重新分配文档组身份。Ash 尚未采用上游全部 Preferences 容器和公开 API。
 
-已确认缺口、真实环境验收和待复核场景统一见 [TODO](../TODO.md#configuration--preferences--todo)；registry / schema、typed parse / serialize、`ashBinding` 等额外契约按真实消费者决定，见 TODO 的发展候选，不按上游成员表整体补齐。
+registry / schema、typed parse / serialize、`ashBinding` 等额外契约按真实消费者决定，见 [TODO 的发展候选](../TODO.md#发展候选未排期)，不按上游成员表整体补齐。
 
 ## 已有验证与限制
+
+2026-10-30 按本轮代码验收口径完成系统与账户 Policy 核对：`policy.test.ts` 7 项、`systemPolicyService.test.ts` 3 项、`windowsRegistryPolicy.test.ts` 1 项及 `accountPolicyService.test.ts` 13 项通过。新增测试直接走默认 macOS 读取分支，以受控文件／进程边界验证固定 plist 路径和 plutil 参数、失败保留、删除撤回、释放取消及迟到结果；账户测试覆盖两个身份、host／凭据代次变化、非空策略保留与撤回、退出和真实配置消费者。日志为 `.build/todo-code-audit-policy-elevation-container-retest.log`。对应 TODO 按代码标准消项；本轮没有执行 macOS 系统管理配置、真实组织账号切换或界面验收，历史真实环境覆盖的限制仍适用。
+
+2026-10-30 在 Windows x64、`a174f34dfd` 上按源码契约与定向测试收口所选 Preferences 行为：`PreferencesService` 与既有配置／文本模型 owner 贯通 User、Workspace、Folder、语言覆盖、重置、JSON 脏草稿和数字编辑器组；核对本地 VS Code 的 `IOpenSettingsOptions` 与组路由公开契约，未复制其内部实现。`settings-json.test.ts` 18 项、配置服务 3 项通过；Sessions Preferences 2 项及 EditorPart 的组、模态窗口和焦点回归包含于布局批次 268 项中，控件测试另通过 14 项。日志为 `.build/todo-code-audit-contracts.log`、`.build/todo-code-audit-layout-preferences.log` 与 `.build/todo-code-audit-workflows.log`。本轮没有新增上游实窗配对证据。
+
+2026-10-30 在 Windows x64、`473f5cd4ea` 上重跑 `settings.test.ts`，49 项全部通过，覆盖注册目录、搜索与已修改过滤、重置、JSON 操作、配置保存及中英文控件契约；日志为 `.build/todo-acceptance-code-contracts.log`。Windows 125% 下另采样 32 个真实窗口宽度，相邻输入框／筛选按钮的 DOMRect 边界出现小于 0.001 CSS px 的浮点误差；对应 smoke 断言仅容忍该测量误差，仍拒绝可见重叠。采样在 `.build/todo-acceptance-20261030/preferences-fractions.json`。
 
 2026-10-29 修复 macOS 打开 Settings 失败：生产 Canvas contribution 已注册 `chat.canvases.enabled`，但 Settings 分类表遗漏该项，完整性检查因此中止窗口创建。将其纳入 Agent Defaults 的 Editing 分类，并让 Settings 单测加载真实 Canvas 注册；新增注册先复现相同错误，修复后该文件 49 项全部通过。正常 Desktop 构建及真实 App Server 的模型持久化／窗口重开场景随后通过。诊断、红绿测试和构建日志位于 `.build/macos-model-acceptance-20261029/`。
 

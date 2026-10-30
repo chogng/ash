@@ -2,7 +2,7 @@
 
 > 本文是行式文本编辑器的 canonical 设计规范，拥有同步文本内核、视图架构、输入边界、Contribution 规则和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，文本几何与浏览器渲染后端的长期目标见 [`text-engine-geometry.md`](./text-engine-geometry.md)（中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md)），跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
 >
-> 本文说明文本编辑机制与调用约束；未完成动作见[根 TODO](../../../TODO.md#stanza-编辑器--todo)，演进依赖见[编辑器设计](../../../docs/design/editor-roadmap.md)。
+> 本文说明文本编辑机制与调用约束；未完成动作见[根 TODO](../../../TODO.md)，演进依赖见[编辑器设计](../../../docs/design/editor-roadmap.md)。
 
 ## 快速理解
 

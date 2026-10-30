@@ -150,7 +150,7 @@ ChatWidgetModel 的 refresh 在 await 后使用 generation、request 和 revisio
 
 ### 已接入的消费者刷新约束
 
-文件模型的焦点刷新共享同一在途读取；文件事件使旧读取失效，并在事件突发后串行补读当前内容。编辑或关闭最后一个视图会取消相应信号，晚到内容在创建文本缓冲前丢弃。保存队列继续拥有写入及已确认修订；只读刷新不会重放写入，也不会因旧刷新等待而跨过新排队的保存。`browserTextModelService.test.ts` 48 项通过，其中回归直接断言读取次数、旧信号退休、最新修订及写入恰好一次，日志 `.build/todo-refresh/unit.log`。
+文件模型的焦点刷新共享同一在途读取；文件事件使旧读取失效，并在事件突发后串行补读当前内容。编辑或关闭最后一个视图会取消相应信号，晚到内容在创建文本缓冲前丢弃。保存队列继续拥有写入及已确认修订；只读刷新不会重放写入，也不会因旧刷新等待而跨过新排队的保存。2026-10-30 在 Windows x64、`a174f34dfd` 上重跑 `browserTextModelService.test.ts`，51 项通过，直接断言读取次数、旧信号退休、最新修订及写入恰好一次，日志 `.build/todo-code-audit-text-refresh.log`。
 
 Chat 的 Changes 摘要按当前模型代次共享在途读取。durable sequence 推进时串行补读最新摘要，迟到的旧代次或已关闭模型不能发布结果；提交和执行接口不参与合并。`chatViewPane.test.ts` 158 项通过，其中新增两个场景覆盖三次并发调用合并、读取期间历史推进与关闭后的迟到结果，日志 `.build/todo-chat-refresh/` 和 `.build/todo-general-document/all-unit-final.log`。
 
@@ -158,7 +158,7 @@ Code／Cowork 的 Thread／transcript 刷新也按模型 generation 共享在途
 
 已知落后于 durable sequence 的 bounded 快照保留现有尾部和 transcript；刷新响应本身不再无限触发下一轮读取。没有新的通知或写入时，仍落后的快照进入可显式重试的错误状态。订阅发现落后仍会发起首次恢复，正常通知继续驱动补读。
 
-本轮 `ChatWidgetModel` 的 81 项与 `ChatViewPane` 的 158 项单测通过，覆盖跨调度轮次的 150 次 Thread／transcript 通知、写入恰好一次、最终错误与显式重试、旧代次成功／失败、排队微任务跨选择和关闭后的迟到结果。日志 `.build/todo-selected-unit.log` 与补齐微任务代次回归后的 `.build/todo-refresh-final-unit.log`；Renderer 类型检查和 prepared Desktop Host／Renderer 构建通过。
+2026-10-30 同基线的 `ChatWidgetModel` 95 项与 `ChatViewPane` 174 项单测通过，覆盖跨调度轮次的 150 次 Thread／transcript 通知、写入恰好一次、最终错误与显式重试、旧代次成功／失败、排队微任务跨选择和关闭后的迟到结果。GitHub 的读取取消保持原请求直到远端退休，并跳过已无消费者的返回值；写入取消保留已提交结果且不重放。包含这些边界的协议客户端 62 项通过。日志为 `.build/todo-code-audit-contracts.log` 与修正旧标题测试后的 `.build/todo-code-audit-final-regressions.log`。这些已选消费者的刷新与取消处理已完成代码验收。
 
 这些结果证明消费者请求数量及生命周期约束，不是整条 Desktop 的性能测量，也没有给未支持取消的文件 provider 或 RPC 增加物理中止保证。通用传输取消和大内容按需读取仍待推进；已有帧的解析成本不能据此宣称消失。
 

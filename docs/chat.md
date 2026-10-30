@@ -108,7 +108,7 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 
 模型无关的听写链路由现有 owner 闭合：配置在本次录音发布前解析并固定为领域选项，服务协调准备、启动、采音、转写、停止与取消，输入 owner 负责写回及会话隔离。PCM16 使用有符号小端编码，停止先 flush 尾包并排空上传，再取最终结果；本地／云端结果是累计快照，扩展结果按已确认片段累积。最终返回的空文字也具有权威性，本地最终事件等待停止回执；本地等待最终结果最多 8 秒，云端最多 35 秒，超时保留已流式返回的文字，无文字则报告错误并取消资源。取消绕过积压的音频或停止请求，新的后端获取等待旧取消回执；浏览器尚未返回的麦克风权限请求独立清理，迟到媒体流和旧会话事件不能影响替代录音。异步切换麦克风以最新选择为准，退休流立即释放。
 
-Ash 保留现有模型、供应商、推理运行时和凭据归属。当前本地默认是 Rust 后端的 Paraformer 模型包，云端选择是 OpenAI／xAI API 或 Codex 订阅，`dictation.model` 只表示本地模型包；本地服务使用受管缓存并拒绝尚不支持的 Foundry runtime、代理及语言参数。模型准备与缓存操作仍走原服务，未加入运行时或模型迁移。真实账户、物理设备与音质的验收范围见 TODO。
+Ash 保留现有模型、供应商、推理运行时和凭据归属。当前本地默认是 Rust 后端的 Paraformer 模型包，云端选择是 OpenAI／xAI API 或 Codex 订阅，`dictation.model` 只表示本地模型包；本地服务使用受管缓存并拒绝尚不支持的 Foundry runtime、代理及语言参数。模型准备与缓存操作仍走原服务，未加入运行时或模型迁移。代码测试与真实账户、物理设备及音质的覆盖边界见[历史验证与复测入口](#历史验证与复测入口)。
 
 | 职责             | 唯一 owner 与范围                                                                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -146,6 +146,8 @@ IDE 与 Agent Window 均可从命令面板运行“开发人员：导出 Agent H
 ZIP 的 `manifest.json` 格式为 2，记录目标、来源、正文索引、录制状态及读取失败、未录制、截断和分页上限。每个文件最多 16 MiB，最多 1,000 个文件、64 MiB，每类会话证据最多 64 页；正文索引最多 1,000 项，完整原引用仍在诊断分页中。daemon 每次只读取该 profile 的最多 32 个日志文件，共最多 64 MiB，不修改生产日志。超过限额的来源和宿主尾读缺口均有标记，不再因旧的 1 MiB 单文件限制丢弃正文。部分来源失败仍导出已有证据并通知用户。取消等待当前有界读取结束后停止并释放尚未读取的资源，不下载半成品；后端连接或 capture 变化拒绝迟到证据，不向新代次续读。复测入口为 `exportAgentHostDebugLogs.test.ts`、`appServerAgentService.test.ts` 和 `test/smoke/areas/chat/chat-debug-logs.spec.ts`。
 
 ## 历史验证与复测入口
+
+2026-10-30 在 Windows x64 按代码与测试验收语音链路：SpeechService、VoiceClient、听写会话／云端适配器／引导和 Call adapter 共 6 文件 60 项通过，覆盖输入归属、准备／取消、PCM 尾包、停止回执和迟到结果；`just test ash-voice-host --lib --features host` 的 8 项通过，覆盖有符号 PCM、控制帧、设备控制代次、重采样、滤波状态清理、回声参考和增益不削波。重新编译后的最终复验包含于 `.build/todo-code-audit-voice-document-scoped.log`，AudioHost 日志为 `.build/todo-code-audit-audio-host.log`。本轮使用受控账户／音频接口和合成信号，原语音验收待办按代码口径消项；没有新增真实账户、物理采音、主观音质或界面验收。旧麦克风枚举故障仍待定位，完整 Prompt／Agent 格式及缺失 MCP capability 不在本次结论内。
 
 2026-10-20 的内置语音入口验证：macOS 定向单测 324 项／9 文件、分层检查 15 项通过。Chromium 内置 ASR 8 项覆盖中英文 Chat／Cowork 的生产听写服务、本地／云端适配器和原输入，验证 PCM 尾包、停止写回、积压取消及迟到结果隔离；后端识别和物理采音使用受控替身。听写命令 4 项、语音模式 10 项及既有 MCP App 回归 40 项也已通过。Renderer 4445 文件类型检查和触及格式检查通过。对应入口为 `pnpm test:unit --run <file>`、`pnpm test:browser:integration chatTranscript.integration.spec.ts --project=chromium --grep <scenario>` 与 `bun check -p tsconfig.renderer.json --all`；不代替真实账户、物理设备或音质验收，也不表示缺失的 MCP capability 已实现。
 

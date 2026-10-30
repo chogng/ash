@@ -136,7 +136,11 @@ if (parameters.has('fileSearch')) {
 	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'quick-access', folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'repo', index: 0 }] })));
 	services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 	const provider = resources.add(services.createInstance(AgentHostFileSearchProvider));
-	services.registerInstance(ISearchService, { fileSearch: provider.fileSearch.bind(provider), textSearch: async () => { throw new Error('Filename fixture must not search contents'); } });
+	services.registerInstance(ISearchService, {
+		registerSearchResultProvider: () => { throw new Error('Filename fixture must not register search providers'); },
+		fileSearch: provider.fileSearch.bind(provider),
+		textSearch: async () => { throw new Error('Filename fixture must not search contents'); },
+	});
 } else {
 	services.registerInstance(IFileService, { hasProvider: () => true } as unknown as IFileService);
 	services.registerInstance(IWorkspaceContextService, {

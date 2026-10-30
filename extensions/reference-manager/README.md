@@ -35,4 +35,15 @@ pnpm test:editor:browser referenceManager.integration.spec.ts --project=chromium
 
 Supply another `target=executable` argument for each supported target. Product packages omit the optional executable, manifest and client. The submission uses the existing signed catalog, Manager, exact execution consent, SDK launcher and closed client integrity chain. Creating a local submission does not publish it. The native source digest binds the client implementation to its provider.
 
-Chromium integration uses actual Rust Reference Manager, Academy and PDF Viewer processes and separately compiled clients, with test-owned files and dialog selections. It checks English/Chinese import, deduplication, metadata editing, persistence, citation insertion/update/undo, missing-entry handling, optional PDF rendering, conflicts, retirement recovery and read-only controls. Signed-package installation is covered separately by the opt-in App Server test using `ASH_REFERENCE_MANAGER_DISTRIBUTION` and `ASH_REFERENCE_MANAGER_TRUSTED_ROOT`. Electron multi-window/remote, physical assistive technology and other OS targets remain part of the extension/document-host acceptance scope in the root TODO.
+Chromium integration uses actual Rust Reference Manager, Academy and PDF Viewer processes and separately compiled clients, with test-owned files and dialog selections. It checks English/Chinese import, deduplication, metadata editing, persistence, citation insertion/update/undo, missing-entry handling, optional PDF rendering, conflicts, retirement recovery and read-only controls. Signed-package installation is covered separately by the opt-in App Server test using `ASH_REFERENCE_MANAGER_DISTRIBUTION` and `ASH_REFERENCE_MANAGER_TRUSTED_ROOT`.
+
+On 2026-10-30, the Windows x64 code audit passed the 7 reference-library cases and the real
+SDK process test. The latter's fixture used an unrepresentable `u64::MAX` invocation deadline;
+using a finite 60-second deadline matches the production contract. `just verify ash-reference-manager`
+then passed check, tests and all-target warnings. Logs are
+`.build/todo-code-audit-reference-runtime.log` (first failure) and
+`.build/todo-code-audit-reference-runtime-verify.log`.
+Shared-host code acceptance is recorded in
+[extension validation](../../docs/editor-extensions.md#10-实现证据与验证).
+This run did not exercise signed distribution installation, real Electron multi-window/remote
+use, physical assistive technology or other OS targets; these remain coverage limits.

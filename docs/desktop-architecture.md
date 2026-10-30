@@ -698,6 +698,8 @@ macOS 系统菜单动作失败通过现有通知服务展示；用户取消保�
 真实 OpenSSH fixture 验证两根授权、第二根读写、脏文件移根拒绝及可见通知、跨根搜索、本地配置 URI 持久化、移除首根后的第二根终端存活及同一 SSH authority 下的关闭重开。此为同机隔离 SSH 服务，不代表 Windows／Linux 远端验证。
 日志与截图／trace 位于 `.build/remote-browser-evidence/`；上述证据早于 Web 多根控制与准确配置文件 proof；这些旧记录不能替代新链路的真实 Web、跨机器和系统选择器验收。
 
+2026-10-30 在 Windows x64、`a174f34dfd` 上按代码与测试验收远端多根契约：工作区识别／切换、Main 与 Browser 提交／回滚、Renderer 编辑、Remote window 生命周期及 authority resolver 共 7 个文件，首次运行发现 Main 管理测试将原始 Windows 盘符大小写与 URI 规范拼写直接比较。修正断言并让监听器随测试释放后，`workspacesManagementMainService.test.ts` 20 项通过；其中新增 Windows 盘符与 UNC 参数，与 POSIX 一起覆盖根顺序、提交给后端的路径、authority、配置保存／重开、清空保留身份、外来根拒绝和失败回滚。其余 6 文件 56 项及 `remote.test.ts` 的跨客户端路径往返 6 项通过，合计 82 项。日志为 `.build/todo-code-audit-remote-workspaces.log`、`.build/todo-code-audit-remote-workspaces-retest.log` 与 `.build/todo-code-audit-remote-workspaces-final.log`，前两份保留首次失败及修正过程。Windows／Linux 远端多根 TODO 按本轮代码口径消项；没有新增跨机器或界面验收，配置直接保存到远端机器仍未实现。
+
 执行目录、目录列表与权限的跨组件语义，以及本次 Codex 执行层核对与修复见
 [环境与目录访问 §9](environment-access.md#9-执行层实现核对codex-对照)。
 

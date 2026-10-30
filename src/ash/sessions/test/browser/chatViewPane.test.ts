@@ -427,6 +427,8 @@ test('Chat title and history switching retain conversations and drafts', async (
 	const api = fake.api;
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
+	// The production window binds this key from its Chat enablement contribution.
+	ChatContextKeys.enabled.bindTo(contextKeys).set(true);
 	using viewDescriptors = new TestViewDescriptorService({
 		registry: new WorkbenchViewRegistry(),
 	}, contextKeys);
@@ -520,20 +522,26 @@ test('Chat title and history switching retain conversations and drafts', async (
 		[...toolbar?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []]
 			.map((item) => item.dataset.actionId),
 		[
-			NEW_CHAT_COMMAND_ID,
+			`submenu.${MenuId.ChatNewMenu.id}`,
 			SHOW_CHAT_HISTORY_COMMAND_ID,
 			'ash.toolbar.moreActions',
 		],
 	);
+	const newChatButton = toolbar?.querySelector<HTMLButtonElement>('.ash-split-action-primary button');
+	assert.ok(newChatButton);
+	assert.equal(toolbar?.querySelector('.ash-split-action-dropdown button')?.getAttribute('aria-label'), 'New Chat');
+	assert.equal(menuService.getMenuActions(MenuId.ChatNewMenu).flatMap(([, actions]) => actions)[0]?.id, NEW_CHAT_COMMAND_ID);
 	assert.deepEqual(
 		[...toolbar?.querySelectorAll<HTMLButtonElement>('button') ?? []]
 			.map((button) => button.title),
-		['New Chat', 'Show Chat History', 'More Actions'],
+		['New Chat', '', 'Show Chat History', 'More Actions'],
 	);
-	assert.equal(
-		toolbar?.querySelectorAll('.ash-action-view-item.icon').length,
-		3,
-	);
+	for (const button of toolbar?.querySelectorAll('button') ?? []) assert.ok(button.querySelector('.ash-icon'));
+	newChatButton.click();
+	const titleDraftId = sessions.activeUntitledSession?.untitledSessionId;
+	assert.ok(titleDraftId);
+	sessions.discardUntitledSession(titleDraftId);
+	sessions.selectThread('session-1', 'thread-1');
 	assert.ok(toolbar?.querySelector('.ash-button-label'));
 	assert.ok(toolbar?.querySelector('.ash-icon'));
 	assert.ok(layoutToolbar?.querySelector(
@@ -609,7 +617,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 			{
 				id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 				label: 'Move Chat to Editor Area',
-				enabled: false,
+				enabled: true,
 				icon: Lxicon.layoutPanel1,
 			},
 			{

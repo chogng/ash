@@ -158,6 +158,7 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 	if (!services.has(IHostService)) services.registerInstance(IHostService, new TestHostService());
 	// Filename discovery is an explicit boundary of the terminal-only fixture.
 	if (!services.has(ISearchService)) services.registerInstance(ISearchService, {
+		registerSearchResultProvider: () => { throw new Error('Terminal fixture does not register search providers'); },
 		fileSearch: async () => ({ results: [], messages: [] }),
 		textSearch: async () => { throw new Error('Terminal fixture does not search file contents'); },
 	});

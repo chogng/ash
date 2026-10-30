@@ -2,6 +2,9 @@
 #[path = "../../../crates/app-server/src/session_runtime_provider.rs"]
 mod host;
 
+#[path = "support/bootstrap.rs"]
+mod bootstrap;
+
 use ash_async_utils::CancellationSource;
 use ash_core_plugins::EditorExtensionPolicy;
 use ash_core_plugins::EditorExtensionPolicyAction;

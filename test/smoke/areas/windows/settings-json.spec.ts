@@ -224,12 +224,14 @@ for (const locale of ['en', 'zh-CN']) {
 				const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
 				return {
 					inside: bounds.left >= field.left && bounds.right <= field.right && bounds.top >= field.top && bounds.bottom <= field.bottom,
-					afterText: bounds.left >= input.right,
+					// Fractional Windows scaling can round adjacent DOMRect edges differently.
+					inputGap: bounds.left - input.right,
 					iconFits: icon.left >= bounds.left && icon.right <= bounds.right && icon.top >= bounds.top && icon.bottom <= bounds.bottom,
 					size: { width: bounds.width, height: bounds.height },
 				};
 			});
-			expect(geometry).toEqual({ inside: true, afterText: true, iconFits: true, size: { width: 22, height: 22 } });
+			expect(geometry).toMatchObject({ inside: true, iconFits: true, size: { width: 22, height: 22 } });
+			expect(geometry.inputGap).toBeGreaterThanOrEqual(-0.001);
 			await settings.getByRole('searchbox').press('Tab');
 			await expect(filter).toBeFocused();
 			await filter.press('Enter');
