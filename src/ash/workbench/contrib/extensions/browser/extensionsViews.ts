@@ -345,13 +345,17 @@ export class ExtensionsListView extends ViewPane {
 		super(container, { ...options, minimumBodySize: 160 });
 		this.element.classList.add('ash-extensions-view');
 		const isPluginsPane = options.id === 'ash.extensions.plugins';
-		const badge = this._register(new CountBadge(this.headerElement, {
+		const countContainer = h(this.headerElement.ownerDocument, 'span', {
+			className: 'ash-extensions-count',
+			attributes: { id: `${this.id}-count` },
+		});
+		this.headerElement.append(countContainer);
+		const badge = this._register(new CountBadge(countContainer, {
 			titleFormat: isPluginsPane
 				? localize({ bundle: 'ash.extensions', key: 'pluginResults' }, '{0} plugins')
 				: localize({ bundle: 'ash.extensions', key: 'results' }, '{0} extensions'),
 		}, defaultCountBadgeStyles));
-		badge.domNode.id = `${this.id}-count`;
-		this.headerElement.setAttribute('aria-describedby', badge.domNode.id);
+		this.headerElement.setAttribute('aria-describedby', countContainer.id);
 		this.content = this._register(instantiation.createInstance(ExtensionsContent, this.contentElement, isPluginsPane ? { view: 'plugins', mode: 'installed' } : { mode: 'browse' }));
 		const loading = this._register(new MutableDisposable());
 		this._register(this.content.onDidChangeLoading(active => {
@@ -418,11 +422,15 @@ abstract class ExtensionsListViewPane extends ViewPane {
 	protected constructor(container: HTMLElement, options: IViewPaneOptions, private readonly editors: IEditorService, contextKeys: IContextKeyService, configuration: IConfigurationService, private readonly packageManagement: IExtensionManagementService, private readonly verbositySetting = AccessibilityVerbositySettingId.Extensions) {
 		super(container, { ...options, minimumBodySize: 80 });
 		this.element.classList.add('ash-extensions-view');
-		this.badge = this._register(new CountBadge(this.headerElement, {
+		const countContainer = h(this.headerElement.ownerDocument, 'span', {
+			className: 'ash-extensions-count',
+			attributes: { id: `${this.id}-count` },
+		});
+		this.headerElement.append(countContainer);
+		this.badge = this._register(new CountBadge(countContainer, {
 			titleFormat: localize({ bundle: 'ash.extensions', key: 'paneResults' }, '{0} items'),
 		}, defaultCountBadgeStyles));
-		this.badge.domNode.id = `${this.id}-count`;
-		this.headerElement.setAttribute('aria-describedby', this.badge.domNode.id);
+		this.headerElement.setAttribute('aria-describedby', countContainer.id);
 		const body = h(mainWindow.document, 'section');
 		this.body = body;
 		body.className = 'ash-extensions extension-capability-pane';

@@ -466,7 +466,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 		);
 		disposables.add(activityServices.createInstance(ActivitybarPart, harness.container, bar, globalBar));
 		const first = (): HTMLElement => bar.domNode.querySelector('[data-action-id="first"]')!;
-		assert.equal(bar.domNode.querySelector('.ash-count-badge'), null);
+		assert.equal(bar.domNode.querySelector('.ash-composite-bar-badge'), null);
 		firstBadge.value = activity.showViewContainerActivity('first', {
 			badge: new NumberBadge(3, () => '3 unsaved files'),
 		});
@@ -475,17 +475,17 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 		first().focus();
 		await harness.configuration.updateValue(WorkbenchConfiguration.activityBarBadges, true);
 		assert.deepEqual(
-			[...bar.domNode.querySelectorAll('.ash-count-badge')].map(badge => badge.textContent),
+			[...bar.domNode.querySelectorAll('.ash-composite-bar-badge')].map(badge => badge.textContent),
 			['3'],
 		);
 		assert.equal(first().getAttribute('aria-label'), 'first, 3 unsaved files');
 		assert.equal(dom.window.document.activeElement, first());
 		await harness.configuration.updateValue(WorkbenchConfiguration.activityBarBadges, false);
 		bar.toggleBadgeEnablement('second');
-		assert.equal(bar.domNode.querySelector('.ash-count-badge'), null);
+		assert.equal(bar.domNode.querySelector('.ash-composite-bar-badge'), null);
 		await harness.configuration.updateValue(WorkbenchConfiguration.activityBarBadges, undefined);
 		assert.deepEqual(
-			[...bar.domNode.querySelectorAll('.ash-count-badge')].map(badge => badge.textContent),
+			[...bar.domNode.querySelectorAll('.ash-composite-bar-badge')].map(badge => badge.textContent),
 			['3', '2'],
 		);
 	} finally {
@@ -1746,7 +1746,7 @@ test('CompositeBar retains selectors and keyboard focus through selection and un
 		using badge = activity.showViewContainerActivity('third', { badge: new NumberBadge(3, () => '3 changes') });
 		assert.equal(bar.domNode.querySelector('[data-action-id="second"]'), tabs[1]);
 		assert.equal(dom.window.document.activeElement, tabs[1]);
-		assert.equal(bar.domNode.querySelector('[data-action-id="third"] .ash-count-badge')?.textContent, '3');
+		assert.equal(bar.domNode.querySelector('[data-action-id="third"] .ash-composite-bar-badge')?.textContent, '3');
 		bar.setActiveComposite(undefined);
 		bar.setActiveComposite('first');
 		assert.equal(bar.domNode.querySelector('[data-action-id="first"]'), tabs[0]);

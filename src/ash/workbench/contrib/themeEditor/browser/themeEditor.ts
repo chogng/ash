@@ -11,6 +11,7 @@ import type { IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
 import { ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
+import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
@@ -1352,7 +1353,7 @@ class ThemeColorGroup extends Disposable {
 	private readonly element: HTMLElement;
 	public readonly header: HTMLButtonElement;
 	public entries: ThemeColorEntry[] = [];
-	private readonly count: HTMLElement;
+	private readonly count: CountBadge;
 	private expandedBeforeSearch = false;
 
 	constructor(
@@ -1372,11 +1373,12 @@ class ThemeColorGroup extends Disposable {
 		});
 		this.header.append(h(doc, 'span', { className: 'ash-theme-color-group-label' }, label));
 		this.header.title = label;
-		this.count = h(doc, 'span', {
+		const countContainer = h(doc, 'span', {
 			className: 'ash-theme-color-group-count',
 			attributes: { 'aria-hidden': 'true' },
 		});
-		this.header.append(this.count);
+		this.header.append(countContainer);
+		this.count = this._register(new CountBadge(countContainer, { presentation: 'outlined', size: 'small' }));
 		const chevron = h(doc, 'span', {
 			className: 'ash-theme-color-group-chevron',
 			attributes: { 'aria-hidden': 'true' },
@@ -1400,7 +1402,7 @@ class ThemeColorGroup extends Disposable {
 	}
 
 	public setCount(count: number): void {
-		if (this.count.textContent !== String(count)) this.count.textContent = String(count);
+		this.count.setCount(count);
 		if (this.element.hidden !== (count === 0)) this.element.hidden = count === 0;
 	}
 

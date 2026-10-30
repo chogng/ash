@@ -139,5 +139,5 @@ export const SCMBusyContext = new RawContextKey<boolean>('scmBusy', false);
 export const SCMCanCommitContext = new RawContextKey<boolean>('scmCanCommit', false);
 export type SCMViewMode = 'list' | 'tree';
 export type SCMViewSortKey = 'path' | 'name' | 'status';
-export const SCMViewModeContext = new RawContextKey<SCMViewMode>('scmViewMode', 'tree');
+export const SCMViewModeContext = new RawContextKey<SCMViewMode>('scmViewMode', 'list');
 export const SCMViewSortKeyContext = new RawContextKey<SCMViewSortKey>('scmViewSortKey', 'path');

@@ -9,10 +9,12 @@ Detailed ownership contract: [UI styling ownership](../../docs/ui-styling-owners
 
 ## DOM vocabulary and ownership
 
+- Keep component-created DOM private by default. Expose a root only when mounting, layout or native DOM integration is part of the component's public responsibility; document permitted host operations, node identity and lifetime. Existing callers are migration requirements, not proof that a node must remain public.
 - Use `domNode` for an exposed visual root, `<role>DomNode` for owned children, and `container` for a caller-provided parent.
 - Use `element` for short-lived generic DOM values, tree/model elements and established generic widget contracts.
 - Stable DOM creators own listener cleanup; register it beside creation.
-- Hosts may size and position a directly hosted root, but must not mutate or style through its internal DOM.
+- Hosts own placement, visibility and cross-component associations through their own containers or an explicitly exposed root. Component-owned content, state, ARIA and presentation must go through semantic APIs; do not reach internal DOM through selectors, casts or replacement getters.
+- Add a host container only for an owned layout, visibility or association boundary. Do not mechanically wrap every widget or replace DOM access with one setter per DOM operation.
 - Ash-owned DOM and CSS use Ash's stable brand classes; do not copy or retain upstream product root classes.
 
 ## CSS and rendering

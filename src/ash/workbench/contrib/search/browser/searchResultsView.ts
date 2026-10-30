@@ -74,10 +74,11 @@ export class SearchResultsRenderer extends Disposable {
 				ariaLabel: description ? `${label}, ${description}` : label,
 			}));
 			if (element.kind === 'file') {
-				const badge = resources.add(new CountBadge(content, {
+				const countContainer = h(this.document, 'span', { className: 'ash-search-file-count' });
+				content.append(countContainer);
+				resources.add(new CountBadge(countContainer, {
 					count: element.matches.length, size: 'small'
 				}, defaultCountBadgeStyles));
-				badge.domNode.classList.add('ash-search-file-count');
 			}
 		}
 		resources.add(this.hover.setupHover({ target: content, content: element.kind === 'match' ? element.preview : element.resource.toString() }));

@@ -15,19 +15,23 @@ export interface ICountBadgeOptions {
 	readonly count?: number;
 	readonly countFormat?: string;
 	readonly titleFormat?: string;
-	readonly presentation?: 'default' | 'accent';
+	/** Outlined counts remain visually secondary alongside labels. */
+	readonly presentation?: 'default' | 'accent' | 'outlined';
 	readonly size?: 'default' | 'small';
 }
 
-/** A non-interactive count with shared theming and a description that follows its value. */
+/**
+ * A non-interactive count that owns its formatted text, description, hover and presentation.
+ * The host owns its container's layout, visibility and cross-component associations; the badge node stays private.
+ */
 export class CountBadge extends Disposable {
-	public readonly domNode: HTMLSpanElement;
+	private readonly element: HTMLSpanElement;
 	private readonly hover: IManagedHover | undefined;
 
 	constructor(container: HTMLElement, private readonly options: ICountBadgeOptions = {}, styles?: ICountBadgeStyles) {
 		super();
-		this.domNode = h(container.ownerDocument, 'span');
-		this.domNode.className = 'ash-count-badge';
+		this.element = h(container.ownerDocument, 'span');
+		this.element.className = 'ash-count-badge';
 		if (styles) {
 			const colors = {
 				'--ash-badge-style-badge-background': styles.badgeBackground,
@@ -35,15 +39,16 @@ export class CountBadge extends Disposable {
 				'--ash-badge-style-badge-border': styles.badgeBorder,
 			};
 			for (const [property, value] of Object.entries(colors)) {
-				if (value !== undefined) this.domNode.style.setProperty(property, value);
+				if (value !== undefined) this.element.style.setProperty(property, value);
 			}
 		}
-		this.domNode.classList.toggle('accent', options.presentation === 'accent');
-		this.domNode.classList.toggle('small', options.size === 'small');
-		container.append(this.domNode);
-		this._register(toDisposable(() => this.domNode.remove()));
+		this.element.classList.toggle('accent', options.presentation === 'accent');
+		this.element.classList.toggle('outlined', options.presentation === 'outlined');
+		this.element.classList.toggle('small', options.size === 'small');
+		container.append(this.element);
+		this._register(toDisposable(() => this.element.remove()));
 		if (options.titleFormat) {
-			this.hover = this._register(getHoverDelegate().setupHover({ target: this.domNode, content: '' }));
+			this.hover = this._register(getHoverDelegate().setupHover({ target: this.element, content: '' }));
 		}
 		this.render(options.count ?? 0);
 	}
@@ -54,10 +59,10 @@ export class CountBadge extends Disposable {
 
 	private render(count: number): void {
 		const parameters = { '0': count };
-		this.domNode.textContent = formatNlsMessage(this.options.countFormat ?? '{0}', parameters);
+		this.element.textContent = formatNlsMessage(this.options.countFormat ?? '{0}', parameters);
 		if (this.options.titleFormat) {
 			const description = formatNlsMessage(this.options.titleFormat, parameters);
-			this.domNode.setAttribute('aria-label', description);
+			this.element.setAttribute('aria-label', description);
 			this.hover!.update(description);
 		}
 	}
