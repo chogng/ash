@@ -132,6 +132,10 @@
 	transform-origin: top left;
 }
 
+.ash-theme-editor-preview.hidden {
+	display: none;
+}
+
 .ash-theme-editor-search {
 	padding: 8px 12px;
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
