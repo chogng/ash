@@ -116,15 +116,20 @@ suite('Rendered menu default split actions', () => {
 				const [main, dropdown] = [...root.querySelectorAll('button')];
 				const left = main!.getBoundingClientRect();
 				const right = dropdown!.getBoundingClientRect();
+				const icon = main!.querySelector('.ash-icon')!.getBoundingClientRect();
 				return {
 					height: left.height, mainWidth: left.width, dropdownHeight: right.height,
 					dropdownWidth: right.width, gap: right.left - left.right,
+					iconWidth: icon.width, iconHeight: icon.height,
+					iconOffsetX: icon.left + icon.width / 2 - left.left - left.width / 2,
+					iconOffsetY: icon.top + icon.height / 2 - left.top - left.height / 2,
 					mainInnerRadius: getComputedStyle(main!).borderTopRightRadius,
 					dropdownInnerRadius: getComputedStyle(dropdown!).borderTopLeftRadius,
 				};
 			});
 			assert.deepEqual(geometry, {
 				height: 22, mainWidth: 22, dropdownHeight: 22, dropdownWidth: 16, gap: 0,
+				iconWidth: 16, iconHeight: 16, iconOffsetX: 0, iconOffsetY: 0,
 				mainInnerRadius: '0px', dropdownInnerRadius: '0px',
 			});
 			await expect(main).toHaveAttribute('aria-label', 'New Chat');
