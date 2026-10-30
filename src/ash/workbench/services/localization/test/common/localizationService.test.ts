@@ -1052,7 +1052,7 @@ suite('Workbench localization', () => {
 			listEditorExtensions: async () => ({ revision: 1, extensions: [] }),
 			setEditorExtensionPolicy: () => Promise.reject(new Error('unused')),
 			acquireCapability: () => Promise.reject(new Error('unused')),
-			releaseCapability: async () => {},
+			releaseCapability: async () => { },
 			openResource: () => Promise.reject(new Error('unused')),
 		};
 	}
@@ -1064,7 +1064,7 @@ suite('Workbench localization', () => {
 		using locale = createTestLocaleService(
 			configuration,
 			packs,
-			async () => {},
+			async () => { },
 			async () => {
 				prompted = true;
 				return { confirmed: true };

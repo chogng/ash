@@ -76,7 +76,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private switching = Promise.resolve();
 	private readonly popouts = new Map<
 		SessionView,
-		{ window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: SessionAuxiliaryWindow }
+		{ window: IAuxiliaryWindow; resources: DisposableStore; placeholder: IView; shell: SessionAuxiliaryWindow; }
 	>();
 	private readonly openingPopouts = new Map<SessionView, Promise<void>>();
 
@@ -191,7 +191,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				maximumWidth: Infinity,
 				minimumHeight: 240,
 				maximumHeight: Infinity,
-				layout() {},
+				layout() { },
 			};
 			this.popouts.set(view, { window, resources, placeholder: placeholderView, shell });
 			resources.add(
@@ -268,7 +268,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	}
 
 	async captureActiveDraft(): Promise<
-		{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined
+		{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined
 	> {
 		await this.switching;
 		return this.activeView?.activeChat.captureDraft();
@@ -294,7 +294,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				view.activeChat.sessionId ??
 				(selection.kind === 'untitled'
 					? this.options.sessionService.materializedSessions.get().get(selection.session.untitledSessionId)
-							?.sessionId
+						?.sessionId
 					: undefined);
 			if (!id || key === sessionKey(id) || this.entries.has(sessionKey(id))) continue;
 			this.entries.delete(key);
@@ -313,12 +313,12 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					view.activeChat.sessionId ??
 					(current.kind === 'untitled'
 						? this.options.sessionService.materializedSessions.get().get(current.session.untitledSessionId)
-								?.sessionId
+							?.sessionId
 						: undefined);
 				const session = id
 					? this.options.sessionService.sessions.find(
-							session => session.sessionId === id && session.status === 'active',
-						)
+						session => session.sessionId === id && session.status === 'active',
+					)
 					: undefined;
 				if (session) {
 					const selection = view.currentSelection;
@@ -473,7 +473,7 @@ class SessionsChatEmptyView extends Disposable implements IView {
 		this.update('ready', undefined);
 	}
 
-	layout(_bounds: IPositionedRectangle): void {}
+	layout(_bounds: IPositionedRectangle): void { }
 
 	update(state: ISessionsManagementService['state'], error: string | undefined): void {
 		this.loading.setVisible(state === 'loading' && !error);
@@ -493,9 +493,9 @@ class SessionsChatEmptyView extends Disposable implements IView {
 			this.description.textContent = this.welcomeComplete()
 				? localize('sessions.empty.select', 'Select a session from the sidebar, or create a new one.')
 				: localize(
-						'sessions.empty.begin',
-						'Create a session to plan, implement, or review work with the coding agent.',
-					);
+					'sessions.empty.begin',
+					'Create a session to plan, implement, or review work with the coding agent.',
+				);
 		}
 	}
 }

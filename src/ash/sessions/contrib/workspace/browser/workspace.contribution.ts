@@ -144,14 +144,14 @@ class WorkspaceStatusContribution extends Disposable {
 				? title
 				: unavailable
 					? localize(
-							'appServer.recoveryUnavailable',
-							'The Agent Host connection cannot be restored. {0}',
-							recovery.error ?? '',
-						)
+						'appServer.recoveryUnavailable',
+						'The Agent Host connection cannot be restored. {0}',
+						recovery.error ?? '',
+					)
 					: localize(
-							'appServer.recoveryFailed',
-							'Could not restore the Agent Host connection or workspace. Try again.',
-						);
+						'appServer.recoveryFailed',
+						'Could not restore the Agent Host connection or workspace. Try again.',
+					);
 			if (next !== previous) status(message);
 			if (unavailable && previous !== 'unavailable') {
 				// A terminal connection failure needs a global recovery action; ordinary reconnects do not.

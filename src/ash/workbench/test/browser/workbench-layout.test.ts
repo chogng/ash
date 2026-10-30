@@ -102,7 +102,7 @@ const { TogglePanelAction } = await import('../../../workbench/browser/parts/pan
 const { CommandService } = await import('../../../workbench/services/commands/common/commandService.js');
 const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
 const { SyncDescriptor } = await import('../../../platform/instantiation/common/descriptors.js');
-const {} = await import('../../../platform/instantiation/common/instantiation.js');
+const { } = await import('../../../platform/instantiation/common/instantiation.js');
 type WorkbenchPartId = import('../../../workbench/services/layout/browser/layoutService.js').WorkbenchPartId;
 type WorkbenchLayoutInstance = import('../../../workbench/browser/layout.js').WorkbenchLayout;
 type WorkbenchLayoutOptions = import('../../../workbench/browser/layout.js').WorkbenchLayoutOptions & {
@@ -277,7 +277,7 @@ test('Workbench layout synchronizes Grid geometry during the window resize event
 			layoutCalls++;
 			originalLayout.call(this, dimension);
 		};
-		const layouts: { readonly width: number; readonly height: number }[] = [];
+		const layouts: { readonly width: number; readonly height: number; }[] = [];
 		harness.disposables.add(harness.layout.onDidLayoutMainContainer(dimension => layouts.push(dimension)));
 		for (const size of [
 			{ width: 1_200, height: 800 },
@@ -593,7 +593,7 @@ test('platform and Workbench dependencies resolve one owner and publish complete
 			readonly platform: import('../../../platform/layout/browser/layoutService.js').ILayoutService,
 			@IWorkbenchLayoutService
 			readonly workbench: import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService,
-		) {}
+		) { }
 	}
 	const consumer = harness.services.createInstance(LayoutConsumer);
 	assert.equal(consumer.platform, harness.layout);
@@ -806,7 +806,7 @@ test('Auxiliary Bar commands restore dimensions, hidden Parts and Panel maximiza
 			getActivePaneComposite: () => undefined,
 			getLastActivePaneCompositeId: () => undefined,
 			openPaneComposite: async () => undefined,
-			hideActivePaneComposite() {},
+			hideActivePaneComposite() { },
 			getPartId: () => 'auxiliarybar',
 		});
 		const commands = resources.add(new CommandService(harness.services));
@@ -1561,7 +1561,7 @@ test('Activity Bar hosts the primary sidebar selector independently of sidebar v
 	const compositeBar = sidebar.compositeBar;
 	const globalActions = dom.window.document.createElement('div');
 	const configuration = disposables.add(new InMemoryConfigurationService());
-	const globalBar = { domNode: globalActions, setOrientation() {}, getContextMenuActions: () => [] };
+	const globalBar = { domNode: globalActions, setOrientation() { }, getContextMenuActions: () => [] };
 	const localization = {
 		translate: (_bundle: string, _key: string, fallback: string) => fallback,
 	} as ILocalizationService;
@@ -1716,7 +1716,7 @@ test('CompositeBar retains selectors and keyboard focus through selection and un
 					ariaLabel: 'Views',
 					viewDescriptorService: views,
 					activityHoverOptions: { position: () => HoverPosition.RIGHT },
-					contextMenuProvider: { showContextMenu() {} },
+					contextMenuProvider: { showContextMenu() { } },
 					openComposite: async id => {
 						opened.push(id);
 						bar.setActiveComposite(id);
@@ -1767,7 +1767,7 @@ test('CompositePart only redistributes changed constraints and publishes each ac
 		using resources = new DisposableStore();
 		const services = resources.add(createTestComponentServices(undefined, undefined, dom.window.document));
 		class MeasuredComposite extends Composite {
-			readonly allocations: { width: number; height: number }[] = [];
+			readonly allocations: { width: number; height: number; }[] = [];
 			constructor(
 				readonly id: string,
 				private readonly width: number,
@@ -1780,8 +1780,8 @@ test('CompositePart only redistributes changed constraints and publishes each ac
 			override get minimumWidth(): number {
 				return this.width;
 			}
-			focus(): void {}
-			layout(dimension: { width: number; height: number }): void {
+			focus(): void { }
+			layout(dimension: { width: number; height: number; }): void {
 				this.allocations.push({ ...dimension });
 			}
 		}
@@ -1995,7 +1995,7 @@ test('Panel presents its destinations as tabs and active commands as a toolbar',
 	const contextKeys = disposables.add(new ContextKeyService());
 	const commands = disposables.add(new CommandService(new InstantiationService()));
 	const menuService = new MenuService(commands, contextKeys);
-	const contextMenuProvider: IContextMenuProvider = { showContextMenu() {} };
+	const contextMenuProvider: IContextMenuProvider = { showContextMenu() { } };
 	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const panelServices = disposables.add(new InstantiationService());
 	assert.throws(() => panelServices.createInstance(PanelPart, dom.window.document.body), /viewDescriptorService/);
@@ -2013,7 +2013,7 @@ test('Panel presents its destinations as tabs and active commands as a toolbar',
 		...contextMenuProvider,
 		onDidShowContextMenu: BaseEvent.None,
 		onDidHideContextMenu: BaseEvent.None,
-		hideContextMenu() {},
+		hideContextMenu() { },
 	});
 	const panel = disposables.add(
 		registerContainerServices(panelServices).createInstance(PanelPart, dom.window.document.body),
@@ -2148,8 +2148,8 @@ test('Transient view navigation follows its active session and ignores stale res
 	services.registerInstance(IMenuService, new MenuService(commands, context));
 	services.registerInstance(IContextMenuService, {
 		contextMenuStyle: 'custom',
-		showContextMenu() {},
-		hideContextMenu() {},
+		showContextMenu() { },
+		hideContextMenu() { },
 		onDidShowContextMenu: BaseEvent.None,
 		onDidHideContextMenu: BaseEvent.None,
 	});
@@ -2305,7 +2305,7 @@ for (const activeId of ['search', 'explorer']) {
 			}
 			const contextKeys = disposables.add(new ContextKeyService());
 			const views = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
-			const opened: { id: string; preserveFocus: boolean | undefined }[] = [];
+			const opened: { id: string; preserveFocus: boolean | undefined; }[] = [];
 			let actions: readonly IAction[] = [];
 			const bar = disposables.add(
 				new CompositeBar(
@@ -2408,7 +2408,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	const configuration = firstBar.add(new InMemoryConfigurationService());
 	const globalBar = {
 		domNode: dom.window.document.createElement('div'),
-		setOrientation() {},
+		setOrientation() { },
 		getContextMenuActions: () => [],
 	};
 	const localization = {
@@ -2557,8 +2557,8 @@ test('Auxiliary Bar retains its View and exposes container selection as a standa
 	auxiliaryServices.registerInstance(IMenuService, new MenuService(commands, contextKeys));
 	auxiliaryServices.registerInstance(IContextMenuService, {
 		contextMenuStyle: 'custom',
-		showContextMenu() {},
-		hideContextMenu() {},
+		showContextMenu() { },
+		hideContextMenu() { },
 		onDidShowContextMenu: BaseEvent.None,
 		onDidHideContextMenu: BaseEvent.None,
 	});
@@ -2745,7 +2745,7 @@ test('titlebar layout commands toggle shell regions', async () => {
 		},
 		getActivePaneComposite: () => undefined,
 		getPartId: () => 'panel',
-		hideActivePaneComposite() {},
+		hideActivePaneComposite() { },
 	});
 	const commands = harness.disposables.add(new CommandService(services));
 
@@ -2870,7 +2870,7 @@ function resetWorkbenchSash(
 	sash.dispatchEvent(new targetWindow.MouseEvent('dblclick', { bubbles: true, detail: 2 }));
 }
 
-function compositeBarDragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {
+function compositeBarDragEvent(targetWindow: { readonly Event: typeof Event; }, type: string, clientX = 0): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 	Object.defineProperty(event, 'clientX', { value: clientX });
 	return event;
@@ -3015,8 +3015,8 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	services.registerInstance(IMenuService, new MenuService(commands, context));
 	services.registerInstance(IContextMenuService, {
 		contextMenuStyle: 'custom',
-		showContextMenu() {},
-		hideContextMenu() {},
+		showContextMenu() { },
+		hideContextMenu() { },
 		onDidShowContextMenu: BaseEvent.None,
 		onDidHideContextMenu: BaseEvent.None,
 	});
@@ -3257,7 +3257,7 @@ test('auxiliary layout completes hosted geometry before container notifications 
 		auxiliary.container.append(participant);
 		const order: string[] = [];
 		const completed: {
-			dimension: { readonly width: number; readonly height: number };
+			dimension: { readonly width: number; readonly height: number; };
 			width: string;
 			height: string;
 		}[] = [];

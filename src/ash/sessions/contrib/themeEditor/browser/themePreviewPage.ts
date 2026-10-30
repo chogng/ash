@@ -73,7 +73,7 @@ const workbench = resources.add(
 			const descriptor = host.fileDialogDescriptor(() => scope);
 			return scope.createInstance(descriptor.ctor, ...descriptor.staticArguments);
 		},
-		returnToWorkbench: () => {},
+		returnToWorkbench: () => { },
 		contributionIds: ['workbench.contrib.sessionsLayout'],
 	}),
 );

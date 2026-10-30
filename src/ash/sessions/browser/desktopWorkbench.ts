@@ -46,9 +46,9 @@ export class DesktopWorkbench extends Workbench {
 /** Persisted, Sessions-owned dimensions and visibility for the dedicated window. */
 export interface SessionsWorkbenchLayoutState {
 	readonly version: 1;
-	readonly sidebar: { readonly width: number; readonly visible: boolean };
-	readonly auxiliarybar: { readonly width: number; readonly visible: boolean };
-	readonly editor: { readonly width: number; readonly visible: boolean };
+	readonly sidebar: { readonly width: number; readonly visible: boolean; };
+	readonly auxiliarybar: { readonly width: number; readonly visible: boolean; };
+	readonly editor: { readonly width: number; readonly visible: boolean; };
 	readonly panel: {
 		readonly position: Position;
 		readonly width: number;
@@ -82,7 +82,7 @@ class SessionsWorkbenchLayoutStateModel {
 	constructor(
 		private readonly storageService: IStorageService,
 		private readonly defaults: SessionsWorkbenchLayoutState,
-	) {}
+	) { }
 
 	get state(): SessionsWorkbenchLayoutState {
 		const storage = this.storageService;
@@ -304,14 +304,14 @@ function createSessionsWorkbenchGridDescriptor(
 	const leadingPanel = state.panel.position === Position.TOP || state.panel.position === Position.LEFT;
 	const mainChildren: SerializedGridDescriptor[] = horizontalPanel
 		? [
-				{
-					type: 'branch',
-					orientation: 'vertical',
-					size: mainWidth,
-					priority: SESSIONS_LAYOUT_PRIORITY,
-					children: leadingPanel ? [panel, content] : [content, panel],
-				},
-			]
+			{
+				type: 'branch',
+				orientation: 'vertical',
+				size: mainWidth,
+				priority: SESSIONS_LAYOUT_PRIORITY,
+				children: leadingPanel ? [panel, content] : [content, panel],
+			},
+		]
 		: leadingPanel
 			? [panel, ...content.children]
 			: [...content.children, panel];
@@ -397,7 +397,7 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 		private readonly dockedMinimumWidth: () => number,
 		private readonly compositionChanged: Event<void>,
 		private readonly isPanelMaximized: () => boolean,
-		private readonly titlebar: Part & { readonly minimumSidebarWidth?: number },
+		private readonly titlebar: Part & { readonly minimumSidebarWidth?: number; },
 	) {
 		super(partId, part, { snap: partId === 'sidebar' });
 	}

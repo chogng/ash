@@ -72,7 +72,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private breadcrumbSeparator!: HTMLElement;
 	private breadcrumbName!: Button;
 	private renameInput!: HTMLInputElement;
-	private rename: { project: Project; saving: boolean } | undefined;
+	private rename: { project: Project; saving: boolean; } | undefined;
 	private search!: HTMLInputElement;
 	private searchActionViewItem!: ToolbarSearchActionViewItem;
 	private tools!: HTMLElement;
@@ -308,8 +308,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this._register(autorun(reader => this.render(this.projects.state.read(reader))));
 	}
 
-	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {}
-	public override clearInput(): void {}
+	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
+	public override clearInput(): void { }
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		this.updateTitlebar();
@@ -484,7 +484,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 
 	private getSortActions(): readonly IAction[] {
 		const selected = this.projects.state.get().sortOrder;
-		const options: readonly { order: ProjectSortOrder; label: string }[] = [
+		const options: readonly { order: ProjectSortOrder; label: string; }[] = [
 			{ order: 'updated', label: localize('projects.sortUpdated', 'Last updated') },
 			{ order: 'created', label: localize('projects.sortCreated', 'Date created') },
 			{ order: 'name', label: localize('projects.sortName', 'Alphabetical') },
@@ -938,12 +938,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const resource =
 				material.kind === 'folder'
 					? (
-							await this.files.showOpenDialog({
-								defaultUri: material.resource,
-								canSelectFiles: true,
-								canSelectFolders: false,
-							})
-						)?.[0]
+						await this.files.showOpenDialog({
+							defaultUri: material.resource,
+							canSelectFiles: true,
+							canSelectFolders: false,
+						})
+					)?.[0]
 					: material.resource;
 			if (resource && !this.isDisposed) {
 				await this.editors.openEditor({ resource });
@@ -1237,13 +1237,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				conflicts.hidden = unresolved.size === 0;
 				feedback.textContent = unresolved.size
 					? localize(
-							'projects.resolveConflict',
-							'Your draft is preserved. Choose which value to keep for each conflict before saving.',
-						)
+						'projects.resolveConflict',
+						'Your draft is preserved. Choose which value to keep for each conflict before saving.',
+					)
 					: localize(
-							'projects.merged',
-							'Saved changes and materials have been merged with your draft. Review and save the project.',
-						);
+						'projects.merged',
+						'Saved changes and materials have been merged with your draft. Review and save the project.',
+					);
 			}
 			reload.enabled = true;
 			name.disabled = false;
@@ -1321,13 +1321,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				: event.key === 'End'
 					? cards.length - 1
 					: index +
-						(event.key === 'ArrowDown'
-							? columns
-							: event.key === 'ArrowUp'
-								? -columns
-								: event.key === 'ArrowLeft'
-									? -1
-									: 1);
+					(event.key === 'ArrowDown'
+						? columns
+						: event.key === 'ArrowUp'
+							? -columns
+							: event.key === 'ArrowLeft'
+								? -1
+								: 1);
 		cards[Math.max(0, Math.min(cards.length - 1, next))].focus();
 	}
 }

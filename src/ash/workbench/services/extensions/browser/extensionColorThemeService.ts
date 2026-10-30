@@ -100,12 +100,12 @@ export class ExtensionColorThemeService extends Disposable {
 					const readSource =
 						developmentRoot && textFiles
 							? async (path: string): Promise<Uint8Array> => {
-									const content = await textFiles.resolve(
-										{ resource: URI.joinPath(developmentRoot, path) },
-										new AbortController().signal,
-									);
-									return new TextEncoder().encode(content.text);
-								}
+								const content = await textFiles.resolve(
+									{ resource: URI.joinPath(developmentRoot, path) },
+									new AbortController().signal,
+								);
+								return new TextEncoder().encode(content.text);
+							}
 							: undefined;
 					let source: Uint8Array | undefined;
 					if (readSource) {

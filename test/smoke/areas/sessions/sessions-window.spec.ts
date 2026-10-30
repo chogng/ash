@@ -154,16 +154,16 @@ test(
 		const originalOpenPath = await application.evaluateHandle(({ shell }) => shell.openPath);
 		try {
 			await application.evaluate(({ shell }) => {
-				(globalThis as unknown as { openedKeyboardLayout?: string }).openedKeyboardLayout = undefined;
+				(globalThis as unknown as { openedKeyboardLayout?: string; }).openedKeyboardLayout = undefined;
 				shell.openPath = async path => {
-					(globalThis as unknown as { openedKeyboardLayout?: string }).openedKeyboardLayout = path;
+					(globalThis as unknown as { openedKeyboardLayout?: string; }).openedKeyboardLayout = path;
 					return '';
 				};
 			});
 			await page.getByRole('option', { name: /Configure Keyboard Layout File/ }).click();
 			const readOpenedPath = () =>
 				application.evaluate(
-					() => (globalThis as unknown as { openedKeyboardLayout?: string }).openedKeyboardLayout,
+					() => (globalThis as unknown as { openedKeyboardLayout?: string; }).openedKeyboardLayout,
 				);
 			await expect.poll(readOpenedPath).toMatch(/keyboard-layout\.json$/);
 			const layoutPath = (await readOpenedPath())!;
@@ -301,7 +301,7 @@ async function expectComposerFocusWithoutOutline(card: Locator, input: Locator, 
 
 async function readComposerShadow(
 	card: Locator,
-): Promise<{ shadow: string; themeOpacity: number; layerOpacities: number[] }> {
+): Promise<{ shadow: string; themeOpacity: number; layerOpacities: number[]; }> {
 	return card.evaluate(element => {
 		const style = getComputedStyle(element);
 		const canvas = document.createElement('canvas');
@@ -1017,16 +1017,16 @@ test(
 			target.kind === 'electron'
 				? readFile(join(directory, filename), 'utf8')
 				: page.evaluate(
-						async ({ folderName, filename }) => {
-							let folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(folderName);
-							const parts = filename.split('/');
-							for (const part of parts.slice(0, -1)) {
-								folder = await folder.getDirectoryHandle(part);
-							}
-							return (await (await folder.getFileHandle(parts.at(-1)!)).getFile()).text();
-						},
-						{ folderName, filename },
-					);
+					async ({ folderName, filename }) => {
+						let folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(folderName);
+						const parts = filename.split('/');
+						for (const part of parts.slice(0, -1)) {
+							folder = await folder.getDirectoryHandle(part);
+						}
+						return (await (await folder.getFileHandle(parts.at(-1)!)).getFile()).text();
+					},
+					{ folderName, filename },
+				);
 		const svg = await read('design.svg');
 		const saved = parseDesignDocument(await read('design.ash-design/manifest.json'));
 		expect(saved.shapes[0]).toMatchObject({
@@ -2392,14 +2392,14 @@ emptyWorkspaceTest(
 			const ipc = (
 				globalThis as unknown as {
 					readonly ash: {
-						readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> };
+						readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; };
 					};
 				}
 			).ash.ipcRenderer;
 			const keybindings = (await globalThis.ashTestMainProcess.call('localFilesystem', 'readFile', {
 				resource,
-			})) as { readonly revision: string; readonly bytes: string };
-			const connection = (await ipc.invoke('ash:remote:connection')) as { readonly kind: string };
+			})) as { readonly revision: string; readonly bytes: string; };
+			const connection = (await ipc.invoke('ash:remote:connection')) as { readonly kind: string; };
 			return {
 				keybindingsRevision: keybindings.revision,
 				bindings: JSON.parse(atob(keybindings.bytes)),
@@ -2475,7 +2475,7 @@ emptyWorkspaceTest(
 				const ipc = (
 					globalThis as unknown as {
 						readonly ash: {
-							readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> };
+							readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; };
 						};
 					}
 				).ash.ipcRenderer;
@@ -2488,7 +2488,7 @@ emptyWorkspaceTest(
 				const ipc = (
 					globalThis as unknown as {
 						readonly ash: {
-							readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown> };
+							readonly ipcRenderer: { invoke(channel: string, params: unknown): Promise<unknown>; };
 						};
 					}
 				).ash.ipcRenderer;
@@ -2551,7 +2551,7 @@ emptyWorkspaceTest(
 		const sessionWindowState = await application.evaluate(({ BrowserWindow }) => {
 			const windows = BrowserWindow.getAllWindows();
 			return windows.map(
-				(window: { readonly id: number; getTitle(): string; readonly webContents: { getURL(): string } }) => ({
+				(window: { readonly id: number; getTitle(): string; readonly webContents: { getURL(): string; }; }) => ({
 					id: window.id,
 					title: window.getTitle(),
 					url: window.webContents.getURL(),
@@ -2560,12 +2560,12 @@ emptyWorkspaceTest(
 		});
 		expect(sessionWindowState).toHaveLength(2);
 		expect(
-			sessionWindowState.some((window: { readonly url: string }) =>
+			sessionWindowState.some((window: { readonly url: string; }) =>
 				window.url.includes('sessions/electron-browser/sessions.html'),
 			),
 		).toBe(true);
 		const windowIds = sessionWindowState
-			.map((window: { readonly id: number }) => window.id)
+			.map((window: { readonly id: number; }) => window.id)
 			.sort((left: number, right: number) => left - right);
 		await openSessions.click();
 		await expect
@@ -2584,22 +2584,22 @@ emptyWorkspaceTest(
 			const ipc = (
 				globalThis as unknown as {
 					readonly ash: {
-						readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> };
+						readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; };
 					};
 				}
 			).ash.ipcRenderer;
 			const home = await globalThis.ashTestMainProcess.call<string>('localFilesystem', 'userDataHome');
-			const configuration = await globalThis.ashTestMainProcess.call<{ revision: string }>(
+			const configuration = await globalThis.ashTestMainProcess.call<{ revision: string; }>(
 				'localFilesystem',
 				'readFile',
 				{ resource: home.replace(/\/$/u, '') + '/settings.json' },
 			);
 			const keybindings = (await globalThis.ashTestMainProcess.call('localFilesystem', 'readFile', {
 				resource,
-			})) as { readonly revision: string; readonly bytes: string };
-			const connection = (await ipc.invoke('ash:remote:connection')) as { readonly kind: string };
+			})) as { readonly revision: string; readonly bytes: string; };
+			const connection = (await ipc.invoke('ash:remote:connection')) as { readonly kind: string; };
 			await ipc.invoke('ash:native-host:open-agents-window');
-			const windows = (await (ipc as { invoke(channel: string, params: unknown): Promise<unknown> }).invoke(
+			const windows = (await (ipc as { invoke(channel: string, params: unknown): Promise<unknown>; }).invoke(
 				'ash:window:operation',
 				{ kind: 'list' },
 			)) as readonly unknown[];
@@ -2622,7 +2622,7 @@ emptyWorkspaceTest(
 			workbenchPage.evaluate(async () => {
 				const ipc = (
 					globalThis as unknown as {
-						readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown> } };
+						readonly ash: { readonly ipcRenderer: { invoke(channel: string): Promise<unknown>; }; };
 					}
 				).ash.ipcRenderer;
 				return ipc.invoke('ash:sessions:return-to-workbench');
@@ -3484,14 +3484,14 @@ test(
 					const ipc = (
 						globalThis as unknown as {
 							readonly ash: {
-								readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> };
+								readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; };
 							};
 						}
 					).ash.ipcRenderer;
 					const list = (await ipc.invoke('ash:window:operation', { kind: 'list' })) as readonly {
 						readonly title: string;
 					}[];
-					const connection = (await ipc.invoke('ash:remote:connection')) as { readonly kind: string };
+					const connection = (await ipc.invoke('ash:remote:connection')) as { readonly kind: string; };
 					return { titles: list.map(window => window.title), connectionKind: connection.kind };
 				});
 				expect(windows).toEqual({ titles: [expect.stringContaining('Sessions')], connectionKind: 'local' });
@@ -3581,7 +3581,7 @@ test(
 						const registered = register.call(globalShortcut, accelerator, callback);
 						if (accelerator === 'Control+Alt+Shift+F24') {
 							(
-								globalThis as typeof globalThis & { ashOpenAgentsShortcut?: () => void }
+								globalThis as typeof globalThis & { ashOpenAgentsShortcut?: () => void; }
 							).ashOpenAgentsShortcut = callback;
 							globalShortcut.register = register;
 						}
@@ -3619,7 +3619,7 @@ test(
 				// Draft handoff preserves unsent text; clear the previous draft before accepting another.
 				await replaceChatInput(editor, '');
 				await application.evaluate(() =>
-					(globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void }).ashOpenAgentsShortcut(),
+					(globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void; }).ashOpenAgentsShortcut(),
 				);
 				await editor.waitForEditorContents(contents => contents === 'From the system shortcut');
 				await driver.workbench.page.close();
@@ -3636,7 +3636,7 @@ test(
 				await editor.waitForEditorContents(contents => contents === 'From the Agents command');
 				await replaceChatInput(editor, '');
 				await application.evaluate(() =>
-					(globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void }).ashOpenAgentsShortcut(),
+					(globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void; }).ashOpenAgentsShortcut(),
 				);
 				await editor.waitForEditorContents(contents => contents === 'From the system shortcut');
 				await new Workbench(child).reloadWindow(child);
@@ -3649,7 +3649,7 @@ test(
 					.toBe(true);
 				await replaceChatInput(editor, '');
 				await application.evaluate(() =>
-					(globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void }).ashOpenAgentsShortcut(),
+					(globalThis as typeof globalThis & { ashOpenAgentsShortcut: () => void; }).ashOpenAgentsShortcut(),
 				);
 				await editor.waitForEditorContents(contents => contents === 'From the system shortcut');
 				await writeFile(resourcePath, '[]\n');
@@ -3682,7 +3682,7 @@ focusTest(
 				({ channel, params }) => {
 					const bridge = (
 						globalThis as unknown as {
-							ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown> } };
+							ash: { ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; };
 						}
 					).ash.ipcRenderer;
 					return bridge.invoke(channel, params);

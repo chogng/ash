@@ -99,7 +99,7 @@ export class CustomizeEditorPane extends EditorPane {
 	private detailEditor: ExtensionEditor | undefined;
 	private catalogScrollTop = 0;
 	private returnFocus:
-		{ readonly element: HTMLElement; readonly resourceId?: string; readonly action: boolean } | undefined;
+		{ readonly element: HTMLElement; readonly resourceId?: string; readonly action: boolean; } | undefined;
 	private readonly detailResources = this._register(new DisposableStore());
 	private panel!: HTMLElement;
 	private grid!: HTMLElement;
@@ -337,16 +337,16 @@ export class CustomizeEditorPane extends EditorPane {
 					const provider =
 						action.id === 'addResource'
 							? {
-									showContextMenu: (
-										delegate: Parameters<IContextMenuService['showContextMenu']>[0],
-									) =>
-										this.menus.showContextMenu({
-											...delegate,
-											anchorAlignment: AnchorAlignment.Right,
-											gap: 8,
-											getMenuClassName: () => 'ash-customize-add-menu',
-										}),
-								}
+								showContextMenu: (
+									delegate: Parameters<IContextMenuService['showContextMenu']>[0],
+								) =>
+									this.menus.showContextMenu({
+										...delegate,
+										anchorAlignment: AnchorAlignment.Right,
+										gap: 8,
+										getMenuClassName: () => 'ash-customize-add-menu',
+									}),
+							}
 							: this.menus;
 					return new DropdownMenuActionViewItem(action, menuAction.getActions, provider, {
 						...options,
@@ -498,30 +498,30 @@ export class CustomizeEditorPane extends EditorPane {
 		this.heroDescription.textContent =
 			this.category === 'skills'
 				? localize(
-						'customize.skillsDescription',
-						'Discover reusable instructions for writing, research, coding and everyday work.',
-					)
+					'customize.skillsDescription',
+					'Discover reusable instructions for writing, research, coding and everyday work.',
+				)
 				: this.category === 'connectors'
 					? localize(
-							'customize.connectorsDescription',
-							'Connect your services and MCP servers to work with the context you need.',
-						)
+						'customize.connectorsDescription',
+						'Connect your services and MCP servers to work with the context you need.',
+					)
 					: localize(
-							'customize.pluginsDescription',
-							'Explore plugins that add tools and capabilities to your workspace.',
-						);
+						'customize.pluginsDescription',
+						'Explore plugins that add tools and capabilities to your workspace.',
+					);
 		this.heading.textContent =
 			this.collection === 'yours'
 				? localize(
-						'customize.yourResources',
-						'Your {0}',
-						categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
-					)
+					'customize.yourResources',
+					'Your {0}',
+					categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
+				)
 				: localize(
-						'customize.discoverResources',
-						'Discover {0}',
-						categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
-					);
+					'customize.discoverResources',
+					'Discover {0}',
+					categories.find(item => item.id === this.category)!.label.toLocaleLowerCase(),
+				);
 	}
 
 	private async load(append = false): Promise<void> {
@@ -648,29 +648,29 @@ export class CustomizeEditorPane extends EditorPane {
 				install:
 					skills && !installed.some(item => item.package.id === resource.installation.selectionId)
 						? async () => {
-								const details = await this.extensions.get(
-									resource.installation.selectionId,
-									resource.version,
-								);
-								if (!this.shown || this.isDisposed) return;
-								const result = await changeExtensionPackage(
-									this.extensions,
-									this.dialogs,
-									this.notifications,
-									'install',
-									details,
-								);
-								if (result && this.shown && !this.isDisposed) await this.load();
-							}
+							const details = await this.extensions.get(
+								resource.installation.selectionId,
+								resource.version,
+							);
+							if (!this.shown || this.isDisposed) return;
+							const result = await changeExtensionPackage(
+								this.extensions,
+								this.dialogs,
+								this.notifications,
+								'install',
+								details,
+							);
+							if (result && this.shown && !this.isDisposed) await this.load();
+						}
 						: undefined,
 				open: () => this.openResource(resource),
 			})),
 			cursor: page.nextCursor,
 			note: !this.marketplace.sources.length
 				? localize(
-						'customize.discoveryUnavailable',
-						'Discovery is disabled or no catalog sources are available.',
-					)
+					'customize.discoveryUnavailable',
+					'Discovery is disabled or no catalog sources are available.',
+				)
 				: page.sourceErrors?.map(error => error.message).join(' · '),
 		};
 	}
@@ -1065,8 +1065,8 @@ export class CustomizeEditorPane extends EditorPane {
 			const target = previous?.element.isConnected
 				? previous.element
 				: row?.querySelector<HTMLButtonElement>(
-						previous?.action ? '.ash-customize-card-open' : '.ash-customize-card-name',
-					);
+					previous?.action ? '.ash-customize-card-open' : '.ash-customize-card-name',
+				);
 			if (target) target.focus({ preventScroll: true });
 			else this.searchActionViewItem.focus();
 		}
@@ -1143,48 +1143,48 @@ export class CustomizeEditorPane extends EditorPane {
 			},
 			...(this.category === 'connectors'
 				? [
-						{
-							...this.menuAction(
-								'connect',
-								localize('customize.addConnection', 'Add connection'),
-								async () => {
-									const target = await addConnection(
-										this.connectors,
-										this.mcp,
-										this.quickInput,
-										this.dialogs,
-										this.actions.signal,
-									);
-									if (target) await this.openInput(new ExtensionsCapabilityInput(target));
-								},
-							),
-							icon: Lxicon.plug,
-						},
-					]
+					{
+						...this.menuAction(
+							'connect',
+							localize('customize.addConnection', 'Add connection'),
+							async () => {
+								const target = await addConnection(
+									this.connectors,
+									this.mcp,
+									this.quickInput,
+									this.dialogs,
+									this.actions.signal,
+								);
+								if (target) await this.openInput(new ExtensionsCapabilityInput(target));
+							},
+						),
+						icon: Lxicon.plug,
+					},
+				]
 				: []),
 			...(this.category === 'plugins'
 				? [
-						{
-							...this.menuAction(
-								'local',
-								localize('customize.installLocal', 'Install from workspace'),
-								async () => {
-									await this.commands.executeCommand('ash.extensions.installLocal');
-								},
-							),
-							icon: Lxicon.folder,
-						},
-						{
-							...this.menuAction(
-								'git',
-								localize('customize.installGit', 'Install from Git repository'),
-								async () => {
-									await this.commands.executeCommand('ash.extensions.installFromGit');
-								},
-							),
-							icon: Lxicon.sourceControl,
-						},
-					]
+					{
+						...this.menuAction(
+							'local',
+							localize('customize.installLocal', 'Install from workspace'),
+							async () => {
+								await this.commands.executeCommand('ash.extensions.installLocal');
+							},
+						),
+						icon: Lxicon.folder,
+					},
+					{
+						...this.menuAction(
+							'git',
+							localize('customize.installGit', 'Install from Git repository'),
+							async () => {
+								await this.commands.executeCommand('ash.extensions.installFromGit');
+							},
+						),
+						icon: Lxicon.sourceControl,
+					},
+				]
 				: []),
 		];
 	}
@@ -1223,9 +1223,9 @@ export class CustomizeEditorPane extends EditorPane {
 										? this.details.innerText
 										: this.panel.innerText
 									: localize(
-											'customize.help',
-											'Customize brings Skills, Connectors and Plugins together. Use Left and Right Arrow on category tabs, then Enter to select. Yours lists current resources; Discover searches catalogs. Use Tab to reach the actions toolbar and resource cards. Activate Search to expand its input; Escape or Close search clears and collapses it, returning focus to Search. Empty search also collapses when focus leaves. In the toolbar, Left and Right Arrow move between Search, source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens resource details within Customize for installation, authorization and enablement. Use the Back button above the details to return to the same category, search, sorting and scroll position, with focus restored to the resource card. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. Other categories offer catalog browsing, connection setup or plugin installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.',
-										),
+										'customize.help',
+										'Customize brings Skills, Connectors and Plugins together. Use Left and Right Arrow on category tabs, then Enter to select. Yours lists current resources; Discover searches catalogs. Use Tab to reach the actions toolbar and resource cards. Activate Search to expand its input; Escape or Close search clears and collapses it, returning focus to Search. Empty search also collapses when focus leaves. In the toolbar, Left and Right Arrow move between Search, source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens resource details within Customize for installation, authorization and enablement. Use the Back button above the details to return to the same category, search, sorting and scroll position, with focus restored to the resource card. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. Other categories offer catalog browsing, connection setup or plugin installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.',
+									),
 							() => {
 								if (
 									focused.isConnected &&

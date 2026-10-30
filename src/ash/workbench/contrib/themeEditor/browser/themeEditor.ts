@@ -113,11 +113,11 @@ export function getThemeEditorSource(extensions: IExtensionService, target: stri
 				typeof target === 'string'
 					? target === id
 					: [resource, installedResource, toExtensionResourceURI(request)].some(candidate =>
-							extUriBiasedIgnorePathCase.isEqual(
-								target.with({ query: '' }),
-								candidate.with({ query: '' }),
-							),
-						)
+						extUriBiasedIgnorePathCase.isEqual(
+							target.with({ query: '' }),
+							candidate.with({ query: '' }),
+						),
+					)
 			) {
 				return { resource, developmentRoot, request, contribution, index, id };
 			}
@@ -142,7 +142,7 @@ export class ThemeEditor extends EditorPane {
 	private inspectorScope = 'workbench:interface';
 	private readonly inspectorStates = new Map<
 		string,
-		{ query: string; allColors: boolean; scrollTop: number; expanded: boolean[] }
+		{ query: string; allColors: boolean; scrollTop: number; expanded: boolean[]; }
 	>();
 	private scrollable: ScrollableElement | undefined;
 	private split: SplitView | undefined;
@@ -169,7 +169,7 @@ export class ThemeEditor extends EditorPane {
 	private compiled: IColorTheme | undefined;
 	private compiledSource: string | undefined;
 	/** Only shared within an in-flight save; the next save rechecks included files. */
-	private saveValidation: { input: IResourceEditorInput; source: string; theme: IColorTheme } | undefined;
+	private saveValidation: { input: IResourceEditorInput; source: string; theme: IColorTheme; } | undefined;
 	private valid = false;
 	private operation = 0;
 	private saving = false;
@@ -504,7 +504,7 @@ export class ThemeEditor extends EditorPane {
 		);
 		// The embedded preview scales to the space left by an ordinary editor group.
 		this.split.addView(
-			{ element: preview, minimumSize: 0, maximumSize: Infinity, onDidChange: Event.None, layout: () => {} },
+			{ element: preview, minimumSize: 0, maximumSize: Infinity, onDidChange: Event.None, layout: () => { } },
 			{ type: 'distribute' },
 		);
 	}
@@ -598,10 +598,10 @@ export class ThemeEditor extends EditorPane {
 				group.body.hidden
 					? []
 					: group.entries.map(
-							entry =>
-								this.rows.get(entry.id)?.accessibleText ??
-								`${entry.id}: ${entry.authored ?? (entry.effective ? Color.Format.CSS.formatHexA(entry.effective, true) : '')}. ${colorSourceLabel(entry.authored, entry.effective, entry.references)}`,
-						),
+						entry =>
+							this.rows.get(entry.id)?.accessibleText ??
+							`${entry.id}: ${entry.authored ?? (entry.effective ? Color.Format.CSS.formatHexA(entry.effective, true) : '')}. ${colorSourceLabel(entry.authored, entry.effective, entry.references)}`,
+					),
 			),
 		].join('\n');
 	}
@@ -611,7 +611,7 @@ export class ThemeEditor extends EditorPane {
 		this.themePicker.clear();
 		const lifetime = new DisposableStore();
 		this.themePicker.value = lifetime;
-		const picker = lifetime.add(this.quickInput.createQuickPick<IQuickPickItem & { readonly themeId: string }>());
+		const picker = lifetime.add(this.quickInput.createQuickPick<IQuickPickItem & { readonly themeId: string; }>());
 		this.themeSelector?.domNode.setAttribute('aria-expanded', 'true');
 		lifetime.add(toDisposable(() => this.themeSelector?.domNode.setAttribute('aria-expanded', 'false')));
 		picker.placeholder = localize('themeEditor.searchThemes', 'Search themes to edit');
@@ -697,7 +697,7 @@ export class ThemeEditor extends EditorPane {
 	private async validateSave(
 		signal: AbortSignal,
 		fresh = false,
-	): Promise<{ input: IResourceEditorInput; source: string; theme: IColorTheme }> {
+	): Promise<{ input: IResourceEditorInput; source: string; theme: IColorTheme; }> {
 		const input = this.input;
 		const model = this.getControl()?.getModel();
 		if (!input || !model) throw new CancellationError();
@@ -889,9 +889,9 @@ export class ThemeEditor extends EditorPane {
 			this.showMessage(
 				this.input.readOnly
 					? localize(
-							'themeEditor.readOnlySource',
-							'This theme source is read-only. Use Save as to create an editable user theme.',
-						)
+						'themeEditor.readOnlySource',
+						'This theme source is read-only. Use Save as to create an editable user theme.',
+					)
 					: '',
 			);
 		} catch (error) {
@@ -919,13 +919,13 @@ export class ThemeEditor extends EditorPane {
 		// Use the format owner to validate theme fields and normalize publisher metadata.
 		return extension
 			? parseExtensionTheme(
-					source,
-					extension.id,
-					extension.request.extensionId,
-					extension.contribution.label,
-					extension.contribution.uiTheme,
-					extension.contribution.path,
-				).colors
+				source,
+				extension.id,
+				extension.request.extensionId,
+				extension.contribution.label,
+				extension.contribution.uiTheme,
+				extension.contribution.path,
+			).colors
 			: (parseColorThemeDocument(source).colors ?? {});
 	}
 
@@ -988,7 +988,7 @@ export class ThemeEditor extends EditorPane {
 		let colors: Readonly<Record<string, string>> = {};
 		try {
 			colors = this.authoredColors();
-		} catch {}
+		} catch { }
 		const previewColors = new Map(this.preview?.colors.map(entry => [entry.id, entry]));
 		const registeredColors = Colors.getColors();
 		const registeredIds = new Set(registeredColors.map(entry => entry.id));

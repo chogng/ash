@@ -267,7 +267,7 @@ test('Agents shows connection status without moving content and automatically re
 		.poll(() =>
 			application.evaluate(
 				() =>
-					(globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario
+					(globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario
 						.waitingValidation,
 			),
 		)
@@ -281,13 +281,13 @@ test('Agents shows connection status without moving content and automatically re
 	expect(await projects.boundingBox()).toEqual(contentBounds);
 	await page.screenshot({ path: testInfo.outputPath('agent-host-recovery-status.png') });
 	await application.evaluate(() =>
-		(globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario.releaseValidation(),
+		(globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation(),
 	);
 	await expect
 		.poll(() =>
 			application.evaluate(
 				() =>
-					(globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario
+					(globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario
 						.acquisitions,
 			),
 		)
@@ -295,7 +295,7 @@ test('Agents shows connection status without moving content and automatically re
 	await expect
 		.poll(() =>
 			application.evaluate(() => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario })
+				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; })
 					.connectionScenario;
 				return { state: scenario.state, readyCount: scenario.readyCount };
 			}),
@@ -317,7 +317,7 @@ test.describe('Agents recovery actions', () => {
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const before = { titlebar: await titlebar.boundingBox(), sidebar: await sidebar.boundingBox() };
 		await application.evaluate(() => {
-			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 			scenario.holdNextWorkspaceRead();
 			scenario.killConnection();
 		});
@@ -325,7 +325,7 @@ test.describe('Agents recovery actions', () => {
 			.poll(() =>
 				application.evaluate(
 					() =>
-						(globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario
+						(globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario
 							.waitingWorkspaceRead,
 				),
 			)
@@ -334,7 +334,7 @@ test.describe('Agents recovery actions', () => {
 			titlebar.getByRole('button', { name: 'Reconnecting to the Agent Host…', exact: true }),
 		).toBeVisible();
 		const connection = await application.evaluate(() => {
-			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario }).connectionScenario;
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 			scenario.releaseWorkspaceRead();
 			return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
 		});
@@ -357,7 +357,7 @@ test.describe('Agents recovery actions', () => {
 		).toHaveCount(0);
 		expect(
 			await application.evaluate(() => {
-				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario })
+				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; })
 					.connectionScenario;
 				return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
 			}),

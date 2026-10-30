@@ -76,7 +76,7 @@ registerAction2(
 					),
 				);
 			}
-			const selection = options as { readonly themeId: string; readonly groupId: number } | undefined;
+			const selection = options as { readonly themeId: string; readonly groupId: number; } | undefined;
 			const users = accessor.get(IUserThemeService);
 			if (!users.available)
 				throw new Error(

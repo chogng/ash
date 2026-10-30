@@ -425,9 +425,9 @@ test('design token links navigate across groups, follow changes and restore afte
 				const field = element.querySelector<HTMLElement>('.ash-color-picker-input')!;
 				return Math.abs(
 					element.clientWidth -
-						parseFloat(style.paddingLeft) -
-						parseFloat(style.paddingRight) -
-						field.getBoundingClientRect().width,
+					parseFloat(style.paddingLeft) -
+					parseFloat(style.paddingRight) -
+					field.getBoundingClientRect().width,
 				);
 			}),
 		)

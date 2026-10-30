@@ -116,8 +116,8 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 					const selection = this.pendingSelection;
 					const source =
 						selection &&
-						event.affectsConfiguration(selection.setting) &&
-						this.configurationService.getValue(selection.setting) === selection.themeId
+							event.affectsConfiguration(selection.setting) &&
+							this.configurationService.getValue(selection.setting) === selection.themeId
 							? selection.source
 							: 'settings';
 					this.updateColorTheme(source);
@@ -204,7 +204,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		return operation;
 	}
 
-	public previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void } {
+	public previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void; } {
 		this.assertNotDisposed();
 		const owner = {};
 		this.previews.set(owner, theme);

@@ -113,7 +113,7 @@ export class ThemePreview extends Disposable {
 	private active: ThemePreviewFrame | undefined;
 	private window: PreviewWindow = 'workbench';
 	private readonly scenes = new Map<PreviewWindow, PreviewScene>();
-	public get selection(): { readonly window: PreviewWindow; readonly scene: PreviewScene } {
+	public get selection(): { readonly window: PreviewWindow; readonly scene: PreviewScene; } {
 		return { window: this.window, scene: this.scenes.get(this.window) ?? 'interface' };
 	}
 	public get scope(): string {
@@ -156,7 +156,7 @@ export class ThemePreview extends Disposable {
 			: import.meta.url.slice(0, import.meta.url.lastIndexOf('/assets/') + 1);
 		const viewport = h(container.ownerDocument, 'div', { className: 'ash-theme-editor-preview-viewport' });
 		container.append(viewport);
-		let geometry: { width: number; height: number; scale: number } | undefined;
+		let geometry: { width: number; height: number; scale: number; } | undefined;
 		const resize = (frame: ThemePreviewFrame): void => {
 			if (!geometry) return;
 			const { width, height, scale } = geometry;

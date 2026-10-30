@@ -22,7 +22,7 @@ suite('TabList incremental updates', () => {
 		try {
 			using tabs = new TabList<string>(dom.window.document.body, {
 				ariaLabel: 'Documents',
-				onActivate: () => {},
+				onActivate: () => { },
 			});
 			const items = [tab('first'), tab('second'), tab('third')];
 			const viewport = tabs.scrollableElement;
@@ -64,7 +64,7 @@ suite('TabList incremental updates', () => {
 		try {
 			using tabs = new TabList<string>(dom.window.document.body, {
 				ariaLabel: 'Documents',
-				onActivate: () => {},
+				onActivate: () => { },
 				onClose: () => tabs.setTabs([tab('first')], 'first'),
 			});
 			tabs.setTabs([tab('first'), tab('second')], 'second');
@@ -86,10 +86,10 @@ suite('TabList incremental updates', () => {
 		try {
 			using tabs = new TabList<string>(dom.window.document.body, {
 				ariaLabel: 'Documents',
-				onActivate: () => {},
-				onClose: () => {},
+				onActivate: () => { },
+				onClose: () => { },
 			});
-			const pin: IAction = { id: 'pin', label: 'Pin', tooltip: 'Pin', enabled: true, run: () => {} };
+			const pin: IAction = { id: 'pin', label: 'Pin', tooltip: 'Pin', enabled: true, run: () => { } };
 			const item = { ...tab('first'), actions: { ariaLabel: 'File actions', items: [pin] } };
 			tabs.setTabs([item], 'first');
 			const toolbar = tabs.element.querySelector('.ash-tab-actions')!;
@@ -118,8 +118,8 @@ suite('TabList incremental updates', () => {
 		try {
 			using tabs = new TabList<string>(dom.window.document.body, {
 				ariaLabel: 'Documents',
-				onActivate: () => {},
-				onClose: () => {},
+				onActivate: () => { },
+				onClose: () => { },
 			});
 			const items = [tab('first'), tab('second')];
 			tabs.setTabs(items, 'second');
@@ -139,14 +139,14 @@ suite('TabList incremental updates', () => {
 		try {
 			using tabs = new TabList<string>(dom.window.document.body, {
 				ariaLabel: 'Documents',
-				onActivate: () => {},
+				onActivate: () => { },
 			});
 			const primaryAction: IAction = {
 				id: 'archive',
 				label: 'Archive',
 				tooltip: 'Archive',
 				enabled: true,
-				run: () => {},
+				run: () => { },
 			};
 			tabs.setTabs([{ ...tab('first'), primaryAction }], 'first');
 			tabs.element.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!.focus();
@@ -163,13 +163,13 @@ suite('TabList incremental updates', () => {
 		try {
 			using tabs = new TabList<string>(dom.window.document.body, {
 				ariaLabel: 'Categories',
-				onActivate: () => {},
+				onActivate: () => { },
 			});
 			const items = [tab('first'), tab('second'), tab('third')];
 			tabs.setTabs(items, 'first');
 			const group = tabs.element.querySelector('[role="tablist"]')!;
 			const [first, second, third] = group.querySelectorAll<HTMLButtonElement>('[role="tab"]');
-			const observer = new dom.window.MutationObserver(() => {});
+			const observer = new dom.window.MutationObserver(() => { });
 			using observation = toDisposable(() => observer.disconnect());
 			observer.observe(group, { attributes: true, childList: true, subtree: true });
 			tabs.setTabs(
@@ -216,7 +216,7 @@ suite('TabList incremental updates', () => {
 		try {
 			using tabs = new TabList<string>(dom.window.document.body, {
 				ariaLabel: 'Documents',
-				onActivate: () => {},
+				onActivate: () => { },
 			});
 			const initial = tab('first');
 			tabs.setTabs([initial], 'first');
@@ -548,7 +548,7 @@ test('TabList reveals selected and keyboard-focused tabs when horizontal content
 test('TabList coalesces geometry reads and reveals the latest selection in a frame', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using tabs = new TabList(dom.window.document.body, { ariaLabel: 'Editors', onActivate: () => {} });
+		using tabs = new TabList(dom.window.document.body, { ariaLabel: 'Editors', onActivate: () => { } });
 		const viewport = tabs.scrollableElement;
 		installMetrics(viewport, { width: 100, height: 24, scrollWidth: 300, scrollHeight: 24 });
 		let reads = 0;
@@ -594,7 +594,7 @@ test('TabList can opt its items into native drag-source presentation', () => {
 
 test('TabList forwards ActionBar drag positions using tab values', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const drops: Array<{ target: string | undefined; position: string }> = [];
+	const drops: Array<{ target: string | undefined; position: string; }> = [];
 	let dragging = false;
 	const tabList = new TabList<string>(dom.window.document.body, {
 		ariaLabel: 'Reorderable tabs',
@@ -757,11 +757,11 @@ function tab(id: string): TabListItem<string> {
 	return { id, value: id, label: id, tabId: `${id}-tab`, panelId: `${id}-panel` };
 }
 
-function keyboardEvent(targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent }, key: string): KeyboardEvent {
+function keyboardEvent(targetWindow: { readonly KeyboardEvent: typeof KeyboardEvent; }, key: string): KeyboardEvent {
 	return new targetWindow.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key });
 }
 
-function dragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {
+function dragEvent(targetWindow: { readonly Event: typeof Event; }, type: string, clientX = 0): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
 	Object.defineProperty(event, 'clientX', { value: clientX });
 	return event;

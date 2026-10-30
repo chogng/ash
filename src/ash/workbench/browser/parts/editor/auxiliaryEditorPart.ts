@@ -42,14 +42,14 @@ for (const compact of [undefined, true, false]) {
 						compact === undefined
 							? undefined
 							: {
-									id: MenuId.LayoutControlMenu,
-									when: ContextKeyExpr.and(
-										IsAuxiliaryWindowContext.isEqualTo(true),
-										IsCompactTitleBarContext.isEqualTo(!compact),
-									),
-									group: 'navigation',
-									order: 0,
-								},
+								id: MenuId.LayoutControlMenu,
+								when: ContextKeyExpr.and(
+									IsAuxiliaryWindowContext.isEqualTo(true),
+									IsCompactTitleBarContext.isEqualTo(!compact),
+								),
+								group: 'navigation',
+								order: 0,
+							},
 				});
 			}
 

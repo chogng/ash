@@ -86,7 +86,7 @@ test('BrowserLayoutService preserves fractional root geometry on initial measure
 		});
 		using service = new BrowserLayoutService({ root });
 		assert.deepEqual(service.mainContainerDimension, new Dimension(1_000.2, 700.8));
-		const layouts: { readonly width: number; readonly height: number }[] = [];
+		const layouts: { readonly width: number; readonly height: number; }[] = [];
 		using subscription = service.onDidLayoutMainContainer(size => layouts.push(size));
 		bounds = { width: 900.6, height: 600.4 };
 		dom.window.dispatchEvent(new dom.window.Event('resize'));

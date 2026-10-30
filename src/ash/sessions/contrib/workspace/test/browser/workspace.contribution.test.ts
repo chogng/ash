@@ -77,7 +77,7 @@ function createFixture() {
 		workspaceTrustInitialized: Promise.resolve(),
 		isWorkspaceTrusted: () => permission.isTrusted,
 		canSetWorkspaceTrust: () => true,
-		resolveWorkspaceTrust: async () => {},
+		resolveWorkspaceTrust: async () => { },
 		getWorkspaceTrustInfo: async () => permission,
 		setWorkspaceTrust: async trusted => {
 			permission = { isTrusted: trusted, isReadOnly: !trusted };
@@ -87,7 +87,7 @@ function createFixture() {
 			throw new Error('Unexpected permission mutation');
 		},
 		getUriTrustInfo: async uri => ({ uri, trusted: permission.isTrusted, permissions: undefined }),
-		addWorkspaceTrustTransitionParticipant: () => toDisposable(() => {}),
+		addWorkspaceTrustTransitionParticipant: () => toDisposable(() => { }),
 	});
 	const recoveryChanges = resources.add(new Emitter<void>());
 	let retries = 0;
@@ -110,7 +110,7 @@ function createFixture() {
 		connectionGeneration: 1,
 		getConnectionState: async () => 'ready',
 		getSlashCommands: async () => [],
-		onConnectionState: () => toDisposable(() => {}),
+		onConnectionState: () => toDisposable(() => { }),
 		recovery,
 	});
 	resources.add(

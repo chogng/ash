@@ -250,10 +250,10 @@ function createAuxiliaryPart(
 		maximumHeight: WorkbenchWindowBarHeight,
 		onDidChange: Event.None,
 		onMenubarVisibilityChange: Event.None,
-		layout() {},
-		updateOptions() {},
-		updateProperties() {},
-		registerVariables() {},
+		layout() { },
+		updateOptions() { },
+		updateProperties() { },
+		registerVariables() { },
 		dispose() {
 			element.remove();
 		},
@@ -739,7 +739,7 @@ test('EditorPart passes Workbench file services to pane factories', async () => 
 	const registry = new EditorPaneRegistry();
 	const textFileService = {
 		onDidSave: Event.None,
-		onDidChangeFiles: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+		onDidChangeFiles: () => ({ dispose() { }, [Symbol.dispose]() { } }),
 		resolve: async () => {
 			throw new Error('not used');
 		},
@@ -1558,7 +1558,7 @@ async function createSaveCloseFixture(
 		const completing = new DeferredPromise<void>();
 		const release = new DeferredPromise<void>();
 		const waiting = new DeferredPromise<void>();
-		const control: { error?: Error } = {};
+		const control: { error?: Error; } = {};
 		owner.add(
 			models.addSaveCompletionParticipant({
 				prepare: async (model, _signal, recovery) => {
@@ -2648,7 +2648,7 @@ test('EditorParts restores supported editors around missing serializers and pres
 		await editor.openEditor(third!, { pinned: false });
 		const saved = JSON.parse(JSON.stringify(editor.saveWorkingSet('lastSession')));
 		saved.groups[0].editors.find(
-			(entry: { input: { value: { resource: string } } }) =>
+			(entry: { input: { value: { resource: string; }; }; }) =>
 				entry.input.value.resource === first!.resource.toString(),
 		).input.typeId = 'workbench.removedSerializer';
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
@@ -2929,7 +2929,7 @@ for (const closeEmptyGroups of [true, false]) {
 			await storage.flush(WillSaveStateReason.SHUTDOWN);
 			const saved = JSON.parse(storage.get('editorparts.state', StorageScope.WORKSPACE)!);
 			assert.deepEqual(
-				saved.parts[0].groups.map((group: { editors: unknown[] }) => group.editors.length),
+				saved.parts[0].groups.map((group: { editors: unknown[]; }) => group.editors.length),
 				closeEmptyGroups ? [1, 1] : [0, 1, 1, 0],
 			);
 			assert.equal(editor.groups.length, 4);
@@ -3512,7 +3512,7 @@ test('EditorPart registers and releases focusable breadcrumbs for its group', as
 	const editor = createEditorPart(dom.window.document.body, {
 		registry,
 		breadcrumbsService: breadcrumbs,
-		showBreadcrumbPicker: () => {},
+		showBreadcrumbPicker: () => { },
 	});
 	const group = editor.activeGroup;
 	const control = breadcrumbs.getWidget(group.id);
@@ -3837,8 +3837,8 @@ test('EditorPart restores nested horizontal and vertical Grid layouts', async ()
 	assert.equal(restored.layout?.orientation, 'horizontal');
 	assert.equal(
 		restored.layout?.type === 'branch' &&
-			restored.layout.children[1]?.type === 'branch' &&
-			restored.layout.children[1].orientation,
+		restored.layout.children[1]?.type === 'branch' &&
+		restored.layout.children[1].orientation,
 		'vertical',
 	);
 
@@ -3880,9 +3880,9 @@ test('EditorPart validates Grid layouts before closing current editors', async (
 				? { ...saved.layout, data: { groupId: 'unknown-group' } }
 				: saved.layout?.type === 'branch'
 					? {
-							...saved.layout,
-							children: [{ ...saved.layout.children[0]!, data: { groupId: 'unknown-group' } }],
-						}
+						...saved.layout,
+						children: [{ ...saved.layout.children[0]!, data: { groupId: 'unknown-group' } }],
+					}
 					: undefined,
 	} as typeof saved;
 
@@ -4013,7 +4013,7 @@ test('Editor title toolbar splits the active group and owns More Actions', async
 	const editor = createEditorPart(dom.window.document.body, {
 		registry,
 		contextKeyService: contextKeys,
-		titleActions: { menuService: menus, contextMenuProvider: { showContextMenu() {} } },
+		titleActions: { menuService: menus, contextMenuProvider: { showContextMenu() { } } },
 	});
 	services.registerInstance(IEditorPart, editor);
 	using editorService = new BrowserEditorService(editor);
@@ -5146,7 +5146,7 @@ test('saveAll saves retained inactive panes without changing selection and respe
 		using resources = new DisposableStore();
 		const registry = resources.add(new EditorPaneRegistry());
 		const copies: TestWorkingCopy[] = [];
-		const saved: { resource: string; options?: ISaveOptions }[] = [];
+		const saved: { resource: string; options?: ISaveOptions; }[] = [];
 		registry.registerEditorPane({
 			id: 'test.save-all',
 			name: 'Save All',
@@ -5592,7 +5592,7 @@ class TestEditorPane extends EditorPane implements IEditorPane {
 		await this.inputPromise;
 	}
 
-	public override clearInput(): void {}
+	public override clearInput(): void { }
 
 	public override layout(dimension: IDimension): void {
 		this.dimension = { width: dimension.width, height: dimension.height };
@@ -5879,7 +5879,7 @@ function trackPane(panes: TestEditorPane[], id: string): TestEditorPane {
 	return pane;
 }
 
-function deferred<T>(): { readonly promise: Promise<T>; resolve(value: T): void } {
+function deferred<T>(): { readonly promise: Promise<T>; resolve(value: T): void; } {
 	let resolvePromise!: (value: T) => void;
 	const promise = new Promise<T>(resolve => {
 		resolvePromise = resolve;
@@ -6054,18 +6054,18 @@ for (const disabledAction of [false, true]) {
 				const pane = new TestEditorPane('test.editor.dialog');
 				pane.inputError = disabledAction
 					? createEditorOpenError(
-							'Unavailable',
-							[
-								{
-									id: 'test.recover',
-									label: 'Recover',
-									tooltip: '',
-									enabled: false,
-									run: () => assert.fail('Disabled recovery must not run'),
-								},
-							],
-							{ allowDialog: true },
-						)
+						'Unavailable',
+						[
+							{
+								id: 'test.recover',
+								label: 'Recover',
+								tooltip: '',
+								enabled: false,
+								run: () => assert.fail('Disabled recovery must not run'),
+							},
+						],
+						{ allowDialog: true },
+					)
 					: new Error('Unavailable');
 				return pane;
 			}),

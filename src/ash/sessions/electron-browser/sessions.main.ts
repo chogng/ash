@@ -160,33 +160,33 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				serviceCollection,
 				createAppToolsHost: documentClient
 					? services =>
-							new AppServerAppToolsHost(
-								documentClient!,
-								services.createInstance(
-									AppToolsHost,
-									container.ownerDocument,
-									services.get(IUpdateService),
-								),
-							)
+						new AppServerAppToolsHost(
+							documentClient!,
+							services.createInstance(
+								AppToolsHost,
+								container.ownerDocument,
+								services.get(IUpdateService),
+							),
+						)
 					: undefined,
 				createBrowserHost: documentClient
 					? services =>
-							registerAppServerBrowserHost(
-								documentClient!,
-								services.get(IPlaywrightService),
-								services.get(IMainProcessService),
-								services.get(IConfigurationService),
-								services.get(IAgentHostCanvasCollection),
-							)
+						registerAppServerBrowserHost(
+							documentClient!,
+							services.get(IPlaywrightService),
+							services.get(IMainProcessService),
+							services.get(IConfigurationService),
+							services.get(IAgentHostCanvasCollection),
+						)
 					: undefined,
 				createTextDocumentHost: documentClient
 					? services => {
-							const editing = services.get(IChatEditingService);
-							return services.createInstance(AppServerTextDocumentHost, documentClient!, {
-								applyEdits: editing.applyEdits.bind(editing),
-								finishTurn: editing.finishTurn.bind(editing),
-							});
-						}
+						const editing = services.get(IChatEditingService);
+						return services.createInstance(AppServerTextDocumentHost, documentClient!, {
+							applyEdits: editing.applyEdits.bind(editing),
+							finishTurn: editing.finishTurn.bind(editing),
+						});
+					}
 					: undefined,
 				contributionIds: [
 					'workbench.contrib.limitIndicator',
