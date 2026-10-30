@@ -691,10 +691,12 @@ test('shared color picker keeps dragging across preview refreshes', async ({ pag
 });
 
 for (const [theme, scheme] of [
+	['ash-light', 'light'],
+	['ash-dark', 'dark'],
 	['ash-high-contrast-dark', 'hcDark'],
 	['ash-high-contrast-light', 'hcLight'],
 ] as const) {
-	test(`shared color picker inherits ${theme} and keeps keyboard focus visible`, async ({ page }) => {
+	test(`shared color picker inherits ${theme} and keeps keyboard focus visible`, async ({ page }, testInfo) => {
 		const popup = await openEditor(page, undefined, theme);
 		await saveEditableTheme(popup);
 		await expect(popup.frameLocator('.ash-theme-editor-preview:visible').locator('#app')).toHaveAttribute(
@@ -702,11 +704,56 @@ for (const [theme, scheme] of [
 			scheme,
 		);
 		await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
+		const hex = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+		const opacity = popup.getByRole('spinbutton', { name: 'Opacity for editor.background (%)', exact: true });
+		const original = await hex.inputValue();
+		const row = popup.locator('.ash-theme-color').filter({ has: hex });
+		const bounds = await row.boundingBox();
+		await hex.fill('invalid');
+		await hex.press('Enter');
+		await expect(hex).toHaveAttribute('aria-invalid', 'true');
+		await expect(hex).toHaveAccessibleDescription('Enter a valid color or a number within the displayed range.');
+		expect((await row.boundingBox())!.height).toBe(bounds!.height);
+		await hex.press('Escape');
+		await expect(hex).toHaveValue(original);
+		await expect(hex).not.toHaveAttribute('aria-invalid');
+		await expect(hex).toHaveCSS('outline-style', 'none');
+		await expect(hex).toHaveCSS('box-shadow', 'none');
+		await hex.press('Tab');
+		await expect(opacity).toBeFocused();
+		await expect(opacity).toHaveCSS('outline-style', 'none');
+		await expect(opacity).toHaveCSS('box-shadow', 'none');
+		await expect(hex.locator('..')).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+		await opacity.press('Shift+Tab');
+		await expect(hex).toBeFocused();
+		await expect(opacity.locator('..')).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+		await hex.press('Tab');
+		await editColor(opacity, '50.2');
+		await expect(hex).toHaveValue(original);
+		expect(await opacity.evaluate((input: HTMLInputElement) => {
+			const style = getComputedStyle(input);
+			const context = input.ownerDocument.createElement('canvas').getContext('2d')!;
+			context.font = style.font;
+			return input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) >= context.measureText(input.value).width;
+		})).toBe(true);
+		expect(await opacity.evaluate(input => {
+			const root = input.closest('.ash-input-box')!;
+			const style = getComputedStyle(root);
+			const expected = input.ownerDocument.createElement('span');
+			expected.style.color = 'var(--ash-focusBorder)';
+			root.append(expected);
+			const focused = style.borderTopColor === getComputedStyle(expected).color;
+			expected.remove();
+			return focused;
+		})).toBe(true);
+		await popup.screenshot({ path: testInfo.outputPath('theme-editor-color-inputs.png') });
 		await popup.getByRole('button', { name: 'Choose color for editor.background', exact: true }).click();
 		const picker = popup.getByRole('dialog', { name: 'Color picker', exact: true });
 		await expect(popup.locator('html')).toHaveAttribute('data-color-scheme', scheme);
-		await expect(picker).toHaveCSS('box-shadow', 'none');
-		await expect(picker).toHaveCSS('border-style', 'solid');
+		if (scheme === 'hcDark' || scheme === 'hcLight') {
+			await expect(picker).toHaveCSS('box-shadow', 'none');
+			await expect(picker).toHaveCSS('border-style', 'solid');
+		}
 		const area = picker.getByRole('slider', { name: 'Saturation and brightness', exact: true });
 		await area.press('ArrowRight');
 		await expect(area).toBeFocused();

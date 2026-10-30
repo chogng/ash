@@ -98,6 +98,15 @@ test('InputBox owns enabled, read-only, and validation accessibility state', () 
 	inputBox.showValidation('A value is required');
 	assert.equal(inputBox.inputElement.getAttribute('aria-invalid'), 'true');
 	assert.ok(inputBox.inputElement.getAttribute('aria-describedby'));
+	const message = dom.window.document.getElementById(inputBox.inputElement.getAttribute('aria-describedby')!)!;
+	assert.equal(message.hidden, false);
+	inputBox.showValidation('A valid number is required', 'accessible');
+	assert.equal(message.hidden, true);
+	assert.equal(message.textContent, 'A valid number is required');
+	assert.equal(inputBox.inputElement.getAttribute('aria-describedby'), message.id);
+	assert.equal(inputBox.inputElement.getAttribute('aria-invalid'), 'true');
+	inputBox.showValidation('A value is required');
+	assert.equal(message.hidden, false);
 	inputBox.showValidation('');
 	assert.equal(inputBox.inputElement.hasAttribute('aria-invalid'), false);
 	assert.equal(

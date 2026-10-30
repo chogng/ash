@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Color } from '../../common/color.js';
+import { IME } from '../../common/ime.js';
 import { toDisposable } from '../../common/lifecycle.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
@@ -61,6 +62,55 @@ test('ColorPicker input validates hex and opacity through the same color model',
 	assert.equal(field(view.picker.domNode, 'Fill hex').getAttribute('aria-invalid'), 'true');
 	assert.deepEqual(commits, ['#aabbcc80', '#aabbcc66', '#12345678']);
 	assert.equal(view.configurations, 0);
+});
+
+test('ColorPicker fields expose validation feedback and clear it when editing or restoring the color', () => {
+	using view = fixture();
+	view.picker.setColor(Color.fromHex('#123456'), 'fill');
+	for (const [label, invalid] of [['Fill hex', 'invalid'], ['Fill opacity', '101']]) {
+		const input = field(view.picker.domNode, label);
+		change(input, invalid);
+		const message = document.getElementById(input.getAttribute('aria-describedby')!);
+		assert.ok(message);
+		assert.equal(message.getAttribute('role'), 'alert');
+		assert.equal(message.hidden, true);
+		assert.equal(message.textContent, input.validationMessage);
+		assert.equal(hex(view.picker.color), '#123456');
+		input.dispatchEvent(new environment.window.Event('input', { bubbles: true }));
+		assert.equal(input.hasAttribute('aria-invalid'), false);
+		assert.equal(input.hasAttribute('aria-describedby'), false);
+		assert.equal(message.hidden, true);
+		change(input, invalid);
+		input.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		assert.equal(input.hasAttribute('aria-invalid'), false);
+		assert.equal(message.hidden, true);
+		assert.equal(input.value, label === 'Fill hex' ? '123456' : '100');
+	}
+	assert.equal(view.configurations, 0);
+});
+
+test('ColorPicker fields follow shared IME coordination and enabled state without committing projected values', () => {
+	using view = fixture();
+	const inputs = [field(view.picker.domNode, 'Fill hex'), field(view.picker.domNode, 'Fill opacity')];
+	const imeEnabled = IME.enabled;
+	let commits = 0;
+	using subscription = view.picker.onDidCommitColor(() => { commits++; });
+	try {
+		IME.disable();
+		assert.ok(inputs.every(input => input.readOnly));
+		IME.enable();
+		assert.ok(inputs.every(input => !input.readOnly));
+		view.picker.enabled = false;
+		assert.ok(inputs.every(input => input.disabled));
+		view.picker.enabled = true;
+		assert.ok(inputs.every(input => !input.disabled));
+		view.picker.setColor(Color.fromHex('#2f6fed80'), 'fill');
+		assert.deepEqual(inputs.map(input => input.value), ['2F6FED', '50.2']);
+		change(inputs[0], '2F6FED');
+		assert.equal(commits, 0);
+	} finally {
+		if (imeEnabled) { IME.enable(); } else { IME.disable(); }
+	}
 });
 
 test('ColorPicker creates its popup once and keeps compact hex independent of panel format', () => {

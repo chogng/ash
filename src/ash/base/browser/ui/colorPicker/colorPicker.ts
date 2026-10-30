@@ -4,6 +4,7 @@ import { Color, HSLA, HSVA, RGBA } from '../../../common/color.js';
 import { Emitter } from '../../../common/event.js';
 import { Disposable, DisposableStore, type IDisposable } from '../../../common/lifecycle.js';
 import { Button } from '../button/button.js';
+import { InputBox } from '../inputbox/inputbox.js';
 import { localize } from '../../../../nls.js';
 
 type ColorFormat = 'hex' | 'rgb' | 'css' | 'hsl' | 'hsb';
@@ -50,8 +51,8 @@ export class ColorPicker extends Disposable {
 	private panelDomNode: HTMLElement | undefined;
 	private swatch: Button | undefined;
 	private swatchDomNode: HTMLElement | undefined;
-	private compactValueInput: HTMLInputElement | undefined;
-	private compactAlphaInput: HTMLInputElement | undefined;
+	private compactValueInput: InputBox | undefined;
+	private compactAlphaInput: InputBox | undefined;
 	private readonly editedInputs = new Set<HTMLInputElement>();
 	private popupVisible = false;
 	private committing = false;
@@ -76,13 +77,33 @@ export class ColorPicker extends Disposable {
 			this.swatch.domNode.setAttribute('aria-expanded', 'false');
 			this.swatchDomNode = h(ownerDocument, 'span', { className: 'ash-color-picker-input-preview', attributes: { 'aria-hidden': 'true' } });
 			this.swatch.domNode.append(this.swatchDomNode);
-			this.compactValueInput = h(ownerDocument, 'input', { className: 'ash-color-picker-input-value', attributes: { type: 'text', spellcheck: 'false', maxlength: '9', 'aria-label': input.value } });
-			this.compactAlphaInput = h(ownerDocument, 'input', { className: 'ash-color-picker-input-alpha', attributes: { type: 'number', min: '0', max: '100', step: '0.1', 'aria-label': input.opacity } });
-			this.domNode.append(this.compactValueInput, h(ownerDocument, 'label', { className: 'ash-color-picker-input-percent' }, this.compactAlphaInput, h(ownerDocument, 'span', { attributes: { 'aria-hidden': 'true' } }, '%')));
-			for (const field of [this.compactValueInput, this.compactAlphaInput]) {
-				this._register(addDisposableListener(field, 'input', () => { this.editedInputs.add(field); field.setCustomValidity(''); field.removeAttribute('aria-invalid'); }));
+			// The composed row draws the shared frame; InputBox owns each field's interaction states.
+			const inputBoxStyles = { inputBackground: 'transparent', inputForeground: 'inherit', inputBorder: 'transparent' };
+			this.compactValueInput = this._register(new InputBox(this.domNode, {
+				presentation: 'field', ariaLabel: input.value, inputBoxStyles,
+			}));
+			this.compactValueInput.element.classList.add('ash-color-picker-input-value');
+			this.compactValueInput.inputElement.maxLength = 9;
+			const percent = h(ownerDocument, 'div', { className: 'ash-color-picker-input-percent' });
+			this.domNode.append(percent);
+			this.compactAlphaInput = this._register(new InputBox(percent, {
+				type: 'number', presentation: 'field', ariaLabel: input.opacity, inputBoxStyles,
+			}));
+			this.compactAlphaInput.element.classList.add('ash-color-picker-input-alpha');
+			this.compactAlphaInput.inputElement.min = '0';
+			this.compactAlphaInput.inputElement.max = '100';
+			this.compactAlphaInput.step = '0.1';
+			percent.append(h(ownerDocument, 'span', { attributes: { 'aria-hidden': 'true' } }, '%'));
+			for (const inputBox of [this.compactValueInput, this.compactAlphaInput]) {
+				const field = inputBox.inputElement;
+				// Native input events distinguish user edits from values projected by render().
+				this._register(addDisposableListener(field, 'input', () => {
+					this.editedInputs.add(field);
+					field.setCustomValidity('');
+					inputBox.showValidation('');
+				}));
 				this._register(addDisposableListener(field, 'change', () => this.handleValueInput(field)));
-				this._register(addDisposableListener(field, 'keydown', event => {
+				this._register(inputBox.onKeyDown(event => {
 					if (event.key === 'Enter') { event.preventDefault(); this.handleValueInput(field); }
 					else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.setColor(this.committedColor, this.target); this.render(); }
 				}));
@@ -273,24 +294,25 @@ export class ColorPicker extends Disposable {
 
 	private handleValueInput(input: HTMLInputElement): void {
 		input.setCustomValidity('');
+		const compactInput = [this.compactValueInput, this.compactAlphaInput].find(inputBox => inputBox?.inputElement === input);
 		let color: Color | null = null;
 		const alpha = this.selectedColor.rgba.a;
-		if (input === this.alphaNumberInput || input === this.compactAlphaInput) {
+		if (input === this.alphaNumberInput || input === this.compactAlphaInput?.inputElement) {
 			if (input.value !== '' && input.checkValidity()) {
 				// Alpha edits must preserve exact RGB channels instead of round-tripping through rounded HSV.
 				const { r, g, b } = this.selectedColor.rgba;
 				color = new Color(new RGBA(r, g, b, input.valueAsNumber / 100));
 			}
-		} else if (input === this.valueInput || input === this.compactValueInput) {
+		} else if (input === this.valueInput || input === this.compactValueInput?.inputElement) {
 			const value = input.value.trim();
-			if ((input === this.compactValueInput || this.format === 'hex') && /^#?(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(value)) {
+			if ((input === this.compactValueInput?.inputElement || this.format === 'hex') && /^#?(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/iu.test(value)) {
 				const hex = value.replace(/^#/u, '');
 				color = Color.Format.CSS.parseHex(`#${hex}`);
 				if (color && (hex.length === 3 || hex.length === 6)) {
 					const { r, g, b } = color.rgba;
 					color = new Color(new RGBA(r, g, b, alpha));
 				}
-			} else if (input !== this.compactValueInput && this.format === 'css') {
+			} else if (input !== this.compactValueInput?.inputElement && this.format === 'css') {
 				color = this.parseCss(value);
 			}
 		} else if (this.channelInputs.every(channel => channel.value !== '' && channel.checkValidity())) {
@@ -303,14 +325,19 @@ export class ColorPicker extends Disposable {
 			if (this.format === 'hsb') { color = new Color(new HSVA(first, second / 100, third / 100, alpha)); }
 		}
 		if (!color) {
-			input.setAttribute('aria-invalid', 'true');
 			const message = localize('colorPicker.invalid', 'Enter a valid color or a number within the displayed range.');
 			input.setCustomValidity(message);
-			if (this.messageDomNode) { this.messageDomNode.textContent = message; this.messageDomNode.hidden = false; }
+			if (compactInput) {
+				compactInput.showValidation(message, 'accessible');
+			} else {
+				input.setAttribute('aria-invalid', 'true');
+				this.messageDomNode.textContent = message;
+				this.messageDomNode.hidden = false;
+			}
 			return;
 		}
 		const edited = this.editedInputs.delete(input);
-		if ((input === this.compactValueInput || input === this.compactAlphaInput) && color.equals(this.committedColor)) {
+		if (compactInput && color.equals(this.committedColor)) {
 			// An explicit equal-value edit can override an inherited color; blur must not commit it twice.
 			if (edited) this.commit(color);
 			this.render(); return;
@@ -343,7 +370,11 @@ export class ColorPicker extends Disposable {
 			this.compactValueInput.value = Color.Format.CSS.formatHex(color).slice(1).toUpperCase();
 			this.compactAlphaInput.value = String(round(color.rgba.a * 100));
 			this.swatchDomNode!.style.setProperty('--ash-color-picker-value', Color.Format.CSS.formatHexA(color, true));
-			for (const field of [this.compactValueInput, this.compactAlphaInput]) { this.editedInputs.delete(field); field.setCustomValidity(''); field.removeAttribute('aria-invalid'); }
+			for (const inputBox of [this.compactValueInput, this.compactAlphaInput]) {
+				this.editedInputs.delete(inputBox.inputElement);
+				inputBox.inputElement.setCustomValidity('');
+				inputBox.showValidation('');
+			}
 		}
 		if (!this.panelDomNode) { return; }
 		const { h: hue, s, v, a } = color.hsva;
@@ -393,8 +424,8 @@ export class ColorPicker extends Disposable {
 
 	public set enabled(enabled: boolean) {
 		if (this.swatch) { this.swatch.enabled = enabled; }
-		if (this.compactValueInput) { this.compactValueInput.disabled = !enabled; }
-		if (this.compactAlphaInput) { this.compactAlphaInput.disabled = !enabled; }
+		if (this.compactValueInput) { this.compactValueInput.enabled = enabled; }
+		if (this.compactAlphaInput) { this.compactAlphaInput.enabled = enabled; }
 		if (!enabled) { this.cancel(); }
 	}
 	public cancel(): void { if (this.popupVisible) { this.input!.popup.hide(); } }

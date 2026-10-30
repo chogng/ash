@@ -363,7 +363,6 @@
 	border-color: var(--ash-contrastBorder);
 }
 
-.ash-theme-editor input:focus-visible,
 .ash-theme-color-name:focus-visible,
 .ash-theme-color-link:focus-visible,
 .ash-theme-color-group-heading:focus-visible {

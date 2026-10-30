@@ -252,16 +252,9 @@
 
 .ash-color-picker-input .ash-color-picker-input-value,
 .ash-color-picker-input .ash-color-picker-input-alpha {
-	box-sizing: border-box;
 	min-width: 0;
 	width: 100%;
 	min-height: var(--ash-spacing-size320);
-	padding: var(--ash-spacing-size40);
-	border: 0;
-	border-radius: 0;
-	background: transparent;
-	color: inherit;
-	font: inherit;
 }
 
 .ash-color-picker-input .ash-color-picker-input-value {
@@ -273,31 +266,9 @@
 	flex-direction: row;
 	align-items: center;
 	gap: 0;
-	flex: 0 0 64px;
+	flex: 0 0 80px;
 	min-width: 0;
 	padding-right: var(--ash-spacing-size80);
 	border-left: var(--ash-strokeThickness) solid var(--ash-border);
 	color: inherit;
-}
-
-.ash-color-picker-input input[type="number"] {
-	appearance: textfield;
-}
-
-.ash-color-picker-input input::-webkit-inner-spin-button {
-	appearance: none;
-}
-
-.ash-color-picker-input input:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
-}
-
-.ash-color-picker-input input:invalid {
-	outline: var(--ash-strokeThickness) solid var(--ash-error-foreground);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
-}
-
-.ash-color-picker-input input:disabled {
-	color: var(--ash-muted-foreground);
 }

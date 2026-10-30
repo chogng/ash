@@ -277,9 +277,10 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 		}
 	}
 
-	showValidation(message: string): void {
+	/** Accessible-only feedback keeps fixed-height compound fields from expanding their host rows. */
+	showValidation(message: string, presentation: 'inline' | 'accessible' = 'inline'): void {
 		this.message.textContent = message;
-		this.message.hidden = !message;
+		this.message.hidden = !message || presentation === 'accessible';
 		this.element.classList.toggle('has-validation', Boolean(message));
 		if (message) {
 			setAriaAttribute(this.inputElement, 'invalid', true);
