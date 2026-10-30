@@ -43,7 +43,7 @@ interface TimelineRow {
 export class TimelinePane extends ViewPane {
 	private readonly tree: WorkbenchObjectTree<TimelineRow>;
 	private readonly messageDomNode: HTMLDivElement;
-	private readonly rows = this._register(new DisposableStore());
+	private readonly rows = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly itemHovers = new Map<string, { readonly hover: IManagedHover; readonly focus: () => void; }>();
 	private readonly pending = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly timelines = new Map<string, Timeline>();
@@ -88,7 +88,10 @@ export class TimelinePane extends ViewPane {
 			// History is flat; reserving a collapse arrow would indent every entry.
 			twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => row.item?.label ?? this.loadMoreLabel(row.source) },
-			onWillRender: () => { this.rows.clear(); this.itemHovers.clear(); },
+			onDidRemoveRow: row => {
+				this.rows.deleteAndDispose(row.dataset.treeId!);
+				this.itemHovers.delete(row.dataset.treeId!);
+			},
 			renderElement: row => this.renderRow(row),
 		}));
 		this.tree.element.classList.add('ash-timeline-tree');
@@ -251,6 +254,8 @@ export class TimelinePane extends ViewPane {
 	}
 
 	private renderRow(row: TimelineRow): HTMLElement {
+		const resources = new DisposableStore();
+		this.rows.set(row.id, resources);
 		const content = h(this.contentElement.ownerDocument, 'span');
 		content.className = 'ash-timeline-row';
 		if (row.item?.icon) appendIcon(row.item.icon, content);
@@ -262,12 +267,12 @@ export class TimelinePane extends ViewPane {
 		description.className = 'ash-timeline-description';
 		description.textContent = row.item?.description ?? this.timeline.getSources().find(source => source.id === row.source)?.label ?? '';
 		content.append(description);
-		if (!row.item || !this.setupHistoryHover(content, row.id, row.item)) {
-			this.rows.add(this.hover.setupDelayedHover(content, { content: row.item?.tooltip ?? [label.textContent, description.textContent].join(' — ') }));
+		if (!row.item || !this.setupHistoryHover(content, row.id, row.item, resources)) {
+			resources.add(this.hover.setupDelayedHover(content, { content: row.item?.tooltip ?? [label.textContent, description.textContent].join(' — ') }));
 		}
 		if (!row.item && !this.pending.has(row.source) && !this.failedSources.has(row.source)) {
 			const generation = this.generation;
-			this.rows.add(observeIntersection(content, entry => {
+			resources.add(observeIntersection(content, entry => {
 				if (generation === this.generation && content.isConnected && entry.isIntersecting) {
 					void this.load(row.source, true);
 				}
@@ -276,19 +281,19 @@ export class TimelinePane extends ViewPane {
 		return content;
 	}
 
-	private setupHistoryHover(target: HTMLElement, rowId: string, item: TimelineItem): boolean {
+	private setupHistoryHover(target: HTMLElement, rowId: string, item: TimelineItem, resources: DisposableStore): boolean {
 		const repository = item.sourceControl && this.scm.getRepository(item.sourceControl.repositoryId);
 		if (!repository || !item.sourceControl) return false;
 		// The shared hover restores focus to its target after Escape.
 		target.tabIndex = -1;
 		const historyItem = item.sourceControl.historyItem;
-		const scope = this.rows.add(this.context.createScoped(target));
+		const scope = resources.add(this.context.createScoped(target));
 		const menuTarget: SCMHistoryItemViewModelTreeElement = {
 			type: 'historyItemViewModel', repository,
 			historyItemViewModel: { historyItem, kind: 'node', inputSwimlanes: [], outputSwimlanes: [] },
 		};
 		const details = setupHistoryItemHover({
-			resources: this.rows,
+			resources,
 			target,
 			render: (resources, layout) => toHistoryItemHoverContent({
 				resources, target, historyItem, references: historyItem.references ?? [], scope, layout,

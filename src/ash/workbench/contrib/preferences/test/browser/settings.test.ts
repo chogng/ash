@@ -1898,6 +1898,21 @@ test('settingsLayout is the single projection from registered settings to catego
 	model.dispose();
 });
 
+test('Settings layout matching preserves literal dots, wildcard groups and input order across rebuilds', () => {
+	const defaults = new DefaultSettings();
+	const first = { ...defaults.get('editor.minimap.enabled'), id: 'editor.minimap.first' };
+	const second = { ...first, id: 'editor.minimap.second[preview]' };
+	const locale = defaults.get(LocalizationConfiguration.locale);
+	const projected = (settings: readonly ISetting[]) => createSettingsLayout(settings).flatMap(category => category.groups.flatMap(group => group.settings.map(setting => [category.id, setting.id, setting.title])));
+	assert.deepEqual(projected([second, locale, first]), [
+		['general', locale.id, locale.title],
+		['editor-display', second.id, second.title],
+		['editor-display', first.id, first.title],
+	]);
+	assert.deepEqual(projected([{ ...first, title: 'Updated metadata' }]), [['editor-display', first.id, 'Updated metadata']]);
+	assert.throws(() => createSettingsLayout([{ ...locale, id: 'workbenchXlocale' }]), /missing from settingsLayout/u);
+});
+
 test('feature settings navigation and groups capture the language initialized before module loading', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {

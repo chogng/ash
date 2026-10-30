@@ -51,9 +51,14 @@ suite('collaboration browser component', () => {
 
 		await page.setViewportSize({ width: 600, height: 900 });
 		await page.goto('/collaboration.html');
+		const general = await channel(page, 'general').locator('.collaboration-channel').elementHandle();
 		await channel(page, 'rooms').click();
 		await page.keyboard.press('ArrowLeft');
 		await expect(channel(page, 'rooms')).toHaveAttribute('aria-expanded', 'false');
+		expect(await channel(page, 'general').locator('.collaboration-channel').evaluate((element, previous) => element === previous, general)).toBe(true);
+		await channel(page, 'general').locator('.collaboration-channel').hover();
+		await expect(page.getByRole('tooltip')).toHaveText('general');
+		await page.keyboard.press('Escape');
 		const search = page.getByRole('searchbox');
 		await search.fill('design');
 		await expect(channel(page, 'design')).toBeVisible();

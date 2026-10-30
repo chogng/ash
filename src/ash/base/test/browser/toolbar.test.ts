@@ -9,6 +9,38 @@ import { ToolBar } from '../../browser/ui/toolbar/toolbar.js';
 import type { IAction } from '../../common/actions.js';
 import { Separator } from '../../common/actions.js';
 import { AnchorPosition } from '../../common/layout.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
+
+test('ToolBar repeated actions keep DOM and Tab stops unchanged while enabled-state changes still move the stop', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: new TestContextMenuProvider() });
+		let enabled = true;
+		const primary = { ...action('primary'), get enabled() { return enabled; } };
+		const secondary = action('secondary');
+		toolbar.setActions([primary], [secondary]);
+		const first = toolbar.element.querySelector<HTMLButtonElement>('[data-action-id="primary"] button')!;
+		const more = toolbar.element.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
+		first.focus();
+		const observer = new dom.window.MutationObserver(() => { });
+		observer.observe(toolbar.element, { subtree: true, childList: true, attributes: true });
+		try {
+			for (let iteration = 0; iteration < 20; iteration++) toolbar.setActions([primary], [secondary]);
+			assert.equal(observer.takeRecords().length, 0, 'identical action updates must not mutate the toolbar');
+			assert.equal(dom.window.document.activeElement, first);
+			enabled = false;
+			toolbar.setActions([primary], [secondary]);
+			assert.equal(first.tabIndex, -1);
+			assert.equal(more.tabIndex, 0);
+			toolbar.setActions([primary, action('added')], [secondary]);
+			assert.equal(toolbar.element.querySelector('[data-action-id="primary"] button'), first);
+			assert.equal(toolbar.element.querySelector('[aria-haspopup="menu"]'), more);
+			assert.equal(toolbar.element.querySelector<HTMLButtonElement>('[data-action-id="added"] button')!.tabIndex, -1);
+		} finally { observer.disconnect(); }
+	} finally { dom.window.close(); }
+});
 
 test('ToolBar renders primary actions and trails More Actions', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

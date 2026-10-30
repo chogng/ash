@@ -4,7 +4,7 @@ import type { TreeElement } from '../../../../base/browser/ui/tree/tree.js';
 import { TreeFindMode } from '../../../../base/browser/ui/tree/tree.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
-import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -27,7 +27,7 @@ import { OutlineViewState } from './outlineViewState.js';
 export class OutlinePane extends ViewPane {
 	public readonly outlineViewState: OutlineViewState;
 	private readonly session = this._register(new MutableDisposable<DisposableStore>());
-	private readonly rowResources = this._register(new DisposableStore());
+	private readonly rowResources = this._register(new DisposableMap<string>());
 	private readonly emptyDomNode: HTMLDivElement;
 	private tree: WorkbenchObjectTree<unknown> | undefined;
 	private outline: IOutline<unknown> | undefined;
@@ -98,7 +98,7 @@ export class OutlinePane extends ViewPane {
 		if (this.isBodyVisible() && editor === this.editor && this.session.value) return;
 		this.generation++;
 		this.session.clear();
-		this.rowResources.clear();
+		this.rowResources.clearAndDisposeAll();
 		this.tree = undefined;
 		this.outline = undefined;
 		this.editor = editor;
@@ -125,10 +125,10 @@ export class OutlinePane extends ViewPane {
 				...outline.config.options,
 				configurationService: this.configuration,
 				openOnSingleClick: true,
-				onWillRender: () => this.rowResources.clear(),
+				onDidRemoveRow: row => this.rowResources.deleteAndDispose(row.dataset.treeId!),
 				renderElement: (element, node) => {
 					const row = outline.config.options.renderElement(element, node);
-					this.rowResources.add(this.hover.setupDelayedHover(row, { content: row.textContent ?? '' }));
+					this.rowResources.set(node.id, this.hover.setupDelayedHover(row, { content: row.textContent ?? '' }));
 					return row;
 				},
 			}));

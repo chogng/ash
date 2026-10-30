@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DragAndDropDataKind } from '../../browser/ui/dnd/dnd.js';
 import { AbstractTree } from '../../browser/ui/tree/abstractTree.js';
@@ -14,6 +14,66 @@ import { TreeVisibility } from '../../browser/ui/tree/tree.js';
 import { h, svg } from '../../browser/dom.js';
 import { isMacintosh } from '../../common/platform.js';
 import { DeferredPromise } from '../../common/async.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
+
+suite('ObjectTree partial update lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('ObjectTree refilter with unchanged visibility retains focused selected rows without DOM writes', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tree = new ObjectTree<{ id: string; }>(dom.window.document.body, {
+				modelOptions: { identityProvider: { getId: item => item.id } },
+				renderElement: item => h(dom.window.document, 'button', undefined, item.id),
+			});
+			tree.setChildren([{ element: { id: 'folder' }, children: [{ element: { id: 'child' } }] }]);
+			tree.setSelection(['child']);
+			const row = tree.element.querySelector<HTMLElement>('[data-tree-id="child"]')!;
+			const button = row.querySelector('button')!;
+			button.focus();
+			const observer = new dom.window.MutationObserver(() => { });
+			observer.observe(tree.element, { attributes: true, childList: true, subtree: true });
+			try {
+				tree.model.refilter();
+				assert.equal(observer.takeRecords().length, 0);
+				assert.equal(dom.window.document.activeElement, button);
+				assert.equal(row.getAttribute('aria-selected'), 'true');
+				assert.equal(row.getAttribute('aria-level'), '2');
+			} finally { observer.disconnect(); }
+		} finally { dom.window.close(); }
+	});
+
+	test('ObjectTree local updates preserve unrelated row controls and refresh retained node payloads', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tree = new ObjectTree<{ id: string; label: string; }>(dom.window.document.body, {
+				modelOptions: { identityProvider: { getId: item => item.id } },
+				dnd: { getDragURI: item => item.label === 'Sibling' ? item.id : undefined, onDragOver: () => false, drop: () => { } },
+				renderElement: item => h(dom.window.document, 'button', undefined, item.label),
+			});
+			const folder = { id: 'folder', label: 'Folder' };
+			const sibling = { id: 'sibling', label: 'Sibling' };
+			tree.setChildren([{ element: folder, collapsed: true, children: [{ element: { id: 'child', label: 'Child' } }] }, { element: sibling }]);
+			const folderRow = tree.element.querySelector<HTMLElement>('[data-tree-id="folder"]')!;
+			const siblingRow = tree.element.querySelector<HTMLElement>('[data-tree-id="sibling"]')!;
+			const control = siblingRow.querySelector('button')!;
+			assert.equal(siblingRow.draggable, true);
+			control.focus();
+			tree.expand('folder');
+			assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
+			assert.equal(dom.window.document.activeElement, control);
+			assert.equal(folderRow.getAttribute('aria-expanded'), 'true');
+			tree.collapse('folder');
+			assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
+			assert.equal(folderRow.getAttribute('aria-expanded'), 'false');
+			tree.setChildren([{ element: folder, collapsed: true, children: [{ element: { id: 'child', label: 'Child' } }] }, { element: { id: 'sibling', label: 'Updated sibling' } }]);
+			assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
+			assert.equal(siblingRow.textContent, 'Updated sibling');
+			assert.equal(siblingRow.getAttribute('aria-posinset'), '2');
+			assert.equal(siblingRow.draggable, false, 'retained model nodes project drag capability from their updated payload');
+		} finally { dom.window.close(); }
+	});
+});
 
 test('Compact async reads stay bounded and release capacity after failures', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

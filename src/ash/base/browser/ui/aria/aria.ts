@@ -55,6 +55,8 @@ export function setAriaAttribute(
 	value: AriaAttributeValue,
 ): void {
 	const name = `aria-${attribute}`;
+	const next = value === undefined || value === null ? null : String(value);
+	if (element.getAttribute(name) === next) return;
 	if (value === undefined || value === null) {
 		element.removeAttribute(name);
 	} else {
@@ -75,6 +77,7 @@ export function setRole(
 	element: Element,
 	role: AriaRole | undefined,
 ): void {
+	if (element.getAttribute('role') === (role ?? null)) return;
 	if (role === undefined) {
 		element.removeAttribute('role');
 	} else {

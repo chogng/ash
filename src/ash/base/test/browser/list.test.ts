@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DragAndDropDataKind } from '../../browser/ui/dnd/dnd.js';
 import { ListDragOverPosition, ListDragTargetSector } from '../../browser/ui/list/list.js';
@@ -7,6 +7,113 @@ import { ListView } from '../../browser/ui/list/listView.js';
 import { List } from '../../browser/ui/list/listWidget.js';
 import { h } from '../../browser/dom.js';
 import { isMacintosh } from '../../common/platform.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
+
+suite('List splice lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('ListView recycled templates reset selection for their new item', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using view = new ListView<string>(dom.window.document.body, { getId: item => item, renderItem: item => h(dom.window.document, 'span', undefined, item) });
+			view.items = ['before'];
+			const row = view.row(0)!;
+			row.setAttribute('aria-selected', 'true');
+			view.splice(0, 1, ['after']);
+			assert.equal(view.row(0), row, 'the discarded template is reused for a different item');
+			assert.equal(row.getAttribute('aria-selected'), 'false');
+			assert.equal(row.textContent, 'after');
+		} finally { dom.window.close(); }
+	});
+
+	test('List metadata refresh retains selection without redundant mutations and projects changed accessibility', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			const item = { id: 'item', label: 'Original', level: 1, expanded: false as boolean | undefined };
+			using list = new List<typeof item>(dom.window.document.body, {
+				getId: item => item.id,
+				accessibilityProvider: { getAriaLabel: item => item.label, getAriaLevel: item => item.level, isExpanded: item => item.expanded },
+				renderItem: item => h(dom.window.document, 'span', undefined, item.id),
+			});
+			list.items = [item];
+			list.setSelection([0]);
+			const row = list.row(0)!;
+			const observer = new dom.window.MutationObserver(() => { });
+			observer.observe(row, { attributes: true, childList: true, subtree: true });
+			try {
+				list.splice(0, 0);
+				assert.equal(observer.takeRecords().length, 0);
+				assert.equal(row.getAttribute('aria-selected'), 'true');
+				item.label = 'Updated';
+				item.level = 2;
+				item.expanded = true;
+				list.splice(0, 0);
+				assert.equal(row.getAttribute('aria-label'), 'Updated');
+				assert.equal(row.getAttribute('aria-level'), '2');
+				assert.equal(row.getAttribute('aria-expanded'), 'true');
+				assert.equal(row.getAttribute('aria-selected'), 'true');
+				item.expanded = undefined;
+				list.splice(0, 0);
+				assert.equal(row.hasAttribute('aria-expanded'), false);
+			} finally { observer.disconnect(); }
+		} finally { dom.window.close(); }
+	});
+
+	test('List splice preserves unaffected controls, selection and disposal without offscreen row caching', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			const removed: string[] = [];
+			using list = new List<string>(dom.window.document.body, {
+				getId: item => item,
+				keyboardNavigation: true,
+				renderItem: item => h(dom.window.document, 'button', undefined, item),
+				updateItem: (_item, index, row) => { row.dataset.renderedIndex = String(index); },
+				onDidRemoveRow: row => { removed.push(row.textContent!); },
+			});
+			list.items = ['before', 'after'];
+			list.setActiveIndex(1);
+			list.setSelection([1]);
+			const before = list.row(0)!;
+			const after = list.row(1)!;
+			const control = after.querySelector('button')!;
+			control.focus();
+			list.splice(1, 0, ['middle']);
+			assert.equal(list.row(0), before);
+			assert.equal(list.row(2), after);
+			assert.equal(dom.window.document.activeElement, control);
+			assert.equal(after.dataset.renderedIndex, '2');
+			assert.equal(list.activeItem, 'after');
+			assert.deepEqual(list.selection, ['after']);
+			assert.equal(list.element.getAttribute('aria-activedescendant'), after.id);
+			assert.deepEqual(removed, []);
+			list.splice(1, 1);
+			list.splice(1, 0, []);
+			assert.equal(list.row(1), after);
+			assert.equal(after.dataset.renderedIndex, '1');
+			assert.equal(dom.window.document.activeElement, control);
+			assert.deepEqual(removed, ['middle']);
+		} finally { dom.window.close(); }
+	});
+
+	test('ListView splice refreshes shifted index-dependent renderers and retains the untouched prefix', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using view = new ListView<string>(dom.window.document.body, {
+				getId: item => item,
+				renderItem: (item, index) => h(dom.window.document, 'span', undefined, `${item}:${index}`),
+			});
+			view.items = ['before', 'after'];
+			const before = view.row(0)!;
+			view.splice(1, 0, ['middle']);
+			assert.equal(view.row(0), before);
+			assert.deepEqual([...view.element.children].map(row => row.textContent), ['before:0', 'middle:1', 'after:2']);
+			const after = view.row(2)!;
+			view.splice(1, 1, ['replacement']);
+			assert.equal(view.row(2), after);
+			assert.deepEqual([...view.element.children].map(row => row.textContent), ['before:0', 'replacement:1', 'after:2']);
+		} finally { dom.window.close(); }
+	});
+});
 
 test('ListView refreshes retained row geometry when a content splice changes delegate height', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

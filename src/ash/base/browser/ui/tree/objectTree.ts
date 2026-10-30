@@ -31,6 +31,7 @@ export interface ObjectTreeOptions<TNode> {
 	readonly modelOptions: ObjectTreeModelOptions<TNode>;
 	readonly onWillRender?: () => void;
 	readonly reuseRows?: boolean;
+	/** Releases resources for a discarded row or replaced payload; data-tree-id identifies its model node. */
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 	readonly renderElement: (element: TNode, node: ObjectTreeNode<TNode>) => HTMLElement;
 	readonly renderTwistie?: (element: TNode, state: TreeTwistieState, container: HTMLSpanElement) => void;

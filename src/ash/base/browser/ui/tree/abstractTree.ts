@@ -407,10 +407,12 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		row.classList.toggle('expanded', node.collapsible && !node.collapsed);
 		row.classList.toggle('collapsed', node.collapsible && node.collapsed);
 		row.classList.toggle('find-match', this.findController?.isMatch(node) ?? false);
-		row.style.paddingLeft = treeRowPadding(node.depth);
+		const padding = treeRowPadding(node.depth);
+		if (row.style.paddingLeft !== padding) row.style.paddingLeft = padding;
 		const twistie = row.querySelector<HTMLSpanElement>(':scope > .ash-tree-row-inner > .ash-tree-twistie');
 		if (!twistie) return;
-		twistie.className = ['ash-tree-twistie', this.twistieAdditionalCssClass?.(node)].filter(Boolean).join(' ');
+		const twistieClass = ['ash-tree-twistie', this.twistieAdditionalCssClass?.(node)].filter(Boolean).join(' ');
+		if (twistie.className !== twistieClass) twistie.className = twistieClass;
 		const expanded = node.collapsible && !node.collapsed;
 		if (rerender || elementChanged || row.dataset.treeExpanded !== String(expanded) || row.dataset.treeCollapsible !== String(node.collapsible)) {
 			twistie.replaceChildren();
@@ -422,7 +424,8 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		}
 		const indent = row.querySelector<HTMLSpanElement>(':scope > .ash-tree-row-inner > .ash-tree-indent');
 		if (indent) this.renderIndentGuides(node, indent);
-		row.dataset.treeDepth = String(node.depth);
+		const depth = String(node.depth);
+		if (row.dataset.treeDepth !== depth) row.dataset.treeDepth = depth;
 	}
 
 	private onListPointer(node: TNode, browserEvent: MouseEvent): void {

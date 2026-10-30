@@ -15,6 +15,18 @@ test('ARIA helpers set, preserve false, and remove semantic attributes', () => {
 	assert.equal(button.getAttribute('role'), 'menuitem');
 	assert.equal(button.getAttribute('aria-expanded'), 'false');
 	assert.equal(button.getAttribute('aria-controls'), 'menu');
+	const observer = new dom.window.MutationObserver(() => { });
+	observer.observe(button, { attributes: true });
+	try {
+		setRole(button, 'menuitem');
+		setAriaAttribute(button, 'expanded', false);
+		setAriaAttribute(button, 'controls', 'menu');
+		setAriaAttribute(button, 'label', undefined);
+		assert.equal(observer.takeRecords().length, 0, 'unchanged semantics must not emit attribute mutations');
+		setAriaAttribute(button, 'expanded', true);
+		assert.equal(observer.takeRecords().length, 1);
+		assert.equal(button.getAttribute('aria-expanded'), 'true');
+	} finally { observer.disconnect(); }
 
 	setRole(button, undefined);
 	setAriaAttribute(button, 'controls', undefined);

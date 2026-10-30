@@ -1,4 +1,5 @@
 import '../../../services/language/common/languageServerLifecycleService.js';
+import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
@@ -720,7 +721,9 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 		id: category.id,
 		groups: category.groups
 			.map(group => {
-				const matches = [...remaining.values()].filter(setting => group.settings.some(pattern => matchesSettingId(setting.id, pattern)));
+				// Each group applies the same rules to every remaining setting.
+				const patterns = group.settings.map(settingIdPattern);
+				const matches = [...remaining.values()].filter(setting => patterns.some(pattern => pattern.test(setting.id)));
 				for (const setting of matches) remaining.delete(setting.id);
 				return {
 					id: group.id,
@@ -827,12 +830,12 @@ function assertSettingsLayoutText(label: string, value: string): void {
 	if (!value.trim()) throw new TypeError(`Settings layout ${label} must not be empty`);
 }
 
-function matchesSettingId(settingId: string, pattern: string): boolean {
+function settingIdPattern(pattern: string): RegExp {
 	const source = pattern
 		.split('*')
-		.map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'))
+		.map(escapeRegExpCharacters)
 		.join('.*');
-	return new RegExp(`^${source}$`, 'u').test(settingId);
+	return new RegExp(`^${source}$`, 'u');
 }
 
 function assertSettingsLayoutId(label: string, value: string): void {

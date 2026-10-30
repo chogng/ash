@@ -156,6 +156,7 @@ export class ActionBar extends Disposable {
 		const focusedControl = focusedEntry ? [...focusedEntry.container.querySelectorAll('button, [tabindex]')].indexOf(activeElement!) : -1;
 		// Retained action identities keep their view and DOM through selection and reordering.
 		const retained = new Map(this.entries.map(entry => [entry.action, entry]));
+		const created = new Set<ActionBarEntry>();
 		const next = actions.map(action => {
 			const entry = retained.get(action);
 			if (entry) {
@@ -167,7 +168,9 @@ export class ActionBar extends Disposable {
 			container.classList.toggle('icon', action.icon !== undefined);
 			container.dataset.actionId = action.id;
 			container.setAttribute('role', 'presentation');
-			return this.createEntry(action, container);
+			const createdEntry = this.createEntry(action, container);
+			created.add(createdEntry);
+			return createdEntry;
 		});
 		for (const entry of retained.values()) {
 			entry.store.dispose();
@@ -182,8 +185,11 @@ export class ActionBar extends Disposable {
 		}
 		const tabStop = next.find(entry => entry.action.enabled && entry.item === this.tabStop)
 			?? next.find(entry => entry.action.enabled);
+		// Retained slots already project their Tab state; only new or changed slots need a DOM write.
+		for (const entry of next) {
+			if (created.has(entry) || (entry.item === this.tabStop) !== (entry === tabStop)) entry.item.setTabbable(entry === tabStop);
+		}
 		this.tabStop = tabStop?.item;
-		for (const entry of next) entry.item.setTabbable(entry === tabStop);
 		if (focusedActionId && this.element.ownerDocument.activeElement !== activeElement) {
 			const entry = next.find(({ action }) => action.id === focusedActionId && action.enabled)
 				?? next.find(({ action }) => action.enabled);

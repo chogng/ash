@@ -510,6 +510,10 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 
 	private search(text: string): void {
 		const query = new SettingsSearchQuery(text);
+		if (query.isEmpty) {
+			// Keep browsing scoped while replacing target-bound controls; hidden categories need no widgets.
+			this.settingsTree.setNavigationTarget(this.treeModel.has(this.activeCategory.id) ? this.activeCategory.id : undefined);
+		}
 		const overrides = { resource: this.folderUri, overrideIdentifier: query.languageFilter };
 		if (this.widgetOptions.configurationTarget !== this.target
 			|| this.widgetOptions.configurationOverrides.resource?.toString() !== overrides.resource?.toString()
@@ -531,9 +535,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this.folderTargetButton.setTitle(this.folderTargetButton.label);
 		this.targetLanguage.textContent = query.languageFilter ? this.languageService.getLanguageName(query.languageFilter) ?? query.languageFilter : '';
 		this.targetLanguage.hidden = !query.languageFilter;
-		// Search is global: release the browsing scope before deriving results or empty state.
-		this.settingsTree.setNavigationTarget(undefined);
 		this.treeModel.setQuery(query);
+		// Apply the global query before releasing the browsing scope to avoid an unfiltered render.
+		if (!query.isEmpty) this.settingsTree.setNavigationTarget(undefined);
 		this.rebuildContent();
 		this.settingsTree.setNavigationTarget(query.isEmpty && this.treeModel.has(this.activeCategory.id) ? this.activeCategory.id : undefined);
 		this.updateSearchPresentation();
