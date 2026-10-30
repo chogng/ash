@@ -1,3 +1,4 @@
+import { Orientation } from '../../browser/ui/sash/sash.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -36,9 +37,9 @@ test('GridView delivers physical boundary sashes through nested axes and clears 
 		const topRight = new BoundaryView(dom.window.document, 'topRight');
 		const bottomRight = new BoundaryView(dom.window.document, 'bottomRight');
 		using grid = new GridView(dom.window.document.body, {
-			type: 'branch', orientation: 'horizontal', size: 800,
+			type: 'branch', orientation: Orientation.HORIZONTAL, size: 800,
 			children: [[topLeft, bottomLeft], [topRight, bottomRight]].map(views => ({
-				type: 'branch', orientation: 'vertical', size: 400,
+				type: 'branch', orientation: Orientation.VERTICAL, size: 400,
 				children: views.map(view => ({ type: 'leaf', view, size: 200 })),
 			})),
 		});
@@ -46,10 +47,10 @@ test('GridView delivers physical boundary sashes through nested axes and clears 
 		assert.ok(topLeft.boundaries.right);
 		assert.equal(topLeft.boundaries.right, topRight.boundaries.left);
 		assert.equal(topLeft.boundaries.right, bottomLeft.boundaries.right);
-		assert.equal(topLeft.boundaries.right.orientation, 'vertical');
+		assert.equal(topLeft.boundaries.right.orientation, Orientation.VERTICAL);
 		assert.ok(topLeft.boundaries.bottom);
 		assert.equal(topLeft.boundaries.bottom, bottomLeft.boundaries.top);
-		assert.equal(topLeft.boundaries.bottom.orientation, 'horizontal');
+		assert.equal(topLeft.boundaries.bottom.orientation, Orientation.HORIZONTAL);
 		assert.equal(topLeft.boundaries.left, undefined);
 		assert.equal(topLeft.boundaries.top, undefined);
 		assert.equal(bottomRight.boundaries.right, undefined);
@@ -74,7 +75,7 @@ test('GridView sash updates lay out only leaves whose geometry changes', () => {
 		const editor = new TestView(dom.window.document, 'editor', 100);
 		const chat = new TestView(dom.window.document, 'chat', 100);
 		using grid = new GridView(dom.window.document.body, {
-			type: 'branch', orientation: 'horizontal', size: 800,
+			type: 'branch', orientation: Orientation.HORIZONTAL, size: 800,
 			children: [
 				{ type: 'leaf', view: sidebar, size: 200 },
 				{ type: 'leaf', view: editor, size: 400 },
@@ -131,7 +132,7 @@ test('GridView adds and removes leaves by GridLocation', () => {
 	const panel = new TestView(dom.window.document, 'panel', 100);
 	const gridview = new GridView(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 600,
 		children: [
 			{ type: 'leaf', view: left, size: 200 },
@@ -162,7 +163,7 @@ test('GridView moves siblings while preserving their sizes', () => {
 	const editor = new TestView(dom.window.document, 'editor');
 	const gridview = new GridView(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 600,
 		children: [
 			{ type: 'leaf', view: left, size: 200 },
@@ -188,12 +189,12 @@ test('GridView removes an empty nested branch', () => {
 	const editor = new TestView(dom.window.document, 'editor');
 	const gridview = new GridView(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 600,
 		children: [
 			{
 				type: 'branch',
-				orientation: 'vertical',
+				orientation: Orientation.VERTICAL,
 				size: 200,
 				children: [
 					{ type: 'leaf', view: nested, size: 400 },

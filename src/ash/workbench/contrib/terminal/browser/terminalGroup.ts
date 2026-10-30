@@ -1,6 +1,6 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { IWorkbenchLayoutService, isHorizontal } from '../../../services/layout/browser/layoutService.js';
-import { SplitView, type SplitViewOrientation } from '../../../../base/browser/ui/splitview/splitview.js';
+import { SplitView, Orientation } from '../../../../base/browser/ui/splitview/splitview.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
@@ -20,8 +20,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 	private width = 0;
 	private height = 0;
 	private relativeSizes: number[] = [1];
-	private applyingPaneSizes = false;
-	private orientation: SplitViewOrientation;
+	private orientation: Orientation;
 
 	constructor(
 		instance: ITerminalInstance,
@@ -30,7 +29,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 	) {
 		super();
 		this.instances.push(instance);
-		this.orientation = isHorizontal(workbenchLayout.getPanelPosition()) ? 'horizontal' : 'vertical';
+		this.orientation = isHorizontal(workbenchLayout.getPanelPosition()) ? Orientation.HORIZONTAL : Orientation.VERTICAL;
 		this._register(workbenchLayout.onDidChangePanelPosition(() => this.layout(this.width, this.height)));
 	}
 
@@ -97,17 +96,17 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		this.height = height;
 		// Hidden Panels have no geometry for a new axis; retain panes until the next visible layout.
 		if (width <= 0 || height <= 0) return;
-		const orientation = isHorizontal(this.workbenchLayout.getPanelPosition()) ? 'horizontal' : 'vertical';
+		const orientation = isHorizontal(this.workbenchLayout.getPanelPosition()) ? Orientation.HORIZONTAL : Orientation.VERTICAL;
 		if (this.orientation !== orientation) {
 			this.orientation = orientation;
 			this.rebuildLayout();
 			return;
 		}
-		this.splitView?.layout(this.primarySize, this.orientation === 'horizontal' ? height : width);
+		this.splitView?.layout(this.primarySize, this.orientation === Orientation.HORIZONTAL ? height : width);
 		this.applyPaneSizes();
 	}
 
-	private get primarySize(): number { return this.orientation === 'horizontal' ? this.width : this.height; }
+	private get primarySize(): number { return this.orientation === Orientation.HORIZONTAL ? this.width : this.height; }
 
 	resizePanes(relativeSizes: number[]): void {
 		this.relativeSizes = [...relativeSizes];
@@ -117,10 +116,9 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 	private applyPaneSizes(): void {
 		if (!this.splitView || this.primarySize <= 0) return;
 		const total = this.relativeSizes.reduce((sum, size) => sum + size, 0);
-		this.applyingPaneSizes = true;
-		try {
-			for (let index = 0; index < this.relativeSizes.length - 1; index++) this.splitView.resizeView(index, this.primarySize * this.relativeSizes[index]! / total);
-		} finally { this.applyingPaneSizes = false; }
+		for (let index = 0; index < this.relativeSizes.length - 1; index++) {
+			this.splitView.resizeView(index, this.primarySize * this.relativeSizes[index]! / total);
+		}
 	}
 
 	getLayoutInfo(isActive: boolean): ITerminalTabLayoutInfoById {
@@ -151,9 +149,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		this.panes.clear();
 		const lifetime = new DisposableStore();
 		this.layoutLifetime.value = lifetime;
-		const split = lifetime.add(new SplitView(this.container, this.orientation, {
-			styles: { separatorBorder: 'var(--ash-contrastBorder, var(--ash-editorGroup-border))' },
-		}));
+		const split = lifetime.add(new SplitView(this.container, { proportionalLayout: false, orientation: this.orientation, styles: { separatorBorder: 'var(--ash-contrastBorder, var(--ash-editorGroup-border))' }, }));
 		this.splitView = split;
 		split.element.classList.add('ash-terminal-group');
 		for (const instance of this.instances) {
@@ -164,7 +160,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 			instance.attachToElement(pane);
 			lifetime.add(addDisposableListener(pane, 'focusin', () => this.terminals.setActiveInstance(instance)));
 			split.addView({
-				element: pane, minimumSize: this.orientation === 'horizontal' ? 120 : 80, maximumSize: Number.POSITIVE_INFINITY,
+				element: pane, minimumSize: this.orientation === Orientation.HORIZONTAL ? 120 : 80, maximumSize: Number.POSITIVE_INFINITY,
 				layout: () => { if (this.visible) instance.xterm?.fit(); },
 			}, { type: 'distribute' });
 		}
@@ -174,8 +170,8 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		// Desired proportions change through pane operations and user sash input.
 		// Intermediate Grid sizes may clamp the rendered panes; those temporary
 		// sizes must never replace the proportions restored on the final layout.
-		lifetime.add(split.onDidChangeViewSizes(() => {
-			if (!this.applyingPaneSizes) this.relativeSizes = this.instances.map((_, index) => split.getViewSize(index));
+		lifetime.add(split.onDidSashChange(() => {
+			this.relativeSizes = this.instances.map((_, index) => split.getViewSize(index));
 		}));
 		this.setVisible(this.visible);
 		this.layout(this.width, this.height);

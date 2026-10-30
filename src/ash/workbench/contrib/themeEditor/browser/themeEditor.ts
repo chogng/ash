@@ -1,3 +1,5 @@
+import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
+import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import './media/themeEditor.css';
 import {
 	addDisposableListener,
@@ -488,7 +490,7 @@ export class ThemeEditor extends EditorPane {
 		);
 		this._register(this.preview.onDidChangeColors(() => this.renderRows()));
 		this._register(this.preview.onDidChangeSelection(() => this.switchInspectorScope()));
-		this.split = this._register(new SplitView(this.body, 'horizontal'));
+		this.split = this._register(new SplitView(this.body, { proportionalLayout: false, orientation: Orientation.HORIZONTAL }));
 		const editor = this;
 		// Keep the source model and undo history, without rendering a hidden JSON viewport.
 		this.split.addView(
@@ -499,7 +501,7 @@ export class ThemeEditor extends EditorPane {
 				},
 				maximumSize: 440,
 				// Let the preview absorb editor resizing, preserving the inspector width.
-				priority: 'low',
+				priority: LayoutPriority.Low,
 				onDidChange: Event.None,
 				layout: (width, _offset, _height) => {
 					this.scrollable?.layout();

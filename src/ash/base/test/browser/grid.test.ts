@@ -1,3 +1,5 @@
+import { LayoutPriority } from '../../browser/ui/splitview/splitview.js';
+import { Orientation } from '../../browser/ui/sash/sash.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -76,13 +78,13 @@ test('Grid lays out a nested SplitView tree in two dimensions', () => {
 	const right = new TestGridView(dom.window.document, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
 			{ type: 'leaf', view: left, size: 200 },
 			{
 				type: 'branch',
-				orientation: 'vertical',
+				orientation: Orientation.VERTICAL,
 				size: 400,
 				children: [
 					{ type: 'leaf', view: session, size: 36 },
@@ -126,7 +128,7 @@ test('Grid keeps hidden leaves mounted and restores their pixel size', () => {
 	const right = new TestGridView(dom.window.document, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
 			{ type: 'leaf', view: left, size: 200 },
@@ -161,13 +163,13 @@ test('Grid wires nested SplitView intersections as corner sashes', () => {
 	const right = new TestGridView(dom.window.document, 100, 600, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
 			{ type: 'leaf', view: left, size: 200 },
 			{
 				type: 'branch',
-				orientation: 'vertical',
+				orientation: Orientation.VERTICAL,
 				size: 400,
 				children: [
 					{ type: 'leaf', view: top, size: 300 },
@@ -202,23 +204,23 @@ test('Grid recursively projects inherited boundary sashes', () => {
 	const view = () => new TestGridView(dom.window.document, 50, 1_000, 50, 1_000);
 	const grid = new Grid(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
 			{ type: 'leaf', view: view(), size: 100 },
 			{
 				type: 'branch',
-				orientation: 'vertical',
+				orientation: Orientation.VERTICAL,
 				size: 600,
 				children: [
 					{
 						type: 'branch',
-						orientation: 'horizontal',
+						orientation: Orientation.HORIZONTAL,
 						size: 300,
 						children: [
 							{
 								type: 'branch',
-								orientation: 'vertical',
+								orientation: Orientation.VERTICAL,
 								size: 300,
 								children: [
 									{ type: 'leaf', view: view(), size: 150 },
@@ -259,7 +261,7 @@ test('Grid links aligned sashes in a 2 by 2 layout', () => {
 	const bottomRight = new TestGridView(dom.window.document, 100, 1_000, 100, 1_000);
 	const row = (left: TestGridView, right: TestGridView) => ({
 		type: 'branch' as const,
-		orientation: 'horizontal' as const,
+		orientation: Orientation.HORIZONTAL as const,
 		size: 300,
 		children: [
 			{ type: 'leaf' as const, view: left, size: 400 },
@@ -268,7 +270,7 @@ test('Grid links aligned sashes in a 2 by 2 layout', () => {
 	});
 	const grid = new Grid(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'vertical',
+		orientation: Orientation.VERTICAL,
 		size: 600,
 		children: [row(topLeft, topRight), row(bottomLeft, bottomRight)],
 	});
@@ -294,7 +296,7 @@ test('Grid edge snapping allows collapse but gates outer-edge restore', () => {
 	const editor = new TestGridView(dom.window.document, 100, Infinity);
 	const grid = new Grid(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 600,
 		children: [
 			{ type: 'leaf', view: sidebar, size: 100 },
@@ -324,7 +326,7 @@ test('Grid resets a visible sash by distributing its sibling sizes', () => {
 	const right = new TestGridView(dom.window.document, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 600,
 		children: [
 			{ type: 'leaf', view: left, size: 200 },
@@ -350,7 +352,7 @@ test('Grid resets only the views adjacent to the selected sash', () => {
 	const right = new TestGridView(dom.window.document, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 600,
 		children: [
 			{ type: 'leaf', view: left, size: 100 },
@@ -378,7 +380,7 @@ test('Grid rejects duplicate views in its descriptor', () => {
 	assert.throws(
 		() => new Grid(dom.window.document.body, {
 			type: 'branch',
-			orientation: 'horizontal',
+			orientation: Orientation.HORIZONTAL,
 			size: 200,
 			children: [
 				{ type: 'leaf', view, size: 100 },
@@ -397,11 +399,11 @@ test('SerializableGrid restores view identity and runtime geometry', () => {
 	const right = new SerializableTestGridView(dom.window.document, 'right', 100, 600);
 	const grid = new SerializableGrid(dom.window.document.body, {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
 			{ type: 'leaf', view: left, size: 200 },
-			{ type: 'leaf', view: editor, size: 400, priority: 'high' },
+			{ type: 'leaf', view: editor, size: 400, priority: LayoutPriority.High },
 			{ type: 'leaf', view: right, size: 200 },
 		],
 	});

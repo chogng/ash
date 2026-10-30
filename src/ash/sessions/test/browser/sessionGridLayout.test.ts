@@ -1,3 +1,5 @@
+import { LayoutPriority } from '../../../base/browser/ui/splitview/splitview.js';
+import { Orientation } from '../../../base/browser/ui/sash/sash.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -148,7 +150,7 @@ test('Sessions restores and immediately saves widths from both legacy layouts wi
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
 		const stored = JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!);
 		assert.deepEqual({ widths: [first.bounds!.width, second.bounds!.width], draft: input.value, focus: browser.window.document.activeElement?.tagName, stored: { version: stored.version, ids: storedIds(stored.layout), orientation: stored.layout.orientation, sizes: stored.layout.children.map((child: { size: number; }) => child.size) }, code: storage.get('sessions.gridState.code', StorageScope.WORKSPACE), chat: storage.get('sessions.gridState.chat', StorageScope.WORKSPACE) }, {
-			widths: [400, 800], draft: 'Unsent text', focus: 'BUTTON', stored: { version: 3, ids: ['first', 'second'], orientation: 'horizontal', sizes: [400, 800] }, code: undefined, chat: undefined,
+			widths: [400, 800], draft: 'Unsent text', focus: 'BUTTON', stored: { version: 3, ids: ['first', 'second'], orientation: Orientation.HORIZONTAL, sizes: [400, 800] }, code: undefined, chat: undefined,
 		});
 		layout.layout(150, 800);
 		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
@@ -184,13 +186,13 @@ test('Sessions ignores saved widths when every pane has been replaced before its
 });
 
 function savedNestedLayout(): object {
-	const leaf = (id: string, size: number) => ({ type: 'leaf', data: { groupId: id }, size, visible: true, priority: 'normal' });
+	const leaf = (id: string, size: number) => ({ type: 'leaf', data: { groupId: id }, size, visible: true, priority: LayoutPriority.Normal });
 	return {
 		version: 2,
 		groups: ['first', 'second', 'third'].map(id => ({ groupId: `saved-${id}`, id })),
 		layout: {
-			type: 'branch', orientation: 'horizontal', size: 1200, priority: 'normal',
-			children: [leaf('saved-first', 400), { type: 'branch', orientation: 'vertical', size: 800, priority: 'normal', children: [leaf('saved-second', 200), leaf('saved-third', 400)] }],
+			type: 'branch', orientation: Orientation.HORIZONTAL, size: 1200, priority: LayoutPriority.Normal,
+			children: [leaf('saved-first', 400), { type: 'branch', orientation: Orientation.VERTICAL, size: 800, priority: LayoutPriority.Normal, children: [leaf('saved-second', 200), leaf('saved-third', 400)] }],
 		},
 	};
 }
@@ -234,7 +236,7 @@ test('Sessions restores a nested split as providers arrive and retains the compl
 
 		const updated = JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!);
 		assert.deepEqual(storedIds(updated.layout), ['first', 'replacement', 'third']);
-		assert.equal(updated.layout.children[1].orientation, 'vertical');
+		assert.equal(updated.layout.children[1].orientation, Orientation.VERTICAL);
 	} finally {
 		getWindowById(1)?.disposables.dispose();
 		browser.window.close();
@@ -270,7 +272,7 @@ test('invalid stored geometry falls back to a usable conversation without mounti
 	console.warn = (...args) => { warnings.push(args); };
 	try {
 		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
-		storage.store('sessions.gridState', JSON.stringify({ version: 2, groups: [{ groupId: 'known', id: 'first' }], layout: { type: 'leaf', data: { groupId: 'unknown' }, size: 1000, visible: true, priority: 'normal' } }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		storage.store('sessions.gridState', JSON.stringify({ version: 2, groups: [{ groupId: 'known', id: 'first' }], layout: { type: 'leaf', data: { groupId: 'unknown' }, size: 1000, visible: true, priority: LayoutPriority.Normal } }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using services = createTestEditorServices(undefined, undefined, browser.window.document, storage);
 		const view = new TestView(browser.window.document);
 		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, view);

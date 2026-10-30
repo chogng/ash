@@ -15,9 +15,26 @@ import { IViewsService } from '../../../workbench/services/views/common/viewsSer
 /** Hosts independently selected Code tools and Design properties. */
 export class AuxiliaryBarPart extends PaneCompositePart {
 	private readonly fallbackTitle: HTMLElement;
+	private embedded = false;
 	override get minimumWidth(): number {
-		return 270;
+		return this.embedded ? 180 : 270;
 	}
+
+	/** Lends the explorer toolbar to its Files card; product pages restore the original title host. */
+	public setEmbedded(header: HTMLElement | undefined): void {
+		const embedded = header !== undefined;
+		if (this.embedded === embedded) { return; }
+		this.embedded = embedded;
+		this.titleDomNode.classList.toggle('ash-sessions-files-toolbar', embedded);
+		if (header) { header.append(this.titleDomNode); }
+		else { this.domNode.prepend(this.titleDomNode); }
+		this.notifyConstraintsChanged();
+	}
+
+	override get minimumHeight(): number {
+		return this.embedded ? 120 : super.minimumHeight;
+	}
+
 	override get maximumWidth(): number {
 		return Number.POSITIVE_INFINITY;
 	}

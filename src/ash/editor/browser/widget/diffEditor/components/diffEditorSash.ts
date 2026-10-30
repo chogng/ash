@@ -1,6 +1,6 @@
 import '../../../../../base/browser/ui/sash/sash.css';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { Sash, SashState } from '../../../../../base/browser/ui/sash/sash.js';
+import { Orientation, Sash, SashState } from '../../../../../base/browser/ui/sash/sash.js';
 import { localize } from '../../../../../nls.js';
 import { type DiffEditorOptions } from '../diffEditorOptions.js';
 
@@ -14,6 +14,8 @@ export class DiffEditorSash extends Disposable {
 	private width = 0;
 	private leadingWidth = 0;
 	private startLeft = 0;
+	private top = 0;
+	private height = 0;
 
 	constructor(
 		container: HTMLElement,
@@ -23,7 +25,11 @@ export class DiffEditorSash extends Disposable {
 		private readonly onDidResize: () => void,
 	) {
 		super();
-		this.sash = this._register(new Sash(container, 'vertical'));
+		this.sash = this._register(new Sash(container, {
+			getVerticalSashLeft: () => this.left,
+			getVerticalSashTop: () => this.top,
+			getVerticalSashHeight: () => this.height,
+		}, { orientation: Orientation.VERTICAL }));
 		this.element = this.sash.element;
 		this.element.classList.add('stanza-diff-sash');
 		this.element.setAttribute('aria-controls', `${originalId} ${modifiedId}`);
@@ -31,7 +37,7 @@ export class DiffEditorSash extends Disposable {
 		this._register(this.sash.onDidStart(() => { this.startLeft = this.left; }));
 		this._register(this.sash.onDidChange(event => {
 			if (this.width <= MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth) return;
-			const left = Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, this.startLeft + event.delta));
+			const left = Math.max(MINIMUM_EDITOR_WIDTH + this.leadingWidth, Math.min(this.width - MINIMUM_EDITOR_WIDTH, this.startLeft + (event.currentX - event.startX)));
 			this.ratio = left / this.width;
 			this.onDidResize();
 		}));
@@ -55,12 +61,12 @@ export class DiffEditorSash extends Disposable {
 	public layout(width: number, height: number, inlineView: boolean, top: number, leadingWidth = 0): number {
 		this.width = width;
 		this.leadingWidth = leadingWidth;
+		this.top = top;
+		this.height = height;
 		const left = this.left;
 		const visible = !inlineView && this.options.enableSplitViewResizing && width > MINIMUM_EDITOR_WIDTH * 2 + this.leadingWidth;
 		this.element.hidden = !visible;
-		this.element.style.left = `${left}px`;
-		this.element.style.top = `${top}px`;
-		this.element.style.height = `${height}px`;
+		this.sash.layout();
 		this.sash.state = !visible ? SashState.Disabled
 			: left <= MINIMUM_EDITOR_WIDTH + this.leadingWidth ? SashState.AtMinimum
 				: left >= width - MINIMUM_EDITOR_WIDTH ? SashState.AtMaximum : SashState.Enabled;

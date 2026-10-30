@@ -208,6 +208,7 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	} as unknown as IWorkbenchLayoutService);
 	using groups = services.createInstance(TerminalGroupService);
 	services.registerInstance(ITerminalGroupService, groups);
+	services.get(IStorageService).store('tabs-list-width-horizontal', 120, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using layout = services.createInstance(TerminalTabbedView, parent);
 	const tabs = layout.element.querySelector<HTMLElement>('.ash-terminal-tabs')!;
 	dom.window.document.body.append(layout.element);
@@ -236,17 +237,25 @@ test('Terminal instance list sash resizes the right column within its bounds', (
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 950, bubbles: true }));
 	assert.equal(panes[1]?.style.width, '46px');
 	assert.equal(tabs.classList.contains('ash-terminal-tabs-narrow'), true);
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 120, 'live presentation does not persist an unfinished drag');
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { clientX: 950, bubbles: true }));
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 46);
 
 	sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { button: 0, clientX: 954, bubbles: true }));
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 930, bubbles: true }));
 	assert.equal(panes[1]?.style.width, '80px');
 	assert.equal(tabs.classList.contains('ash-terminal-tabs-narrow'), false);
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 46);
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { clientX: 930, bubbles: true }));
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 80);
 
 	for (let index = 0; index < 50; index += 1) {
 		sash.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
 	}
+	assert.equal(panes[1]?.style.width, '500px');
+	layout.layout(200, 200);
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 500, 'a code-driven clamp retains the preferred width');
+	layout.layout(1_000, 200);
 	assert.equal(panes[1]?.style.width, '500px');
 
 	const third = createInstance('three');

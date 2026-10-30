@@ -1,8 +1,8 @@
+import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { EditorInputCapabilities, type IResourceEditorInput, type IEditorPane, type IEditorIdentifier } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
-import type { Direction as GridDirection } from '../../../../base/browser/ui/grid/grid.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { DisposableMap, Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -252,7 +252,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		const recentGroups = this.mainPart.editorsMru.map(editor => editor.groupId);
 		return recentGroups.map(id => this.mainPart.groups.find(group => group.id === id)).find(group => group && !group.isLocked)
 			?? this.mainPart.groups.find(group => !group.isLocked)
-			?? this.mainPart.addGroup(this.mainPart.activeGroup.id, 'right');
+			?? this.mainPart.addGroup(this.mainPart.activeGroup.id, Direction.Right);
 	}
 
 	private async prepareAuxiliaryClose(part: IEditorPart): Promise<boolean> {
@@ -286,7 +286,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return this._activePart.openEditor(input, options, target);
 	}
 
-	public addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView {
+	public addGroup(reference: EditorGroupId, direction: Direction): IEditorGroupView {
 		return this.parts.find(part => part.groups.some(group => group.id === reference))!.addGroup(reference, direction);
 	}
 	public removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean> {
@@ -378,10 +378,10 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	saveActiveEditor(): Promise<void> { return this._activePart.saveActiveEditor(); }
 	setContent(content: Element): Promise<void> { return this._activePart.setContent(content); }
-	splitActiveGroup(direction: GridDirection): Promise<void> { return this._activePart.splitActiveGroup(direction); }
+	splitActiveGroup(direction: Direction): Promise<void> { return this._activePart.splitActiveGroup(direction); }
 	splitActiveGroupHorizontal(): Promise<void> { return this._activePart.splitActiveGroupHorizontal(); }
 	splitActiveGroupVertical(): Promise<void> { return this._activePart.splitActiveGroupVertical(); }
-	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: GridDirection): Promise<void> {
+	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: Direction): Promise<void> {
 		const part = this.parts.find(candidate => candidate.groups.some(group => group.id === groupId));
 		if (!part) throw new RangeError(`Editor group is not open: ${groupId}`);
 		return part.splitEditors(groupId, inputs, direction);

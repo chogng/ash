@@ -1,5 +1,8 @@
+import { Orientation } from '../../base/browser/ui/sash/sash.js';
+import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 import {
 	CodeInformationView,
+	CodeFilesView,
 	readCodeCardLayout,
 	type ICodeCardLayout,
 	type CodeCardId,
@@ -10,11 +13,11 @@ import type { IPositionedRectangle } from '../../base/browser/geometry.js';
 import {
 	SerializableGrid,
 	Sizing,
-	type Direction,
+	Direction,
 	type SerializedGridDescriptor,
 } from '../../base/browser/ui/grid/grid.js';
 import { Emitter, Event } from '../../base/common/event.js';
-import { MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { combinedDisposable, MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import {
 	BrowserLayoutService,
 	getContainerDimension,
@@ -25,6 +28,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../platform/sto
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
 import type { Part } from '../../workbench/browser/part.js';
+import { AuxiliaryBarPart } from './parts/auxiliaryBarPart.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
@@ -262,7 +266,7 @@ function storedPanelPosition(value: string | undefined, fallback: Position): Pos
 	}
 }
 
-const SESSIONS_LAYOUT_PRIORITY = 'high' as const;
+const SESSIONS_LAYOUT_PRIORITY = LayoutPriority.High;
 
 function createSessionsWorkbenchGridDescriptor(
 	views: ReadonlyMap<SessionsPartId, WorkbenchPartView<SessionsPartId>>,
@@ -274,7 +278,7 @@ function createSessionsWorkbenchGridDescriptor(
 		partId: SessionsPartId,
 		size: number,
 		visible = true,
-		priority: 'normal' | 'high' = 'normal',
+		priority: LayoutPriority = LayoutPriority.Normal,
 	): SerializedGridDescriptor => ({ type: 'leaf', data: partId, size, visible, priority });
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bodyHeight = Math.max(0, dimension.height - titlebarHeight);
@@ -293,17 +297,17 @@ function createSessionsWorkbenchGridDescriptor(
 	const sessionsWidth = Math.max(0, contentWidth - sidePaneWidth);
 	const content: SerializedGridDescriptor = {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: horizontalPanel ? contentHeight : contentWidth,
 		priority: SESSIONS_LAYOUT_PRIORITY,
 		children: [
-			leaf('sessions', sessionsWidth, !editorPrimary, editorPrimary ? 'normal' : SESSIONS_LAYOUT_PRIORITY),
+			leaf('sessions', sessionsWidth, !editorPrimary, editorPrimary ? LayoutPriority.Normal : SESSIONS_LAYOUT_PRIORITY),
 			...(views.has('customview') ? [leaf('customview', sessionsWidth, false, SESSIONS_LAYOUT_PRIORITY)] : []),
 			leaf(
 				'editor',
 				editorPrimary ? sessionsWidth : state.editor.width,
 				state.editor.visible,
-				editorPrimary ? SESSIONS_LAYOUT_PRIORITY : 'normal',
+				editorPrimary ? SESSIONS_LAYOUT_PRIORITY : LayoutPriority.Normal,
 			),
 			...(!stackedTools ? [leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible)] : []),
 		],
@@ -314,9 +318,9 @@ function createSessionsWorkbenchGridDescriptor(
 	const tools: SerializedGridDescriptor = stackedTools
 		? {
 			type: 'branch',
-			orientation: 'vertical',
+			orientation: Orientation.VERTICAL,
 			size: toolsWidth,
-			priority: 'normal',
+			priority: LayoutPriority.Normal,
 			children: [
 				leaf('panel', state.panel.height, state.panel.visible),
 				leaf(
@@ -332,7 +336,7 @@ function createSessionsWorkbenchGridDescriptor(
 		? [
 			{
 				type: 'branch',
-				orientation: 'vertical',
+				orientation: Orientation.VERTICAL,
 				size: mainWidth,
 				priority: SESSIONS_LAYOUT_PRIORITY,
 				children: leadingPanel ? [panel, content] : [content, panel],
@@ -343,14 +347,14 @@ function createSessionsWorkbenchGridDescriptor(
 			: [...content.children, tools];
 	return {
 		type: 'branch',
-		orientation: 'vertical',
+		orientation: Orientation.VERTICAL,
 		size: dimension.height,
-		priority: 'normal',
+		priority: LayoutPriority.Normal,
 		children: [
 			leaf('titlebar', titlebarHeight),
 			{
 				type: 'branch',
-				orientation: 'horizontal',
+				orientation: Orientation.HORIZONTAL,
 				size: bodyHeight,
 				priority: SESSIONS_LAYOUT_PRIORITY,
 				children: [leaf('sidebar', state.sidebar.width, state.sidebar.visible), ...mainChildren],
@@ -444,13 +448,13 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 			? this.part.preferredWidth
 			: super.preferredWidth;
 	}
-	public get priority(): 'high' | 'normal' {
+	public get priority(): LayoutPriority {
 		return this.partId === 'customview' ||
 			(this.partId === 'sessions' && !this.isEditorPrimary()) ||
 			(this.partId === 'editor' && this.isEditorPrimary()) ||
 			(this.partId === 'panel' && this.isPanelMaximized())
-			? 'high'
-			: 'normal';
+			? LayoutPriority.High
+			: LayoutPriority.Normal;
 	}
 
 	public override layout(bounds: IPositionedRectangle): void {
@@ -466,13 +470,14 @@ export class DesktopWorkbenchLayout
 	extends BrowserLayoutService
 	implements IAgentWorkbenchLayoutService, ICodeCardLayout {
 	private readonly views = new Map<SessionsPartId, SessionsWorkbenchPartView>();
-	private grid!: SerializableGrid<SessionsWorkbenchPartView | CodeInformationView>;
+	private grid!: SerializableGrid<SessionsWorkbenchPartView | CodeInformationView | CodeFilesView>;
 	private readonly gridHandle = this._register(
-		new MutableDisposable<SerializableGrid<SessionsWorkbenchPartView | CodeInformationView>>(),
+		new MutableDisposable<SerializableGrid<SessionsWorkbenchPartView | CodeInformationView | CodeFilesView>>(),
 	);
 	private readonly gridChangeHandle = this._register(new MutableDisposable<IDisposable>());
 	readonly codeCards: ICodeCardLayout = this;
 	readonly information: CodeInformationView;
+	readonly files: CodeFilesView;
 	private readonly cardsChanged = this._register(new Emitter<void>());
 	readonly onDidChangeCards = this.cardsChanged.event;
 	private informationElement: HTMLElement | undefined;
@@ -480,7 +485,10 @@ export class DesktopWorkbenchLayout
 	private codeDescriptor: SerializedGridDescriptor | undefined;
 	private transientDescriptor: SerializedGridDescriptor | undefined;
 	private readonly detachedCards = new Set<CodeCardId>();
-	expandedCard: CodeCardId | undefined;
+	get expandedCard(): CodeCardId | undefined {
+		if (!this.grid?.hasMaximizedView()) return undefined;
+		return (['terminal', 'files', 'info'] as const).find(id => this.grid.isViewMaximized(this.cardView(id)));
+	}
 	get active(): boolean {
 		return this.primaryPart === 'sessions' && !this.unavailableParts.has('panel') && !this.customViewVisible;
 	}
@@ -530,6 +538,7 @@ export class DesktopWorkbenchLayout
 	) {
 		super({ root: container, focus: options.focus });
 		this.information = new CodeInformationView(container.ownerDocument);
+		this.files = this._register(new CodeFilesView(container.ownerDocument, storageService, () => this.detachedCards.has('files')));
 		this.informationVisible = storageService.getBoolean('sessions.code.infoPinned', StorageScope.PROFILE, false);
 		this.initialDimension = resolveSessionsInitialDimension(container, options.initialDimension);
 		this.layoutStyle = options.layoutStyle ?? 'modern';
@@ -591,16 +600,21 @@ export class DesktopWorkbenchLayout
 					() => this.partUpdateDepth > 0,
 					this.compositionChanged.event,
 					() => this.panelMaximized,
-					() => (partId === 'panel' || partId === 'auxiliarybar' || partId === 'editor') && this.detachedCards.has(partId),
+					() => partId === 'panel' && this.detachedCards.has('terminal'),
 					requiredPart(parts, 'titlebar'),
 				),
 			);
 		}
 		this._register(requiredPart(parts, 'editor').onDidChangeConstraints(() => this.compositionChanged.fire()));
-		this.codeDescriptor = readCodeCardLayout(
-			this.storageService.get('sessions.code.cardLayout', StorageScope.PROFILE),
-			[...parts.keys(), 'info'],
-		);
+		const savedCards = this.storageService.get('sessions.code.cardLayout', StorageScope.PROFILE);
+		const cardIds = [...parts.keys()].filter(id => id !== 'editor' && id !== 'auxiliarybar');
+		const groupedCards = readCodeCardLayout(savedCards, [...cardIds, 'files', 'info']);
+		this.codeDescriptor = groupedCards ?? readCodeCardLayout(savedCards, [...parts.keys(), 'info']);
+		// Older profiles could show a document while Files was closed. The combined card must reveal that document.
+		if (!groupedCards && this.primaryPart === 'sessions' && this.desiredVisibility.editor) {
+			this.desiredVisibility.auxiliarybar = true;
+			this.detailsWidth = Math.max(this.detailsWidth, this.sidePaneWidth);
+		}
 		const state = this.stateModel.state;
 		this.projectFrameInsets(state.auxiliarybar.visible);
 		this.rebuildGrid(state, this.initialDimension);
@@ -664,12 +678,12 @@ export class DesktopWorkbenchLayout
 	}
 
 	isPanelMaximized(): boolean {
-		return (this.panelMaximized || this.expandedCard === 'panel') && this.isPartVisible('panel');
+		return (this.panelMaximized || this.expandedCard === 'terminal') && this.isPartVisible('panel');
 	}
 
 	toggleMaximizedPanel(): void {
 		if (this.active) {
-			this.expandCard('panel');
+			this.expandCard('terminal');
 			return;
 		}
 		if (this.customViewVisible || this.unavailableParts.has('panel')) return;
@@ -689,37 +703,40 @@ export class DesktopWorkbenchLayout
 		const restoreFocus = focused && this.mainContainer.contains(focused);
 		this.gridChangeHandle.clear();
 		this.gridHandle.clear();
+		const groupedFiles = this.primaryPart === 'sessions';
+		if (groupedFiles) {
+			this.files.mount(this.view('editor'), this.view('auxiliarybar'));
+		} else {
+			this.files.unmount();
+		}
+		const auxiliary = this.view('auxiliarybar').part;
+		if (auxiliary instanceof AuxiliaryBarPart) { auxiliary.setEmbedded(groupedFiles ? this.files.header : undefined); }
+		const source = descriptor ?? (groupedFiles ? this.codeDescriptor : undefined)
+			?? createSessionsWorkbenchGridDescriptor(this.views, dimension, state, this.primaryPart);
 		this.grid = SerializableGrid.deserialize(
 			this.domNode,
-			descriptor ??
-			(this.primaryPart === 'sessions' ? this.codeDescriptor : undefined) ??
-			createSessionsWorkbenchGridDescriptor(
-				this.views,
-				dimension,
-				state,
-				this.primaryPart,
-			),
-			{ fromJSON: data => (data === 'info' ? this.information : this.view(parseSessionsPartId(data))) },
+			groupedFiles ? groupFilesDescriptor(source) : source,
+			{ fromJSON: data => data === 'info' ? this.information : data === 'files' ? this.files : this.view(parseSessionsPartId(data)) },
 			{ edgeSnapping: true },
 		);
 		this.gridHandle.value = this.grid;
 		if (!descriptor && !(this.primaryPart === 'sessions' && this.codeDescriptor))
-			this.grid.addView(this.information, Sizing.Invisible(280), this.view('sessions'), 'right');
+			this.grid.addView(this.information, Sizing.Invisible(280), this.view('sessions'), Direction.Right);
 		this.grid.layout(dimension.width, dimension.height);
 		this.restorePartVisibility();
-		this.gridChangeHandle.value = this.grid.onDidChange(() => {
+		this.gridChangeHandle.value = combinedDisposable(this.grid.onDidChangeViewMaximized(() => this.cardsChanged.fire()), this.grid.onDidChange(() => {
 			if (this.partUpdateDepth === 0) {
 				// Sash snapping changes Grid visibility directly; retain it across page changes and reloads.
 				if (!this.unavailableParts.has('sidebar'))
-					this.desiredVisibility.sidebar = this.grid.isViewVisible(this.view('sidebar'));
-				if (this.grid.isViewVisible(this.view('auxiliarybar')))
-					this.detailsWidth = this.grid.getViewSize(this.view('auxiliarybar')).width;
+					this.desiredVisibility.sidebar = this.isViewVisible(this.view('sidebar'));
+				if (!this.grid.hasMaximizedView() && this.isViewVisible(this.view('auxiliarybar')))
+					this.detailsWidth = this.getViewSize(this.view('auxiliarybar')).width;
 				if (
 					this.primaryPart === 'editor' &&
-					this.grid.isViewVisible(this.view('sessions')) &&
-					this.grid.isViewVisible(this.view('editor'))
+					this.isViewVisible(this.view('sessions')) &&
+					this.isViewVisible(this.view('editor'))
 				)
-					this.conversationWidth = this.grid.getViewSize(this.view('sessions')).width;
+					this.conversationWidth = this.getViewSize(this.view('sessions')).width;
 				this.capturePanelSize();
 				this.rememberDetachedArrangement();
 				this.projectFrameInsets();
@@ -727,7 +744,7 @@ export class DesktopWorkbenchLayout
 				this.publishPartVisibility();
 				this.saveState();
 			}
-		});
+		}));
 		if (restoreFocus && focused.isConnected) focused.focus({ preventScroll: true });
 	}
 
@@ -735,17 +752,17 @@ export class DesktopWorkbenchLayout
 		this.partUpdateDepth++;
 		try {
 			for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) {
-				this.grid.setViewVisible(this.view(id), this.desiredVisibility[id] && !this.unavailableParts.has(id));
+				this.setViewVisible(this.view(id), this.desiredVisibility[id] && !this.unavailableParts.has(id));
 			}
 			this.applyCardVisibility();
 			if (this.customViewVisible) this.applyCustomViewVisibility();
 			else if (this.panelMaximized) {
 				for (const id of ['sessions', 'editor', 'auxiliarybar'] as const)
-					this.grid.setViewVisible(this.view(id), false);
+					this.setViewVisible(this.view(id), false);
 			}
-			const size = this.grid.getViewSize(this.view('panel'));
+			const size = this.getViewSize(this.view('panel'));
 			if (!this.active && !this.panelMaximized && this.isPartVisible('panel'))
-				this.grid.resizeView(
+				this.resizeView(
 					this.view('panel'),
 					isHorizontal(this.panelPosition)
 						? new Dimension(size.width, this.panelHeight)
@@ -763,17 +780,18 @@ export class DesktopWorkbenchLayout
 
 	private capturePanelSize(): void {
 		if (
-			!this.grid.isViewVisible(this.view('panel')) ||
+			!this.isViewVisible(this.view('panel')) ||
 			this.panelMaximized ||
 			this.customViewVisible ||
+			this.grid.hasMaximizedView() ||
 			this.transientDescriptor
 		)
 			return;
-		const size = this.grid.getViewSize(this.view('panel'));
+		const size = this.getViewSize(this.view('panel'));
 		if (isHorizontal(this.panelPosition)) this.panelHeight = size.height;
 		else {
 			this.panelWidth = size.width;
-			if (this.stackedTools && this.grid.isViewVisible(this.view('auxiliarybar'))) this.panelHeight = size.height;
+			if (this.stackedTools && this.isViewVisible(this.view('auxiliarybar'))) this.panelHeight = size.height;
 		}
 	}
 
@@ -800,7 +818,7 @@ export class DesktopWorkbenchLayout
 		if (this.customViewVisible) this.applyCustomViewVisibility();
 		else if (this.panelMaximized) {
 			for (const id of ['sessions', 'editor', 'auxiliarybar'] as const)
-				this.grid.setViewVisible(this.view(id), false);
+				this.setViewVisible(this.view(id), false);
 		}
 		this.projectFrameInsets();
 		this.grid.layout(dimension.width, dimension.height);
@@ -808,17 +826,18 @@ export class DesktopWorkbenchLayout
 		if (this.partUpdateDepth > 0) return;
 		if (
 			this.primaryPart === 'sessions' &&
+			!this.grid.hasMaximizedView() &&
 			this.desiredVisibility.editor &&
-			this.grid.isViewVisible(this.view('editor'))
+			this.isViewVisible(this.view('editor'))
 		) {
-			this.sidePaneWidth = this.grid.getViewSize(this.view('editor')).width;
+			this.sidePaneWidth = this.getViewSize(this.view('editor')).width;
 		}
 		if (
 			this.primaryPart === 'editor' &&
-			this.grid.isViewVisible(this.view('sessions')) &&
-			this.grid.isViewVisible(this.view('editor'))
+			this.isViewVisible(this.view('sessions')) &&
+			this.isViewVisible(this.view('editor'))
 		) {
-			this.conversationWidth = this.grid.getViewSize(this.view('sessions')).width;
+			this.conversationWidth = this.getViewSize(this.view('sessions')).width;
 		}
 		this.publishPartVisibility();
 		this.cardsChanged.fire();
@@ -832,6 +851,7 @@ export class DesktopWorkbenchLayout
 	/** Editor and panel changes share one geometry commit when several Parts change together. */
 	public updateParts(update: () => void): void {
 		const sidebarSize = this.getPartSize('sidebar');
+		const wasMaximized = this.grid.hasMaximizedView();
 		this.partUpdateDepth++;
 		try {
 			update();
@@ -839,25 +859,25 @@ export class DesktopWorkbenchLayout
 			try {
 				if (this.partUpdateDepth === 1) {
 					this.projectFrameInsets();
-					if (!this.transientDescriptor && this.grid.isViewVisible(this.view('auxiliarybar')))
-						this.grid.resizeView(
+					if (!wasMaximized && !this.transientDescriptor && !this.grid.hasMaximizedView() && this.isViewVisible(this.view('auxiliarybar')))
+						this.resizeView(
 							this.view('auxiliarybar'),
-							new Dimension(this.detailsWidth, this.grid.getViewSize(this.view('auxiliarybar')).height),
+							new Dimension(this.detailsWidth, this.getViewSize(this.view('auxiliarybar')).height),
 						);
 					// Restore the supporting width after all centers are visible; an isolated visible leaf must fill its branch.
 					if (
 						this.primaryPart === 'editor' &&
-						this.grid.isViewVisible(this.view('sessions')) &&
-						this.grid.isViewVisible(this.view('editor'))
+						this.isViewVisible(this.view('sessions')) &&
+						this.isViewVisible(this.view('editor'))
 					) {
-						this.grid.resizeView(
+						this.resizeView(
 							this.view('sessions'),
-							new Dimension(this.conversationWidth, this.grid.getViewSize(this.view('sessions')).height),
+							new Dimension(this.conversationWidth, this.getViewSize(this.view('sessions')).height),
 						);
 					}
 					// Replacing the only center temporarily lets navigation absorb its space.
 					// Keep the user's width, including its hidden cache, until the composition is complete.
-					this.grid.resizeView(this.view('sidebar'), sidebarSize);
+					if (!wasMaximized && !this.grid.hasMaximizedView()) this.resizeView(this.view('sidebar'), sidebarSize);
 				}
 			} finally {
 				this.partUpdateDepth--;
@@ -878,18 +898,18 @@ export class DesktopWorkbenchLayout
 		this.projectFrameInsets(state.auxiliarybar.visible);
 		this.compositionChanged.fire();
 		this.rebuildGrid(state, dimension);
-		if (partId === 'sessions' && this.grid.isViewVisible(this.view('auxiliarybar')))
-			this.grid.resizeView(
+		if (partId === 'sessions' && this.isViewVisible(this.view('auxiliarybar')))
+			this.resizeView(
 				this.view('auxiliarybar'),
-				new Dimension(this.detailsWidth, this.grid.getViewSize(this.view('auxiliarybar')).height),
+				new Dimension(this.detailsWidth, this.getViewSize(this.view('auxiliarybar')).height),
 			);
 		this.layout(dimension);
 	}
 
 	isPartVisible(partId: SessionsPartId): boolean {
 		return (
-			((partId === 'panel' || partId === 'auxiliarybar' || partId === 'editor') && this.detachedCards.has(partId)) ||
-			this.grid.isViewVisible(this.view(partId))
+			(partId === 'panel' && this.detachedCards.has('terminal')) || (partId === 'auxiliarybar' && this.detachedCards.has('files')) ||
+			this.isViewVisible(this.view(partId))
 		);
 	}
 	isPartAvailable(partId: SessionsPartId): boolean {
@@ -902,7 +922,7 @@ export class DesktopWorkbenchLayout
 		this.updatePartVisibility(partId, false);
 	}
 	getPartSize(partId: SessionsPartId): Dimension {
-		const size = this.grid.getViewSize(this.view(partId));
+		const size = this.getViewSize(this.view(partId));
 		// A hidden column has no current width; its leaves still own their restore geometry.
 		const width = !this.isPartVisible(partId)
 			? partId === 'auxiliarybar'
@@ -923,12 +943,16 @@ export class DesktopWorkbenchLayout
 			this.detailsWidth = dimension.width;
 		}
 		if (this.primaryPart === 'sessions' && partId === 'editor') this.sidePaneWidth = dimension.width;
-		this.grid.resizeView(this.view(partId), dimension);
+		this.resizeView(this.view(partId), dimension);
+		if (this.primaryPart === 'sessions' && partId === 'editor') {
+			this.files.rememberTreeWidth();
+		}
 		this.layout(new Dimension(this.grid.width, this.grid.height));
 	}
 
 	private updatePartVisibility(partId: SessionsPartId, visible: boolean): void {
-		if (this.expandedCard && (visible ? this.expandedCard !== partId : this.expandedCard === partId))
+		const card = partId === 'panel' ? 'terminal' : partId === 'auxiliarybar' || partId === 'editor' ? 'files' : undefined;
+		if (this.expandedCard && (visible ? this.expandedCard !== card : this.expandedCard === card))
 			this.expandCard(this.expandedCard);
 		if (partId === 'customview') {
 			this.setCustomViewVisible(visible);
@@ -937,15 +961,22 @@ export class DesktopWorkbenchLayout
 		if (partId === 'titlebar' || partId === 'sessions')
 			throw new Error('Required Sessions Part cannot be hidden: ' + partId);
 		this.updateParts(() => {
+			if (partId === 'editor' && visible && !this.desiredVisibility.editor && this.files.grid) {
+				this.detailsWidth = Math.max(this.detailsWidth, Math.min(800, this.mainContainerDimension.width * 0.6));
+			}
 			this.desiredVisibility[partId] = visible;
+			if (partId === 'editor' && visible && this.files.grid) {
+				this.desiredVisibility.auxiliarybar = true;
+				this.setViewVisible(this.view('auxiliarybar'), !this.unavailableParts.has('auxiliarybar'));
+			}
 			if (partId === 'panel' && !visible && this.panelMaximized) {
 				this.panelMaximized = false;
 				this.restorePartVisibility();
 			}
-			this.grid.setViewVisible(this.view(partId), visible && !this.unavailableParts.has(partId));
+			this.setViewVisible(this.view(partId), visible && !this.unavailableParts.has(partId));
 			if (visible && partId === 'panel' && !this.panelMaximized && !this.active) {
-				const size = this.grid.getViewSize(this.view('panel'));
-				this.grid.resizeView(
+				const size = this.getViewSize(this.view('panel'));
+				this.resizeView(
 					this.view('panel'),
 					new Dimension(
 						isHorizontal(this.panelPosition) ? size.width : this.panelWidth,
@@ -955,7 +986,7 @@ export class DesktopWorkbenchLayout
 					),
 				);
 				if (this.stackedTools && this.isPartVisible('auxiliarybar'))
-					this.detailsWidth = this.grid.getViewSize(this.view('panel')).width;
+					this.detailsWidth = this.getViewSize(this.view('panel')).width;
 			}
 		});
 	}
@@ -969,12 +1000,12 @@ export class DesktopWorkbenchLayout
 		this.updateParts(() => {
 			if (available) this.unavailableParts.delete(partId);
 			else this.unavailableParts.add(partId);
-			this.grid.setViewVisible(this.view(partId), available && this.desiredVisibility[partId]);
+			this.setViewVisible(this.view(partId), available && this.desiredVisibility[partId]);
 			if (partId === 'panel') {
 				if (!available) this.panelMaximized = false;
 				this.restorePartVisibility();
 				if (!this.active && available && this.stackedTools && this.isPartVisible('panel'))
-					this.detailsWidth = this.grid.getViewSize(this.view('panel')).width;
+					this.detailsWidth = this.getViewSize(this.view('panel')).width;
 			}
 		});
 	}
@@ -988,9 +1019,9 @@ export class DesktopWorkbenchLayout
 			this.customViewVisible = visible;
 			if (visible) this.applyCustomViewVisibility();
 			else {
-				this.grid.setViewVisible(this.view('customview'), false);
+				this.setViewVisible(this.view('customview'), false);
 				for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) {
-					this.grid.setViewVisible(
+					this.setViewVisible(
 						this.view(id),
 						this.desiredVisibility[id] && !this.unavailableParts.has(id),
 					);
@@ -999,9 +1030,9 @@ export class DesktopWorkbenchLayout
 		});
 	}
 	private applyCustomViewVisibility(): void {
-		this.grid.setViewVisible(this.view('customview'), true);
+		this.setViewVisible(this.view('customview'), true);
 		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) {
-			this.grid.setViewVisible(
+			this.setViewVisible(
 				this.view(id),
 				id === 'sidebar' && this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar'),
 			);
@@ -1009,7 +1040,7 @@ export class DesktopWorkbenchLayout
 	}
 
 	private saveState(): void {
-		if (this.grid && this.active && !this.transientDescriptor) this.codeDescriptor = this.grid.serialize();
+		if (this.grid && this.active && !this.transientDescriptor && !this.grid.hasMaximizedView()) this.codeDescriptor = this.grid.serialize();
 		if (this.codeDescriptor)
 			this.storageService.store(
 				'sessions.code.cardLayout',
@@ -1072,7 +1103,12 @@ export class DesktopWorkbenchLayout
 			left: !sessionsVisible ? contentLeft : 0,
 		});
 		for (const partId of ['panel', 'auxiliarybar', 'editor'] as const) {
-			this.view(partId).part.domNode.classList.toggle('ash-sessions-tool-card', toolCards);
+			const nested = !!this.files.grid && partId !== 'panel';
+			this.view(partId).part.domNode.classList.toggle('ash-sessions-tool-card', toolCards && !nested);
+			if (nested) {
+				this.view(partId).setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+				continue;
+			}
 			if (toolCards) {
 				// Keep the sash in the space between cards; Grid still owns their real content bounds.
 				const gap = AGENTS_FLOATING_PANEL_GAP;
@@ -1128,8 +1164,8 @@ export class DesktopWorkbenchLayout
 	}
 
 	private updateTitlebarSurface(): void {
-		const width = this.grid.isViewVisible(this.view('sidebar'))
-			? this.grid.getViewSize(this.view('sidebar')).width
+		const width = this.isViewVisible(this.view('sidebar'))
+			? this.getViewSize(this.view('sidebar')).width
 			: 0;
 		this.view('titlebar').part.domNode.style.setProperty('--ash-sessions-titlebar-sidebar-width', `${width}px`);
 	}
@@ -1146,12 +1182,13 @@ export class DesktopWorkbenchLayout
 	isCardVisible(id: CodeCardId): boolean {
 		return (
 			this.active &&
-			(id === 'info' ? !!this.informationElement && this.informationVisible : this.desiredVisibility[id])
+			(id === 'info' ? !!this.informationElement && this.informationVisible : this.desiredVisibility[id === 'files' ? 'auxiliarybar' : 'panel'])
 		);
 	}
 
 	setInformation(element: HTMLElement | undefined): void {
 		if (this.informationElement === element) return;
+		if (!element && this.expandedCard === 'info') this.expandCard('info');
 		this.informationElement = element;
 		this.information.body.replaceChildren(...(element ? [element] : []));
 		if (this.grid) this.updateParts(() => this.applyCardVisibility());
@@ -1174,42 +1211,35 @@ export class DesktopWorkbenchLayout
 		if (this.expandedCard === id) this.expandCard(id);
 		if (id === 'info') {
 			if (this.informationVisible) this.toggleInformation();
-		} else this.hidePart(id);
+		} else this.hidePart(id === 'files' ? 'auxiliarybar' : 'panel');
 		this.mainContainer
 			.querySelector<HTMLElement>(
 				'[data-action-id="' +
-				(id === 'editor'
-					? 'workbench.agentSessions.action.viewChanges'
-					: id === 'info'
-						? 'ash.sessions.toggleInfo'
-						: id === 'panel'
-							? 'ash.sessions.togglePanel'
-							: 'ash.sessions.toggleFiles') +
+				(id === 'info' ? 'ash.sessions.toggleInfo' : id === 'terminal' ? 'ash.sessions.togglePanel' : 'ash.sessions.toggleFiles') +
 				'"] button',
 			)
 			?.focus();
 	}
 
-	private cardView(id: CodeCardTarget): SessionsWorkbenchPartView | CodeInformationView {
-		return id === 'info' ? this.information : this.view(id);
+	private cardView(id: CodeCardTarget): SessionsWorkbenchPartView | CodeInformationView | CodeFilesView {
+		return id === 'info' ? this.information : id === 'files' ? this.files : this.view(id === 'terminal' ? 'panel' : 'sessions');
 	}
 
 	private applyCardVisibility(): void {
-		if (!this.grid) return;
-		this.grid.setViewVisible(
+		if (!this.grid || this.grid.hasMaximizedView()) return;
+		this.setViewVisible(
 			this.information,
 			this.active &&
 			!!this.informationElement &&
 			this.informationVisible &&
-			!this.detachedCards.has('info') &&
-			(!this.expandedCard || this.expandedCard === 'info'),
+			!this.detachedCards.has('info'),
 		);
 		for (const id of ['panel', 'auxiliarybar', 'sessions', 'editor'] as const) {
-			if (
-				((id === 'panel' || id === 'auxiliarybar' || id === 'editor') && this.detachedCards.has(id)) ||
-				(this.active && this.expandedCard && this.expandedCard !== id)
-			)
-				this.grid.setViewVisible(this.view(id), false);
+			const card = id === 'panel' ? 'terminal' : id === 'auxiliarybar' || id === 'editor' ? 'files' : undefined;
+			if (card && this.detachedCards.has(card)) {
+				// Files is one outer leaf. Its embedded editor keeps its visibility while the card is covered.
+				if (id !== 'editor' || !this.files.grid) { this.setViewVisible(this.view(id), false); }
+			}
 		}
 	}
 
@@ -1217,17 +1247,17 @@ export class DesktopWorkbenchLayout
 		if (!this.active || this.detachedCards.has(id)) return;
 		if (this.expandedCard) this.expandCard(this.expandedCard);
 		const view = this.cardView(id),
-			size = this.grid.getViewSize(view);
+			size = this.getViewSize(view);
 		this.updateParts(() => {
-			this.grid.resizeView(
+			this.resizeView(
 				view,
 				new Dimension(
 					Math.max(view.minimumWidth, size.width + widthDelta),
 					Math.max(view.minimumHeight, size.height + heightDelta),
 				),
 			);
-			if (this.grid.isViewVisible(this.view('auxiliarybar')))
-				this.detailsWidth = this.grid.getViewSize(this.view('auxiliarybar')).width;
+			if (this.isViewVisible(this.view('auxiliarybar')))
+				this.detailsWidth = this.getViewSize(this.view('auxiliarybar')).width;
 			this.rememberDetachedArrangement();
 		});
 	}
@@ -1237,27 +1267,29 @@ export class DesktopWorkbenchLayout
 		if (this.expandedCard) this.expandCard(this.expandedCard);
 		this.updateParts(() => {
 			this.grid.moveView(this.cardView(id), Sizing.Split, this.cardView(target), direction);
-			if (this.grid.isViewVisible(this.view('auxiliarybar')))
-				this.detailsWidth = this.grid.getViewSize(this.view('auxiliarybar')).width;
+			if (this.isViewVisible(this.view('auxiliarybar')))
+				this.detailsWidth = this.getViewSize(this.view('auxiliarybar')).width;
 			this.rememberDetachedArrangement();
 		});
 	}
 
 	expandCard(id: CodeCardId): void {
 		if (!this.active || this.detachedCards.has(id)) return;
-		if (id !== 'info' && !this.desiredVisibility[id]) this.showPart(id);
+		if (id !== 'info' && !this.isCardVisible(id)) this.showPart(id === 'files' ? 'auxiliarybar' : 'panel');
 		this.updateParts(() => {
-			this.transientDescriptor ??= this.grid.serialize();
-			this.expandedCard = this.expandedCard === id ? undefined : id;
-			this.restoreCardGeometry();
+			if (this.grid.isViewMaximized(this.cardView(id))) this.grid.exitMaximizedView();
+			else {
+				if (!this.grid.hasMaximizedView() && !this.transientDescriptor) this.codeDescriptor = this.grid.serialize();
+				this.grid.maximizeView(this.cardView(id), [this.view('titlebar'), this.view('sidebar')]);
+			}
 		});
 	}
 
 	detachCard(id: CodeCardId, detached: boolean): void {
 		if (detached === this.detachedCards.has(id)) return;
 		this.updateParts(() => {
+			this.grid.exitMaximizedView();
 			this.transientDescriptor ??= this.grid.serialize();
-			if (this.expandedCard === id) this.expandedCard = undefined;
 			if (detached) this.detachedCards.add(id);
 			else this.detachedCards.delete(id);
 			this.restoreCardGeometry();
@@ -1270,9 +1302,8 @@ export class DesktopWorkbenchLayout
 		if (!this.active || this.expandedCard || this.detachedCards.size === 0) return;
 		const normal = (node: SerializedGridDescriptor): SerializedGridDescriptor => {
 			if (node.type === 'branch') return { ...node, children: node.children.map(normal) };
-			return typeof node.data === 'string' && this.detachedCards.has(node.data as CodeCardId)
-				? { ...node, visible: this.isCardVisible(node.data as CodeCardId) }
-				: node;
+			const card = node.data === 'panel' ? 'terminal' : node.data === 'files' ? 'files' : node.data === 'info' ? 'info' : undefined;
+			return card && this.detachedCards.has(card) ? { ...node, visible: this.isCardVisible(card) } : node;
 		};
 		this.codeDescriptor = this.transientDescriptor = normal(this.grid.serialize());
 	}
@@ -1285,7 +1316,33 @@ export class DesktopWorkbenchLayout
 				new Dimension(this.grid.width, this.grid.height),
 				this.primaryPart === 'sessions' ? base : undefined,
 			);
-		if (!this.expandedCard && this.detachedCards.size === 0) this.transientDescriptor = undefined;
+		if (this.detachedCards.size === 0) this.transientDescriptor = undefined;
+	}
+
+	private isViewVisible(view: SessionsWorkbenchPartView | CodeInformationView | CodeFilesView): boolean {
+		if (this.files.grid && view === this.view('editor')) {
+			return (this.detachedCards.has('files') || this.grid.isViewVisible(this.files)) && this.files.grid.isViewVisible(view);
+		}
+		return this.grid.isViewVisible(this.files.grid && view === this.view('auxiliarybar') ? this.files : view);
+	}
+
+	private setViewVisible(view: SessionsWorkbenchPartView | CodeInformationView | CodeFilesView, visible: boolean): void {
+		if (this.files.grid && view === this.view('editor')) {
+			this.files.grid.setViewVisible(view, visible);
+			view.setVisible(visible && this.isPartVisible('auxiliarybar'));
+		} else {
+			this.grid.setViewVisible(this.files.grid && view === this.view('auxiliarybar') ? this.files : view, visible);
+		}
+	}
+
+	private getViewSize(view: SessionsWorkbenchPartView | CodeInformationView | CodeFilesView): IDimension {
+		if (this.files.grid && view === this.view('editor')) { return this.files.grid.getViewSize(view); }
+		return this.grid.getViewSize(this.files.grid && view === this.view('auxiliarybar') ? this.files : view);
+	}
+
+	private resizeView(view: SessionsWorkbenchPartView | CodeInformationView | CodeFilesView, dimension: IDimension): void {
+		if (this.files.grid && view === this.view('editor')) { this.files.grid.resizeView(view, dimension); }
+		else { this.grid.resizeView(this.files.grid && view === this.view('auxiliarybar') ? this.files : view, dimension); }
 	}
 
 	private view(partId: SessionsPartId): SessionsWorkbenchPartView {
@@ -1304,4 +1361,17 @@ function requiredPart(parts: ReadonlyMap<SessionsPartId, Part>, partId: Sessions
 	const part = parts.get(partId);
 	if (!part) throw new Error(`Sessions Part is not registered: ${partId}`);
 	return part;
+}
+
+/** Files changes presentation topology only; its child Parts keep their existing services and inputs. */
+function groupFilesDescriptor(descriptor: SerializedGridDescriptor): SerializedGridDescriptor {
+	const visit = (node: SerializedGridDescriptor): SerializedGridDescriptor | undefined => {
+		if (node.type === 'leaf') {
+			if (node.data === 'editor') { return undefined; }
+			return node.data === 'auxiliarybar' ? { ...node, data: 'files' } : node;
+		}
+		const children = node.children.map(visit).filter((child): child is SerializedGridDescriptor => child !== undefined);
+		return children.length ? { ...node, children } : undefined;
+	};
+	return visit(descriptor)!;
 }

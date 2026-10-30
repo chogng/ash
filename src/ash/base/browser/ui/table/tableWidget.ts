@@ -6,7 +6,7 @@ import { Emitter } from '../../../common/event.js';
 import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { ListView } from '../list/listView.js';
 import type { ListScrolling } from '../list/list.js';
-import { SplitView } from '../splitview/splitview.js';
+import { Orientation, SplitView } from '../splitview/splitview.js';
 import { TableError, type ITableColumn, type ITableEvent, type ITableRenderer, type ITableVirtualDelegate } from './table.js';
 
 export interface ITableOptions<TRow> {
@@ -70,7 +70,7 @@ export class Table<TRow> extends Disposable {
 		headerContainer.setAttribute('aria-rowindex', '1');
 		headerContainer.style.height = `${virtualDelegate.headerRowHeight}px`;
 		this.domNode.append(headerContainer);
-		this.header = this._register(new SplitView(headerContainer, 'horizontal'));
+		this.header = this._register(new SplitView(headerContainer, { proportionalLayout: false, orientation: Orientation.HORIZONTAL }));
 		for (const [index, column] of columns.entries()) {
 			const label = h(document, 'div');
 			label.className = 'ash-table-column-header';

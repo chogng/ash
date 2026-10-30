@@ -1,3 +1,4 @@
+import { Orientation } from '../../../../../../base/browser/ui/sash/sash.js';
 import type { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
 import type { IExtensionHostApi } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
 import type { ExtensionDescriptor, IExtensionApi } from '../../../../../../platform/extensions/common/extensionApi.js';
@@ -1067,6 +1068,36 @@ test('external attachment URI drop opens its source range without treating the s
 	} finally {
 		dom.window.close();
 	}
+});
+
+test('dropping a tab above its group preserves the zero-valued Up direction and creates a vertical split', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.upwardDrop', '.ts', () => new TestEditorPane('test.upwardDrop')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		editor.layout({ width: 800, height: 600 });
+		const source = editor.activeGroup;
+		const first = input('/project/above.ts'), second = input('/project/below.ts');
+		await source.openEditor(first);
+		await source.openEditor(second);
+		source.domNode.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 800, 600);
+		const tab = source.domNode.querySelector('.ash-tab')!;
+		tab.dispatchEvent(new dom.window.MouseEvent('dragstart', { bubbles: true }));
+		source.domNode.dispatchEvent(new dom.window.MouseEvent('dragover', { bubbles: true, cancelable: true, clientX: 400, clientY: 5 }));
+		assert.equal(source.domNode.dataset.editorDropDirection, 'up');
+		source.domNode.dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, cancelable: true }));
+		await nextTask();
+		assert.equal(editor.groups.length, 2);
+		assert.deepEqual(editor.activeGroup.inputs, [first]);
+		assert.deepEqual(source.inputs, [second]);
+		const layout = editor.saveWorkingSet('upward-drop').layout;
+		const split = layout?.type === 'branch' && layout.children.length === 1 ? layout.children[0] : layout;
+		assert.equal(split?.type, 'branch');
+		assert.equal(split?.type === 'branch' && split.orientation, Orientation.VERTICAL);
+		assert.equal(split?.type === 'branch' && split.children[0]?.type === 'leaf' && split.children[0].data.groupId, editor.activeGroup.id);
+		assert.equal(source.domNode.dataset.editorDropDirection, undefined);
+	} finally { dom.window.close(); }
 });
 
 for (const move of ['drop', 'moveEditorTo', 'openEditor'] as const) {
@@ -2960,7 +2991,7 @@ for (const closeEmptyGroups of [true, false]) {
 			if (closeEmptyGroups) {
 				const layout = editor.saveWorkingSet('normalized').layout!;
 				assert.equal(layout.type, 'branch');
-				assert.equal(layout.type === 'branch' && layout.orientation, 'vertical');
+				assert.equal(layout.type === 'branch' && layout.orientation, Orientation.VERTICAL);
 			}
 			await storage.flush(WillSaveStateReason.SHUTDOWN);
 			await parts.restoreSavedState(true);
@@ -3817,13 +3848,13 @@ test('EditorPart restores nested horizontal and vertical Grid layouts', async ()
 	const saved = editor.saveWorkingSet('nested-grid');
 
 	assert.equal(saved.layout?.type, 'branch');
-	assert.equal(saved.layout?.orientation, 'horizontal');
+	assert.equal(saved.layout?.orientation, Orientation.HORIZONTAL);
 	assert.equal(saved.layout?.type === 'branch' && saved.layout.children[1]?.type, 'branch');
 	const rightBranch =
 		saved.layout?.type === 'branch' && saved.layout.children[1]?.type === 'branch'
 			? saved.layout.children[1]
 			: undefined;
-	assert.equal(rightBranch?.orientation, 'vertical');
+	assert.equal(rightBranch?.orientation, Orientation.VERTICAL);
 	const groupIds = saved.groups.map(group => group.id);
 
 	await editor.applyWorkingSet('empty', { preserveFocus: true });
@@ -3835,17 +3866,19 @@ test('EditorPart restores nested horizontal and vertical Grid layouts', async ()
 	assert.equal(editor.domNode.querySelectorAll('.ash-split-view-separator-border').length, 2);
 	const restored = editor.saveWorkingSet('nested-grid-restored');
 	assert.equal(restored.layout?.type, 'branch');
-	assert.equal(restored.layout?.orientation, 'horizontal');
+	assert.equal(restored.layout?.orientation, Orientation.HORIZONTAL);
 	assert.equal(
 		restored.layout?.type === 'branch' &&
 		restored.layout.children[1]?.type === 'branch' &&
 		restored.layout.children[1].orientation,
-		'vertical',
+		Orientation.VERTICAL,
 	);
 
 	const legacy = JSON.parse(
 		JSON.stringify(saved, (key, value) =>
-			(key === 'id' || key === 'groupId') && typeof value === 'number' ? `legacy-${value}` : value,
+			(key === 'id' || key === 'groupId') && typeof value === 'number' ? `legacy-${value}`
+				: key === 'orientation' ? value === Orientation.VERTICAL ? 'vertical' : 'horizontal'
+					: key === 'priority' ? ['normal', 'low', 'high'][value] : value,
 		),
 	) as typeof saved;
 	await editor.applyWorkingSet(legacy, { preserveFocus: true });

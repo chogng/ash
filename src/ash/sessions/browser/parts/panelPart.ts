@@ -1,3 +1,5 @@
+import type { ICodeCardPresentation } from '../codeCardLayout.js';
+import { localize } from '../../../nls.js';
 import { IActivityService } from '../../../workbench/services/activity/common/activity.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
@@ -11,6 +13,7 @@ import { IInstantiationService } from '../../../platform/instantiation/common/in
 
 /** Retains Code's tool views without creating terminal processes when the panel is hidden. */
 export class PanelPart extends WorkbenchPanelPart {
+	public readonly card: ICodeCardPresentation;
 	constructor(
 		container: HTMLElement,
 		@IViewDescriptorService descriptors: IViewDescriptorService,
@@ -24,5 +27,11 @@ export class PanelPart extends WorkbenchPanelPart {
 		@IThemeService themeService: IThemeService,
 	) {
 		super(container, descriptors, contextKeys, storage, localization, menus, contextMenus, instantiationService, themeService, activityService);
+		this.card = {
+			title: localize('sessions.cards.terminal', 'Terminal'),
+			domNode: this.domNode,
+			header: this.titleDomNode,
+			layout: dimension => this.layout(dimension),
+		};
 	}
 }

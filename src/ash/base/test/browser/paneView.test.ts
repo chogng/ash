@@ -20,6 +20,31 @@ for (const [name, value] of Object.entries({
 
 const { Pane, PaneView } = await import('../../browser/ui/splitview/paneview.js');
 
+test('PaneView forwards indexed user resizing separately from code resizing and expansion', () => {
+	const document = browserEnvironment.window.document;
+	using view = new PaneView(document.body);
+	using first = new Pane(document.body, { id: 'event-first', title: 'First' });
+	using second = new Pane(document.body, { id: 'event-second', title: 'Second' });
+	view.addPane(first, 200);
+	view.addPane(second, 300);
+	view.layout(500, 300);
+	const completed: number[] = [];
+	const resets: number[] = [];
+	view.onDidSashChange(index => completed.push(index));
+	view.onDidSashReset(index => resets.push(index));
+	view.resizePane(first, 230);
+	second.setCollapsed(true);
+	second.setCollapsed(false);
+	assert.deepEqual(completed, []);
+	assert.deepEqual(resets, []);
+	const sash = view.element.querySelector<HTMLElement>('.ash-sash-horizontal')!;
+	sash.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+	assert.deepEqual(completed, [0]);
+	sash.dispatchEvent(new browserEnvironment.window.MouseEvent('dblclick', { bubbles: true }));
+	assert.deepEqual(completed, [0]);
+	assert.deepEqual(resets, [0]);
+});
+
 test('Pane retains one focus owner and releases its actions when their host moves outside the pane', async () => {
 	const document = browserEnvironment.window.document;
 	class HostedPane extends Pane {

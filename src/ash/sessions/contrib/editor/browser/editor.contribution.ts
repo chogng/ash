@@ -136,7 +136,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 						},
 						when: codeWhen,
 						group: 'navigation',
-						order: 4,
+						order: 5,
 					},
 				},
 				{
@@ -145,9 +145,9 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 						command: {
 							id: 'workbench.agentSessions.action.viewChanges',
 							title: localize2({ bundle: 'ash', key: 'sessions.changes.title' }, 'Changes'),
-							icon: Lxicon.diff,
+							icon: Lxicon.diffChanges,
 						},
-						when: codeWhen, group: 'navigation', order: 5,
+						when: codeWhen, group: 'navigation', order: 4,
 					},
 				},
 				{

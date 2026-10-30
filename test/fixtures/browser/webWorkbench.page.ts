@@ -1,3 +1,4 @@
+import { Orientation } from '../../../src/ash/base/browser/ui/sash/sash.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IPathService } from '../../../src/ash/platform/path/common/pathService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
@@ -93,7 +94,7 @@ class Content extends Part {
 }
 const content = resources.add(new Content());
 const grid = resources.add(new Grid<WorkbenchPartView>(root, {
-	type: 'branch', orientation: 'vertical', size: innerHeight, children: [
+	type: 'branch', orientation: Orientation.VERTICAL, size: innerHeight, children: [
 		{ type: 'leaf', view: new WorkbenchPartView('titlebar', titlebar), size: 35 },
 		{ type: 'leaf', view: new WorkbenchPartView('editor', content), size: innerHeight - 35 },
 	],

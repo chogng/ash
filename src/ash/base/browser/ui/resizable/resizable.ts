@@ -3,7 +3,7 @@ import { observeElementSize } from '../../observer.js';
 import { type Event, Emitter } from '../../../common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { clamp, isFiniteNumber } from '../../../common/numbers.js';
-import { Sash, SashState } from '../sash/sash.js';
+import { Orientation, Sash, SashState } from '../sash/sash.js';
 import { h } from '../../dom.js';
 
 /** A control whose geometry is driven by an external container layout. */
@@ -56,10 +56,26 @@ export class ResizableHTMLElement extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 
 		container.append(this.domNode);
-		this.northSash = this._register(new Sash(this.domNode, 'horizontal'));
-		this.eastSash = this._register(new Sash(this.domNode, 'vertical'));
-		this.southSash = this._register(new Sash(this.domNode, 'horizontal'));
-		this.westSash = this._register(new Sash(this.domNode, 'vertical'));
+		this.northSash = this._register(new Sash(this.domNode, {
+			getHorizontalSashTop: () => 0,
+			getHorizontalSashLeft: () => 0,
+			getHorizontalSashWidth: () => this.size.width,
+		}, { orientation: Orientation.HORIZONTAL }));
+		this.eastSash = this._register(new Sash(this.domNode, {
+			getVerticalSashLeft: () => this.size.width,
+			getVerticalSashTop: () => 0,
+			getVerticalSashHeight: () => this.size.height,
+		}, { orientation: Orientation.VERTICAL }));
+		this.southSash = this._register(new Sash(this.domNode, {
+			getHorizontalSashTop: () => this.size.height,
+			getHorizontalSashLeft: () => 0,
+			getHorizontalSashWidth: () => this.size.width,
+		}, { orientation: Orientation.HORIZONTAL }));
+		this.westSash = this._register(new Sash(this.domNode, {
+			getVerticalSashLeft: () => 0,
+			getVerticalSashTop: () => 0,
+			getVerticalSashHeight: () => this.size.height,
+		}, { orientation: Orientation.VERTICAL }));
 
 		this.connectSash(this.northSash, 'north');
 		this.connectSash(this.eastSash, 'east');
@@ -144,10 +160,10 @@ export class ResizableHTMLElement extends Disposable {
 		}));
 		this._register(sash.onDidChange((event) => {
 			if (this.resizeStart === undefined) return;
-			if (edge === 'east') this.deltaX = event.delta;
-			if (edge === 'west') this.deltaX = -event.delta;
-			if (edge === 'south') this.deltaY = event.delta;
-			if (edge === 'north') this.deltaY = -event.delta;
+			if (edge === 'east') this.deltaX = event.currentX - event.startX;
+			if (edge === 'west') this.deltaX = event.startX - event.currentX;
+			if (edge === 'south') this.deltaY = event.currentY - event.startY;
+			if (edge === 'north') this.deltaY = event.startY - event.currentY;
 			this.layout(
 				this.resizeStart.height + this.deltaY,
 				this.resizeStart.width + this.deltaX,
@@ -183,10 +199,10 @@ export class ResizableHTMLElement extends Disposable {
 	}
 
 	private layoutSashes(): void {
-		setSashBounds(this.northSash, 0, 0, this.size.width, 1);
-		setSashBounds(this.eastSash, this.size.width, 0, 1, this.size.height);
-		setSashBounds(this.southSash, 0, this.size.height, this.size.width, 1);
-		setSashBounds(this.westSash, 0, 0, 1, this.size.height);
+		this.northSash.layout();
+		this.eastSash.layout();
+		this.southSash.layout();
+		this.westSash.layout();
 	}
 }
 
@@ -207,12 +223,6 @@ export class Resizable extends Disposable {
 	}
 }
 
-function setSashBounds(sash: Sash, left: number, top: number, width: number, height: number): void {
-	sash.element.style.left = `${left}px`;
-	sash.element.style.top = `${top}px`;
-	sash.element.style.width = `${width}px`;
-	sash.element.style.height = `${height}px`;
-}
 
 function assertSize(value: IDimension, name: string, allowInfinity = false): void {
 	const validWidth = value.width >= 0 && (allowInfinity || Number.isFinite(value.width));

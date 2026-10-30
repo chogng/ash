@@ -225,6 +225,7 @@ test('ViewPaneContainer opens a collapsed view and focuses only when requested',
 
 test('ViewPaneContainer retains hidden view instances and restores workspace sizes and collapse state', async () => {
 	const { ViewPane } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
+	const { StorageScope } = await import('../../../../../../platform/storage/common/storage.js');
 	const { SyncDescriptor } = await import('../../../../../../platform/instantiation/common/descriptors.js');
 	const { WorkbenchViewRegistry } = await import('../../../../../../workbench/common/views.js');
 	const { ViewDescriptorService } = await import('../../../../../../workbench/services/views/browser/viewDescriptorService.js');
@@ -260,6 +261,12 @@ test('ViewPaneContainer retains hidden view instances and restores workspace siz
 	const first = container.getView('test.first') as TestView;
 	const second = container.getView('test.second') as TestView;
 	second.setExpanded(true);
+	container.resizeView(second, 270);
+	const sizeKey = 'workbench.viewContainer.test.multiple.test.second.size';
+	assert.equal(storage.getNumber(sizeKey, StorageScope.WORKSPACE), 270, 'code resizing saves its requested geometry explicitly');
+	first.element.closest('.ash-pane-view-container')!.querySelector<HTMLElement>('.ash-sash-horizontal')!
+		.dispatchEvent(new browserEnvironment.window.MouseEvent('dblclick', { bubbles: true }));
+	assert.equal(storage.getNumber(sizeKey, StorageScope.WORKSPACE), 300, 'user reset saves the completed geometry');
 	container.resizeView(second, 270);
 	second.input.value = 'unsent expression';
 	for (let attempt = 0; attempt < 3; attempt += 1) {

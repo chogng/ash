@@ -9,7 +9,7 @@ import { AccessibleViewRegistry } from '../../platform/accessibility/browser/acc
 import { addDisposableListener, Dimension, h } from '../../base/browser/dom.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { status } from '../../base/browser/ui/aria/aria.js';
-import type { Direction } from '../../base/browser/ui/grid/grid.js';
+import { Direction } from '../../base/browser/ui/grid/grid.js';
 import { Separator, SubmenuAction, type IAction } from '../../base/common/actions.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -22,19 +22,8 @@ import {
 	IAuxiliaryWindowService,
 	type IAuxiliaryWindow,
 } from '../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
-import type { Part } from '../../workbench/browser/part.js';
-import type { SessionsPartId } from '../common/layoutConstants.js';
-import type { CodeCardId, CodeCardTarget, ICodeCardLayout } from './codeCardLayout.js';
-import { EditorPart } from './parts/editorPart.js';
+import type { CodeCardId, CodeCardTarget, ICodeCardLayout, ICodeCardPresentation } from './codeCardLayout.js';
 import './media/codeCards.css';
-
-const names = () => ({
-	panel: localize('sessions.cards.terminal', 'Terminal'),
-	auxiliarybar: localize('sessions.cards.files', 'Files'),
-	info: localize('sessions.cards.information', 'Session information'),
-	sessions: localize('sessions.cards.conversation', 'Conversation'),
-	editor: localize('sessions.cards.editor', 'Editor'),
-});
 
 /** Card chrome moves retained DOM; no terminal, explorer or chat model is copied into a popup. */
 export class CodeCardControls extends Disposable {
@@ -48,19 +37,17 @@ export class CodeCardControls extends Disposable {
 
 	constructor(
 		private readonly layout: ICodeCardLayout,
-		private readonly parts: ReadonlyMap<SessionsPartId, Part>,
+		private readonly cards: ReadonlyMap<CodeCardTarget, ICodeCardPresentation>,
 		@IAuxiliaryWindowService private readonly windows: IAuxiliaryWindowService,
 		@IContextMenuService private readonly menus: IContextMenuService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 	) {
 		super();
-		for (const id of ['panel', 'auxiliarybar', 'info', 'editor'] as const) {
-			const element = this.element(id);
-			const header =
-				id === 'info'
-					? layout.information.header
-					: parts.get(id)!.domNode.querySelector<HTMLElement>(':scope > .ash-workbench-part-title')!;
+		for (const [id, card] of cards) {
+			if (id === 'sessions') { continue; }
+			const element = card.domNode;
+			const header = card.header!;
 			element.dataset.codeCard = id;
 			header.classList.add('ash-code-card-draggable');
 			const controls = h(header.ownerDocument, 'div', { className: 'ash-code-card-controls' });
@@ -137,7 +124,7 @@ export class CodeCardControls extends Disposable {
 	}
 
 	private element(id: CodeCardTarget): HTMLElement {
-		return id === 'info' ? this.layout.information.card : this.parts.get(id)!.domNode;
+		return this.cards.get(id)!.domNode;
 	}
 	private button(parent: HTMLElement, icon: Icon, label: string, onClick: () => void): Button {
 		return this._register(
@@ -153,9 +140,8 @@ export class CodeCardControls extends Disposable {
 		);
 	}
 	private render(): void {
-		const editor = this.parts.get('editor');
-		if (editor instanceof EditorPart) { editor.setCardPresentation(this.layout.active); }
 		for (const [id, controls] of this.controls) {
+			if (controls.parentElement?.lastElementChild !== controls) { controls.parentElement?.append(controls); }
 			controls.hidden = !this.layout.active;
 			this.element(id).classList.toggle('ash-code-card-managed', this.layout.active);
 			const popup = this.popouts.has(id);
@@ -177,12 +163,12 @@ export class CodeCardControls extends Disposable {
 			this.popouts.get(id)!.window.close();
 			return;
 		}
-		const labels = names();
+		const labels = Object.fromEntries([...this.cards].map(([id, card]) => [id, card.title]));
 		const directions: readonly [Direction, string][] = [
-			['left', localize('sessions.cards.left', 'Move to the left of {0}', '{0}')],
-			['right', localize('sessions.cards.right', 'Move to the right of {0}', '{0}')],
-			['up', localize('sessions.cards.above', 'Move above {0}', '{0}')],
-			['down', localize('sessions.cards.below', 'Move below {0}', '{0}')],
+			[Direction.Left, localize('sessions.cards.left', 'Move to the left of {0}', '{0}')],
+			[Direction.Right, localize('sessions.cards.right', 'Move to the right of {0}', '{0}')],
+			[Direction.Up, localize('sessions.cards.above', 'Move above {0}', '{0}')],
+			[Direction.Down, localize('sessions.cards.below', 'Move below {0}', '{0}')],
 		];
 		const action = (key: string, label: string, run: () => void): IAction => ({
 			id: key,
@@ -197,7 +183,7 @@ export class CodeCardControls extends Disposable {
 					target,
 					labels[target],
 					directions.map(([direction, label]) =>
-						action(direction, label.replace('{0}', labels[target]), () => {
+						action(Direction[direction].toLowerCase(), label.replace('{0}', labels[target]), () => {
 							this.layout.moveCard(id, target, direction);
 							anchor.focus();
 							status(localize('sessions.cards.moved', '{0} moved', labels[id]));
@@ -222,7 +208,7 @@ export class CodeCardControls extends Disposable {
 	}
 
 	private targets(id: CodeCardId): CodeCardTarget[] {
-		return (['panel', 'auxiliarybar', 'info', 'sessions', 'editor'] as const).filter(
+		return [...this.cards.keys()].filter(
 			target =>
 				target !== id &&
 				!this.popouts.has(target as CodeCardId) &&
@@ -271,18 +257,18 @@ export class CodeCardControls extends Disposable {
 						const x = (next.clientX - rect.left) / rect.width,
 							y = (next.clientY - rect.top) / rect.height;
 						const edges: [Direction, number][] = [
-							['left', x],
-							['right', 1 - x],
-							['up', y],
-							['down', 1 - y],
+							[Direction.Left, x],
+							[Direction.Right, 1 - x],
+							[Direction.Up, y],
+							[Direction.Down, 1 - y],
 						];
 						edges.sort((a, b) => a[1] - b[1]);
 						const direction = edges[0]![0];
 						drop = { target: candidate, direction };
-						const horizontal = direction === 'left' || direction === 'right';
+						const horizontal = direction === Direction.Left || direction === Direction.Right;
 						Object.assign(preview.style, {
-							left: rect.left + (direction === 'right' ? rect.width / 2 : 0) + 'px',
-							top: rect.top + (direction === 'down' ? rect.height / 2 : 0) + 'px',
+							left: rect.left + (direction === Direction.Right ? rect.width / 2 : 0) + 'px',
+							top: rect.top + (direction === Direction.Down ? rect.height / 2 : 0) + 'px',
 							width: (horizontal ? rect.width / 2 : rect.width) + 'px',
 							height: (horizontal ? rect.height : rect.height / 2) + 'px',
 						});
@@ -302,7 +288,7 @@ export class CodeCardControls extends Disposable {
 					this.drag.clear();
 					if (destination) {
 						this.layout.moveCard(id, destination.target, destination.direction);
-						status(localize('sessions.cards.moved', '{0} moved', names()[id]));
+						status(localize('sessions.cards.moved', '{0} moved', this.cards.get(id)!.title));
 					}
 				},
 				true,
@@ -339,7 +325,7 @@ export class CodeCardControls extends Disposable {
 			const frame = element.parentElement!;
 			const bounds = element.getBoundingClientRect();
 			const popup = await this.windows.open({
-				title: names()[id],
+				title: this.cards.get(id)!.title,
 				width: Math.max(560, bounds.width),
 				height: Math.max(460, bounds.height),
 			});
@@ -351,12 +337,12 @@ export class CodeCardControls extends Disposable {
 			this.popupLifetimes.add(lifetime);
 			this.popouts.set(id, popup);
 			this.layout.detachCard(id, true);
-			popup.window.document.title = names()[id];
-			popup.container.setAttribute('aria-label', names()[id]);
+			popup.window.document.title = this.cards.get(id)!.title;
+			popup.container.setAttribute('aria-label', this.cards.get(id)!.title);
 			popup.container.classList.add('ash-sessions-window', 'ash-code-card-window', 'ash-sessions-code-tools');
 			const titlebar = h(popup.window.document, 'header', { className: 'ash-code-card-window-titlebar' });
 			const title = h(popup.window.document, 'span');
-			title.textContent = names()[id];
+			title.textContent = this.cards.get(id)!.title;
 			titlebar.append(title);
 			lifetime.add(
 				new Button(titlebar, {
@@ -391,7 +377,7 @@ export class CodeCardControls extends Disposable {
 					height = Math.max(0, popup.container.clientHeight - titlebar.offsetHeight);
 				element.style.width = width + 'px';
 				element.style.height = height + 'px';
-				if (id !== 'info') this.parts.get(id)!.layout(new Dimension(width, height));
+				this.cards.get(id)!.layout(new Dimension(width, height));
 			};
 			// Return the original node before the auxiliary document and its styles are destroyed.
 			lifetime.add(

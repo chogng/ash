@@ -5,7 +5,10 @@ import { disposableWindowTimeout } from '../../scheduler.js';
 import { type IDisposable, MutableDisposable, Disposable, DisposableStore, toDisposable } from '../../../common/lifecycle.js';
 import { isFiniteNumber } from '../../../common/numbers.js';
 
-export type SashOrientation = 'vertical' | 'horizontal';
+export enum Orientation {
+	VERTICAL,
+	HORIZONTAL,
+}
 
 /** Separators surrounding a view, in physical screen directions. Borrowed from its Grid. */
 export interface IBoundarySashes {
@@ -45,11 +48,31 @@ export interface SashSettings {
 	readonly hoverDelay: number;
 }
 
-export interface SashDragEvent {
-	/** Signed movement from the position where the current drag started. */
-	readonly delta: number;
+export interface ISashEvent {
+	readonly startX: number;
+	readonly currentX: number;
+	readonly startY: number;
+	readonly currentY: number;
+	/** Ash extension: keyboard steps use the same coordinate contract as pointer movement. */
 	readonly input: 'pointer' | 'keyboard';
 	readonly altKey: boolean;
+}
+
+export interface IVerticalSashLayoutProvider {
+	getVerticalSashLeft(sash: Sash): number;
+	getVerticalSashTop?(sash: Sash): number;
+	getVerticalSashHeight?(sash: Sash): number;
+}
+
+export interface IHorizontalSashLayoutProvider {
+	getHorizontalSashTop(sash: Sash): number;
+	getHorizontalSashLeft?(sash: Sash): number;
+	getHorizontalSashWidth?(sash: Sash): number;
+}
+
+export interface ISashOptions {
+	readonly orientation: Orientation;
+	readonly presentation?: SashPresentation;
 }
 
 const SashDragAreaSizeProperty = '--ash-sash-dragAreaSize';
@@ -95,8 +118,8 @@ export class SashSettingsBinding extends Disposable {
 export class Sash extends Disposable {
 	readonly element: HTMLDivElement;
 	private _state = SashState.Enabled;
-	private readonly startListeners = new Set<() => void>();
-	private readonly changeListeners = new Set<(event: SashDragEvent) => void>();
+	private readonly startListeners = new Set<(event: ISashEvent) => void>();
+	private readonly changeListeners = new Set<(event: ISashEvent) => void>();
 	private readonly resetListeners = new Set<() => void>();
 	private readonly endListeners = new Set<() => void>();
 	private readonly stateListeners = new Set<(state: SashState) => void>();
@@ -110,22 +133,25 @@ export class Sash extends Disposable {
 	private _orthogonalEndSash: Sash | undefined;
 	private _linkedSash: Sash | undefined;
 	private _presentation: SashPresentation;
+	readonly orientation: Orientation;
 
 	constructor(
 		container: HTMLElement,
-		readonly orientation: SashOrientation,
-		presentation: SashPresentation = undefined,
+		private readonly layoutProvider: IVerticalSashLayoutProvider | IHorizontalSashLayoutProvider,
+		options: ISashOptions,
 	) {
 		super();
+		const { orientation } = options;
+		this.orientation = orientation;
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'div');
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = `ash-sash ash-sash-${orientation}`;
+		element.className = `ash-sash ash-sash-${orientation === Orientation.VERTICAL ? 'vertical' : 'horizontal'}`;
 		this._presentation = undefined;
-		this.presentation = presentation;
+		this.presentation = options.presentation;
 		element.setAttribute('role', 'separator');
-		element.setAttribute('aria-orientation', orientation);
+		element.setAttribute('aria-orientation', orientation === Orientation.VERTICAL ? 'vertical' : 'horizontal');
 		element.setAttribute('aria-disabled', 'false');
 		element.tabIndex = 0;
 		container.append(element);
@@ -160,12 +186,26 @@ export class Sash extends Disposable {
 		this._register(addDisposableListener(element, 'dblclick', () => this.reset()));
 	}
 
-	onDidStart(listener: () => void): IDisposable {
+	layout(): void {
+		if (this.orientation === Orientation.VERTICAL) {
+			const provider = this.layoutProvider as IVerticalSashLayoutProvider;
+			this.element.style.left = `${provider.getVerticalSashLeft(this)}px`;
+			if (provider.getVerticalSashTop) this.element.style.top = `${provider.getVerticalSashTop(this)}px`;
+			if (provider.getVerticalSashHeight) this.element.style.height = `${provider.getVerticalSashHeight(this)}px`;
+		} else {
+			const provider = this.layoutProvider as IHorizontalSashLayoutProvider;
+			this.element.style.top = `${provider.getHorizontalSashTop(this)}px`;
+			if (provider.getHorizontalSashLeft) this.element.style.left = `${provider.getHorizontalSashLeft(this)}px`;
+			if (provider.getHorizontalSashWidth) this.element.style.width = `${provider.getHorizontalSashWidth(this)}px`;
+		}
+	}
+
+	onDidStart(listener: (event: ISashEvent) => void): IDisposable {
 		this.startListeners.add(listener);
 		return toDisposable(() => this.startListeners.delete(listener));
 	}
 
-	onDidChange(listener: (event: SashDragEvent) => void): IDisposable {
+	onDidChange(listener: (event: ISashEvent) => void): IDisposable {
 		this.changeListeners.add(listener);
 		return toDisposable(() => this.changeListeners.delete(listener));
 	}
@@ -260,8 +300,11 @@ export class Sash extends Disposable {
 		this.endHover(fromLinkedSash);
 		this.element.classList.add('ash-sash-active');
 		this.dragListeners.clear();
-		const start = this.coordinate(event);
-		this.fire(this.startListeners);
+		for (const listener of this.startListeners) listener({
+			startX: event.clientX, currentX: event.clientX,
+			startY: event.clientY, currentY: event.clientY,
+			input: 'pointer', altKey: event.altKey,
+		});
 		if (
 			!fromLinkedSash &&
 			typeof event.pointerId === 'number' &&
@@ -270,8 +313,9 @@ export class Sash extends Disposable {
 			this.element.setPointerCapture(event.pointerId);
 		}
 		const move = (next: PointerEvent) => {
-			const dragEvent: SashDragEvent = {
-				delta: this.coordinate(next) - start,
+			const dragEvent: ISashEvent = {
+				startX: event.clientX, currentX: next.clientX,
+				startY: event.clientY, currentY: next.clientY,
 				input: 'pointer',
 				altKey: next.altKey,
 			};
@@ -343,15 +387,18 @@ export class Sash extends Disposable {
 		const delta = this.keyboardDelta(event);
 		if (delta === undefined) return;
 		event.preventDefault();
-		this.fire(this.startListeners);
+		for (const listener of this.startListeners) listener({
+			startX: 0, currentX: 0, startY: 0, currentY: 0, input: 'keyboard', altKey: false,
+		});
 		for (const listener of this.changeListeners) {
-			listener({ delta, input: 'keyboard', altKey: false });
+			listener({
+				startX: 0, startY: 0,
+				currentX: this.orientation === Orientation.VERTICAL ? delta : 0,
+				currentY: this.orientation === Orientation.HORIZONTAL ? delta : 0,
+				input: 'keyboard', altKey: false,
+			});
 		}
 		this.fire(this.endListeners);
-	}
-
-	private coordinate(event: Pick<PointerEvent, 'clientX' | 'clientY'>): number {
-		return this.orientation === 'vertical' ? event.clientX : event.clientY;
 	}
 
 	private setOrthogonalSash(edge: 'start' | 'end', sash: Sash | undefined): void {
@@ -401,7 +448,7 @@ export class Sash extends Disposable {
 
 	private keyboardDelta(event: KeyboardEvent): number | undefined {
 		const step = event.altKey ? 1 : 10;
-		if (this.orientation === 'vertical') {
+		if (this.orientation === Orientation.VERTICAL) {
 			if (event.key === 'ArrowLeft') return -step;
 			if (event.key === 'ArrowRight') return step;
 			return undefined;

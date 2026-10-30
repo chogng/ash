@@ -1,3 +1,5 @@
+import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
+import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
 import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
 import { EditorInputCapabilities } from '../../../common/editor.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -17,7 +19,7 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
 import { computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { type IPositionedRectangle } from '../../../../base/browser/geometry.js';
-import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, type GridDescriptor, type ISerializableView as ISerializableGridView } from '../../../../base/browser/ui/grid/grid.js';
+import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView as ISerializableGridView } from '../../../../base/browser/ui/grid/grid.js';
 import { DisposableMap, Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { rot } from '../../../../base/common/numbers.js';
 import { Schemas } from '../../../../base/common/network.js';
@@ -80,7 +82,7 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent>;
 	readonly groups: readonly IEditorGroupView[];
 	readonly activeGroup: IEditorGroupView;
-	addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView;
+	addGroup(reference: EditorGroupId, direction: Direction): IEditorGroupView;
 	removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean>;
 	activateGroup(id: EditorGroupId): void;
 	findGroup(scope: IFindGroupScope, source?: IEditorGroup): IEditorGroup | undefined;
@@ -105,9 +107,9 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	moveActiveEditorTo(target: IEditorPart): Promise<boolean>;
 	saveActiveEditor(): Promise<void>;
 	setContent(content: Element): Promise<void>;
-	splitActiveGroup(direction: GridDirection): Promise<void>;
+	splitActiveGroup(direction: Direction): Promise<void>;
 	/** Copies the requested tabs beside their source group without activating a source tab. */
-	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: GridDirection): Promise<void>;
+	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: Direction): Promise<void>;
 	splitActiveGroupHorizontal(): Promise<void>;
 	splitActiveGroupVertical(): Promise<void>;
 	getEditorPaneChoices(input?: IResourceEditorInput): readonly IEditorPaneDescriptor[];
@@ -321,7 +323,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return this._activeGroup;
 	}
 
-	public addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView {
+	public addGroup(reference: EditorGroupId, direction: Direction): IEditorGroupView {
 		return this.insertGroup(this.groupHosts.get(reference)!.group, direction).group;
 	}
 
@@ -349,11 +351,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const mapped = new Set(groupMapping.values());
 		if (mapped.size !== groupMapping.size || [...mapped].some(id => !this.groupHosts.has(id))) throw new TypeError('Invalid Editor Grid group mapping');
 		const missing = this._groups.filter(host => !mapped.has(host.group.id));
-		const extra: EditorWorkingSetLayout[] = missing.map(host => ({ type: 'leaf', data: { groupId: host.group.id }, size: this.editorGrid.getViewSize(host.view).width, visible: true, priority: 'normal' }));
+		const extra: EditorWorkingSetLayout[] = missing.map(host => ({ type: 'leaf', data: { groupId: host.group.id }, size: this.editorGrid.getViewSize(host.view).width, visible: true, priority: LayoutPriority.Normal }));
 		const rebound = remapWorkingSetLayout(retained, groupMapping);
 		const combined: EditorWorkingSetLayout = extra.length ? {
-			type: 'branch', orientation: 'horizontal', size: this.dimension.width, priority: 'normal',
-			children: [...(rebound.type === 'branch' && rebound.orientation === 'horizontal' ? rebound.children : [rebound]), ...extra],
+			type: 'branch', orientation: Orientation.HORIZONTAL, size: this.dimension.width, priority: LayoutPriority.Normal,
+			children: [...(rebound.type === 'branch' && rebound.orientation === Orientation.HORIZONTAL ? rebound.children : [rebound]), ...extra],
 		} : rebound;
 		this.preserveFocus(() => {
 			this.gridSlot.clear();
@@ -787,11 +789,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		await this.splitActiveGroup(Direction.Down);
 	}
 
-	async splitActiveGroup(direction: GridDirection): Promise<void> {
+	async splitActiveGroup(direction: Direction): Promise<void> {
 		await this.splitEditors(this._activeGroup.id, this._activeGroup.activeInput ? [this._activeGroup.activeInput] : [], direction);
 	}
 
-	async splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: GridDirection): Promise<void> {
+	async splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: Direction): Promise<void> {
 		const splittable = inputs.filter(input => !((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton));
 		if (inputs.length > 0 && splittable.length === 0) return;
 		const source = this.groupHosts.get(groupId)!.group;
@@ -998,7 +1000,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return { host: this.insertGroup(source, direction), created: true };
 	}
 
-	protected insertGroup(source: IEditorGroupView, direction: GridDirection, id?: EditorGroupId): EditorGroupHost {
+	protected insertGroup(source: IEditorGroupView, direction: Direction, id?: EditorGroupId): EditorGroupHost {
 		this.restoreMaximizedGroup();
 		const sourceIndex = this.groupIndex(source);
 		const sourceHost = this._groups[sourceIndex]!;
@@ -1047,7 +1049,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		// Independent editor hosts can have different pane registries. Reject a transfer
 		// the receiving host cannot render before moving or closing its source input.
 		if (!this.groupOptions.registry.getEditorPanesForInput(event.input).length) return;
-		if (event.splitDirection) {
+		if (event.splitDirection !== undefined) {
 			if (this.groupOptions.editorLimit === 1 && this.groupHosts.get(event.source.id)?.group === event.source) {
 				// A single-content tab represents its whole group. Move that group
 				// to retain its pane and identity instead of leaving an empty source.
@@ -1213,8 +1215,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		}
 		this._groups.push(...retained, ...hosts);
 		const hostById = new Map(this._groups.map(host => [host.group.id, host]));
-		const documentLayout = layout ?? { type: 'branch' as const, orientation: 'horizontal' as const, priority: 'normal' as const, size: this.dimension.width, children: hosts.map((host, index) => ({ type: 'leaf' as const, data: { groupId: host.group.id }, size: groups[index]!.size * this.dimension.width, visible: true, priority: 'normal' as const })) };
-		const combinedLayout = retainedLayout ? { type: 'branch' as const, orientation: 'horizontal' as const, priority: 'normal' as const, size: this.dimension.width, children: [retainedLayout, documentLayout].flatMap(child => child.type === 'branch' && child.orientation === 'horizontal' ? child.children : [child]) } : layout;
+		const documentLayout = layout ?? { type: 'branch' as const, orientation: Orientation.HORIZONTAL as const, priority: LayoutPriority.Normal as const, size: this.dimension.width, children: hosts.map((host, index) => ({ type: 'leaf' as const, data: { groupId: host.group.id }, size: groups[index]!.size * this.dimension.width, visible: true, priority: LayoutPriority.Normal as const })) };
+		const combinedLayout = retainedLayout ? { type: 'branch' as const, orientation: Orientation.HORIZONTAL as const, priority: LayoutPriority.Normal as const, size: this.dimension.width, children: [retainedLayout, documentLayout].flatMap(child => child.type === 'branch' && child.orientation === Orientation.HORIZONTAL ? child.children : [child]) } : layout;
 		const grid = combinedLayout
 			? SerializableGrid.deserialize<EditorGroupGridView>(this.contentDomNode, combinedLayout, {
 				fromJSON: data => {
@@ -1384,7 +1386,7 @@ function legacyGridDescriptor(
 	const width = Math.max(1, dimension.width);
 	return {
 		type: 'branch',
-		orientation: 'horizontal',
+		orientation: Orientation.HORIZONTAL,
 		size: width,
 		children: hosts.map((host, index) => ({
 			type: 'leaf',

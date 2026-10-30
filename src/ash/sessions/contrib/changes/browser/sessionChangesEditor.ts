@@ -1,3 +1,4 @@
+import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
@@ -216,10 +217,10 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			return;
 		}
 		const stacked = dimension.width < 720;
-		const orientation = stacked ? 'vertical' : 'horizontal';
+		const orientation = stacked ? Orientation.VERTICAL : Orientation.HORIZONTAL;
 		if (this.split.value?.orientation !== orientation) {
 			this.split.clear();
-			const split = new SplitView(this.domNode, orientation);
+			const split = new SplitView(this.domNode, { proportionalLayout: false, orientation: orientation });
 			this.split.value = split;
 			const details = this.details;
 			split.addView({

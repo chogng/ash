@@ -1,3 +1,4 @@
+import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import './findWidget.css';
 import '../../../../base/browser/ui/sash/sash.css';
 import { addDisposableListener, h, isHTMLElement, isNode, stopEvent } from '../../../../base/browser/dom.js';
@@ -215,7 +216,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		);
 		this.replaceRow.append(spacer, this.replaceControl.domNode, this.preserveCaseButton.domNode, this.replaceButton.domNode, this.replaceAllButton.domNode);
 		this.root.append(findRow, this.replaceRow);
-		this.resizeSash = this._register(new Sash(this.root, 'vertical'));
+		this.resizeSash = this._register(new Sash(this.root, this, { orientation: Orientation.VERTICAL }));
 		this.resizeSash.element.setAttribute('aria-label', localize('label.resizeFindWidget', 'Resize find widget'));
 		this.resizeSash.element.setAttribute(
 			'aria-description',
@@ -223,7 +224,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		);
 		this._register(this.resizeSash.onDidStart(() => { this.dragStartWidth = this.displayedWidth; }));
 		this._register(this.resizeSash.onDidChange(event => {
-			this.requestedWidth = this.dragStartWidth - event.delta;
+			this.requestedWidth = this.dragStartWidth - (event.currentX - event.startX);
 			this.layout();
 		}));
 		this._register(this.resizeSash.onDidReset(() => {
@@ -351,7 +352,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		const minimumWidth = Math.min(FIND_WIDGET_INITIAL_WIDTH, maximumWidth);
 		this.displayedWidth = Math.min(maximumWidth, Math.max(minimumWidth, this.requestedWidth));
 		this.root.style.width = `${this.displayedWidth}px`;
-		this.resizeSash.element.style.left = `${this.getVerticalSashLeft(this.resizeSash)}px`;
+		this.resizeSash.layout();
 		if (maximumWidth <= minimumWidth) {
 			this.resizeSash.state = SashState.Disabled;
 		} else if (this.displayedWidth === minimumWidth) {

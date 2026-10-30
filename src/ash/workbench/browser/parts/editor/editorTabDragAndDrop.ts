@@ -69,7 +69,7 @@ export class EditorTabDragAndDropController implements IEditorTabDragAndDrop {
 			target,
 			targetInput,
 			position,
-			...(splitDirection ? { splitDirection } : {}),
+			...(splitDirection !== undefined ? { splitDirection } : {}),
 		});
 	}
 

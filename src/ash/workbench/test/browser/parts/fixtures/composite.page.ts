@@ -1,3 +1,4 @@
+import { Orientation } from '../../../../../base/browser/ui/sash/sash.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../../services/lifecycle/common/lifecycleService.js';
@@ -54,7 +55,7 @@ import { ActivityService } from '../../../../services/activity/browser/activityS
 import { NumberBadge } from '../../../../services/activity/common/activity.js';
 import { Pane, PaneView } from '../../../../../base/browser/ui/splitview/paneview.js';
 import '../../../../../base/browser/ui/actionbar/actionbar.css';
-import '../../../../../base/browser/ui/grid/grid.css';
+import '../../../../../base/browser/ui/grid/gridview.css';
 import '../../../../../base/browser/ui/splitview/splitview.css';
 import '../../../../../platform/theme/common/sizes/baseSizes.js';
 import { bindTestColorTheme } from '../../../../../../../test/fixtures/browser/themeFixture.js';
@@ -393,7 +394,7 @@ if (new URLSearchParams(location.search).has('partWidth')) {
 	const editorView = new WorkbenchPartView('editor', editor);
 	const auxiliaryView = new WorkbenchPartView('auxiliarybar', part);
 	auxiliaryView.setFrameInsets({ left: 8, right: 8, top: 0, bottom: 0 });
-	const grid = resources.add(new Grid<WorkbenchPartView>(host, { type: 'branch', orientation: 'horizontal', size: 1000, children: [{ type: 'leaf', view: editorView, size: 620 }, { type: 'leaf', view: auxiliaryView, size: 380 }] }));
+	const grid = resources.add(new Grid<WorkbenchPartView>(host, { type: 'branch', orientation: Orientation.HORIZONTAL, size: 1000, children: [{ type: 'leaf', view: editorView, size: 620 }, { type: 'leaf', view: auxiliaryView, size: 380 }] }));
 	grid.element.style.cssText = 'width:100%;height:100%';
 	grid.layout(1000, 400);
 	const pane = composite.getView('width-chat.view') as WidthView;

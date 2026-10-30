@@ -1,3 +1,4 @@
+import { Orientation } from '../../../src/ash/base/browser/ui/sash/sash.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import { LanguageCompletionItemKind } from '../../../src/ash/editor/common/languages.js';
@@ -22,7 +23,7 @@ import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/t
 import '../../../src/ash/workbench/contrib/scm/browser/quickDiff.contribution.js';
 import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
 import { GridView } from '../../../src/ash/base/browser/ui/grid/gridview.js';
-import '../../../src/ash/base/browser/ui/grid/grid.css';
+import '../../../src/ash/base/browser/ui/grid/gridview.css';
 import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
@@ -1106,7 +1107,7 @@ const harness = {
 			},
 		}));
 		resizeGrid = resources.add(new GridView(container, {
-			type: 'branch', orientation: 'horizontal', size: 900,
+			type: 'branch', orientation: Orientation.HORIZONTAL, size: 900,
 			children: views.map((view, index) => ({ type: 'leaf', view, size: [180, 440, 280][index]! })),
 		}));
 		resizeGrid.element.style.width = '900px';

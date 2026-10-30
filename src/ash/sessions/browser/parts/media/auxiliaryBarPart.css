@@ -10,3 +10,18 @@
 	white-space: nowrap;
 	font-size: var(--ash-fontSize-body1);
 }
+
+.ash-sessions-files-toolbar {
+	min-width: 0;
+	flex: 1;
+}
+
+.ash-sessions-files-toolbar > .ash-pane-composite-title-content {
+	display: none;
+}
+
+.ash-code-card-managed
+	.ash-sessions-files-toolbar
+	.ash-pane-composite-title-part-actions {
+	display: none;
+}

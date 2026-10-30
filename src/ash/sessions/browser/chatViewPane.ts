@@ -1,3 +1,4 @@
+import { Orientation } from '../../base/browser/ui/sash/sash.js';
 import { DisposableStore } from '../../base/common/lifecycle.js';
 import { ISessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
@@ -179,7 +180,12 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.sessionsSidebar.hidden = true;
 		const storedWidth = storage.getNumber(sessionsSidebarWidthKey, StorageScope.WORKSPACE);
 		this.sessionsSidebarWidth = storedWidth !== undefined && storedWidth >= minimumSessionsSidebarWidth ? storedWidth : defaultSessionsSidebarWidth;
-		this.sessionsSash = this._register(new Sash(this.body, 'vertical'));
+		this.sessionsSash = this._register(new Sash(this.body, {
+			getVerticalSashLeft: () => {
+				const width = this.body.getBoundingClientRect().width;
+				return width - this.getSessionsSidebarWidth(width);
+			}
+		}, { orientation: Orientation.VERTICAL }));
 		this.sessionsSash.element.classList.add('ash-chat-sessions-sash');
 		this.sessionsSash.element.setAttribute('aria-label', localize('chat.sessions.resize', 'Resize Sessions list'));
 		this.sessionsSash.element.setAttribute('aria-controls', this.sessionsSidebar.id);
@@ -192,7 +198,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 				return;
 			}
 			const width = this.body.getBoundingClientRect().width;
-			this.sessionsSidebarWidth = this.getSessionsSidebarWidth(width, resizeStartWidth - event.delta);
+			this.sessionsSidebarWidth = this.getSessionsSidebarWidth(width, resizeStartWidth - (event.currentX - event.startX));
 			this.layoutSessionsSidebar(width);
 		}));
 		this._register(this.sessionsSash.onDidEnd(() => {
@@ -734,7 +740,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		const sidebarWidth = this.getSessionsSidebarWidth(width);
 		const maximumWidth = width - minimumChatWidth;
 		this.sessionsSidebar.style.flexBasis = `${sidebarWidth}px`;
-		this.sessionsSash.element.style.left = `${width - sidebarWidth}px`;
+		this.sessionsSash.layout();
 		if (sidebarWidth >= maximumWidth) {
 			this.sessionsSash.state = SashState.AtMinimum;
 		} else if (sidebarWidth <= minimumSessionsSidebarWidth) {

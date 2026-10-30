@@ -42,7 +42,8 @@
 	display: none;
 }
 
-.ash-code-information-card {
+.ash-code-information-card,
+.ash-code-files-card {
 	display: flex;
 	flex-direction: column;
 	box-sizing: border-box;
@@ -125,4 +126,37 @@
 
 .ash-code-card-header[hidden] {
 	display: none;
+}
+
+.ash-code-files-frame {
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-code-files-card[hidden] {
+	display: none;
+}
+
+.ash-code-files-body {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.ash-code-files-body > .ash-grid {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-code-files-card .ash-workbench-part-title[hidden] {
+	display: none;
+}
+
+.ash-code-card-window > .ash-code-files-card {
+	flex: 1;
+	min-height: 0;
+}
+
+:is(.hc-black, .hc-light) .ash-code-files-card {
+	box-shadow: none;
 }

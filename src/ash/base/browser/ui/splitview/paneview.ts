@@ -1,3 +1,4 @@
+import { Orientation } from '../sash/sash.js';
 import { addDisposableListener, h } from '../../dom.js';
 import { isAncestorOfActiveElement, trackFocus } from '../../focus.js';
 import { appendIcon } from '../lxicons/lxicon.js';
@@ -6,7 +7,7 @@ import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { RunOnceScheduler } from '../../../common/async.js';
 import { isReducedMotion, UI_ANIMATION_DURATION } from '../animations/animations.js';
 import { Lxicon } from '../../../common/lxicons.js';
-import { SplitView, type ISplitViewView } from './splitview.js';
+import { SplitView, type IView } from './splitview.js';
 import { ScrollableElement } from '../scrollbar/scrollableElement.js';
 import './paneview.css';
 import { localize } from '../../../../nls.js';
@@ -35,7 +36,7 @@ export type PaneViewHeaderActionsVisibility = 'always' | 'whenExpanded';
  * through {@link headerActionsElement}. They must not recreate or style the
  * header interaction internals.
  */
-export class Pane extends Disposable implements ISplitViewView {
+export class Pane extends Disposable implements IView {
 	readonly element: HTMLElement;
 	readonly id: string;
 	protected readonly headerElement: HTMLDivElement;
@@ -277,7 +278,7 @@ export class PaneView extends Disposable {
 	private height = 0;
 	private width = 0;
 	private didLayout = false;
-	readonly onDidSashChange: Event<void>;
+	readonly onDidSashChange: Event<number>;
 	readonly onDidSashReset: Event<number>;
 
 	constructor(container: HTMLElement) {
@@ -286,10 +287,8 @@ export class PaneView extends Disposable {
 		this.scrollable = this._register(new ScrollableElement(container, { direction: 'vertical', tabIndex: -1 }));
 		this.element = this.scrollable.element;
 		this.element.classList.add('ash-pane-view-container');
-		this.splitView = this._register(new SplitView(this.scrollable.contentElement, 'vertical', {
-			styles: { separatorBorder: 'var(--ash-border)' },
-		}));
-		this.onDidSashChange = this.splitView.onDidChangeViewSizes;
+		this.splitView = this._register(new SplitView(this.scrollable.contentElement, { proportionalLayout: false, orientation: Orientation.VERTICAL, styles: { separatorBorder: 'var(--ash-border)' }, }));
+		this.onDidSashChange = this.splitView.onDidSashChange;
 		this.onDidSashReset = this.splitView.onDidSashReset;
 		this._register(this.onDidSashReset(index => this.splitView.resetSash(index)));
 		this._register(addDisposableListener(this.element, 'keydown', event => {

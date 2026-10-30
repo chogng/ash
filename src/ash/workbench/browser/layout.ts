@@ -1,3 +1,5 @@
+import { Orientation } from '../../base/browser/ui/sash/sash.js';
+import { LayoutPriority } from '../../base/browser/ui/splitview/splitview.js';
 import { addDisposableListener, getWindow, h } from '../../base/browser/dom.js';
 import { Dimension, type IDimension } from '../../base/browser/dom.js';
 import { SerializableGrid, type SerializedGridDescriptor, type Direction } from '../../base/browser/ui/grid/grid.js';
@@ -48,7 +50,7 @@ const DEFAULT_AUXILIARYBAR_WIDTH = 300;
 const DEFAULT_AGENT_SIDEBAR_WIDTH = 280;
 const DEFAULT_PANEL_HEIGHT = 300;
 const DEFAULT_PANEL_WIDTH = 300;
-const EDITOR_LAYOUT_PRIORITY = 'high' as const;
+const EDITOR_LAYOUT_PRIORITY = LayoutPriority.High;
 
 interface WorkbenchLayoutStyleMetrics {
 	readonly windowLeftEdgeInset: number;
@@ -793,7 +795,7 @@ function createWorkbenchGridDescriptor(
 		partId: WorkbenchPartId,
 		size: number,
 		visible = true,
-		priority: 'normal' | 'high' = 'normal',
+		priority: LayoutPriority = LayoutPriority.Normal,
 	): SerializedGridDescriptor => ({ type: 'leaf', data: partId, size, visible, priority });
 	const titlebarHeight = requiredView(views, 'titlebar').minimumHeight;
 	const bannerHeight = requiredView(views, 'banner').minimumHeight;
@@ -848,7 +850,7 @@ function createWorkbenchGridDescriptor(
 		? [
 			{
 				type: 'branch',
-				orientation: 'vertical',
+				orientation: Orientation.VERTICAL,
 				size: editorWidth,
 				priority: EDITOR_LAYOUT_PRIORITY,
 				children: centralParts,
@@ -857,15 +859,15 @@ function createWorkbenchGridDescriptor(
 		: centralParts;
 	return {
 		type: 'branch',
-		orientation: 'vertical',
+		orientation: Orientation.VERTICAL,
 		size: dimension.height,
-		priority: 'normal',
+		priority: LayoutPriority.Normal,
 		children: [
 			leaf('titlebar', titlebarHeight),
 			leaf('banner', bannerHeight, bannerVisible),
 			{
 				type: 'branch',
-				orientation: 'horizontal',
+				orientation: Orientation.HORIZONTAL,
 				size: bodyHeight,
 				priority: EDITOR_LAYOUT_PRIORITY,
 				children:

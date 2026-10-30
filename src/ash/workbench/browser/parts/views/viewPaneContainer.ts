@@ -2,7 +2,7 @@ import './media/paneviewlet.css';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
-import { Emitter } from '../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
@@ -132,7 +132,7 @@ export class ViewPaneContainer extends Composite {
 			this._panes.clearAndDisposeAll();
 			this.mountedPanes.length = 0;
 		}));
-		this._register(this.paneView.onDidSashChange(() => this.saveState()));
+		this._register(Event.any(this.paneView.onDidSashChange, this.paneView.onDidSashReset)(() => this.saveState()));
 		this._register(this.model.onDidChangeAllViewDescriptors(() => this.syncPanes()));
 		this._register(this.model.onDidChangeVisibleViewDescriptors(() => {
 			this.syncPanes();
@@ -168,6 +168,7 @@ export class ViewPaneContainer extends Composite {
 
 	resizeView(view: ViewPane, size: number): void {
 		this.paneView.resizePane(view, size);
+		this.saveState();
 	}
 
 	get panes(): readonly ViewPane[] {

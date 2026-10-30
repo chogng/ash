@@ -1,3 +1,4 @@
+import { Orientation } from '../../../../../base/browser/ui/sash/sash.js';
 import {
 	defaultButtonStyles,
 	defaultCountBadgeStyles,
@@ -347,10 +348,10 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 	}
 
 	private configureSplit(narrow: boolean): void {
-		if (this.split.value?.orientation === (narrow ? 'vertical' : 'horizontal')) { return; }
+		if (this.split.value?.orientation === (narrow ? Orientation.VERTICAL : Orientation.HORIZONTAL)) { return; }
 		// Pane roots and widget owners survive orientation changes; only the Sash layout is replaced.
 		this.navigationDomNode.remove(); this.inspectorDomNode.remove();
-		this.split.value = new SplitView(this.bodyDomNode, narrow ? 'vertical' : 'horizontal', { styles: { separatorBorder: 'var(--ash-widget-border)' } });
+		this.split.value = new SplitView(this.bodyDomNode, { proportionalLayout: false, orientation: narrow ? Orientation.VERTICAL : Orientation.HORIZONTAL, styles: { separatorBorder: 'var(--ash-widget-border)' } });
 		this.split.value.addView({ element: this.navigationDomNode, minimumSize: narrow ? 120 : 200, maximumSize: Number.POSITIVE_INFINITY, layout: (size, _offset, other) => this.layoutNavigation(narrow ? other : size, narrow ? size : other) }, (narrow ? this.dimension.height : this.dimension.width) * 0.35);
 		this.split.value.addView({ element: this.inspectorDomNode, minimumSize: narrow ? 160 : 240, maximumSize: Number.POSITIVE_INFINITY, layout: (size, _offset, other) => this.layoutInspector(narrow ? other : size, narrow ? size : other) }, (narrow ? this.dimension.height : this.dimension.width) * 0.65);
 	}

@@ -1,5 +1,5 @@
 import { CodeCardControls } from './codeCardControls.js';
-import type { ICodeCardLayout } from './codeCardLayout.js';
+import type { CodeCardTarget, ICodeCardLayout, ICodeCardPresentation } from './codeCardLayout.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -146,7 +146,7 @@ import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
-import { addDisposableListener, h, type IDimension } from '../../base/browser/dom.js';
+import { addDisposableListener, Dimension, h, type IDimension } from '../../base/browser/dom.js';
 import { canceled, errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
@@ -949,7 +949,31 @@ export abstract class Workbench extends Disposable {
 			['customview', customViewPart],
 		]);
 		layout.createWorkbenchLayout(parts);
-		if (layout.codeCards) this._register(services.createInstance(CodeCardControls, layout.codeCards, parts));
+		if (layout.codeCards) {
+			const cards = layout.codeCards;
+			const presentations = new Map<CodeCardTarget, ICodeCardPresentation>([
+				['terminal', panel.card],
+				['files', {
+					title: localize('sessions.cards.files', 'Files'),
+					domNode: cards.files.card,
+					header: cards.files.header,
+					layout: dimension => cards.files.layoutCard(dimension),
+				}],
+				['info', {
+					title: localize('sessions.cards.information', 'Session information'),
+					domNode: cards.information.card,
+					header: cards.information.header,
+					layout: () => cards.information.layout(),
+				}],
+				['sessions', {
+					title: localize('sessions.cards.conversation', 'Conversation'),
+					domNode: sessionsPart.domNode,
+					header: undefined,
+					layout: dimension => sessionsPart.layout(new Dimension(dimension.width, dimension.height)),
+				}],
+			]);
+			this._register(services.createInstance(CodeCardControls, cards, presentations));
+		}
 		setActivityBarLocation(activityBarLocation);
 		const customViews = services.get(ICustomViewService);
 		this._register(autorun(reader => {

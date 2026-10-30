@@ -1,3 +1,4 @@
+import { Orientation } from '../../browser/ui/sash/sash.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -21,6 +22,32 @@ for (const [name, value] of Object.entries({
 }
 
 const { Sash, SashSettingsBinding, SashState } = await import('../../browser/ui/sash/sash.js');
+
+test('Sash projects owner geometry and reports pointer coordinates without losing keyboard support', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		let left = 120;
+		using sash = new Sash(dom.window.document.body, {
+			getVerticalSashLeft: () => left, getVerticalSashTop: () => 10, getVerticalSashHeight: () => 300,
+		}, { orientation: Orientation.VERTICAL });
+		sash.layout();
+		assert.deepEqual([sash.element.style.left, sash.element.style.top, sash.element.style.height], ['120px', '10px', '300px']);
+		left = 180;
+		sash.layout();
+		assert.equal(sash.element.style.left, '180px');
+		const changes: number[][] = [];
+		let starts = 0, ends = 0;
+		sash.onDidStart(event => { starts++; assert.equal(event.currentX, event.startX); });
+		sash.onDidChange(event => changes.push([event.startX, event.startY, event.currentX, event.currentY]));
+		sash.onDidEnd(() => ends++);
+		sash.element.dispatchEvent(new dom.window.MouseEvent('pointerdown', { button: 0, clientX: 180, clientY: 30 }));
+		dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 220, clientY: 40 }));
+		dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup'));
+		sash.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', altKey: true }));
+		assert.deepEqual(changes, [[180, 30, 220, 40], [0, 0, 1, 0]]);
+		assert.deepEqual([starts, ends], [2, 2]);
+	} finally { dom.window.close(); }
+});
 
 test('Sash settings are scoped to a subtree and clean up their projection', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -94,7 +121,7 @@ test('Sash applies configured hover feedback and active drag state', () => {
 		hoverFeedbackSize: 4,
 		hoverDelay: 0,
 	});
-	using sash = new Sash(dom.window.document.body, 'vertical');
+	using sash = new Sash(dom.window.document.body, { getVerticalSashLeft: () => 0 }, { orientation: Orientation.VERTICAL });
 	root.append(sash.element);
 
 	sash.element.dispatchEvent(new dom.window.MouseEvent('pointerenter'));
@@ -117,7 +144,7 @@ test('Sash applies configured hover feedback and active drag state', () => {
 
 test('Sash projects directional and disabled interaction states', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	using sash = new Sash(dom.window.document.body, 'vertical');
+	using sash = new Sash(dom.window.document.body, { getVerticalSashLeft: () => 0 }, { orientation: Orientation.VERTICAL });
 	dom.window.document.body.append(sash.element);
 	let starts = 0;
 	sash.onDidStart(() => starts += 1);
@@ -140,14 +167,14 @@ test('Sash projects directional and disabled interaction states', () => {
 
 test('Sash corner handles drag both orthogonal separators', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	using horizontal = new Sash(dom.window.document.body, 'horizontal');
-	using vertical = new Sash(dom.window.document.body, 'vertical');
+	using horizontal = new Sash(dom.window.document.body, { getHorizontalSashTop: () => 0 }, { orientation: Orientation.HORIZONTAL });
+	using vertical = new Sash(dom.window.document.body, { getVerticalSashLeft: () => 0 }, { orientation: Orientation.VERTICAL });
 	dom.window.document.body.append(horizontal.element, vertical.element);
 	const horizontalDeltas: number[] = [];
 	const verticalDeltas: number[] = [];
 	let resets = 0;
-	horizontal.onDidChange((event) => horizontalDeltas.push(event.delta));
-	vertical.onDidChange((event) => verticalDeltas.push(event.delta));
+	horizontal.onDidChange((event) => horizontalDeltas.push(event.currentY - event.startY));
+	vertical.onDidChange((event) => verticalDeltas.push(event.currentX - event.startX));
 	horizontal.onDidReset(() => resets += 1);
 	vertical.onDidReset(() => resets += 1);
 	horizontal.orthogonalStartSash = vertical;
@@ -164,7 +191,7 @@ test('Sash corner handles drag both orthogonal separators', () => {
 	assert.equal(resets, 2);
 	vertical.state = SashState.Disabled;
 	assert.equal(horizontal.element.querySelector('.ash-sash-orthogonal-handle-start'), null);
-	using sameOrientation = new Sash(dom.window.document.body, 'horizontal');
+	using sameOrientation = new Sash(dom.window.document.body, { getHorizontalSashTop: () => 0 }, { orientation: Orientation.HORIZONTAL });
 	assert.throws(() => horizontal.orthogonalEndSash = sameOrientation, /different orientations/);
 
 	dom.window.close();
@@ -176,16 +203,16 @@ test('Sash forwards drag, hover, and reset to a linked Sash', () => {
 	assert.ok(root);
 	using binding = new SashSettingsBinding(root);
 	binding.update({ dragAreaSize: 4, hoverFeedbackSize: 4, hoverDelay: 0 });
-	using first = new Sash(dom.window.document.body, 'vertical');
-	using second = new Sash(dom.window.document.body, 'vertical');
+	using first = new Sash(dom.window.document.body, { getVerticalSashLeft: () => 0 }, { orientation: Orientation.VERTICAL });
+	using second = new Sash(dom.window.document.body, { getVerticalSashLeft: () => 0 }, { orientation: Orientation.VERTICAL });
 	root.append(first.element, second.element);
 	first.linkedSash = second;
 	second.linkedSash = first;
 	const firstDeltas: number[] = [];
 	const secondDeltas: number[] = [];
 	let resets = 0;
-	first.onDidChange((event) => firstDeltas.push(event.delta));
-	second.onDidChange((event) => secondDeltas.push(event.delta));
+	first.onDidChange((event) => firstDeltas.push(event.currentX - event.startX));
+	second.onDidChange((event) => secondDeltas.push(event.currentX - event.startX));
 	first.onDidReset(() => resets += 1);
 	second.onDidReset(() => resets += 1);
 	let firstPointerCaptures = 0;
@@ -210,7 +237,7 @@ test('Sash forwards drag, hover, and reset to a linked Sash', () => {
 	first.element.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
 	assert.equal(resets, 2);
 
-	using horizontal = new Sash(dom.window.document.body, 'horizontal');
+	using horizontal = new Sash(dom.window.document.body, { getHorizontalSashTop: () => 0 }, { orientation: Orientation.HORIZONTAL });
 	assert.throws(() => first.linkedSash = horizontal, /same orientation/);
 	dom.window.close();
 });
