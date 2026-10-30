@@ -335,7 +335,7 @@ test.describe('Sessions from an Electron Workbench', () => {
 			const nested = auxiliary.getByRole('treeitem', { name: 'nested', exact: true });
 			await nested.click();
 			await expect(auxiliary.getByRole('treeitem', { name: /child\.ts$/u })).toBeVisible();
-			const collapse = auxiliary.getByRole('button', { name: 'Collapse folders', exact: true });
+			const collapse = page.locator('.ash-code-files-card').getByRole('button', { name: 'Collapse folders', exact: true });
 			await collapse.focus();
 			await page.keyboard.press('Enter');
 			await expect(nested).toHaveAttribute('aria-expanded', 'false');
@@ -349,7 +349,16 @@ test.describe('Sessions from an Electron Workbench', () => {
 			await page.keyboard.insertText('const value = 42;\n');
 			await page.keyboard.press('ControlOrMeta+S');
 			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 42;\n');
+			const filesCard = page.locator('.ash-code-files-card');
+			await expect(filesCard.locator('[data-part="editor"]')).toBeVisible();
+			await expect(filesCard.locator('[data-part="auxiliarybar"]')).toBeVisible();
 			const input = await editor.input.elementHandle();
+			await filesCard.locator(':scope > header > .ash-code-card-controls').getByRole('button', { name: 'Close card', exact: true }).click();
+			await expect(editors).toBeHidden();
+			await expect(auxiliary).toBeHidden();
+			await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Toggle files', exact: true }).click();
+			await expect(editors).toBeVisible();
+			expect(await editor.input.evaluate((element, original) => element === original, input)).toBe(true);
 			await mode.getByRole('button', { name: /^Chat/u }).click();
 			await expect(auxiliary).toBeHidden();
 			await expect(page.locator('.ash-chatgpt-widget')).toBeVisible();
@@ -481,7 +490,7 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	expect(failures).toEqual([]);
 });
 
-test('Changes uses one retained editor card beside Files and Terminal', async ({ application, target, workbench }, testInfo) => {
+test('Files retains its shared review editor while the whole card moves beside Terminal', async ({ application, target, workbench }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const commands = new QuickAccess(page);
@@ -491,8 +500,9 @@ test('Changes uses one retained editor card beside Files and Terminal', async ({
 	await expect(editor).toBeHidden();
 	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Changes', exact: true }).click();
 	await expect(editor).toBeVisible();
-	await expect(editor).toHaveAttribute('data-code-card', 'editor');
-	await expect(editor.locator('.ash-editor-title-control:visible')).toHaveCount(0);
+	const filesCard = page.locator('.ash-code-files-card');
+	await expect(filesCard.locator('[data-part="editor"]')).toBeVisible();
+	await expect(editor.getByRole('tab', { name: 'Changes', exact: true })).toBeVisible();
 	await expect(files).toBeVisible();
 	await expect(files.locator('.ash-sessions-changes')).toHaveCount(0);
 	await expect(editor.locator('.ash-sessions-changes')).toHaveCount(1);
@@ -504,22 +514,22 @@ test('Changes uses one retained editor card beside Files and Terminal', async ({
 	await expect(editor.getByRole('tree', { name: 'Changes', exact: true })).toBeFocused();
 	await commands.runCommand('ash.sessions.togglePanel');
 	await expect(terminal).toBeVisible();
-	const controls = editor.locator(':scope > .ash-workbench-part-title .ash-code-card-controls');
+	const controls = filesCard.locator(':scope > header > .ash-code-card-controls');
 	const menus = new Menus(page);
-	await menus.select(application, () => controls.getByRole('button', { name: 'Arrange card', exact: true }).click(), ['Files', 'Move above Files']);
+	await menus.select(application, () => controls.getByRole('button', { name: 'Arrange card', exact: true }).click(), ['Terminal', 'Move above Terminal']);
 	await expect.poll(async () => {
-		const card = (await editor.boundingBox())!, tree = (await files.boundingBox())!;
-		return card.y + card.height <= tree.y + 1;
+		const card = (await filesCard.boundingBox())!, tool = (await terminal.boundingBox())!;
+		return card.y + card.height <= tool.y + 1;
 	}).toBe(true);
-	const before = await files.boundingBox();
+	const before = await filesCard.boundingBox();
 	await controls.getByRole('button', { name: 'Expand card', exact: true }).click();
-	await expect(files).toBeHidden();
+	await expect(files).toBeVisible();
 	await expect(terminal).toBeHidden();
 	await expect(page.locator('[data-part="sessions"]')).toBeHidden();
 	await controls.getByRole('button', { name: 'Restore card size', exact: true }).click();
 	await expect(files).toBeVisible();
 	await expect(terminal).toBeVisible();
-	await expect.poll(async () => Math.abs((await files.boundingBox())!.width - before!.width)).toBeLessThanOrEqual(1);
+	await expect.poll(async () => Math.abs((await filesCard.boundingBox())!.width - before!.width)).toBeLessThanOrEqual(1);
 	const screenshot = testInfo.outputPath('changes-card.png');
 	await page.screenshot({ path: screenshot });
 	await testInfo.attach('changes-card-with-files-and-terminal', { path: screenshot, contentType: 'image/png' });
@@ -533,7 +543,7 @@ test('Changes uses one retained editor card beside Files and Terminal', async ({
 	await expect(editor.locator('.ash-sessions-changes')).toHaveCount(1);
 	await controls.getByRole('button', { name: 'Close card', exact: true }).click();
 	await expect(editor).toBeHidden();
-	await expect(files).toBeVisible();
+	await expect(files).toBeHidden();
 	await expect(terminal).toBeVisible();
 	await page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Changes', exact: true }).click();
 	await testInfo.attach('reopened-changes-card', { body: await page.screenshot(), contentType: 'image/png' });

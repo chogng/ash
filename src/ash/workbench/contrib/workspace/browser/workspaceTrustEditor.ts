@@ -150,6 +150,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 		description.textContent = localize('workspaceTrust.advancedDescription', 'Customize individual permissions for this folder. Changes stay in a draft until you save and confirm.');
 		advancedContent.append(this.folderPath, description);
 		const presetLabel = h(document, 'p');
+		presetLabel.className = 'workspace-trust-preset-label';
 		presetLabel.textContent = localize('workspaceTrust.preset', 'Permission preset');
 		advancedContent.append(presetLabel);
 		this.presets = this._register(new SelectBox(advancedContent, {
@@ -185,6 +186,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 		this._register(this.saveButton.onDidClick(() => { void this.savePermissions(); }));
 		this._register(this.resetButton.onDidClick(() => { this.draft = new Set(this.saved); this.render(); }));
 		const note = h(document, 'p');
+		note.className = 'workspace-trust-note';
 		note.textContent = localize('workspaceTrust.ready', 'Changing permissions may terminate running terminal commands and debug sessions. Save any work before applying changes.');
 		advancedContent.append(note);
 
@@ -250,12 +252,14 @@ export class WorkspaceTrustEditor extends EditorPane {
 
 	private renderOverview(): void {
 		if (this.effective === undefined) {
+			this.root.dataset.trustState = 'unknown';
 			this.heading.textContent = localize('workspaceTrust.stateUnknown', 'Workspace permissions');
 			this.summary.textContent = localize('workspaceTrust.noEffective', 'Effective directory permissions are unavailable.');
 			return;
 		}
 		const readOnly = this.samePermissions(this.effective, READ_DIR_PERMISSIONS);
 		const development = this.effectiveTrusted && this.samePermissions(this.effective, DEVELOPMENT_DIR_PERMISSIONS);
+		this.root.dataset.trustState = development ? 'trusted' : readOnly ? 'readOnly' : 'custom';
 		this.heading.textContent = development
 			? localize('workspaceTrust.stateTrusted', 'Trusted workspace')
 			: readOnly
