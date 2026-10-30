@@ -80,14 +80,11 @@ suite('Workbench localization', () => {
 
 	test('theme editor actions and workspace help use the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');
-		assert.equal(localize('themeEditor.selectTheme', ''), '打开主题…');
-		assert.equal(localize('themeEditor.currentlyApplied', ''), '当前应用');
-		assert.equal(localize('themeEditor.searchThemes', ''), '搜索要编辑的主题');
-		assert.ok(localize('themeEditor.themePickerHelp', '').includes('当前应用'));
+		assert.ok(localize('themeEditor.currentThemeHelp', '').includes('当前应用的主题'));
+		assert.ok(localize('themeEditor.currentThemeHelp', '').includes('个人主题副本'));
 		assert.ok(localize('themeEditor.help', '').includes('默认在当前窗口的标签页中打开'));
 		assert.ok(localize('themeEditor.sourceHelp', '').includes('编辑器类型选择器'));
-		assert.equal(localize('themeEditor.editingTheme', '', 'Ash Light'), '编辑主题：Ash Light');
-		assert.equal(localize('themeEditor.syntaxPreview', ''), '语法');
+		assert.equal(localize('themeEditor.codeScene', ''), '代码');
 	});
 
 	test('Panel commands and navigation help use the selected Chinese catalog', () => {

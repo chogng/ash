@@ -80,6 +80,7 @@ if (locale) {
 const resources = new DisposableStore();
 const bundledExtensions = createBuiltinExtensionFixture();
 let themeSourceRoot: URI | undefined;
+let installedThemeSources = false;
 let extensionCatalogReads = 0;
 let saveOnClose = false;
 let writeGate: { started: DeferredPromise<void>; release: DeferredPromise<void>; } | undefined;
@@ -88,7 +89,7 @@ const extensionApi = {
 	list: async (reload: 'cached' | 'refresh') => {
 		extensionCatalogReads++;
 		const catalog = await bundledExtensions.list(reload);
-		return { ...catalog, extensions: catalog.extensions.map(extension => themeSourceRoot && extension.id === 'vscode.theme-defaults' ? { ...extension, extensionLocation: 'file:///prepared/theme-defaults' } : extension) };
+		return { ...catalog, extensions: catalog.extensions.map(extension => themeSourceRoot && extension.id === 'vscode.theme-defaults' ? { ...extension, extensionLocation: installedThemeSources ? themeSourceRoot.toString() : 'file:///prepared/theme-defaults', ...(installedThemeSources ? { sourceKind: 'user' as const } : {}) } : extension) };
 	},
 };
 const extensions = resources.add(new ExtensionColorThemeService(extensionApi, { subscribe: () => toDisposable(() => { }) }));
@@ -238,7 +239,7 @@ declare global {
 			releaseWrite(): Promise<void>;
 			reloadThemes(): Promise<void>;
 			editors(): { resource: string; label: string | undefined; dirty: boolean; }[];
-			useWritableThemeSources(): Promise<void>;
+			useWritableThemeSources(installed?: boolean): Promise<void>;
 			themeSource(path: string): Promise<string>;
 			externalWrite(text: string): Promise<void>;
 		};
@@ -271,7 +272,8 @@ window.themeEditorTest = {
 	releaseWrite: async () => { await writeGate?.release.complete(); },
 	reloadThemes: async () => { await Promise.all([extensions.reload(), users.reload()]); },
 	editors: () => parts.parts.flatMap(part => part.groups.flatMap(group => group.editors.map(editor => ({ resource: editor.input.resource.toString(), label: editor.input.label, dirty: editor.isDirty })))),
-	useWritableThemeSources: async () => {
+	useWritableThemeSources: async (installed = false) => {
+		installedThemeSources = installed;
 		const root = URI.file('/extension-sources/theme-defaults');
 		const catalog = await bundledExtensions.list('cached');
 		const descriptor = catalog.extensions.find(extension => extension.id === 'vscode.theme-defaults')!;

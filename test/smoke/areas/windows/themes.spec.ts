@@ -2,16 +2,12 @@ import { readUserSettings, writeUserSettings } from '../../../automation/setting
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
-import type { Locator, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import type { Workbench } from '../../../automation/workbench.js';
 
-function themeSelector(page: Page): Locator {
-	return page.locator('.ash-theme-editor-preview-actions:visible').getByRole('button', { name: /^Editing theme:/u });
-}
-
 async function pressThemeShortcut(page: Page, shortcut: string): Promise<void> {
-	await themeSelector(page).focus();
+	await page.getByRole('tablist', { name: 'Preview window', exact: true }).getByRole('tab', { selected: true }).focus();
 	await page.keyboard.press(shortcut);
 }
 
@@ -21,7 +17,7 @@ async function saveThemeCopy(page: Page, name: string): Promise<void> {
 	await dialog.getByRole('textbox', { name: 'Theme name', exact: true }).fill(name);
 	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(dialog).toBeHidden();
-	await expect(themeSelector(page)).toHaveText(`Editing theme: ${name}`);
+	await expect(page.getByRole('tab', { name: new RegExp(name.toLowerCase().replaceAll(' ', '-') + '\\.json') })).toBeVisible();
 }
 
 async function selectEditorType(workbench: Workbench, application: PlaywrightApplication, name: 'Text Editor' | 'Theme Editor'): Promise<void> {
@@ -29,7 +25,6 @@ async function selectEditorType(workbench: Workbench, application: PlaywrightApp
 }
 
 test('Theme Editor opens an installed source outside the workspace and applies a saved user copy', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
-	const original = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'));
 	const popup = workbench.page;
 	const originalPages = popup.context().pages().length;
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
@@ -39,7 +34,7 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	await expect(popup.locator('.ash-workbench-statusbar')).toBeVisible();
 	for (const width of [800, 1100, 1440]) {
 		await popup.setViewportSize({ width, height: 900 });
-		await expect(themeSelector(popup)).toBeVisible();
+		await expect(popup.getByRole('button', { name: 'Save as…', exact: true })).toBeVisible();
 		await expect(popup.locator('.ash-breadcrumbs-editor-type:visible')).toHaveText('Theme Editor');
 	}
 	const search = popup.getByRole('searchbox', { name: 'Search colors', exact: true });
@@ -72,7 +67,7 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	await expect(savedTab).toHaveAttribute('aria-label', /unsaved/i);
 	await pressThemeShortcut(popup, 'ControlOrMeta+s');
 	await expect(savedTab).not.toHaveAttribute('aria-label', /unsaved/i);
-	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
+	await expect(workbench.element).toHaveCSS('--ash-editor-background', '#315bc9');
 	const trigger = popup.getByRole('button', { name: 'Choose color for editor.background', exact: true });
 	await trigger.press('Enter');
 	const picker = popup.getByRole('dialog', { name: 'Color picker', exact: true });
@@ -100,7 +95,7 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	await pressThemeShortcut(popup, 'ControlOrMeta+z');
 	await expect(color).toHaveValue('2F6FED');
 	await expect(popup.getByRole('spinbutton', { name: 'Opacity for editor.background (%)', exact: true })).toHaveValue('40');
-	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
+	await expect(workbench.element).toHaveCSS('--ash-editor-background', '#315bc9');
 	await pressThemeShortcut(popup, 'ControlOrMeta+s');
 	await expect(savedTab).not.toHaveAttribute('aria-label', /unsaved/i);
 	await workbench.quickaccess.runCommand('workbench.action.selectTheme');
@@ -120,31 +115,16 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	expect(saved.colors['editor.background']).toBe('#2f6fed66');
 });
 
-test('Theme Editor opens themes in workspace tabs and preserves edits while switching', { tag: ['@electron-app-server'] }, async ({ workbench }) => {
+test('Theme Editor opens the applied theme and preserves edits in other tabs', { tag: ['@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	const originalPages = page.context().pages().length;
-	const original = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'));
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	const open = themeSelector(page);
-	await open.press('Enter');
-	const picker = page.locator('.ash-quick-pick');
-	const input = picker.getByRole('combobox', { name: 'Open Theme…', exact: true });
-	await expect(input).toBeFocused();
-	await input.fill('>');
-	await expect(picker.getByRole('option')).toHaveCount(0);
-	await input.fill('palette.ts');
-	await expect(picker.getByRole('option')).toHaveCount(0);
-	await input.fill('Ash Dark');
-	await picker.getByRole('option').filter({ has: page.getByText('Ash Dark', { exact: true }) }).click();
-	await expect(picker).toBeHidden();
-	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'light.json' })).toHaveCount(1);
-	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'dark.json' })).toHaveCount(1);
 	await saveThemeCopy(page, 'Theme switching regression');
 	const search = page.getByRole('searchbox', { name: 'Search colors', exact: true });
 	await search.fill('editor.background');
 	const color = page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
 	const preview = page.locator('.ash-theme-editor:visible').frameLocator('.ash-theme-editor-preview').locator('#app');
-	const beforeEdit = '#' + (await color.inputValue()).replace(/^#/, '').toLowerCase();
+	const beforeEdit = '#' + (await color.inputValue()).toLowerCase();
 	await color.fill('#123456');
 	await color.press('Enter');
 	await expect(preview).toHaveCSS('--ash-editor-background', '#123456');
@@ -154,15 +134,15 @@ test('Theme Editor opens themes in workspace tabs and preserves edits while swit
 	await expect(preview).toHaveCSS('--ash-editor-background', '#123456');
 	const draft = workbench.editors.groupAt(0).tabs.filter({ hasText: 'theme-switching-regression.json' });
 	await expect(draft).toHaveAttribute('aria-label', /unsaved/i);
-	await open.click();
-	await input.fill('Ash Light');
-	await picker.getByRole('option').filter({ has: page.getByText('Ash Light', { exact: true }) }).click();
-	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'light.json' })).toHaveAttribute('aria-selected', 'true');
+	await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+	await workbench.quickaccess.select('Ash Dark');
+	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'ash-dark.json' })).toHaveAttribute('aria-selected', 'true');
 	await expect(draft).toHaveAttribute('aria-label', /unsaved/i);
+	await expect(page.locator('.ash-theme-editor').getByRole('button', { name: /^Editing theme:/u })).toHaveCount(0);
 	await draft.click();
 	await expect(color).toHaveValue('123456');
 	await expect(preview).toHaveCSS('--ash-editor-background', '#123456');
-	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
 	expect(page.context().pages()).toHaveLength(originalPages);
 });
 
@@ -186,10 +166,6 @@ test('Theme Editor tab close confirms unsaved changes and allows cancel, save an
 	const saved = JSON.parse(await readFile(path, 'utf8'));
 	expect(saved.colors['editor.background']).toBe('#234567');
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	await themeSelector(page).click();
-	const picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox', { name: 'Open Theme…', exact: true }).fill('Tab close regression');
-	await picker.getByRole('option').filter({ has: page.getByText('Tab close regression', { exact: true }) }).click();
 	await page.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
 	await page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#456789');
 	await page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).press('Enter');
@@ -235,6 +211,8 @@ test('Theme Editor connects its local file preview and isolates draft colors', {
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
 	const popup = page;
 	await saveThemeCopy(page, 'Desktop preview regression');
+	await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+	await workbench.quickaccess.select('Ash Light');
 	const savedTab = workbench.editors.groupAt(0).tabs.filter({ hasText: 'desktop-preview-regression.json' });
 	const errors: string[] = [];
 	popup.on('pageerror', error => errors.push(error.message));

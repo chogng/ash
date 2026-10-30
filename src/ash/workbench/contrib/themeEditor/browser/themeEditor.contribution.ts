@@ -57,33 +57,14 @@ registerAction2(
 				f1: true,
 			});
 		}
-		public override async run(accessor: ServicesAccessor, options?: unknown): Promise<void> {
-			if (
-				options !== undefined &&
-				(!options ||
-					typeof options !== 'object' ||
-					!('themeId' in options) ||
-					typeof options.themeId !== 'string' ||
-					!options.themeId ||
-					!('groupId' in options) ||
-					typeof options.groupId !== 'number' ||
-					!Number.isSafeInteger(options.groupId))
-			) {
-				throw new TypeError(
-					localize(
-						'themeEditor.invalidSelection',
-						'A theme selection requires a theme ID and an editor group ID.',
-					),
-				);
-			}
-			const selection = options as { readonly themeId: string; readonly groupId: number; } | undefined;
+		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const users = accessor.get(IUserThemeService);
 			if (!users.available)
 				throw new Error(
 					localize('themeEditor.unavailable', 'User theme files are unavailable in this window.'),
 				);
 			const theme = accessor.get(IWorkbenchThemeService).getColorTheme();
-			const themeId = selection?.themeId ?? theme.id;
+			const themeId = theme.id;
 			const source = users.sourceFor(themeId);
 			const extensions = accessor.get(IExtensionService);
 			const extension = source ? undefined : getThemeEditorSource(extensions, themeId);
@@ -92,7 +73,7 @@ registerAction2(
 					localize(
 						'themeEditor.sourceUnavailable',
 						'The source file for theme {0} is unavailable.',
-						selection ? themeId : theme.label,
+						theme.label,
 					),
 				);
 			const resource = source ? URI.joinPath(users.directory!, source.file) : extension!.resource;
@@ -100,7 +81,7 @@ registerAction2(
 			const files = accessor.get(IFileService);
 			const editors = accessor.get(IEditorService);
 			// An installation path does not grant access through the workspace file provider.
-			// Keep directly accessible sources editable; otherwise use the catalog's read capability.
+			// Only checkout sources are editable. Installed themes are copied into the user profile.
 			const stat =
 				extension && resource.scheme !== 'ash-extension-resource'
 					? await files.stat(resource).catch(() => undefined)
@@ -112,14 +93,13 @@ registerAction2(
 				label: source?.file ?? resource.path.split('/').at(-1),
 				...(packaged
 					? { initialText: await resources.readExtensionResource(editorResource), readOnly: true }
-					: stat?.readonly
+					: extension && (!extension.developmentRoot || stat?.readonly)
 						? { readOnly: true }
 						: {}),
 			});
 			await editors.openEditor(
 				input,
 				{ preferredEditorId: ThemeEditorId, pinned: true, revealIfOpened: true },
-				selection ? { groupId: selection.groupId } : undefined,
 			);
 		}
 	},

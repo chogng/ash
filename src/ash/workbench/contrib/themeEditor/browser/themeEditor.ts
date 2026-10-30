@@ -79,9 +79,6 @@ import {
 	IExtensionResourceLoaderService,
 	toExtensionResourceURI,
 } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
-import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { WorkbenchThemesRegistry } from '../../../common/theme.js';
 
 export const ThemeEditorId = 'workbench.editor.themeEditor';
 export const ThemeEditorFocused = new RawContextKey<boolean>('themeEditorFocused', false);
@@ -150,7 +147,7 @@ export class ThemeEditor extends EditorPane {
 	private scrollable: ScrollableElement | undefined;
 	private split: SplitView | undefined;
 	private preview: ThemePreview | undefined;
-	private themeSelector: Button | undefined;
+	private saveAsButton: Button | undefined;
 	private readonly rows = new Map<string, ThemeColorRow>();
 	private rowHeight = 0;
 	private selectedColor: string | undefined;
@@ -176,7 +173,6 @@ export class ThemeEditor extends EditorPane {
 	private valid = false;
 	private operation = 0;
 	private saving = false;
-	private readonly themePicker = this._register(new MutableDisposable<DisposableStore>());
 	private dimension: IDimension = { width: 0, height: 0 };
 	private initialSplitLayout = true;
 
@@ -196,8 +192,6 @@ export class ThemeEditor extends EditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IExtensionService private readonly extensions: IExtensionService,
 		@IExtensionResourceLoaderService private readonly extensionResources: IExtensionResourceLoaderService,
-		@IQuickInputService private readonly quickInput: IQuickInputService,
-		@ICommandService private readonly commands: ICommandService,
 	) {
 		super(ThemeEditorId, themeService, storageService);
 		this._register(toDisposable(() => this.clearInput()));
@@ -470,17 +464,15 @@ export class ThemeEditor extends EditorPane {
 				this.configuration,
 				header,
 				actions => {
-					this.themeSelector = this._register(
+					this.saveAsButton = this._register(
 						new Button(actions, {
 							...defaultButtonStyles,
-							label: '',
+							label: localize('themeEditor.saveAs', 'Save as…'),
 							size: 'small',
-							onClick: () => this.showThemePicker(),
+							onClick: () => { void this.runAction(() => this.saveThemeAs()); },
 						}),
 					);
-					this.themeSelector.domNode.setAttribute('aria-haspopup', 'listbox');
-					this.themeSelector.domNode.setAttribute('aria-expanded', 'false');
-					appendLabelIcon(this.themeSelector.domNode, Lxicon.chevronDown);
+					this.saveAsButton.hidden = true;
 				},
 			),
 		);
@@ -517,7 +509,7 @@ export class ThemeEditor extends EditorPane {
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
 		this.input = input;
-		this.updateThemeSelector();
+		if (this.saveAsButton) this.saveAsButton.hidden = !input.readOnly;
 		await this.textEditor.setInput(input, signal);
 		if (signal.aborted || this.input !== input) throw new CancellationError();
 		const control = this.getControl()!;
@@ -538,7 +530,6 @@ export class ThemeEditor extends EditorPane {
 	}
 
 	public override clearInput(): void {
-		this.themePicker.clear();
 		this.picker?.cancel();
 		this.operation++;
 		this.refresh.cancel();
@@ -548,7 +539,7 @@ export class ThemeEditor extends EditorPane {
 		this.compiledSource = undefined;
 		this.saveValidation = undefined;
 		this.input = undefined;
-		this.updateThemeSelector();
+		if (this.saveAsButton) this.saveAsButton.hidden = true;
 		this.valid = false;
 		this.textEditor.clearInput();
 		this.copiesChanged.fire();
@@ -610,78 +601,10 @@ export class ThemeEditor extends EditorPane {
 			),
 		].join('\n');
 	}
-
-	private showThemePicker(): void {
-		if (!this.input || !this.group) return;
-		this.themePicker.clear();
-		const lifetime = new DisposableStore();
-		this.themePicker.value = lifetime;
-		const picker = lifetime.add(this.quickInput.createQuickPick<IQuickPickItem & { readonly themeId: string; }>());
-		this.themeSelector?.domNode.setAttribute('aria-expanded', 'true');
-		lifetime.add(toDisposable(() => this.themeSelector?.domNode.setAttribute('aria-expanded', 'false')));
-		picker.placeholder = localize('themeEditor.searchThemes', 'Search themes to edit');
-		picker.ariaLabel = localize('themeEditor.selectTheme', 'Open Theme…');
-		const current = this.themeIdForResource(this.input.resource);
-		const updateItems = (): void => {
-			const active = picker.activeItems[0]?.themeId ?? current;
-			const applied = this.themes.getColorTheme().id;
-			const items = WorkbenchThemesRegistry.getColorThemes()
-				.filter(theme => this.userThemes.sourceFor(theme.id) || getThemeEditorSource(this.extensions, theme.id))
-				.map(theme => ({
-					label: theme.label,
-					themeId: theme.id,
-					picked: theme.id === current,
-					description:
-						theme.id === applied
-							? localize('themeEditor.currentlyApplied', 'Currently applied')
-							: undefined,
-				}));
-			picker.items = items;
-			picker.activeItems = items.filter(item => item.themeId === active);
-		};
-		updateItems();
-		lifetime.add(this.themes.onDidColorThemeChange(updateItems));
-		lifetime.add(
-			picker.onDidAccept(() => {
-				const selected = picker.selectedItems[0];
-				const groupId = this.group?.id;
-				if (!selected || groupId === undefined) return;
-				picker.hide();
-				void this.commands
-					.executeCommand('workbench.action.openThemeEditor', { themeId: selected.themeId, groupId })
-					.catch(error => {
-						if (!this.isDisposed)
-							this.showMessage(
-								localize(
-									'themeEditor.switchError',
-									'Could not switch the theme. {0}',
-									error instanceof Error ? error.message : String(error),
-								),
-								true,
-							);
-					});
-			}),
-		);
-		lifetime.add(
-			Event.once(picker.onDidHide)(() => {
-				if (this.themePicker.value === lifetime) this.themePicker.clear();
-			}),
-		);
-		picker.show();
-	}
-
-	private updateThemeSelector(): void {
-		if (!this.themeSelector || this.isDisposed) return;
-		const label = this.compiled?.label ?? this.input?.label ?? '';
-		this.themeSelector.label = localize('themeEditor.editingTheme', 'Editing theme: {0}', label);
-		this.themeSelector.enabled = !!this.input;
-		this.themeSelector.setTitle(this.themeSelector.label);
-	}
-
 	public async save(options?: ISaveOptions): Promise<void> {
 		const input = this.input;
-		if (!input || input.readOnly) return;
-		if (input.resource.scheme === 'untitled') return this.saveThemeAs();
+		if (!input) return;
+		if (input.readOnly || input.resource.scheme === 'untitled') return this.saveThemeAs();
 		// Keep theme validation errors in this editor, before generic file-error dialogs.
 		const validation = await this.validateSave(new AbortController().signal, true);
 		if (this.input !== input) throw new CancellationError();
@@ -739,6 +662,7 @@ export class ThemeEditor extends EditorPane {
 		const name = await this.promptName();
 		if (name === undefined || this.input !== input) return;
 		const source = model.getText();
+		const copiedThemeId = input.readOnly ? this.themeIdForResource(input.resource) : undefined;
 		// Exporting an extension theme is explicit. Resolve its package-relative
 		// includes here; the original source editor keeps the original document.
 		const candidate = getThemeEditorSource(this.extensions, input.resource)
@@ -765,6 +689,10 @@ export class ThemeEditor extends EditorPane {
 				localize('themeEditor.copySaved', 'Saved {0}. Newer edits remain in this editor.', saved.file),
 			);
 			return;
+		}
+		if (copiedThemeId && this.themes.getColorTheme().id === copiedThemeId) {
+			await this.themes.setColorTheme(saved.theme.id, 'themeEditor');
+			if (this.input !== input) return;
 		}
 		// Resource navigation may normalize the input; replacement follows the pane's owning group.
 		const group = this.editorParts.groups.find(group => group.id === this.group?.id);
@@ -885,7 +813,6 @@ export class ThemeEditor extends EditorPane {
 				(this.compiledSource === source && this.compiled ? this.compiled : await this.compile(source));
 			if (operation !== this.operation || this.textEditor.getValue() !== source) return;
 			this.compiled = theme;
-			this.updateThemeSelector();
 			this.compiledSource = source;
 			this.valid = true;
 			this.updateTitleArea();

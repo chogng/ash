@@ -26,8 +26,7 @@ async function chooseThemeAction(popup: Page, label: string, _locale = 'en'): Pr
 		if (label === 'Open Theme (JSON)') await popup.getByRole('textbox').focus();
 		return;
 	}
-	const selector = popup.locator('.ash-theme-editor-preview-actions > .ash-button:visible');
-	if (await selector.isVisible()) await selector.focus();
+	await popup.locator('.ash-theme-editor-preview-tabs').getByRole('tab', { selected: true }).focus();
 	const shortcut =
 		label === 'Undo' || label === '撤销'
 			? 'ControlOrMeta+z'
@@ -103,50 +102,34 @@ async function openEditor(page: Page, locale?: string, theme?: string): Promise<
 }
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`theme toolbar names the edited file and marks the applied theme independently (${locale})`, async ({
-		page,
-	}) => {
+	test(`opening Theme Editor follows the applied theme and preserves other tabs (${locale})`, async ({ page }) => {
 		const chinese = locale === 'zh-CN';
-		const openLabel = chinese ? '打开主题…' : 'Open Theme…';
-		const appliedLabel = chinese ? '当前应用' : 'Currently applied';
 		await page.goto('/themeEditor.html' + (chinese ? '?locale=zh-CN' : ''));
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await page.locator('#open').click();
-		const open = page.locator('.ash-theme-editor-preview-actions > .ash-button:visible');
-		await expect(open.locator('.ash-button-label')).toBeVisible();
-		await expect(open).toHaveText(chinese ? '编辑主题：Aurora' : 'Editing theme: Aurora');
-		await expect(open.locator('.ash-icon')).toHaveCount(1);
+		await expect(page.getByRole('searchbox')).toBeVisible();
+		await expect(page.locator('.ash-theme-editor-preview-actions > .ash-button:visible')).toHaveCount(0);
 		await page.evaluate(() =>
 			window.themeEditorTest.setSource(window.themeEditorTest.source().replace('#101525', '#234567')),
 		);
-		const background = await page.locator('#main').evaluate(element => getComputedStyle(element).backgroundColor);
-		await open.press('Enter');
-		const picker = page.locator('.ash-quick-pick');
-		const input = picker.getByRole('combobox', { name: openLabel, exact: true });
-		await expect(input).toBeFocused();
-		await expect(input).toHaveAttribute('placeholder', chinese ? '搜索要编辑的主题' : 'Search themes to edit');
-		const applied = picker.getByRole('option').filter({ hasText: appliedLabel });
-		await expect(applied).toHaveCount(1);
-		await expect(applied.locator('.ash-quick-pick-row-label')).toHaveText('Aurora');
-		await expect(applied).toHaveAccessibleName(new RegExp(appliedLabel));
-		await input.fill('Ash Dark');
-		await input.press('Enter');
-		await expect(picker).toBeHidden();
-		await expect
-			.poll(() => page.evaluate(() => window.themeEditorTest.editors().map(editor => editor.label)))
-			.toEqual(['aurora.json', 'ash-dark.json']);
-		expect((await page.evaluate(() => window.themeEditorTest.editors()))[0].dirty).toBe(true);
-		await expect(page.locator('#main')).toHaveCSS('background-color', background);
-		await open.press('Enter');
-		await expect(applied.locator('.ash-quick-pick-row-label')).toHaveText('Aurora');
-		await input.fill('Ash');
 		await page.evaluate(() => window.themeEditorTest.selectTheme('ash-light'));
-		await expect(input).toHaveValue('Ash');
-		await expect(applied).toHaveCount(1);
-		await expect(applied.locator('.ash-quick-pick-row-label')).toHaveText('Ash Light');
-		await input.press('Escape');
-		await expect(picker).toBeHidden();
-		await expect(open).toBeFocused();
+		await page.locator('#open').click();
+		await expect.poll(() => page.evaluate(() => window.themeEditorTest.editors().map(editor => editor.label)))
+			.toEqual(['aurora.json', 'ash-light.json']);
+		expect((await page.evaluate(() => window.themeEditorTest.editors()))[0].dirty).toBe(true);
+		await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+		const saveAs = page.getByRole('button', { name: chinese ? '另存为…' : 'Save as…', exact: true });
+		await saveAs.press('Enter');
+		const dialog = page.getByRole('dialog', { name: chinese ? '另存为…' : 'Save as…', exact: true });
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: chinese ? '取消' : 'Cancel', exact: true }).click();
+		await expect(dialog).toBeHidden();
+		await expect(saveAs).toBeFocused();
+		expect((await page.evaluate(() => window.themeEditorTest.editors()))[1].dirty).toBe(false);
+		await page.getByRole('searchbox').press('Alt+F1');
+		await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue(
+			chinese ? /个人主题副本/u : /editable user theme copy/u,
+		);
 	});
 }
 
@@ -206,14 +189,6 @@ test('saving another theme changes its document without selecting it', async ({ 
 	await expectSaved(page);
 	expect(await page.evaluate(() => window.themeEditorTest.persisted('editable-theme.json'))).toContain('#223344');
 	await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(16, 21, 37)');
-	await popup.locator('.ash-theme-editor-preview-actions > .ash-button:visible').click();
-	await expect(
-		page
-			.locator('.ash-quick-pick')
-			.getByRole('option')
-			.filter({ hasText: 'Currently applied' })
-			.locator('.ash-quick-pick-row-label'),
-	).toHaveText('Aurora');
 });
 
 for (const [theme, locale] of [
@@ -399,11 +374,7 @@ for (const [locale, theme] of [
 		await expectSaved(page);
 		await expect(popup.locator('.ash-tab[data-state=dirty]')).toHaveCount(0);
 		await expect(popup.locator('.ash-theme-editor-message')).toBeHidden();
-		const selector = toolbar.locator('.ash-theme-editor-preview-actions > .ash-button:visible');
-		const lastTab = tabs.last();
-		const selectorBounds = await selector.boundingBox();
-		const tabBounds = await lastTab.boundingBox();
-		expect(tabBounds!.x + tabBounds!.width).toBeLessThanOrEqual(selectorBounds!.x);
+		await expect(toolbar.locator('.ash-theme-editor-preview-actions > .ash-button:visible')).toHaveCount(0);
 		await popup.screenshot({ path: testInfo.outputPath('theme-document-toolbar.png') });
 	});
 }
@@ -729,6 +700,7 @@ for (const [theme, scheme] of [
 		await expect(opacity.locator('..')).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
 		await hex.press('Tab');
 		await editColor(opacity, '50.2');
+		await expect(opacity).toBeFocused();
 		await expect(hex).toHaveValue(original);
 		expect(await opacity.evaluate((input: HTMLInputElement) => {
 			const style = getComputedStyle(input);
@@ -737,7 +709,8 @@ for (const [theme, scheme] of [
 			return input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) >= context.measureText(input.value).width;
 		})).toBe(true);
 		expect(await opacity.evaluate(input => {
-			const root = input.closest('.ash-input-box')!;
+			// Color and opacity share the outer focus border; inner field borders stay transparent.
+			const root = input.closest('.ash-color-picker-input')!;
 			const style = getComputedStyle(root);
 			const expected = input.ownerDocument.createElement('span');
 			expected.style.color = 'var(--ash-focusBorder)';
@@ -1119,6 +1092,36 @@ for (const theme of ['aurora', 'ash-light']) {
 		expect(await page.evaluate(() => window.themeEditorTest.mainEditors())).toEqual([]);
 	});
 }
+
+test('installed theme sources remain read-only even when their files are writable', async ({ page }) => {
+	await page.goto('/themeEditor.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.evaluate(async () => {
+		await window.themeEditorTest.useWritableThemeSources(true);
+		await window.themeEditorTest.selectTheme('ash-light');
+	});
+	const original = await page.evaluate(() => window.themeEditorTest.themeSource('themes/ash-light.json'));
+	await page.locator('#open').click();
+	await page.getByRole('searchbox').fill('editor.background');
+	await expect(page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true })).toBeDisabled();
+	await chooseThemeAction(page, 'Save');
+	const dialog = page.getByRole('dialog', { name: 'Save as…', exact: true });
+	await dialog.getByRole('textbox', { name: 'Theme name', exact: true }).fill('My light theme');
+	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(dialog).toBeHidden();
+	await expect.poll(() => page.evaluate(() => window.themeEditorTest.editors())).toEqual([
+		{ resource: 'file:///themes/my-light-theme.json', label: 'my-light-theme.json', dirty: false },
+	]);
+	await page.getByRole('searchbox').fill('editor.background');
+	const hex = page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+	await expect(hex).toBeEnabled();
+	await editColor(hex, '#234567');
+	await chooseThemeAction(page, 'Save');
+	await expectSaved(page);
+	await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(35, 69, 103)');
+	expect(await page.evaluate(() => window.themeEditorTest.themeSource('themes/ash-light.json'))).toBe(original);
+	expect(await page.evaluate(() => window.themeEditorTest.persisted('my-light-theme.json'))).toContain('#234567');
+});
 
 test('a development built-in theme opens and saves its checkout source instead of its installed copy', async ({
 	page,
