@@ -1,5 +1,4 @@
-import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
-import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
+import { isResourceDiffEditorInput, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
 import { h } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
@@ -180,14 +179,14 @@ export class EditorHeaderControl extends Disposable {
 			this.symbolRequest.clear();
 			this.outline = null;
 			this.breadcrumbs.setInput(input);
-			if (input && pane && this.languageFeatures) this.watchSymbols(pane);
+			if (input && !isResourceDiffEditorInput(input) && pane && this.languageFeatures) this.watchSymbols(pane);
 		}
 		this.updateBreadcrumbVisibility();
 	}
 
 	private watchSymbols(pane: IEditorPane): void {
 		const paneControl = pane.getControl?.();
-		const control = (paneControl instanceof DiffEditorWidget ? paneControl.modifiedEditor : paneControl) as Partial<{
+		const control = paneControl as Partial<{
 			getModel(): TextModel | null;
 			getPosition(): Position | null;
 			onDidChangeCursorSelection: Event<unknown>;

@@ -34,7 +34,8 @@ import { EditorGroupModel } from '../../common/editor/editorGroupModel.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { FileKind } from '../../../platform/files/common/files.js';
-import type { FileElement } from '../../browser/parts/editor/breadcrumbsModel.js';
+import { SymbolElement, type FileElement } from '../../browser/parts/editor/breadcrumbsModel.js';
+import { createDiffEditorInput } from '../../common/editor/diffEditorInput.js';
 
 test('Editor breadcrumbs initialize their navigation label in Chinese', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -46,6 +47,9 @@ test('Editor breadcrumbs initialize their navigation label in Chinese', () => {
 		control.setInput(input('folder/file.ts'));
 
 		assert.equal(control.domNode.getAttribute('aria-label'), '编辑器面包屑');
+		using comparison = createDiffEditorInput(input('old.ts'), input('new.ts'));
+		control.setInput(comparison);
+		assert.equal(control.domNode.getAttribute('aria-label'), '差异编辑器面包屑');
 		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorShowIconsConfiguration)?.setting;
 		assert.deepEqual([setting?.title, setting?.description], ['工作台 › 编辑器：显示图标', '在编辑器标签中显示文件图标。']);
 		const tabStyle = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)?.setting;
@@ -125,6 +129,50 @@ test('Editor breadcrumbs respect URI segment boundaries for remote, Windows and 
 			control.setInput({ ...input('main.ts'), resource: URI.parse(scenario.file) });
 			assert.deepEqual([...control.domNode.querySelectorAll('.ash-breadcrumb-item')].map(button => button.textContent), scenario.labels, scenario.file);
 		}
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Editor breadcrumbs keep historical paths separate from comparison behavior and content identity', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using services = createTestEditorServices();
+		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
+		workspace.updateWorkspace({ id: 'project', uri: URI.file('/project') });
+		const selections: FileElement[] = [];
+		using control = services.createInstance(EditorBreadcrumbsControl, dom.window.document.body,
+			(element: FileElement) => selections.push(element), undefined);
+		const historical = {
+			resource: URI.parse('git-commit:/a684989/src/a684989/method.ts?repository=repo&side=modified'),
+			preferredResource: URI.file('/project/src/a684989/method.ts'),
+			label: 'method.ts (a684989)', readOnly: true,
+		};
+		const range = new Range(1, 1, 2, 1);
+		const symbol = new SymbolElement({ name: 'run', kind: 'method', range, selectionRange: range });
+		control.setInput(historical);
+		control.setSymbols([symbol]);
+		const labels = (): (string | null)[] => [...control.domNode.querySelectorAll('.ash-breadcrumb-item')].map(button => button.textContent);
+		assert.deepEqual(labels(), ['src', 'a684989', 'method.ts', 'run']);
+		assert.equal(control.domNode.querySelector('[data-ash-icon-id="symbol-method"]') !== null, true);
+		control.domNode.querySelector<HTMLButtonElement>('.ash-breadcrumb-item')!.click();
+		assert.equal(selections.length, 0);
+		assert.equal(control.domNode.querySelector('.ash-breadcrumb-item')!.getAttribute('aria-disabled'), 'true');
+
+		using comparison = createDiffEditorInput({ ...historical, preferredResource: URI.file('/project/old/method.ts') }, historical);
+		control.setInput(comparison);
+		control.setSymbols([symbol]);
+		assert.deepEqual(labels(), ['src', 'a684989', 'method.ts']);
+		assert.equal(control.domNode.title, '/project/old/method.ts → /project/src/a684989/method.ts');
+		assert.equal(control.focus(), false);
+		assert.equal([...control.domNode.querySelectorAll<HTMLButtonElement>('.ash-breadcrumb-item')].every(button => button.disabled), true);
+		assert.equal(comparison.modified.resource, historical.resource);
+
+		control.setInput({ resource: historical.preferredResource });
+		assert.deepEqual(labels(), ['src', 'a684989', 'method.ts']);
+		assert.equal(control.focus(), true);
+		control.domNode.querySelector<HTMLButtonElement>('.ash-breadcrumb-item')!.click();
+		assert.equal(selections[0]?.uri.toString(), URI.file('/project/src').toString());
 	} finally {
 		dom.window.close();
 	}
@@ -405,6 +453,7 @@ test('EditorTitleControl follows nested document symbols and opens outline selec
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
 	assert.match(control.domNode.querySelector('.ash-editor-breadcrumbs')?.textContent ?? '', /symbols\.ts.*Alpha.*Beta/u);
+	assert.equal(control.domNode.querySelectorAll('[data-ash-icon-id="symbol-method"]').length, 2);
 	const buttons = control.domNode.querySelectorAll<HTMLButtonElement>('.ash-breadcrumb-item');
 	buttons[buttons.length - 1]?.click();
 	assert.equal(chosen?.name, 'Beta');
@@ -417,6 +466,14 @@ test('EditorTitleControl follows nested document symbols and opens outline selec
 	assert.doesNotMatch(control.domNode.querySelector('.ash-editor-breadcrumbs')?.textContent ?? '', /symbols\.ts/u);
 	await configuration.updateValue(BreadcrumbsSymbolPathConfiguration, 'off');
 	assert.equal(control.height, 35);
+	await configuration.updateValue(BreadcrumbsFilePathConfiguration, 'on');
+	await configuration.updateValue(BreadcrumbsSymbolPathConfiguration, 'on');
+	using comparison = createDiffEditorInput(input('folder/old.ts'), resource);
+	group.openEditor(comparison);
+	control.setEditors([descriptor(resource), descriptor(comparison)], comparison, pane);
+	await new Promise(resolve => setTimeout(resolve, 0));
+	cursorChanges.fire();
+	assert.doesNotMatch(control.domNode.querySelector('.ash-editor-breadcrumbs')?.textContent ?? '', /Alpha|Beta/u);
 	control.dispose();
 	cursorChanges.dispose();
 	dom.window.close();

@@ -1,5 +1,6 @@
 use crate::GitRuntime;
 use crate::api::decode;
+use crate::api::file_uri;
 use crate::api::invalid;
 use crate::changes::relative_resource;
 use crate::model::Repository;
@@ -185,11 +186,8 @@ impl GitRuntime {
                 let file =
                     self.api
                         .commit_file(repository, &id, &historical_path, parent, token)?;
-                let original_path = selected
-                    .original_path
-                    .as_deref()
-                    .unwrap_or(&historical_path);
-                let original = crate::changes::content_input(
+                let original_path = selected.original_path.as_ref().unwrap_or(&historical_path);
+                let mut original = crate::changes::content_input(
                     &file.original,
                     crate::history::commit_file_uri(
                         &repository.descriptor.id,
@@ -209,8 +207,11 @@ impl GitRuntime {
                     ),
                     &historical_path,
                 );
-                // Follow the working file while the editor model reads the immutable snapshot.
-                modified["preferredResource"] = json!(resource);
+                // Labels follow each historical path while models retain immutable snapshot identities.
+                original["preferredResource"] =
+                    json!(file_uri(&repository.root_uri, original_path)?);
+                modified["preferredResource"] =
+                    json!(file_uri(&repository.root_uri, &historical_path)?);
                 let short = id.chars().take(7).collect::<String>();
                 let input = json!({"kind":if file.original.is_binary() || file.modified.is_binary() {"binaryDiff"} else {"diff"},"original":original,"modified":modified,"label":self.api.text("git.timelineComparison",&[&historical_path,&short])});
                 self.api.editor(

@@ -3528,7 +3528,7 @@ test('EditorPart registers and releases focusable breadcrumbs for its group', as
 	dom.window.close();
 });
 
-test('EditorPart diff breadcrumbs display and navigate the modified path without changing the tab identity', async () => {
+test('EditorPart diff breadcrumbs show the modified path without opening ordinary files from the comparison', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		const registry = new EditorPaneRegistry();
@@ -3558,12 +3558,13 @@ test('EditorPart diff breadcrumbs display and navigate the modified path without
 			[...navigation.querySelectorAll('.ash-breadcrumb-item')].map(element => element.textContent),
 			['src', 'new name.ts'],
 		);
-		assert.equal(navigation.title, modified.resource.toString());
-		assert.equal(breadcrumbs.getWidget(editor.activeGroup.id)?.focus(), true);
-		const current = dom.window.document.activeElement as HTMLElement;
+		assert.equal(navigation.title, '/old-project/old.ts → /project/src/new name.ts');
+		assert.equal(breadcrumbs.getWidget(editor.activeGroup.id)?.focus(), false);
+		const current = navigation.querySelector<HTMLButtonElement>('.ash-breadcrumb-item.current')!;
 		assert.equal(current.textContent, 'new name.ts');
+		assert.equal(current.disabled, true);
 		current.click();
-		assert.deepEqual(selected, [modified.resource.toString()]);
+		assert.deepEqual(selected, []);
 		assert.equal(editor.activeInput, comparison);
 		assert.equal(editor.activeGroup.inputs.length, 1);
 
@@ -3924,6 +3925,7 @@ test('Diff title menu follows each group and updates layout and whitespace check
 			contextMenuProvider: {
 				showContextMenu: delegate => {
 					overflow = delegate.getActions();
+					delegate.onHide?.(false);
 				},
 			},
 		},
@@ -3937,6 +3939,7 @@ test('Diff title menu follows each group and updates layout and whitespace check
 		menus
 			.getMenuActions(MenuId.EditorTitle, { arg: { groupId: review.id } }, reviewContext)
 			.find(([group]) => group === '1_diff')![1];
+	const whitespaceButton = () => review.domNode.querySelector<HTMLButtonElement>(`[data-action-id="${TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE}"] button`)!;
 	const layoutActions = () =>
 		menus.getMenuActions(MenuId.DiffEditorViewSubmenu, undefined, reviewContext).flatMap(([, actions]) => actions);
 	const checkedLayout = () =>
@@ -3950,47 +3953,63 @@ test('Diff title menu follows each group and updates layout and whitespace check
 	);
 	assert.deepEqual(
 		diffActions().map(action => action.id),
-		[`submenu.${MenuId.DiffEditorViewSubmenu.id}`, TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, DIFF_SWAP_SIDES],
+		[`submenu.${MenuId.DiffEditorViewSubmenu.id}`, DIFF_SWAP_SIDES],
 	);
 	assert.deepEqual(checkedLayout(), [SET_DIFF_VIEW_MODE_AUTOMATIC]);
-	assert.equal(diffActions()[1]!.checked, false);
+	assert.ok(whitespaceButton());
+	assert.equal(whitespaceButton().getAttribute('aria-pressed'), 'false');
 	review.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.toolbar.moreActions"] button')!.click();
 	assert.deepEqual(
 		overflow
 			.filter(action => action.id !== 'separator')
-			.slice(0, 3)
+			.slice(0, 2)
 			.map(action => action.id),
 		diffActions().map(action => action.id),
 	);
+	assert.equal(overflow.some(action => action.id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE), false);
 	await configuration.updateValue('diffEditor.renderSideBySide', false);
 	assert.deepEqual(checkedLayout(), [SET_DIFF_VIEW_MODE_INLINE]);
 	await configuration.updateValue('diffEditor.renderSideBySide', true);
 	await configuration.updateValue('diffEditor.useInlineViewWhenSpaceIsLimited', false);
 	assert.deepEqual(checkedLayout(), [SET_DIFF_VIEW_MODE_SIDE_BY_SIDE]);
 	await configuration.updateValue('diffEditor.ignoreTrimWhitespace', false);
-	assert.equal(diffActions()[1]!.checked, true);
+	assert.equal(whitespaceButton().getAttribute('aria-pressed'), 'true');
 	await configuration.updateValue('diffEditor.useInlineViewWhenSpaceIsLimited', true);
 	assert.deepEqual(checkedLayout(), [SET_DIFF_VIEW_MODE_AUTOMATIC]);
 	await editor.splitActiveGroupHorizontal();
 	await editor.openEditor(input('/code.ts'), { pinned: true });
+	const code = editor.activeGroup;
 	using codeContext = contexts.createScoped(
-		editor.activeGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-actions')!,
+		code.domNode.querySelector<HTMLElement>('.ash-editor-title-actions')!,
 	);
 	assert.equal(
 		menus.getMenuActions(MenuId.EditorTitle, undefined, codeContext).some(([group]) => group === '1_diff'),
 		false,
 	);
-	assert.equal(diffActions().length, 3);
+	assert.equal(code.domNode.querySelector(`[data-action-id="${TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE}"]`), null);
+	assert.equal(diffActions().length, 2);
 	const invoked: unknown[] = [];
 	services.registerInstance(IEditorPart, editor);
 	services.registerInstance(IDiffEditorCommandsService, {
 		setViewMode: async (mode: string) => {
 			invoked.push({ group: editor.activeGroup.id, mode });
 		},
+		toggleDiffIgnoreTrimWhitespace: async () => {
+			invoked.push({ group: editor.activeGroup.id, operation: 'whitespace' });
+		},
 	} as never);
+	const whitespaceExecuted = new DeferredPromise<void>();
+	using whitespaceListener = commands.onDidExecuteCommand(event => {
+		if (event.commandId === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE) void whitespaceExecuted.complete();
+	});
+	whitespaceButton().click();
+	await whitespaceExecuted.p;
+	assert.deepEqual(invoked, [{ group: review.id, operation: 'whitespace' }]);
+	assert.equal(editor.activeGroup, review);
+	editor.activateGroup(code.id);
 	const submenu = diffActions()[0] as import('../../../../../../base/common/actions.js').SubmenuAction;
 	await submenu.actions.find(action => action.id === SET_DIFF_VIEW_MODE_INLINE)!.run();
-	assert.deepEqual(invoked, [{ group: review.id, mode: 'inline' }]);
+	assert.deepEqual(invoked, [{ group: review.id, operation: 'whitespace' }, { group: review.id, mode: 'inline' }]);
 	dom.window.close();
 });
 

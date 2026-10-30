@@ -4,7 +4,7 @@ import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { SymbolKinds } from '../../../../editor/common/languages.js';
 import { IResourceLabelService, type ResourceLabels } from '../../labels.js';
 import { FileKind } from '../../../../platform/files/common/files.js';
-import { EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput } from '../../../common/editor.js';
+import { EditorResourceAccessor, SideBySideEditor, isResourceDiffEditorInput, type IResourceEditorInput } from '../../../common/editor.js';
 import './media/breadcrumbscontrol.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { BreadcrumbsItem, BreadcrumbsWidget } from '../../../../base/browser/ui/breadcrumbs/breadcrumbsWidget.js';
@@ -70,7 +70,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 			}
 			const element = event.item.element;
 			if (element instanceof FileElement) {
-				this.onSelect?.(element);
+				if (event.item.canSelect) this.onSelect?.(element);
 			} else {
 				this.onSelectSymbol?.(element);
 			}
@@ -80,7 +80,7 @@ export class EditorBreadcrumbsControl extends Disposable {
 
 	focus(): boolean {
 		if (this.domNode.hidden) return false;
-		const item = this.widget.getItems().at(-1);
+		const item = this.widget.getItems().filter(item => item instanceof EditorBreadcrumbItem && item.canSelect).at(-1);
 		if (!item) return false;
 		this.widget.setFocused(item);
 		return true;
@@ -129,13 +129,26 @@ export class EditorBreadcrumbsControl extends Disposable {
 			this.domNode.hidden = true;
 			return;
 		}
+		const isDiff = isResourceDiffEditorInput(this.input);
+		// A display path may point at today's working file while the input reads an immutable version.
+		// The filesystem picker cannot preserve a comparison or a snapshot's revision.
+		const canSelectFiles = !isDiff && extUri.isEqual(this.input.resource, resource);
+		this.domNode.setAttribute('aria-label', isDiff
+			? localize('breadcrumbs.diffEditorLabel', 'Diff editor breadcrumbs')
+			: localize('breadcrumbs.editorLabel', 'Editor breadcrumbs'));
 		const workspaceFolder = this.workspaceContextService.getWorkspaceFolder(resource);
 		const files = this.filePath === 'off' ? [] : new BreadcrumbsModel(resource, workspaceFolder, this.input.label, this.workspaceContextService.getWorkspace().folders.length > 1).getElements();
 		const visibleFiles = this.filePath === 'last' ? files.slice(-1) : files;
-		const visibleSymbols = this.symbolPath === 'off' ? [] : this.symbolPath === 'last' ? this.symbols.slice(-1) : this.symbols;
+		const visibleSymbols = isDiff || this.symbolPath === 'off' ? [] : this.symbolPath === 'last' ? this.symbols.slice(-1) : this.symbols;
 		const elements = [...visibleFiles, ...visibleSymbols];
-		this.widget.setItems(elements.map((element, index) => new EditorBreadcrumbItem(element, index === elements.length - 1, this.labels, this.showIcons)));
+		this.widget.setItems(elements.map((element, index) => new EditorBreadcrumbItem(element, index === elements.length - 1, this.labels, this.showIcons,
+			element instanceof SymbolElement || canSelectFiles)));
+		this.widget.setEnabled(!isDiff);
 		this.domNode.title = resource.toString();
+		if (isResourceDiffEditorInput(this.input)) {
+			const original = EditorResourceAccessor.getOriginalUri(this.input.original);
+			if (original && original.path !== resource.path) this.domNode.title = `${original.path} → ${resource.path}`;
+		}
 		// Content emptiness is independent of configuration hiding a nonempty path.
 		this.domNode.classList.toggle('empty', elements.length === 0);
 		this.domNode.hidden = elements.length === 0;
@@ -152,6 +165,7 @@ class EditorBreadcrumbItem extends BreadcrumbsItem {
 		private readonly current: boolean,
 		private readonly labels: ResourceLabels,
 		private readonly showIcons: boolean,
+		public readonly canSelect: boolean,
 	) {
 		super();
 	}
@@ -159,7 +173,7 @@ class EditorBreadcrumbItem extends BreadcrumbsItem {
 	public override dispose(): void { this.label?.dispose(); }
 
 	public override equals(other: BreadcrumbsItem): boolean {
-		if (!(other instanceof EditorBreadcrumbItem) || this.current !== other.current || this.showIcons !== other.showIcons || this.element.label !== other.element.label) {
+		if (!(other instanceof EditorBreadcrumbItem) || this.current !== other.current || this.showIcons !== other.showIcons || this.canSelect !== other.canSelect || this.element.label !== other.element.label) {
 			return false;
 		}
 		if (this.element instanceof FileElement && other.element instanceof FileElement) {
@@ -169,6 +183,8 @@ class EditorBreadcrumbItem extends BreadcrumbsItem {
 	}
 
 	public override render(container: HTMLElement): void {
+		container.classList.toggle('disabled', !this.canSelect);
+		container.setAttribute('aria-disabled', String(!this.canSelect));
 		if (this.element instanceof FileElement) {
 			const label = this.label = this.labels.create(container);
 			label.setResource({ resource: this.element.uri, name: this.element.label }, {

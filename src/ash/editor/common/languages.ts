@@ -540,6 +540,7 @@ export namespace SymbolKinds {
 		switch (name) {
 			case 'file': return Lxicon.file;
 			case 'module': case 'namespace': case 'package': return Lxicon.folders;
+			case 'method': case 'function': case 'constructor': return Lxicon.symbolMethod;
 			case 'string': case 'number': case 'boolean': case 'null': return Lxicon.text;
 			case 'property': case 'field': case 'key': case 'variable': case 'constant': case 'enumMember': return Lxicon.tag;
 			default: return Lxicon.code;

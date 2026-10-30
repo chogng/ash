@@ -78,7 +78,7 @@ suite('diff browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN'] as const) {
-		test(`Markdown diff connects file navigation, symbols, icons and editing contributions (${locale})`, async function () {
+		test(`Markdown diff keeps its shared path separate from symbols and retains editing contributions (${locale})`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
 
@@ -95,23 +95,19 @@ suite('diff browser component', () => {
 			expect(wrapping.map(info => info.decorationsWidth)).toEqual(wrapping.map(info => Math.floor(info.characterWidth * 2)));
 			const host = page.locator('#title-comparison');
 			const breadcrumbs = host.locator('.ash-editor-breadcrumbs');
-			await expect(breadcrumbs).toContainText('Cross-machine Desktop acceptance');
+			await expect(breadcrumbs).toHaveAttribute('aria-label', localized(locale, 'Diff editor breadcrumbs', '差异编辑器面包屑'));
+			await expect(breadcrumbs).not.toContainText('Cross-machine Desktop acceptance');
 			await expect(breadcrumbs).not.toContainText('unstaged');
-			await expect(breadcrumbs.locator('.ash-breadcrumb-item')).toHaveText(['docs', 'TODO.md', 'Cross-machine Desktop acceptance']);
-			await expect(breadcrumbs.locator('.ash-icon-label-icon .ash-icon')).toHaveCount(1);
+			await expect(breadcrumbs.locator('.ash-breadcrumb-item')).toHaveText(['docs', 'TODO.md']);
+			await expect(breadcrumbs.locator('.ash-breadcrumb-item:disabled')).toHaveCount(2);
 			expect(await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).toMatchObject({ wordWrap: 'on', find: true, hover: true, suggest: true, originalReadonly: true, modifiedReadonly: false });
-			await breadcrumbs.locator('.ash-breadcrumb-item').last().focus();
-			await page.keyboard.press('Enter');
-			const picker = page.getByRole('combobox');
-			await expect(picker).toBeVisible();
-			await page.keyboard.press('Enter');
-			await expect(picker).toBeHidden();
-			expect((await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).position).toMatchObject({ lineNumber: 1, column: 35 });
-			await expect(host.locator('.modified .stanza-editor-input')).toBeFocused();
-			await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('breadcrumbs.icons', false));
-			await expect(breadcrumbs.locator('.ash-icon-label-icon .ash-icon')).toHaveCount(0);
-			await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('breadcrumbs.icons', true));
-			await expect(breadcrumbs.locator('.ash-icon-label-icon .ash-icon')).toHaveCount(1);
+			await breadcrumbs.locator('.ash-breadcrumb-item').last().evaluate((button: HTMLButtonElement) => button.click());
+			await expect(page.getByRole('combobox')).toHaveCount(0);
+			for (const icons of [false, true]) {
+				await page.evaluate(icons => window.ashDiffIntegration.updateTitleEditorConfiguration('breadcrumbs.icons', icons), icons);
+				await expect(breadcrumbs.locator('.ash-breadcrumb-item')).toHaveText(['docs', 'TODO.md']);
+				await expect(breadcrumbs.locator('.ash-icon-label-icon .ash-icon')).toHaveCount(0);
+			}
 			await page.evaluate(() => window.ashDiffIntegration.updateTitleEditorConfiguration('editor.wordWrap', 'bounded', 'markdown'));
 			expect((await page.evaluate(() => window.ashDiffIntegration.readMarkdownComparison())).wordWrap).toBe('bounded');
 			await page.evaluate(async () => {

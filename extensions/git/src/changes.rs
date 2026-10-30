@@ -311,11 +311,33 @@ impl GitRuntime {
             let path = change["path"]
                 .as_str()
                 .ok_or_else(|| invalid("Invalid history path"))?;
-            let file =
-                self.api
-                    .commit_file(repository, id, &RepoPath::parse(path)?, parent, token)?;
-            let original_path = change["originalPath"].as_str().unwrap_or(path);
-            items.push(json!({"id":path,"binary":file.original.is_binary() || file.modified.is_binary(),"label":path,"original":content_input(&file.original,crate::history::commit_file_uri(&repository.descriptor.id,parent.unwrap_or("root"),original_path,"original"),original_path),"modified":content_input(&file.modified,crate::history::commit_file_uri(&repository.descriptor.id,id,path,"modified"),path),"actions":[]}));
+            let repo_path = RepoPath::parse(path)?;
+            let file = self
+                .api
+                .commit_file(repository, id, &repo_path, parent, token)?;
+            let original_path = change["originalPath"]
+                .as_str()
+                .map(RepoPath::parse)
+                .transpose()?
+                .unwrap_or_else(|| repo_path.clone());
+            let mut original = content_input(
+                &file.original,
+                crate::history::commit_file_uri(
+                    &repository.descriptor.id,
+                    parent.unwrap_or("root"),
+                    &original_path,
+                    "original",
+                ),
+                &original_path,
+            );
+            let mut modified = content_input(
+                &file.modified,
+                crate::history::commit_file_uri(&repository.descriptor.id, id, path, "modified"),
+                path,
+            );
+            original["preferredResource"] = json!(file_uri(&repository.root_uri, &original_path)?);
+            modified["preferredResource"] = json!(file_uri(&repository.root_uri, &repo_path)?);
+            items.push(json!({"id":path,"binary":file.original.is_binary() || file.modified.is_binary(),"label":path,"original":original,"modified":modified,"actions":[]}));
         }
         Ok(
             json!({"kind":"multiDiff","resource":format!("git-commit:/{id}?parent={}",parent.unwrap_or("root")),"label":id,"readOnly":true,"items":items}),

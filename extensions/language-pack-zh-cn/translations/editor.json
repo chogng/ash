@@ -175,6 +175,7 @@
     "inspectEditorTokens.verbosityDescription": "在词法单元检查中提示如何打开无障碍帮助。",
     "configuration.languageScopeError": "设置 {0} 不支持按语言覆盖",
     "breadcrumbs.editorLabel": "编辑器面包屑",
+    "breadcrumbs.diffEditorLabel": "差异编辑器面包屑",
     "hover.show": "显示或聚焦悬停内容",
     "hover.title": "编辑器悬停内容",
     "colorPicker.documentFormat": "写入文档的颜色格式",

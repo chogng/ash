@@ -95,8 +95,16 @@ registerAction2(class extends Action2 {
 					return {
 						binary: file.original.kind === 'binary' || file.modified.kind === 'binary',
 						label: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
-						original: { resource: source ? historyFileResource(source, change, true, file.parentId) : change.originalUri ?? change.uri, readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : '' },
-						modified: { resource: source ? historyFileResource(source, change, false) : change.modifiedUri ?? change.uri, readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : '' },
+						original: {
+							resource: source ? historyFileResource(source, change, true, file.parentId) : change.originalUri ?? change.uri,
+							preferredResource: repository.provider.rootUri ? URI.joinPath(repository.provider.rootUri, change.originalPath ?? change.path) : undefined,
+							readOnly: true, initialText: file.original.kind === 'text' ? file.original.text : '',
+						},
+						modified: {
+							resource: source ? historyFileResource(source, change, false) : change.modifiedUri ?? change.uri,
+							preferredResource: repository.provider.rootUri ? URI.joinPath(repository.provider.rootUri, change.path) : undefined,
+							readOnly: true, initialText: file.modified.kind === 'text' ? file.modified.text : '',
+						},
 					};
 				}));
 				if (!isCurrent()) return;
@@ -154,6 +162,7 @@ registerAction2(class extends Action2 {
 		const name = historyItemChange.path.split('/').at(-1) ?? historyItemChange.path;
 		await accessor.get(IEditorService).openEditor({
 			resource: source ? historyFileResource(source, historyItemChange, original, file.parentId) : historyItemChange.modifiedUri ?? historyItemChange.uri,
+			preferredResource: repository.provider.rootUri ? URI.joinPath(repository.provider.rootUri, original ? historyItemChange.originalPath ?? historyItemChange.path : historyItemChange.path) : undefined,
 			label: `${name} (${original ? (source?.baseRevision ?? file.parentId)?.slice(0, 7) ?? 'empty' : historyItem?.displayId ?? revision.slice(0, 7)})`,
 			readOnly: true,
 			...(contents.kind === 'text' ? { initialText: contents.text } : { initialBytes: contents.bytes, contentType: 'application/octet-stream' }),
@@ -1570,6 +1579,9 @@ export class SCMHistoryViewPane extends ViewPane {
 	private async openCommitChange(historyItem: ISCMHistoryItem, change: ISCMHistoryItemChange, options: IOpenEditorOptions): Promise<void> {
 		const provider = this.provider;
 		if (!provider) return;
+		const root = this.graphRepositoryId ? this.scmService.getRepository(this.graphRepositoryId)?.provider.rootUri : undefined;
+		const originalResource = root ? URI.joinPath(root, change.originalPath ?? change.path) : undefined;
+		const modifiedResource = root ? URI.joinPath(root, change.path) : undefined;
 		const request = ++this.openGeneration;
 		const file = await provider.resolveHistoryItemChangeContents(historyItem.comparison?.revision ?? historyItem.id, change);
 		// Rapid keyboard navigation must not let an older preview replace the latest selected file.
@@ -1577,12 +1589,14 @@ export class SCMHistoryViewPane extends ViewPane {
 		const name = change.path.split('/').at(-1) ?? change.path;
 		const original = file.original.kind === 'text' ? {
 			resource: change.originalUri ?? change.uri,
+			preferredResource: originalResource,
 			label: `${name} (${file.parentId?.slice(0, 7) ?? 'empty'})`,
 			readOnly: true,
 			initialText: file.original.text,
 		} : undefined;
 		const modified = file.modified.kind === 'text' ? {
 			resource: change.modifiedUri ?? change.uri,
+			preferredResource: modifiedResource,
 			label: `${name} (${historyItem.displayId ?? historyItem.comparison?.revision.slice(0, 7) ?? historyItem.id})`,
 			readOnly: true,
 			initialText: file.modified.text,
@@ -1593,8 +1607,8 @@ export class SCMHistoryViewPane extends ViewPane {
 			const after = file.modified.kind === 'binary' ? file.modified.bytes : file.modified.kind === 'text' ? new TextEncoder().encode(file.modified.text) : new Uint8Array();
 			if (!before || !after) { return; }
 			await this.editorService.openEditor(createBinaryDiffEditorInput(
-				{ resource: change.originalUri ?? change.uri, label: `${name} (${file.parentId?.slice(0, 7) ?? 'empty'})`, readOnly: true, initialBytes: before },
-				{ resource: change.modifiedUri ?? change.uri, label: `${name} (${historyItem.displayId ?? historyItem.subject})`, readOnly: true, initialBytes: after },
+				{ resource: change.originalUri ?? change.uri, preferredResource: originalResource, label: `${name} (${file.parentId?.slice(0, 7) ?? 'empty'})`, readOnly: true, initialBytes: before },
+				{ resource: change.modifiedUri ?? change.uri, preferredResource: modifiedResource, label: `${name} (${historyItem.displayId ?? historyItem.subject})`, readOnly: true, initialBytes: after },
 			), options.editorOptions, group);
 			return;
 		}

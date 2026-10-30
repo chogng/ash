@@ -194,6 +194,7 @@ suite('SCM attachment source commands', () => {
 		const change = { path: 'src/name:中文.ts', uri: URI.file('/working/name.ts'), modifiedUri: revisionUris ? URI.parse('git:/captured/name.ts?revision=tip') : undefined, status: 'modified' };
 		const repository = {
 			id: 'repo:original', provider: {
+				rootUri: URI.file('/working'),
 				historyProvider: {
 					provideHistoryItemChanges: async (...args: unknown[]) => { calls.push(args); return [change]; },
 					resolveHistoryItemChangeContents: async (...args: unknown[]) => { calls.push(args); return { original: { kind: 'text', text: 'Before' }, modified: { kind: 'text', text: 'Captured after' } }; },
@@ -210,6 +211,7 @@ suite('SCM attachment source commands', () => {
 		const [input, options] = opened[0] as [import('../../../../common/editor.js').IResourceEditorInput, unknown];
 		assert.deepEqual(options, { pinned: true });
 		if (changeSource) {
+			assert.equal(input.preferredResource?.path, '/working/src/name:中文.ts');
 			if (change.modifiedUri) assert.equal(input.resource.toString(), change.modifiedUri.toString());
 			else {
 				assert.notEqual(input.resource.toString(), change.uri.toString());
@@ -222,6 +224,7 @@ suite('SCM attachment source commands', () => {
 			assert.equal(input.label, 'Captured label');
 			assert.equal(input.items[0].modified.initialText, 'Captured after');
 			assert.equal(input.items[0].modified.readOnly, true);
+			assert.equal(input.items[0].modified.preferredResource?.path, '/working/src/name:中文.ts');
 			assert.notEqual(input.items[0].original.resource.toString(), input.items[0].modified.resource.toString());
 		}
 	});
