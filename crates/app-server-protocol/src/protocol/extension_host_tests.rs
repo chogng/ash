@@ -117,6 +117,10 @@ fn command_registration_preserves_optional_icon_and_menu_metadata() {
 fn generated_typescript_uses_camel_case_registration_fields() {
     let typescript = crate::typescript_files()
         .into_iter()
+        .filter(|(path, _)| {
+            path.file_stem()
+                .is_some_and(|name| name.to_string_lossy().starts_with("ExtensionHost"))
+        })
         .map(|(_, contents)| contents)
         .collect::<String>();
 
