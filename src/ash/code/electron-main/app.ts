@@ -1828,6 +1828,9 @@ export class AshApplication extends Disposable {
 			if (details.url !== 'about:blank') return;
 			const childResources = new DisposableStore();
 			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id, details.options));
+			const auxiliaryWindow = this.auxiliaryWindowsMainService.getWindowByWebContents(child.webContents);
+			assertDefined(auxiliaryWindow, 'Auxiliary window was not registered');
+			this.lifecycleMainService.registerAuxWindow(auxiliaryWindow);
 			auxiliaryWindows.set(child.id, childResources);
 			this.configureWindowNavigation(child, childResources, titleBarStyle, openerWindow);
 			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));

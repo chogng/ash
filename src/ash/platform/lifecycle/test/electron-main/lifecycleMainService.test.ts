@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { mock } from 'node:test';
 import { EventEmitter } from 'node:events';
+import type { BrowserWindow } from 'electron';
+import type { IAuxiliaryWindow } from '../../../auxiliaryWindow/electron-main/auxiliaryWindow.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
@@ -44,6 +46,28 @@ function createStateService(): IStateService {
 		removeItem: key => { items.delete(key); },
 		flush: async () => { },
 		close: async () => { },
+	};
+}
+
+class TestAuxiliaryWindow extends EventEmitter {
+	public destroyed = false;
+
+	public close(): void {
+		let prevented = false;
+		this.emit('close', { preventDefault: () => { prevented = true; } });
+		if (!prevented) this.destroy();
+	}
+
+	public destroy(): void {
+		this.destroyed = true;
+		this.emit('closed');
+	}
+}
+
+function auxiliaryWindow(window: TestAuxiliaryWindow): IAuxiliaryWindow {
+	return {
+		id: 2, parentId: 1, win: window as unknown as BrowserWindow, lastFocusTime: 0,
+		getState: () => ({ width: 800, height: 600, left: 0, top: 0, zoomLevel: 0, alwaysOnTop: false, mode: 'normal' }),
 	};
 }
 
@@ -130,6 +154,50 @@ suite('LifecycleMainService', () => {
 		window.close();
 		assert.deepEqual(window.messages.at(-1), { channel: WINDOW_PREPARE_CLOSE_CHANNEL, token: 2 });
 		service.respondToClose(window, { kind: 'complete', token: 2 });
+		assert.equal(window.destroyed, true);
+	});
+
+	test('auxiliary windows survive quit until their owner destroys them and release their close listeners', () => {
+		const window = new TestAuxiliaryWindow();
+		const auxiliary = auxiliaryWindow(window);
+		using service = new LifecycleMainService<TestWindow>(() => { }, () => { }, createStateService(), 'test', () => 'quit');
+		service.registerAuxWindow(auxiliary);
+		assert.throws(() => service.registerAuxWindow(auxiliary), /already registered/);
+		window.close();
+		assert.equal(window.destroyed, false);
+		window.destroy();
+		assert.deepEqual({ destroyed: window.destroyed, close: window.listenerCount('close'), closed: window.listenerCount('closed') }, {
+			destroyed: true, close: 0, closed: 0,
+		});
+	});
+
+	for (const vetoedQuit of [false, true]) {
+		test(`auxiliary windows close normally ${vetoedQuit ? 'after a quit veto' : 'without a quit request'}`, () => {
+			let quitting = vetoedQuit;
+			const window = new TestAuxiliaryWindow();
+			using service = new LifecycleMainService<TestWindow>(() => { }, () => { }, createStateService(), 'test', () => quitting ? 'quit' : 'windowClose');
+			service.registerAuxWindow(auxiliaryWindow(window));
+			if (vetoedQuit) {
+				window.close();
+				assert.equal(window.destroyed, false);
+				quitting = false;
+			}
+			window.close();
+			assert.deepEqual({ destroyed: window.destroyed, close: window.listenerCount('close'), closed: window.listenerCount('closed') }, {
+				destroyed: true, close: 0, closed: 0,
+			});
+		});
+	}
+
+	test('lifecycle disposal releases auxiliary close listeners without destroying the borrowed window', () => {
+		const window = new TestAuxiliaryWindow();
+		using service = new LifecycleMainService<TestWindow>(() => { }, () => { }, createStateService(), 'test', () => 'quit');
+		service.registerAuxWindow(auxiliaryWindow(window));
+		service.dispose();
+		assert.deepEqual({ destroyed: window.destroyed, close: window.listenerCount('close'), closed: window.listenerCount('closed') }, {
+			destroyed: false, close: 0, closed: 0,
+		});
+		window.close();
 		assert.equal(window.destroyed, true);
 	});
 

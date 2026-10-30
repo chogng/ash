@@ -5,6 +5,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { isRecord } from '../../../base/common/types.js';
 import { localize } from '../../../nls.js';
 import { Color } from '../../../base/common/color.js';
+import type { INativeWindowTheme } from '../../native/common/nativeHost.js';
 import { IThemeMainService } from '../../theme/electron-main/themeMainService.js';
 import { IAuxiliaryWindowsMainService } from '../../auxiliaryWindow/electron-main/auxiliaryWindows.js';
 import { ILogService } from '../../log/common/log.js';
@@ -20,26 +21,47 @@ import {
 	type IWindowState,
 } from '../../window/electron-main/window.js';
 import {
+	WINDOW_MINIMUM_SIZE,
 	WINDOW_ZOOM_CHANGED_CHANNEL,
 	WINDOW_CLIENT_SIZE_CHANGED_CHANNEL,
 	type IWindowClientSize,
 	type TitleBarStyleConfiguration,
 } from '../../window/common/window.js';
 import {
-	applyWindowState,
-	resolveBrowserWindowOptions,
-	resolveWindowTitleBarOptions,
-	restoreWindowBounds,
-	WindowControlsOverlay,
-	type IWindowConstructorOptions,
-	type IWindowWebPreferences,
-} from './windows.js';
-import {
 	UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 	isSingleFolderWorkspaceIdentifier,
 	isWorkspaceIdentifier,
 	type IAnyWorkspaceIdentifier,
 } from '../../workspace/common/workspace.js';
+
+/** The Electron window options owned by the platform window policy. */
+export interface IWindowConstructorOptions {
+	show: boolean;
+	backgroundColor?: string;
+	x?: number;
+	y?: number;
+	width: number;
+	height: number;
+	minWidth: number;
+	minHeight: number;
+	frame?: boolean;
+	titleBarStyle?: 'hidden' | 'hiddenInset';
+	titleBarOverlay?: boolean | {
+		readonly color: string;
+		readonly symbolColor: string;
+		readonly height: number;
+	};
+	webPreferences: IWindowWebPreferences;
+}
+
+/** The preload settings required by Ash's renderer boundary. */
+export interface IWindowWebPreferences {
+	contextIsolation: boolean;
+	nodeIntegration: boolean;
+	sandbox: boolean;
+	preload: string;
+	additionalArguments: string[];
+}
 
 export interface IWindowCreationOptions {
 	/** Rebuilds the window's host resources without asking the old renderer to unload. */
@@ -112,7 +134,7 @@ export interface ICodeWindowHandle<TWindow = Electron.BrowserWindow> {
 	setBounds(bounds: IWindowBounds): void;
 	hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void;
 	unhookWindowMessage(message: number): void;
-	setTitleBarOverlay(colors: { color: string; symbolColor: string; height: number }): void;
+	setTitleBarOverlay(colors: { color: string; symbolColor: string; height: number; }): void;
 	maximize(): void;
 	setFullScreen(fullscreen: boolean): void;
 	loadURL(url: string): Promise<void>;
@@ -440,7 +462,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			this.send(channel, ...args);
 			return;
 		}
-		const message: { channel: string; args: unknown[]; token: CancellationToken; cancellation?: IDisposable } = {
+		const message: { channel: string; args: unknown[]; token: CancellationToken; cancellation?: IDisposable; } = {
 			channel,
 			args,
 			token,
@@ -661,16 +683,16 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 					detail: gone
 						? localize('window.recoveryDetail', 'Reopen the window to continue, or close it.')
 						: localize(
-								'window.waitRecoveryDetail',
-								'You can keep waiting, reopen the window, or close it. Reopening or closing may lose changes that have not been backed up.',
-							),
+							'window.waitRecoveryDetail',
+							'You can keep waiting, reopen the window, or close it. Reopening or closing may lose changes that have not been backed up.',
+						),
 					buttons: gone
 						? [localize('window.reopen', 'Reopen'), localize('window.close', 'Close')]
 						: [
-								localize('window.reopen', 'Reopen'),
-								localize('window.close', 'Close'),
-								localize('window.keepWaiting', 'Keep Waiting'),
-							],
+							localize('window.reopen', 'Reopen'),
+							localize('window.close', 'Close'),
+							localize('window.keepWaiting', 'Keep Waiting'),
+						],
 					defaultId: gone ? 0 : 2,
 					cancelId: gone ? 1 : 2,
 					noLink: true,
@@ -699,5 +721,130 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			});
 		this.errorPromptTask = task;
 		return task;
+	}
+}
+
+/** Inputs required to resolve one main-window constructor policy. */
+export interface IResolveBrowserWindowOptions {
+	readonly state: IWindowState;
+	readonly webPreferences: IWindowWebPreferences;
+	readonly titleBarStyle?: TitleBarStyleConfiguration;
+	readonly platform?: NodeJS.Platform;
+	readonly backgroundColor?: string;
+}
+
+/** Produces Electron options from window state and Ash's fixed host policy. */
+export function resolveBrowserWindowOptions({
+	state,
+	webPreferences,
+	titleBarStyle = 'custom',
+	platform = process.platform,
+	backgroundColor,
+}: IResolveBrowserWindowOptions): IWindowConstructorOptions {
+	const browserWindowOptions: IWindowConstructorOptions = {
+		show: state.mode === WindowMode.Normal,
+		...(backgroundColor ? { backgroundColor } : {}),
+		x: state.x,
+		y: state.y,
+		width: state.width,
+		height: state.height,
+		minWidth: Math.min(WINDOW_MINIMUM_SIZE.width, state.workArea?.width ?? WINDOW_MINIMUM_SIZE.width),
+		minHeight: Math.min(WINDOW_MINIMUM_SIZE.height, state.workArea?.height ?? WINDOW_MINIMUM_SIZE.height),
+		webPreferences,
+	};
+
+	return { ...browserWindowOptions, ...resolveWindowTitleBarOptions(titleBarStyle, platform, backgroundColor) };
+}
+
+/** Applies saved outer DIP bounds after Windows has selected the window's display. */
+export function restoreWindowBounds(window: { setBounds(bounds: IWindowBounds): void; getBounds(): IWindowBounds; }, bounds: IWindowBounds): void {
+	let requestedWidth = bounds.width;
+	let requestedHeight = bounds.height;
+	for (let attempt = 0; attempt < 4; attempt++) {
+		window.setBounds({ ...bounds, width: requestedWidth, height: requestedHeight });
+		const actual = window.getBounds();
+		if (actual.width === bounds.width && actual.height === bounds.height) break;
+		// Fractional DPI can map adjacent DIP requests to the same outer size.
+		// Accumulate corrections across that plateau, bounded for OS size constraints.
+		requestedWidth -= actual.width - bounds.width;
+		requestedHeight -= actual.height - bounds.height;
+		if (requestedWidth <= 0 || requestedHeight <= 0) break;
+	}
+}
+
+/** Main and auxiliary windows use the same frame and window-controls policy. */
+export function resolveWindowTitleBarOptions(
+	titleBarStyle: TitleBarStyleConfiguration,
+	platform: NodeJS.Platform = process.platform,
+	backgroundColor?: string,
+): Pick<IWindowConstructorOptions, 'frame' | 'titleBarStyle' | 'titleBarOverlay'> {
+	const options: Pick<IWindowConstructorOptions, 'frame' | 'titleBarStyle' | 'titleBarOverlay'> = {};
+	if (titleBarStyle === 'system') return options;
+
+	if (platform === 'win32' || platform === 'linux') {
+		// Without a supplied startup theme, match Electron's default window background.
+		const controlBackground = backgroundColor ?? Color.Format.CSS.formatHex(Color.white);
+		options.frame = false;
+		options.titleBarStyle = 'hidden';
+		options.titleBarOverlay = {
+			color: controlBackground,
+			symbolColor: Color.fromHex(controlBackground).isDarker() ? '#ffffff' : '#000000',
+			height: 35,
+		};
+	} else if (platform === 'darwin') {
+		options.titleBarStyle = 'hiddenInset';
+		options.titleBarOverlay = true;
+	}
+
+	return options;
+}
+
+/** Keeps Electron's window controls in step with the theme and modal backdrop. */
+export class WindowControlsOverlay {
+	private theme: INativeWindowTheme | undefined;
+	private dimmed = false;
+
+	constructor(private readonly apply: (colors: { color: string; symbolColor: string; height: number; }) => void) { }
+
+	setTheme(theme: Partial<INativeWindowTheme>): INativeWindowTheme {
+		this.theme = { backgroundColor: '#000000', symbolColor: '#ffffff', backdropColor: '#00000000', ...this.theme, ...theme };
+		this.update();
+		return this.theme;
+	}
+
+	setDimmed(dimmed: boolean): void {
+		if (this.dimmed === dimmed) return;
+		this.dimmed = dimmed;
+		this.update();
+	}
+
+	private update(): void {
+		if (!this.theme) return;
+		const { backgroundColor, symbolColor, backdropColor } = this.theme;
+		const backdrop = Color.fromHex(backdropColor);
+		this.apply({
+			color: this.dimmed ? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(backgroundColor))) : backgroundColor,
+			// An opaque high-contrast backdrop must not erase the window buttons.
+			symbolColor: this.dimmed && !backdrop.isOpaque() ? Color.Format.CSS.formatHex(backdrop.flatten(Color.fromHex(symbolColor))) : symbolColor,
+			height: 35,
+		});
+	}
+}
+
+/** A BrowserWindow-like target that can receive a restored non-normal mode. */
+export interface IWindowStateTarget {
+	maximize(): void;
+	setFullScreen(fullscreen: boolean): void;
+}
+
+/** Applies the mode that cannot be represented by constructor bounds alone. */
+export function applyWindowState(
+	target: IWindowStateTarget,
+	state: IWindowState,
+): void {
+	if (state.mode === WindowMode.Maximized) {
+		target.maximize();
+	} else if (state.mode === WindowMode.Fullscreen) {
+		target.setFullScreen(true);
 	}
 }

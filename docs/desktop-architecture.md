@@ -321,6 +321,14 @@ Electron 主进程由 `code/electron-main/main.ts` 编排启动，`app.ts` 装�
 `WindowsMainService` 统一拥有窗口注册、活动窗口选择和工作区复用；`app.ts` 只保留窗口对应的
 App Server、模式和产品资源。Windows 最近项目跳转列表由 `WorkspacesHistoryMainService` 更新。
 
+`platform/windows/electron-main/windows.ts` 只定义多窗口服务契约。单窗口构造参数、标题栏与
+边框策略由 `windowImpl.ts` 拥有，辅助窗口复用同一实现；持久化位置的屏幕校验与调整由
+`windowsStateHandler.ts` 拥有，与位置恢复和保存保持在同一模块。
+
+辅助窗口创建后由 `app.ts` 接入 `LifecycleMainService.registerAuxWindow`。退出期间，生命周期
+服务阻止 Electron 提前关闭辅助窗口，让所属主窗口先完成 Renderer 布局保存握手，再由主窗口的
+资源作用域释放辅助窗口；普通关闭及退出被否决后的关闭仍走原有流程。
+
 `platform/windows/electron-main/windowImpl.ts` 的 `CodeWindow` 拥有每个窗口的 Renderer 就绪、
 加载、开发服务器断线重试、重载协调及标题栏主题／模态 dim 状态；`WindowsMainService` 通过
 实例化服务创建它，构造注入日志、系统对话框、生命周期、主题和辅助窗口服务。文件打开请求
