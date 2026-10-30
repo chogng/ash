@@ -6,30 +6,24 @@ suite('model picker browser component', () => {
 	const browserTests = useBrowserTests();
 
 	for (const locale of ['en', 'zh-CN']) {
-		test(`provider icons follow the product theme and shared details open documentation in ${locale}`, async () => {
+		test(`model controls and details use model names and open documentation in ${locale}`, async () => {
 			const { page } = browserTests;
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/chatInput.html?modelSet=providers&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const trigger = page.locator('.ash-chat-input-model-action');
-			const triggerIcon = trigger.locator('.ash-icon');
-			await expect(triggerIcon).toHaveAttribute('data-ash-icon-id', 'chat-model-provider-openai');
-			await expect(triggerIcon).toHaveAttribute('aria-hidden', 'true');
-			await triggerIcon.evaluate(element => element.setAttribute('data-retained-icon', 'true'));
-			const previousGlyph = await triggerIcon.getAttribute('data-ash-icon-character');
+			await expect(trigger).toHaveText('Test Model');
+			await expect(trigger).toHaveAccessibleName('Test Model');
+			await expect(trigger.locator('.ash-icon')).toHaveCount(0);
 			await trigger.press('ArrowDown');
 			const picker = page.locator('.ash-chat-model-picker');
 			await expect(picker.getByRole('tab', { includeHidden: true })).toHaveCount(0);
 			await expect(picker.getByRole('tabpanel')).toHaveCount(0);
-			await picker.getByRole('button', { name: chinese ? 'Test Model 详情' : 'Test Model details', exact: true }).click();
+			await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const card = picker.getByRole('region', { name: 'Test Model', exact: true });
-			const cardIcon = card.locator('h3 .ash-icon');
-			await expect(cardIcon).toHaveAttribute('data-ash-icon-id', 'chat-model-provider-openai');
-			await page.evaluate(() => window.ashChatInputIntegration.setProviderIconTheme());
-			await expect(triggerIcon).not.toHaveAttribute('data-ash-icon-character', previousGlyph!);
-			await expect(triggerIcon).toHaveAttribute('data-retained-icon', 'true');
-			const themedGlyph = await triggerIcon.getAttribute('data-ash-icon-character');
-			await expect(cardIcon).toHaveAttribute('data-ash-icon-character', themedGlyph!);
+			await expect(card.getByRole('heading', { name: 'Test Model', exact: true })).toBeVisible();
+			await expect(card.locator('h3 .ash-icon')).toHaveCount(0);
 			await expect(card).toBeFocused();
 			await page.evaluate(() => window.ashChatInputIntegration.setDescription('**Provider** description. [Documentation](https://example.test/model)'));
 			await expect(card.locator('strong')).toHaveText('Provider');
@@ -122,15 +116,18 @@ suite('model picker browser component', () => {
 			await expect(picker.getByRole('menuitemradio', { name: 'Claude fixture', exact: true })).toHaveAttribute('aria-checked', 'true');
 			const geometry = await picker.locator('.ash-action-widget-action').first().evaluate(row => {
 				const primary = row.firstElementChild!.getBoundingClientRect();
-				const details = row.lastElementChild!.getBoundingClientRect();
-				return { aligned: primary.top === details.top, separate: primary.right <= details.left, height: row.getBoundingClientRect().height };
+				const bounds = row.getBoundingClientRect();
+				return { fullWidth: primary.left === bounds.left && primary.right === bounds.right, height: bounds.height };
 			});
-			expect(geometry).toEqual({ aligned: true, separate: true, height: 22 });
+			expect(geometry).toEqual({ fullWidth: true, height: 22 });
+			await expect(picker.locator('.ash-action-widget-secondary')).toHaveCount(0);
+			await expect(picker.locator('.ash-action-widget-summary, .ash-menu-badge')).toHaveCount(0);
 			const search = picker.getByRole('combobox');
 			await search.fill('fixture');
 			await expect(picker.getByRole('menuitemradio')).toHaveCount(5);
 			const before = await page.evaluate(() => window.ashChatInputIntegration.modelState());
-			await picker.getByRole('button', { name: chinese ? 'Custom fixture 详情' : 'Custom fixture details', exact: true }).click();
+			await picker.getByRole('menuitemradio', { name: 'Custom fixture', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const card = picker.getByRole('region', { name: 'Custom fixture', exact: true });
 			await expect(card).toBeFocused();
 			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(before);
@@ -168,7 +165,8 @@ suite('model picker browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			await page.locator('.ash-chat-input-model-action').press('ArrowDown');
 			const picker = page.locator('.ash-chat-model-picker');
-			await picker.getByRole('button', { name: chinese ? 'Test Model 详情' : 'Test Model details', exact: true }).click();
+			await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const expanded = picker.getByRole('radio', { name: '872K', exact: true });
 			await expanded.focus();
 			await expanded.press('Space');
@@ -249,7 +247,8 @@ suite('model picker browser component', () => {
 			await page.goto(`/chatInput.html?modelSet=providers&locale=${locale}`);
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			await page.locator('.ash-chat-input-model-action').press('ArrowDown');
-			await picker.getByRole('button', { name: chinese ? 'Custom fixture 详情' : 'Custom fixture details', exact: true }).click();
+			await picker.getByRole('menuitemradio', { name: 'Custom fixture', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const customFast = picker.getByRole('radiogroup', { name: chinese ? '速度' : 'Speed', exact: true }).getByRole('radio', { name: chinese ? '快速' : 'Fast', exact: true });
 			await customFast.focus();
 			await customFast.press('Space');
@@ -278,7 +277,8 @@ suite('model picker browser component', () => {
 			expect(metrics.right).toBeLessThanOrEqual(320);
 			expect(metrics.overflow).toBe(false);
 			expect(metrics.border).not.toBe('rgba(0, 0, 0, 0)');
-			await picker.getByRole('button', { name: 'Test Model details', exact: true }).click();
+			await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
 			const high = picker.getByRole('radio', { name: 'High', exact: true });
 			await high.focus();
 			await expect(picker.locator('.ash-chat-model-card-configurable')).toBeVisible();

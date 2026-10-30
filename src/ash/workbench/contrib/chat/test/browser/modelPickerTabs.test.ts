@@ -30,8 +30,8 @@ test('An unknown provider retains its exact ID and an empty catalog retains an a
 	assert.deepEqual(buildModelPickerDestinations([entry('custom://endpoint', 'shared')], []).map(({ id, label }) => ({ id, label })), [
 		{ id: 'custom://endpoint', label: 'custom://endpoint' },
 	]);
-	assert.deepEqual(buildModelPickerDestinations([], []).map(({ id, label, icon, models, placeholders }) => ({ id, label, icon: icon.id, models, placeholders })), [
-		{ id: '', label: 'Models', icon: 'chat-model-provider-generic', models: [], placeholders: [] },
+	assert.deepEqual(buildModelPickerDestinations([], []), [
+		{ id: '', label: 'Models', models: [], placeholders: [] },
 	]);
 });
 

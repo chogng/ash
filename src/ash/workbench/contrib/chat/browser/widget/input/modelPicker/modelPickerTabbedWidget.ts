@@ -113,10 +113,7 @@ export class TabbedModelPicker extends Disposable {
 					}
 				}
 				return {
-					items: buildModelPickerItems(models, current, {
-						selectedEffort: this.delegate.getSelectedReasoningEffort(),
-						onOpenDetails: entry => this.showDetails(entry),
-					}),
+					items: buildModelPickerItems(models, current),
 					listOptions: {
 						className: 'ash-chat-model-picker', presentation: 'details',
 						ariaLabel: localize('chat.modelPicker.aria', 'Choose a chat model'),
@@ -307,7 +304,7 @@ export class TabbedModelPicker extends Disposable {
 					if (!(active instanceof HTMLElement) || !root.contains(active)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
 						() => type === AccessibleViewType.Help
-							? localize('chat.modelPicker.help', 'Model picker. All enabled models appear in one list. Type in search to filter models across all providers. Up and Down Arrow browse models and Enter selects one. The details button or Right Arrow opens model information and supported thinking, context and speed settings. Tab moves between controls; arrow keys change a focused option group. Applying settings selects that model. Back to models or Alt+Left Arrow returns to the retained list and search. Auto enables automatic model selection. Escape closes the picker. Add Models opens Language Models management.')
+							? localize('chat.modelPicker.help', 'Model picker. All enabled models appear in one list. Type in search to filter models across all providers. Up and Down Arrow browse models and Enter selects one. Right Arrow opens model information and supported thinking, context and speed settings. Tab moves between controls; arrow keys change a focused option group. Applying settings selects that model. Back to models or Alt+Left Arrow returns to the retained list and search. Auto enables automatic model selection. Escape closes the picker. Add Models opens Language Models management.')
 							: root.innerText,
 						() => { if (active.isConnected) { active.focus(); } }, AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},

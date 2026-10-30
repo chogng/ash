@@ -111,10 +111,3 @@
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label2);
 }
-
-.ash-action-widget-menu .ash-action-widget-secondary.ash-button {
-	width: var(--ash-toolbar-actionSize);
-	min-width: var(--ash-toolbar-actionSize);
-	flex: 0 0 auto;
-	padding: var(--ash-spacing-size20);
-}

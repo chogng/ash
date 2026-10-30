@@ -7,7 +7,6 @@ import { IconLabel } from '../../../../../../../base/browser/ui/iconlabel/iconla
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 import { getModelConfigValueLabel, modelPickerEffortOptions, modelPickerAccelerationOptions } from './modelPickerModelConfig.js';
 import { getMaxContextLabel, renderModelDescription } from './modelPickerDetails.js';
-import { getModelProviderIcon } from './modelProviderIcons.js';
 
 export interface IModelCardOptions {
 	getSelectedReasoningEffort(): ModelReasoningEffort | undefined;
@@ -91,7 +90,7 @@ export class ModelCard extends DomWidget {
 		if (accessibleDescription) { this.domNode.setAttribute('aria-description', accessibleDescription); }
 		else { this.domNode.removeAttribute('aria-description'); }
 		if (!this.options) { return; }
-		this.title!.setLabel(entry.displayName, undefined, { icon: getModelProviderIcon(entry) });
+		this.title!.setLabel(entry.displayName);
 		this.identity!.textContent = `${entry.model.provider}/${entry.model.model}`;
 		// Preference updates retain the radio DOM, including the option being used by the keyboard.
 		const key = JSON.stringify([entry.model, entry.supportedReasoningEfforts, entry.defaultReasoningEffort,

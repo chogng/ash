@@ -3602,12 +3602,12 @@ suite('chatInput browser component', () => {
 			await expect(row.locator('.ash-menu-badge')).toHaveCount(0);
 			await page.evaluate(() => window.ashChatInputIntegration.setRetirement({}));
 			const announced = locale === 'zh-CN' ? '即将退役' : 'Retiring soon';
-			await expect(row.locator('.ash-menu-badge')).toHaveText(announced);
+			await expect(row).toHaveText('Test Model');
 			await expect(row).toHaveAttribute('aria-description', new RegExp(announced));
 			await page.evaluate(() => window.ashChatInputIntegration.setRetirement({ shutdownDate: '2027-01-31' }));
 			const scheduled = locale === 'zh-CN' ? '将于 2027-01-31 退役' : 'Retires on 2027-01-31';
-			await expect(row.locator('.ash-menu-badge')).toHaveText(scheduled);
-			expect(await row.locator('.ash-menu-badge').evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(28);
+			await expect(row).toHaveText('Test Model');
+			await expect(row.locator('.ash-menu-badge')).toHaveCount(0);
 			await expect(row).toHaveAttribute('aria-description', new RegExp(scheduled));
 			await page.setViewportSize({ width: 280, height: 600 });
 			expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -3621,7 +3621,7 @@ suite('chatInput browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.setRetirement({ shutdownDate: '2027-01-31' }));
 			await search.press('ArrowDown');
 			await expect(row).toBeFocused();
-			expect(await row.evaluate(element => getComputedStyle(element.querySelector('.ash-menu-badge')!).color === getComputedStyle(element).color)).toBe(true);
+			await expect(row).toHaveText('Test Model');
 			await row.press('Enter');
 			await expect(menu).toHaveCount(0);
 			await expect(trigger).toBeFocused();

@@ -58,6 +58,12 @@
 	border-color: var(--ash-focusBorder);
 }
 
+.ash-input-box-field.ash-input-box-filter {
+	border-color: var(--ash-contrastBorder, transparent);
+	color: var(--ash-foreground);
+	background: transparent;
+}
+
 .ash-input-box-field.has-validation {
 	border-color: var(--ash-error-foreground);
 }

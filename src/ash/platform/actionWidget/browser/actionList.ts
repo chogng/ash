@@ -42,8 +42,6 @@ export interface IActionListItem<T> {
 	/** Searchable metadata announced with the action, separate from the visible label and badge. */
 	readonly detail?: string;
 	readonly description?: string;
-	readonly toolbarActions?: readonly IAction[];
-	readonly opensDialog?: boolean;
 }
 
 export interface IActionListOptions {
@@ -95,10 +93,8 @@ class ActionListHeader extends ActionViewItem {
 	public override setTabbable(_tabbable: boolean): void { }
 }
 
-/** A selectable row and its secondary actions share one navigation stop. */
+/** A selectable row keeps its checked state, summary and badge within one navigation stop. */
 class ActionListAction extends ButtonActionViewItem {
-	private readonly toolbar: Button[] = [];
-
 	constructor(action: IAction, private readonly entry: IActionListItem<unknown>) {
 		super(action, { buttonStyles: defaultButtonStyles, buttonPresentation: 'quiet' });
 	}
@@ -133,25 +129,10 @@ class ActionListAction extends ButtonActionViewItem {
 			badge.textContent = this.entry.badge;
 			button.append(badge);
 		}
-		for (const action of this.entry.toolbarActions ?? []) {
-			const secondary = this._register(new Button(container, {
-				...defaultButtonStyles, presentation: 'quiet', label: '', iconOnly: true, icon: action.icon,
-				ariaLabel: action.label, title: action.tooltip, enabled: action.enabled,
-				onClick: () => { void action.run(); },
-			}));
-			secondary.domNode.classList.add('ash-action-widget-secondary');
-			if (this.entry.opensDialog) { secondary.domNode.setAttribute('aria-haspopup', 'dialog'); }
-			this.toolbar.push(secondary);
-		}
 	}
 
 	protected override setupTooltip(): void {
 		this.setupDelayedHover(this.button.domNode, [this.action.label, this.entry.description].filter(Boolean).join(' · '));
-	}
-
-	public override setTabbable(tabbable: boolean): void {
-		super.setTabbable(tabbable);
-		for (const button of this.toolbar) { button.domNode.tabIndex = tabbable ? 0 : -1; }
 	}
 }
 
@@ -200,7 +181,7 @@ export class ActionList<T> extends Disposable {
 			this.filter = this._register(new InputBox(filterHost, {
 				inputBoxStyles: defaultInputBoxStyles,
 				type: 'search',
-				presentation: 'compact',
+				presentation: 'filter',
 				ariaLabel: options.ariaLabel ?? localize('actionWidget.filter', 'Filter actions'),
 				placeholder: options.filterPlaceholder ?? localize('actionWidget.filter', 'Filter actions'),
 				role: options.filterAsCombobox ? 'combobox' : undefined,
@@ -355,7 +336,7 @@ export class ActionList<T> extends Disposable {
 				const entry = entries.get(action.id);
 				if (!entry) { return undefined; }
 				if (entry.kind === ActionListItemKind.Header) { return new ActionListHeader(action); }
-				return entry.toolbarActions?.length ? new ActionListAction(action, entry) : undefined;
+				return this.options.presentation === 'details' ? new ActionListAction(action, entry) : undefined;
 			},
 		}, defaultMenuStyles));
 		menu.element.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
