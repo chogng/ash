@@ -280,12 +280,17 @@ impl InvocationSessionStore {
         let terminal = match result {
             Ok(result) => InvocationTerminal::Succeeded(result.payload),
             Err(error) => {
-                let failure = runtime_failure(&error, Some(session.incarnation));
+                let mut failure = runtime_failure(&error, Some(session.incarnation));
                 if failure.code == ExtensionHostFailureKind::Cancelled {
                     InvocationTerminal::Cancelled(
                         session.cancellation.unwrap_or(CancelReason::Caller),
                     )
                 } else {
+                    // HostFailure carries the extension's validated, caller-facing message.
+                    // Keep it for invocation errors; lifecycle and process diagnostics stay sanitized.
+                    if let ExtensionHostError::HostRejected { message, .. } = error {
+                        failure.message = message;
+                    }
                     InvocationTerminal::Failed(failure)
                 }
             }
