@@ -75,11 +75,13 @@ test('Desktop package omits standalone Node and retains its Electron binding aft
 	}
 });
 
-test('Windows package saves files, executes a terminal command and restarts with its bundled backend', { tag: ['@win32'] }, async ({ }, testInfo) => {
+test('Desktop package saves files, renders Markdown, executes a terminal command and restarts with its bundled backend', { tag: ['@win32', '@darwin'] }, async ({ }, testInfo) => {
 	test.setTimeout(120_000);
 	const bundle = process.env.ASH_PACKAGED_BUNDLE;
-	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a built Ash-win32-x64 directory.');
+	test.skip(!bundle, 'Set ASH_PACKAGED_BUNDLE to a built Desktop bundle.');
 	const bundlePath = resolve(bundle!);
+	const installation = process.platform === 'darwin' ? dirname(bundlePath) : bundlePath;
+	const resources = process.platform === 'darwin' ? join(bundlePath, 'Contents', 'Resources') : join(bundlePath, 'resources');
 	const directory = await mkdtemp(join(tmpdir(), 'ash-'));
 	try {
 		const userData = directory;
@@ -88,9 +90,9 @@ test('Windows package saves files, executes a terminal command and restarts with
 		await mkdir(join(userData, 'profile'), { recursive: true });
 		await writeFile(join(userData, 'profile', 'settings.json'), '{"update.policy":"never"}');
 		await writeFile(join(workspace, 'main.ts'), 'const release = 1;\n');
-		const { version } = JSON.parse(await readFile(join(bundlePath, 'resources', 'app', 'package.json'), 'utf8'));
-		await exercisePackagedWorkbench(bundlePath, version, userData, workspace, 'const release = 2;', testInfo, 'package');
-		await exercisePackagedWorkbench(bundlePath, version, userData, workspace, 'const release = 3;', testInfo, 'restart');
+		const { version } = JSON.parse(await readFile(join(resources, 'app', 'package.json'), 'utf8'));
+		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 2;', testInfo, 'package');
+		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 3;', testInfo, 'restart');
 	} finally {
 		const absolute = await realpath(directory);
 		assert.equal(dirname(absolute), await realpath(tmpdir()));

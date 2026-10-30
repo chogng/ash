@@ -14,7 +14,7 @@ import { isProcessRunning } from '../../build/processes.ts';
 
 interface RunningApplication {
 	driver: PlaywrightDriver;
-	diagnostics: Pick<WorkbenchDiagnostics, 'pageErrors' | 'consoleErrors' | 'errors'>;
+	diagnostics: Pick<WorkbenchDiagnostics, 'pageErrors' | 'consoleErrors' | 'resourceErrors' | 'errors'>;
 	deferRestart(): Promise<void>;
 	restartMessage(): Promise<string>;
 	reload(reason?: 'windowClose' | 'quit'): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
@@ -113,6 +113,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		const diagnostics = {
 			get pageErrors(): string[] { return generations.flatMap(generation => generation.pageErrors); },
 			get consoleErrors(): string[] { return generations.flatMap(generation => generation.consoleErrors); },
+			get resourceErrors(): string[] { return generations.flatMap(generation => generation.resourceErrors); },
 			get errors(): readonly string[] { return generations.flatMap(generation => generation.errors); },
 		};
 		const useApplication = async (running: RunningApplication): Promise<void> => {
@@ -121,10 +122,10 @@ export const test = base.extend<PlaywrightFixtures>({
 			await use(running);
 
 			page = running.driver.workbench.page;
-			const { pageErrors, consoleErrors } = running.diagnostics;
+			const { pageErrors, consoleErrors, resourceErrors } = running.diagnostics;
 			const errors = running.diagnostics.errors;
 			const failed = testInfo.status !== testInfo.expectedStatus || errors.length > 0;
-			if (failed) { await testInfo.attach('diagnostics', { body: JSON.stringify({ url: page.url(), pageErrors, consoleErrors }), contentType: 'application/json' }); }
+			if (failed) { await testInfo.attach('diagnostics', { body: JSON.stringify({ url: page.url(), pageErrors, consoleErrors, resourceErrors }), contentType: 'application/json' }); }
 			if (failed && !page.isClosed()) {
 				const screenshotPath = testInfo.outputPath('workbench.png');
 				await page.screenshot({ path: screenshotPath }).catch(() => undefined);

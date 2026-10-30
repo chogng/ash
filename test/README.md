@@ -72,4 +72,4 @@ Electron 自动化普通测试在本地和 CI 都隐藏窗口，`--debug` 显示
 
 三个 stable 晋级工作流都会重新检查已发布成品，下载通过的报告，并在签署 stable 更新信息前核对报告里的包哈希。Desktop 晋级还必须指定 `previous-version`：先安装旧版，再在同一安装位置安装候选版，共用配置和工作区，验证版本切换、重启及数据保留。该场景覆盖安装包升级；应用内自动检查、下载和安装更新的完整调用链，以及 Code/App Server 的更新选择与数据迁移，不在此场景覆盖范围内。首次 Desktop stable 晋级也需要一个可用于升级验证的旧发布版本。
 
-失败时会保留 JSON 报告、DOM/控制台诊断和 Playwright trace；排查不依赖截图。构建工具回归测试位于 `build/release/sanity.test.ts`。
+Desktop 成品检查还会在候选版及后续重启中打开 Markdown 预览并确认相对路径图片加载，覆盖包内 webview 启动资源、扩展脚本和工作区资源读取。启动资源 HTTP 错误、请求失败和 webview 致命启动错误会立即中断预览等待；资源诊断的 URL 会去掉凭据、查询参数和片段。失败时会保留 JSON 报告、DOM/控制台/资源诊断和 Playwright trace；排查不依赖截图。构建工具回归测试位于 `build/release/sanity.test.ts`。
