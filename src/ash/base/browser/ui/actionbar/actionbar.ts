@@ -253,6 +253,11 @@ export class ActionBar extends Disposable {
 		this._setTabStop(entry.item);
 	}
 
+	/** Returns the rendered width of an action slot, excluding the bar's gap. */
+	getItemWidth(index: number): number {
+		return this.entries[index]?.container.getBoundingClientRect().width ?? 0;
+	}
+
 	focus(): void {
 		const entry = this.entries.find(({ item, action }) => item === this.tabStop && action.enabled)
 			?? this.entries.find(({ action }) => action.enabled);

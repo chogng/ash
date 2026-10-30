@@ -10,7 +10,8 @@ import { observableValue } from '../../../src/ash/base/common/observable.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
-import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { Action2, IMenuService, MenuId, registerAction2 } from '../../../src/ash/platform/actions/common/actions.js';
+import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
@@ -18,6 +19,7 @@ import { IContextMenuService, IContextViewService } from '../../../src/ash/platf
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
+import { HoverConfiguration } from '../../../src/ash/platform/hover/common/hoverService.js';
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
@@ -45,6 +47,17 @@ import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmSer
 import { ISCMService, ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
 import type { ISCMHistoryItem, ISCMHistoryProvider } from '../../../src/ash/workbench/contrib/scm/common/history.js';
 const resources = new DisposableStore();
+let toolbarCalls = 0;
+if (new URLSearchParams(location.search).has('toolbarOverflow')) {
+	for (const [index, name] of ['Fetch', 'Pull', 'Push'].entries()) {
+		resources.add(registerAction2(class extends Action2 {
+			constructor() {
+				super({ id: `fixture.history.${name}`, title: name, icon: Lxicon.sync, menu: { id: MenuId.SCMHistoryTitle, group: 'navigation', order: 900 + index } });
+			}
+			override run(): void { toolbarCalls++; }
+		}));
+	}
+}
 resources.add(setARIAContainer(document.body));
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 const root = document.querySelector<HTMLElement>('#history-root')!;
@@ -150,6 +163,8 @@ panes.layout({ height: 600, width: 560 });
 panes.setVisible(true);
 const fixture = {
 	hash, timestamp, subject, message, opened, historyReads,
+	get toolbarCalls(): number { return toolbarCalls; },
+	setHoverDelay(delay: number): Promise<void> { return configuration.updateValue(HoverConfiguration.delay, delay); },
 	get changeReads(): number { return changeReads; },
 	setRepositoryBusy(value: boolean): void { repositoryBusy = value; repositoryChanged.fire(); },
 	completedContents,

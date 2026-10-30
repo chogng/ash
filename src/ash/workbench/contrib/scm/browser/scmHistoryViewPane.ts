@@ -1,8 +1,9 @@
 import { defaultListStyles, defaultFindWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize2, localize } from '../../../../nls.js';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { observeResize } from '../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
@@ -434,6 +435,16 @@ export class SCMHistoryViewPane extends ViewPane {
 			},
 		));
 		toolbar.element.classList.add('ash-scm-remote-actions');
+		const layoutToolbar = this._register(new AnimationFrameScheduler(getWindow(this.element), () => {
+			const width = this.headerElement.clientWidth;
+			if (width === 0) return;
+			// Keep the collapse control and a readable title beside the operation strip.
+			toolbar.layout(Math.max(0, width - 64));
+		}));
+		this._register(observeResize([this.headerElement, toolbar.element], () => layoutToolbar.schedule()));
+		this._register(toolbar.onDidChangeMenuItems(() => layoutToolbar.schedule()));
+		this._register(this.filterPresentation.onDidChange(() => layoutToolbar.schedule()));
+		layoutToolbar.schedule();
 		this._register(this.scmViewService.onDidChangeActiveRepository(() => void this.refresh()));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('scm.graph.pageSize') || event.affectsConfiguration('scm.graph.showIncomingChanges') || event.affectsConfiguration('scm.graph.showOutgoingChanges')) { void this.refresh(); }
@@ -1003,7 +1014,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		tree.element.setAttribute('aria-multiselectable', 'false');
 		const navigationHelp = localize(
 			'scm.history.help',
-			'Use Up and Down Arrow to navigate and select commits, folders and changed files. Navigating to a file previews it while keeping focus here. Home and End move to the first and last loaded rows; Page Up and Page Down move by a page. Right Arrow expands a commit or folder and enters its children; Left Arrow collapses it or returns to its parent. Enter or Space toggles commits and folders. Enter opens and pins a changed file; Space previews it while keeping focus in history. Click a file to preview it and double-click to pin it. Hold Ctrl, Command or Alt when clicking to open it beside the current editor. On macOS, Command+Down Arrow also opens the selected item. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges, Open Changes and Open File. Press Alt+Down Arrow on a commit to focus its details; Escape returns to history. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and updates the graph immediately. Enter, Escape or clicking outside closes the picker and keeps the selection. Use View as List or View as Tree to change file layout. Incoming and Outgoing Changes compare the branch with its merge base. Binary changes open a read-only hexadecimal comparison. The graph selects one row at a time. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded rows. Synchronizing or refreshing returns to the top. Automatic fetch keeps older history in place and marks the graph as outdated; refresh to update it.',
+			'Use Up and Down Arrow to navigate and select commits, folders and changed files. Navigating to a file previews it while keeping focus here. Home and End move to the first and last loaded rows; Page Up and Page Down move by a page. Right Arrow expands a commit or folder and enters its children; Left Arrow collapses it or returns to its parent. Enter or Space toggles commits and folders. Enter opens and pins a changed file; Space previews it while keeping focus in history. Click a file to preview it and double-click to pin it. Hold Ctrl, Command or Alt when clicking to open it beside the current editor. On macOS, Command+Down Arrow also opens the selected item. Press Shift+F10 or the Context Menu key for provider actions. Use Tab to reach reference badges, Open Changes and Open File. Press Alt+Down Arrow on a commit to focus its details; Escape returns to history. Use Filter History References to select branches and tags; Ctrl+Space toggles a reference and updates the graph immediately. Enter, Escape or clicking outside closes the picker and keeps the selection. Use View as List or View as Tree to change file layout. Incoming and Outgoing Changes compare the branch with its merge base. Binary changes open a read-only hexadecimal comparison. The graph selects one row at a time. Escape clears the selection without collapsing files. Loading more or refreshing retains available selections and expanded rows. Synchronizing or refreshing returns to the top. Automatic fetch keeps older history in place and marks the graph as outdated; refresh to update it. When the header is narrow, use More Actions to reach operations that do not fit in the toolbar.',
 		);
 		const pagingHelp = localize('scm.history.pagingHelp', 'Automatic loading fetches older commits before you reach the end. When it is off, use Load more commits. If loading fails, use Retry; the loaded history stays available.');
 		tree.element.setAttribute('aria-description', `${navigationHelp} ${pagingHelp}`);

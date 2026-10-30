@@ -682,6 +682,14 @@
 	min-width: 0;
 }
 
+.ash-scm-commit.ash-button,
+.ash-scm-commit-dropdown.ash-button {
+	box-sizing: border-box;
+	height: 24px;
+	min-height: 24px;
+	padding-block: 0;
+}
+
 .ash-scm-commit .ash-icon-label-container {
 	min-width: 0;
 }

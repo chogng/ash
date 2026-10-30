@@ -43,8 +43,13 @@ export class ToolBar extends Disposable {
 	private readonly actionBar: ActionBar;
 	private readonly moreActions = new MoreActionsAction();
 	private readonly moreActionsPlacement: MoreActionsPlacement | undefined;
+	private primaryActions: readonly IAction[] = [];
+	private menuActions: readonly IAction[] = [];
 	private secondaryActions: readonly IAction[] = [];
 	private trailingActions: readonly IAction[] = [];
+	private renderedActions: readonly IAction[] = [];
+	private readonly actionWidths = new Map<IAction, number>();
+	private availableWidth: number | undefined;
 
 	constructor(container: HTMLElement, options: ToolBarOptions) {
 		super();
@@ -77,9 +82,57 @@ export class ToolBar extends Disposable {
 		trailingActions: readonly IAction[] = [],
 	): void {
 		const primary = cleanSeparators(primaryActions);
-		this.secondaryActions = cleanSeparators(secondaryActions);
+		this.primaryActions = primary;
+		this.menuActions = this.secondaryActions = cleanSeparators(secondaryActions);
 		this.trailingActions = cleanSeparators(trailingActions);
-		this.actionBar.setActions(this.withMoreActions(primary));
+		this.actionWidths.clear();
+		this.renderActions(this.withMoreActions(primary));
+		if (this.availableWidth !== undefined) this.layout(this.availableWidth);
+	}
+
+	/** Fits primary actions to a host-supplied width, moving the trailing suffix into More Actions. */
+	layout(width: number): void {
+		this.availableWidth = Math.max(0, width);
+		this.element.classList.add('ash-toolbar-responsive');
+		const all = [...this.primaryActions, this.moreActions, ...this.trailingActions];
+		const activeElement = this.element.ownerDocument.activeElement;
+		const focusedAction = this.renderedActions.find((_, index) => this.element.children[index]?.contains(activeElement));
+		if (all.some(action => !this.actionWidths.has(action))) {
+			// Measure real custom action views and the menu trigger before choosing a prefix.
+			this.renderActions(all);
+		}
+		const styles = this.element.ownerDocument.defaultView!.getComputedStyle(this.element);
+		const gap = Number.parseFloat(styles.columnGap) || 0;
+		// A restored custom view can have a new label width; measure it once more before settling.
+		for (let pass = 0; pass < 2; pass++) {
+			for (let index = 0; index < this.renderedActions.length; index++) {
+				this.actionWidths.set(this.renderedActions[index]!, this.actionBar.getItemWidth(index));
+			}
+			const fits = (actions: readonly IAction[]): boolean => {
+				const itemWidths = actions.reduce((total, action) => total + (this.actionWidths.get(action) ?? 0), 0);
+				return itemWidths + Math.max(0, actions.length - 1) * gap <= this.availableWidth!;
+			};
+			let count = this.primaryActions.length;
+			if (this.menuActions.length > 0 || !fits([...this.primaryActions, ...this.trailingActions])) {
+				while (count > 0) {
+					const primary = cleanSeparators(this.primaryActions.slice(0, count));
+					if (fits([...primary, this.moreActions, ...this.trailingActions])) break;
+					count--;
+				}
+			}
+			const overflow = cleanSeparators(this.primaryActions.slice(count));
+			this.secondaryActions = cleanSeparators([
+				...overflow,
+				...(overflow.length && this.menuActions.length ? [new Separator()] : []),
+				...this.menuActions,
+			]);
+			this.renderActions(this.withMoreActions(cleanSeparators(this.primaryActions.slice(0, count))));
+		}
+		if (focusedAction && !this.renderedActions.includes(focusedAction)) {
+			// A shrinking toolbar must keep its focused operation reachable from the keyboard.
+			if (this.renderedActions.includes(this.moreActions)) this.actionBar.setTabStop(this.moreActions.id);
+			this.actionBar.focus();
+		}
 	}
 
 	focus(): void {
@@ -93,9 +146,18 @@ export class ToolBar extends Disposable {
 		trailingActions: readonly IAction[] = [],
 	): void {
 		const primary = cleanSeparators(primaryActions);
-		this.secondaryActions = cleanSeparators(secondaryActions);
+		this.primaryActions = primary;
+		this.menuActions = this.secondaryActions = cleanSeparators(secondaryActions);
 		this.trailingActions = cleanSeparators(trailingActions);
-		this.actionBar.updateActions(this.withMoreActions(primary));
+		this.actionWidths.clear();
+		this.renderActions(this.withMoreActions(primary), true);
+		if (this.availableWidth !== undefined) this.layout(this.availableWidth);
+	}
+
+	private renderActions(actions: readonly IAction[], update = false): void {
+		this.renderedActions = actions;
+		if (update) this.actionBar.updateActions(actions);
+		else this.actionBar.setActions(actions);
 	}
 
 	private withMoreActions(primary: readonly IAction[]): readonly IAction[] {

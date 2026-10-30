@@ -211,6 +211,59 @@ test('ToolBar can place More Actions before a named primary action', () => {
 	dom.window.close();
 });
 
+test('ToolBar folds measured action widths into More Actions and restores their order and focus', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const provider = new TestContextMenuProvider();
+		using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: provider });
+		toolbar.element.style.columnGap = '4px';
+		dom.window.HTMLElement.prototype.getBoundingClientRect = function () {
+			return { width: this.dataset.actionId === 'filter' ? 70 : 22 } as DOMRect;
+		};
+		const operations = ['filter', 'pull', 'push', 'refresh'].map(action);
+		const view = action('view');
+		toolbar.setActions(operations, [view]);
+		const filter = toolbar.element.querySelector('[data-action-id="filter"]');
+		toolbar.element.querySelector<HTMLButtonElement>('[data-action-id="refresh"] button')!.focus();
+		toolbar.layout(110);
+		assert.deepEqual([...toolbar.element.children].map(item => (item as HTMLElement).dataset.actionId), ['filter', 'ash.toolbar.moreActions']);
+		const more = toolbar.element.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
+		assert.equal(dom.window.document.activeElement, more);
+		more.click();
+		assert.deepEqual(provider.lastOptions!.getActions().map(item => item.id), ['pull', 'push', 'refresh', Separator.ID, 'view']);
+		provider.lastOptions!.onHide?.(true);
+		toolbar.layout(240);
+		assert.deepEqual([...toolbar.element.children].map(item => (item as HTMLElement).dataset.actionId), ['filter', 'pull', 'push', 'refresh', 'ash.toolbar.moreActions']);
+		assert.equal(toolbar.element.querySelector('[data-action-id="filter"]'), filter);
+	} finally { dom.window.close(); }
+});
+
+test('ToolBar reserves a menu trigger even without secondary actions and invokes the original overflow action', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const provider = new TestContextMenuProvider();
+		using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: provider });
+		dom.window.HTMLElement.prototype.getBoundingClientRect = () => ({ width: 22 }) as DOMRect;
+		toolbar.element.style.columnGap = '4px';
+		let calls = 0;
+		const first = { ...action('first'), run() { calls++; } };
+		const disabled = { ...action('disabled'), enabled: false };
+		toolbar.setActions([first, disabled]);
+		toolbar.layout(22);
+		assert.equal(toolbar.element.children.length, 1);
+		toolbar.element.querySelector<HTMLButtonElement>('button')!.click();
+		const menuActions = provider.lastOptions!.getActions();
+		assert.deepEqual(menuActions, [first, disabled]);
+		await menuActions[0]!.run();
+		assert.equal(calls, 1);
+		provider.lastOptions!.onHide?.(true);
+		await Promise.resolve();
+		toolbar.layout(48);
+		assert.deepEqual([...toolbar.element.children].map(item => (item as HTMLElement).dataset.actionId), ['first', 'disabled']);
+		assert.equal(toolbar.element.querySelector('[aria-haspopup="menu"]'), null);
+	} finally { dom.window.close(); }
+});
+
 class TestContextMenuProvider implements IContextMenuProvider {
 	lastOptions: IContextMenuDelegate | undefined;
 

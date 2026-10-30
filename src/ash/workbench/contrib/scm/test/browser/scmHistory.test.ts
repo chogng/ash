@@ -432,6 +432,39 @@ suite('scmHistory browser component', () => {
 		await expect.poll(async () => ({ mounted: await page.getByRole('treeitem', { name: /History metadata:/u }).count(), errors })).toEqual({ mounted: 1, errors: [] });
 	});
 
+	for (const locale of ['en', 'zh-CN']) test(`history title actions overflow by available width and return when widened (${locale})`, async function () {
+		const { page } = browserTests;
+		await page.goto(`/scmHistory.html?toolbarOverflow&locale=${locale}`);
+		const pane = page.locator('[data-view-id="fixture.history"]');
+		const toolbar = pane.getByRole('toolbar');
+		const more = toolbar.locator('[data-action-id="ash.toolbar.moreActions"] button');
+		await expect(toolbar.locator('[data-action-id="fixture.history.Push"] button')).toBeVisible();
+		const filter = toolbar.locator('[data-action-id="workbench.scm.action.graph.pickHistoryItemRefs"] button');
+		await expect(filter).toContainText(locale === 'en' ? 'Auto' : '自动');
+		await toolbar.locator('[data-action-id="fixture.history.Push"] button').focus();
+		await page.evaluate(() => window.ashSCMHistoryIntegration.resize(180));
+		await expect(toolbar.locator('[data-action-id="fixture.history.Push"]')).toHaveCount(0);
+		await expect(more).toBeFocused();
+		const boxes = await toolbar.locator(':scope > .ash-action-view-item').evaluateAll(items => items.map(item => {
+			const bounds = item.getBoundingClientRect();
+			return { left: bounds.left, right: bounds.right, width: bounds.width };
+		}));
+		const paneBounds = (await pane.boundingBox())!;
+		for (let index = 0; index < boxes.length; index++) {
+			expect(boxes[index]!.width).toBeGreaterThanOrEqual(22);
+			expect(boxes[index]!.right).toBeLessThanOrEqual(paneBounds.x + paneBounds.width);
+			if (index) expect(boxes[index]!.left - boxes[index - 1]!.right).toBeGreaterThanOrEqual(4);
+		}
+		await more.press('Enter');
+		await page.getByRole('menuitem', { name: 'Push', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.toolbarCalls)).toBe(1);
+		await expect(more).toBeFocused();
+		await page.evaluate(() => window.ashSCMHistoryIntegration.resize(560));
+		await expect(toolbar.locator('[data-action-id="fixture.history.Push"] button')).toBeVisible();
+		await expect(filter).toContainText(locale === 'en' ? 'Auto' : '自动');
+		await expect(pane.getByRole('tree')).toHaveAttribute('aria-description', locale === 'en' ? /When the header is narrow/u : /标题栏较窄时/u);
+	});
+
 	test('SCM history progress follows reads, collapse, completion and failure', async function () {
 		const { page } = browserTests;
 		const testInfo = browserTests.info;
@@ -1315,12 +1348,17 @@ suite('scmHistory browser component', () => {
 	test('slow pointer movement and action tooltip delays retain the details card', async function () {
 		const { page } = browserTests;
 
+		// Own the timing instead of depending on the platform's default hover delay.
+		const hoverDelay = 500;
+		await page.evaluate(delay => window.ashSCMHistoryIntegration.setHoverDelay(delay), hoverDelay);
 		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
 		await page.clock.pauseAt(new Date('2026-01-01T00:00:01Z'));
 		const commit = page.getByRole('treeitem', { name: /History metadata:/u });
 		const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 		await commit.locator('.ash-scm-graph-subject').hover({ position: { x: 3, y: 8 } });
-		await page.clock.runFor(1000);
+		await page.clock.runFor(hoverDelay - 1);
+		await expect(hover).toHaveCount(0);
+		await page.clock.runFor(1);
 		await expect(hover).toBeVisible();
 		const pointerCopy = hover.getByRole('button', { name: 'Copy Commit Hash', exact: true });
 		const hoverId = await hover.getAttribute('id');
