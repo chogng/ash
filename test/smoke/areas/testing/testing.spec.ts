@@ -110,13 +110,7 @@ test.describe('built-in Rust testing', () => {
 
 test.describe('testing without a backend', () => {
 	test.use({ openWorkspace: false });
-	test('Testing opens with accessible controls and disables execution without discovered cases', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench }) => {
-		const page = workbench.page;
-		await page.getByRole('tab', { name: 'Testing', exact: true }).first().click();
-		const pane = page.locator('[data-view-id="ash.testing.view"]');
-		await expect(pane.getByRole('tree', { name: 'Tests' })).toHaveAttribute('aria-description', /arrow keys/);
-		await expect(pane.getByRole('button', { name: 'Refresh Tests', exact: true })).toBeVisible();
-		await expect(pane.getByRole('button', { name: 'Run All Tests', exact: true })).toBeDisabled();
-		await expect(pane.getByRole('button', { name: 'Refresh Tests', exact: true })).toBeEnabled();
+	test('Testing stays hidden without workspace testing support', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench }) => {
+		await expect(workbench.page.getByRole('tab', { name: 'Testing', exact: true })).toHaveCount(0);
 	});
 });

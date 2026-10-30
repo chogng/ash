@@ -1,4 +1,4 @@
-import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { ITaskService } from '../../../contrib/tasks/common/taskService.js';
@@ -47,6 +47,7 @@ export class TestingService extends Disposable implements ITestingService {
 	private get debugSession() { return this.debug.sessions.find(session => session.configuration.id === this.debugConfigurationId && session.state !== 'terminated' && session.state !== 'error'); }
 	readonly onDidChangeTests = this.testsEmitter.event;
 	private readonly profilesEmitter = this._register(new Emitter<readonly ITestProfile[]>());
+	private readonly providersEmitter = this._register(new Emitter<void>());
 	private readonly startRunEmitter = this._register(new Emitter<ITestRun>());
 	private readonly changeRunEmitter = this._register(new Emitter<ITestRun>());
 	private readonly providers = new Map<string, OwnedTestProfileProvider>();
@@ -59,6 +60,7 @@ export class TestingService extends Disposable implements ITestingService {
 	private loaded = false;
 
 	readonly onDidChangeProfiles: Event<readonly ITestProfile[]> = this.profilesEmitter.event;
+	readonly onDidChangeTestCapability: Event<void> = Event.any(Event.map(this.onDidChangeProfiles, () => undefined), this.providersEmitter.event);
 	readonly onDidStartRun: Event<ITestRun> = this.startRunEmitter.event;
 	readonly onDidChangeRun: Event<ITestRun> = this.changeRunEmitter.event;
 
@@ -105,6 +107,7 @@ export class TestingService extends Disposable implements ITestingService {
 		this.projectProfiles();
 	}
 
+	get hasTestCapability(): boolean { return this.providers.size > 0 || this.currentProfiles.length > 0; }
 	get profiles(): readonly ITestProfile[] { return this.currentProfiles; }
 	get runs(): readonly ITestRun[] { return this.currentRuns; }
 	get tests(): readonly ITestCase[] { return this.currentTests; }
@@ -414,6 +417,7 @@ export class TestingService extends Disposable implements ITestingService {
 		const refresh = this.loaded || this.activeProviderRefresh !== undefined;
 		this.providerProfiles = Object.freeze(this.providerProfiles.filter(profile => !changedProviders.has(profile.source)));
 		this.projectProfiles();
+		this.providersEmitter.fire();
 		this.activeProviderRefresh?.abort();
 		this.providerRefreshGeneration += 1;
 		if (refresh) void this.refreshProviderProfiles().catch(error => this.reportError(error));

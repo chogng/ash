@@ -52,6 +52,9 @@ export interface ITestRun {
 
 /** Workspace test cases with backend results, plus independently executed script profiles. */
 export interface ITestingService extends IDisposable {
+	/** Available test tasks or registered providers, even before any tests are discovered. */
+	readonly hasTestCapability: boolean;
+	readonly onDidChangeTestCapability: Event<void>;
 	readonly tests: readonly ITestCase[];
 	readonly testResults: readonly ITestCaseResult[];
 	readonly isDiscovering: boolean;

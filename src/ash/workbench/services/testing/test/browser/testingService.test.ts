@@ -80,6 +80,36 @@ test('TestingService rejects profiles that do not reference a current test task'
 	assert.deepEqual(service.profiles.map(candidate => candidate.id), ['unit']);
 });
 
+test('TestingService capability follows test tasks and provider lifetimes before discovery', () => {
+	using tasks = new FakeTaskService([task('build', 'Build', 'build')]);
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
+	const capabilities: boolean[] = [];
+	using listener = service.onDidChangeTestCapability(() => capabilities.push(service.hasTestCapability));
+	assert.equal(service.hasTestCapability, false);
+
+	tasks.setTasks([task('unit', 'Unit', 'test')]);
+	assert.equal(service.hasTestCapability, true);
+	assert.deepEqual(service.tests, []);
+	tasks.setTasks([]);
+	assert.equal(service.hasTestCapability, false);
+
+	using registration = service.registerTestProfileProviders([{ id: 'empty.tests', provideTestProfiles: () => [] }]);
+	assert.equal(service.hasTestCapability, true);
+	assert.deepEqual(service.profiles, []);
+	registration.replace([{ id: 'replacement.tests', provideTestProfiles: () => [] }]);
+	assert.equal(service.hasTestCapability, true);
+	registration.replace([]);
+	assert.equal(service.hasTestCapability, false);
+	registration.replace([{ id: 'empty.tests', provideTestProfiles: () => [] }]);
+	registration.dispose();
+	assert.equal(service.hasTestCapability, false);
+	assert.deepEqual(capabilities, [true, false, true, true, false, true, false]);
+	assert.deepEqual(tasks.runs, []);
+});
+
 function task(id: string, label: string, group: IWorkspaceTask['group']): IWorkspaceTask {
 	return Object.freeze({ id, label, group, command: `run ${id}`, source: 'vscode' });
 }
@@ -99,7 +129,8 @@ class FakeTaskService extends Disposable implements ITaskService {
 	readonly onDidChangeTaskRun = this.runEmitter.event;
 	readonly runs: FakeTaskRun[] = [];
 	lastRun: ITaskRun | undefined;
-	constructor(readonly tasks: readonly IWorkspaceTask[]) { super(); }
+	constructor(public tasks: readonly IWorkspaceTask[]) { super(); }
+	setTasks(tasks: readonly IWorkspaceTask[]): void { this.tasks = tasks; this.tasksEmitter.fire(tasks); }
 	get activeRuns(): readonly ITaskRun[] { return this.runs.filter(run => run.status === 'running'); }
 	registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
 	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
