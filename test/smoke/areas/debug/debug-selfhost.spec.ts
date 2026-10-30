@@ -162,28 +162,30 @@ async function expandScope(workbench: Workbench, name: 'Local' | 'Module'): Prom
 	if (await scope.getAttribute('aria-expanded') === 'false') await scope.click();
 }
 
-async function backendWatcher(workbench: Workbench): Promise<{ tabId: string | null; pid: number; }> {
-	const tab = workbench.terminal.tabs.filter({ hasText: 'Watch Ash Backend' });
-	await expect(tab).toHaveCount(1);
-	await tab.click();
-	const tabId = await tab.getAttribute('id');
-	const pane = workbench.page.locator('.ash-terminal-group-pane');
-	await expect(pane.filter({ hasText: 'Watching Rust App Server sources' })).toHaveCount(1);
-	await command(workbench, 'workbench.action.terminal.focusHover');
-	const hover = workbench.page.locator('.ash-terminal-instance-hover').filter({ hasText: 'Watch Ash Backend' });
-	await expect(hover).toContainText(/Process ID \(PID\): \d+/);
-	const pid = Number((await hover.innerText()).match(/Process ID \(PID\): (\d+)/)![1]);
-	await workbench.page.keyboard.press('Escape');
-	return { tabId, pid };
+async function debugServiceProcessIds(directory: string): Promise<number[]> {
+	let processes: { pid: number; parent: number; command: string; }[];
+	if (process.platform === 'win32') {
+		const { stdout } = await execute('powershell.exe', ['-NoProfile', '-Command', 'Get-CimInstance Win32_Process | Select-Object @{n="pid";e={$_.ProcessId}},@{n="parent";e={$_.ParentProcessId}},@{n="command";e={$_.CommandLine}} | ConvertTo-Json -Compress'], { windowsHide: true });
+		processes = JSON.parse(stdout);
+	} else {
+		const { stdout } = await execute('ps', ['-eo', 'pid=,ppid=,args=']);
+		processes = stdout.trim().split('\n').map(line => {
+			const [, pid, parent, command] = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/u)!;
+			return { pid: Number(pid), parent: Number(parent), command };
+		});
+	}
+	const descendants = new Set(processes.filter(process => process.command?.includes('build/desktop/launch/electron.ts') && process.command.includes(directory)).map(process => process.pid));
+	let count = -1;
+	while (count !== descendants.size) {
+		count = descendants.size;
+		for (const process of processes) if (descendants.has(process.parent)) descendants.add(process.pid);
+	}
+	return processes.filter(process => descendants.has(process.pid) && /watch-app-server[.]ts|vite[/\\]bin[/\\]vite[.]js/u.test(process.command)).map(process => process.pid);
 }
 
 async function stop(workbench: Workbench, browser?: Browser, profile = join(repository, '.build/desktop/debug/profile')): Promise<void> {
 	if (!workbench.page.isClosed()) {
 		await command(workbench, 'workbench.action.debug.stopAll').catch(() => undefined);
-		for (const name of ['Watch Ash Backend', 'Run Ash Desktop Renderer']) {
-			await command(workbench, 'workbench.action.tasks.terminate');
-			if (await workbench.quickaccess.input.isVisible()) await workbench.quickaccess.select(name);
-		}
 	}
 	await browser?.close();
 	const daemon = join(developmentAshPackagePath(repository, 'host-provided-node'), 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
@@ -198,9 +200,9 @@ async function finish(workbench: Workbench, info: TestInfo, failed: boolean, bro
 	}
 }
 
-desktopTest('Desktop debug configurations start and reuse one Rust source watcher in Ash', { tag: ['@electron-app-server'] }, async ({ workbench, debugTarget }, info) => {
+desktopTest('Desktop Stop releases its Renderer and Rust watcher before the next F5 in Ash', { tag: ['@electron-app-server'] }, async ({ workbench, debugTarget }, info) => {
 	desktopTest.setTimeout(360_000);
-	let watcher: Awaited<ReturnType<typeof backendWatcher>> | undefined;
+	let servicePids: number[] = [];
 	let failed = false;
 	try {
 		for (const [name, entry] of [['Ash', '/workbench.html'], ['Ash Agents', '/sessions.html']] as const) {
@@ -217,11 +219,14 @@ desktopTest('Desktop debug configurations start and reuse one Rust source watche
 					return targets.some(target => target.url.includes(entry));
 				} catch { return false; }
 			}, { timeout: 120_000 }).toBe(true);
-			const current = await backendWatcher(workbench);
-			if (watcher) expect(current).toEqual(watcher);
-			watcher = current;
-			await command(workbench, 'workbench.action.debug.stopAll');
+			await expect.poll(async () => {
+				servicePids = await debugServiceProcessIds(debugTarget.directory);
+				return servicePids.length;
+			}).toBe(2);
+			await expect(workbench.terminal.tabs.filter({ hasText: /Watch Ash Backend|Run Ash Desktop Renderer/u })).toHaveCount(0);
+			await workbench.page.keyboard.press('Shift+F5');
 			await expect.poll(async () => fetch(`${debugTarget.endpoint}/json/list`).then(() => true, () => false)).toBe(false);
+			for (const pid of servicePids) await expect.poll(() => { try { process.kill(pid, 0); return true; } catch { return false; } }).toBe(false);
 		}
 	} catch (error) {
 		failed = true;
@@ -229,9 +234,38 @@ desktopTest('Desktop debug configurations start and reuse one Rust source watche
 		throw error;
 	} finally {
 		await finish(workbench, info, failed, undefined, debugTarget.profile);
-		const watcherPid = watcher?.pid;
-		if (watcherPid) await expect.poll(() => { try { process.kill(watcherPid, 0); return true; } catch { return false; } }).toBe(false);
+		for (const pid of servicePids) await expect.poll(() => { try { process.kill(pid, 0); return true; } catch { return false; } }).toBe(false);
 	}
+});
+
+base('Stop cancels a pre-launch build and its already started task dependencies in Ash', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const root = testWorkspace.directory;
+	await mkdir(join(root, '.vscode'), { recursive: true });
+	await writeFile(join(root, 'watch.cjs'), "require('node:fs').writeFileSync('watch.pid', String(process.pid)); console.log('WATCH_READY'); setInterval(() => {}, 1000);");
+	await writeFile(join(root, 'build.cjs'), "const child = require('node:child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' }); require('node:fs').writeFileSync('build.pids', JSON.stringify([process.pid, child.pid])); setInterval(() => {}, 1000);");
+	await writeFile(join(root, 'unexpected.cjs'), "require('node:fs').writeFileSync('unexpected', 'started');");
+	await writeFile(join(root, '.vscode/tasks.json'), JSON.stringify({
+		version: '2.0.0', tasks: [
+			{ label: 'prepare', dependsOrder: 'sequence', dependsOn: ['watch', 'build', 'later'] },
+			{
+				label: 'watch', type: 'process', command: process.execPath, args: ['watch.cjs'], isBackground: true,
+				problemMatcher: { owner: 'selfhost-test', pattern: { regexp: '^(never):(\\d+):(.*)$', file: 1, line: 2, message: 3 }, background: { activeOnStart: true, beginsPattern: '^WATCH_READY$', endsPattern: '^WATCH_READY$' } },
+			},
+			{ label: 'build', type: 'process', command: process.execPath, args: ['build.cjs'], problemMatcher: [] },
+			{ label: 'later', type: 'process', command: process.execPath, args: ['unexpected.cjs'], problemMatcher: [] },
+		]
+	}));
+	await writeFile(join(root, '.vscode/launch.json'), JSON.stringify({
+		version: '0.2.0', configurations: [
+			{ name: 'Cancel preparation', type: 'node', request: 'launch', program: '${workspaceFolder}/unexpected.cjs', cwd: '${workspaceFolder}', preLaunchTask: 'prepare' },
+		]
+	}));
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	await expect.poll(async () => readFile(join(root, 'build.pids'), 'utf8').then(() => true, () => false)).toBe(true);
+	const pids = [Number(await readFile(join(root, 'watch.pid'), 'utf8')), ...JSON.parse(await readFile(join(root, 'build.pids'), 'utf8')) as number[]];
+	await workbench.page.keyboard.press('Shift+F5');
+	for (const pid of pids) await expect.poll(() => { try { process.kill(pid, 0); return true; } catch { return false; } }, { timeout: 15_000 }).toBe(false);
+	expect(existsSync(join(root, 'unexpected'))).toBe(false);
 });
 
 test('Ash self hosts Electron main and renderer source breakpoints and releases debug targets', { tag: ['@electron-app-server'] }, async ({ workbench }, info) => {

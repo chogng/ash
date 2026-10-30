@@ -299,3 +299,79 @@ if (!fs.existsSync('launches.log')) {
 	assert.equal(pids.length, 2, output);
 	assert.equal(isProcessRunning(pids[1]!), true);
 });
+
+for (const mode of ['running', 'rendererStarting', 'watcherFails'] as const) {
+	test(`F5 launcher owns Renderer and Rust watcher cleanup (${mode})`, { timeout: 30_000 }, async t => {
+		const root = await realpath(await mkdtemp(join(tmpdir(), 'ash-debug-services-')));
+		for (const name of launchSources) {
+			await mkdir(join(root, name, '..'), { recursive: true });
+			await copyFile(resolve(import.meta.dirname, '../../..', name), join(root, name));
+		}
+		await mkdir(join(root, 'node_modules/electron'), { recursive: true });
+		await mkdir(join(root, 'build/node_modules/vite/bin'), { recursive: true });
+		await writeFile(join(root, 'node_modules/electron/index.js'), 'module.exports = process.execPath;');
+		await writeFile(join(root, 'package.json'), '{"type":"module","main":"fixture.cjs"}');
+		await writeFile(join(root, 'mode'), mode);
+		await writeFile(join(root, 'build/desktop/host.ts'), `
+export async function watchHost(onReady) {
+  const done = Promise.withResolvers();
+  onReady(true, 'initial');
+  return { close: async () => done.resolve(), done: done.promise };
+}
+`);
+		const record = `require('node:fs').appendFileSync('services.log', process.pid + '\\n');`;
+		await writeFile(join(root, 'fixture.cjs'), `${record}\nprocess.send('ash:dev:ready'); setInterval(() => {}, 1000);`);
+		await writeFile(join(root, 'build/node_modules/vite/bin/vite.js'), `
+${record}
+const net = require('node:net');
+const port = Number(process.argv[process.argv.indexOf('--port') + 1]);
+net.createServer().listen(port, '127.0.0.1', () => {
+  if (require('node:fs').readFileSync('mode', 'utf8') !== 'rendererStarting') console.log('\\x1b[32mLocal:\\x1b[0m \\x1b[36mhttp://\\x1b[1m127.0.0.1\\x1b[22m:' + port + '/');
+});
+`);
+		await writeFile(join(root, 'build/node_modules/vite/package.json'), '{"type":"commonjs"}');
+		await writeFile(join(root, 'build/desktop/watch-app-server.ts'), `
+import { appendFileSync, readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+appendFileSync('services.log', process.pid + '\\n');
+if (readFileSync('mode', 'utf8') === 'watcherFails') process.exit(2);
+spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); require('node:fs').appendFileSync('services.log', process.pid + '\\\\n'); setInterval(() => {}, 1000)"], { stdio: 'ignore' });
+console.log('[app-server] Watching Rust App Server sources');
+setInterval(() => {}, 1000);
+`);
+		const { createServer } = await import('node:net');
+		const reservation = createServer();
+		await new Promise<void>(resolveReady => reservation.listen(0, '127.0.0.1', resolveReady));
+		const port = (reservation.address() as import('node:net').AddressInfo).port;
+		await new Promise<void>((resolveClosed, reject) => reservation.close(error => error ? reject(error) : resolveClosed()));
+		const runs: ProcessRun[] = [];
+		t.after(async () => { await Promise.all(runs.map(run => run.stop('SIGTERM'))); await rm(root, { recursive: true, force: true }); });
+		const pids = async (): Promise<number[]> => readFile(join(root, 'services.log'), 'utf8').then(text => text.trim().split('\n').filter(Boolean).map(Number), () => []);
+		for (let attempt = 0; attempt < (mode === 'running' ? 2 : 1); attempt++) {
+			const run = new ProcessRun(root, undefined, 100);
+			runs.push(run);
+			const previousCount = (await pids()).length;
+			const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch', '--dev-services'], {
+				cwd: root, stdio: 'pipe', env: { ...process.env, ASH_DESKTOP_UI_ONLY: '1', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_RENDERER_URL: `http://127.0.0.1:${port}` },
+			});
+			let output = '';
+			child.stdout.on('data', chunk => { output += chunk; });
+			child.stderr.on('data', chunk => { output += chunk; });
+			await run.own(child);
+			const deadline = Date.now() + 10_000;
+			const expectedCount = mode === 'running' ? 4 : mode === 'watcherFails' ? 2 : 1;
+			while ((await pids()).length < previousCount + expectedCount && Date.now() < deadline) await delay(20);
+			assert.equal((await pids()).length, previousCount + expectedCount, output);
+			if (mode !== 'watcherFails') {
+				if (process.platform === 'win32') await run.stop('SIGTERM');
+				else child.kill('SIGTERM');
+			}
+			while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) await delay(20);
+			if (mode !== 'watcherFails' && process.platform === 'win32') assert.equal(child.signalCode, 'SIGTERM', output);
+			else assert.equal(child.exitCode, mode === 'watcherFails' ? 1 : 143, output);
+			for (const pid of await pids()) assert.equal(isProcessRunning(pid), false, `Leaked F5 process ${pid}: ${output}`);
+			await new Promise<void>((resolveReady, reject) => reservation.once('error', reject).listen(port, '127.0.0.1', resolveReady));
+			await new Promise<void>((resolveClosed, reject) => reservation.close(error => error ? reject(error) : resolveClosed()));
+		}
+	});
+}

@@ -446,22 +446,24 @@ export class DebugService extends Disposable implements IDebugService {
 		const sessionOptions = this.normalizeSessionOptions(options);
 		if (!this.processes) throw new Error('This host does not provide the Code debug adapter capability');
 		const generation = this.workspaceGeneration;
-		const relation = await this.processes.reserveSession({
-			id: generateUuid(), workspaceId: this.workspace.getWorkspace().id, parentId: sessionOptions.parentSession?.id ?? null,
-			lifecycleManagedByParent: sessionOptions.lifecycleManagedByParent ?? false,
-			mergeConsole: sessionOptions.consoleMode === DebugConsoleMode.MergeWithParent,
-			noDebug: sessionOptions.noDebug ?? (sessionOptions.parentSession ? null : typeof current.arguments.noDebug === 'boolean' ? current.arguments.noDebug : null),
-		});
+		const id = generateUuid();
 		const controller = new AbortController();
-		this.launchControllers.set(relation.id, controller);
+		this.launchControllers.set(id, controller);
 		try {
+			const relation = await this.processes.reserveSession({
+				id, workspaceId: this.workspace.getWorkspace().id, parentId: sessionOptions.parentSession?.id ?? null,
+				lifecycleManagedByParent: sessionOptions.lifecycleManagedByParent ?? false,
+				mergeConsole: sessionOptions.consoleMode === DebugConsoleMode.MergeWithParent,
+				noDebug: sessionOptions.noDebug ?? (sessionOptions.parentSession ? null : typeof current.arguments.noDebug === 'boolean' ? current.arguments.noDebug : null),
+			});
+			throwIfCancelled(controller.signal);
 			if (this.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
 			const launch = relation.noDebug === null ? current : Object.freeze({ ...current, arguments: Object.freeze({ ...current.arguments, noDebug: relation.noDebug }) });
 			return await this.startAdmittedDebugging(launch, sessionOptions, relation.id, controller.signal);
 		} catch (error) {
-			await this.processes.manageSession(relation.id, 'end').catch(() => { });
+			await this.processes.manageSession(id, 'end').catch(() => { });
 			throw error;
-		} finally { this.launchControllers.delete(relation.id); }
+		} finally { this.launchControllers.delete(id); }
 	}
 
 	private async startAdmittedDebugging(current: IDebugConfiguration, sessionOptions: IDebugSessionOptions, id: string, signal: AbortSignal): Promise<IDebugSession> {
@@ -791,7 +793,13 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	async stop(session: IDebugSession | undefined = this.session): Promise<void> {
-		if (!session) return;
+		if (!session) {
+			// A pre-launch task can be running before there is a session to disconnect.
+			this.taskRunner.cancel();
+			for (const controller of this.launchControllers.values()) controller.abort();
+			return;
+		}
+		this.launchControllers.get(session.id)?.abort();
 		const target = await this.processes!.manageSession(session.id, 'route');
 		if (target.lifecycleTargetId !== session.id) return this.stop(this.getSession(target.lifecycleTargetId));
 		const record = this.sessionRecords.get(session.id);
@@ -808,6 +816,8 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	async stopAll(): Promise<void> {
+		this.taskRunner.cancel();
+		for (const controller of this.launchControllers.values()) controller.abort();
 		await Promise.allSettled([...this.sessions, ...this.preparingSessions.values()].map(session => this.stop(session)));
 	}
 

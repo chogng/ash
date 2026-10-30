@@ -833,7 +833,7 @@ test('DebugService cancels dispatch when the workspace changes during preLaunchT
 	assert.deepEqual(processes.started, []);
 });
 
-for (const change of ['workspace', 'dispose'] as const) {
+for (const change of ['workspace', 'dispose', 'stop', 'stopAll'] as const) {
 	test(`Debug task discovery cancels promptly on ${change} and cannot start from a late catalog`, async () => {
 		using resources = new DisposableStore();
 		const root = URI.file('/workspace');
@@ -848,7 +848,8 @@ for (const change of ['workspace', 'dispose'] as const) {
 		const pending = assert.rejects(service.startDebugging({ id: 'pending', name: 'Pending', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {}, preLaunchTask: 'build' }), isCancellationError);
 		await entered.p;
 		if (change === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
-		else service.dispose();
+		else if (change === 'dispose') service.dispose();
+		else await service[change]();
 		await pending;
 		await catalog.complete(tasks.tasks);
 		await Promise.resolve();
@@ -856,7 +857,7 @@ for (const change of ['workspace', 'dispose'] as const) {
 	});
 }
 
-test('Debug task cancellation terminates a running handle returned after its launch was retired', async () => {
+for (const change of ['workspace', 'stop', 'stopAll'] as const) test(`Debug task cancellation terminates a late running handle after ${change}`, async () => {
 	using resources = new DisposableStore();
 	const root = URI.file('/workspace');
 	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
@@ -871,13 +872,33 @@ test('Debug task cancellation terminates a running handle returned after its lau
 	using service = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	const pending = assert.rejects(service.startDebugging({ id: 'pending', name: 'Pending', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {}, preLaunchTask: 'build' }), isCancellationError);
 	const signal = await entered.p;
-	workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+	if (change === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+	else await service[change]();
 	assert.equal(signal.aborted, true);
 	const run = { ...await FakeTaskService.prototype.run.call(tasks, tasks.tasks[0]!), status: 'running' as const };
 	await released.complete(run);
 	await pending;
 	assert.deepEqual(terminated, [run]);
 	assert.deepEqual(processes.started, []);
+});
+
+for (const operation of ['stop', 'stopAll'] as const) test(`Debug ${operation} cancels a launch while session admission is pending`, async () => {
+	using resources = new DisposableStore();
+	const root = URI.file('/workspace');
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	const entered = new DeferredPromise<void>();
+	const released = new DeferredPromise<void>();
+	const reserve = processes.reserveSession.bind(processes);
+	processes.reserveSession = async request => { void entered.complete(); await released.p; return reserve(request); };
+	const pending = assert.rejects(service.startDebugging({ id: 'pending', name: 'Pending', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {}, preLaunchTask: 'build' }), isCancellationError);
+	await entered.p;
+	await service[operation]();
+	await released.complete();
+	await pending;
+	assert.deepEqual({ tasks: tasks.ran, adapters: processes.started }, { tasks: [], adapters: [] });
 });
 
 test('Debug task selection uses the launch folder when task labels collide', async () => {

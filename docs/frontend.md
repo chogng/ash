@@ -20,7 +20,7 @@
 
 `Ash (Hot Reload)` 专用于前端热更新和 Electron 宿主监听，仍连接 Rust 后端，但不监听后端源码变化；`Ash` 和 `Ash Agents` 同时监听前后端，也支持前端热更新。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
 
-这三个 Desktop F5 配置由 Node 调试器运行 Electron launcher，Ash 与 VS Code 共用同一配置。前置任务准备后端并在 5183 端口启动 Vite；`Ash` 和 `Ash Agents` 还会启动可复用的 `Watch Ash Backend` 后台任务，等 Rust 源码监听就绪后再启动窗口，成功构建后自动切换后端。launcher 发布调试目标后自动启动 `Ash Main Process` 附加会话。停止调试后，Vite 和 Rust watcher 继续运行，可通过“任务: 终止任务”结束。Electron Main 构建生成 source map，映射回当前 checkout 的 `src/`。Rust 开发运行包使用剥离符号的 `dev-small` profile；调试 Rust 源码须使用带调试信息的独立目标。
+这三个 Desktop F5 配置由 Node 调试器运行 Electron launcher，Ash 与 VS Code 共用同一配置。launcher 准备后端，在 5183 端口启动 Vite；`Ash` 和 `Ash Agents` 还会启动 Rust 源码 watcher，等待监听就绪后再启动窗口，成功构建后自动切换后端。launcher 发布调试目标后自动启动 `Ash Main Process` 附加会话。停止调试会一并关闭 launcher 所拥有的 Electron、Vite 和 Rust watcher；启动准备阶段的 Stop 也会取消正在执行的构建。Electron Main 构建生成 source map，映射回当前 checkout 的 `src/`。Rust 开发运行包使用剥离符号的 `dev-small` profile；调试 Rust 源码须使用带调试信息的独立目标。
 
 `Ash Code (TUI)` 通过 CodeLLDB 调试 `.build/cargo/ci-test/ash`（Windows 为 `.exe`），在集成终端运行。其 `Prepare Ash Code Debug` 前置任务为 CLI 和 TUI 构建完整调试符号，准备匹配的后端程序和完整的 Node 扩展运行资源，并将 `ASH_DEV_RUNTIME_ROOT` 及校验锁定的 ripgrep／tgrep 路径写入 `.build/code/debug.env`。单独准备可执行 `node build/python.ts -B build/code/debug.py`；直接运行 TUI 仍用 `just ash-code`，也会先准备这些运行资源。
 

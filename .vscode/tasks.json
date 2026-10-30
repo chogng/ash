@@ -11,27 +11,6 @@
 			"runOptions": { "instanceLimit": 1 }
 		},
 		{
-			"label": "Prepare Ash Desktop Debug",
-			"dependsOrder": "sequence",
-			"dependsOn": ["Prepare Ash Desktop UI Debug", "Watch Ash Backend"],
-			"problemMatcher": []
-		},
-		{
-			"label": "Prepare Ash Desktop UI Debug",
-			"dependsOrder": "sequence",
-			"dependsOn": ["Prepare Ash Backend", "Run Ash Desktop Renderer"],
-			"problemMatcher": []
-		},
-		{
-			"label": "Prepare Ash Native Debug",
-			"dependsOrder": "sequence",
-			"dependsOn": [
-				"Prepare Ash Desktop UI Debug",
-				"Build Ash Debug Backend"
-			],
-			"problemMatcher": []
-		},
-		{
 			"label": "Build Ash Debug Backend",
 			"type": "shell",
 			"command": "pnpm debug:backend",
