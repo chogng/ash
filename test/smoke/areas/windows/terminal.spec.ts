@@ -725,7 +725,8 @@ test('terminal panel reopening retains split output, pending input, focus and co
 		await expect(panes.nth(index).locator('.xterm-rows > div').filter({ hasText: new RegExp(`^pending-${cycle}\\s*$`) })).toBeVisible();
 		for (const other of [0, 1, 2]) {
 			// Long shell prompts can scroll earlier output beyond the rendered rows.
-			await panes.nth(other).locator('.xterm-screen').click({ position: { x: 12, y: 12 } });
+			// Focus the input directly; a command hover can cover the screen's first row.
+			await panes.nth(other).locator('.xterm-helper-textarea').focus();
 			await page.keyboard.press('ControlOrMeta+f');
 			const find = panes.nth(other).getByRole('region', { name: 'Find in terminal' });
 			const input = find.getByRole('textbox', { name: 'Find', exact: true });

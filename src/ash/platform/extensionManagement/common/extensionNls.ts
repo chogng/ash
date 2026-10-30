@@ -12,12 +12,12 @@ export function localizeManifest<T>(manifest: T, translations: Readonly<Record<s
 	return visit(manifest) as T;
 }
 
-/** One label for the package declaration in Marketplace, details and recommendations. */
+/** Labels the package's declared window support in extension details. */
 export function extensionUiTargetsLabel(targets: readonly ExtensionUiTarget[] | undefined): string {
 	if (targets?.includes(ExtensionUiTarget.IDE) && targets.includes(ExtensionUiTarget.Agents)) {
-		return localize({ bundle: 'ash.extensions', key: 'uiTargetsShared' }, 'IDE and Agent Window');
+		return localize({ bundle: 'ash.extensions', key: 'uiTargetsShared' }, 'Editor and Agent');
 	}
-	if (targets?.includes(ExtensionUiTarget.IDE)) { return localize({ bundle: 'ash.extensions', key: 'uiTargetsIde' }, 'IDE'); }
-	if (targets?.includes(ExtensionUiTarget.Agents)) { return localize({ bundle: 'ash.extensions', key: 'uiTargetsAgents' }, 'Agent Window'); }
+	if (targets?.includes(ExtensionUiTarget.IDE)) { return localize({ bundle: 'ash.extensions', key: 'uiTargetsIde' }, 'Editor'); }
+	if (targets?.includes(ExtensionUiTarget.Agents)) { return localize({ bundle: 'ash.extensions', key: 'uiTargetsAgents' }, 'Agent'); }
 	return localize({ bundle: 'ash.extensions', key: 'uiTargetsUnknown' }, 'Not declared');
 }

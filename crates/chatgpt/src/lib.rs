@@ -9,6 +9,13 @@ mod oauth;
 mod plan;
 mod speed;
 mod storage;
+mod web_auth;
+
+pub use oauth::CHATGPT_WEB_PROVIDER_ID;
+pub use web_auth::ChatGptWebAuthError;
+pub use web_auth::ChatGptWebAuthSession;
+pub use web_auth::ChatGptWebAuthentication;
+pub use web_auth::ChatGptWebLogin;
 
 pub use maintenance::ChatGptAuthManagement;
 pub use plan::CHATGPT_PLAN_PROVIDER_ID;

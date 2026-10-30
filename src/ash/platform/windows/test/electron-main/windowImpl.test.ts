@@ -20,8 +20,7 @@ import { WINDOW_PREPARE_RELOAD_CHANNEL } from '../../../window/common/window.js'
 import { readFile } from 'node:fs/promises';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { WindowMode, LoadReason, type IWindowBounds } from '../../../window/electron-main/window.js';
-import { CodeWindow, type ICodeWindowHandle } from '../../electron-main/windowImpl.js';
-import type { IWindowConstructorOptions } from '../../electron-main/windows.js';
+import { CodeWindow, type ICodeWindowHandle, type IWindowConstructorOptions } from '../../electron-main/windowImpl.js';
 
 let windowServices: InstantiationService;
 let cleanup: DisposableStore;

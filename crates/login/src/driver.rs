@@ -41,6 +41,15 @@ pub trait InteractiveLoginDriver: Send + Sync {
     fn cancel(&self, login_id: &LoginId) -> Result<CancelLoginOutcome, LoginError>;
 
     fn logout(&self, account: &AccountRef) -> Result<(), LoginError>;
+
+    /// Disconnects the provider, including sources that currently have no account.
+    /// Drivers with persistent source selection may override this to retire it.
+    fn logout_provider(&self, accounts: &[AccountRef]) -> Result<(), LoginError> {
+        for account in accounts {
+            self.logout(account)?;
+        }
+        Ok(())
+    }
 }
 
 /// Refreshes remote display metadata for an existing provider account.

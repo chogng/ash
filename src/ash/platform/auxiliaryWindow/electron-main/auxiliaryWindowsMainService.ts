@@ -5,7 +5,7 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposa
 import { AuxiliaryWindow, type IAuxiliaryWindow } from './auxiliaryWindow.js';
 import type { IAuxiliaryWindowsMainService } from './auxiliaryWindows.js';
 import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
-import { resolveWindowTitleBarOptions, restoreWindowBounds } from '../../windows/electron-main/windows.js';
+import { resolveWindowTitleBarOptions, restoreWindowBounds } from '../../windows/electron-main/windowImpl.js';
 
 export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliaryWindowsMainService {
 	private readonly stateChanged = this._register(new Emitter<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>());

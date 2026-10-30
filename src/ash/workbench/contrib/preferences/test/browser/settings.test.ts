@@ -554,6 +554,14 @@ test('Settings maturity filters compose with text, identifiers and modified sett
 	);
 });
 
+test('Welcome illustration is discoverable in startup settings', () => {
+	const defaults = new DefaultSettings();
+	const setting = defaults.get('chat.welcomePage.agentsWindowGraphic');
+	assert.equal(setting.valueType, 'select');
+	assert.equal(setting.configuration.defaultValue, 'auto');
+	assert.equal(findSettingCategory(createSettingsLayout(defaults.all), setting.id), 'startup');
+});
+
 test('DefaultSettings projects only Configuration Registry metadata', () => {
 	const registry = new ConfigurationRegistry();
 	const tags = ['experimental'];
@@ -3022,6 +3030,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		lookupKeybinding: () => undefined,
 	});
 	services.registerInstance(IHostService, {
+		getWindows: async () => [],
 		reload: async () => {
 			throw new Error('Unexpected reload in this fixture');
 		},

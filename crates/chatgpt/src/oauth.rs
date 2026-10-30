@@ -40,6 +40,7 @@ use std::sync::Weak;
 use std::thread;
 
 pub const CHATGPT_SUBSCRIPTION_PROVIDER_ID: &str = "chatgpt-subscription";
+pub const CHATGPT_WEB_PROVIDER_ID: &str = "chatgpt-web";
 pub const CHATGPT_RESPONSES_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
 
 pub(crate) const AUTH_BASE_URL: &str = "https://auth.openai.com";
@@ -89,6 +90,7 @@ impl ChatGptApiTarget {
         base_url: &str,
         credential: &TokenCredential,
         purpose: ash_client::RequestPurpose,
+        provider: &'static str,
     ) -> Result<Self, ChatGptError> {
         let identity = credential.identity()?;
         Ok(Self {
@@ -98,7 +100,7 @@ impl ChatGptApiTarget {
                 ash_client::RequestBinding::new(
                     purpose,
                     ash_client::RequestIdentity::account(
-                        CHATGPT_SUBSCRIPTION_PROVIDER_ID,
+                        provider,
                         format!("{}\0{}", identity.user_id, identity.account_id),
                         credential.credential_revision,
                     ),
@@ -110,19 +112,77 @@ impl ChatGptApiTarget {
     }
 }
 
-/// Maintains ChatGPT authentication when Codex is absent and otherwise reuses its credentials.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum CredentialOwner {
+    Codex,
+    WebCodex,
+    Web,
+}
+
+/// Supplies either explicitly borrowed Codex credentials or an independent Web login.
 pub struct ChatGptOAuth {
     pub(crate) client: Arc<dyn OperationClient>,
     secrets: Arc<dyn SecretStore>,
     self_weak: Weak<Self>,
     login_service: Mutex<Weak<LoginService>>,
-    active: Mutex<BTreeMap<LoginId, CancellationSource>>,
-    auth: CodexAuthStore,
+    active: Mutex<BTreeMap<LoginId, ActiveLogin>>,
+    pub(crate) auth: CodexAuthStore,
+    owner: CredentialOwner,
     maintenance: AuthMaintenance,
     pub(crate) speed_access: Mutex<Option<crate::speed::SpeedObservation>>,
 }
 
+struct ActiveLogin {
+    cancellation: CancellationSource,
+    completion: Weak<LoginService>,
+    completion_id: LoginId,
+}
+
+impl ActiveLogin {
+    fn retire(self) {
+        self.cancellation.cancel();
+        if let Some(service) = self.completion.upgrade() {
+            let _ = service.complete(CompleteLogin {
+                login_id: self.completion_id,
+                outcome: LoginCompletionOutcome::Failed {
+                    failure: LoginFailure {
+                        code: "cancelled".into(),
+                        message: "ChatGPT login was cancelled".into(),
+                    },
+                },
+            });
+        }
+    }
+}
+
 impl ChatGptOAuth {
+    pub(crate) fn use_codex_web_source(&self) -> Result<(), LoginError> {
+        let mut active = self.active.lock().map_err(login_lock_error)?;
+        let retired = std::mem::take(&mut *active);
+        let result = self
+            .auth
+            .select_web_source(crate::storage::WebCredentialSource::Codex)
+            .map_err(login_driver_error);
+        drop(active);
+        for (_, login) in retired {
+            login.retire();
+        }
+        result
+    }
+
+    pub(crate) fn disconnect_web(&self) -> Result<(), LoginError> {
+        let mut active = self.active.lock().map_err(login_lock_error)?;
+        // Retire the source and all tokens atomically, even if Codex currently
+        // has no readable account. A later external login cannot reconnect Web.
+        self.auth.disconnect_web().map_err(login_driver_error)?;
+        let retired = std::mem::take(&mut *active);
+        drop(active);
+        for (_, login) in retired {
+            login.retire();
+        }
+        Ok(())
+    }
+
     pub fn production(
         codex_home: PathBuf,
         secrets: Arc<dyn SecretStore>,
@@ -143,13 +203,54 @@ impl ChatGptOAuth {
         client: Arc<dyn OperationClient>,
         management: ChatGptAuthManagement,
     ) -> Arc<Self> {
+        Self::new(
+            CodexAuthStore::new(codex_home),
+            secrets,
+            client,
+            management,
+            CredentialOwner::Codex,
+        )
+    }
+
+    pub(crate) fn web_reuse(&self) -> Arc<Self> {
+        Self::new(
+            self.auth.clone(),
+            self.secrets.clone(),
+            self.client.clone(),
+            ChatGptAuthManagement::Codex,
+            CredentialOwner::WebCodex,
+        )
+    }
+
+    pub(crate) fn managed_web(
+        profile_root: PathBuf,
+        secrets: Arc<dyn SecretStore>,
+        client: Arc<dyn OperationClient>,
+    ) -> Arc<Self> {
+        Self::new(
+            CodexAuthStore::managed(profile_root.join("chatgpt-web"), secrets.clone()),
+            secrets,
+            client,
+            ChatGptAuthManagement::Ash,
+            CredentialOwner::Web,
+        )
+    }
+
+    fn new(
+        auth: CodexAuthStore,
+        secrets: Arc<dyn SecretStore>,
+        client: Arc<dyn OperationClient>,
+        management: ChatGptAuthManagement,
+        owner: CredentialOwner,
+    ) -> Arc<Self> {
         Arc::new_cyclic(|self_weak| Self {
             client,
             secrets,
             self_weak: self_weak.clone(),
             login_service: Mutex::new(Weak::new()),
             active: Mutex::new(BTreeMap::new()),
-            auth: CodexAuthStore::new(codex_home),
+            auth,
+            owner,
             maintenance: AuthMaintenance::new(management),
             speed_access: Mutex::new(None),
         })
@@ -223,10 +324,10 @@ impl ChatGptOAuth {
                 "Codex sign-in has expired; update the login in Codex, then reconnect",
             ));
         }
-        ChatGptApiTarget::new(base_url, &credential, purpose)
+        ChatGptApiTarget::new(base_url, &credential, purpose, self.provider_id())
     }
 
-    fn disconnected_key() -> SecretKey {
+    fn disconnected_key(&self) -> SecretKey {
         SecretKey::new(DISCONNECTED_KEY).expect("static connection key is valid")
     }
 
@@ -235,9 +336,12 @@ impl ChatGptOAuth {
     }
 
     fn disconnected(&self) -> Result<bool, ChatGptError> {
+        if self.owner != CredentialOwner::Codex {
+            return Ok(false);
+        }
         if self
             .secrets
-            .load(&Self::disconnected_key())
+            .load(&self.disconnected_key())
             .map_err(|_| ChatGptError::new("Ash connection state could not be read"))?
             .is_some()
         {
@@ -253,7 +357,7 @@ impl ChatGptOAuth {
         // Persist the new marker before deleting the old one so a restart cannot
         // silently reconnect a user who had explicitly disconnected Ash.
         self.secrets
-            .store(&Self::disconnected_key(), &legacy)
+            .store(&self.disconnected_key(), &legacy)
             .and_then(|_| {
                 self.secrets
                     .delete(&Self::legacy_disconnected_key())
@@ -264,7 +368,10 @@ impl ChatGptOAuth {
     }
 
     pub(crate) fn load_credential(&self) -> Result<Option<TokenCredential>, ChatGptError> {
-        if self.disconnected()? {
+        if self.disconnected()?
+            || self.owner == CredentialOwner::Web
+                && self.auth.web_source()?.0 != crate::storage::WebCredentialSource::Ash
+        {
             return Ok(None);
         }
         self.auth.load()
@@ -325,7 +432,13 @@ impl ChatGptOAuth {
         if self.disconnected()? {
             return Ok(None);
         }
-        ChatGptApiTarget::new(base_url, &credential, rejected.target.binding().purpose()).map(Some)
+        ChatGptApiTarget::new(
+            base_url,
+            &credential,
+            rejected.target.binding().purpose(),
+            self.provider_id(),
+        )
+        .map(Some)
     }
 
     /// Remembers a rejected credential version without deleting shared authentication.
@@ -338,17 +451,24 @@ impl ChatGptOAuth {
     }
 
     fn connect(&self) -> Result<(), ChatGptError> {
+        if self.owner != CredentialOwner::Codex {
+            return Ok(());
+        }
         self.secrets
-            .delete(&Self::disconnected_key())
-            .and_then(|_| self.secrets.delete(&Self::legacy_disconnected_key()))
-            .map(|_| ())
-            .map_err(|_| ChatGptError::new("Ash connection state could not be saved"))
+            .delete(&self.disconnected_key())
+            .map_err(|_| ChatGptError::new("Ash connection state could not be saved"))?;
+        if self.owner == CredentialOwner::Codex {
+            self.secrets
+                .delete(&Self::legacy_disconnected_key())
+                .map_err(|_| ChatGptError::new("Ash connection state could not be saved"))?;
+        }
+        Ok(())
     }
 
     fn account_snapshot(&self, credential: &TokenCredential) -> AccountSnapshot {
         AccountSnapshot {
             account: AccountRef {
-                provider: CHATGPT_SUBSCRIPTION_PROVIDER_ID.into(),
+                provider: self.provider_id().into(),
                 account_id: credential
                     .account_id
                     .clone()
@@ -382,56 +502,54 @@ impl ChatGptOAuth {
         let Ok(mut active) = self.active.lock() else {
             return;
         };
-        let Some(source) = active.remove(&login_id) else {
+        let Some(login) = active.remove(&login_id) else {
             return;
         };
-        if source.token().is_cancelled() {
+        if login.cancellation.token().is_cancelled() {
             return;
         }
-        let outcome = match tokens.and_then(|tokens| {
-            if matches!(write, LoginWrite::Replace { .. }) && !self.maintenance.management.is_ash()
-            {
-                return Err(ChatGptError::new(
-                    "Codex now manages authentication; complete sign-in there",
-                ));
-            }
-            self.auth.write_login(&tokens, write)
-        }) {
-            Ok(credential) => match self.connect() {
-                Ok(()) => LoginCompletionOutcome::Succeeded {
-                    account: self.account_snapshot(&credential),
+        let Some(service) = login.completion.upgrade() else {
+            return;
+        };
+        let _ = service.complete_with(login.completion_id, || {
+            match tokens.and_then(|tokens| {
+                if matches!(write, LoginWrite::Replace { .. })
+                    && !self.maintenance.management.is_ash()
+                {
+                    return Err(ChatGptError::new(
+                        "Codex now manages authentication; complete sign-in there",
+                    ));
+                }
+                self.auth.write_login(&tokens, write)
+            }) {
+                Ok(credential) => match self.connect() {
+                    Ok(()) => LoginCompletionOutcome::Succeeded {
+                        account: self.account_snapshot(&credential),
+                    },
+                    Err(error) => login_failure(error),
                 },
                 Err(error) => login_failure(error),
-            },
-            Err(error) => login_failure(error),
-        };
-        let service = self
-            .login_service
-            .lock()
-            .ok()
-            .and_then(|service| service.upgrade());
-        if let Some(service) = service {
-            let _ = service.complete(CompleteLogin { login_id, outcome });
-        }
+            }
+        });
     }
 }
 
-impl InteractiveLoginDriver for ChatGptOAuth {
-    fn provider_id(&self) -> &'static str {
-        CHATGPT_SUBSCRIPTION_PROVIDER_ID
-    }
-
-    fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
-        self.load_credential()
-            .map(|credential| credential.map(|value| self.account_snapshot(&value)))
-            .map_err(login_driver_error)
-    }
-
-    fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
-        if !matches!(
-            request.method,
-            LoginMethod::OpenAiChatGptBrowser | LoginMethod::OpenAiChatGptDeviceCode
-        ) {
+impl ChatGptOAuth {
+    pub(crate) fn begin_for_service(
+        &self,
+        request: BeginLoginRequest,
+        completion: Weak<LoginService>,
+        completion_id: LoginId,
+    ) -> Result<BeginLogin, LoginError> {
+        let method_matches = match self.owner {
+            CredentialOwner::Codex => matches!(
+                request.method,
+                LoginMethod::OpenAiChatGptBrowser | LoginMethod::OpenAiChatGptDeviceCode
+            ),
+            CredentialOwner::Web => matches!(request.method, LoginMethod::ChatGptWebDeviceCode),
+            CredentialOwner::WebCodex => false,
+        };
+        if !method_matches {
             return Err(LoginError::new(
                 LoginErrorKind::InvalidInput,
                 "login method is not owned by ChatGPT",
@@ -443,6 +561,11 @@ impl InteractiveLoginDriver for ChatGptOAuth {
                 LoginErrorKind::Conflict,
                 "a ChatGPT login is already active",
             ));
+        }
+        if self.owner == CredentialOwner::Web {
+            self.auth
+                .select_web_source(crate::storage::WebCredentialSource::Ash)
+                .map_err(login_driver_error)?;
         }
         let write = if let Some(mut credential) = self.auth.load().map_err(login_driver_error)? {
             let managed = self.maintenance.management.is_ash();
@@ -483,20 +606,32 @@ impl InteractiveLoginDriver for ChatGptOAuth {
                     "Codex sign-in has expired; update it in Codex before reconnecting",
                 ));
             }
-            LoginWrite::Replace {
-                revision: credential.storage_revision,
+            if self.owner == CredentialOwner::Web {
+                self.auth
+                    .managed_login_write()
+                    .map_err(login_driver_error)?
+            } else {
+                LoginWrite::Replace {
+                    revision: credential.storage_revision,
+                }
             }
         } else {
-            // This connection borrows Codex's session. Independent Ash authorization
-            // belongs to chatgpt-plan and must never create a shared Codex credential.
+            // Read-only Codex reuse must never create a shared credential. The
+            // independent Web owner writes only its private profile secret.
             if !self.maintenance.management.is_ash() {
                 return Err(LoginError::new(
                     LoginErrorKind::ExternalLoginRequired,
                     "Codex now manages authentication; complete sign-in there",
                 ));
             }
-            self.auth.ensure_creatable().map_err(login_driver_error)?;
-            LoginWrite::Create
+            if self.owner == CredentialOwner::Web {
+                self.auth
+                    .managed_login_write()
+                    .map_err(login_driver_error)?
+            } else {
+                self.auth.ensure_creatable().map_err(login_driver_error)?;
+                LoginWrite::Create
+            }
         };
         if matches!(write, LoginWrite::Replace { .. }) && !self.maintenance.management.is_ash() {
             return Err(LoginError::new(
@@ -507,7 +642,14 @@ impl InteractiveLoginDriver for ChatGptOAuth {
         let device =
             device_flow::request_device_code(self.client.as_ref()).map_err(login_driver_error)?;
         let cancellation = CancellationSource::new();
-        active.insert(request.login_id.clone(), cancellation.clone());
+        active.insert(
+            request.login_id.clone(),
+            ActiveLogin {
+                cancellation: cancellation.clone(),
+                completion,
+                completion_id,
+            },
+        );
         let weak = self.self_weak.clone();
         let client = Arc::clone(&self.client);
         let login_id = request.login_id.clone();
@@ -528,6 +670,27 @@ impl InteractiveLoginDriver for ChatGptOAuth {
             user_code: device.user_code,
         })
     }
+}
+
+impl InteractiveLoginDriver for ChatGptOAuth {
+    fn provider_id(&self) -> &'static str {
+        match self.owner {
+            CredentialOwner::Codex => CHATGPT_SUBSCRIPTION_PROVIDER_ID,
+            CredentialOwner::Web | CredentialOwner::WebCodex => CHATGPT_WEB_PROVIDER_ID,
+        }
+    }
+
+    fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
+        self.load_credential()
+            .map(|credential| credential.map(|value| self.account_snapshot(&value)))
+            .map_err(login_driver_error)
+    }
+
+    fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
+        let completion = self.login_service.lock().map_err(login_lock_error)?.clone();
+        let completion_id = request.login_id.clone();
+        self.begin_for_service(request, completion, completion_id)
+    }
 
     fn cancel(&self, login_id: &LoginId) -> Result<CancelLoginOutcome, LoginError> {
         let source = self
@@ -538,16 +701,29 @@ impl InteractiveLoginDriver for ChatGptOAuth {
         let Some(source) = source else {
             return Ok(CancelLoginOutcome::NotFound);
         };
-        source.cancel();
+        source.cancellation.cancel();
         Ok(CancelLoginOutcome::Cancelled)
     }
 
     fn logout(&self, account: &AccountRef) -> Result<(), LoginError> {
-        if account.provider != CHATGPT_SUBSCRIPTION_PROVIDER_ID {
+        if account.provider != self.provider_id() {
             return Err(LoginError::new(
                 LoginErrorKind::InvalidInput,
                 "account is not owned by the ChatGPT login driver",
             ));
+        }
+        if self.owner == CredentialOwner::Web {
+            return self.disconnect_web();
+        }
+        if self.owner == CredentialOwner::WebCodex {
+            return Err(LoginError::new(
+                LoginErrorKind::InvalidInput,
+                "Web source selection belongs to the Web owner",
+            ));
+        }
+        let mut active = self.active.lock().map_err(login_lock_error)?;
+        for (_, login) in std::mem::take(&mut *active) {
+            login.retire();
         }
         if self.maintenance.management.is_ash()
             && self.auth.load().map_err(login_driver_error)?.is_some()
@@ -560,7 +736,7 @@ impl InteractiveLoginDriver for ChatGptOAuth {
             }
         }
         self.secrets
-            .store(&Self::disconnected_key(), &SecretValue::new(b"1".to_vec()))
+            .store(&self.disconnected_key(), &SecretValue::new(b"1".to_vec()))
             .map_err(|_| {
                 LoginError::new(
                     LoginErrorKind::Unavailable,
@@ -607,7 +783,7 @@ impl Drop for ChatGptOAuth {
     fn drop(&mut self) {
         if let Ok(active) = self.active.get_mut() {
             for source in active.values() {
-                source.cancel();
+                source.cancellation.cancel();
             }
         }
     }

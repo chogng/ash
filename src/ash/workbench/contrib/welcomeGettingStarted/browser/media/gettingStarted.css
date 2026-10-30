@@ -317,3 +317,46 @@ button.ash-getting-started-recent-content:focus-visible {
 		transition: none;
 	}
 }
+
+.ash-getting-started-agents {
+	width: min(560px, calc(100cqw - 32px));
+	margin-block-start: var(--ash-spacing-size400);
+	margin-inline-start: 50%;
+	transform: translateX(-50%);
+	text-align: center;
+}
+
+.ash-getting-started-agents .ash-agents-banner-open {
+	margin-top: var(--ash-spacing-size200);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid var(--ash-editorWelcome-cardBorder);
+	border-radius: var(--ash-cornerRadius-small);
+	color: var(--ash-foreground);
+	background: var(--ash-editorWelcome-cardBackground);
+	font: inherit;
+	cursor: pointer;
+}
+
+.ash-getting-started-agents .ash-agents-banner-open:hover {
+	background: var(--ash-editorWelcome-cardHoverBackground);
+}
+
+.ash-getting-started-agents .ash-agents-banner-open:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+/* Keep primary actions in view before spending vertical space on the illustration. */
+.ash-getting-started.agents-compact .ash-getting-started-content {
+	margin-block: var(--ash-spacing-size240);
+}
+
+.ash-getting-started.agents-compact .ash-getting-started-cards,
+.ash-getting-started.agents-compact .ash-getting-started-recent,
+.ash-getting-started-agents.compact {
+	margin-block-start: var(--ash-spacing-size240);
+}
+
+.ash-getting-started-agents.compact .ash-agents-banner-open {
+	margin-top: var(--ash-spacing-size80);
+}

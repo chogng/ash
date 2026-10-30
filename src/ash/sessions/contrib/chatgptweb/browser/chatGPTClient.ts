@@ -184,6 +184,7 @@ export class ChatGPTClient {
 		const response = await this.request(path, signal, { method, ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) });
 		if (response.status !== 204) {
 			const text = await response.text();
+			signal.throwIfAborted();
 			if (text) {
 				const value: unknown = JSON.parse(text);
 				if (!isRecord(value) || value.success === false) { throw this.invalidResponse(); }
@@ -373,7 +374,9 @@ export class ChatGPTClient {
 	}
 
 	private async json(path: string, signal: AbortSignal): Promise<unknown> {
-		return (await this.request(path, signal)).json();
+		const value: unknown = await (await this.request(path, signal)).json();
+		signal.throwIfAborted();
+		return value;
 	}
 
 	private async request(path: string, signal: AbortSignal, init: RequestInit = {}, headersOnly = false): Promise<Response> {

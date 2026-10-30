@@ -160,7 +160,7 @@ if (parameters.has('fileSearch')) {
 	services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 	const provider = resources.add(services.createInstance(AgentHostFileSearchProvider));
 	services.registerInstance(ISearchService, {
-		registerSearchResultProvider: () => { throw new Error('Filename fixture must not register search providers'); },
+		registerSearchResultProvider: () => { throw new Error('Filename fixture does not register search providers'); },
 		fileSearch: provider.fileSearch.bind(provider),
 		textSearch: async () => { throw new Error('Filename fixture must not search contents'); },
 	});

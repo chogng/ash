@@ -1,13 +1,16 @@
 import './media/gettingStarted.css';
 import './gettingStartedColors.js';
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
+import type { AgentsWindowGraphicDesign } from '../../chat/browser/agentSessions/agentsWindowGraphic.js';
+import { createAgentsBanner, type IAgentsBannerResult } from '../../chat/browser/agentSessions/agentSessionsBanner.js';
 
 /** A host callback invoked by one welcome-page action. */
 type GettingStartedAction = () => void | Promise<void>;
@@ -27,6 +30,7 @@ interface GettingStartedOptions {
 		readonly cloneRepository?: GettingStartedAction;
 		readonly connectViaSsh?: GettingStartedAction;
 		readonly connectGitHub?: GettingStartedAction;
+		readonly openAgentsWindow?: GettingStartedAction;
 	};
 	readonly recentProjects?: readonly IGettingStartedProject[];
 }
@@ -44,6 +48,9 @@ export class GettingStarted extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly recentDisposables = this._register(new DisposableStore());
 	private readonly recentSection: HTMLElement;
+	private readonly scroll: HTMLElement;
+	private readonly agentsBanner: IAgentsBannerResult;
+	private readonly layoutFrame = this._register(new MutableDisposable());
 	private cloneAction: GettingStartedAction | undefined;
 	private cloneCard: HTMLButtonElement | undefined;
 	private recentProjects: readonly IGettingStartedProject[];
@@ -63,7 +70,7 @@ export class GettingStarted extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 
-		const scroll = h(ownerDocument, 'div');
+		const scroll = this.scroll = h(ownerDocument, 'div');
 		scroll.className = 'ash-getting-started-scroll';
 		const content = h(ownerDocument, 'div');
 		content.className = 'ash-getting-started-content';
@@ -74,6 +81,12 @@ export class GettingStarted extends Disposable {
 		content.append(this.createCards(ownerDocument, options.actions));
 		this.recentSection = this.createRecentProjects(ownerDocument);
 		content.append(this.recentSection);
+		this.agentsBanner = createAgentsBanner(ownerDocument, { onButtonClick: options.actions?.openAgentsWindow });
+		this._register(this.agentsBanner.disposables);
+		this.agentsBanner.element.classList.add('ash-getting-started-agents');
+		content.append(this.agentsBanner.element);
+		this._register(observeResize([this.domNode, content], () => this.scheduleAgentsLayout()));
+		this.scheduleAgentsLayout();
 	}
 
 	public setRecentProjects(projects: readonly IGettingStartedProject[]): void {
@@ -85,6 +98,7 @@ export class GettingStarted extends Disposable {
 		const focusedPath = this.recentProjects[focusedIndex]?.path;
 		this.recentProjects = projects;
 		this.renderRecentProjects(this.recentSection);
+		this.scheduleAgentsLayout();
 		if (focusedIndex !== -1) {
 			const nextItems = this.recentSection.querySelectorAll<HTMLElement>('.ash-getting-started-recent-item');
 			const retainedIndex = projects.findIndex(project => project.path === focusedPath);
@@ -95,6 +109,55 @@ export class GettingStarted extends Disposable {
 			const fallback = this.domNode.querySelector<HTMLButtonElement>('.ash-getting-started-card:not(:disabled)');
 			(target ?? fallback ?? this.domNode).focus();
 		}
+	}
+
+	public setAgentsWindowAction(action: GettingStartedAction | undefined): void {
+		if (!action && this.agentsBanner.element.contains(this.domNode.ownerDocument.activeElement)) {
+			this.domNode.focus();
+		}
+		this.agentsBanner.setAction(action);
+		this.scheduleAgentsLayout();
+	}
+
+	public setAgentsWindowGraphic(design: AgentsWindowGraphicDesign | undefined): void {
+		this.agentsBanner.setDesign(design);
+		this.scheduleAgentsLayout();
+	}
+
+	private scheduleAgentsLayout(): void {
+		if (this.isDisposed || this.layoutFrame.value) {
+			return;
+		}
+		this.layoutFrame.value = scheduleAtNextAnimationFrame(getWindow(this.domNode), () => {
+			this.layoutFrame.clear();
+			this.layoutAgentsBanner();
+		});
+	}
+
+	private layoutAgentsBanner(): void {
+		const height = this.domNode.clientHeight;
+		if (!this.domNode.isConnected || height === 0) {
+			return;
+		}
+
+		// Reconsider the full illustration after a resize or recent-list change so it can return.
+		// Only decoration is dropped: projects and the same focused launch button stay in the page.
+		this.domNode.classList.remove('agents-compact');
+		if (this.agentsBanner.element.hidden) {
+			return;
+		}
+		this.agentsBanner.setLayout('spacious');
+		if (this.scroll.scrollHeight <= height) {
+			return;
+		}
+
+		this.domNode.classList.add('agents-compact');
+		this.agentsBanner.setLayout('compact');
+		if (this.scroll.scrollHeight <= height) {
+			return;
+		}
+
+		this.agentsBanner.setLayout('dropped');
 	}
 
 	private createBrand(ownerDocument: Document): HTMLElement {

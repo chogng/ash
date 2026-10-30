@@ -17,7 +17,7 @@ interface AppServerDaemonConnectionOptions {
 	readonly profileRoot: string;
 	readonly electronExecutable: string;
 	readonly workspaceRoot?: string;
-	readonly role: 'workbench' | 'agents';
+	readonly role: 'workbench' | 'agents' | 'credentials';
 }
 
 /** Creates a connection carrier; stopping it leaves the profile's shared backend running. */
@@ -51,8 +51,8 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 		productEnvironment.ASH_WORKSPACE_ROOT = options.workspaceRoot;
 		productEnvironment.ASH_DIR_GRANT_SOURCE = 'userConfig';
 	}
-	if (options.role === 'agents') {
-		productEnvironment.ASH_APP_SERVER_CONNECTION_ROLE = 'agents';
+	if (options.role !== 'workbench') {
+		productEnvironment.ASH_APP_SERVER_CONNECTION_ROLE = options.role;
 	}
 	let hostPlatform: AppServerHostPlatform;
 	switch (packageLocation.platform) {
@@ -60,6 +60,10 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 		case 'darwin': hostPlatform = 'macos'; break;
 		case 'linux': hostPlatform = 'linux'; break;
 		default: throw new Error(`Unsupported App Server host platform: ${packageLocation.platform}`);
+	}
+	const environment = { ...buildAppServerEnvironment(sourceEnvironment, hostPlatform, productEnvironment, 'desktop') };
+	if (options.role === 'credentials') {
+		for (const key of ['ASH_WORKSPACE_ROOT', 'ASH_DIR_GRANT_SOURCE', 'ASH_REMOTE_HOST', 'ASH_REMOTE_ROOT', 'ASH_REMOTE_RUNTIME']) { delete environment[key]; }
 	}
 	return {
 		launcher: new AppServerDaemonLauncher({
@@ -70,7 +74,7 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 			expectedSha256: packagedAppServerDaemonSha256(packageLocation),
 			// Development selects the current build; released clients reuse the profile's selected backend.
 			args: [packageLocation.isPackaged ? 'connect' : 'connect-selected'],
-			environment: buildAppServerEnvironment(sourceEnvironment, hostPlatform, productEnvironment, 'desktop'),
+			environment,
 		}),
 		// Frontend-only development still selects live extension sources, while the
 		// profile reloader is installed only when Rust rebuilds are being watched.

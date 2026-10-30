@@ -1,18 +1,19 @@
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { simpleChatGPTModelCatalog } from '../../../fixtures/chatGPTModels.js';
+import { chatGPTAuthDocument } from '../../../fixtures/chatGPTAuth.js';
 
 /** Keep the actual history transport and UI, replacing only remote service I/O. */
 async function installHistory(application: ElectronApplication): Promise<void> {
 	await application.evaluate(
-		async ({ app, session, webContents }, catalog) => {
+		async ({ app, session, webContents }, { catalog, authentication }) => {
 			const fs = process.getBuiltinModule('fs/promises');
 			const path = process.getBuiltinModule('path');
 			const home = path.join(process.env.HOME!, '.codex');
 			await fs.mkdir(home, { recursive: true });
 			await fs.writeFile(
 				path.join(home, 'auth.json'),
-				JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'synthetic-search-login' } }),
+				authentication,
 			);
 			const installed = new WeakSet<Electron.Session>();
 			const install = (storage: Electron.Session) => {
@@ -74,7 +75,7 @@ async function installHistory(application: ElectronApplication): Promise<void> {
 			}
 			app.on('session-created', install);
 		},
-		simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]),
+		{ catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument() },
 	);
 }
 
@@ -83,7 +84,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		test.use({ electronWindowMode: 'active' });
 		test(
 			'finds native conversations through Search and preserves sidebar groups',
-			{ tag: ['@electron-ui', '@electron-app-server'] },
+			{ tag: ['@electron-app-server'] },
 			async (
 				{ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench },
 				testInfo,

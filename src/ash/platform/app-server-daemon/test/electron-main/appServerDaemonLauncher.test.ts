@@ -78,6 +78,29 @@ test('Agents daemon connections identify their role without a workspace grant', 
 	}
 });
 
+test('native credential consumers cannot inherit a workspace grant or SSH destination', () => {
+	for (const platform of ['win32', 'darwin', 'linux'] as const) {
+		const resourcesPath = mkdtempSync(join(tmpdir(), 'ash-credential-package-'));
+		try {
+			writeFileSync(join(resourcesPath, 'ash-package.json'), JSON.stringify({
+				buildId: `sha256:${'b'.repeat(64)}`,
+				components: { appServerDaemon: { binarySha256: 'a'.repeat(64) }, appServer: { binarySha256: 'c'.repeat(64) } },
+				entrypoint: `bin/ash-app-server${platform === 'win32' ? '.exe' : ''}`, layoutVersion: 2,
+				protocol: { major: APP_SERVER_PROTOCOL_MAJOR, schemaHash: APP_SERVER_SCHEMA_HASH }, version: '1.2.3',
+			}));
+			const { launcher } = createAppServerDaemonLauncher({
+				packageLocation: { appPath: '/unused', isPackaged: true, platform, resourcesPath },
+				sourceEnvironment: { CODEX_HOME: '/codex', ASH_WORKSPACE_ROOT: '/workspace', ASH_DIR_GRANT_SOURCE: 'hostConfiguration', ASH_REMOTE_HOST: 'host', ASH_REMOTE_ROOT: '/remote', ASH_REMOTE_RUNTIME: '/runtime' },
+				profileRoot: '/profile', electronExecutable: '/electron', role: 'credentials',
+			});
+			using ownedLauncher = launcher;
+			assert.equal(launcher.environment.ASH_APP_SERVER_CONNECTION_ROLE, 'credentials');
+			assert.equal(launcher.environment.CODEX_HOME, '/codex');
+			for (const key of ['ASH_WORKSPACE_ROOT', 'ASH_DIR_GRANT_SOURCE', 'ASH_REMOTE_HOST', 'ASH_REMOTE_ROOT', 'ASH_REMOTE_RUNTIME']) { assert.equal(launcher.environment[key], undefined); }
+		} finally { rmSync(resourcesPath, { recursive: true, force: true }); }
+	}
+});
+
 test('a daemon launcher starts a connection carrier with its selected environment', () => {
 	let launched: unknown;
 	using launcher = new AppServerDaemonLauncher({

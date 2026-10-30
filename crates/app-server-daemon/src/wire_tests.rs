@@ -6,6 +6,31 @@ use crate::GrantSource;
 use crate::SshConnectionOptions;
 
 #[test]
+fn credential_consumers_require_a_native_versioned_scope_without_directory_or_remote_authority() {
+    let options = ConnectionOptions::new("/profile", None, GrantSource::HostConfiguration, None)
+        .with_role(ConnectionRole::Credentials);
+    let value = serde_json::to_value(ConnectionPrelude::from_options(&options)).unwrap();
+    assert_eq!(value["version"], 3);
+    decode_prelude(format!("{value}\n").as_bytes()).unwrap();
+    for (field, invalid) in [
+        ("version", serde_json::json!(1)),
+        ("dirRoot", serde_json::json!("/workspace")),
+        (
+            "web",
+            serde_json::json!({"leaseId":vec![0_u8;32],"port":0,"assets":null,"origin":null}),
+        ),
+        (
+            "ssh",
+            serde_json::json!({"host":"host","root":null,"runtime":"/runtime/bin"}),
+        ),
+    ] {
+        let mut invalid_scope = value.clone();
+        invalid_scope[field] = invalid;
+        assert!(decode_prelude(format!("{invalid_scope}\n").as_bytes()).is_err());
+    }
+}
+
+#[test]
 fn execution_scope_requires_a_versioned_host_grant_and_identity() {
     let profile = tempfile::tempdir().unwrap();
     let options = ConnectionOptions::new(

@@ -6,8 +6,8 @@ import { URI } from '../../../../base/common/uri.js';
 import type { IStateService } from '../../../../platform/state/node/state.js';
 import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, type IWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState, serializeWorkspaceIdentifier } from '../../../../platform/workspace/common/workspace.js';
 import { defaultWindowState, WindowMode, type IWindowBounds } from '../../../../platform/window/electron-main/window.js';
-import { applyWindowState, resolveBrowserWindowOptions, validateWindowState, type IWindowDisplay } from '../../../../platform/windows/electron-main/windows.js';
-import { WindowsStateHandler, WindowSessionStateHandler, type IStatefulWindow, type IWindowSessionEntry, type IWindowSessionWindow } from '../../../../platform/windows/electron-main/windowsStateHandler.js';
+import { applyWindowState, resolveBrowserWindowOptions } from '../../../../platform/windows/electron-main/windowImpl.js';
+import { WindowsStateHandler, WindowSessionStateHandler, validateWindowState, type IWindowDisplay, type IStatefulWindow, type IWindowSessionEntry, type IWindowSessionWindow } from '../../../../platform/windows/electron-main/windowsStateHandler.js';
 import { parseNewWindowDimensions, parseRestoreFullscreen } from '../../../../platform/window/common/window.js';
 
 const defaultOptions = { existingWindows: [], newWindowDimensions: 'default', restoreFullscreen: false, wasRestarted: false } as const;

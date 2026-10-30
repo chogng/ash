@@ -319,11 +319,24 @@ export function validateWindowCloseResponse(value: unknown): WindowCloseResponse
 }
 
 export interface IWorkbenchWindowInfo {
+	/** Registry role, independent of the window title or active workspace. */
+	readonly kind?: 'editor' | 'managed' | 'auxiliary';
 	readonly id: number;
 	readonly title: string;
 	readonly focused: boolean;
 	/** The window selected by the caller's trusted window context, independent of OS focus. */
 	readonly current: boolean;
+}
+
+/** Decodes the native window-list reply once, at the renderer IPC boundary. */
+export function validateWorkbenchWindowInfo(value: unknown): IWorkbenchWindowInfo {
+	if (!isRecord(value) || Object.keys(value).some(key => !['id', 'title', 'focused', 'current', 'kind'].includes(key))
+		|| !Number.isSafeInteger(value.id) || (value.id as number) <= 0 || typeof value.title !== 'string'
+		|| typeof value.focused !== 'boolean' || typeof value.current !== 'boolean'
+		|| !['editor', 'managed', 'auxiliary'].includes(value.kind as string)) {
+		throw new TypeError('Invalid native window information');
+	}
+	return value as unknown as IWorkbenchWindowInfo;
 }
 
 export type WindowOperation =

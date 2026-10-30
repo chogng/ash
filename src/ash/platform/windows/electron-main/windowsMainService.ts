@@ -14,11 +14,11 @@ import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier, get
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL, WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, type IAuxiliaryWindowState, parseRestoreWindowsSetting, validateWindowCloseResponse, validateWindowOperation, type WindowCloseResponse, type WindowOperation, type IWorkbenchWindowInfo, type RestoreWindowsSetting } from '../../window/common/window.js';
 import { focusWindow, type IFocusableWindow, type WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import type { WindowsStateHandler } from './windowsStateHandler.js';
-import { CodeWindow, type ICodeWindowHandle, type IWindowCreationOptions } from './windowImpl.js';
+import { CodeWindow, type ICodeWindowHandle, type IWindowCreationOptions, type IWindowConstructorOptions, type IWindowWebPreferences } from './windowImpl.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import type { IOpenAgentsWindowOptions } from '../../native/common/nativeHost.js';
 import type { IAgentsWindowHandoffResult } from '../../window/common/window.js';
-import type { IWindowConstructorOptions, IWindowWebPreferences, IOpenConfiguration, IWindowsMainService } from './windows.js';
+import type { IOpenConfiguration, IWindowsMainService } from './windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesResponse, type IWindowFilesRequest, type WindowFilesResponse } from '../../window/common/window.js';
 import type { ICodeWindow, IWindowBounds, IWindowState } from '../../window/electron-main/window.js';
 import { findWindowOnWorkspaceOrFolder } from './windowsFinder.js';
@@ -618,7 +618,10 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		if (!target) throw new Error('Auxiliary window is closed or belongs to another workbench');
 		switch (operation.kind) {
 			case 'list':
-				return windows.map((window): IWorkbenchWindowInfo => ({ id: window.id, title: window.getTitle(), focused: window.isFocused(), current: window === target }));
+				return windows.map((window): IWorkbenchWindowInfo => ({
+					id: window.id, title: window.getTitle(), focused: window.isFocused(), current: window === target,
+					kind: this.workbenchWindows.has(window.id) ? 'editor' : this.getWindowById(window.id) ? 'managed' : 'auxiliary',
+				}));
 			case 'focus': {
 				const target = windows.find(window => window.id === operation.windowId);
 				if (!target) throw new Error('Workbench window is closed');

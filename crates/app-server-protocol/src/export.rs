@@ -52,6 +52,8 @@ pub const GENERATED_TYPESCRIPT_HEADER: &str =
 #[schemars(title = "Ash App Server Protocol")]
 #[serde(rename_all = "camelCase")]
 struct ProtocolSchema {
+    native_host_credential_request: crate::host_credentials::HostCredentialRequest,
+    native_host_credential_response: crate::host_credentials::HostCredentialResponse,
     listen_info: AppServerListenInfo,
     web_listen_info: crate::WebListenInfo,
     remote_tunnel_host_info: crate::RemoteTunnelHostInfo,
@@ -292,6 +294,21 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
         (
             PathBuf::from("AppServerListenInfo.ts"),
             generated_listen_info(),
+        ),
+        (
+            PathBuf::from("HostCredentials.ts"),
+            format!(
+                "{GENERATED_TYPESCRIPT_HEADER}export {}\nexport {}\nexport {}\n",
+                <crate::host_credentials::HostCredentialRequest as ts_rs::TS>::decl(
+                    &ts_rs::Config::default()
+                ),
+                <crate::host_credentials::HostCredentialResponse as ts_rs::TS>::decl(
+                    &ts_rs::Config::default()
+                ),
+                <crate::host_credentials::HostCredentialFailure as ts_rs::TS>::decl(
+                    &ts_rs::Config::default()
+                )
+            ),
         ),
         (
             PathBuf::from("WebProtocolDecoder.ts"),

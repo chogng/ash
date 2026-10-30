@@ -231,6 +231,7 @@ let screenshotCalls = 0;
 let screenshotVisibleOverlays: number[] = [];
 let releaseScreenshot: (() => void) | undefined;
 services.registerInstance(IHostService, {
+		getWindows: async () => [],
 	hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, reload: async () => { }, openWindow: async () => { },
 	async getScreenshot() {
 		screenshotCalls++;

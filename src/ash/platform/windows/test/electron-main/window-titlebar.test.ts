@@ -10,7 +10,7 @@ import { resolveContextMenuStyle } from '../../../../platform/window/common/wind
 import {
 	resolveBrowserWindowOptions,
 	WindowControlsOverlay,
-} from '../../../../platform/windows/electron-main/windows.js';
+} from '../../../../platform/windows/electron-main/windowImpl.js';
 
 test('window options apply the custom titlebar host policy', () => {
 	const webPreferences = {

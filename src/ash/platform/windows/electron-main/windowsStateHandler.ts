@@ -6,7 +6,6 @@ import { URI } from '../../../base/common/uri.js';
 import type { IStateService } from '../../state/node/state.js';
 import { type IAnyWorkspaceIdentifier, type IWorkspaceIdentifier, type WorkbenchState, isEmptyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, parseWorkspaceIdentifier, serializeWorkspaceIdentifier, workbenchStateFromWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 import { defaultWindowState, WindowMode, type IWindowBounds, type IWindowState } from '../../window/electron-main/window.js';
-import { validateWindowState, type IWindowDisplay } from './windows.js';
 import { WINDOW_MINIMUM_SIZE, type NewWindowDimensions } from '../../window/common/window.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 
@@ -14,6 +13,13 @@ const WINDOWS_STATE_STORAGE_KEY = 'windowsState';
 const WINDOWS_STATE_VERSION = 1;
 const MAX_OPENED_WINDOW_RECORDS = 100;
 const WINDOW_SESSION_STATE_KEY = 'windowSession';
+
+/** Structural display information required to validate a restored window. */
+export interface IWindowDisplay {
+	readonly id: number;
+	readonly bounds: IWindowBounds;
+	readonly workArea: IWindowBounds;
+}
 
 /** Display operations needed to restore and capture window placement. */
 export interface IWindowDisplayService {
@@ -770,4 +776,110 @@ function isWindowMode(value: unknown): value is IWindowState['mode'] {
 	return value === WindowMode.Normal ||
 		value === WindowMode.Maximized ||
 		value === WindowMode.Fullscreen;
+}
+
+/** Validates and adjusts restored state against the displays available now. */
+export function validateWindowState(
+	state: IWindowState,
+	displays: readonly IWindowDisplay[],
+	workbenchState: WorkbenchState,
+): IWindowState | undefined {
+	const { x, y, width: stateWidth, height: stateHeight } = state;
+	if (
+		!isFiniteNumber(x) ||
+		!isFiniteNumber(y) ||
+		!isFiniteNumber(stateWidth) ||
+		!isFiniteNumber(stateHeight) ||
+		stateWidth <= 0 ||
+		stateHeight <= 0
+	) {
+		return undefined;
+	}
+
+	const usableDisplays = displays
+		.map((display) => ({ display, area: getWorkingArea(display) }))
+		.filter((entry): entry is { display: IWindowDisplay; area: IWindowBounds; } =>
+			entry.area !== undefined
+		);
+	if (usableDisplays.length === 0) {
+		return undefined;
+	}
+
+	if (state.workArea) {
+		const previousArea = state.workArea;
+		const previousCenterX = x + stateWidth / 2;
+		const previousCenterY = y + stateHeight / 2;
+		const distance = (area: IWindowBounds): number => {
+			const dx = Math.max(area.x - previousCenterX, 0, previousCenterX - area.x - area.width);
+			const dy = Math.max(area.y - previousCenterY, 0, previousCenterY - area.y - area.height);
+			return dx * dx + dy * dy;
+		};
+		const target = usableDisplays.find(({ display }) => display.id === state.displayId) ??
+			usableDisplays.reduce((nearest, entry) => distance(entry.area) < distance(nearest.area) ? entry : nearest);
+		const { display, area } = target;
+		// User-requested Ash policy: restoring recorded display placement keeps the
+		// whole window in the target work area so controls and content remain reachable.
+		// VS Code's multi-display check permits a partially off-screen window instead.
+		// Electron bounds are already in DIP. A resolution or DPI change must not
+		// multiply the user's saved size by the change in display work area.
+		const width = Math.min(area.width, Math.max(WINDOW_MINIMUM_SIZE.width, stateWidth));
+		const height = Math.min(area.height, Math.max(WINDOW_MINIMUM_SIZE.height, stateHeight));
+		const adjustedX = area.x + x - previousArea.x;
+		const adjustedY = area.y + y - previousArea.y;
+		return {
+			...state,
+			x: Math.round(Math.max(area.x, Math.min(adjustedX, area.x + area.width - width))),
+			y: Math.round(Math.max(area.y, Math.min(adjustedY, area.y + area.height - height))),
+			width,
+			height,
+			displayId: display.id,
+			workArea: { ...area },
+		};
+	}
+
+	if (state.mode === WindowMode.Fullscreen && state.displayId !== undefined) {
+		const fullscreenDisplay = usableDisplays.find(
+			({ display }) => display.id === state.displayId,
+		);
+		if (fullscreenDisplay) {
+			return {
+				...defaultWindowState(workbenchState, WindowMode.Fullscreen),
+				x: fullscreenDisplay.display.bounds.x,
+				y: fullscreenDisplay.display.bounds.y,
+				displayId: fullscreenDisplay.display.id,
+			};
+		}
+	}
+
+	if (usableDisplays.length === 1) {
+		const { area } = usableDisplays[0];
+		const width = Math.min(stateWidth, area.width);
+		const height = Math.min(stateHeight, area.height);
+
+		return {
+			...state,
+			x: Math.max(area.x, Math.min(x, area.x + area.width - width)),
+			y: Math.max(area.y, Math.min(y, area.y + area.height - height)),
+			width,
+			height,
+		};
+	}
+
+	const intersectsCurrentDisplay = usableDisplays.some(({ area }) =>
+		x + stateWidth > area.x &&
+		y + stateHeight > area.y &&
+		x < area.x + area.width &&
+		y < area.y + area.height
+	);
+	return intersectsCurrentDisplay ? { ...state } : undefined;
+}
+
+function getWorkingArea(display: IWindowDisplay): IWindowBounds | undefined {
+	if (display.workArea.width > 0 && display.workArea.height > 0) {
+		return display.workArea;
+	}
+	if (display.bounds.width > 0 && display.bounds.height > 0) {
+		return display.bounds;
+	}
+	return undefined;
 }

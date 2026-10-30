@@ -1,3 +1,4 @@
+import type { IWorkbenchWindowInfo } from '../../../../platform/window/common/window.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -23,6 +24,11 @@ export class NativeHostService extends BrowserHostService {
 		@IPathService paths: IPathService,
 		@IFileService files: IFileService,
 	) { super({}, lifecycle, dialogs, paths, files); }
+
+	public override async getWindows(options: { readonly includeAuxiliaryWindows: boolean; }): Promise<readonly IWorkbenchWindowInfo[]> {
+		const windows = await this.host.listWindows();
+		return options.includeAuxiliaryWindows ? windows : windows.filter(window => window.kind !== 'auxiliary');
+	}
 
 	public override restart(): Promise<void> { return invoke<void>(HOST_RESTART_CHANNEL); }
 

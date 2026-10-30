@@ -263,11 +263,14 @@ for (const window of ['Code', 'Agents']) {
 		const page = window === 'Code' ? workbench.page : await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('ash.extensions.manageBuiltIn');
 		const extensions = page.locator('[data-view-id="ash.extensions.plugins"]');
-		for (const id of ['ash.markdown-language-features', 'ash.markdown-math', 'ash.rust']) {
-			await extensions.locator(`[data-package-id="${id}"]`).click();
+		for (const id of ['ash.git', 'ash.markdown-language-features', 'ash.markdown-math', 'ash.rust']) {
+			const row = extensions.locator(`[data-package-id="${id}"]`);
+			await row.click();
 			// Details inputs retain their panes; only the selected extension is visible.
 			const editor = page.locator('.ash-extension-editor:visible');
 			await expect(editor.locator('.extension-detail-header h1')).toBeVisible();
+			await expect(editor.locator('.extension-info-section dd').getByText(id === 'ash.rust' ? 'Editor' : 'Editor and Agent', { exact: true })).toBeVisible();
+			if (id === 'ash.git') { await expect(row.locator('.extension-metadata')).toHaveCount(0); }
 			if (id === 'ash.rust') {
 				await expect(extensions.locator(`[data-package-id="${id}"] .extension-body > .ash-icon-label`)).toHaveText(['Rust', 'The Rust Programming Language', 'Rust language configuration, syntax highlighting and language server support.']);
 				await expect(editor.locator('.extension-detail-attribution')).toHaveText('The Rust Programming Language');
