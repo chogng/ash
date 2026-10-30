@@ -55,6 +55,84 @@ suite('Customize page', () => {
 		await expect(entry).toBeVisible();
 	});
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`keeps collection controls and result rows stable while switching and refreshing in ${locale}`, async () => {
+			const { page } = browser;
+			const chinese = locale === 'zh-CN';
+			if (chinese) {
+				await page.goto('/sessions.html?customize&locale=zh-CN');
+				await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+				await page.locator('.ash-sessions-activity-content')
+					.getByRole('button', { name: '自定义', exact: true }).click();
+			}
+			const root = page.locator('.ash-customize');
+			const panel = root.getByRole('tabpanel');
+			const badge = root.locator('.ash-customize-results-heading .ash-count-badge');
+			const collection = root.locator('.ash-customize-toolbar > .ash-segmented-control');
+			const grid = root.locator('.ash-customize-grid');
+			for (const width of [1280, 760]) {
+				await page.setViewportSize({ width, height: 720 });
+				if (width === 760) {
+					await expect(root).toHaveClass(/narrow/);
+				} else {
+					await expect(root).not.toHaveClass(/narrow/);
+				}
+				await expect(badge).toHaveText('3');
+				await expect(badge).toHaveAttribute('aria-label', chinese ? '3 个资源' : '3 resources');
+				const collectionBounds = (await collection.boundingBox())!;
+				const gridTop = (await grid.boundingBox())!.y;
+				for (const [name, count] of chinese
+					? [['连接器', '1'], ['插件', '1']]
+					: [['Connectors', '1'], ['Plugins', '1']]) {
+					await root.getByRole('tab', { name, exact: true }).click();
+					await expect(badge).toHaveText(count!);
+					expect(await collection.boundingBox()).toEqual(collectionBounds);
+					expect((await grid.boundingBox())!.y).toBe(gridTop);
+				}
+				await page.evaluate(() => window.ashSessionsIntegration.setCustomizeDetailsRead('hold'));
+				await root.getByRole('tab', { name: chinese ? '技能' : 'Skills', exact: true }).click();
+				try {
+					await expect(panel).toHaveAttribute('aria-busy', 'true');
+					await expect(badge).toBeHidden();
+					expect((await root.locator('.ash-sessions-loading.cards').boundingBox())!.y).toBe(gridTop);
+					expect(await collection.boundingBox()).toEqual(collectionBounds);
+				} finally {
+					await page.evaluate(() => window.ashSessionsIntegration.completeCustomizeDetails());
+				}
+				await expect(panel).toHaveAttribute('aria-busy', 'false');
+				await expect(badge).toHaveText('3');
+				expect((await grid.boundingBox())!.y).toBe(gridTop);
+				await page.evaluate(() => window.ashSessionsIntegration.setCustomizeDetailsRead('hold'));
+				await root.getByRole('button', { name: chinese ? '刷新' : 'Refresh', exact: true }).click();
+				try {
+					await expect(panel).toHaveAttribute('aria-busy', 'true');
+					await expect(badge).toBeVisible();
+					expect((await grid.boundingBox())!.y).toBe(gridTop);
+				} finally {
+					await page.evaluate(() => window.ashSessionsIntegration.completeCustomizeDetails());
+				}
+				await expect(panel).toHaveAttribute('aria-busy', 'false');
+				await page.screenshot({ path: browser.info.outputPath(`customize-count-${locale}-${width}.png`) });
+				await root.getByRole('button', { name: chinese ? '发现' : 'Discover', exact: true }).click();
+				await expect(badge).toHaveText('4');
+				expect(await collection.boundingBox()).toEqual(collectionBounds);
+				await root.getByRole('tab', { name: chinese ? '插件' : 'Plugins', exact: true }).click();
+				await expect(panel).toHaveAttribute('aria-busy', 'false');
+				expect(await collection.boundingBox()).toEqual(collectionBounds);
+				await root.getByRole('tab', { name: chinese ? '技能' : 'Skills', exact: true }).click();
+				await root.getByRole('button', { name: chinese ? '你的' : 'Yours', exact: true }).click();
+				await expect(badge).toHaveText('3');
+				expect(await collection.boundingBox()).toEqual(collectionBounds);
+			}
+			await root.getByRole('button', { name: chinese ? '搜索' : 'Search', exact: true }).click();
+			await root.getByRole('searchbox').fill('writing');
+			await expect(badge).toHaveText('1');
+			await root.getByRole('searchbox').fill('absent-synthetic-resource');
+			await expect(badge).toHaveText('0');
+			await expect(root.getByRole('status')).toBeVisible();
+		});
+	}
+
 	test('opens embedded skill details and restores the filtered, sorted and scrolled catalog with keyboard focus', async () => {
 		const { page } = browser;
 		await page.setViewportSize({ width: 760, height: 500 });

@@ -12,6 +12,7 @@
 	min-height: 0;
 	padding: var(--ash-spacing-size320);
 	overflow: auto;
+	scrollbar-gutter: stable;
 }
 
 .ash-customize-details {
@@ -58,7 +59,7 @@
 }
 
 .ash-customize-toolbar > .ash-tab-list {
-	flex: 0 1 auto;
+	flex: 0 0 auto;
 	--ash-tab-height: var(--ash-spacing-size280);
 	--ash-tab-border-radius: var(--ash-cornerRadius-large);
 	--ash-tabList-itemContentInset: var(--ash-spacing-size120);
@@ -141,9 +142,13 @@
 
 .ash-customize-results-heading {
 	justify-content: space-between;
+	margin-bottom: var(--ash-spacing-size200);
 }
 
 .ash-customize-results-heading h2 {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
 	margin: 0;
 	font-size: var(--ash-fontSize-body1);
 	font-weight: var(--ash-fontWeight-semiBold);
@@ -154,6 +159,15 @@
 	line-height: 1.5;
 	white-space: pre-wrap;
 	margin: var(--ash-spacing-size80) 0 var(--ash-spacing-size200);
+}
+
+.ash-customize-message.status-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
 }
 
 .ash-customize-grid {

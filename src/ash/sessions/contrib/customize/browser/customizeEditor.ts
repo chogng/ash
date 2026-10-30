@@ -2,6 +2,7 @@ import { addDisposableListener, h, type IDimension } from '../../../../base/brow
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { AnchorAlignment } from '../../../../base/browser/ui/contextview/contextview.js';
+import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { SegmentedControl } from '../../../../base/browser/ui/segmentedControl/segmentedControl.js';
@@ -106,6 +107,7 @@ export class CustomizeEditorPane extends EditorPane {
 	private loading!: LoadingSkeleton;
 	private message!: HTMLElement;
 	private heading!: HTMLElement;
+	private count!: CountBadge;
 	private hero!: HTMLElement;
 	private heroTitle!: HTMLElement;
 	private heroDescription!: HTMLElement;
@@ -367,8 +369,14 @@ export class CustomizeEditorPane extends EditorPane {
 		this.hero.append(this.heroTitle, this.heroDescription);
 		this.panel.append(this.hero);
 		const header = h(document, 'div', { className: 'ash-customize-results-heading' });
-		this.heading = h(document, 'h2');
-		header.append(this.heading);
+		const title = h(document, 'h2');
+		this.heading = h(document, 'span');
+		title.append(this.heading);
+		this.count = this._register(new CountBadge(title, {
+			titleFormat: localize('customize.count', '{0} resources'),
+		}));
+		this.count.domNode.hidden = true;
+		header.append(title);
 		const refresh = this._register(
 			new Button(header, {
 				...defaultButtonStyles,
@@ -544,6 +552,7 @@ export class CustomizeEditorPane extends EditorPane {
 			this.cursor = undefined;
 			this.loadedQuery = queryKey;
 			this.renderCards();
+			this.count.domNode.hidden = true;
 		}
 		this.panel.setAttribute('aria-busy', 'true');
 		this.loading ??= this._register(
@@ -553,8 +562,7 @@ export class CustomizeEditorPane extends EditorPane {
 		this.loading.setVisible(!this.cards.length);
 		this.more.enabled = false;
 		this.retry.domNode.hidden = true;
-		this.message.hidden = !this.cards.length;
-		this.message.textContent = this.cards.length ? localize('customize.loading', 'Loading resources…') : '';
+		this.setMessage(this.cards.length ? localize('customize.loading', 'Loading resources…') : '', false);
 		try {
 			const result =
 				this.collection === 'discover'
@@ -571,14 +579,12 @@ export class CustomizeEditorPane extends EditorPane {
 			this.cards = [...unique.values()];
 			this.note = result.note ?? '';
 			this.cursor = result.cursor;
-			this.message.hidden = false;
 			this.renderCards();
 		} catch (error) {
 			if (request.token.isCancellationRequested || !this.shown || isCancellationError(error)) return;
 			this.cursor = undefined;
 			this.more.domNode.hidden = true;
-			this.message.textContent = localize('customize.loadFailed', 'Could not load resources: {0}', String(error));
-			this.message.hidden = false;
+			this.setMessage(localize('customize.loadFailed', 'Could not load resources: {0}', String(error)));
 			this.retry.domNode.hidden = false;
 		} finally {
 			if (this.request === request && !request.token.isCancellationRequested) {
@@ -928,10 +934,12 @@ export class CustomizeEditorPane extends EditorPane {
 			open.setTitle(open.label);
 			this.grid.append(article);
 		}
-		this.message.textContent = [
+		this.count.setCount(cards.length);
+		this.count.domNode.hidden = false;
+		const message = [
 			this.note,
 			cards.length
-				? localize('customize.count', '{0} resources', cards.length)
+				? ''
 				: query
 					? localize('customize.noMatches', 'No matching resources. Try another search.')
 					: this.collection === 'yours'
@@ -940,12 +948,20 @@ export class CustomizeEditorPane extends EditorPane {
 		]
 			.filter(Boolean)
 			.join('\n');
+		this.setMessage(message || localize('customize.count', '{0} resources', cards.length), !!message);
 		this.more.domNode.hidden = !this.cursor;
 		if (focusedId) {
 			const row = [...this.grid.children].find(row => (row as HTMLElement).dataset.resourceId === focusedId);
 			if (row) row.querySelector<HTMLButtonElement>('button')?.focus();
 			else this.search.focus();
 		}
+	}
+
+	private setMessage(text: string, visible = true): void {
+		this.message.textContent = text;
+		this.message.hidden = !text;
+		// Counts and refresh announcements must not insert a row above the cards.
+		this.message.classList.toggle('status-only', !visible);
 	}
 
 	private navigateCards(event: KeyboardEvent): void {
@@ -1087,7 +1103,7 @@ export class CustomizeEditorPane extends EditorPane {
 		try {
 			await action();
 		} catch (error) {
-			if (!this.isDisposed && this.shown && !isCancellationError(error)) this.message.textContent = String(error);
+			if (!this.isDisposed && this.shown && !isCancellationError(error)) this.setMessage(String(error));
 		} finally {
 			this.opening = false;
 		}
