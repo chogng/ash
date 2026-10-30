@@ -93,8 +93,9 @@ test('Command Palette finds localized commands by their English title and report
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IMenuService, new MenuService(commands, contexts));
 		services.registerInstance(IDialogService, dialogs);
+		const shortcutLookups: string[] = [];
 		services.registerInstance(IKeybindingService, {
-			lookupKeybinding: () => undefined,
+			lookupKeybinding: (id: string) => { shortcutLookups.push(id); return undefined; },
 			onDidUpdateKeybindings: Event.None,
 		} as unknown as IKeybindingService);
 		const provider = resources.add(services.createInstance(CommandsQuickAccessProvider));
@@ -114,6 +115,9 @@ test('Command Palette finds localized commands by their English title and report
 		assert.ok(categorized && !('type' in categorized));
 		assert.deepEqual([categorized.label, categorized.detail], ['文件: 启动调试', 'File: Start Debugging']);
 		assert.ok(filterQuickPickItems([categorized], 'File').includes(categorized));
+		assert.deepEqual(shortcutLookups, [], 'Searching and ranking commands must not resolve offscreen shortcuts');
+		assert.equal(item.keybinding, undefined);
+		assert.deepEqual(shortcutLookups, ['test.commandFailure']);
 
 		picker.selectedItems = [item];
 		accept.fire({ inBackground: false });

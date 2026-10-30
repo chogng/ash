@@ -38,7 +38,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly headings = new Map<TItem, IQuickPickSeparator>();
 	public keyMods: IKeyMods = { ctrlCmd: false, alt: false, shift: false };
 	private _visibleItems: readonly TItem[] = [];
-	private singleLineRows: boolean;
+	private detailRowHeight = 44;
+	private measureDetails = false;
 	private maxHeight = Number.POSITIVE_INFINITY;
 	private query = '';
 	private _sortByLabel = true;
@@ -77,7 +78,6 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
 	constructor(container: HTMLElement, private readonly presentation: 'quickPick' | 'menu' | 'compactMenu' = 'quickPick') {
 		super();
-		this.singleLineRows = presentation === 'quickPick';
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, 'div');
 		this.element.className = 'ash-quick-pick-list';
@@ -86,16 +86,15 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
 
-		const owner = this;
-		const singleLineHeight = () => 22;
+		const getRowHeight = (item: TItem): number => item.detail ? this.detailRowHeight : 22;
 		this.list = this._register(new List<TItem>(this.element, {
 			styles: defaultListStyles,
 			ariaLabel: localize('quickInput.results', 'Quick Pick results'),
 			domFocusable: true,
 			scrolling: 'managed',
-			// Details and menus retain their content-sized geometry. Ordinary results
-			// share the standard row height, so only the viewport needs DOM rows.
-			get getHeight() { return owner.singleLineRows ? singleLineHeight : undefined; },
+			// A detail line changes that row's height, not the virtualization of every result.
+			// Menus keep their content-sized geometry.
+			getHeight: presentation === 'quickPick' ? getRowHeight : undefined,
 			accessibilityProvider: {
 				getAriaSetSize: () => this._visibleItems.length,
 				getAriaPosInSet: item => this._visibleItems.indexOf(item) + 1,
@@ -223,6 +222,31 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	layout(maxHeight = this.maxHeight): void {
 		this.maxHeight = maxHeight;
 		if (this.list.domNode.hidden) return;
+		if (this.measureDetails && this.element.isConnected) {
+			const item = this._visibleItems.find(item => !!item.detail)!;
+			// Read the actual font metrics once for this result set. Measuring one natural
+			// row also works when the first detailed result is outside the viewport.
+			const sample = h(this.element.ownerDocument, 'div');
+			sample.className = 'ash-quick-pick-row-content';
+			sample.style.position = 'absolute';
+			sample.style.visibility = 'hidden';
+			const text = h(this.element.ownerDocument, 'span');
+			text.className = 'ash-quick-pick-row-text';
+			appendOptionalText(text, item.label, 'ash-quick-pick-row-label', this.element.ownerDocument);
+			appendOptionalText(text, item.description, 'ash-quick-pick-row-description', this.element.ownerDocument);
+			appendOptionalText(text, item.detail, 'ash-quick-pick-row-detail', this.element.ownerDocument);
+			sample.append(text);
+			this.list.element.append(sample);
+			const height = sample.getBoundingClientRect().height;
+			sample.remove();
+			if (height > 0) {
+				this.measureDetails = false;
+				if (height !== this.detailRowHeight) {
+					this.detailRowHeight = height;
+					this.list.items = this._visibleItems;
+				}
+			}
+		}
 		const contentHeight = this.list.element.scrollHeight;
 		this.element.classList.toggle('scrolling', contentHeight > maxHeight);
 		let height = Math.min(contentHeight, maxHeight);
@@ -260,8 +284,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			this._visibleItems = candidates.filter(item => matches.has(item));
 		}
 		const active = this.list.activeItem;
-		this.singleLineRows = this.presentation === 'quickPick' && !this._visibleItems.some(item => !!item.detail);
-		this.element.classList.toggle('ash-quick-pick-list-virtualized', this.singleLineRows);
+		this.measureDetails = this.presentation === 'quickPick' && this._visibleItems.some(item => !!item.detail);
+		this.element.classList.toggle('ash-quick-pick-list-virtualized', this.presentation === 'quickPick');
 		this.list.items = this._visibleItems;
 		// Item actions already provide Tab targets; otherwise the list needs its own.
 		this.list.element.tabIndex = this._visibleItems.some(item => item.buttons?.length) ? -1 : 0;
@@ -362,14 +386,15 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			appendIcon(Lxicon.check, check);
 			content.append(check);
 		}
-		if (item.keybinding) {
-			const keybinding = new KeybindingLabel(content, {
+		const keybinding = item.keybinding;
+		if (keybinding) {
+			const keybindingLabel = new KeybindingLabel(content, {
 				...defaultKeybindingLabelStyles,
-				keybinding: item.keybinding,
+				keybinding,
 				presentation: 'keycap',
 			});
-			keybinding.element.classList.add('ash-quick-pick-row-keybinding');
-			this.keybindingLabels.set(row, keybinding);
+			keybindingLabel.element.classList.add('ash-quick-pick-row-keybinding');
+			this.keybindingLabels.set(row, keybindingLabel);
 		}
 		if (item.buttons?.length) {
 			const buttons = item.buttons;

@@ -57,17 +57,15 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 	private readonly menu: ReturnType<IMenuService['createMenu']>;
 
 	protected override _getPicks(query: string): Picks<ICommandQuickPickItem> {
-		const { editor, history, menu } = this;
+		const { editor, history, menu, keybindingService } = this;
 		// A preview can close while the picker is open; the service owns editor registration.
 		const editorActions = editor && this.codeEditorService.listCodeEditors().includes(editor) ? editor.getSupportedActions() : [];
 		const editorCommands = editorActions.map(action => {
-			const keybinding = this.keybindingService.lookupKeybinding(action.id);
 			return {
 				commandId: action.id,
 				label: action.label,
 				description: action.id,
 				detail: action.alias !== action.label ? action.alias : undefined,
-				keybinding,
 			};
 		});
 		const editorCommandIds = new Set(editorCommands.map(command => command.commandId));
@@ -76,7 +74,6 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 			.filter((action): action is MenuItemAction => action instanceof MenuItemAction && action.enabled)
 			.filter(action => !editorCommandIds.has(action.id))
 			.map(action => {
-				const keybinding = this.keybindingService.lookupKeybinding(action.id);
 				const category = action.item.category;
 				const title = action.item.title;
 				const label = category ? localize('quickAccess.categoryTitle', '{0}: {1}', commandActionLabel(category), action.label) : action.label;
@@ -89,7 +86,6 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 					label,
 					description: action.id,
 					detail: original !== label ? original : undefined,
-					keybinding,
 				};
 			});
 		const normalizedQuery = query.toLocaleLowerCase();
@@ -116,6 +112,9 @@ export class CommandsQuickAccessProvider extends PickerQuickAccessProvider<IComm
 			}
 			picks.push({
 				...command,
+				// Resolve shortcuts only for rendered results; lookup resolves conflicts
+				// across the full keybinding registry and is unnecessary for offscreen rows.
+				get keybinding() { return keybindingService.lookupKeybinding(command.commandId); },
 				accept: () => {
 					// Hiding disposes the provider. Persist MRU through its storage owner afterward.
 					using acceptedHistory = this.instantiationService.createInstance(CommandsHistory);

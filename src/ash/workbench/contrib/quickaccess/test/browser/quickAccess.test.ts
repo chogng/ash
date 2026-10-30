@@ -44,6 +44,51 @@ suite('quickAccess browser component', () => {
 		});
 	}
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Quick Access virtualizes mixed detail rows across search mode switches (${locale})`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/quickAccess.html?manyCommands&locale=${locale}`);
+			await page.getByRole('button', { name: 'Open commands' }).click();
+			const picker = page.getByRole('dialog');
+			const input = picker.getByRole('combobox');
+			const tabs = picker.getByRole('tab');
+			await input.fill('>Bulk command');
+			const active = picker.locator('.ash-list-row.is-active');
+			await expect(active).toHaveAttribute('aria-setsize', '600');
+			for (let round = 0; round < 3; round++) {
+				expect(await picker.getByRole('option').count()).toBeLessThan(40);
+				const detailRow = picker.getByRole('option').filter({ has: page.getByText('Bulk command 000', { exact: true }) });
+				const geometry = await detailRow.evaluate(row => {
+					const bounds = row.getBoundingClientRect();
+					const detail = row.querySelector('.ash-quick-pick-row-detail')!.getBoundingClientRect();
+					const next = row.nextElementSibling!.getBoundingClientRect();
+					return { bottom: bounds.bottom, detailBottom: detail.bottom, nextTop: next.top, height: bounds.height };
+				});
+				expect(geometry.height).toBeGreaterThan(22);
+				expect(geometry.detailBottom).toBeLessThanOrEqual(geometry.bottom + 1);
+				expect(Math.abs(geometry.nextTop - geometry.bottom)).toBeLessThan(1);
+				await input.press('ArrowUp');
+				await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('Bulk command 599');
+				await expect(active).toHaveAttribute('aria-posinset', '600');
+				await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+				expect(await picker.getByRole('option').count()).toBeLessThan(40);
+				await input.press('ArrowDown');
+				await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('Bulk command 000');
+				await tabs.nth(1).click();
+				await tabs.nth(2).click();
+				await tabs.nth(3).click();
+				await tabs.nth(0).click();
+				await expect(input).toBeFocused();
+				await expect(input).toHaveValue('>Bulk command');
+				await expect(active).toHaveAttribute('aria-setsize', '600');
+			}
+			await input.press('ArrowUp');
+			await input.press('Enter');
+			await expect(picker).toHaveCount(0);
+			await expect(page.locator('output')).toHaveText('Bulk command 599');
+		});
+	}
+
 	test('Quick Input releases an interrupted drag when the picker closes', async () => {
 		const { page } = browserTests;
 		await page.goto('/quickAccess.html');

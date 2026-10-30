@@ -378,6 +378,21 @@ if (parameters.has('shortcuts')) {
 	await import('../../../../preferences/browser/preferencesActions.js');
 }
 const executions: string[] = [];
+if (parameters.has('manyCommands')) {
+	for (let index = 0; index < 600; index++) {
+		const title = `Bulk command ${String(index).padStart(3, '0')}`;
+		resources.add(registerAction2(class extends Action2 {
+			constructor() {
+				super({
+					id: `test.quickAccess.bulk${index}`,
+					title: index % 5 === 0 ? { value: title, original: `Original command ${index}` } : title,
+					f1: true,
+				});
+			}
+			public override run(): void { document.querySelector('output')!.textContent = title; }
+		}));
+	}
+}
 if (parameters.has('scrollRows')) {
 	for (let index = 0; index < 60; index++) {
 		const id = `test.quickAccess.scroll${index}`;
