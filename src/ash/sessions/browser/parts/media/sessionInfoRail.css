@@ -1,0 +1,118 @@
+.ash-code-conversation {
+	display: flex;
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.ash-code-conversation > .ash-chat {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+}
+
+.ash-session-info {
+	box-sizing: border-box;
+	flex: 0 0 280px;
+	width: 280px;
+	min-width: 0;
+	overflow: auto;
+	margin: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size160);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: 0 var(--ash-spacing-size20) var(--ash-spacing-size40)
+		var(--ash-widget-shadow);
+	background: var(--ash-sideBar-background);
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-session-info[hidden],
+.ash-session-info progress[hidden] {
+	display: none;
+}
+
+.ash-session-info.floating {
+	position: absolute;
+	z-index: 20;
+	top: var(--ash-spacing-size80);
+	right: var(--ash-spacing-size80);
+	bottom: var(--ash-spacing-size80);
+	max-width: calc(100% - 2 * var(--ash-spacing-size80));
+	margin: 0;
+	box-shadow: 0 var(--ash-spacing-size20) var(--ash-spacing-size80)
+		var(--ash-widget-shadow);
+}
+
+.ash-session-info-close {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	margin-left: auto;
+	border: 0;
+	border-radius: var(--ash-cornerRadius-medium);
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
+.ash-session-info-close:hover {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-session-info :is(button, summary):focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-session-info details {
+	padding: var(--ash-spacing-size120) 0;
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-session-info summary {
+	min-height: 28px;
+	cursor: pointer;
+}
+
+.ash-session-info-row {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	min-height: 32px;
+}
+
+.ash-session-info-row span:last-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-session-info p {
+	color: var(--ash-description-foreground);
+	line-height: 1.5;
+}
+
+.ash-session-info progress {
+	width: 100%;
+	height: 6px;
+	accent-color: var(--ash-focusBorder);
+}
+
+.hc-black .ash-session-info,
+.hc-light .ash-session-info {
+	box-shadow: none;
+	border-color: var(--ash-contrastBorder);
+}
+
+.ash-session-info-value {
+	float: right;
+	color: var(--ash-description-foreground);
+}

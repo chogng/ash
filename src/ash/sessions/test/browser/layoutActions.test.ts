@@ -74,7 +74,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	const navigationState = (): unknown => [contextKeys.getValue(CanGoBackContext.key), contextKeys.getValue(CanGoForwardContext.key)];
 	try {
 		assert.deepEqual(navigationState(), [true, false]);
-		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'bottom');
+		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'right');
 		layout.setPanelPosition(Position.LEFT);
 		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'left');
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);

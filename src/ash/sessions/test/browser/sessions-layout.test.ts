@@ -183,6 +183,7 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_600, 1_000) });
 		assert.equal(layout.getSideBarPosition(), Position.LEFT);
 		layout.layout(new Dimension(1_600, 1_000));
+		layout.setPanelPosition(Position.BOTTOM);
 		layout.showPart('panel');
 		layout.resizePart('panel', new Dimension(layout.getPartSize('panel').width, 280));
 		input.focus();
@@ -198,7 +199,7 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 			assert.equal(layout.isPartVisible('sessions'), true);
 			const panelFrame = parts.get('panel')!.domNode.parentElement!;
 			const parentSplit = panelFrame.parentElement!.parentElement!;
-			assert.equal(parentSplit.classList.contains(position === Position.TOP || position === Position.BOTTOM ? 'ash-split-view-vertical' : 'ash-split-view-horizontal'), true);
+			assert.equal(parentSplit.classList.contains('ash-split-view-vertical'), true);
 			const leading = position === Position.TOP || position === Position.LEFT;
 			const sessionsFrame = parts.get('sessions')!.domNode.parentElement!;
 			assert.equal(!!(panelFrame.compareDocumentPosition(sessionsFrame) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING), leading);
@@ -235,7 +236,7 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 		layout.showPart('editor');
 		layout.showPart('auxiliarybar');
 		layout.setPanelPosition(Position.RIGHT);
-		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), true);
+		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
 		layout.setPrimaryPart('editor');
 		layout.setPanelPosition(Position.LEFT);
 		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
@@ -252,6 +253,7 @@ test('Sessions restores Panel position and both axis sizes from the profile whil
 	const storage = createStorage();
 	const first = createLayout(dom.window.document.body, firstParts, { storageService: storage, initialDimension: new Dimension(1_600, 1_000) });
 	first.layout(new Dimension(1_600, 1_000));
+	first.setPanelPosition(Position.BOTTOM);
 	first.showPart('panel');
 	first.resizePart('panel', new Dimension(first.getPartSize('panel').width, 280));
 	first.setPanelPosition(Position.RIGHT);
@@ -315,37 +317,49 @@ test('Custom Views cover retained content without changing its desired visibilit
 	}
 });
 
-test('Code docks Details below one tab strip and preserves the side pane boundary when Details toggles', () => {
+test('Code stacks Panel and Details independently of document tabs and rebuilds the stack across mode changes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);
-	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 800) });
-	const editor = parts.get('editor') as TestSessionsPart;
-	layout.layout(new Dimension(1600, 800));
-	assert.equal(editor.contentVisible, false);
-	assert.equal(editor.domNode.contains(parts.get('auxiliarybar')!.domNode), true);
-	assert.equal(editor.domNode.querySelector<HTMLElement>('.ash-sessions-docked-details')!.style.top, '35px');
-	layout.showPart('editor');
-	layout.resizePart('editor', new Dimension(700, 800));
-	layout.showPart('auxiliarybar');
-	layout.resizePart('auxiliarybar', new Dimension(280, 800));
-	const width = layout.getPartSize('editor').width;
-	assert.equal(editor.contentInset, 280);
-	layout.hidePart('auxiliarybar');
-	assert.equal(editor.contentInset, 0);
-	assert.equal(layout.getPartSize('editor').width, width);
-	layout.showPart('auxiliarybar');
-	layout.layout(new Dimension(1000, 800));
-	assert.equal(layout.getPartSize('editor').width - editor.contentInset >= 300, true);
-	layout.hidePart('editor');
-	assert.equal(editor.contentVisible, false);
-	const editorFrame = editor.domNode.parentElement!;
-	const editorInsets = Number.parseFloat(editorFrame.style.paddingLeft) + Number.parseFloat(editorFrame.style.paddingRight);
-	assert.equal(layout.getPartSize('editor').width - editorInsets, 300);
-	layout.hidePart('auxiliarybar');
-	assert.equal(layout.isPartVisible('editor'), false);
-	assert.equal(layout.isPartVisible('auxiliarybar'), false);
-	for (const part of parts.values()) part.dispose();
-	dom.window.close();
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 1000) });
+		layout.layout(new Dimension(1600, 1000));
+		assert.equal(layout.getPanelPosition(), Position.RIGHT);
+		assert.equal(layout.isPartVisible('editor'), false);
+		assert.equal(layout.isPartVisible('auxiliarybar'), true);
+		layout.showPart('editor');
+		layout.resizePart('editor', new Dimension(600, 1000));
+		layout.showPart('panel');
+		layout.resizePart('panel', new Dimension(300, 280));
+		const editorWidth = layout.getPartSize('editor').width;
+		const stackParent = () => parts.get('panel')!.domNode.parentElement!.parentElement!.parentElement!;
+		assert.equal(stackParent(), parts.get('auxiliarybar')!.domNode.parentElement!.parentElement!.parentElement!);
+		assert.equal(stackParent().classList.contains('ash-split-view-vertical'), true);
+		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
+		assert.equal(layout.getPartSize('panel').width, layout.getPartSize('auxiliarybar').width);
+		assert.equal(layout.getPartSize('panel').height, 280);
+		assert.equal(
+			layout.getPartSize('panel').height + layout.getPartSize('auxiliarybar').height,
+			1000 - WorkbenchWindowBarHeight,
+		);
+		layout.hidePart('auxiliarybar');
+		assert.equal(layout.getPartSize('editor').width, editorWidth);
+		layout.showPart('auxiliarybar');
+		assert.equal(layout.getPartSize('panel').height, 280);
+		const input = dom.window.document.createElement('input');
+		parts.get('auxiliarybar')!.domNode.append(input);
+		input.focus();
+		layout.setPrimaryPart('editor');
+		assert.equal(stackParent().classList.contains('ash-split-view-horizontal'), true);
+		assert.equal(dom.window.document.activeElement, input);
+		layout.setPrimaryPart('sessions');
+		assert.equal(stackParent(), parts.get('auxiliarybar')!.domNode.parentElement!.parentElement!.parentElement!);
+		assert.equal(stackParent().classList.contains('ash-split-view-vertical'), true);
+		assert.equal(dom.window.document.activeElement, input);
+		assert.equal(layout.getPartSize('panel').height, 280);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
 });
 
 test('Sessions layout owns a fixed Sessions-first Part topology', () => {
@@ -633,12 +647,18 @@ test('Sessions Part availability preserves user visibility and cached widths dur
 	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800), storageService: storage });
 	layout.layout(new Dimension(1_200, 800));
 	layout.showPart('auxiliarybar');
-	layout.resizePart('auxiliarybar', new Dimension(280, 800));
+	layout.resizePart('auxiliarybar', new Dimension(320, 800));
 	layout.setPartAvailable('auxiliarybar', false);
 	await storage.flush(WillSaveStateReason.SHUTDOWN);
-	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar }, { visible: false, desired: { width: 280, visible: true } });
+	assert.deepEqual(
+		{ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar },
+		{ visible: false, desired: { width: 320, visible: true } },
+	);
 	layout.setPartAvailable('auxiliarybar', true);
-	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), width: layout.getPartSize('auxiliarybar').width }, { visible: true, width: 280 });
+	assert.deepEqual(
+		{ visible: layout.isPartVisible('auxiliarybar'), width: layout.getPartSize('auxiliarybar').width },
+		{ visible: true, width: 320 },
+	);
 	layout.setPartAvailable('auxiliarybar', false);
 	layout.hidePart('auxiliarybar');
 	layout.setPartAvailable('auxiliarybar', true);
@@ -819,4 +839,125 @@ test('Sessions compositions keep the content directly below the titlebar without
 		for (const part of parts.values()) part.dispose();
 		dom.window.close();
 	}
+});
+
+test('Code cards move in the Grid and restore exact dimensions after expanding every card', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 1000) });
+		const info = dom.window.document.createElement('aside');
+		layout.setInformation(info);
+		layout.toggleInformation();
+		layout.showPart('panel');
+		layout.moveCard('info', 'auxiliarybar', 'down');
+		layout.moveCard('auxiliarybar', 'panel', 'up');
+		layout.resizeCard('auxiliarybar', 0, 60);
+		const terminal = layout.getPartSize('panel');
+		const files = layout.getPartSize('auxiliarybar');
+		for (const id of ['panel', 'auxiliarybar', 'info'] as const) {
+			layout.expandCard(id);
+			assert.equal(layout.expandedCard, id);
+			assert.equal(layout.isPartVisible('sessions'), false);
+			layout.expandCard(id);
+			assert.equal(layout.expandedCard, undefined);
+			assert.equal(layout.isPartVisible('sessions'), true);
+			assert.deepEqual(layout.getPartSize('panel'), terminal);
+			assert.deepEqual(layout.getPartSize('auxiliarybar'), files);
+			assert.equal(layout.information.body.firstElementChild, info);
+		}
+		layout.detachCard('panel', true);
+		assert.equal(layout.isCardVisible('panel'), true, 'toolbar stays selected for a detached terminal');
+		assert.equal(parts.get('panel')!.domNode.hidden, false, 'the retained part remains usable in another document');
+		layout.detachCard('panel', false);
+		assert.deepEqual(layout.getPartSize('panel'), terminal);
+		assert.deepEqual(layout.getPartSize('auxiliarybar'), files);
+		layout.detachCard('panel', true);
+		layout.moveCard('info', 'auxiliarybar', 'up');
+		layout.detachCard('panel', false);
+		assert.ok(
+			layout.information.element.compareDocumentPosition(parts.get('auxiliarybar')!.domNode.parentElement!) &
+			dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
+		);
+		layout.expandCard('info');
+		layout.toggleInformation();
+		assert.equal(layout.expandedCard, undefined);
+		assert.equal(layout.isPartVisible('sessions'), true);
+		layout.detachCard('panel', true);
+		layout.setPrimaryPart('editor');
+		layout.showPart('editor');
+		layout.detachCard('panel', false);
+		assert.equal(layout.isPartVisible('editor'), true);
+		layout.setPrimaryPart('sessions');
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Code card topology survives product composition, hide/show and profile reload', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://cards.test' });
+	using storage = new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		workspaceId: 'cards',
+		profileId: 'cards',
+		backend: dom.window.localStorage,
+		flushInterval: 0,
+	});
+	const parts = createParts(dom.window.document);
+	const layout = createLayout(dom.window.document.body, parts, {
+		storageService: storage,
+		initialDimension: new Dimension(1600, 1000),
+	});
+	layout.showPart('panel');
+	layout.moveCard('auxiliarybar', 'panel', 'up');
+	layout.resizeCard('auxiliarybar', 0, -50);
+	const files = layout.getPartSize('auxiliarybar');
+	layout.setPrimaryPart('editor');
+	layout.setPrimaryPart('sessions');
+	assert.deepEqual(layout.getPartSize('auxiliarybar'), files);
+	layout.hidePart('auxiliarybar');
+	layout.showPart('auxiliarybar');
+	assert.deepEqual(layout.getPartSize('auxiliarybar'), files);
+	layout.expandCard('panel');
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	layout.dispose();
+	for (const part of parts.values()) part.dispose();
+	const restoredParts = createParts(dom.window.document);
+	try {
+		using restored = createLayout(dom.window.document.body, restoredParts, {
+			storageService: storage,
+			initialDimension: new Dimension(1600, 1000),
+		});
+		assert.equal(restored.expandedCard, undefined, 'expanded geometry never replaces the saved arrangement');
+		assert.deepEqual(restored.getPartSize('auxiliarybar'), files);
+		const fileFrame = restoredParts.get('auxiliarybar')!.domNode.parentElement!;
+		const terminalFrame = restoredParts.get('panel')!.domNode.parentElement!;
+		assert.ok(fileFrame.compareDocumentPosition(terminalFrame) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+	} finally {
+		for (const part of restoredParts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Saved Code card layouts reject duplicate, missing and malformed leaves', async () => {
+	const { readCodeCardLayout } = await import('../../browser/codeCardLayout.js');
+	const leaf = { type: 'leaf', data: 'panel', size: 300, visible: true, priority: 'normal' };
+	assert.ok(readCodeCardLayout(JSON.stringify(leaf), ['panel']));
+	assert.equal(readCodeCardLayout(JSON.stringify(leaf), ['panel', 'info']), undefined);
+	assert.equal(
+		readCodeCardLayout(
+			JSON.stringify({
+				type: 'branch',
+				orientation: 'vertical',
+				size: 300,
+				priority: 'normal',
+				children: [leaf, leaf],
+			}),
+			['panel'],
+		),
+		undefined,
+	);
+	assert.equal(readCodeCardLayout(JSON.stringify({ ...leaf, size: -1 }), ['panel']), undefined);
+	assert.equal(readCodeCardLayout('{broken', ['panel']), undefined);
 });

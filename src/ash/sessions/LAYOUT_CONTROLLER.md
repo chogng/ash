@@ -10,7 +10,7 @@ SessionsPart permanently owns Agent conversation content and its grid. Projects 
 
 The last entry's owning command is stored at `sessions.layout.activeEntry` in workspace storage; entry content visibility preferences use `sessions.layout.entryVisibility` in profile storage. Sidebar visibility and width belong only to the Workbench layout and persist across entries; legacy per-entry sidebar preferences are discarded. Creator workspace selection remains at `sessions.creator.activeMode` and is interpreted by Creator. Project selection and browsing state remain with the feature's window-local service and never become layout entries. Existing activeMode, modeState and older page keys migrate once to the entry state.
 
-Code has a bottom Panel and Details docked below the editor tabs. Hiding Editor content, closing the side pane and switching modes retain ordinary tabs and dirty documents. Actual editor close and window shutdown still use save/discard/cancel. The previous open Code side-pane composition survives reload at sessions.layout.sidePane.lastOpen. An empty Code document group is seeded with managed Files/Changes tabs after session restoration; Details-only protects those managed tabs.
+Code starts with Terminal and Files stacked in an independent right column; session information is another movable card. DesktopWorkbenchLayout owns their retained Grid tree. Hiding Editor content, closing the side pane and switching modes retain ordinary tabs and dirty documents. Actual editor close and window shutdown still use save/discard/cancel. The previous open Code side-pane composition survives reload at sessions.layout.sidePane.lastOpen. An empty Code document group is seeded with managed Files/Changes tabs after session restoration; Details-only protects those managed tabs.
 
 Mobile presentation, separate desktop lifecycle strategy classes, and the controller-selection contribution below remain intended contracts. Current behavior tests live in `contrib/layout/test/browser/desktopLayoutController.test.ts`, `test/browser/sessions-layout.test.ts`, and `test/smoke/areas/sessions/sessions-code.spec.ts`.
 
@@ -40,6 +40,7 @@ The Agents window keeps a single active selection but lets the user move between
 | Entry content visibility       | `sessions.layout.entryVisibility`   | Profile, per entry                                           |
 | Active entry's restore command | `sessions.layout.activeEntry`       | Workspace                                                    |
 | Creator workspace selection    | `sessions.creator.activeMode`       | Workspace, owned by Creator                                  |
+| Normal Code card tree          | `sessions.code.cardLayout`          | Profile, window geometry; excludes expansion and detachment  |
 | Last open Code side pane       | `sessions.layout.sidePane.lastOpen` | Profile                                                      |
 | Side-pane and panel visibility | Workbench part visibility           | Window; Editor/Details also restore per Chat in `chat` scope |
 
@@ -55,17 +56,17 @@ When more than one session is visible, per-session layout synchronization is sup
 
 On initial restoration, a saved working set is applied under editor-auto-visibility suppression. The restored workbench part visibility remains authoritative, so loading editors does not reveal a side pane the user had closed.
 
-## 3. Desktop side pane
+## 3. Desktop tools
 
-The side pane combines Editor content and the docked Auxiliary Bar detail. Its valid visibility states and transitions are specified in [DESKTOP.md](DESKTOP.md).
+DesktopWorkbenchLayout owns independent Editor, Auxiliary Bar and Panel leaves. In Code's default right column, Panel and Auxiliary Bar stack vertically; hiding one lets the other fill the column. Card headers may rearrange Terminal, Files and information relative to each other or the conversation/editor. Grid topology, sash sizes and explicit panel position remain window layout state; expansion and auxiliary-window detachment preserve the normal tree.
 
-The Sessions layout service owns entry visibility preferences. DesktopLayoutController owns the four Code side-pane transitions. DesktopDockedTabsCoordinator owns managed Changes and Files tabs; DesktopDetailPanelCoordinator selects Changes or Files detail from the active document editor.
+DesktopLayoutController restores document working sets and retains the existing combined side-pane command for compatibility. Files and Terminal toolbar actions independently open or hide their retained view containers. DesktopDetailPanelCoordinator changes Files/Changes content only on explicit opens. Document selection never implicitly hides Files; closing the last document hides only EditorPart. Managed tabs remain part of compatible saved document working sets, without owning tool visibility.
 
-The Auxiliary Bar is visible only with active container content. Unsupported document editors hide Details while their content is visible. Supported tab activation reveals the matching detail; a later explicit hide remains effective until another tab is selected. Hiding editor content keeps the tabs and selects the applicable details. The retained product group does not participate in the Code managed-tab empty-group check.
+SessionInfoRail reads the active Code chat model and workspace/SCM services. DesktopWorkbenchLayout mounts the active rail as a Grid leaf; profile UI state remembers its visibility, section expansion and normal Code card tree. Expansion and native-window detachment retain the base geometry without persisting their temporary hidden leaves. The rail creates no copy of conversation, workspace or context-usage business state.
 
 ## 4. Panel
 
-The desktop layout stores bottom-panel visibility with workbench part visibility. It remembers only the active panel view per session in `sessions.singlePane.layoutState`.
+The desktop layout stores panel visibility with workbench part visibility. It remembers only the active panel view per session in `sessions.singlePane.layoutState`.
 
 Panel tools are available in Code. Chat, Collaboration, Projects and Creator make Panel unavailable; returning to Code restores its remembered visibility. Its retained views and height survive these changes, and explicit panel commands reveal them again.
 

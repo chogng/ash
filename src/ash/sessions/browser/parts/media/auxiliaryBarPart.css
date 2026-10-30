@@ -1,3 +1,12 @@
 .ash-sessions-auxiliarybar {
 	background: var(--ash-sideBar-background);
 }
+
+.ash-sessions-tool-title {
+	min-width: 0;
+	padding-inline: var(--ash-spacing-size80);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ash-fontSize-body1);
+}

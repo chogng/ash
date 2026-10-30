@@ -1,3 +1,12 @@
+import type { ICodeCardLayout } from '../codeCardLayout.js';
+import { SessionInfoRail } from './sessionInfoRail.js';
+import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
+import { MenusRegistry, MenuId } from '../../../platform/actions/common/actions.js';
+import { ContextKeyExpr, RawContextKey, type IContextKey } from '../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
+import { Menus } from '../menus.js';
+import { localize2 } from '../../../nls.js';
 import { ISessionProviderScopeService } from '../agentHost/sessionProviderScopeService.js';
 import { ScopedSessionConversationPane } from './scopedSessionConversationPane.js';
 import { LoadingSkeleton } from '../ui/loadingSkeleton.js';
@@ -41,6 +50,7 @@ import type {
 } from '../../services/sessions/common/sessionsConversation.js';
 
 export interface SessionsPartOptions {
+	readonly codeCards?: ICodeCardLayout;
 	readonly sessionService: ISessionsManagementService;
 	readonly chatService: IChatService;
 	readonly contextMenuService: IContextMenuService;
@@ -70,6 +80,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private readonly empty: SessionsChatEmptyView;
 	private readonly entries = new Map<string, SessionView>();
 	private activeView: SessionView | undefined;
+	private readonly infoVisible: IContextKey<boolean>;
 	private mainKeys: readonly string[] = [];
 	private kind: SessionsConversationKind = 'code';
 	private visible = true;
@@ -92,8 +103,37 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		@IStorageService storageService: IStorageService,
 		@ISessionProviderScopeService private readonly providerScopes: ISessionProviderScopeService,
 		@IAuxiliaryWindowService private readonly auxiliaryWindows: IAuxiliaryWindowService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, 'sessions', themeService, storageService);
+		this.infoVisible = new RawContextKey('sessions.infoVisible', false).bindTo(contextKeys);
+		this._register(toDisposable(() => this.infoVisible.reset()));
+		if (options.codeCards) this._register(options.codeCards.onDidChangeCards(() => this.updateInfoContext()));
+		this._register(
+			CommandsRegistry.register('ash.sessions.toggleInfo', () => {
+				const pane = this.activeView?.activeChat;
+				if (pane instanceof CodeSessionConversationPane) pane.info.toggle();
+			}),
+		);
+		const infoCommand = {
+			id: 'ash.sessions.toggleInfo',
+			title: localize2({ bundle: 'ash', key: 'sessions.info.toggle' }, 'Toggle session information'),
+			icon: Lxicon.info,
+			toggled: ContextKeyExpr.equals('sessions.infoVisible', true),
+		};
+		this._register(
+			MenusRegistry.appendMenuItems(
+				[Menus.TitleBarRightLayout, MenuId.CommandPalette].map(id => ({
+					id,
+					item: {
+						command: infoCommand,
+						when: ContextKeyExpr.equals('sessions.toolsAvailable', true),
+						group: 'navigation',
+						order: 2,
+					},
+				})),
+			),
+		);
 		this.content = h(container.ownerDocument, 'section');
 		this.content.className = 'ash-sessions-chat-view';
 		this.contentDomNode.append(this.content);
@@ -375,6 +415,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			view.element.classList.toggle('last-slot', selection === selections.at(-1));
 		}
 		this.activeView = active ? this.entries.get(selectionKey(active)) : undefined;
+		this.updateInfoContext();
 		this.reconcileGrid();
 		for (const view of removed) {
 			this.popouts.get(view)?.resources.dispose();
@@ -392,6 +433,14 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	override layout(dimension: Dimension): void {
 		const bounds = this.content.getBoundingClientRect();
 		this.grid.layout(bounds.width || dimension.width, bounds.height || dimension.height);
+	}
+
+	private updateInfoContext(): void {
+		const pane = this.activeView?.activeChat;
+		this.options.codeCards?.setInformation(
+			pane instanceof CodeSessionConversationPane ? pane.info.element : undefined,
+		);
+		this.infoVisible.set(pane instanceof CodeSessionConversationPane && pane.info.visible);
 	}
 
 	private createPane(
@@ -415,9 +464,12 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					: { kind: 'untitled', session: selection.session },
 				options.sessionService,
 			);
+			const host = h(container.ownerDocument, 'div');
+			host.className = 'ash-code-conversation';
+			container.append(host);
 			const pane = scope.createInstance<ChatWidget<ChatWidgetModel>>(
 				ChatWidget,
-				container,
+				host,
 				panelId,
 				model,
 				options.createNewSession,
@@ -432,7 +484,9 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				(inputContainer: HTMLElement, delegate: ChatInputDelegate) =>
 					options.createInputPart(inputContainer, delegate, model, scope),
 			);
-			return new ScopedSessionConversationPane(pane, scope, model);
+			return new CodeSessionConversationPane(pane, scope, model, host, options.codeCards, () =>
+				this.updateInfoContext(),
+			);
 		} catch (error) {
 			scope.dispose();
 			throw error;
@@ -508,4 +562,28 @@ function selectionKey(selection: SessionsViewSelection): string {
 
 function sessionKey(sessionId: SessionId): string {
 	return `session:${sessionId}`;
+}
+
+class CodeSessionConversationPane extends ScopedSessionConversationPane {
+	readonly info: SessionInfoRail;
+	constructor(
+		pane: ISessionsConversationPane,
+		scope: IInstantiationService,
+		model: ChatWidgetModel,
+		private readonly host: HTMLElement,
+		cards: ICodeCardLayout | undefined,
+		changed: () => void,
+	) {
+		super(pane, scope, model);
+		this.info = this._register(scope.createInstance(SessionInfoRail, host, model, () => pane.focus(), cards));
+		this._register(this.info.onDidChange(changed));
+		this._register(toDisposable(() => host.remove()));
+	}
+	override get element(): HTMLElement {
+		return this.host;
+	}
+	override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		this.info.setVisible(visible);
+	}
 }

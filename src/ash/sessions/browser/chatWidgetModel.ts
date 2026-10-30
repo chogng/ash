@@ -249,6 +249,10 @@ export class ChatWidgetModel extends Disposable {
 		return this._thread?.goal ?? undefined;
 	}
 
+	get selectedSession(): ChatWidgetSelection {
+		return this.selection;
+	}
+
 	get sessionId(): SessionId | undefined {
 		return this.activeSession?.session.sessionId;
 	}

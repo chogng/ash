@@ -1,3 +1,5 @@
+import { CodeCardControls } from './codeCardControls.js';
+import type { ICodeCardLayout } from './codeCardLayout.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -807,19 +809,28 @@ export abstract class Workbench extends Disposable {
 		}));
 		updateActivityBarHelpHint();
 		const cowork = this._register(services.createInstance(CoworkPaneFactory));
-		sessionsPart = this.sessionsPart = this._register(services.createInstance(SessionsPart, this.domNode, {
-			sessionService: sessions,
-			chatService: routedChat,
-			contextMenuService: contextMenus,
-			contextViewService: contextViews,
-			accessibleViewService,
-			notifications: notificationService,
-			commandService,
-			createInputPart: (container, delegate, model, scope) => scope.createInstance(NewChatInputWidget, container, delegate, model),
-			createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { view.openNewSession(); }),
-			activateSelection: selection => view.activateSelection(selection),
-			createNewSession: () => { view.openNewSession(); },
-		} satisfies SessionsPartOptions));
+		sessionsPart = this.sessionsPart = this._register(
+			services.createInstance(SessionsPart, this.domNode, {
+				codeCards: layout.codeCards,
+				sessionService: sessions,
+				chatService: routedChat,
+				contextMenuService: contextMenus,
+				contextViewService: contextViews,
+				accessibleViewService,
+				notifications: notificationService,
+				commandService,
+				createInputPart: (container, delegate, model, scope) =>
+					scope.createInstance(NewChatInputWidget, container, delegate, model),
+				createCoworkPane: (container, panelId, selection) =>
+					cowork.createPane(container, panelId, selection, () => {
+						view.openNewSession();
+					}),
+				activateSelection: selection => view.activateSelection(selection),
+				createNewSession: () => {
+					view.openNewSession();
+				},
+			} satisfies SessionsPartOptions),
+		);
 		services.registerInstance(ISessionsConversationService, sessionsPart);
 		const updateSessionsPart = (): void => {
 			const selection = view.getSelection();
@@ -935,6 +946,7 @@ export abstract class Workbench extends Disposable {
 			['customview', customViewPart],
 		]);
 		layout.createWorkbenchLayout(parts);
+		if (layout.codeCards) this._register(services.createInstance(CodeCardControls, layout.codeCards, parts));
 		setActivityBarLocation(activityBarLocation);
 		const customViews = services.get(ICustomViewService);
 		this._register(autorun(reader => {
@@ -1034,6 +1046,7 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 }
 
 export interface IAgentWorkbenchLayoutService extends ILayoutService {
+	readonly codeCards?: ICodeCardLayout;
 	getSideBarPosition(): Position;
 	getPanelPosition(): Position;
 	setPanelPosition(position: Position): void;

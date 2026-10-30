@@ -1,3 +1,4 @@
+import { SESSIONS_FILES_CONTAINER_ID } from '../../files/browser/files.contribution.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { localize } from '../../../../nls.js';
@@ -136,13 +137,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 		await this.detailPanel.update(false);
 	}
 	public async hideEditor(): Promise<void> {
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) return;
 		this.setDocumentsVisible(false);
-		this.layout.showPart('auxiliarybar');
-		if (this.sessions.activeSelection) { await this.tabs.reconcile(this.sessions.activeSelection, true); }
-		if (this.isDisposed) { return; }
-		await this.detailPanel.update(true);
-		if (!this.isDisposed) { this.layout.focus(); }
+		this.layout.focus();
 	}
 	public async showEditor(): Promise<void> {
 		if (this.isDisposed) { return; }
@@ -153,14 +150,22 @@ export class DesktopLayoutController extends BaseLayoutController {
 		await this.detailPanel.update(false);
 		if (!this.isDisposed) { this.editor.focus(); }
 	}
+	public async toggleFiles(): Promise<void> {
+		if (this.isDisposed) return;
+		if (
+			this.layout.isPartVisible('auxiliarybar') &&
+			this.panes.getActivePaneComposite(ViewContainerLocation.AuxiliaryBar)?.getId() ===
+			SESSIONS_FILES_CONTAINER_ID
+		)
+			await this.toggleDetails();
+		else await this.openFiles();
+	}
 	public async toggleDetails(): Promise<void> {
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) return;
 		if (this.layout.isPartVisible('auxiliarybar')) {
-			if (!this.documentsVisible) { await this.showEditor(); }
-			if (this.isDisposed) { return; }
 			this.layout.hidePart('auxiliarybar');
-		}
-		else { this.editor.activateGroup(this.documentGroups[0]!.id); await this.detailPanel.update(true); }
+			this.layout.focus();
+		} else await this.detailPanel.openFiles();
 	}
 	public async toggleSidePane(): Promise<void> {
 		if (this.isDisposed) { return; }
@@ -179,12 +184,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 
 	public async openFiles(): Promise<void> {
-		if (this.isDisposed) { return; }
-		await this.showEditor();
-		if (this.isDisposed) { return; }
-		await this.tabs.openFiles();
-		if (this.isDisposed) { return; }
-		await this.detailPanel.update(true);
+		if (!this.isDisposed) await this.detailPanel.openFiles();
 	}
 
 	public async openChanges(): Promise<void> {
@@ -192,8 +192,12 @@ export class DesktopLayoutController extends BaseLayoutController {
 		await this.showEditor();
 		if (this.isDisposed) { return; }
 		const selection = this.sessions.activeSelection;
-		if (selection) { await this.tabs.openChanges(selection); }
-		if (this.isDisposed) { return; }
-		await this.detailPanel.update(true);
+		if (selection) {
+			await this.tabs.openChanges(selection);
+		}
+		if (this.isDisposed) {
+			return;
+		}
+		await this.detailPanel.openChanges();
 	}
 }

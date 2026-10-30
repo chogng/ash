@@ -66,3 +66,24 @@
 	border-top: 0;
 	border-left: var(--ash-strokeThickness) solid var(--ash-border);
 }
+
+.ash-sessions-window
+	.ash-sessions-code-tools
+	.ash-workbench-part.ash-sessions-tool-card {
+	overflow: hidden;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: 0 var(--ash-spacing-size20) var(--ash-spacing-size40)
+		var(--ash-widget-shadow);
+}
+
+.ash-sessions-window .ash-sessions-code-tools .ash-workbench-sessions {
+	border-right: 0;
+}
+
+:is(.hc-black, .hc-light)
+	.ash-sessions-code-tools
+	.ash-workbench-part.ash-sessions-tool-card {
+	box-shadow: none;
+}

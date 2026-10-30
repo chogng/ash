@@ -21,7 +21,7 @@ Chat and Code are workspace shells selected by the titlebar switcher. Entry desc
 | Agent conversations               | `SessionsPart`     | Retained session views and their independent conversation grid                           |
 | Editing and central product pages | `EditorPart`       | `EditorInput` and `EditorPane` opened through `IEditorService`                           |
 | Right properties and detail views | `AuxiliaryBarPart` | Registered view containers and views for the current mode or editor                      |
-| Bottom tools                      | `PanelPart`        | Registered tool view containers and views                                                |
+| Optional tools                    | `PanelPart`        | Registered tool view containers and views                                                |
 
 The Agents Window has no Banner Part or reserved notice row. The Sessions workspace contribution presents restricted directory permissions only in the Code workspace, naming the window workspace and opening its existing Workspace Trust editor. Connection recovery remains available through a title bar action in every workspace. These controls read the owning services and do not own another permission or connection model. A terminal connection failure offers a sticky global notification with the existing Reload Window action; startup failures retain the host's recovery surface. Status changes do not move the content or enter saved session layouts. The regular IDE retains its Banner Part and notice producers.
 
@@ -109,7 +109,7 @@ Sessions supports multiple intended layout families over the shared Parts. Share
 | Layout controllers and strategies | Restore session document working sets and coordinate Code Editor/Details behavior                      |
 | Sessions services and Parts       | Own conversation identity, selection and content independently of the selected window layout           |
 
-The desktop detail layout illustrates why this boundary matters: Auxiliary Bar content sits inside the Editor's grid node below one shared tab strip. The node can remain visible while editor content is hidden, and its width can include both editor content and Details. The desktop layout must therefore distinguish node visibility and size from editor-content visibility and size. A layout with independently placed Parts must own its own mapping without inheriting these desktop assumptions.
+In the Code composition, PanelPart and AuxiliaryBarPart are independent retained tools. At a vertical panel position they share a resizable column, with Terminal above Files; EditorPart has its own document tabs alongside the conversation. Product-editor compositions keep independent properties beside their editor. DesktopWorkbenchLayout owns rebuilding this topology while preserving Part instances, focus and saved geometry.
 
 Layout family and runtime are separate choices. Browser and Electron windows can use the same desktop layout. Chat, Code, Collaboration, Projects and Creator are compositions within that layout; changing pages does not by itself require another Workbench subclass. A separate implementation is justified by different Part containment, geometry or lifecycle, not by a page name or file length. Common mechanisms remain shared, and layout variants consume the same Sessions services without creating another conversation or selection model.
 
@@ -217,7 +217,7 @@ Session geometry does not determine Editor, Details, or other side-pane visibili
 
 All non-phone Agents windows use the desktop detail layout. Phone viewports use the dedicated mobile presentation.
 
-The Editor and Auxiliary Bar compose one side pane next to the active session. Editor tabs choose either editor content or a details view while the layout coordinators preserve one coherent visibility model.
+Editor, Files and Terminal have independent visibility. Opening a document reveals EditorPart without closing Files; closing the last document hides only the editor. Explicit tool actions select their view containers. Session information reads the active Code chat model and workspace services. DesktopWorkbenchLayout mounts it as a Sessions-owned Grid leaf alongside retained Terminal and Files Parts. Their normal card tree is persistent; expansion and native auxiliary-window detachment are transient presentations of the same content. Header dragging and keyboard arrangement both mutate that Grid.
 
 The Sessions EditorPart reuses the shared editor-group capabilities. It retains a locked product-page group and separate session document groups. Mode changes select their visibility; restoring session document groups keeps the product group, panes and documents alive. The independent conversation grid remains in SessionsPart.
 
