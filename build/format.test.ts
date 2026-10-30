@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { test } from 'node:test';
+import { format as formatSource } from './format.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const bun = join(repositoryRoot, 'node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun');
@@ -82,6 +84,161 @@ test('TypeScript formats nested call chains to stable output in one pass', () =>
 	const formatted = format('test/example.ts', input);
 	assert.notEqual(formatted, input);
 	assert.equal(format('test/example.ts', formatted), formatted);
+});
+
+test('batched whitespace edits retain semicolons at replaced whitespace and Unicode offsets', () => {
+	const input = [
+		'const value=1   ',
+		'const label="中文🙂"  ',
+		'consume(',
+		' value,',
+		' label,',
+		')  ',
+		'',
+	].join('\n');
+	const expected = [
+		'const value = 1;',
+		'const label = "中文🙂";',
+		'consume(',
+		'\tvalue,',
+		'\tlabel,',
+		');',
+		'',
+	].join('\n');
+	assert.equal(formatSource('test/example.ts', input), expected);
+	assert.equal(formatSource('test/example.ts', expected), expected);
+	assert.equal(formatSource('test/example.ts', ''), '');
+});
+
+test('large CLI batches match serial formatting with snapshot settings in Node and Bun', t => {
+	const directory = mkdtempSync(join(repositoryRoot, 'test/.formatter-test-'));
+	const snapshot = mkdtempSync(join(tmpdir(), 'ash format snapshot '));
+	t.after(() => rmSync(directory, { recursive: true, force: true }));
+	t.after(() => rmSync(snapshot, { recursive: true, force: true }));
+	const options = {
+		...JSON.parse(readFileSync(join(repositoryRoot, 'tsfmt.json'), 'utf8')),
+		convertTabsToSpaces: true,
+		indentSize: 2,
+		tabSize: 2,
+	};
+	writeFileSync(join(snapshot, 'tsfmt.json'), JSON.stringify(options));
+	const inputs = [
+		[
+			'ts',
+			[
+				'import type { One, Two } from "./types.js"',
+				'const settings={',
+				' title: "中文🙂",',
+				' nested: { enabled:true },',
+				'}',
+				'',
+			].join('\n'),
+		],
+		[
+			'js',
+			[
+				'const run=(value)=>{',
+				' console.log(',
+				' value,',
+				' )  ',
+				'}',
+				'',
+			].join('\n'),
+		],
+		[
+			'tsx',
+			[
+				'export const View=()=> (',
+				' <div title="中文🙂">',
+				' <span>{value}</span>',
+				' </div>',
+				')',
+				'',
+			].join('\n'),
+		],
+		['jsx', 'export const View=()=> <div title="中文🙂"/>\n'],
+		[
+			'mts',
+			[
+				'export const values=[',
+				' 1,',
+				' 2,',
+				']',
+				'',
+			].join('\n'),
+		],
+		['cts', 'const value=1   \nconst label="中文🙂"  \n'],
+		['mjs', 'export const compact={id:"on", label:"On"}\n'],
+		[
+			'cjs',
+			[
+				'module.exports={',
+				' value: true,',
+				'}',
+				'',
+			].join('\n'),
+		],
+	];
+	const files = Array.from({ length: 500 }, (_, index) => {
+		const [extension, body] = inputs[index % inputs.length];
+		const file = join(directory, `source [${index.toString().padStart(3, '0')}].${extension}`);
+		const name = relative(repositoryRoot, file);
+		const target = join(snapshot, name);
+		mkdirSync(dirname(target), { recursive: true });
+		writeFileSync(file, 'const workingTree = "untouched";\n');
+		const input = `// snapshot ${index}\n${body}`;
+		return {
+			file,
+			name,
+			target,
+			input,
+			expected: formatSource(target, input, options),
+		};
+	});
+	const scope = relative(repositoryRoot, directory);
+	for (const runtime of [process.execPath, bun]) {
+		for (const { target, input } of files) {
+			writeFileSync(target, input);
+		}
+		const invoke = (mode: string): ReturnType<typeof spawnSync> => spawnSync(
+			runtime,
+			[join(repositoryRoot, 'build/format.ts'), mode, '--content-root', snapshot, scope],
+			{
+				cwd: repositoryRoot,
+				encoding: 'utf8',
+				timeout: 30_000,
+			},
+		);
+		const checked = invoke('--check');
+		assert.equal(checked.status, 1, String(checked.stdout) + String(checked.stderr));
+		assert.match(String(checked.stdout), /checked 500 TypeScript\/JavaScript files; 500 changed\./);
+		const diagnostics = files
+			.map(({ name }) => `File not formatted: ${name.replaceAll('\\', '/')}`)
+			.sort()
+			.join('\n');
+		assert.equal(String(checked.stderr), diagnostics + '\n');
+		for (const { target, input } of files) {
+			assert.equal(readFileSync(target, 'utf8'), input);
+		}
+		const fixed = invoke('--write');
+		assert.equal(fixed.status, 0, String(fixed.stdout) + String(fixed.stderr));
+		for (const { target, expected, file } of files) {
+			assert.equal(readFileSync(target, 'utf8'), expected, target);
+			assert.equal(readFileSync(file, 'utf8'), 'const workingTree = "untouched";\n');
+		}
+		const rechecked = invoke('--check');
+		assert.equal(rechecked.status, 0, String(rechecked.stdout) + String(rechecked.stderr));
+		assert.match(String(rechecked.stdout), /checked 500 TypeScript\/JavaScript files; 0 changed\./);
+		// A parser failure in one worker must fail the check and release the other workers.
+		const invalid = 'const value = ' + '('.repeat(10_000) + '1' + ')'.repeat(10_000) + ';\n';
+		writeFileSync(files[0].target, invalid);
+		const failed = invoke('--check');
+		assert.equal(failed.error, undefined);
+		assert.equal(failed.status, 1, String(failed.stdout) + String(failed.stderr));
+		assert.match(String(failed.stderr), /call stack|stack overflow/i);
+		assert.doesNotMatch(String(failed.stdout), /TypeScript: checked/);
+		assert.equal(readFileSync(files[0].target, 'utf8'), invalid);
+	}
 });
 
 test('the formatting CLI checks TypeScript SDK and extension author sources', t => {

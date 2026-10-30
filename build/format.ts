@@ -1,6 +1,8 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { isMainThread, parentPort, Worker, workerData } from 'node:worker_threads';
 import ts from 'typescript';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -41,10 +43,18 @@ export function format(
 		// Apply replacements before insertions at the same offset so an inserted semicolon cannot be erased.
 		const edits = service.getFormattingEditsForDocument(absolutePath, options)
 			.sort((left, right) => right.span.start - left.span.start || right.span.length - left.span.length);
-		for (const edit of edits) {
-			text = text.slice(0, edit.span.start) + edit.newText + text.slice(edit.span.start + edit.span.length);
+		if (edits.length === 0) {
+			return text;
 		}
-		return text;
+		// Collect unchanged spans once instead of copying the entire document for every edit.
+		const pieces: string[] = [];
+		let end = text.length;
+		for (const edit of edits) {
+			pieces.push(text.slice(edit.span.start + edit.span.length, end), edit.newText);
+			end = edit.span.start;
+		}
+		pieces.push(text.slice(0, end));
+		return pieces.reverse().join('');
 	} finally {
 		service.dispose();
 	}
@@ -94,7 +104,73 @@ function sourceFiles(paths: readonly string[], contentRoot: string): string[] {
 	return [...selected].sort();
 }
 
-function main(args: readonly string[]): number {
+interface FormattingJob {
+	files: readonly string[];
+	contentRoot: string;
+	mode: '--check' | '--write';
+	options: ts.FormatCodeSettings;
+}
+
+function formatFiles({ files, contentRoot, mode, options }: FormattingJob): string[] {
+	const changed: string[] = [];
+	for (const file of files) {
+		const absolutePath = resolve(contentRoot, file);
+		const original = readFileSync(absolutePath, 'utf8');
+		const formatted = format(absolutePath, original, options);
+		if (formatted !== original) {
+			changed.push(file);
+			if (mode === '--write') {
+				writeFileSync(absolutePath, formatted, 'utf8');
+			}
+		}
+	}
+	return changed;
+}
+
+async function formatBatch(job: FormattingJob): Promise<string[]> {
+	// Amortize loading TypeScript in each worker; editor buffers and small checks stay in-process.
+	const count = Math.min(4, availableParallelism(), Math.floor(job.files.length / 250));
+	if (count < 2) {
+		return formatFiles(job);
+	}
+	const batches = Array.from({ length: count }, () => [] as string[]);
+	job.files.forEach((file, index) => batches[index % count].push(file));
+	const workers: Worker[] = [];
+	try {
+		const results = await Promise.all(
+			batches.map(files => new Promise<string[]>((resolve, reject) => {
+				const worker = new Worker(new URL(import.meta.url), {
+					workerData: {
+						...job,
+						files,
+						formatter: import.meta.url,
+					},
+				});
+				workers.push(worker);
+				worker.once('message', (changed: unknown) => {
+					if (
+						!Array.isArray(changed) ||
+						!changed.every(file => typeof file === 'string' && files.includes(file))
+					) {
+						reject(new Error('Invalid TypeScript formatter worker result.'));
+						return;
+					}
+					resolve(changed);
+				});
+				worker.once('error', reject);
+				worker.once('exit', code => {
+					reject(new Error(`TypeScript formatter worker exited before returning results (code ${code}).`));
+				});
+			})),
+		);
+		return results.flat();
+	} finally {
+		// Stop remaining work on failure and release each worker's compiler and syntax tree.
+		await Promise.all(workers.map(worker => worker.terminate()));
+	}
+}
+
+async function main(args: readonly string[]): Promise<number> {
 	const [mode, ...remaining] = args;
 	if (mode === '--stdin-filepath') {
 		if (remaining.length !== 1 || !remaining[0]) {
@@ -138,27 +214,23 @@ function main(args: readonly string[]): number {
 		throw new Error('No first-party TypeScript or JavaScript sources found.');
 	}
 	const options: ts.FormatCodeSettings = JSON.parse(readFileSync(resolve(contentRoot, 'tsfmt.json'), 'utf8'));
-	let changes = 0;
-	for (const file of files) {
-		const absolutePath = resolve(contentRoot, file);
-		const original = readFileSync(absolutePath, 'utf8');
-		const formatted = format(absolutePath, original, options);
-		if (formatted !== original) {
-			changes++;
-			if (mode === '--check') {
-				console.error(`File not formatted: ${file}`);
-			} else {
-				writeFileSync(absolutePath, formatted, 'utf8');
-			}
+	const changed = await formatBatch({ files, contentRoot, mode, options });
+	if (mode === '--check') {
+		for (const file of changed.sort()) {
+			console.error(`File not formatted: ${file}`);
 		}
 	}
-	console.log(`TypeScript: ${mode === '--check' ? 'checked' : 'formatted'} ${files.length} TypeScript/JavaScript files; ${changes} changed.`);
-	return mode === '--check' && changes > 0 ? 1 : 0;
+	console.log(`TypeScript: ${mode === '--check' ? 'checked' : 'formatted'} ${files.length} TypeScript/JavaScript files; ${changed.length} changed.`);
+	return mode === '--check' && changed.length > 0 ? 1 : 0;
 }
 
-if (import.meta.main) {
+// Bun workers do not set import.meta.main. The module identity also keeps imports
+// from unrelated build workers from accidentally starting a formatter job.
+if (!isMainThread && workerData?.formatter === import.meta.url) {
+	parentPort!.postMessage(formatFiles(workerData as FormattingJob));
+} else if (import.meta.main) {
 	try {
-		process.exitCode = main(process.argv.slice(2));
+		process.exitCode = await main(process.argv.slice(2));
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : String(error));
 		process.exitCode = 1;

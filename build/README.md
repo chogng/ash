@@ -100,6 +100,9 @@ TypeScript and JavaScript use the TypeScript formatter with `tsfmt.json`, retain
 author-selected line breaks and quote style while normalizing indentation, spaces
 and semicolons. Generated TypeScript uses the same formatter. Configuration and
 documentation use the pinned `bun fmt` with `.prettierrc.toml` and `.editorconfig`.
+TS/JS batches use at most four workers, with at least 250 files per worker;
+smaller selections and editor buffers run in-process. Workers use the same
+formatter and settings, and check mode remains read-only.
 The VS Code buffer commands preserve ignored inputs; Markdown code fences are
 left to their owning language formatter.
 VS Code uses the recommended Simple LSP Client extension to invoke the
