@@ -32,7 +32,7 @@ suite('DesktopDockedTabsCoordinator', () => {
 		using fixture = new TabsFixture();
 		const file = { resource: URI.file('/sample.ts'), label: 'sample.ts' };
 		fixture.documents.inputs.push(new EmptyFileEditorInput(), file);
-		await fixture.coordinator.removeFilesLandingTab();
+		await fixture.coordinator.removeRestoredDetailTabs();
 		await fixture.coordinator.reconcile(fixture.selection, true);
 		assert.deepEqual(fixture.documents.inputs, [file]);
 		assert.deepEqual(fixture.pages.inputs.map(input => input.resource.scheme), ['ash-trace']);
@@ -42,6 +42,7 @@ suite('DesktopDockedTabsCoordinator', () => {
 	test('retained Changes tabs still follow the selected session and editor presentation', async () => {
 		using fixture = new TabsFixture();
 		fixture.documents.inputs.push(new SessionChangesEditorInput(selection('outgoing')));
+		await fixture.coordinator.removeRestoredDetailTabs();
 		await fixture.coordinator.reconcile(fixture.selection, true);
 		assert.equal(fixture.documents.inputs[0]?.resource.path, '/current');
 		assert.equal(fixture.documents.inputs[0]?.capabilities, EditorInputCapabilities.CannotClose | EditorInputCapabilities.ExcludeFromEditorLimit);
@@ -55,7 +56,7 @@ suite('DesktopDockedTabsCoordinator', () => {
 		fixture.documents.inputs.push(new EmptyFileEditorInput(), new EmptyFileEditorInput());
 		const gate = new DeferredPromise<void>();
 		fixture.closeGate = gate.p;
-		const pending = fixture.coordinator.removeFilesLandingTab();
+		const pending = fixture.coordinator.removeRestoredDetailTabs();
 		await fixture.closeStarted.p;
 		fixture.coordinator.dispose();
 		await gate.complete();

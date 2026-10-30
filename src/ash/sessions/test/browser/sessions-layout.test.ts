@@ -850,12 +850,13 @@ test('Code cards move in the Grid and restore exact dimensions after expanding e
 		layout.setInformation(info);
 		layout.toggleInformation();
 		layout.showPart('panel');
+		layout.showPart('editor');
 		layout.moveCard('info', 'auxiliarybar', 'down');
 		layout.moveCard('auxiliarybar', 'panel', 'up');
 		layout.resizeCard('auxiliarybar', 0, 60);
 		const terminal = layout.getPartSize('panel');
 		const files = layout.getPartSize('auxiliarybar');
-		for (const id of ['panel', 'auxiliarybar', 'info'] as const) {
+		for (const id of ['panel', 'auxiliarybar', 'info', 'editor'] as const) {
 			layout.expandCard(id);
 			assert.equal(layout.expandedCard, id);
 			assert.equal(layout.isPartVisible('sessions'), false);

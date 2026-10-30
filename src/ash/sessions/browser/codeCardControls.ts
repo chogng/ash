@@ -25,6 +25,7 @@ import {
 import type { Part } from '../../workbench/browser/part.js';
 import type { SessionsPartId } from '../common/layoutConstants.js';
 import type { CodeCardId, CodeCardTarget, ICodeCardLayout } from './codeCardLayout.js';
+import { EditorPart } from './parts/editorPart.js';
 import './media/codeCards.css';
 
 const names = () => ({
@@ -54,7 +55,7 @@ export class CodeCardControls extends Disposable {
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 	) {
 		super();
-		for (const id of ['panel', 'auxiliarybar', 'info'] as const) {
+		for (const id of ['panel', 'auxiliarybar', 'info', 'editor'] as const) {
 			const element = this.element(id);
 			const header =
 				id === 'info'
@@ -152,6 +153,8 @@ export class CodeCardControls extends Disposable {
 		);
 	}
 	private render(): void {
+		const editor = this.parts.get('editor');
+		if (editor instanceof EditorPart) { editor.setCardPresentation(this.layout.active); }
 		for (const [id, controls] of this.controls) {
 			controls.hidden = !this.layout.active;
 			this.element(id).classList.toggle('ash-code-card-managed', this.layout.active);

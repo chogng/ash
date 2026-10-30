@@ -122,3 +122,7 @@
 :is(.hc-black, .hc-light) .ash-code-information-card {
 	box-shadow: none;
 }
+
+.ash-code-card-header[hidden] {
+	display: none;
+}

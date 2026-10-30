@@ -87,8 +87,8 @@ export class DesktopLayoutController extends BaseLayoutController {
 	public async activate(revealDetails: boolean): Promise<void> {
 		await this.whenSettled();
 		if (this.isDisposed) { return; }
-		// Old working sets may still contain the Files landing tab. Files now lives in Details.
-		await this.tabs.removeFilesLandingTab();
+		// Restored detail tabs must not leave an empty editor column before a conversation is selected.
+		await this.tabs.removeRestoredDetailTabs();
 		if (this.isDisposed) { return; }
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 		if (this.documentGroups.every(group => group.inputs.length === 0)) { this.layout.hidePart('editor'); }
@@ -135,7 +135,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 	protected override async onSessionRestored(selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> {
 		if (!this.context.isDocumentContent) { return; }
-		await this.tabs.removeFilesLandingTab();
+		await this.tabs.removeRestoredDetailTabs();
 		if (this.isDisposed) { return; }
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 		// Switching working sets preserves shared Editor visibility, even when the incoming session has no documents.
@@ -196,15 +196,11 @@ export class DesktopLayoutController extends BaseLayoutController {
 
 	public async openChanges(): Promise<void> {
 		if (this.isDisposed) { return; }
+		// Reloading the retained pane briefly removes its visible editor; this explicit open owns visibility.
+		using suppression = this.suppressEditorAutoVisibility();
 		await this.showEditor();
 		if (this.isDisposed) { return; }
-		const selection = this.sessions.activeSelection;
-		if (selection) {
-			await this.tabs.openChanges(selection);
-		}
-		if (this.isDisposed) {
-			return;
-		}
-		await this.detailPanel.openChanges();
+		await this.tabs.openChanges();
+		if (!this.isDisposed) { this.setDocumentsVisible(true); }
 	}
 }

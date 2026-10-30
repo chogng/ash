@@ -11,14 +11,11 @@ export class DesktopDetailPanelCoordinator {
 	}
 
 	public async update(reveal: boolean): Promise<void> {
-		if (reveal) await this.openFiles();
+		if (reveal || this.views.isViewContainerActive(CHANGES_VIEW_CONTAINER_ID)) await this.openFiles();
 	}
 
 	public async openFiles(): Promise<void> {
 		await this.views.openViewContainer(SESSIONS_FILES_CONTAINER_ID);
 	}
 
-	public async openChanges(): Promise<void> {
-		await this.views.openViewContainer(CHANGES_VIEW_CONTAINER_ID);
-	}
 }

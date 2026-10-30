@@ -140,6 +140,17 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					},
 				},
 				{
+					id: Menus.TitleBarRightLayout,
+					item: {
+						command: {
+							id: 'workbench.agentSessions.action.viewChanges',
+							title: localize2({ bundle: 'ash', key: 'sessions.changes.title' }, 'Changes'),
+							icon: Lxicon.diff,
+						},
+						when: codeWhen, group: 'navigation', order: 5,
+					},
+				},
+				{
 					id: MenuId.EditorTitle,
 					item: {
 						title: localize2({ bundle: 'ash', key: 'sessions.layout.addTab' }, 'Add tab'),

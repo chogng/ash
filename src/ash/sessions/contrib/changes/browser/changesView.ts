@@ -89,16 +89,20 @@ export class ChangesViewPane extends ViewPane {
 		this.statusDomNode = h(container.ownerDocument, 'p');
 		this.statusDomNode.setAttribute('role', 'status');
 		this.contentElement.append(this.statusDomNode);
-		this.review = this._register(new Button(this.contentElement, {
+		const actions = h(container.ownerDocument, 'div', { className: 'ash-sessions-changes-primary-actions' });
+		this.contentElement.append(actions);
+		this.review = this._register(new Button(actions, {
 			...defaultButtonStyles,
+			size: 'small',
 			label: localize('sessions.changes.review', 'Review all changes'),
 			onClick: () => {
 				const epoch = this.ownerEpoch;
 				void this.openReview().catch(error => this.reportOperationError(error, epoch));
 			},
 		}));
-		this.preview = this._register(new Button(this.contentElement, {
+		this.preview = this._register(new Button(actions, {
 			...defaultButtonStyles,
+			size: 'small',
 			label: localize('sessions.changes.previewSelected', 'Preview selected changes'),
 			onClick: () => {
 				const epoch = this.ownerEpoch;
@@ -107,14 +111,16 @@ export class ChangesViewPane extends ViewPane {
 		}));
 		this.preview.enabled = false;
 		this.review.enabled = false;
-		this.retry = this._register(new Button(this.contentElement, {
+		this.retry = this._register(new Button(actions, {
 			...defaultButtonStyles,
+			size: 'small',
 			label: localize('sessions.changes.retry', 'Retry loading changes'),
 			onClick: () => { void this.refresh(); },
 		}));
-		this.retry.domNode.hidden = true;
-		this.createPullRequest = this._register(new Button(this.contentElement, {
+		this.retry.hidden = true;
+		this.createPullRequest = this._register(new Button(actions, {
 			...defaultButtonStyles,
+			size: 'small',
 			label: localize('sessions.changes.createPR', 'Create pull request'),
 			onClick: () => {
 				const view = this.instantiation.createInstance(CreatePullRequestContextView);
@@ -124,7 +130,7 @@ export class ChangesViewPane extends ViewPane {
 		}));
 		const updatePullRequest = (): void => {
 			const selected = this.sessions.activeSelection;
-			this.createPullRequest.domNode.hidden = selected?.kind !== 'session' || !selected.active.session.workspace;
+			this.createPullRequest.hidden = selected?.kind !== 'session' || !selected.active.session.workspace;
 		};
 		this._register(sessions.onDidChange(updatePullRequest));
 		updatePullRequest();
@@ -147,11 +153,13 @@ export class ChangesViewPane extends ViewPane {
 		controls.append(this.changesetPicker, this.modePicker);
 		this.markReviewed = this._register(new Button(controls, {
 			...defaultButtonStyles,
+			size: 'small',
 			label: localize('sessions.changes.markReviewed', 'Mark reviewed'),
 			onClick: () => this.setReviewState(true),
 		}));
 		this.markUnread = this._register(new Button(controls, {
 			...defaultButtonStyles,
+			size: 'small',
 			label: localize('sessions.changes.markUnread', 'Mark unreviewed'),
 			onClick: () => this.setReviewState(false),
 		}));
@@ -365,7 +373,7 @@ export class ChangesViewPane extends ViewPane {
 		this.updatePreviewSelection();
 		this.review.enabled = false;
 		this.preview.enabled = false;
-		this.retry.domNode.hidden = true;
+		this.retry.hidden = true;
 		this.tree.domNode.setAttribute('aria-busy', 'true');
 		const selection = this.sessions.activeSelection;
 		const resource = selection ? new SessionChangesEditorInput(selection).resource : undefined;
@@ -427,7 +435,7 @@ export class ChangesViewPane extends ViewPane {
 			this.rows = [];
 			this.tree.setChildren([]);
 			this.statistics.set(undefined, undefined);
-			this.retry.domNode.hidden = false;
+			this.retry.hidden = false;
 			this.statusDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', error instanceof Error ? error.message : String(error));
 		} finally {
 			if (!this.isDisposed && request === this.request) {
@@ -435,7 +443,7 @@ export class ChangesViewPane extends ViewPane {
 				this.loading = false;
 				this.skeleton.setVisible(false);
 				this.statusDomNode.hidden = false;
-				this.changesetPicker.disabled = !this.retry.domNode.hidden;
+				this.changesetPicker.disabled = !this.retry.hidden;
 				this.updatePreviewSelection();
 				this.tree.domNode.removeAttribute('aria-busy');
 			}

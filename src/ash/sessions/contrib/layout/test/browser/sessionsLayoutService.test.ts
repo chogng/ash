@@ -42,6 +42,7 @@ import { ISessionsConversationService } from '../../../../services/sessions/comm
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayoutService.js';
 import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
+import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 
 suite('SessionsLayoutService lifecycle and focus', () => {
@@ -193,9 +194,9 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.focused, 'details');
 	});
 
-	test('Code drops a restored Files landing tab and stale editor visibility without an active session', async () => {
+	test('Code drops restored detail tabs and stale editor visibility without an active session', async () => {
 		using fixture = new EntryFixture({ code: { details: true, panel: false, documents: true } });
-		fixture.documentInputs.push(new EmptyFileEditorInput());
+		fixture.documentInputs.push(new EmptyFileEditorInput(), new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old')));
 		await fixture.service.openEntry(documentEntry);
 		assert.deepEqual(fixture.documentInputs, []);
 		assert.equal(fixture.visible.get('editor'), false);
@@ -205,6 +206,16 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		await fixture.service.openEntry(documentEntry);
 		assert.deepEqual(fixture.documentInputs, []);
 		assert.equal(fixture.visible.get('editor'), false);
+	});
+
+	test('Code retains an open document when removing an unowned restored Changes tab', async () => {
+		using fixture = new EntryFixture({ code: { details: true, panel: false, documents: true } });
+		const file = { resource: URI.file('/workspace/sample.ts'), label: 'sample.ts' };
+		fixture.documentInputs.push(new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old')), file);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.documentInputs, [file]);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.visible.get('auxiliarybar'), true);
 	});
 
 	test('background entry restoration preserves the Custom View, focus and activity selection', async () => {
@@ -424,6 +435,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(IOutputService, { onDidRequestShowChannel: this.outputReveal.event } as unknown as IOutputService);
 		this.services.registerInstance(IViewsService, {
 			onDidChangeViewContainerVisibility: this.viewVisibility.event,
+			isViewContainerActive: (id: string) => this.sidebarId === id,
 			getVisibleViewContainer: () => this.sidebarId ? { id: this.sidebarId, title: 'Conversations', location: ViewContainerLocation.Sidebar } : null,
 			openViewContainer: async (id: string, focus?: boolean) => {
 				this.opened.push({ id, focus });

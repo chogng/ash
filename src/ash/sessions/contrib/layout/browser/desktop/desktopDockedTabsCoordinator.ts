@@ -1,3 +1,4 @@
+import { URI } from '../../../../../base/common/uri.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
@@ -45,19 +46,23 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 		}
 	}
 
-	public async removeFilesLandingTab(): Promise<void> {
+	public async removeRestoredDetailTabs(): Promise<void> {
 		if (this.isDisposed) { return; }
 		for (const group of this.documentGroups) {
-			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-sessions-files')) {
+			// Files lives in Details; a Changes tab needs a selected conversation to restore against.
+			const hasConversation = this.sessions.activeSelection?.kind === 'session';
+			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-sessions-files' || !hasConversation && input.resource.scheme === 'ash-session-changes')) {
 				await group.closeEditor(input, { skipConfirmation: true, reason: 'reset' });
 				if (this.isDisposed) { return; }
 			}
 		}
 	}
 
-	public async openChanges(selection: SessionsViewSelection): Promise<void> {
-		if (!this.isCurrent(selection)) { return; }
-		await this.changes.openChangesEditor(new SessionChangesEditorInput(selection).sessionResource, { changesetSelection: { kind: 'id', id: undefined } });
+	public async openChanges(): Promise<void> {
+		if (this.isDisposed) { return; }
+		const selection = this.sessions.activeSelection;
+		const resource = selection ? new SessionChangesEditorInput(selection).sessionResource : URI.parse('ash-session:/draft/empty');
+		await this.changes.openChangesEditor(resource, { changesetSelection: { kind: 'id', id: undefined } });
 	}
 
 	public isManaged(input: IResourceEditorInput): boolean {

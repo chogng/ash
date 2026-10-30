@@ -228,7 +228,7 @@
     "sessions.layout.addTab": "添加标签",
     "sessions.layout.openFiles": "打开文件标签",
     "sessions.layout.openChanges": "打开更改标签",
-    "sessions.changes.editorHelp": "更改编辑器\n比较当前对话对文件的更改。按 Tab 在比较内容及其控件之间移动。按 Alt+F2 阅读更改前后的内容。“切换详情”控制对应的文件列表；“隐藏编辑器”保留共用标签栏和详情；“显示编辑器”恢复打开的文件。",
+    "sessions.changes.editorHelp": "更改卡片\n文件列表和差异比较共用此卡片。使用方向键浏览更改的文件，按 Enter 比较文件。按 Tab 到达审阅、提交和比较控件。调整分隔线可改变列表和比较区域的大小；卡片较窄时上下排列。按 Alt+F2 阅读文件列表和更改前后的内容。卡片标题栏可排列、放大、关闭卡片，或在独立窗口中打开保留的编辑器。文件和终端保留各自的卡片。",
     "sessions.changes.editorComparison": "{0}\n更改前：\n{1}\n更改后：\n{2}",
     "sessions.layout.restoreFailed": "无法恢复此会话的编辑器：{0}",
     "sessions.design.canvas": "设计画布",

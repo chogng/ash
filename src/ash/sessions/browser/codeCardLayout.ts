@@ -4,8 +4,8 @@ import type { Direction, ISerializableView, SerializedGridDescriptor } from '../
 import type { Event } from '../../base/common/event.js';
 import { localize } from '../../nls.js';
 
-export type CodeCardId = 'panel' | 'auxiliarybar' | 'info';
-export type CodeCardTarget = CodeCardId | 'sessions' | 'editor';
+export type CodeCardId = 'panel' | 'auxiliarybar' | 'info' | 'editor';
+export type CodeCardTarget = CodeCardId | 'sessions';
 
 /** Window-local presentation of retained content. The desktop Grid owns topology and geometry. */
 export interface ICodeCardLayout {

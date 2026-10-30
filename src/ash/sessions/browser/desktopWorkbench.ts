@@ -591,7 +591,7 @@ export class DesktopWorkbenchLayout
 					() => this.partUpdateDepth > 0,
 					this.compositionChanged.event,
 					() => this.panelMaximized,
-					() => (partId === 'panel' || partId === 'auxiliarybar') && this.detachedCards.has(partId),
+					() => (partId === 'panel' || partId === 'auxiliarybar' || partId === 'editor') && this.detachedCards.has(partId),
 					requiredPart(parts, 'titlebar'),
 				),
 			);
@@ -888,7 +888,7 @@ export class DesktopWorkbenchLayout
 
 	isPartVisible(partId: SessionsPartId): boolean {
 		return (
-			((partId === 'panel' || partId === 'auxiliarybar') && this.detachedCards.has(partId)) ||
+			((partId === 'panel' || partId === 'auxiliarybar' || partId === 'editor') && this.detachedCards.has(partId)) ||
 			this.grid.isViewVisible(this.view(partId))
 		);
 	}
@@ -1065,7 +1065,13 @@ export class DesktopWorkbenchLayout
 			left: contentLeft,
 		});
 		this.view('auxiliarybar').setFrameInsets({ top: 0, right: contentRight, bottom: contentBottom, left: 0 });
-		for (const partId of ['panel', 'auxiliarybar'] as const) {
+		this.view('editor').setFrameInsets({
+			top: 0,
+			right: !auxiliarybarVisible ? contentRight : 0,
+			bottom: contentBottom,
+			left: !sessionsVisible ? contentLeft : 0,
+		});
+		for (const partId of ['panel', 'auxiliarybar', 'editor'] as const) {
 			this.view(partId).part.domNode.classList.toggle('ash-sessions-tool-card', toolCards);
 			if (toolCards) {
 				// Keep the sash in the space between cards; Grid still owns their real content bounds.
@@ -1074,12 +1080,7 @@ export class DesktopWorkbenchLayout
 				this.view(partId).setFrameInsets({ top: gap, right: gap, bottom: gap, left: gap });
 			}
 		}
-		this.view('editor').setFrameInsets({
-			top: 0,
-			right: !auxiliarybarVisible ? contentRight : 0,
-			bottom: contentBottom,
-			left: !sessionsVisible ? contentLeft : 0,
-		});
+
 		if (this.views.has('customview'))
 			this.view('customview').setFrameInsets({
 				top: 0,
@@ -1177,11 +1178,13 @@ export class DesktopWorkbenchLayout
 		this.mainContainer
 			.querySelector<HTMLElement>(
 				'[data-action-id="' +
-				(id === 'info'
-					? 'ash.sessions.toggleInfo'
-					: id === 'panel'
-						? 'ash.sessions.togglePanel'
-						: 'ash.sessions.toggleFiles') +
+				(id === 'editor'
+					? 'workbench.agentSessions.action.viewChanges'
+					: id === 'info'
+						? 'ash.sessions.toggleInfo'
+						: id === 'panel'
+							? 'ash.sessions.togglePanel'
+							: 'ash.sessions.toggleFiles') +
 				'"] button',
 			)
 			?.focus();
@@ -1203,7 +1206,7 @@ export class DesktopWorkbenchLayout
 		);
 		for (const id of ['panel', 'auxiliarybar', 'sessions', 'editor'] as const) {
 			if (
-				((id === 'panel' || id === 'auxiliarybar') && this.detachedCards.has(id)) ||
+				((id === 'panel' || id === 'auxiliarybar' || id === 'editor') && this.detachedCards.has(id)) ||
 				(this.active && this.expandedCard && this.expandedCard !== id)
 			)
 				this.grid.setViewVisible(this.view(id), false);
