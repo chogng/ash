@@ -247,7 +247,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/stale.ts'], 2, 150));
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/latest.ts'], 3));
 		await expect(sections).toHaveCount(3);
-		await expect(host.locator('.stanza-multi-diff-editor-title')).toHaveText(['src/first.ts', 'src/second.ts', 'src/latest.ts']);
+		await expect(host.locator('.stanza-multi-diff-editor-title .ash-icon-label-text')).toHaveText(['first.ts', 'second.ts', 'latest.ts']);
+		await expect(host.locator('.stanza-multi-diff-editor-title .ash-icon-label-description')).toHaveText(['src', 'src', 'src']);
 		await expect(sections.first().locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'false');
 		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().active)).toBe('src/second.ts');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/second.ts revision 3\nshared', 'src/latest.ts revision 3\nshared']);
@@ -257,7 +258,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(sections).toHaveCount(0);
 		await expect(host.locator('.stanza-multi-diff-editor-empty')).toHaveText(localized(locale, 'No changes in this selection.', '此选择中没有更改。'));
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/returned.ts'], 5));
-		await expect(host.locator('.stanza-multi-diff-editor-title')).toHaveText(['src/returned.ts']);
+		await expect(host.locator('.stanza-multi-diff-editor-title .ash-icon-label-text')).toHaveText(['returned.ts']);
 		await expect(host.locator('.stanza-multi-diff-editor-empty')).toBeHidden();
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/returned.ts revision 5\nshared']);
 	});

@@ -96,6 +96,21 @@
 	margin: 0;
 }
 
+.ash-multi-diff-resource {
+	display: inline-flex;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.ash-multi-diff-resource.original {
+	color: var(--ash-description-foreground);
+}
+
+.ash-multi-diff-rename-status {
+	flex: none;
+	color: var(--ash-warning-foreground);
+}
+
 .stanza-multi-diff-editor-empty {
 	display: flex;
 	box-sizing: border-box;

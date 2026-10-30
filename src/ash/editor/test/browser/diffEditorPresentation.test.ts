@@ -135,6 +135,59 @@ suite('diff action visibility', () => {
 	}
 });
 
+suite('multi diff resource headers', () => {
+	const browserTests = useBrowserTests();
+	teardown(async () => {
+		await browserTests.page.evaluate(() => window.ashDiffIntegration?.dispose());
+	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`shows the current filename and directory, with the old resource only for renames (${locale})`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/diff.html?locale=${locale}`);
+			await page.waitForFunction(() => !!window.ashDiffIntegration);
+			await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('paths'));
+			const host = page.locator('#title-comparison');
+			const headers = host.locator('.stanza-multi-diff-editor-header');
+			const titles = headers.locator('.stanza-multi-diff-editor-title');
+			await expect(titles.first().locator('.ash-icon-label-text')).toHaveText(['chat.json']);
+			await expect(titles.first().locator('.ash-icon-label-description')).toHaveText(['extensions/language-pack-zh-cn/translations']);
+			await expect(titles.first().locator('.ash-multi-diff-resource.original')).toHaveCount(0);
+			await expect(titles.nth(1).locator('.ash-icon-label-text')).toHaveText(['second.ts', 'second.ts']);
+			await expect(titles.nth(1).locator('.ash-icon-label-description')).toHaveText(['src/renamed folder/包含空格的目录', 'src/previous folder/包含空格的目录']);
+			await expect(titles.nth(1).locator('.ash-multi-diff-rename-status')).toHaveText('R');
+			await expect(titles.nth(1).locator('.original .ash-icon-label')).toHaveClass(/strikethrough/);
+			await expect(host.locator('.stanza-multi-diff-editor-labels')).toHaveCount(0);
+			for (const theme of ['vs', 'vs-dark', 'hc-black', 'hc-light'] as const) {
+				await page.evaluate(theme => window.ashDiffIntegration.setTitleTheme(theme), theme);
+				for (const width of [320, 680, 1000]) {
+					await host.evaluate((node, width) => { node.style.width = `${width}px`; }, width);
+					await page.evaluate(width => window.ashDiffIntegration.resizeTitleComparison(width), width);
+					await expect.poll(() => headers.evaluateAll(nodes => nodes.every(node => {
+						const header = node.getBoundingClientRect();
+						return [...node.querySelectorAll('.stanza-multi-diff-editor-title .ash-icon-label-text, .stanza-multi-diff-editor-title .ash-icon-label-description')].every(label => {
+							const bounds = label.getBoundingClientRect();
+							return bounds.top >= header.top && bounds.bottom <= header.bottom && bounds.height < header.height
+								&& bounds.left >= header.left && bounds.right <= header.right;
+						});
+					}))).toBe(true);
+				}
+			}
+			await expect(titles.first().locator('.ash-icon-label')).toHaveAttribute('title', 'extensions/language-pack-zh-cn/translations/chat.json');
+			const toggle = headers.first().getByRole('button').first();
+			await toggle.focus();
+			await page.keyboard.press('Enter');
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+			await page.keyboard.press('Space');
+			await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+			await page.evaluate(() => window.ashDiffIntegration.setTitleTheme('vs'));
+			await host.evaluate(node => { node.style.width = '680px'; });
+			await page.evaluate(() => window.ashDiffIntegration.resizeTitleComparison(680));
+			await host.screenshot({ path: browserTests.info.outputPath(`multi-diff-headers-${locale}.png`) });
+		});
+	}
+});
+
 async function assertRowBackgrounds(backgrounds: Locator, lineHeight: number): Promise<void> {
 	await expect(backgrounds.first()).toBeVisible();
 	await expect.poll(() => backgrounds.evaluateAll((nodes, lineHeight) => nodes.every(node => {

@@ -7,7 +7,8 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
-import { IResourceIconRenderer } from '../../../../browser/labels.js';
+import { DEFAULT_LABELS_CONTAINER, IResourceIconRenderer, IResourceLabelService, ResourceLabels } from '../../../../browser/labels.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
@@ -81,6 +82,12 @@ const { MultiDiffGoToFileAction } = await import('../../browser/multiDiffEditorA
 
 function registerMultiDiffTestServices(services: InstantiationService): InstantiationService {
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
+	if (!services.has(IResourceLabelService)) services.registerInstance(IResourceLabelService, {
+		createGroup: () => new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
+			workspaceContextService: services.get(IWorkspaceContextService),
+			resourceIconRenderer: services.get(IResourceIconRenderer),
+		}),
+	});
 	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));
 	if (!services.has(IUriIdentityService)) services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => uriIdentityServices.createInstance(BrowserWorkingCopyService));

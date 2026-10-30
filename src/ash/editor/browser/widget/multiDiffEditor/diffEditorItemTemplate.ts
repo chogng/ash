@@ -72,10 +72,7 @@ export class DiffEditorItemTemplate extends Disposable {
 		} else {
 			titleDomNode.textContent = item.label;
 		}
-		const labelsDomNode = h(ownerDocument, 'span');
-		labelsDomNode.className = 'stanza-multi-diff-editor-labels';
-		labelsDomNode.textContent = [item.originalLabel, item.modifiedLabel].filter(label => label !== undefined).join(' ↔ ');
-		this.toggleDomNode.append(collapsedIconDomNode, expandedIconDomNode, titleDomNode, labelsDomNode);
+		this.toggleDomNode.append(collapsedIconDomNode, expandedIconDomNode, titleDomNode);
 		headerDomNode.append(this.toggleDomNode);
 		this.incompleteStatusDomNode = h(ownerDocument, 'span');
 		this.incompleteStatusDomNode.className = 'stanza-multi-diff-editor-incomplete-status';
