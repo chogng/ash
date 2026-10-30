@@ -17,12 +17,30 @@ pub enum SecretStorageMode {
     File,
 }
 
+/// The facility currently serving credentials; a fallback retains its redacted cause.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SecretPersistence {
+    Persisted,
+    InMemory {
+        reason: Option<SecretStoreErrorKind>,
+    },
+}
+
 /// Persists opaque secret values for domain runtimes.
 ///
 /// Implementations are expected to provide complete load/store/delete behavior, isolate Ash's
 /// namespace from other products, sanitize all errors, and never copy secret values into ordinary
 /// configuration, logs, telemetry, command arguments, or durable product events.
 pub trait SecretStore: Send + Sync {
+    fn persistence(&self) -> Result<SecretPersistence, SecretStoreError> {
+        Ok(SecretPersistence::Persisted)
+    }
+
+    /// Retries durable storage after an explicit user recovery action.
+    fn restore_persistence(&self) -> Result<(), SecretStoreError> {
+        self.check_availability()
+    }
+
     /// Reports configurable profile persistence; injected stores need not expose a choice.
     fn storage_mode(&self) -> Result<Option<SecretStorageMode>, SecretStoreError> {
         Ok(None)

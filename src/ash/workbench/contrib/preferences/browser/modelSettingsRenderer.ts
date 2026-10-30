@@ -22,7 +22,7 @@ import { type ModelProviderCredentialStatus } from '../../../services/chat/commo
 import { ChatModelsWidget } from '../../chat/browser/chatManagement/chatModelsWidget.js';
 import type { ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
-import { ISecretStorageStatusService, SecretStorageError, secretStorageMessage, type SecretStorageStatus, type SecretStorageMode } from '../../../../platform/secrets/common/secrets.js';
+import { ISecretStorageStatusService, SecretStorageError, secretStorageStateMessage, type SecretStorageState, type SecretStorageMode } from '../../../../platform/secrets/common/secrets.js';
 
 /** Model and credential rows shared by Workbench and Sessions; the host owns navigation and search. */
 export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionReference> {
@@ -55,7 +55,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			compact: true,
 			matches: (entry: ModelCatalogEntry) => this.catalogQuery.matches({ title: entry.displayName, description: '', keywords: [`${entry.model.provider}/${entry.model.model}`] }),
 			isFiltering: () => !this.catalogQuery.isEmpty,
-			onStorageError: (error: SecretStorageError) => this.updateStorageStatus(error.status),
+			onStorageError: (error: SecretStorageError) => this.updateStorageStatus({ status: error.status }),
 		}));
 		this.modelsWidget.element.hidden = true;
 		this._register(this.modelsWidget.onDidChangeItemCount(() => this.changed.fire()));
@@ -132,7 +132,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 					const nodes = [this.providerTitle, this.storageStatus, ...this.apiElements.map(provider => provider.row), ...[...this.customProviders].map(([, card]) => card.domNode)];
 					if (!nodes.some(node => node.contains(focused))) return undefined;
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
-						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n')].filter(Boolean).join('\n\n') : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
+						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n')].filter(Boolean).join('\n\n') : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. If the system keyring is unavailable, credentials are stored only in memory until Ash exits. Authorizing the keyring saves the credentials entered during this run and restores persistent storage. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
 						() => focused.focus(), AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},
 			}));
@@ -189,8 +189,8 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			const storage = await this.secretStorage.readState();
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			this.storageMode = storage.mode;
-			this.updateStorageStatus(storage.status);
-			if (storage.status !== 'available') {
+			this.updateStorageStatus(storage);
+			if (!this.storageAvailable) {
 				this.providersStatus.textContent = '';
 				this.changed.fire();
 				return;
@@ -229,7 +229,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		} catch (error) {
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			if (error instanceof SecretStorageError) {
-				this.updateStorageStatus(error.status);
+				this.updateStorageStatus({ status: error.status });
 				this.providersStatus.textContent = '';
 				this.changed.fire();
 				return;
@@ -256,16 +256,17 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		}
 	}
 
-	private updateStorageStatus(status: SecretStorageStatus): void {
-		const available = status === 'available';
+	private updateStorageStatus(state: SecretStorageState): void {
+		const available = state.status === 'available' || state.storageType === 'in-memory';
+		const persisted = state.status === 'available' && state.storageType !== 'in-memory';
 		this.storageAvailable = available;
-		this.storageMessage.textContent = available ? this.storageMode === 'file'
+		this.storageMessage.textContent = persisted ? this.storageMode === 'file'
 			? localize('credentials.storage.file', 'Credentials are stored without encryption in private files protected by your account permissions.')
 			: this.storageMode === 'encrypted' ? localize('credentials.storage.encrypted', 'Credentials are encrypted using a key in your system keyring.') : ''
-			: secretStorageMessage(status);
-		this.storageStatus.hidden = available && !this.storageMode;
-		this.storageRetry.domNode.hidden = available;
-		this.storageAuthorize.domNode.hidden = this.storageMode !== 'encrypted' || available;
+			: secretStorageStateMessage(state);
+		this.storageStatus.hidden = persisted && !this.storageMode;
+		this.storageRetry.domNode.hidden = persisted;
+		this.storageAuthorize.domNode.hidden = this.storageMode !== 'encrypted' || persisted;
 		this.storageModeButton.domNode.hidden = !this.storageMode;
 		this.storageModeButton.label = this.storageMode === 'file' ? localize('credentials.storage.useEncrypted', 'Use encrypted storage') : localize('credentials.storage.useFile', 'Use file storage');
 		this.storageAuthorize.enabled = !this.storageBusy;
@@ -296,7 +297,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			const state = action === 'authorize' ? await this.secretStorage.authorizeAccess() : await this.secretStorage.setStorageMode(mode);
 			if (this.isDisposed) return;
 			this.storageMode = state.mode;
-			this.updateStorageStatus(state.status);
+			this.updateStorageStatus(state);
 		} catch (error) {
 			if (!this.isDisposed) this.notifications.error(error instanceof Error ? error.message : String(error));
 		} finally {

@@ -1,6 +1,6 @@
 {
   "ash": {
-    "github.settings.managedHelp": "“刷新托管设置”会获取主 GitHub 账户的策略，与用于访问仓库的所选账户无关。状态包含最近尝试、最近成功刷新时间和恢复提示。刷新期间按钮不可用。",
+    "github.settings.managedHelp": "“刷新托管设置”会获取主 GitHub 账户的策略，与用于访问仓库的所选账户无关。状态包含最近尝试、最近成功刷新时间和恢复提示。刷新期间按钮不可用。失败后，同一账号、主机和凭据的自动请求会停止。使用“刷新托管设置”可主动重试；更换账号或凭据后可重新刷新。",
     "github.settings.refreshManaged": "刷新托管设置",
     "github.settings.primaryAccount": "主 GitHub 账户",
     "github.settings.managedIdle": "尚未获取当前账户的托管设置。",

@@ -3,6 +3,8 @@ use ash_app_server_protocol::protocol::secrets::SecretStorageMode;
 use ash_app_server_protocol::protocol::secrets::SecretStorageModeSetParams;
 use ash_app_server_protocol::protocol::secrets::SecretStorageStatus;
 use ash_app_server_protocol::protocol::secrets::SecretStorageStatusResult;
+use ash_app_server_protocol::protocol::secrets::SecretStorageType;
+use ash_secrets::SecretPersistence;
 use ash_secrets::SecretStoreErrorKind;
 use serde_json::Value;
 
@@ -33,15 +35,21 @@ impl SecretRequestProcessor {
 
     pub(super) fn secrets_status(&self, params: &Value) -> Result<Value, RpcError> {
         let _: ash_app_server_protocol::protocol::common::EmptyParams = decode(params)?;
-        self.secret_storage_state(SecretAccess::Silent)
+        result(&self.secret_storage_state(SecretAccess::Silent)?)
     }
 
-    pub(super) fn secrets_authorize(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn secrets_authorize(
+        &self,
+        params: &Value,
+    ) -> Result<SecretStorageStatusResult, RpcError> {
         let _: ash_app_server_protocol::protocol::common::EmptyParams = decode(params)?;
         self.secret_storage_state(SecretAccess::Authorize)
     }
 
-    pub(super) fn secrets_storage_mode_set(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn secrets_storage_mode_set(
+        &self,
+        params: &Value,
+    ) -> Result<SecretStorageStatusResult, RpcError> {
         let params: SecretStorageModeSetParams = decode(params)?;
         let store = self
             .secret_store
@@ -61,12 +69,15 @@ impl SecretRequestProcessor {
         self.secret_storage_state(SecretAccess::Silent)
     }
 
-    fn secret_storage_state(&self, access: SecretAccess) -> Result<Value, RpcError> {
+    fn secret_storage_state(
+        &self,
+        access: SecretAccess,
+    ) -> Result<SecretStorageStatusResult, RpcError> {
         let status = match &self.secret_store {
             Some(store) => match match access {
                 SecretAccess::Silent => store.check_availability(),
                 SecretAccess::Authorize => {
-                    ash_keyring_store::with_user_authorization(|| store.check_availability())
+                    ash_keyring_store::with_user_authorization(|| store.restore_persistence())
                 }
             } {
                 Ok(()) => SecretStorageStatus::Available,
@@ -84,7 +95,29 @@ impl SecretRequestProcessor {
                 }),
             None => None,
         };
-        result(&SecretStorageStatusResult { status, mode })
+        let (status, storage_type) = match &self.secret_store {
+            Some(store) => match store
+                .persistence()
+                .map_err(|error| storage_error(error.kind()))?
+            {
+                SecretPersistence::Persisted => (status, None),
+                SecretPersistence::InMemory { reason } => (
+                    // An unsuccessful explicit recovery must keep its actual failure visible.
+                    if status == SecretStorageStatus::Available {
+                        reason.map(storage_status).unwrap_or(status)
+                    } else {
+                        status
+                    },
+                    Some(SecretStorageType::InMemory),
+                ),
+            },
+            None => (status, None),
+        };
+        Ok(SecretStorageStatusResult {
+            status,
+            mode,
+            storage_type,
+        })
     }
 }
 

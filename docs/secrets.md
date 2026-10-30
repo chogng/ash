@@ -150,9 +150,11 @@ profile file backend 的最低要求：
 
 构造 store 不访问系统 keyring；无法访问 keyring 时 App Server 仍可启动。`secrets/status` 返回 available、unavailable、accessDenied、keyMissing、corrupted、migrationFailed 或 failure，并验证已有密文完整性。状态不包含凭据、主密钥、路径或原始系统错误。前端保留已有的凭据遮蔽值，显示本地化恢复提示并提供显式重试；操作时的存储错误也通过稳定 `data.kind` 返回。查询可能触发初始化和迁移，因此协议按全局写操作串行。
 
+本地 profile runtime 以 `SessionSecretStore` 统一选择活动存储。钥匙串不可用或拒绝访问时，各 Provider 转为本次运行共享的内存存储，后续后台操作不反复访问钥匙串。已有密文保持原样；不会隐式写入明文文件。`secrets/status` 保留原失败分类并附带 `storageType: "in-memory"`，账号界面只提示一次，模型设置允许使用临时凭据并显示退出后丢失的说明。缺失密钥、损坏数据和迁移失败继续返回错误，不触发该降级。显式授权成功后，先将本次内存写入和删除提交到持久存储，再切回持久读取；失败时继续使用内存，允许再次恢复。
+
 macOS 的后台状态检查、启动和普通凭据操作保持静默；需要系统授权时返回 `accessDenied`。模型设置中的“授权系统钥匙串”或 `ash secrets authorize` 显式调用 `secrets/authorize`，允许本次调用显示系统授权窗口；用户主动选择 encrypted 存储也允许系统授权。授权不会让后续后台操作弹窗。
 
-profile 存储方式由唯一 `ProfileSecretStore` 保存于 `<profile>/secrets/storage-mode`，不是目录级或 Session 配置。未设置时为 `encrypted`；用户可在模型设置中经说明及确认选择 `file`，或运行 `ash secrets mode file`。文件模式在 `secrets/values/` 保存未加密字节，由现有私有目录、文件权限和原子 IO 保护；同账户进程可读。`ash secrets mode encrypted` 切回认证加密存储，`ash secrets status` 静默返回状态和当前模式。没有 `auto` 或错误后的隐式降级。
+profile 存储方式由唯一 `ProfileSecretStore` 保存于 `<profile>/secrets/storage-mode`，不是目录级或 Session 配置。未设置时为 `encrypted`；用户可在模型设置中经说明及确认选择 `file`，或运行 `ash secrets mode file`。文件模式在 `secrets/values/` 保存未加密字节，由现有私有目录、文件权限和原子 IO 保护；同账户进程可读。`ash secrets mode encrypted` 切回认证加密存储，`ash secrets status` 静默返回状态和当前模式。持久模式没有 `auto`，错误不会自动改变 encrypted/file 的选择。
 
 `secrets/storageMode/set` 按 profile 全局写操作串行；同一 profile 的不同进程在 `store.lock` 下重新读取模式。切换会验证源数据，原子记录 `to-file` / `to-encrypted` 迁移状态，逐项写入并重读核对后才删除源值，完成后原子提交目标模式。重启或另一进程访问时先恢复未完成的迁移，不暴露部分目标数据。缺失原密钥、损坏或冲突会保留尚未迁移的数据并返回错误；不会生成替代密钥、自动切换或长期双写。
 

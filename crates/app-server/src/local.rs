@@ -1166,7 +1166,9 @@ fn open_profile_secrets(
     let keyring = ash_secrets::FileSecretStore::open(profile_root.join("test-keyring"))
         .map_err(open_error)?;
     ProfileSecretStore::open(profile_root.join("secrets"), Arc::new(keyring))
-        .map(|store| Arc::new(store) as Arc<dyn SecretStore>)
+        .map(|store| {
+            Arc::new(ash_secrets::SessionSecretStore::new(Arc::new(store))) as Arc<dyn SecretStore>
+        })
         .map_err(open_error)
 }
 

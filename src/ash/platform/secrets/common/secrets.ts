@@ -52,6 +52,14 @@ export type SecretStorageMode = 'encrypted' | 'file';
 export interface SecretStorageState {
 	readonly status: SecretStorageStatus;
 	readonly mode?: SecretStorageMode;
+	readonly storageType?: 'persisted' | 'in-memory';
+}
+
+export function secretStorageStateMessage(state: SecretStorageState): string {
+	const message = state.status === 'available' ? '' : secretStorageMessage(state.status);
+	if (state.storageType !== 'in-memory') return message;
+	const persistence = localize('credentials.storage.inMemory', 'Credentials are stored in memory for this run only and will be lost when Ash exits. Existing encrypted credentials are preserved.');
+	return message ? `${message} ${persistence}` : persistence;
 }
 
 /** Storage failures shared by consumers of credentials owned by the App Server. */

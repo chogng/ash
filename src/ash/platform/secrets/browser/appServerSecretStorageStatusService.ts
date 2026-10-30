@@ -15,7 +15,7 @@ export function createAppServerSecretStorageStatusService(connection: AppServerP
 
 async function storageState(operation: Promise<SecretStorageStatusResult>): Promise<SecretStorageState> {
 	const result = await withSecretStorageErrors(operation);
-	return { status: result.status, ...(result.mode ? { mode: result.mode } : {}) };
+	return { status: result.status, ...(result.mode ? { mode: result.mode } : {}), ...(result.storageType ? { storageType: result.storageType } : {}) };
 }
 
 export function createDisconnectedSecretStorageStatusService(unavailable: UnavailableOperation): ISecretStorageStatusService {

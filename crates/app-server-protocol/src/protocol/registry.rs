@@ -2192,6 +2192,8 @@ use crate::protocol::secrets::SecretStorageStatus;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::secrets::SecretStorageStatusResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::secrets::SecretStorageType;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::AdvisorConfigureResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsParams;
@@ -7006,6 +7008,7 @@ typescript_bindings! {
     ProviderListResult,
     SecretStorageStatus,
     SecretStorageStatusResult,
+    SecretStorageType,
     SecretStorageMode,
     SecretStorageModeSetParams,
     StableTurnErrorCode,

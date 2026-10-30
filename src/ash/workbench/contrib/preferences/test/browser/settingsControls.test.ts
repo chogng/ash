@@ -35,6 +35,30 @@ suite('table browser component', () => {
 		});
 	}
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`memory credential fallback stays usable and keyboard authorization restores persistence (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/table.html?locale=${locale}`);
+			await page.evaluate(() => {
+				window.ashTableIntegration.setCredentialStorageMode('encrypted');
+				window.ashTableIntegration.setCredentialStorageType('in-memory');
+				window.ashTableIntegration.setCredentialStorage('accessDenied');
+				window.ashTableIntegration.showCredentialSettings();
+			});
+			const root = page.locator('#credential-settings');
+			await expect(root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '退出 Ash' : 'lost when Ash exits' })).toBeVisible();
+			await expect(root.locator('input[type="password"]')).toBeEnabled();
+			expect(await page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual([]);
+			const authorize = root.getByRole('button', { name: locale === 'zh-CN' ? '授权系统钥匙串' : 'Authorize system keyring' });
+			await authorize.focus();
+			await page.keyboard.press('Enter');
+			await expect(root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '系统钥匙串中的密钥加密' : 'encrypted using a key' })).toBeVisible();
+			await expect(authorize).toHaveCount(0);
+			await expect(root.getByRole('button', { name: locale === 'zh-CN' ? '使用文件存储' : 'Use file storage' })).toBeFocused();
+			expect(await page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual(['authorize']);
+		});
+	}
+
 	for (const scale of [1, 1.25, 1.5, 2]) {
 		suite(`Table layout at ${scale * 100}% display scale`, () => {
 			browserTests.use({ deviceScaleFactor: scale });

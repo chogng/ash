@@ -3,7 +3,7 @@ import type { IDelayedHoverOptions } from '../../../base/browser/ui/hover/hover.
 import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
 import { getActivityHoverPosition, type IActivityHoverOptions } from './compositeBarActions.js';
 import './media/globalCompositeBar.css';
-import { h } from '../../../base/browser/dom.js';
+import { h, runWhenWindowIdle } from '../../../base/browser/dom.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
 import type { ActionViewItem, ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
@@ -20,6 +20,9 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { ILogService } from '../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import { ISecretStorageStatusService, secretStorageStateMessage } from '../../../platform/secrets/common/secrets.js';
+import { INotificationService, Severity } from '../../../platform/notification/common/notification.js';
+import { ILifecycleService, LifecyclePhase } from '../../services/lifecycle/common/lifecycle.js';
 import { IGitHubConnectionService } from '../../services/accounts/common/gitHubConnectionService.js';
 import { ILocalizationService } from '../../services/localization/common/localizationService.js';
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation } from '../../common/configuration.js';
@@ -36,6 +39,8 @@ export class GlobalCompositeBar extends Disposable {
 	private accountsVisible: boolean;
 	private accounts: readonly Account[] = [];
 	private accountRevision = -1n;
+	private accountsInitialized = false;
+	private storageWarningShown = false;
 
 	constructor(
 		container: HTMLElement,
@@ -49,6 +54,9 @@ export class GlobalCompositeBar extends Disposable {
 		@ILogService private readonly logService: ILogService,
 		@IStorageService private readonly storageService: IStorageService,
 		@IRendererHostService private readonly host: IRendererHost,
+		@ISecretStorageStatusService private readonly secretStorage: ISecretStorageStatusService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		this.accountsVisible = this.storageService.getBoolean(GlobalCompositeBar.accountsVisibilityKey, StorageScope.PROFILE, true);
@@ -71,11 +79,49 @@ export class GlobalCompositeBar extends Disposable {
 			this.accountsVisible = this.storageService.getBoolean(GlobalCompositeBar.accountsVisibilityKey, StorageScope.PROFILE, true);
 			this.renderActions();
 		}));
-		this._register(this.accountService.onDidChangeAccounts(state => this.updateAccounts(state)));
+		this._register(this.accountService.onDidChangeAccounts(state => {
+			this.updateAccounts(state);
+			if (this.accountsInitialized) void this.notifyOfEphemeralStorage();
+		}));
 		if (host.hasAppServer) {
-			void this.accountService.read().then(state => this.updateAccounts(state), error => {
-				this.logService.error('activitybar', 'Could not read accounts', error);
+			void this.lifecycle.when(LifecyclePhase.Restored).then(() => {
+				if (this.isDisposed) return;
+				this._register(runWhenWindowIdle(this.domNode.ownerDocument.defaultView!, () => { void this.initializeAccounts(); }));
 			});
+		}
+	}
+
+	private async initializeAccounts(): Promise<void> {
+		try {
+			const state = await this.accountService.read();
+			if (!this.isDisposed) this.updateAccounts(state);
+		} catch (error) {
+			if (!this.isDisposed) this.logService.error('activitybar', 'Could not read accounts', error);
+		}
+		if (this.isDisposed) return;
+		this.accountsInitialized = true;
+		await this.notifyOfEphemeralStorage();
+	}
+
+	private async notifyOfEphemeralStorage(): Promise<void> {
+		if (this.isDisposed || this.storageWarningShown) return;
+		try {
+			const state = await this.secretStorage.readState();
+			if (this.isDisposed || this.storageWarningShown || state.storageType !== 'in-memory' || state.status === 'available') return;
+			this.storageWarningShown = true;
+			const label = this.label('workbench.openCredentialSettings', 'Open credential settings');
+			this.notifications.notify({
+				severity: Severity.Error,
+				message: secretStorageStateMessage(state),
+				actions: {
+					primary: [{
+						id: 'workbench.accounts.openCredentialSettings', label, tooltip: label, enabled: true,
+						run: () => this.commandService.executeCommand('workbench.action.openSettings', { section: 'models' }),
+					}],
+				},
+			});
+		} catch (error) {
+			if (!this.isDisposed) this.logService.error('activitybar', 'Could not read credential storage status', error);
 		}
 	}
 
@@ -131,6 +177,10 @@ export class GlobalCompositeBar extends Disposable {
 	}
 
 	private accountActions(): readonly IAction[] {
+		if (!this.accountsInitialized) {
+			const label = this.label('workbench.loadingAccounts', 'Loading accounts…');
+			return [{ id: 'ash.activityBar.loadingAccounts', label, tooltip: label, enabled: false, run() { } }];
+		}
 		const manageLabel = this.label('workbench.manageAccounts', 'Manage Accounts');
 		const signOutLabel = this.label('workbench.signOut', 'Sign Out');
 		const githubConnected = this.accounts.some(account => account.provider === 'github');

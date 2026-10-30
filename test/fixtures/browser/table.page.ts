@@ -72,7 +72,7 @@ import type { IContextMenuService } from '../../../src/ash/platform/contextview/
 
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
-import { ISecretStorageStatusService, type SecretStorageStatus, type SecretStorageMode } from '../../../src/ash/platform/secrets/common/secrets.js';
+import { ISecretStorageStatusService, type SecretStorageStatus, type SecretStorageMode, type SecretStorageState } from '../../../src/ash/platform/secrets/common/secrets.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
@@ -89,6 +89,7 @@ declare global {
 			readonly searchSaved: readonly string[];
 			setCredentialStorage(status: SecretStorageStatus): void;
 			setCredentialStorageMode(mode: SecretStorageMode): void;
+			setCredentialStorageType(type: SecretStorageState['storageType']): void;
 			readonly credentialOperations: readonly string[];
 			progress(): void;
 			finish(): void;
@@ -146,14 +147,15 @@ services.registerSingleton(IImageEditorService, () => services.createInstance(Br
 const modelChanges = resources.add(new Emitter<void>());
 let credentialStorage: SecretStorageStatus = 'available';
 let credentialStorageMode: SecretStorageMode | undefined;
+let credentialStorageType: SecretStorageState['storageType'];
 const credentialOperations: string[] = [];
 let credentialSettings = false;
 services.registerInstance(IMessageHistoryService, undefined);
 services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(ISecretStorageStatusService, {
-	readState: async () => ({ status: credentialStorage, mode: credentialStorageMode }),
-	authorizeAccess: async () => { credentialOperations.push('authorize'); credentialStorage = 'available'; return { status: credentialStorage, mode: credentialStorageMode }; },
+	readState: async () => ({ status: credentialStorage, mode: credentialStorageMode, storageType: credentialStorageType }),
+	authorizeAccess: async () => { credentialOperations.push('authorize'); credentialStorage = 'available'; credentialStorageType = undefined; return { status: credentialStorage, mode: credentialStorageMode }; },
 	setStorageMode: async mode => { credentialOperations.push(mode); credentialStorageMode = mode; credentialStorage = 'available'; return { status: credentialStorage, mode }; },
 });
 const dialogs = resources.add(new DialogService());
@@ -363,6 +365,7 @@ window.ashTableIntegration = {
 	},
 	setCredentialStorage: status => { credentialStorage = status; modelChanges.fire(); },
 	setCredentialStorageMode: mode => { credentialStorageMode = mode; modelChanges.fire(); },
+	setCredentialStorageType: type => { credentialStorageType = type; modelChanges.fire(); },
 	credentialOperations,
 	extensionSpeech: async (admitted, lazy = false) => {
 		if (!lazy && !declaredSpeech) { speechBridge.update(speechSnapshot(admitted)); if (!admitted) extensionEmit = undefined; return; }

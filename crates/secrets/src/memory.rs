@@ -5,6 +5,7 @@ use zeroize::Zeroize;
 
 use crate::DeleteSecretOutcome;
 use crate::SecretKey;
+use crate::SecretPersistence;
 use crate::SecretStore;
 use crate::SecretStoreError;
 use crate::SecretStoreErrorKind;
@@ -19,6 +20,10 @@ pub struct MemorySecretStore {
 }
 
 impl SecretStore for MemorySecretStore {
+    fn persistence(&self) -> Result<SecretPersistence, SecretStoreError> {
+        Ok(SecretPersistence::InMemory { reason: None })
+    }
+
     fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
         let values = self.values.lock().map_err(lock_error)?;
         Ok(values.get(key).cloned().map(SecretValue::new))

@@ -6,6 +6,8 @@ import { createDisconnectedGitHubService } from '../../../../../platform/github/
 import { GitHubError, GitHubErrorCode, IGitHubService, type GitHubAccount } from '../../../../../platform/github/common/githubService.js';
 import type { JsonValue } from '../../../../../base/common/jsonValue.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import type { LogEntry } from '../../../../../platform/log/common/log.js';
+import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import type { PolicyValue } from '../../../../../base/common/policy.js';
 import { AbstractPolicyService, type PolicyDefinition } from '../../../../../platform/policy/common/policy.js';
 import { MultiplexPolicyService } from '../../../../../platform/policy/common/multiplexPolicyService.js';
@@ -69,11 +71,82 @@ test('Account read failures and malformed replacements retain policy, while auth
 	await source.updatePolicyDefinitions(binding);
 	assert.equal(source.getPolicyValue('ManagedFeature'), true);
 	raw = { strictPluginOnlyCustomization: 'invalid' };
-	await source.updatePolicyDefinitions(binding);
+	await source.refresh({ retryManagedSettings: true });
 	assert.equal(source.getPolicyValue('ManagedFeature'), true);
 	raw = null;
-	await source.updatePolicyDefinitions(binding);
+	await source.refresh({ retryManagedSettings: true });
 	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
+});
+
+test('Failed account discovery suppresses automatic requests until explicit retry or a GitHub account change', async () => {
+	using changes = new Emitter<AccountState>();
+	const entries: LogEntry[] = [];
+	using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
+	const failure = new GitHubError(GitHubErrorCode.Unavailable);
+	let unavailable = true;
+	let attempts = 0;
+	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => ({}), async () => {
+		attempts++;
+		if (unavailable) throw failure;
+		return [account];
+	}), logger);
+	await source.updatePolicyDefinitions(binding);
+	const failed = source.state;
+	await source.refresh();
+	await source.updatePolicyDefinitions(binding);
+	changes.fire({ revision: 2n, accounts: [{ provider: 'chatgpt-subscription', accountId: 'model', status: 'ready', credentialRevision: 1n }] });
+	await source.refresh();
+	assert.equal(attempts, 1);
+	assert.equal(source.state, failed);
+	assert.equal(entries.length, 1);
+	assert.equal(entries[0]!.category, 'accountPolicy');
+	assert.equal(entries[0]!.message, 'Could not refresh managed account settings unavailable');
+	assert.equal(entries[0]!.error, failure);
+	await source.refresh({ retryManagedSettings: true });
+	assert.equal(attempts, 2);
+	unavailable = false;
+	changes.fire({ revision: 3n, accounts: [{ provider: 'github', accountId: 'first', status: 'ready', credentialRevision: 1n }] });
+	await source.refresh();
+	assert.equal(attempts, 3);
+	assert.equal(source.state.phase, 'ready');
+});
+
+test('Failed managed settings stay scoped to account, host and credentials and explicit retry recovers retained policy', async () => {
+	using changes = new Emitter<AccountState>();
+	let selected = account;
+	let failure: Error | undefined;
+	let reads = 0;
+	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
+		reads++;
+		if (failure) throw failure;
+		return { strictPluginOnlyCustomization: true };
+	}, async () => [selected]), log);
+	await source.updatePolicyDefinitions(binding);
+	failure = new GitHubError(GitHubErrorCode.Unavailable);
+	await source.refresh();
+	const failed = source.state;
+	await source.refresh();
+	assert.deepEqual(source.state, failed);
+	assert.equal(reads, 2);
+	assert.equal(source.getPolicyValue('ManagedFeature'), true);
+
+	selected = { ...account, credentialRevision: 2n };
+	await source.refresh();
+	assert.equal(reads, 3);
+	selected = { ...selected, host: 'enterprise.example' };
+	await source.refresh();
+	assert.equal(reads, 4);
+	selected = { ...selected, id: 'second' };
+	await source.refresh();
+	assert.equal(reads, 5);
+	selected = account;
+	await source.refresh();
+	assert.equal(reads, 5);
+	failure = undefined;
+	await source.refresh({ retryManagedSettings: true });
+	assert.equal(reads, 6);
+	assert.equal(source.state.phase, 'ready');
+	assert.equal(source.getPolicyValue('ManagedFeature'), true);
 });
 
 test('Logout cancels pending policy reads and prevents a late response from restoring restrictions', async () => {
@@ -163,7 +236,7 @@ test('Explicit refresh exposes cold failure, joins in-flight requests, retains o
 	raw = { strictPluginOnlyCustomization: true };
 	gate = new Promise<void>(resolve => { release = resolve; });
 	const started = new Promise<void>(resolve => { entered = resolve; });
-	const retry = source.refresh();
+	const retry = source.refresh({ retryManagedSettings: true });
 	await started;
 	assert.equal(state().phase, 'refreshing');
 	assert.equal(source.refresh(), retry);
@@ -176,7 +249,7 @@ test('Explicit refresh exposes cold failure, joins in-flight requests, retains o
 	assert.equal(typeof success, 'number');
 
 	raw = new GitHubError(GitHubErrorCode.ManagedSettingsUpdateRequired);
-	await source.refresh();
+	await source.refresh({ retryManagedSettings: true });
 	assert.deepEqual(state(), {
 		phase: 'failed', failure: GitHubErrorCode.ManagedSettingsUpdateRequired,
 		retainsPolicy: true,
@@ -185,7 +258,7 @@ test('Explicit refresh exposes cold failure, joins in-flight requests, retains o
 	});
 	assert.equal(source.getPolicyValue('ManagedFeature'), true);
 	raw = null;
-	await source.refresh();
+	await source.refresh({ retryManagedSettings: true });
 	assert.equal(state().phase, 'ready');
 	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
 	assert.ok(states.some(state => state.phase === 'failed' && state.lastSuccessAt === undefined));

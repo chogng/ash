@@ -22,6 +22,15 @@ pub struct SecretStorageStatusResult {
     pub status: SecretStorageStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<SecretStorageMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_type: Option<SecretStorageType>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "kebab-case")]
+pub enum SecretStorageType {
+    Persisted,
+    InMemory,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

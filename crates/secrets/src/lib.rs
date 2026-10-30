@@ -7,6 +7,7 @@
 mod error;
 mod file;
 mod memory;
+mod session;
 mod store;
 mod value;
 
@@ -15,7 +16,9 @@ pub use error::SecretStoreErrorKind;
 pub use file::FileSecretStore;
 pub use file::ProfileSecretStore;
 pub use memory::MemorySecretStore;
+pub use session::SessionSecretStore;
 pub use store::DeleteSecretOutcome;
+pub use store::SecretPersistence;
 pub use store::SecretStorageMode;
 pub use store::SecretStore;
 pub use store::UnavailableSecretStore;

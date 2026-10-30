@@ -947,6 +947,25 @@ impl AppServer {
         )
     }
 
+    fn secret_storage_recovery_response(
+        &self,
+        state: ash_app_server_protocol::protocol::secrets::SecretStorageStatusResult,
+    ) -> Result<Value, RpcError> {
+        if state.status
+            == ash_app_server_protocol::protocol::secrets::SecretStorageStatus::Available
+            && let Some(login) = &self.login
+            && let Err(error) = login.refresh()
+        {
+            // The storage action succeeded independently of optional account providers.
+            // A successful projection refresh publishes account/updated through its owner.
+            log::warn!(
+                "Could not refresh accounts after credential storage recovery: {:?}",
+                error.kind()
+            );
+        }
+        result(&state)
+    }
+
     fn call_processor(&self) -> call_operations::CallRequestProcessor<'_> {
         call_operations::CallRequestProcessor::new(
             &self.calls,
@@ -3872,12 +3891,13 @@ impl AppServer {
             Some(ClientMethod::SecretsStatus) => {
                 self.secret_processor.secrets_status(&request.params)
             }
-            Some(ClientMethod::SecretsAuthorize) => {
-                self.secret_processor.secrets_authorize(&request.params)
-            }
-            Some(ClientMethod::SecretsStorageModeSet) => self
-                .secret_processor
-                .secrets_storage_mode_set(&request.params),
+            Some(ClientMethod::SecretsAuthorize) => self.secret_storage_recovery_response(
+                self.secret_processor.secrets_authorize(&request.params)?,
+            ),
+            Some(ClientMethod::SecretsStorageModeSet) => self.secret_storage_recovery_response(
+                self.secret_processor
+                    .secrets_storage_mode_set(&request.params)?,
+            ),
             Some(ClientMethod::ProviderApiKeySet) => self
                 .provider_processor()
                 .provider_api_key_set(std::mem::take(&mut request.params)),

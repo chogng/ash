@@ -159,7 +159,50 @@ fn encrypted_storage_rpc_reports_available_without_exposing_values() {
         r#"{"jsonrpc":"2.0","id":2,"method":"secrets/status","params":{}}"#,
     );
     let reply: serde_json::Value = serde_json::from_str(&reply).unwrap();
-    assert_eq!(reply["result"], json!({"status":"available"}));
+    assert_eq!(
+        reply["result"],
+        json!({"status":"available","storageType":"in-memory"})
+    );
+}
+
+#[test]
+fn locked_keyring_reports_ephemeral_storage_without_blocking_credential_access() {
+    let store = Arc::new(ash_secrets::SessionSecretStore::new(Arc::new(FailedStore(
+        SecretStoreErrorKind::AccessDenied,
+    ))));
+    let server = server().with_secret_store(store.clone());
+    let mut first = server.connection();
+    let mut second = server.connection();
+    initialize(&server, &mut first);
+    initialize(&server, &mut second);
+    for connection in [&mut first, &mut second] {
+        let response: serde_json::Value = serde_json::from_str(&server.handle_json(
+            connection,
+            r#"{"jsonrpc":"2.0","id":2,"method":"secrets/status","params":{}}"#,
+        ))
+        .unwrap();
+        assert_eq!(
+            response["result"],
+            json!({"status":"accessDenied","storageType":"in-memory"})
+        );
+    }
+    let key = SecretKey::new("provider/temporary").unwrap();
+    store
+        .store(&key, &SecretValue::new(b"session-only".to_vec()))
+        .unwrap();
+    assert_eq!(store.load(&key).unwrap().unwrap().expose(), b"session-only");
+    // Explicit recovery still reports its failure; it does not discard memory credentials.
+    let response: serde_json::Value = serde_json::from_str(&server.handle_json(
+        &mut first,
+        r#"{"jsonrpc":"2.0","id":3,"method":"secrets/authorize","params":{}}"#,
+    ))
+    .unwrap();
+    assert_eq!(
+        response["result"],
+        json!({"status":"accessDenied","storageType":"in-memory"})
+    );
+    assert!(!response.to_string().contains("session-only"));
+    assert_eq!(store.load(&key).unwrap().unwrap().expose(), b"session-only");
 }
 
 #[test]

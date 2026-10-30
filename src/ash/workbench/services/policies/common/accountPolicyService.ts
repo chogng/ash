@@ -1,6 +1,6 @@
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import type { JsonValue } from '../../../../base/common/jsonValue.js';
 import type { PolicyValue } from '../../../../base/common/policy.js';
@@ -25,8 +25,8 @@ export type AccountPolicyRefreshState = {
 export interface IAccountPolicyService {
 	readonly state: AccountPolicyRefreshState;
 	readonly onDidChangeState: Event<AccountPolicyRefreshState>;
-	/** Fetch the current primary account's policy, joining an existing refresh. */
-	refresh(): Promise<void>;
+	/** Automatic refreshes retain failed scopes; an explicit retry may fetch them again. */
+	refresh(options?: { readonly retryManagedSettings?: boolean; }): Promise<void>;
 }
 
 export const IAccountPolicyService = createServiceIdentifier<IAccountPolicyService>('accountPolicyService');
@@ -41,6 +41,10 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 	private generation = 0;
 	private currentAccount: GitHubAccount | undefined;
 	private pending: Promise<void> | undefined;
+	private readonly failedRefreshes = new Map<string, Extract<AccountPolicyRefreshState, { phase: 'failed'; }>>();
+	private retryRequested = false;
+	private performingExplicitRetry = false;
+	private githubAccountsScope: string | undefined;
 	constructor(
 		@IAccountService private readonly accounts: IAccountService,
 		@IGitHubService private readonly github: IGitHubService,
@@ -60,6 +64,13 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 	}
 
 	private onAccountsChanged(state: AccountState): void {
+		const scope = JSON.stringify(state.accounts.filter(account => account.provider === 'github').map(account => [account.accountId, account.status, account.credentialRevision.toString()]));
+		if (scope === '[]' && this.githubAccountsScope === undefined && !this.currentAccount) return;
+		if (scope === this.githubAccountsScope) return;
+		this.githubAccountsScope = scope;
+		// A provider catalog change can resolve an earlier failure to identify the
+		// primary account. Unrelated providers do not restart GitHub policy requests.
+		this.failedRefreshes.delete('unresolved');
 		this.generation++;
 		this.cancellation?.cancel();
 		// Logout revokes policy immediately; no old-account values survive an identity change.
@@ -79,8 +90,9 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 		this.retry.schedule(0);
 	}
 
-	public override refresh(): Promise<void> {
+	public override refresh(options?: { readonly retryManagedSettings?: boolean; }): Promise<void> {
 		if (this.stopped) return Promise.resolve();
+		if (options?.retryManagedSettings && !this.performingExplicitRetry) this.retryRequested = true;
 		if (this.pending) return this.pending;
 		this.retry.cancel();
 		// Publish after installing the shared promise: state listeners may themselves
@@ -89,12 +101,16 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 			while (!this.stopped) {
 				const definitions = this.policyDefinitions;
 				const generation = this.generation;
-				await this.load();
-				if (definitions === this.policyDefinitions && generation === this.generation) return;
+				const retryManagedSettings = this.retryRequested;
+				this.retryRequested = false;
+				this.performingExplicitRetry = retryManagedSettings;
+				try { await this.load(retryManagedSettings); }
+				finally { this.performingExplicitRetry = false; }
+				if (definitions === this.policyDefinitions && generation === this.generation && !this.retryRequested) return;
 			}
 		}).finally(() => {
 			this.pending = undefined;
-			if (!this.stopped && !this.retry.isScheduled()) this.retry.schedule(60000);
+			if (!this.stopped && !this.failedRefreshes.has('unresolved') && !this.retry.isScheduled()) this.retry.schedule(60000);
 		});
 		return this.pending;
 	}
@@ -103,11 +119,20 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 		return Object.freeze({ accountId: account.id, host: account.host, credentialRevision: account.credentialRevision });
 	}
 
-	private async load(): Promise<void> {
+	private scopeKey(scope: NonNullable<AccountPolicyRefreshState['scope']>): string {
+		return JSON.stringify([scope.host, scope.accountId, scope.credentialRevision.toString()]);
+	}
+
+	private async load(retryManagedSettings: boolean): Promise<void> {
 		if (this.stopped) return;
 		if (!Object.values(this.policyDefinitions).some(definition => definition.managedSettings)) {
 			this.accept({});
 			this.setState({ phase: 'idle' });
+			return;
+		}
+		const unresolved = this.failedRefreshes.get('unresolved');
+		if (unresolved && !retryManagedSettings) {
+			this.setState(unresolved);
 			return;
 		}
 		const generation = this.generation;
@@ -115,12 +140,16 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 		const cancellation = new CancellationTokenSource();
 		this.cancellation?.dispose(true);
 		this.cancellation = cancellation;
+		let failureKey = 'unresolved';
 		try {
-			this.setState({ phase: 'refreshing', scope: this.state.scope, lastAttemptAt, lastSuccessAt: this.state.lastSuccessAt });
+			if (this.state.phase !== 'failed' || retryManagedSettings) {
+				this.setState({ phase: 'refreshing', scope: this.state.scope, lastAttemptAt, lastSuccessAt: this.state.lastSuccessAt });
+			}
 			if (this.stopped || generation !== this.generation || cancellation.token.isCancellationRequested) return;
 			// The provider catalog defines primary-account order; windows never infer it from plan or email.
 			const selected = (await this.github.listAccounts(cancellation.token))[0];
 			if (this.stopped || generation !== this.generation) return;
+			this.failedRefreshes.delete('unresolved');
 			if (!selected || selected.status !== 'ready') {
 				this.currentAccount = undefined;
 				this.accept({});
@@ -132,6 +161,12 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 				&& selected.host === this.state.scope.host
 				&& selected.credentialRevision === this.state.scope.credentialRevision;
 			this.currentAccount = selected;
+			failureKey = this.scopeKey(this.scope(selected));
+			const failed = this.failedRefreshes.get(failureKey);
+			if (failed && !retryManagedSettings) {
+				this.setState({ ...failed, retainsPolicy: Object.keys(this.policyValues).length > 0 });
+				return;
+			}
 			this.setState({ phase: 'refreshing', scope: this.scope(selected), lastAttemptAt, lastSuccessAt: sameScope ? this.state.lastSuccessAt : undefined });
 			if (this.stopped || generation !== this.generation || cancellation.token.isCancellationRequested) return;
 			const raw = await this.github.readManagedSettings(selected.id, cancellation.token);
@@ -155,15 +190,19 @@ export class AccountPolicyService extends AbstractPolicyService implements IAcco
 			this.accept(validatePolicyValues(values, this.policyDefinitions));
 			// Value listeners can revoke the account or dispose the window synchronously.
 			if (this.stopped || generation !== this.generation || cancellation.token.isCancellationRequested) return;
+			this.failedRefreshes.delete(failureKey);
 			this.setState({ phase: 'ready', scope: this.scope(selected), lastAttemptAt, lastSuccessAt: Date.now() });
 		} catch (error) {
 			if (this.stopped || generation !== this.generation || cancellation.token.isCancellationRequested) return;
+			if (isCancellationError(error)) return;
 			const failure = error instanceof GitHubError ? error.code : error instanceof TypeError ? 'invalidResponse' : GitHubErrorCode.Unavailable;
-			this.setState({
+			const failed: Extract<AccountPolicyRefreshState, { phase: 'failed'; }> = {
 				phase: 'failed', scope: this.state.scope, lastAttemptAt, lastSuccessAt: this.state.lastSuccessAt,
 				failure, retainsPolicy: Object.keys(this.policyValues).length > 0,
-			});
-			if (!isCancellationError(error)) this.log.error(getErrorMessage(error));
+			};
+			this.failedRefreshes.set(failureKey, failed);
+			this.setState(failed);
+			if (!this.stopped) this.log.error('accountPolicy', 'Could not refresh managed account settings', error);
 		} finally {
 			cancellation.dispose();
 			if (this.cancellation === cancellation) this.cancellation = undefined;
