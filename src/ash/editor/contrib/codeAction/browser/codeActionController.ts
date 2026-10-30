@@ -15,7 +15,8 @@ import { CodeActionKeybindingResolver } from './codeActionKeybindingResolver.js'
 import { toMenuItems } from './codeActionMenu.js';
 import { LightBulbWidget } from './lightBulbWidget.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
-import { ActionListItemKind, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
+import { TabbedActionListWidget } from '../../../../platform/actionWidget/browser/tabbedActionListWidget.js';
+import { ActionListItemKind, type IActionListDelegate, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
 import { localize } from '../../../../nls.js';
 import { IBulkEditService, type IBulkEditOptions } from '../../../browser/services/bulkEditService.js';
 
@@ -25,6 +26,7 @@ export class CodeActionController extends Disposable {
 	static get(editor: ICodeEditor): CodeActionController | null {
 		return editor.getContribution<CodeActionController>(CodeActionController.ID);
 	}
+	private readonly tabbedMenu: TabbedActionListWidget;
 	private menuContext: languages.LanguageCodeActionRequest | undefined;
 	private readonly model: CodeActionModel;
 	private readonly lightbulb: LightBulbWidget;
@@ -53,6 +55,7 @@ export class CodeActionController extends Disposable {
 		this.model = this._register(instantiationService.createInstance(CodeActionModel, editor, diagnostics, onError));
 		this.lightbulb = this._register(instantiationService.createInstance(LightBulbWidget, editor));
 		this.keybindings = instantiationService.createInstance(CodeActionKeybindingResolver);
+		this.tabbedMenu = this._register(instantiationService.createInstance(TabbedActionListWidget));
 		this._register(this.model.onDidChangeState(state => {
 			this.hideMenu();
 			this.lightbulb.hide();
@@ -128,25 +131,36 @@ export class CodeActionController extends Disposable {
 			group.push(item);
 		}
 		const groupEntries = [...groups.entries()];
-		this.actionWidgetService.show(CodeActionController.ID, this.bulkEditService.hasPreviewHandler(), items, {
+		const delegate: IActionListDelegate<CodeActionItem> = {
 			onSelect: (entry, preview) => this.apply(entry, preview),
 			onHide: didCancel => {
 				this.menuContext = undefined;
 				if (this.context === context && didCancel !== false) this.close();
 			},
-		}, {
+		};
+		const anchor = {
 			left: bounds.left + coordinates.left,
 			top: bounds.top + coordinates.top,
 			width: 0,
 			height: coordinates.height,
-		}, { showFilter: true }, groups.size > 1 ? {
-			tabs: [
-				{ id: 'all', label: localize('codeAction.allActions', 'All actions') },
-				...groupEntries.map(([title], index) => ({ id: String(index), label: title })),
-			],
-			initialTab: 'all',
-			createActionList: id => ({ items: id === 'all' ? items : groupEntries[Number(id)]![1] }),
-		} : undefined);
+		};
+		const supportsPreview = this.bulkEditService.hasPreviewHandler();
+		if (groups.size > 1) {
+			this.tabbedMenu.show({
+				user: CodeActionController.ID, anchor, delegate, supportsPreview,
+				tabs: [
+					{ id: 'all', label: localize('codeAction.allActions', 'All actions') },
+					...groupEntries.map(([title], index) => ({ id: String(index), label: title })),
+				],
+				initialTab: 'all',
+				createActionList: id => ({
+					items: id === 'all' ? items : groupEntries[Number(id)]![1],
+					listOptions: { showFilter: true },
+				}),
+			});
+		} else {
+			this.actionWidgetService.show(CodeActionController.ID, supportsPreview, items, delegate, anchor, { showFilter: true });
+		}
 	}
 
 	private async apply(entry: CodeActionItem, preview = false): Promise<void> {
@@ -206,6 +220,7 @@ export class CodeActionController extends Disposable {
 		if (this.menuContext) {
 			this.menuContext = undefined;
 			this.actionWidgetService.hide();
+			this.tabbedMenu.hide();
 		}
 		this.actions = [];
 	}

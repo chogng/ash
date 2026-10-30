@@ -34,6 +34,8 @@ import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform
 import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 import { extensionMenuId } from '../../../src/ash/workbench/services/extensions/common/extensionMenus.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
+import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
+import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { IMessageHistoryService, type MessageHistoryEntry, type MessageHistoryQuery } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { ILanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/common/tools/languageModelToolsService.js';
@@ -135,7 +137,7 @@ declare global {
 		finishSubmission(error?: string): void;
 		replaceDraftOnClear(): void;
 		recoveryState(): { pending: boolean; drafts: NonNullable<Parameters<ChatInputPart['restoreDraft']>[0]>[]; };
-		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setProviderIconTheme(): void; setModelsAvailable(available: boolean): void; modelState(): unknown; restoreProviderModels(): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -147,6 +149,7 @@ if (new URLSearchParams(location.search).has('resourceMenus')) {
 	await import('../../../src/ash/workbench/contrib/files/browser/fileActions.contribution.js');
 }
 const resources = new DisposableStore();
+setIconResolver(document, icon => getIconDefinition(icon));
 setARIAContainer(document.body);
 const themes = { dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const themeName = new URLSearchParams(location.search).get('theme') as keyof typeof themes | null;
@@ -357,17 +360,36 @@ if (modelOptions === 'effort' || modelOptions === 'none') {
 if (modelOptions === 'context' || modelOptions === 'none') {
 	models = models.map(entry => ({ ...entry, supportedReasoningEfforts: [] }));
 }
+if (modelOptions === 'effort' || modelOptions === 'context' || modelOptions === 'none') {
+	models = models.map(entry => ({ ...entry, accelerationOptions: [], selectedAcceleration: null }));
+}
 if (new URLSearchParams(location.search).get('modelSet') === 'multiple') {
 	models = [...models, { ...models[0], model: { provider: 'openai', model: 'extended-model' }, displayName: 'Extended model with a longer display name for coding' }];
 }
+if (new URLSearchParams(location.search).get('modelSet') === 'providers') {
+	models = [...models, ...[
+		['anthropic', 'claude-fixture', 'Claude fixture'], ['google', 'gemini-fixture', 'Gemini fixture'],
+		['deepseek', 'ds-fixture', 'DeepSeek fixture'], ['qwen', 'qwen-fixture', 'Qwen fixture'],
+		['private-endpoint', 'custom-fixture', 'Custom fixture'],
+	].map(([provider, model, displayName]) => ({
+		...models[0], model: { provider, model }, displayName,
+		...(provider === 'google' || provider === 'deepseek' ? { supportedReasoningEfforts: [], longContext: null, accelerationOptions: [], selectedAcceleration: null } : {}),
+	}))];
+}
+const unavailableProvider = new URLSearchParams(location.search).has('unavailableProvider');
+const unavailableProviderModels = unavailableProvider ? models.filter(entry => entry.model.provider === 'private-endpoint') : [];
+if (unavailableProvider) {
+	models = models.filter(entry => entry.model.provider !== 'private-endpoint');
+}
 let hiddenModels: readonly ModelCatalogEntry[] | undefined;
-let selectedModel: ModelRef = models[0].model;
+let selectedModel: ModelRef = models.find(entry => entry.model.provider === new URLSearchParams(location.search).get('initialProvider'))?.model ?? models[0].model;
 let automatic = false;
 services.registerInstance(ILanguageModelsService, {
 	readApprovalReviewModel: async () => ({ type: 'automatic' }),
 	setApprovalReviewModel: async () => { },
 	onDidChangeModels: modelChanged.event,
 	setModelPreferences: async (model, update) => {
+		if (new URLSearchParams(location.search).has('modelPreferenceFailure')) { throw new Error('Preference write failed'); }
 		preferenceWrites.push({ model, update });
 		models = models.map(entry => entry.model.provider === model.provider && entry.model.model === model.model ? {
 			...entry,
@@ -387,7 +409,8 @@ services.registerInstance(ILanguageModelsService, {
 	listCustomModelProviders: async () => [],
 	saveCustomModelProvider: async () => { },
 	testProviderModel: async () => ({ type: 'passed' }),
-	listModelProviders: async () => [],
+	listModelProviders: async () => [{ connection: 'private-endpoint', provider: 'custom', displayName: 'Team endpoint',
+		access: 'apiKey', active: !unavailableProvider, configured: true, ready: !unavailableProvider, apiKeyPolicy: 'required', apiKeyConfigured: !unavailableProvider }],
 	setModelProviderApiKey: async () => { },
 	removeModelProviderApiKey: async () => { },
 	listAdvisorModels: async () => [],
@@ -894,9 +917,11 @@ window.ashChatInputIntegration = {
 	},
 	releaseReferencePreview: () => releaseReferencePreview?.(),
 	setHistorySkill: digest => part.render({ ...state, skillSelectors: [{ name: 'commit', description: 'Commit the synthetic change', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } }] }),
-	modelState: () => ({ selectedModel, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
+	modelState: () => ({ selectedModel, selectedReasoningEffort, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
+	restoreProviderModels: () => { models = [...models, ...unavailableProviderModels]; renderModels(); modelChanged.fire(); },
 	setModelsAvailable: available => { if (available) { models = hiddenModels ?? models; hiddenModels = undefined; } else { hiddenModels = models; models = []; } renderModels(); modelChanged.fire(); },
 	setDescription: description => { models = models.map(entry => ({ ...entry, description })); renderModels(); modelChanged.fire(); },
+	setProviderIconTheme: () => { setIconResolver(document, icon => getIconDefinition(icon, new Map([['chat-model-provider-openai', getIconDefinition(Lxicon.claude)!]]))); },
 	disposeContextTerminal: () => { terminalScreen?.dispose(); terminalInstances.length = 0; },
 	changeContextSources: () => {
 		symbolSource = 'changed source';

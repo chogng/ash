@@ -1,48 +1,37 @@
-import {
-	defaultButtonStyles,
-	defaultMenuStyles,
-	defaultToggleStyles,
-	defaultKeybindingLabelStyles,
-} from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import './media/modelPicker.css';
-import { Button } from '../../../../../../../base/browser/ui/button/button.js';
-import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
-import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
 import { EventType, Gesture } from '../../../../../../../base/browser/touch.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { createUuid } from '../../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../../nls.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
-import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { IActionWidgetService } from '../../../../../../../platform/actionWidget/browser/actionWidget.js';
-import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
-import type { IModelPickerDelegate } from './modelPickerActionItem.js';
-import { ModelPickerDetailsMenu } from './modelPickerHover.js';
-import { buildModelPickerItems } from './modelPickerItems.js';
-import { ModelPickerConfiguration } from './modelPickerConfiguration.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
+import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/browser/ui/hover/hoverDelegate.js';
+import { appendIcon } from '../../../../../../../base/browser/ui/lxicons/lxicon.js';
+import { Lxicon } from '../../../../../../../base/common/lxicons.js';
+import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
+import type { IModelPickerDelegate } from './modelPickerActionItem.js';
+import { renderModelConfigurationButton } from './modelPickerConfiguration.js';
+import { TabbedModelPicker } from './modelPickerTabbedWidget.js';
+import { getCompactModelPickerIcon, getProviderIconForIdentity } from './modelProviderIcons.js';
 import { renderChatInputPickerSplit, trackChatInputPickerFocus } from '../chatInputPickerActionItem.js';
-import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
-import { MANAGE_CHAT_COMMAND_ID } from '../../../../common/constants.js';
 
-let nextPickerId = 0;
-
-/** Model controls retain business state; ActionWidget owns the popup and its action list. */
+/** Toolbar controls project the delegate; TabbedModelPicker owns their shared popup interaction. */
 export class ModelPickerWidget extends Disposable {
+	private readonly hoverGroupId = createUuid();
 	private nameButton: HTMLElement | undefined;
 	private configurationButton: HTMLElement | undefined;
+	private nameIcon: HTMLElement | undefined;
 	private readonly nameHover = this._register(new MutableDisposable<IManagedHover>());
-	private configuration: ModelPickerConfiguration | undefined;
+	private readonly configurationHover = this._register(new MutableDisposable<IManagedHover>());
 	private enabled = true;
-	private readonly popup: MutableDisposable<DisposableStore>;
+	private picker: TabbedModelPicker | undefined;
 
-	constructor(private readonly delegate: IModelPickerDelegate, @IActionWidgetService private readonly actionWidgetService: IActionWidgetService, @IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService, @IInstantiationService private readonly instantiationService: IInstantiationService, @ICommandService private readonly commands: ICommandService) {
-		super();
-		// Close the service-owned popup before releasing the controls attached to it.
-		this._register(toDisposable(() => this.hide()));
-		this.popup = this._register(new MutableDisposable<DisposableStore>());
-	}
+	constructor(
+		private readonly delegate: IModelPickerDelegate,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IAccessibleViewService private readonly accessibleViewService: IAccessibleViewService,
+	) { super(); }
 
 	public render(container: HTMLElement): void {
 		const control = h(container.ownerDocument, 'div');
@@ -52,12 +41,16 @@ export class ModelPickerWidget extends Disposable {
 		const { primaryButton: name, secondaryButton: options } = renderChatInputPickerSplit(control);
 		this._register(trackChatInputPickerFocus(control));
 		this.nameButton = name;
+		this.nameIcon = h(container.ownerDocument, 'span');
+		this.nameIcon.className = 'ash-chat-input-model-icon';
+		this.nameIcon.setAttribute('aria-hidden', 'true');
+		name.prepend(this.nameIcon);
 		this.configurationButton = options;
 		name.classList.add('ash-chat-input-model-action');
 		options.classList.add('ash-chat-input-configuration-action');
 		name.setAttribute('aria-haspopup', 'dialog');
-		options.setAttribute('aria-haspopup', 'menu');
-		this.configuration = this._register(this.instantiationService.createInstance(ModelPickerConfiguration, this.delegate, options));
+		options.setAttribute('aria-haspopup', 'dialog');
+		this.picker = this._register(this.instantiationService.createInstance(TabbedModelPicker, this.delegate));
 		this.bindTrigger(name, () => {
 			name.focus();
 			if (this.visible) { this.hide(); }
@@ -66,14 +59,14 @@ export class ModelPickerWidget extends Disposable {
 		this.bindTrigger(options, () => {
 			this.hide();
 			options.focus();
-			this.configuration!.show();
+			this.show(options, this.delegate.getSelectedModel());
 		});
 		this._register(addDisposableListener(control, 'keydown', event => {
 			if (!this.enabled || event.isComposing) { return; }
 			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 				stopEvent(event);
 				if (event.target === name) { this.show(name); }
-				else { this.configuration!.show(); }
+				else { this.show(options, this.delegate.getSelectedModel()); }
 			} else if (event.key === 'ArrowRight' && event.target === name && !options.hidden) {
 				stopEvent(event);
 				options.focus();
@@ -126,269 +119,30 @@ export class ModelPickerWidget extends Disposable {
 			: model?.displayName ?? (selected ? `${selected.provider}/${selected.model}` : localize('chat.modelPicker.selectModel', 'Select model'));
 		this.nameButton!.querySelector('.ash-chat-input-picker-label')!.textContent = label;
 		this.nameButton!.setAttribute('aria-label', label);
+		const icon = this.delegate.isAutomaticModel() ? Lxicon.unlimited
+			: model ? getCompactModelPickerIcon(model) : getProviderIconForIdentity(selected?.provider ?? '');
+		if (this.nameIcon!.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
+			this.nameIcon!.replaceChildren();
+			appendIcon(icon, this.nameIcon!);
+		}
 		this.nameHover.clear();
-		this.nameHover.value = getHoverDelegate().setupHover({ target: this.nameButton!, content: label, groupId: 'actions' });
-		this.configuration!.renderButton();
+		this.nameHover.value = getHoverDelegate().setupHover({ target: this.nameButton!, content: label, groupId: this.hoverGroupId });
+		renderModelConfigurationButton(this.configurationButton!, model, this.delegate.getSelectedReasoningEffort(), this.delegate.isAutomaticModel(),
+			this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration));
+		this.configurationHover.clear();
+		this.configurationHover.value = getHoverDelegate().setupHover({
+			target: this.configurationButton!, content: this.configurationButton!.getAttribute('aria-label')!, groupId: this.hoverGroupId,
+		});
 		if (this.configurationButton!.hidden && this.configurationButton!.ownerDocument.activeElement === this.configurationButton) { this.focus(); }
 		this.setEnabled(this.enabled);
 	}
 
-	public get visible(): boolean {
-		return this.popup.value !== undefined;
-	}
+	public get visible(): boolean { return this.picker?.isVisible ?? false; }
 
-	public hide(): void {
-		if (this.visible) {
-			this.actionWidgetService.hide();
-		}
-	}
+	public hide(): void { this.picker?.hide(); }
 
-	public show(anchor: HTMLElement = this.nameButton!): void {
-		if (this.visible || !this.enabled) return;
-		const ownerDocument = anchor.ownerDocument;
-		let models = this.delegate.getModels();
-		const session = new DisposableStore();
-		const pickerId = ++nextPickerId;
-		const header = h(ownerDocument, 'div');
-		const footer = h(ownerDocument, 'div');
-		footer.className = 'ash-chat-model-picker-footer';
-		const error = h(ownerDocument, 'div');
-		error.className = 'ash-chat-model-picker-error';
-		error.setAttribute('role', 'status');
-		error.hidden = true;
-		let autoSwitch: Switch | undefined;
-		if (models.length === 0) {
-			header.className = 'ash-chat-model-picker-empty';
-			const message = h(ownerDocument, 'div');
-			message.className = 'ash-chat-model-picker-empty-message';
-			message.setAttribute('role', 'status');
-			message.textContent = this.delegate.getModelsError()
-				? localize('chat.modelPicker.loadFailed', 'Could not load models')
-				: localize('chat.modelPicker.noModels', 'No models available');
-			const guidance = h(ownerDocument, 'div');
-			guidance.className = 'ash-chat-model-picker-empty-guidance';
-			guidance.textContent = localize('chat.modelPicker.noModelsPlaceholder', 'Set up models in Settings');
-			header.append(message, guidance);
-			const settingsButton = session.add(new Button(header, {
-				...defaultButtonStyles,
-				label: localize('chat.modelPicker.openSettings', 'Open Settings'),
-				presentation: 'primary',
-			}));
-			session.add(settingsButton.onDidClick(() => {
-				this.hide();
-				void this.delegate.openSettings();
-			}));
-		} else {
-			header.className = 'ash-chat-model-picker-auto';
-			autoSwitch = session.add(new Switch(header, {
-				...defaultToggleStyles,
-				label: localize('chat.modelPicker.auto', 'Auto'),
-				ariaLabel: localize('chat.modelPicker.auto', 'Auto'),
-				checked: this.delegate.isAutomaticModel(),
-				contentPlacement: 'before-control',
-			}));
-			session.add(new Menu(footer, {
-				buttonStyles: defaultButtonStyles,
-				keybindingLabelStyles: defaultKeybindingLabelStyles,
-				actions: [{
-					id: 'ash.chat.input.addModels',
-					label: localize('chat.modelPicker.addModels', 'Add Models'),
-					tooltip: '',
-					enabled: true,
-					run: () => {
-						this.hide();
-						return this.commands.executeCommand(MANAGE_CHAT_COMMAND_ID);
-					},
-				}],
-			}, defaultMenuStyles));
-		}
-		let selecting = false;
-		let active: { entry: ModelCatalogEntry; row: HTMLElement; } | undefined;
-		let detailsMenu: ModelPickerDetailsMenu;
-		let hasNavigated = false;
-		const showDetails = (): void => {
-			if (active && hasNavigated) {
-				const { entry, row } = active;
-				const hadDetailsFocus = detailsMenu.domNode.contains(detailsMenu.domNode.ownerDocument.activeElement);
-				detailsMenu.show(entry, row);
-				// A catalog update can remove the description while a keyboard user reads it.
-				if (hadDetailsFocus && detailsMenu.domNode.hidden) this.actionWidgetService.focusFilter();
-			}
-		};
-		const isAutomatic = this.delegate.isAutomaticModel();
-		footer.hidden = models.length === 0 || isAutomatic;
-		this.popup.value = session;
-		anchor.setAttribute('aria-expanded', 'true');
-		this.actionWidgetService.show(`chatModelPicker-${pickerId}`, false, isAutomatic ? [] : buildModelPickerItems(models, this.delegate.getSelectedModel()), {
-			onShow: content => {
-				this.registerAccessibility(content, session, pickerId);
-				content.append(error);
-				detailsMenu = session.add(new ModelPickerDetailsMenu(content));
-				session.add(addDisposableListener(content, 'keydown', event => {
-					if (event.isComposing) return;
-					if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-						hasNavigated = true;
-					} else if (event.key === 'ArrowRight' && !detailsMenu.domNode.contains(event.target as Node)) {
-						stopEvent(event);
-						hasNavigated = true;
-						this.actionWidgetService.focus();
-						showDetails();
-						detailsMenu.focus();
-					} else if (event.key === 'ArrowLeft' && event.altKey) {
-						stopEvent(event);
-						this.actionWidgetService.focusFilter();
-					}
-				}, true));
-				session.add(addDisposableListener(content, 'input', event => {
-					if (event.target instanceof HTMLElement && event.target.getAttribute('type') === 'search') {
-						hasNavigated = false;
-						detailsMenu.hide();
-					}
-				}));
-			},
-			onFocus: (entry, row) => {
-				active = { entry, row };
-				showDetails();
-			},
-			onHover: (entry, row) => {
-				active = { entry, row };
-				hasNavigated = true;
-				showDetails();
-			},
-			onSelect: async entry => {
-				if (selecting) return;
-				selecting = true;
-				try {
-					await this.delegate.selectModel(entry.model);
-					if (!session.isDisposed) this.actionWidgetService.hide(false);
-				} catch {
-					if (session.isDisposed) return;
-					error.textContent = localize('chat.modelPicker.selectionFailed', 'Could not select model');
-					error.hidden = false;
-				} finally { selecting = false; }
-			},
-			onHide: () => {
-				anchor.setAttribute('aria-expanded', 'false');
-				this.popup.clear();
-			},
-		}, anchor, {
-			className: 'ash-chat-model-picker',
-			presentation: 'details',
-			ariaLabel: localize('chat.modelPicker.aria', 'Choose a chat model'),
-			showFilter: models.length > 0,
-			filterPlaceholder: localize('chat.modelPicker.search', 'Search models'),
-			focusFilterOnOpen: true,
-			filterAsCombobox: true,
-			filterVisible: !isAutomatic,
-			itemsVisible: models.length > 0 && !isAutomatic,
-			minWidth: 180,
-			header,
-			footer,
-			accessibilityHelp: () => { this.accessibleViewService.show(AccessibleViewType.Help); },
-		});
-		if (!autoSwitch) {
-			header.querySelector<HTMLButtonElement>('button')!.focus();
-			return;
-		}
-		const modeSwitch = autoSwitch;
-		let renderedModels = models;
-		let renderedSelected = this.delegate.getSelectedModel();
-		let renderedAutomatic = isAutomatic;
-		const renderMode = (): void => {
-			models = this.delegate.getModels();
-			const automatic = this.delegate.isAutomaticModel();
-			const selected = this.delegate.getSelectedModel();
-			const modeChanged = automatic !== renderedAutomatic;
-			const modelsChanged = renderedModels.length !== models.length || models.some((entry, index) => renderedModels[index] !== entry);
-			const selectionChanged = renderedSelected?.provider !== selected?.provider || renderedSelected?.model !== selected?.model;
-			modeSwitch.checked = automatic;
-			footer.hidden = automatic;
-			if (modeChanged) {
-				hasNavigated = false;
-				active = undefined;
-				detailsMenu.hide();
-			}
-			if (active && !models.some(entry => entry.model.provider === active!.entry.model.provider && entry.model.model === active!.entry.model.model)) {
-				const hadDetailsFocus = detailsMenu.domNode.contains(ownerDocument.activeElement);
-				active = undefined;
-				detailsMenu.hide();
-				if (hadDetailsFocus && !automatic) this.actionWidgetService.focusFilter();
-			}
-
-			if (modeChanged || modelsChanged || selectionChanged) {
-				this.actionWidgetService.updateItems(automatic ? [] : buildModelPickerItems(models, selected), { filterVisible: !automatic, itemsVisible: !automatic });
-			}
-			renderedModels = models;
-			renderedSelected = selected;
-			renderedAutomatic = automatic;
-		};
-		session.add(this.delegate.onDidChangePresentation(renderMode));
-		session.add(modeSwitch.onDidChange(async automatic => {
-			if (selecting) { renderMode(); return; }
-			selecting = true;
-			const hadFocus = ownerDocument.activeElement === modeSwitch.input;
-			modeSwitch.busy = true;
-			error.hidden = true;
-			try {
-				if (automatic) {
-					await this.delegate.selectAutomaticModel();
-				} else {
-					const candidate = this.delegate.getSelectedModel() ?? models[0]?.model;
-					if (!candidate) throw new Error('No models available');
-					await this.delegate.selectModel(candidate);
-				}
-			} catch {
-				if (session.isDisposed) return;
-				error.textContent = localize('chat.modelPicker.selectionFailed', 'Could not select model');
-				error.hidden = false;
-			} finally {
-				selecting = false;
-				if (!session.isDisposed) {
-					modeSwitch.busy = false;
-					renderMode();
-					if (hadFocus) modeSwitch.focus();
-				}
-			}
-		}));
-		if (isAutomatic) modeSwitch.focus();
-	}
-
-	private registerAccessibility(content: HTMLElement, session: DisposableStore, pickerId: number): void {
-		const ownerDocument = content.ownerDocument;
-		content.setAttribute('role', 'dialog');
-		content.setAttribute('aria-label', localize('chat.modelPicker.aria', 'Choose a chat model'));
-		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-			session.add(AccessibleViewRegistry.register({
-				type,
-				priority: 110,
-				name: `chatModelPicker-${pickerId}`,
-				getProvider: () => {
-					const active = ownerDocument.activeElement;
-					if (!(active instanceof HTMLElement) || !content.contains(active)) { return undefined; }
-					return new AccessibleContentProvider(
-						AccessibleViewProviderId.ChatModelConfiguration,
-						{ type },
-						() => {
-							if (type === AccessibleViewType.Help) {
-								return localize('chat.modelPicker.help', 'Model menu. Space toggles Auto. When Auto is on, only its switch is shown. When Auto is off, retirement badges show confirmed shutdown dates when available. Type to search, use Up and Down Arrow to browse models, and Enter to select. Right Arrow reads the model description when available. Use the model options button beside the model button to change thinking level or context size. Alt+Left Arrow returns to search. Escape closes the menu. Add Models opens Language Models management.');
-							}
-							return content.innerText;
-						},
-						() => { if (active.isConnected) { active.focus(); } },
-						AccessibilityVerbositySettingId.ChatModelConfiguration,
-					);
-				},
-			}));
-		}
-		const descriptions = new WeakMap<HTMLElement, string>();
-		session.add(addDisposableListener(content, 'focusin', event => {
-			const hint = this.accessibleViewService.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration);
-			if (event.target instanceof HTMLElement) {
-				if (!descriptions.has(event.target)) { descriptions.set(event.target, event.target.getAttribute('aria-description') ?? ''); }
-				const description = [descriptions.get(event.target), hint].filter(Boolean).join(' ');
-				if (description) { event.target.setAttribute('aria-description', description); }
-				else { event.target.removeAttribute('aria-description'); }
-			}
-		}));
+	public show(anchor: HTMLElement = this.nameButton!, detailsModel?: ModelRef): void {
+		if (!this.enabled || this.visible) { return; }
+		this.picker?.show(anchor, detailsModel);
 	}
 }

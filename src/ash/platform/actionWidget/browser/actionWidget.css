@@ -86,3 +86,35 @@
 .ash-action-widget-details > .ash-action-widget-filter {
 	flex-shrink: 0;
 }
+
+.ash-action-widget-menu.ash-menu > .ash-action-widget-action {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+
+.ash-action-widget-action > .ash-action-widget-primary {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-action-widget-check {
+	margin-left: auto;
+	flex: 0 0 auto;
+}
+
+.ash-action-widget-summary {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label2);
+}
+
+.ash-action-widget-menu .ash-action-widget-secondary.ash-button {
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	flex: 0 0 auto;
+	padding: var(--ash-spacing-size20);
+}

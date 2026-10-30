@@ -10,7 +10,6 @@ import { InstantiationType, registerSingleton } from '../../instantiation/common
 import { IInstantiationService, createDecorator } from '../../instantiation/common/instantiation.js';
 import { Registry } from '../../registry/common/platform.js';
 import { ActionList, type IActionListDelegate, type IActionListItem, type IActionListOptions, type IActionListUpdateOptions } from './actionList.js';
-import { TabbedActionListWidget, type ITabbedActionListShowOptions } from './tabbedActionListWidget.js';
 
 export const IActionWidgetService = createDecorator<IActionWidgetService>('actionWidgetService');
 
@@ -18,7 +17,7 @@ export const IActionWidgetService = createDecorator<IActionWidgetService>('actio
 export interface IActionWidgetService {
 	readonly _serviceBrand: undefined;
 	readonly isVisible: boolean;
-	show<T>(user: string, supportsPreview: boolean, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor, listOptions?: IActionListOptions, tabs?: ITabbedActionListShowOptions<T>): void;
+	show<T>(user: string, supportsPreview: boolean, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor, listOptions?: IActionListOptions): void;
 	hide(didCancel?: boolean): void;
 	updateItems<T>(items: readonly IActionListItem<T>[], options?: IActionListUpdateOptions): void;
 	focusFilter(): void;
@@ -44,16 +43,14 @@ export class ActionWidgetService extends Disposable implements IActionWidgetServ
 		return this.current.value !== undefined;
 	}
 
-	public show<T>(user: string, supportsPreview: boolean, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor, listOptions: IActionListOptions = {}, tabs?: ITabbedActionListShowOptions<T>): void {
+	public show<T>(user: string, supportsPreview: boolean, items: readonly IActionListItem<T>[], delegate: IActionListDelegate<T>, anchor: ContextViewAnchor, listOptions: IActionListOptions = {}): void {
 		this.hide();
 		const lifetime = new DisposableStore();
 		const document = isHTMLElement(anchor) ? anchor.ownerDocument : this.contextViewService.container.ownerDocument;
 		const ariaHint = this.configurationService.getValue<boolean>(AccessibilityVerbositySettingId.ActionWidget)
 			? localize('actionWidget.helpHint', 'Press Alt+F1 for action menu accessibility help.')
 			: undefined;
-		const list = lifetime.add(tabs
-			? this.instantiationService.createInstance(TabbedActionListWidget<T>, user, tabs.createActionList(tabs.initialTab).items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions, tabs)
-			: this.instantiationService.createInstance(ActionList<T>, user, items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions));
+		const list = lifetime.add(this.instantiationService.createInstance(ActionList<T>, user, items, delegate, this.contextViewService.container, ariaHint, supportsPreview, listOptions));
 		this.list = list as ActionList<unknown>;
 		lifetime.add(toDisposable(() => { this.list = undefined; }));
 		const layout = (): void => {

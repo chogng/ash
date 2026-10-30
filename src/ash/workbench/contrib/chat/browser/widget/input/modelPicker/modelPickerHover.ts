@@ -3,8 +3,9 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../../../services/chat/common/modelCatalog.js';
 import { ModelCard } from './modelPickerCard.js';
+import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 
-/** Owns the active model card and positions it beside the flat menu. */
+/** Positions the read-only model description beside the active provider list. */
 export class ModelPickerDetailsMenu extends Disposable {
 	public readonly domNode: HTMLElement;
 	private model: ModelRef | undefined;
@@ -12,7 +13,10 @@ export class ModelPickerDetailsMenu extends Disposable {
 	private card: ModelCard | undefined;
 	private active: { entry: ModelCatalogEntry; row: HTMLElement; } | undefined;
 
-	constructor(private readonly picker: HTMLElement) {
+	constructor(
+		private readonly picker: HTMLElement,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) {
 		super();
 		this.domNode = h(picker.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-model-picker-details-menu';
@@ -22,13 +26,13 @@ export class ModelPickerDetailsMenu extends Disposable {
 	}
 
 	public show(entry: ModelCatalogEntry, row: HTMLElement): void {
-		if (!entry.description?.trim()) { this.hide(); return; }
+		if (!entry.description?.trim() && !(entry.maximumContextWindow ?? entry.contextWindow)) { this.hide(); return; }
 		this.active = { entry, row };
 		if (!this.card || this.model?.provider !== entry.model.provider || this.model.model !== entry.model.model) {
 			const scope = new DisposableStore();
 			this.cardScope.value = scope;
 			this.model = entry.model;
-			const cards = ModelCard.createObservable(scope, this.picker.ownerDocument);
+			const cards = ModelCard.instantiateObservable(this.instantiationService, scope, this.picker.ownerDocument, undefined);
 			this.card = cards.get();
 			this.domNode.append(this.card.element);
 			scope.add(cards.onDidChange(card => {
