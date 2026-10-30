@@ -401,7 +401,6 @@
     "chat.input.sendMessage": "发送消息",
     "chat.input.dictate": "听写",
     "chat.agentPicker.mode": "智能体：{0}",
-    "chat.agentPicker.default": "默认智能体",
     "speech.extensionIntroduction": "试着使用语音扩展说话。它负责识别和麦克风访问。测试文字只会保留在这里。",
     "speech.providerDeclarationInvalid": "无效的语音提供程序贡献声明。",
     "chat.message.copy": "复制消息",

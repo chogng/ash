@@ -187,9 +187,10 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 	const agents = new Promise<readonly ChatAgent[]>(resolve => { finishListing = resolve; });
 	let finishSelection!: (agent: ChatAgent | undefined) => void;
 	const selection = new Promise<ChatAgent | undefined>(resolve => { finishSelection = resolve; });
+	const selectedAgents: (ChatAgent | undefined)[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', {
 		listAgents: () => agents,
-		selectAgent: selected => finishSelection(selected),
+		selectAgent: selected => { selectedAgents.push(selected); finishSelection(selected); },
 	});
 	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true });
 	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!.click();
@@ -210,12 +211,21 @@ test('Chat mode picker loads Agents before opening the shared action widget and 
 	const choices = Array.from(widget.querySelectorAll<HTMLButtonElement>('[role=menuitemradio]'));
 	assert.deepEqual(choices.map(choice => [choice.getAttribute('aria-label'), choice.getAttribute('aria-checked')]), [
 		['Agent', 'true'], ['Plan', 'false'], ['Debug', 'false'], ['Multitask', 'false'], ['Ask', 'false'],
-		['Default Agent', 'true'], ['Reviewer', 'false'],
+		['Reviewer', 'false'],
 	]);
-	choices[6]!.click();
+	choices[5]!.click();
 	assert.deepEqual(await selection, agent);
 	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
 	assert.equal(part.element.querySelector('[data-action-id="ash.chat.input.mode"] button')!.getAttribute('aria-expanded'), 'false');
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: true, selectedAgent: agent });
+	part.element.querySelector<HTMLButtonElement>('[data-action-id="ash.chat.input.mode"] button')!.click();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	const reopenedChoices = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-mode-menu [role=menuitemradio]')];
+	assert.equal(reopenedChoices[0]!.getAttribute('aria-checked'), 'false');
+	assert.equal(reopenedChoices[5]!.getAttribute('aria-checked'), 'true');
+	reopenedChoices[0]!.click();
+	assert.deepEqual(selectedAgents, [agent, undefined]);
+	assert.equal(document.querySelector('.ash-chat-input-mode-menu'), null);
 });
 
 test('Session option loading retires with the input and can reopen for the next visible lifetime', async () => {
@@ -239,7 +249,7 @@ test('Session option loading retires with the input and can reopen for the next 
 	trigger().click();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	const options = [...document.querySelectorAll<HTMLButtonElement>('.ash-chat-input-mode-menu [role=menuitemradio]')];
-	assert.equal(options.length, 7);
+	assert.equal(options.length, 6);
 	options.find(option => option.getAttribute('aria-label') === agent.name)!.click();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(selected, [agent]);

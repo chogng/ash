@@ -1120,15 +1120,15 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 						'mode',
 						() => {
 							this.draftRevision++;
+							if (option.id === 'agent' && this.state.canSelectAgent && this.state.selectedAgent) {
+								this.delegate.selectAgent(undefined);
+							}
 							this.delegate.selectMode(option.id);
 						},
-						option.id === this.mode,
+						option.id === this.mode && (option.id !== 'agent' || !this.state.canSelectAgent || !this.state.selectedAgent),
 					));
 					const agentOptions: IAction[] = [];
-					if (this.state.canSelectAgent) {
-						const label = localize('chat.agentPicker.default', 'Default Agent');
-						agentOptions.push(new ChatInputAction('ash.chat.input.agent.default', label, label, Lxicon.unlimited, true, 'mode', () => this.delegate.selectAgent(undefined), !this.state.selectedAgent));
-					} else if (this.state.agentName) {
+					if (!this.state.canSelectAgent && this.state.agentName) {
 						agentOptions.push(new ChatInputAction('ash.chat.input.agent.current', this.state.agentName, this.state.agentName, Lxicon.unlimited, false, 'mode', () => { }, true));
 					}
 					agentOptions.push(...agents.map(agent => new ChatInputAction(
