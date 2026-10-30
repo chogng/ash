@@ -77,8 +77,9 @@ canonical URI 沿同一本地扩展实例调用链执行：`ExtensionHostManager
 resolver 的可选回调，`NativeExtensionService` 注册 provider，平台 resolver 合并相同 URI 的查询并
 缓存结果。省略回调或返回 null/undefined 保留原 URI。重连、provider 替换、扩展实例退役和窗口
 关闭清除旧缓存及在途查询；Web 的对应平台实现默认保留 URI。
-`workbench/services/workspaces/common/workspaceTrust.ts` 使用同一主机的 canonical 目录身份查询
-Rust 权限，不允许 canonical URI 将目录授权改向其他主机或本机文件系统。
+`workbench/services/workspaces/common/workspaceTrust.ts` 先核对同一主机的 canonical 目录身份，
+当前工作区根目录按已激活目录 ID 读取 Rust 有效权限；配置中保存的授权不替代运行时权限。
+canonical URI 不允许将目录授权改向其他主机或本机文件系统。
 通用 Remote URI 的 authority 由 `platform/remote/common/remoteHosts.ts` 读取，不限定 resolver 前缀；
 `team+` 等扩展端点的文件夹与 SSH 文件夹共用 canonical 绝对路径及权限检查。OpenSSH host alias
 校验只在 SSH 身份与执行入口生效，不参与其他 provider 的资源身份解析。
