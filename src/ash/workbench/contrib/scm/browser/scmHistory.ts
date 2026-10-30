@@ -20,7 +20,6 @@ import type { IHoverService, IManagedHover } from '../../../../platform/hover/br
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { openLinkFromMarkdown } from '../../../../platform/markdown/browser/markdownRenderer.js';
 import { localize, getNLSLanguage } from '../../../../nls.js';
-import { findLastIdx } from "../../../../base/common/arraysFind.js";
 import { registerColor } from '../../../../platform/theme/common/colorUtils.js';
 import { chartsBlue, chartsPurple } from '../../../../platform/theme/common/colors/chartsColors.js';
 import { SCMIncomingHistoryItemId, SCMOutgoingHistoryItemId, type ISCMHistoryItemDetails, type ISCMHistoryItem, type ISCMHistoryItemRef, type ISCMHistoryItemViewModel, type ISCMHistoryItemGraphNode } from '../common/history.js';
@@ -40,6 +39,9 @@ const LaneHeight = 22;
 const LaneWidth = 11;
 const CurveRadius = 5;
 const ColorCount = 8;
+// Reference colors must not be allocated to unrelated branch lanes.
+const HistoryItemRefColor = ColorCount;
+const HistoryItemRemoteRefColor = ColorCount + 1;
 
 interface Lane {
 	readonly id: string;
@@ -48,11 +50,12 @@ interface Lane {
 
 interface GraphRow {
 	readonly historyItem: ISCMHistoryItem;
+	readonly color?: number;
 	readonly inputSwimlanes: readonly Lane[];
 	readonly outputSwimlanes: readonly Lane[];
 }
 
-type GraphNodeKind = "commit" | "head" | "merge" | "incoming-changes" | "outgoing-changes";
+type GraphNodeKind = 'commit' | 'head' | 'merge' | 'incoming-changes' | 'outgoing-changes';
 
 export const SWIMLANE_HEIGHT = LaneHeight;
 export const SWIMLANE_WIDTH = LaneWidth;
@@ -88,24 +91,33 @@ export function toISCMHistoryItemViewModelArray(historyItems: readonly ISCMHisto
 			if (localIndex >= 0) { items.splice(localIndex, 0, { id: SCMOutgoingHistoryItemId, subject: localize('scm.history.outgoing', 'Outgoing Changes'), message: '', parentIds: [local], comparison: { revision: local, baseRevision: base } }); }
 		}
 	}
-	const rows = createRows(items, colorMap, parentOverrides);
+	const rows = createRows(items, colorMap, parentOverrides, currentHistoryItemRef, comparison?.remote);
 	return rows.map(row => ({
 		historyItem: row.historyItem,
+		color: row.color,
 		inputSwimlanes: row.inputSwimlanes.map(lane => ({ id: lane.id, color: lane.colorIndex })),
 		outputSwimlanes: row.outputSwimlanes.map(lane => ({ id: lane.id, color: lane.colorIndex })),
 		kind: row.historyItem.id === SCMIncomingHistoryItemId ? 'incoming-changes' : row.historyItem.id === SCMOutgoingHistoryItemId ? 'outgoing-changes' : row.historyItem.id === currentHistoryItemRef?.revision ? 'HEAD' : 'node',
 	}));
 }
 
-function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: ReadonlyMap<string, number>, parentOverrides: ReadonlyMap<string, readonly string[]>): GraphRow[] {
+function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: ReadonlyMap<string, number>, parentOverrides: ReadonlyMap<string, readonly string[]>, currentHistoryItemRef?: ISCMHistoryItemRef, currentHistoryItemRemoteRef?: ISCMHistoryItemRef): GraphRow[] {
 	const rows: GraphRow[] = [];
 	const historyById = new Map(historyItems.map(item => [item.id, item]));
 	let lanes: readonly Lane[] = [];
 	let nextColorIndex = 0;
 	const referenceColor = (item: ISCMHistoryItem): number | undefined => {
+		if (item.id === SCMIncomingHistoryItemId) return HistoryItemRemoteRefColor;
+		if (item.id === SCMOutgoingHistoryItemId) return HistoryItemRefColor;
 		for (const reference of item.references ?? []) {
 			const color = colorMap.get(reference.id) ?? reference.color;
 			if (color !== undefined) return color;
+		}
+		if (item.id === currentHistoryItemRef?.revision || item.references?.some(reference => reference.id === currentHistoryItemRef?.id)) {
+			return HistoryItemRefColor;
+		}
+		if (item.id === currentHistoryItemRemoteRef?.revision || item.references?.some(reference => reference.category === 'remoteBranch')) {
+			return HistoryItemRemoteRefColor;
 		}
 		return undefined;
 	};
@@ -137,7 +149,7 @@ function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: Readonly
 			const colorIndex = index === 0 ? referenceColor(historyItem) : parent ? referenceColor(parent) : undefined;
 			outputSwimlanes.push({ id: parentIds[index], colorIndex: colorIndex ?? allocateColor() });
 		}
-		rows.push({ historyItem, inputSwimlanes, outputSwimlanes });
+		rows.push({ historyItem, color: referenceColor(historyItem), inputSwimlanes, outputSwimlanes });
 		lanes = outputSwimlanes;
 	}
 	return rows;
@@ -147,12 +159,12 @@ function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: Readonly
 export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemViewModel, expandedHeight = LaneHeight, document: Document = globalThis.document): SVGSVGElement {
 	const row = historyItemViewModel;
 	const kind: GraphNodeKind = row.kind === 'incoming-changes' || row.kind === 'outgoing-changes' ? row.kind : row.kind === 'HEAD' ? 'head' : row.historyItem.parentIds.length > 1 ? 'merge' : 'commit';
-	const svg = createSvgElement(document, "svg");
-	svg.classList.add("ash-scm-graph-graph", kind);
-	svg.setAttribute("aria-hidden", "true");
+	const svg = createSvgElement(document, 'svg');
+	svg.classList.add('ash-scm-graph-graph', kind);
+	svg.setAttribute('aria-hidden', 'true');
 	const inputIndex = row.inputSwimlanes.findIndex((lane) => lane.id === row.historyItem.id);
 	const circleIndex = inputIndex === -1 ? row.inputSwimlanes.length : inputIndex;
-	const circleColorIndex = row.historyItem.parentIds.length > 0 ? row.outputSwimlanes[circleIndex]?.color ?? 0 : row.inputSwimlanes[circleIndex]?.color ?? 0;
+	const circleColorIndex = row.color ?? (row.historyItem.parentIds.length > 0 ? row.outputSwimlanes[circleIndex]?.color ?? 0 : row.inputSwimlanes[circleIndex]?.color ?? 0);
 	let outputSwimlaneIndex = 0;
 
 	for (let index = 0; index < row.inputSwimlanes.length; index += 1) {
@@ -176,10 +188,10 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 	}
 
 	for (let index = 1; index < row.historyItem.parentIds.length; index += 1) {
-		// Repeated parent IDs keep separate branch lanes until that commit is reached.
-		let parentOutputIndex = findLastIdx(row.outputSwimlanes, lane => lane.id === row.historyItem.parentIds[index]);
-		if (parentOutputIndex < 0) { parentOutputIndex = findLastIdx(row.outputSwimlanes, lane => lane.id === SCMIncomingHistoryItemId); }
-		if (parentOutputIndex === -1) continue;
+		// createRows appends a distinct lane for every additional parent. Use its
+		// position because summary nodes can replace its ID while an unrelated
+		// lane still targets the original parent commit.
+		const parentOutputIndex = row.outputSwimlanes.length - row.historyItem.parentIds.length + index;
 		const parentColorIndex = row.outputSwimlanes[parentOutputIndex].color;
 		appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} A ${LaneWidth} ${LaneWidth} 0 0 1 ${LaneWidth * (parentOutputIndex + 1)} ${LaneHeight}`, parentColorIndex);
 		appendPath(svg, `M ${LaneWidth * parentOutputIndex} ${LaneHeight / 2} H ${LaneWidth * (circleIndex + 1)}`, parentColorIndex);
@@ -214,10 +226,10 @@ export function renderSCMHistoryGraphPlaceholder(columns: readonly ISCMHistoryIt
 }
 
 function appendPath(svg: SVGSVGElement, data: string, colorIndex: number): SVGPathElement {
-	const path = createSvgElement(svg.ownerDocument, "path");
-	path.classList.add("ash-scm-graph-path");
+	const path = createSvgElement(svg.ownerDocument, 'path');
+	path.classList.add('ash-scm-graph-path');
 	path.dataset.laneColor = String(colorIndex);
-	path.setAttribute("d", data);
+	path.setAttribute('d', data);
 	svg.append(path);
 	return path;
 }
@@ -229,26 +241,26 @@ function appendNode(svg: SVGSVGElement, index: number, kind: GraphNodeKind, colo
 		appendCircle(svg, index, 5, 'dashed', colorIndex);
 		return;
 	}
-	if (kind === "head") {
-		appendCircle(svg, index, 7, "outer", colorIndex);
-		appendCircle(svg, index, 2, "inner", colorIndex);
+	if (kind === 'head') {
+		appendCircle(svg, index, 7, 'outer', colorIndex);
+		appendCircle(svg, index, 2, 'inner', colorIndex);
 		return;
 	}
-	if (kind === "merge") {
-		appendCircle(svg, index, 6, "outer", colorIndex);
-		appendCircle(svg, index, 3, "inner", colorIndex);
+	if (kind === 'merge') {
+		appendCircle(svg, index, 6, 'outer', colorIndex);
+		appendCircle(svg, index, 3, 'inner', colorIndex);
 		return;
 	}
-	appendCircle(svg, index, 5, "single", colorIndex);
+	appendCircle(svg, index, 5, 'single', colorIndex);
 }
 
-function appendCircle(svg: SVGSVGElement, index: number, radius: number, part: "inner" | "outer" | "single" | "dashed", colorIndex: number): void {
-	const circle = createSvgElement(svg.ownerDocument, "circle");
-	circle.classList.add("ash-scm-graph-node", part);
+function appendCircle(svg: SVGSVGElement, index: number, radius: number, part: 'inner' | 'outer' | 'single' | 'dashed', colorIndex: number): void {
+	const circle = createSvgElement(svg.ownerDocument, 'circle');
+	circle.classList.add('ash-scm-graph-node', part);
 	circle.dataset.laneColor = String(colorIndex);
-	circle.setAttribute("cx", `${LaneWidth * (index + 1)}`);
-	circle.setAttribute("cy", `${LaneHeight / 2}`);
-	circle.setAttribute("r", `${radius}`);
+	circle.setAttribute('cx', `${LaneWidth * (index + 1)}`);
+	circle.setAttribute('cy', `${LaneHeight / 2}`);
+	circle.setAttribute('r', `${radius}`);
 	svg.append(circle);
 }
 
@@ -348,15 +360,14 @@ export function toHistoryItemHoverContent(
 	const openLabel = localize('scm.history.openCommit', 'Open Commit {0}', historyItem.displayId ?? historyItem.id);
 	const hashToolbar = resources.add(new WorkbenchToolBar(hash, contextMenuService, {
 		ariaLabel: openLabel,
-		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: openLabel, tooltip: '' }),
+		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: openLabel, tooltip: openLabel }),
 	}));
 	hashToolbar.setActions([{ id: 'workbench.scm.action.graph.viewChanges', label: historyItem.displayId ?? historyItem.id, tooltip: openLabel, enabled: true, run: () => options.openChanges() }]);
 	const actions = h(document, 'div');
 	actions.className = 'ash-scm-graph-hover-actions';
 	const toolbar = resources.add(new WorkbenchToolBar(actions, contextMenuService, {
 		ariaLabel: localize('scm.history.commitActions', 'Commit actions'),
-		// Action tooltips share the ContextView and would replace their own details card.
-		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip, tooltip: '' }),
+		actionViewItemProvider: (action, options) => new LabelActionViewItem(action, { ...options, ariaLabel: action.tooltip, tooltip: action.tooltip }),
 	}));
 	const copyLabel = localize('scm.history.copyHash', 'Copy Commit Hash');
 	const hoverActions: IAction[] = [{

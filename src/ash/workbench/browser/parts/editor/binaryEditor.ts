@@ -3,15 +3,15 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
-import { h } from "../../../../base/browser/dom.js";
-import type { IDimension } from "../../../../base/browser/dom.js";
-import { raceCancellationError } from "../../../../base/common/async.js";
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { h } from '../../../../base/browser/dom.js';
+import type { IDimension } from '../../../../base/browser/dom.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
-import { IFileService } from "../../../../platform/files/common/files.js";
+import { IFileService } from '../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
+import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { BinaryEditorModel } from '../../../common/editor/binaryEditorModel.js';
 import { localize } from '../../../../nls.js';
 import { EditorPaneMatch, EditorPane } from './editorPane.js';
@@ -20,7 +20,7 @@ import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import type { IModelDeltaDecoration } from '../../../../editor/common/model.js';
 
-export const BINARY_EDITOR_ID = "ash.editor.binary";
+export const BINARY_EDITOR_ID = 'ash.editor.binary';
 const MAX_BINARY_EDITOR_BYTES = 128 * 1024 * 1024;
 const MAX_RENDERED_BYTES = 64 * 1024;
 
@@ -48,14 +48,14 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 	}
 
 	public override create(parent: HTMLElement): void {
-		if (this.container) throw new ReferenceError("Binary editor pane has already been created");
-		const container = h(parent.ownerDocument, "div");
-		container.className = "ash-binary-editor";
-		container.setAttribute("role", "region");
-		const summary = h(parent.ownerDocument, "div");
-		summary.className = "ash-binary-editor-summary";
-		const content = h(parent.ownerDocument, "div");
-		content.className = "ash-binary-editor-content";
+		if (this.container) throw new ReferenceError('Binary editor pane has already been created');
+		const container = h(parent.ownerDocument, 'div');
+		container.className = 'ash-binary-editor';
+		container.setAttribute('role', 'region');
+		const summary = h(parent.ownerDocument, 'div');
+		summary.className = 'ash-binary-editor-summary';
+		const content = h(parent.ownerDocument, 'div');
+		content.className = 'ash-binary-editor-content';
 		container.append(summary, content);
 		parent.append(container);
 		super.create(container);
@@ -69,16 +69,16 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const summary = this.requireSummary();
 		this.requireContent();
-		throwIfCancelled(signal, "Binary editor loading was cancelled");
+		throwIfCancelled(signal, 'Binary editor loading was cancelled');
 		const model = this.instantiationService.createInstance(BinaryEditorModel, input.resource, input.label ?? basename(input.resource), input.initialBytes?.length);
 		try {
-			await raceCancellationError(model.resolve(), signal, "Binary editor loading was cancelled");
+			await raceCancellationError(model.resolve(), signal, 'Binary editor loading was cancelled');
 			const size = model.getSize();
 			if (size !== undefined && size > MAX_BINARY_EDITOR_BYTES) {
 				throw new Error(localize('binaryEditor.tooLarge', 'Binary file is too large to preview ({0})', formatByteCount(size)));
 			}
-			const resolved = input.initialBytes ? { bytes: input.initialBytes } : await raceCancellationError(this.files.readFileBytes(input.resource), signal, "Binary editor loading was cancelled");
-			throwIfCancelled(signal, "Binary editor loading was cancelled");
+			const resolved = input.initialBytes ? { bytes: input.initialBytes } : await raceCancellationError(this.files.readFileBytes(input.resource), signal, 'Binary editor loading was cancelled');
+			throwIfCancelled(signal, 'Binary editor loading was cancelled');
 			// Keep only the preview, rather than retaining a large file's backing buffer.
 			const visible = resolved.bytes.slice(0, MAX_RENDERED_BYTES);
 			this.editor.clear();
@@ -138,8 +138,8 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 		this.bytes = new Uint8Array();
 		this.metadata = undefined;
 		this.updateAriaLabel();
-		if (this.summary) this.summary.textContent = "";
-		if (this.content) this.content.textContent = "";
+		if (this.summary) this.summary.textContent = '';
+		if (this.content) this.content.textContent = '';
 	}
 
 	public override layout(dimension: IDimension): void {
@@ -206,12 +206,12 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 	}
 
 	private requireSummary(): HTMLElement {
-		if (!this.summary) throw new ReferenceError("Binary editor pane has not been created");
+		if (!this.summary) throw new ReferenceError('Binary editor pane has not been created');
 		return this.summary;
 	}
 
 	private requireContent(): HTMLElement {
-		if (!this.content) throw new ReferenceError("Binary editor pane has not been created");
+		if (!this.content) throw new ReferenceError('Binary editor pane has not been created');
 		return this.content;
 	}
 }
@@ -219,13 +219,13 @@ export class BaseBinaryResourceEditor extends EditorPane implements IEditorPane 
 export function binaryEditorDescriptor(): IEditorPaneDescriptor {
 	return {
 		id: BINARY_EDITOR_ID,
-		name: "Binary Editor",
+		name: 'Binary Editor',
 		canOpen: input => {
-			if (input.initialBytes === undefined && input.resource.scheme !== "file" && !isRemoteResource(input.resource)) return EditorPaneMatch.None;
-			return input.contentType?.toLowerCase().startsWith("application/octet-stream") ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
+			if (input.initialBytes === undefined && input.resource.scheme !== 'file' && !isRemoteResource(input.resource)) return EditorPaneMatch.None;
+			return input.contentType?.toLowerCase().startsWith('application/octet-stream') ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
 		},
 		create: options => {
-			if (!options.instantiationService) throw new Error("Binary editor requires Workbench instantiation services");
+			if (!options.instantiationService) throw new Error('Binary editor requires Workbench instantiation services');
 			return options.instantiationService.createInstance(BaseBinaryResourceEditor, 'standalone');
 		},
 	};
@@ -235,13 +235,13 @@ function renderHexDump(bytes: Uint8Array, length = bytes.length): string {
 	const rows: string[] = [];
 	for (let offset = 0; offset < length; offset += 16) {
 		const row = bytes.subarray(offset, offset + 16);
-		const address = offset.toString(16).padStart(8, "0");
+		const address = offset.toString(16).padStart(8, '0');
 		const count = Math.min(16, length - offset);
 		const hex = Array.from({ length: count }, (_, index) => row[index] === undefined ? '--' : row[index].toString(16).padStart(2, '0')).join(' ').padEnd(47, ' ');
 		const ascii = Array.from({ length: count }, (_, index) => row[index] === undefined ? '-' : row[index] >= 0x20 && row[index] <= 0x7e ? String.fromCharCode(row[index]) : '.').join('');
 		rows.push(`${address}  ${hex}  |${ascii}|`);
 	}
-	return rows.join("\n");
+	return rows.join('\n');
 }
 
 function formatByteCount(bytes: number): string {

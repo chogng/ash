@@ -63,3 +63,5 @@ SQLite 对最新数据执行单 key 事务，不让不同窗口的不同 key 更
 后续接口或模块迁移仍需同批处理 Cargo workspace 和 lockfile、Bazel、CI、Host 的依赖和调用方、示例与测试；不以 SDK 目录搬迁代替具体能力验证。
 保留其他领域的系统工具和外部进程能力，不以新方向为由删除无关运行时。
 验证应分别覆盖真实 TS/JS 包与独立 Rust 程序的注册、调用、取消、释放和授权拒绝；现有 Node 路径按当前实现验证，不能当作目标 Rust/V8 兼容层已经完成。Rust Provider 需检查 App/TUI 共用语义，以及未启用可选登录扩展时 TUI 没有启动依赖；旧 Rust 命令或 Hover 示例通过不能证明认证能力完成。
+
+Rust 调试扩展可通过 `BackgroundClient::create_terminal` 创建归属当前激活的集成终端，使用 `read_terminal` 的输出游标和关闭标记观察其生命周期，再以 `dispose_terminal` 释放。句柄绑定激活代次，其他激活无法读取或关闭；扩展退役和工作区切换时由终端桥回收。输出保留有界，`output_gap` 表示游标前的数据已被淘汰。

@@ -56,7 +56,11 @@ export class KeybindingsEditorModel extends EditorModel {
 		const quoted = /"([^"]*)"/.exec(query);
 		const exact = quoted ? this.keybindings.resolveUserBinding(quoted[1]!) : undefined;
 		const exactLabel = exact ? getKeybindingLabel(exact, KeybindingLabelStyle.Aria).toLocaleLowerCase() : undefined;
-		const terms = query.replace(/@source:\s*(system|default|user|extension|unassigned)\b/ig, '').replace(/"[^"]*"/g, '').split(/\s+/).filter(Boolean);
+		const terms = query
+			.replace(/@source:\s*(system|default|user|extension|unassigned)\b/gi, '')
+			.replace(/"[^"]*"/g, '')
+			.split(/\s+/)
+			.filter(Boolean);
 		const items = this.allItems.filter(item => {
 			if (source && (source === 'system' || source === 'default'
 				? item.source !== 'builtin' && item.source !== 'workbench'

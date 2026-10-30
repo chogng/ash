@@ -1,4 +1,4 @@
-import type { ISandboxGlobals } from "../../../base/parts/sandbox/electron-browser/sandboxTypes.js";
+import type { ISandboxGlobals } from '../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { ITextEditorSelection } from '../../editor/common/editor.js';
 
@@ -9,19 +9,19 @@ export interface IResourceStat {
 }
 
 export const CodeDataTransfers = {
-	EDITORS: "CodeEditors",
-	FILES: "CodeFiles",
-	SYMBOLS: "application/vnd.code.symbols",
-	MARKERS: "application/vnd.code.diagnostics",
-	NOTEBOOK_CELL_OUTPUT: "notebook-cell-output",
-	SCM_HISTORY_ITEM: "scm-history-item",
-	CHAT_REFERENCE: "application/vnd.code.chat-reference",
+	EDITORS: 'CodeEditors',
+	FILES: 'CodeFiles',
+	SYMBOLS: 'application/vnd.code.symbols',
+	MARKERS: 'application/vnd.code.diagnostics',
+	NOTEBOOK_CELL_OUTPUT: 'notebook-cell-output',
+	SCM_HISTORY_ITEM: 'scm-history-item',
+	CHAT_REFERENCE: 'application/vnd.code.chat-reference',
 } as const;
 
 /** Returns the desktop path associated with a browser File, when available. */
 export function getPathForFile(file: File): string | undefined {
 	const legacyPath = (file as File & { readonly path?: unknown; }).path;
-	if (typeof legacyPath === "string" && legacyPath.length > 0) return legacyPath;
+	if (typeof legacyPath === 'string' && legacyPath.length > 0) return legacyPath;
 	const globals = (globalThis as typeof globalThis & { readonly ash?: ISandboxGlobals; }).ash;
 	if (!globals?.webUtils) return undefined;
 	const path = globals.webUtils.getPathForFile(file);

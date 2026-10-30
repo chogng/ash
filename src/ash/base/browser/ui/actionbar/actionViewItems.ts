@@ -1,23 +1,25 @@
-import { Separator, type IAction } from "../../../common/actions.js";
-import type { Icon } from "../../../common/icon.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
-import { assertDefined } from "../../../common/types.js";
-import { addDisposableListener, h } from "../../dom.js";
-import { setAriaAttribute } from "../aria/aria.js";
-import { Button, type IButtonOptions, type IButtonStyles } from "../button/button.js";
-import { AnchorPosition } from "../contextview/contextview.js";
-import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
+import { Separator, type IAction } from '../../../common/actions.js';
+import type { Icon } from '../../../common/icon.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
+import { assertDefined } from '../../../common/types.js';
+import { addDisposableListener, h } from '../../dom.js';
+import { setAriaAttribute } from '../aria/aria.js';
+import { Button, type IButtonOptions, type IButtonStyles } from '../button/button.js';
+import { AnchorPosition } from '../contextview/contextview.js';
+import { getHoverDelegate, type IManagedHover } from '../hover/hoverDelegate.js';
 import type { IDelayedHoverOptions } from '../hover/hover.js';
 import { HoverPosition } from '../hover/hoverWidget.js';
-import { appendIcon } from "../lxicons/lxicon.js";
-
-const ActionHoverGroupId = "actions";
+import { appendIcon } from '../lxicons/lxicon.js';
 
 /** Presentation options shared by every ActionBar item representation. */
 export interface ActionViewItemOptions {
+	/** Adjacent actions share their host's delay history, independently of other toolbars. */
+	readonly hoverGroupId?: string;
 	readonly buttonStyles?: IButtonStyles;
 	/** Selects the shared Button presentation for this action's triggers. */
 	readonly buttonPresentation?: IButtonOptions['presentation'];
+	/** Hides button captions while retaining their accessible names and tooltips. */
+	readonly iconOnly?: boolean;
 	/** Allows the host ActionBar to expose this item as a native drag source. */
 	readonly draggable?: boolean;
 	/** Places the item's managed tooltip relative to its trigger. */
@@ -31,11 +33,19 @@ export interface ActionViewItemOptions {
  * resources they create for that representation.
  */
 export abstract class ActionViewItem extends Disposable {
+	private hoverGroupId: string | undefined;
+
 	protected constructor(
 		readonly action: IAction,
 		private readonly actionViewItemOptions: ActionViewItemOptions = {},
 	) {
 		super();
+		this.hoverGroupId = actionViewItemOptions.hoverGroupId;
+	}
+
+	/** The owning ActionBar assigns its delay group before rendering custom or standard items. */
+	public setHoverGroupId(groupId: string | undefined): void {
+		this.hoverGroupId = groupId;
 	}
 
 	get draggable(): boolean {
@@ -55,8 +65,9 @@ export abstract class ActionViewItem extends Disposable {
 			...this.actionViewItemOptions.buttonStyles,
 			presentation: this.actionViewItemOptions.buttonPresentation,
 			...options,
+			iconOnly: options.iconOnly ?? this.actionViewItemOptions.iconOnly,
 			title: undefined,
-			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
+			hoverGroupId: options.hoverGroupId ?? this.hoverGroupId,
 			hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
 		}));
 		if (options.title) {
@@ -70,7 +81,7 @@ export abstract class ActionViewItem extends Disposable {
 		return this._register(getHoverDelegate().setupDelayedHover(target, () => ({
 			content,
 			...this.getHoverOptions(),
-		}), { groupId: ActionHoverGroupId }));
+		}), { groupId: this.hoverGroupId }));
 	}
 
 	/** Mutable tooltips are retained for items whose labels change while visible. */
@@ -78,7 +89,7 @@ export abstract class ActionViewItem extends Disposable {
 		return this._register(getHoverDelegate().setupHover({
 			target,
 			content,
-			groupId: ActionHoverGroupId,
+			groupId: this.hoverGroupId,
 			anchorPosition: this.actionViewItemOptions.hoverAnchorPosition,
 		}));
 	}
@@ -156,29 +167,29 @@ export class LabelActionViewItem extends ActionViewItem {
 		if (this.button) {
 			throw new Error(`Action view item is already rendered: ${this.action.id}`);
 		}
-		const button = h(container.ownerDocument, "button");
-		const label = h(container.ownerDocument, "span");
-		button.className = "ash-action-label";
-		button.type = "button";
+		const button = h(container.ownerDocument, 'button');
+		const label = h(container.ownerDocument, 'span');
+		button.className = 'ash-action-label';
+		button.type = 'button';
 		button.disabled = !this.action.enabled;
 		if (this.action.checked !== undefined) {
-			button.classList.toggle("checked", this.action.checked);
-			setAriaAttribute(button, "pressed", this.action.checked);
+			button.classList.toggle('checked', this.action.checked);
+			setAriaAttribute(button, 'pressed', this.action.checked);
 		}
 		if (this.options.ariaLabel) {
-			setAriaAttribute(button, "label", this.options.ariaLabel);
+			setAriaAttribute(button, 'label', this.options.ariaLabel);
 		}
 		const icon = this.options.icon ?? this.action.icon;
 		if (icon) {
-			const iconContainer = h(container.ownerDocument, "span");
-			iconContainer.className = "ash-action-label-icon";
+			const iconContainer = h(container.ownerDocument, 'span');
+			iconContainer.className = 'ash-action-label-icon';
 			appendIcon(icon, iconContainer);
 			button.append(iconContainer);
 		}
-		label.className = "ash-action-label-text";
+		label.className = 'ash-action-label-text';
 		label.textContent = this.options.label ?? this.action.label;
 		button.append(label);
-		this._register(addDisposableListener(button, "click", () => this.action.run()));
+		this._register(addDisposableListener(button, 'click', () => this.action.run()));
 		this.setupHover(button, this.options.tooltip ?? this.action.tooltip);
 		this._register(toDisposable(() => button.remove()));
 		this.button = button;
@@ -207,8 +218,8 @@ export class SeparatorActionViewItem extends ActionViewItem {
 			throw new Error(`Action view item is already rendered: ${this.action.id}`);
 		}
 		this.rendered = true;
-		container.classList.add("ash-action-view-item-separator");
-		container.setAttribute("role", "separator");
+		container.classList.add('ash-action-view-item-separator');
+		container.setAttribute('role', 'separator');
 	}
 
 	override setTabbable(_tabbable: boolean): void { }

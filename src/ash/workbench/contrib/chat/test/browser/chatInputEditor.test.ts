@@ -1,12 +1,12 @@
 import { ChatAttachmentModel } from '../../browser/attachments/chatAttachmentModel.js';
 import { SCMHistoryItemUri } from '../../../scm/common/history.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import assert from "node:assert/strict";
-import { setup, teardown, test, suite, suiteSetup, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { setup, teardown, test, suite, suiteSetup, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -21,22 +21,22 @@ for (const [name, value] of Object.entries({
 }
 
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
-const { ChatInputEditor } = await import("../../browser/widget/input/chatInputEditor.js");
+const { ChatInputEditor } = await import('../../browser/widget/input/chatInputEditor.js');
 await import('../../browser/chat.shared.contribution.js');
 const { ChatInputConfiguration } = await import('../../common/constants.js');
 const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
-const { createChatCommandCompletionProvider, createChatSkillCompletionProvider } = await import("../../browser/widget/input/editor/chatInputCompletions.js");
-const { DesktopSlashCommands, SlashCommandCatalog } = await import("../../common/slashCommands.js");
+const { createChatCommandCompletionProvider, createChatSkillCompletionProvider } = await import('../../browser/widget/input/editor/chatInputCompletions.js');
+const { DesktopSlashCommands, SlashCommandCatalog } = await import('../../common/slashCommands.js');
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
-const { Position } = await import("../../../../../editor/common/core/position.js");
+const { Position } = await import('../../../../../editor/common/core/position.js');
 const { PositionAffinity } = await import('../../../../../editor/common/model.js');
 const { EndOfLineSequence } = await import('../../../../../editor/common/model.js');
 const { EditorOption } = await import('../../../../../editor/common/config/editorOptions.js');
 const { FontMeasurements } = await import('../../../../../editor/browser/config/fontMeasurements.js');
-const { Range } = await import("../../../../../editor/common/core/range.js");
-const { LanguageCompletionTriggerKind } = await import("../../../../../editor/common/languages.js");
-const { TextModel } = await import("../../../../../editor/common/model/textModel.js");
-const { ICodeEditorService } = await import("../../../../../editor/browser/services/codeEditorService.js");
+const { Range } = await import('../../../../../editor/common/core/range.js');
+const { LanguageCompletionTriggerKind } = await import('../../../../../editor/common/languages.js');
+const { TextModel } = await import('../../../../../editor/common/model/textModel.js');
+const { ICodeEditorService } = await import('../../../../../editor/browser/services/codeEditorService.js');
 const { ICommandService } = await import('../../../../../platform/commands/common/commands.js');
 const { Selection } = await import('../../../../../editor/common/core/selection.js');
 const { ChatDynamicVariableModel, dynamicVariableDecorationType } = await import('../../browser/attachments/chatDynamicVariables.js');
@@ -45,7 +45,7 @@ const { ChatPasteProvidersFeature, CHAT_ATTACHMENT_MIME_TYPE, CopyTextProvider }
 const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
 const { ILanguageFeaturesService } = await import('../../../../../editor/common/services/languageFeatures.js');
 const { CopyPasteController } = await import('../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js');
-const { SelectAllCommand } = await import("../../../../../editor/browser/editorExtensions.js");
+const { SelectAllCommand } = await import('../../../../../editor/browser/editorExtensions.js');
 const { URI } = await import('../../../../../base/common/uri.js');
 const { IEditorService } = await import('../../../../services/editor/common/editorService.js');
 const { emptyEditorServiceState } = await import('../../../../test/common/testEditorService.js');
@@ -403,7 +403,13 @@ test('A mixed attachment batch keeps the caret after each reference and retains 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using resources = new DisposableStore();
 	const services = createChatInputServices(resources);
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Review  please';
@@ -626,7 +632,13 @@ test('References constrain mouse, keyboard and API selections to whole model and
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using resources = new DisposableStore();
 	const services = createChatInputServices(resources);
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Before  after';
@@ -674,7 +686,13 @@ test('Reference icons borrow the file theme, refresh with it and leave non-file 
 		getFileIconTheme: () => ({ ...noFileIconTheme, hasFileIcons: true }),
 		renderFileIcon: (resource, container) => { container.dataset.fileIcon = `${resource.path}:${version}`; },
 	});
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	for (const [id, uri] of [['file', 'file:///workspace/settings.json'], ['output', 'output:/rust-analyzer'], ['debug', 'inmemory:/debug-console'], ['anonymous', 'inmemory:/console']] as const) {
@@ -705,7 +723,13 @@ test('Reference previews shorten the shared snapshot without exposing output ide
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	const resource = URI.parse('output:/language-server.rust-analyzer.internal-id#3,1-33,1');
@@ -731,7 +755,13 @@ test('Late reference previews cannot restore removed references or decorate anot
 	using editorServices = new DisposableStore();
 	const opened: string[] = [];
 	const services = createChatInputServices(editorServices, async input => { opened.push(input.resource.toString()); });
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	let finish!: (value: { name: string; content: string; }) => void;
@@ -755,7 +785,13 @@ test('Opening saved references isolates same-name snapshots and reuses the same 
 	using editorServices = new DisposableStore();
 	const opened: import('../../../../common/editor.js').IResourceEditorInput[] = [];
 	const services = createChatInputServices(editorServices, async input => { opened.push(input); });
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	for (const content of ['First saved version', 'Second saved version']) {
@@ -783,7 +819,13 @@ test('Inline code references track edits, atomic deletion, undo and redo in the 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog([], []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, {
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
+		slashCommands: new SlashCommandCatalog([], []),
+		skills: new SkillSelectorCatalog()
+	});
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	editor.value = 'Explain  please';
@@ -846,7 +888,7 @@ test('Source updates project the canonical capture and revoked sources stay deta
 });
 
 test('Chat registers its focused editor for global commands and removes it on disposal', async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
@@ -857,7 +899,7 @@ test('Chat registers its focused editor for global commands and removes it on di
 	using willCreate = editors.onWillCreateCodeEditor(() => lifecycle.push('will'));
 	using added = editors.onCodeEditorAdd(() => lifecycle.push('add'));
 	using removed = editors.onCodeEditorRemove(() => lifecycle.push('remove'));
-	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, "main"), placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, 'main'), placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	assert.ok(editors.listDecorationTypes().includes(dynamicVariableDecorationType));
 	editor.value = 'message';
 	editor.focus();
@@ -919,13 +961,13 @@ test('Chat typography updates preserve the draft and selection, resize the input
 	assert.equal(services.get(ICodeEditorService).listCodeEditors().length, 0);
 });
 
-test("Chat completion providers use one-based editor positions and ranges", async () => {
+test('Chat completion providers use one-based editor positions and ranges', async () => {
 	const slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
-	using slashModel = new TextModel("/ne");
+	using slashModel = new TextModel('/ne');
 	const slashPosition = new Position(1, 4);
 	const slashResult = await createChatCommandCompletionProvider(slashCommands).provideCompletions({
 		requestId: 1,
-		languageId: "ash-chat-input",
+		languageId: 'ash-chat-input',
 		position: slashPosition,
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
 		snapshot: slashModel.createVersionedSnapshot(),
@@ -934,16 +976,16 @@ test("Chat completion providers use one-based editor positions and ranges", asyn
 
 	const skills = new SkillSelectorCatalog();
 	skills.setSkills([{
-		name: "commit",
-		description: "Draft a commit message",
-		source: "user",
-		skill: { id: { source: "user:skill-source:test", name: "commit" }, version: { type: "pinnedDigest", digest: "sha256:commit" } },
+		name: 'commit',
+		description: 'Draft a commit message',
+		source: 'user',
+		skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest: 'sha256:commit' } },
 	}]);
-	using skillModel = new TextModel("first line\nuse $com here");
+	using skillModel = new TextModel('first line\nuse $com here');
 	const skillPosition = new Position(2, 9);
 	const skillResult = await createChatSkillCompletionProvider(skills).provideCompletions({
 		requestId: 2,
-		languageId: "ash-chat-input",
+		languageId: 'ash-chat-input',
 		position: skillPosition,
 		context: { kind: LanguageCompletionTriggerKind.Invoke },
 		snapshot: skillModel.createVersionedSnapshot(),
@@ -970,34 +1012,34 @@ test('Chat slash provider finds description text without preselecting it', async
 	]);
 });
 
-test("Chat input completes slash commands before submitting", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('Chat input completes slash commands before submitting', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
+	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using editorServices = new DisposableStore();
-	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	let submissions = 0;
 	using submitListener = editor.onDidSubmit(() => submissions += 1);
-	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
+	const input = requiredElement<HTMLTextAreaElement>(editor.element, '.stanza-editor-input');
 	editor.focus();
 
-	input.dispatchEvent(beforeInputEvent(dom.window, "/"));
-	assert.equal(editor.value, "/");
+	input.dispatchEvent(beforeInputEvent(dom.window, '/'));
+	assert.equal(editor.value, '/');
 	await waitFor(() => completionLabels(editor.element).includes('/config'));
 	for (const command of ['/new', '/history', '/config']) assert.ok(completionLabels(editor.element).includes(command));
-	assert.equal(editor.element.querySelector(".stanza-editor-line-number"), null);
+	assert.equal(editor.element.querySelector('.stanza-editor-line-number'), null);
 
-	input.dispatchEvent(beforeInputEvent(dom.window, "n"));
+	input.dispatchEvent(beforeInputEvent(dom.window, 'n'));
 	await waitFor(() => completionLabels(editor.element).length === 1);
-	assert.deepEqual(completionLabels(editor.element), ["/new"]);
+	assert.deepEqual(completionLabels(editor.element), ['/new']);
 
-	const accept = keyboardEvent(dom.window, "Enter");
+	const accept = keyboardEvent(dom.window, 'Enter');
 	input.dispatchEvent(accept);
 	assert.equal(accept.defaultPrevented, true);
-	assert.equal(editor.value, "/new ");
+	assert.equal(editor.value, '/new ');
 	assert.equal(submissions, 0);
 
-	const submit = keyboardEvent(dom.window, "Enter");
+	const submit = keyboardEvent(dom.window, 'Enter');
 	input.dispatchEvent(submit);
 	assert.equal(submit.defaultPrevented, true);
 	assert.equal(submissions, 1);
@@ -1068,25 +1110,25 @@ test('Chat input emphasizes a description-only command match', async () => {
 });
 
 test('Chat input discovers Skills through the shared `$` selector', async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
+	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
 	const skills = new SkillSelectorCatalog();
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
-	const options = { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: catalog, skills };
+	const options = { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: catalog, skills };
 	using editor = services.createInstance(ChatInputEditor, options);
 	let submissions = 0;
 	using submitListener = editor.onDidSubmit(() => submissions++);
 	skills.setSkills([{
-		name: "commit",
-		description: "Draft a commit message",
-		source: "user",
-		skill: { id: { source: "user:skill-source:test", name: "commit" }, version: { type: "pinnedDigest", digest: "sha256:commit" } },
+		name: 'commit',
+		description: 'Draft a commit message',
+		source: 'user',
+		skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest: 'sha256:commit' } },
 	}]);
-	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
+	const input = requiredElement<HTMLTextAreaElement>(editor.element, '.stanza-editor-input');
 	editor.focus();
 
 	input.dispatchEvent(beforeInputEvent(dom.window, '$'));
@@ -1100,13 +1142,13 @@ test('Chat input discovers Skills through the shared `$` selector', async () => 
 });
 
 test('Chat command completion replaces the whole command and preserves arguments', async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
+	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using editorServices = new DisposableStore();
 	const services = createChatInputServices(editorServices);
-	using editor = services.createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	using editor = services.createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
 	editor.value = '/history argument';
@@ -1123,39 +1165,39 @@ test('Chat command completion replaces the whole command and preserves arguments
 	assert.equal(editor.value, '/history argument');
 });
 
-test("Chat input starts with two lines and grows and shrinks with content", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('Chat input starts with two lines and grows and shrinks with content', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement<HTMLElement>(dom.window.document, "main");
+	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 	using editorServices = new DisposableStore();
-	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	using editor = createChatInputServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: 'Ask Ash', ariaLabel: 'Chat message', slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
 	editor.layout();
 
-	assert.equal(editor.element.style.height, "40px");
-	editor.value = "First line\nSecond line";
-	await waitFor(() => editor.element.style.height === "40px");
-	editor.value += "\nThird line";
-	await waitFor(() => editor.element.style.height === "60px");
-	editor.value = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n");
-	await waitFor(() => editor.element.style.height === "240px");
-	editor.value = Array.from({ length: 50 }, (_, index) => `Line ${index + 1}`).join("\n");
-	await waitFor(() => editor.element.style.height === "314px");
-	editor.value = "";
-	await waitFor(() => editor.element.style.height === "40px");
+	assert.equal(editor.element.style.height, '40px');
+	editor.value = 'First line\nSecond line';
+	await waitFor(() => editor.element.style.height === '40px');
+	editor.value += '\nThird line';
+	await waitFor(() => editor.element.style.height === '60px');
+	editor.value = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join('\n');
+	await waitFor(() => editor.element.style.height === '240px');
+	editor.value = Array.from({ length: 50 }, (_, index) => `Line ${index + 1}`).join('\n');
+	await waitFor(() => editor.element.style.height === '314px');
+	editor.value = '';
+	await waitFor(() => editor.element.style.height === '40px');
 	dom.window.close();
 });
 
 function completionLabels(root: ParentNode): string[] {
-	return [...root.querySelectorAll<HTMLElement>(".stanza-editor-completion-label")].map(element => element.textContent ?? "");
+	return [...root.querySelectorAll<HTMLElement>('.stanza-editor-completion-label')].map(element => element.textContent ?? '');
 }
 
-function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string | null, inputType = "insertText"): InputEvent {
-	return new targetWindow.InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType, data }) as unknown as InputEvent;
+function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string | null, inputType = 'insertText'): InputEvent {
+	return new targetWindow.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType, data }) as unknown as InputEvent;
 }
 
 function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string): KeyboardEvent {
-	return new targetWindow.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key }) as unknown as KeyboardEvent;
+	return new targetWindow.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key }) as unknown as KeyboardEvent;
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
@@ -1163,7 +1205,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		if (predicate()) return;
 		await new Promise<void>(resolve => setTimeout(resolve, 0));
 	}
-	assert.fail("Timed out waiting for Chat input state");
+	assert.fail('Timed out waiting for Chat input state');
 }
 
 function requiredElement<T extends Element = HTMLElement>(root: ParentNode, selector: string): T {

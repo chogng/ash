@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import { IRendererHostService } from '../../../../../platform/renderer/common/rendererHost.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
@@ -48,7 +49,7 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { registerTestTerminalCreationServices, registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -57,13 +58,13 @@ import { resetNlsResolver } from '../../../../../nls.js';
 import { ITerminalProcessService, type IShellLaunchConfig, type ITerminalProcessReadResult, type TerminalProcessExecution } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalService } from '../../../terminal/browser/terminalService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
-import { Emitter, Event } from "../../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
-import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from "../../../terminal/browser/terminal.js";
-import { TaskService } from "../../browser/taskService.js";
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileStat, type IFileWriteResult } from '../../../../../platform/files/common/files.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from '../../../terminal/browser/terminal.js';
+import { TaskService } from '../../browser/taskService.js';
 import '../../../accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { ITaskService } from '../../common/taskService.js';
@@ -172,20 +173,20 @@ test('TaskService discovers UTF-8 configuration through the provider text contra
 	assert.deepEqual(textReads, ['utf8']);
 });
 
-test("TaskService discovers tasks, creates a shell execution, and tracks its exit", async () => {
-	const root = URI.file("C:\\project");
+test('TaskService discovers tasks, creates a shell execution, and tracks its exit', async () => {
+	const root = URI.file('C:\\project');
 	const files = new FakeFileService(root, {
-		".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Lint","command":"cargo lint","group":"build"}]}',
-		"package.json": '{"scripts":{"test":"node --test"}}',
-		"pnpm-lock.yaml": "lockfileVersion: 9",
-		"Cargo.toml": "[workspace]",
+		'.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Lint","command":"cargo lint","group":"build"}]}',
+		'package.json': '{"scripts":{"test":"node --test"}}',
+		'pnpm-lock.yaml': 'lockfileVersion: 9',
+		'Cargo.toml': '[workspace]',
 	});
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
 		onDidChangeWorkspaceFolders: Event.None,
 		onDidChangeWorkbenchState: Event.None,
 		onDidChangeWorkspaceName: Event.None,
-		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
+		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] }),
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
 	};
@@ -195,73 +196,73 @@ test("TaskService discovers tasks, creates a shell execution, and tracks its exi
 	const output = services.get(IOutputService);
 	using service = services.createInstance(TaskService);
 	const tasks = await service.refresh();
-	assert.deepEqual(tasks.map(task => task.id), ["cargo:build", "cargo:check", "vscode:0:lint", "cargo:test", "pnpm:test", "cargo:run"]);
+	assert.deepEqual(tasks.map(task => task.id), ['cargo:build', 'cargo:check', 'vscode:0:lint', 'cargo:test', 'pnpm:test', 'cargo:run']);
 
-	const task = tasks.find(candidate => candidate.id === "vscode:0:lint")!;
+	const task = tasks.find(candidate => candidate.id === 'vscode:0:lint')!;
 	const run = await service.run(task);
 	const terminal = terminals.instances[0] as FakeTerminalInstance;
 	assert.equal(run.terminalId, terminal.id);
-	assert.equal(terminal.title, "Task: Lint");
+	assert.equal(terminal.title, 'Task: Lint');
 	assert.deepEqual({ execution: terminal.execution, writes: terminal.writes }, { execution: { type: 'shell', commandLine: 'cargo lint' }, writes: [] });
-	assert.equal(run.status, "running");
-	terminal.command({ commandId: "command-1", status: "running", exitCode: undefined });
-	terminal.command({ commandId: "command-1", status: "failed", exitCode: 2 });
-	assert.equal(run.status, "failed");
+	assert.equal(run.status, 'running');
+	terminal.command({ commandId: 'command-1', status: 'running', exitCode: undefined });
+	terminal.command({ commandId: 'command-1', status: 'failed', exitCode: 2 });
+	assert.equal(run.status, 'failed');
 	assert.equal(run.exitCode, 2);
 	assert.equal(service.activeRuns.length, 0);
 	assert.equal(service.lastRun, run);
-	assert.match(output.getChannel("tasks")?.getText() ?? "", /Discovered 6 workspace task/);
-	assert.match(output.getChannel("tasks")?.getText() ?? "", /Task 'Lint' failed \(exit code 2\)/);
-	assert.doesNotMatch(output.getChannel("tasks")?.getText() ?? "", /cargo lint/);
+	assert.match(output.getChannel('tasks')?.getText() ?? '', /Discovered 6 workspace task/);
+	assert.match(output.getChannel('tasks')?.getText() ?? '', /Task 'Lint' failed \(exit code 2\)/);
+	assert.doesNotMatch(output.getChannel('tasks')?.getText() ?? '', /cargo lint/);
 
 	const secondRun = await service.run(task);
 	await service.terminate(secondRun);
-	assert.equal(secondRun.status, "canceled");
+	assert.equal(secondRun.status, 'canceled');
 });
 
-test("TaskService atomically owns dynamic providers and merges their tasks on refresh", async () => {
-	const root = URI.file("C:\\project");
-	const files = new FakeFileService(root, { ".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Build","command":"build","group":"build"}]}' });
+test('TaskService atomically owns dynamic providers and merges their tasks on refresh', async () => {
+	const root = URI.file('C:\\project');
+	const files = new FakeFileService(root, { '.vscode/tasks.json': '{"version":"2.0.0","tasks":[{"label":"Build","command":"build","group":"build"}]}' });
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
 		onDidChangeWorkspaceFolders: Event.None,
 		onDidChangeWorkbenchState: Event.None,
 		onDidChangeWorkspaceName: Event.None,
-		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
+		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] }),
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
 	};
 	using terminals = new FakeTerminalService();
 	using resources = new DisposableStore();
 	using service = taskServices(resources, files, workspace, terminals).createInstance(TaskService);
-	const registration = service.registerTaskProviders([{ id: "demo.provider", provideTasks: () => [{ id: "verify", label: "Verify", command: "demo --verify", group: "test" }] }]);
+	const registration = service.registerTaskProviders([{ id: 'demo.provider', provideTasks: () => [{ id: 'verify', label: 'Verify', command: 'demo --verify', group: 'test' }] }]);
 
-	assert.deepEqual((await service.refresh()).map(task => [task.id, task.source]), [["vscode:0:build", "vscode"], ["extension:demo.provider:verify", "extension"]]);
-	const revokedTask = service.tasks.find(task => task.source === "extension")!;
-	registration.replace([{ id: "demo.provider", provideTasks: () => [{ id: "run", label: "Run", command: "demo", group: "run" }] }]);
-	assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build"]);
+	assert.deepEqual((await service.refresh()).map(task => [task.id, task.source]), [['vscode:0:build', 'vscode'], ['extension:demo.provider:verify', 'extension']]);
+	const revokedTask = service.tasks.find(task => task.source === 'extension')!;
+	registration.replace([{ id: 'demo.provider', provideTasks: () => [{ id: 'run', label: 'Run', command: 'demo', group: 'run' }] }]);
+	assert.deepEqual(service.tasks.map(task => task.id), ['vscode:0:build']);
 	await assert.rejects(service.run(revokedTask), /no longer present/);
 	await service.refresh();
-	assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build", "extension:demo.provider:run"]);
+	assert.deepEqual(service.tasks.map(task => task.id), ['vscode:0:build', 'extension:demo.provider:run']);
 
-	assert.throws(() => service.registerTaskProvider({ id: "demo.provider", provideTasks: () => [] }), /already registered/);
-	assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build", "extension:demo.provider:run"]);
-	const disposedTask = service.tasks.find(task => task.source === "extension")!;
+	assert.throws(() => service.registerTaskProvider({ id: 'demo.provider', provideTasks: () => [] }), /already registered/);
+	assert.deepEqual(service.tasks.map(task => task.id), ['vscode:0:build', 'extension:demo.provider:run']);
+	const disposedTask = service.tasks.find(task => task.source === 'extension')!;
 	registration.dispose();
-	assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build"]);
+	assert.deepEqual(service.tasks.map(task => task.id), ['vscode:0:build']);
 	await assert.rejects(service.run(disposedTask), /no longer present/);
 	await service.refresh();
-	assert.deepEqual(service.tasks.map(task => task.id), ["vscode:0:build"]);
+	assert.deepEqual(service.tasks.map(task => task.id), ['vscode:0:build']);
 });
 
-test("TaskService retains the last good task set when a provider refresh fails", async () => {
-	const root = URI.file("C:\\project");
+test('TaskService retains the last good task set when a provider refresh fails', async () => {
+	const root = URI.file('C:\\project');
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: Event.None,
 		onDidChangeWorkspaceFolders: Event.None,
 		onDidChangeWorkbenchState: Event.None,
 		onDidChangeWorkspaceName: Event.None,
-		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
+		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'project', index: 0 }] }),
 		getWorkbenchState: () => 2,
 		getWorkspaceFolder: () => null,
 	};
@@ -269,7 +270,7 @@ test("TaskService retains the last good task set when a provider refresh fails",
 	using resources = new DisposableStore();
 	using service = taskServices(resources, new FakeFileService(root, {}), workspace, terminals).createInstance(TaskService);
 	let fail = false;
-	using registration = service.registerTaskProvider({ id: "stable", provideTasks: () => { if (fail) throw new Error("provider failed"); return [{ id: "test", label: "Test", command: "test", group: "test" }]; } });
+	using registration = service.registerTaskProvider({ id: 'stable', provideTasks: () => { if (fail) throw new Error('provider failed'); return [{ id: 'test', label: 'Test', command: 'test', group: 'test' }]; } });
 	await service.refresh();
 	const previous = service.tasks;
 
@@ -277,7 +278,7 @@ test("TaskService retains the last good task set when a provider refresh fails",
 	await assert.rejects(service.refresh(), /provider failed/);
 
 	assert.equal(service.tasks, previous);
-	assert.deepEqual(service.tasks.map(task => task.id), ["extension:stable:test"]);
+	assert.deepEqual(service.tasks.map(task => task.id), ['extension:stable:test']);
 });
 
 test('concurrent dispatch shares one pending task and a canceled joiner does not stop its owner', async () => {
@@ -347,17 +348,17 @@ class FakeFileService implements IFileSystemProvider {
 	constructor(private readonly root: URI, private readonly files: Readonly<Record<string, string>>, readonly onDidChangeFiles: Event<IFileChangeEvent> = Event.None) { }
 	async stat(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.files[path]!.length, readonly: false, modifiedAtMillis: undefined }; }
 	async readDirectory() { return []; }
-	async readFile(resource: URI): Promise<IFileBytes> { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, bytes: new TextEncoder().encode(this.files[path]!), revision: "1" }; }
+	async readFile(resource: URI): Promise<IFileBytes> { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, bytes: new TextEncoder().encode(this.files[path]!), revision: '1' }; }
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
-		if (!options.overwrite) { throw new Error("unused"); }
+		if (!options.overwrite) { throw new Error('unused'); }
 		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
-		throw new Error("unused");
+		throw new Error('unused');
 	}
-	async createFile(): Promise<IFileStat> { throw new Error("unused"); }
-	async createDirectory(): Promise<IFileStat> { throw new Error("unused"); }
-	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }
-	async rename() { throw new Error("unused"); }
-	async delete() { throw new Error("unused"); }
+	async createFile(): Promise<IFileStat> { throw new Error('unused'); }
+	async createDirectory(): Promise<IFileStat> { throw new Error('unused'); }
+	async copy(): Promise<void> { throw new Error('Copy is not used in this test'); }
+	async rename() { throw new Error('unused'); }
+	async delete() { throw new Error('unused'); }
 	private relative(resource: URI): string { return resource.path.slice(this.root.path.length + 1); }
 }
 
@@ -373,7 +374,7 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 	readonly onDidDisposeInstance = Event.None;
 	readonly onDidChangeInstances = Event.None;
 	readonly onDidChangeActiveInstance = Event.None;
-	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this._register(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.dirId ?? "folder", options.title ?? "Terminal")); terminal.execution = options.execution; this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
+	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this._register(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.dirId ?? 'folder', options.title ?? 'Terminal')); terminal.execution = options.execution; this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
 	async relaunchTerminal() { }
 	setActiveInstance(instance: ITerminalInstance | undefined) { this.activeInstance = instance; }
 	moveTerminal() { }
@@ -381,8 +382,8 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 }
 
 class FakeTerminalInstance extends Disposable implements ITerminalInstance {
-	async refreshProperty<T extends import("../../../../../platform/terminal/common/terminal.js").ProcessPropertyType>(_property: T): Promise<import("../../../../../platform/terminal/common/terminal.js").IProcessPropertyMap[T]> { throw new Error("No OS process in task fixture"); }
-	async serializeState(): Promise<import("../../../../services/terminal/common/terminal.js").ITerminalSerializedState> { throw new Error("No process checkpoint in task fixture"); }
+	async refreshProperty<T extends import('../../../../../platform/terminal/common/terminal.js').ProcessPropertyType>(_property: T): Promise<import('../../../../../platform/terminal/common/terminal.js').IProcessPropertyMap[T]> { throw new Error('No OS process in task fixture'); }
+	async serializeState(): Promise<import('../../../../services/terminal/common/terminal.js').ITerminalSerializedState> { throw new Error('No process checkpoint in task fixture'); }
 	private static nextInstanceId = 1;
 	readonly instanceId = FakeTerminalInstance.nextInstanceId++;
 	clearBuffer(): void { }
@@ -392,9 +393,9 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	readonly processId = 1234;
 	readonly initialCwd = '/backend/workspace';
 	async processBinary(): Promise<void> { throw new Error('Binary input is not used in task tests'); }
-	readonly profile = { profileId: "command-prompt", title: "Command Prompt", isDefault: true };
+	readonly profile = { profileId: 'command-prompt', title: 'Command Prompt', isDefault: true };
 	readonly writes: string[] = [];
-	state: TerminalInstanceState = "running";
+	state: TerminalInstanceState = 'running';
 	exitCode: number | undefined;
 	private readonly commandEmitter = this._register(new Emitter<ITerminalCommandStatusEvent>());
 	private readonly dataEmitter = this._register(new Emitter<import('../../../../../platform/terminal/common/terminal.js').IProcessDataEvent>());
@@ -414,7 +415,7 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	attachToElement(): void { throw new Error('Task test has no terminal view'); }
 	detachFromElement(): void { }
 	resize(_dimensions: ITerminalDimensions): void { }
-	async close(): Promise<void> { this.state = "exited"; }
+	async close(): Promise<void> { this.state = 'exited'; }
 	command(event: ITerminalCommandStatusEvent): void { this.commandEmitter.fire(event); }
 	output(value: string): void { this.outputBytes(new TextEncoder().encode(value)); }
 	private readonly outputDecoder = new TextDecoder();
@@ -465,7 +466,7 @@ function taskServices(owner: DisposableStore, files: IFileSystemProvider, worksp
 			operatingSystem: os, onConnectionState: Event.None,
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({ HOME: '/execution/home' }),
-			listProfiles: async () => [{ profileId: "command-prompt", title: "Command Prompt", isDefault: true }], setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
+			listProfiles: async () => [{ profileId: 'command-prompt', title: 'Command Prompt', isDefault: true }], setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 		}],
 		[ITerminalService, terminals], [ILogService, new NullLoggerService()],
 	), owner);
@@ -1002,7 +1003,7 @@ test('TaskService selects the execution host platform before resolving command, 
 	const task = (await service.refresh())[0];
 	assert.equal(terminals.instances.length, 0);
 	const run = await service.run(task);
-	assert.deepEqual(creates, [{ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, title: 'Task: Platform', dirId: 'workspace', env: { INHERITED: 'base', REMOVED: null, PLATFORM: '/execution/home' }, cwd: '/workspace/linux', execution: { type: 'process', program: '/workspace/linux-adapter', args: ['', '/execution/home', '$HOME'] }, initialText: { text: formatMessageForTerminal('Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"'), trailingNewLine: false }, waitOnExit: 'Terminal will be reused by tasks, press any key to close it.', deferStart: true }]);
+	assert.deepEqual(creates, [{ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, title: 'Task: Platform', type: 'Task', dirId: 'workspace', env: { INHERITED: 'base', REMOVED: null, PLATFORM: '/execution/home' }, cwd: '/workspace/linux', execution: { type: 'process', program: '/workspace/linux-adapter', args: ['', '/execution/home', '$HOME'] }, initialText: { text: formatMessageForTerminal('Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"'), trailingNewLine: false }, waitOnExit: 'Terminal will be reused by tasks, press any key to close it.', deferStart: true }]);
 	assert.deepEqual(terminals.instances[0].writes, []);
 	await service.terminate(run);
 });
@@ -1222,6 +1223,67 @@ suite('Task terminal reuse policies', () => {
 		};
 		return { tasks, terminals, finish, created, environments, closed, closing };
 	}
+
+	test('closing a running task terminal settles cancellation after process release and frees its instance', async () => {
+		using owner = new DisposableStore();
+		const { tasks, terminals, closing } = assemble(owner, 'dedicated', { reveal: 'never' });
+		const task = (await tasks.refresh())[0]!;
+		const run = await tasks.run(task);
+		const requested = new DeferredPromise<void>();
+		const released = new DeferredPromise<void>();
+		closing.wait = async () => { void requested.complete(); await released.p; };
+		let completed = false;
+		void run.completion!.then(() => { completed = true; });
+		const close = terminals.closeTerminal(terminals.instances[0]!);
+		try {
+			await requested.p;
+			assert.deepEqual({ status: run.status, completed, active: tasks.activeRuns.length }, { status: 'running', completed: false, active: 1 });
+		} finally {
+			void released.complete();
+			await close;
+		}
+		await run.completion;
+		assert.deepEqual({ status: run.status, completed, active: tasks.activeRuns.length, terminals: terminals.instances.length }, { status: 'canceled', completed: true, active: 0, terminals: 0 });
+		const next = await tasks.run(task);
+		assert.notEqual(next.runId, run.runId);
+		await tasks.terminate(next);
+	});
+
+	test('closing a custom task terminal cancels its run and waits for producer release', async () => {
+		using owner = new DisposableStore();
+		const { tasks, terminals } = assemble(owner, 'dedicated', { reveal: 'never' });
+		const writes = owner.add(new Emitter<string>());
+		const released = new DeferredPromise<void>();
+		let closes = 0;
+		owner.add(tasks.registerTaskProvider({
+			id: 'custom-close', provideTasks: () => [{
+				id: 'watch', label: 'Custom watch', group: 'build', presentation: { reveal: 'never' },
+				execution: { type: 'custom', callback: () => ({ onDidWrite: writes.event, releaseCompletion: released.p, open() { }, close() { closes++; } }) },
+			}]
+		}));
+		const task = (await tasks.refresh()).find(task => task.label === 'Custom watch')!;
+		const run = await tasks.run(task);
+		let completed = false;
+		void run.completion!.then(() => { completed = true; });
+		try {
+			await terminals.closeTerminal(terminals.instances[0]!);
+			assert.deepEqual({ status: run.status, completed, closes, active: tasks.activeRuns.length }, { status: 'canceled', completed: false, closes: 1, active: 0 });
+		} finally { void released.complete(); }
+		await run.completion;
+		assert.equal(completed, true);
+	});
+
+	test('disposing a task screen retains release failures on its completion', async () => {
+		using owner = new DisposableStore();
+		const { tasks, terminals, closing } = assemble(owner, 'dedicated', { reveal: 'never' });
+		const run = await tasks.run((await tasks.refresh())[0]!);
+		const failure = new Error('Task process release failed');
+		closing.wait = async () => { throw failure; };
+		const completion = assert.rejects(run.completion!, error => error === failure);
+		await assert.rejects(terminals.closeTerminal(terminals.instances[0]!), error => error === failure);
+		await completion;
+		assert.deepEqual({ status: run.status, active: tasks.activeRuns.length }, { status: 'canceled', active: 0 });
+	});
 
 	for (const panel of [undefined, 'shared', 'dedicated', 'new'] as const) {
 		test(`${panel ?? 'default'} task panels preserve instance policy while replacing the complete child environment`, async () => {
@@ -3107,7 +3169,7 @@ suite('Configured task automatic launch and split groups', () => {
 		]);
 		const changes = owner.add(new Emitter<void>());
 		let trusted = false;
-		services.registerInstance(IWorkspaceTrustManagementService, { onDidChangeTrust: changes.event, getUriTrustInfo: async uri => ({ uri, trusted, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: trusted, isReadOnly: false }) });
+		services.registerInstance(IWorkspaceTrustManagementService, owner.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrustedFolders: changes.event, isWorkspaceTrusted: () => trusted, getUriTrustInfo: async uri => ({ uri, trusted, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: trusted, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>)));
 		owner.add(services.createInstance(RunAutomaticTasks));
 		await tasks.refresh();
 		await new Promise<void>(resolve => setImmediate(resolve));
@@ -3130,7 +3192,7 @@ suite('Configured task automatic launch and split groups', () => {
 	test('policy refresh after start publication preserves a run while terminal reveal is pending', async () => {
 		using owner = new DisposableStore();
 		const { services, tasks, terminals } = assemble(owner, [{ label: 'Automatic', command: 'auto', runOptions: { runOn: 'folderOpen' } }]);
-		services.registerInstance(IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) });
+		services.registerInstance(IWorkspaceTrustManagementService, owner.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>)));
 		const entered = new DeferredPromise<void>();
 		const release = new DeferredPromise<undefined>();
 		services.registerInstance(IViewsService, { openView: async () => { void entered.complete(); return release.p; } } as unknown as IViewsService);
@@ -3154,7 +3216,7 @@ suite('Configured task automatic launch and split groups', () => {
 		const entered = new DeferredPromise<void>();
 		const result = new DeferredPromise<string>();
 		owner.add(CommandsRegistry.register('tasks.automatic.wait', () => { void entered.complete(); return result.p; }));
-		services.registerInstance(IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) });
+		services.registerInstance(IWorkspaceTrustManagementService, owner.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async uri => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>)));
 		await services.get(IConfigurationService).updateValue('task.allowAutomaticTasks', 'on');
 		owner.add(services.createInstance(RunAutomaticTasks));
 		await entered.p;

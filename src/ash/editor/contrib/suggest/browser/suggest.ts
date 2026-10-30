@@ -52,21 +52,21 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		this.registry = registry;
 		this.catalogSource = registry;
 		this.catalog = registry.providerCatalog;
-		if (options.onProviderError !== undefined && typeof options.onProviderError !== "function") {
+		if (options.onProviderError !== undefined && typeof options.onProviderError !== 'function') {
 			this.dispose();
-			throw new TypeError("Language completion provider error handler must be a function");
+			throw new TypeError('Language completion provider error handler must be a function');
 		}
-		if (options.workerFactory !== undefined && typeof options.workerFactory !== "function") {
+		if (options.workerFactory !== undefined && typeof options.workerFactory !== 'function') {
 			this.dispose();
-			throw new TypeError("Language completion worker factory must be a function");
+			throw new TypeError('Language completion worker factory must be a function');
 		}
 		if (options.resource !== undefined && !(options.resource instanceof URI)) {
 			this.dispose();
-			throw new TypeError("Language completion resource must be a URI");
+			throw new TypeError('Language completion resource must be a URI');
 		}
 		if (options.workerFactory && options.onProviderError) {
 			this.dispose();
-			throw new TypeError("A custom language completion worker owns its provider error policy");
+			throw new TypeError('A custom language completion worker owns its provider error policy');
 		}
 		this.results = this._register(createLanguageCompletionStore(model));
 		this.resource = options.resource;
@@ -139,7 +139,7 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		return this.request(languageId, position, context, options);
 	}
 
-	request(languageId: string, position: Position, context: languages.LanguageCompletionRequest["context"], options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
+	request(languageId: string, position: Position, context: languages.LanguageCompletionRequest['context'], options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
 		const request = Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), position, context });
 		languages.assertLanguageCompletionRequest(request);
 		this.model.offsetAt(position);
@@ -164,7 +164,7 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		this.coordinator.startWorker();
 		const resolver = this.currentResolver;
 		if (!resolver) {
-			throw new ReferenceError("The current language completion Worker does not support item resolution");
+			throw new ReferenceError('The current language completion Worker does not support item resolution');
 		}
 		const details = await resolver.resolveCompletionItem(normalized, signal);
 		signal.throwIfAborted();
@@ -201,7 +201,7 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		} catch (disposalError) {
 			throw new AggregateError(
 				[catalogError, disposalError],
-				"Completion provider catalog and Worker disposal both failed",
+				'Completion provider catalog and Worker disposal both failed',
 			);
 		}
 	}
@@ -210,7 +210,7 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		const result = this.results.result;
 		const item = result?.value.items.find(candidate => candidate.providerId === request.providerId && candidate.id === request.itemId);
 		if (!result || result.requestId !== request.completionRequestId || result.modelVersion !== request.modelVersion || !item?.hasDeferredDetails) {
-			throw new ReferenceError("Language completion resolve request is not the current deferred item");
+			throw new ReferenceError('Language completion resolve request is not the current deferred item');
 		}
 	}
 
@@ -225,8 +225,8 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 		private readonly registry: LanguageCompletionProviderRegistry,
 		private readonly onProviderError: LanguageCompletionProviderErrorHandler = reportProviderError,
 	) {
-		if (typeof onProviderError !== "function") {
-			throw new TypeError("Language completion provider error handler must be a function");
+		if (typeof onProviderError !== 'function') {
+			throw new TypeError('Language completion provider error handler must be a function');
 		}
 	}
 
@@ -267,7 +267,7 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 		const normalized = languages.normalizeLanguageCompletionResolveRequest(request);
 		const cache = this.resolutionCache;
 		if (!cache || cache.completionRequestId !== normalized.completionRequestId || cache.modelVersion !== normalized.modelVersion) {
-			throw new ReferenceError("Language completion resolve request no longer has a provider result");
+			throw new ReferenceError('Language completion resolve request no longer has a provider result');
 		}
 		const entry = cache.items.get(completionIdentity(normalized.providerId, normalized.itemId));
 		if (!entry || this.registry.getProvider(normalized.providerId) !== entry.provider || !entry.provider.resolveCompletionItem) {
@@ -287,7 +287,7 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 			throw error;
 		}
 		if (this.resolutionCache !== cache || this.registry.getProvider(normalized.providerId) !== entry.provider) {
-			throw new ReferenceError("Language completion resolve result became stale");
+			throw new ReferenceError('Language completion resolve result became stale');
 		}
 		return details;
 	}
@@ -333,14 +333,14 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 		} catch (reportingError) {
 			reportProviderError(providerId, new AggregateError(
 				[error, reportingError],
-				"Completion provider and error reporter both failed",
+				'Completion provider and error reporter both failed',
 			));
 		}
 	}
 
 	private ensureAlive(): void {
 		if (this.disposed) {
-			throw new ReferenceError("LanguageCompletionProviderWorker is already disposed");
+			throw new ReferenceError('LanguageCompletionProviderWorker is already disposed');
 		}
 	}
 }
@@ -455,12 +455,12 @@ function completionIdentity(providerId: string, itemId: string): string {
 
 function assertProviderResult(result: languages.LanguageCompletionProviderResult): void {
 	if (
-		typeof result !== "object" ||
+		typeof result !== 'object' ||
 		result === null ||
 		!Array.isArray(result.items) ||
-		typeof result.isIncomplete !== "boolean"
+		typeof result.isIncomplete !== 'boolean'
 	) {
-		throw new TypeError("Language completion provider result must contain items and isIncomplete");
+		throw new TypeError('Language completion provider result must contain items and isIncomplete');
 	}
 }
 
@@ -470,19 +470,19 @@ function reportProviderError(providerId: string, error: unknown): void {
 
 function isCatalogSource(value: languages.LanguageCompletionWorker): value is languages.LanguageCompletionWorker & languages.LanguageCompletionProviderCatalogSource {
 	const candidate = value as Partial<languages.LanguageCompletionProviderCatalogSource>;
-	return typeof candidate.onDidChangeProviderCatalog === "function" &&
-		typeof candidate.waitForProviderCatalog === "function" &&
-		typeof candidate.providerCatalogReady === "boolean" &&
-		typeof candidate.providerCatalog === "object";
+	return typeof candidate.onDidChangeProviderCatalog === 'function' &&
+		typeof candidate.waitForProviderCatalog === 'function' &&
+		typeof candidate.providerCatalogReady === 'boolean' &&
+		typeof candidate.providerCatalog === 'object';
 }
 
 function isCompletionItemResolver(value: languages.LanguageCompletionWorker): value is languages.LanguageCompletionWorker & languages.LanguageCompletionItemResolver {
-	return typeof (value as Partial<languages.LanguageCompletionItemResolver>).resolveCompletionItem === "function";
+	return typeof (value as Partial<languages.LanguageCompletionItemResolver>).resolveCompletionItem === 'function';
 }
 
 function waitForCatalog(source: languages.LanguageCompletionProviderCatalogSource, signal: AbortSignal | undefined): Promise<languages.LanguageCompletionProviderCatalog> {
 	if (!signal) return source.waitForProviderCatalog();
-	return raceCancellationError(source.waitForProviderCatalog(), signal, "Completion provider catalog wait was cancelled");
+	return raceCancellationError(source.waitForProviderCatalog(), signal, 'Completion provider catalog wait was cancelled');
 }
 
 export function createLanguageCompletionStore(model: TextModel): VersionedLanguageResultStore<languages.LanguageCompletionResult> {
@@ -496,7 +496,7 @@ export function createLanguageCompletionStore(model: TextModel): VersionedLangua
 
 function assertModelCompletionRange(model: TextModel, position: Position, range: Range): void {
 	if (!(range instanceof Range)) {
-		throw new TypeError("Language completion item range must be a Range");
+		throw new TypeError('Language completion item range must be a Range');
 	}
 	model.offsetAt(range.getStartPosition());
 	model.offsetAt(range.getEndPosition());
@@ -504,16 +504,16 @@ function assertModelCompletionRange(model: TextModel, position: Position, range:
 		range.getStartPosition().lineNumber !== position.lineNumber ||
 		range.getEndPosition().lineNumber !== position.lineNumber
 	) {
-		throw new RangeError("Language completion item range must stay on the trigger line");
+		throw new RangeError('Language completion item range must stay on the trigger line');
 	}
 	if (Position.compare(range.getStartPosition(), position) > 0 || Position.compare(range.getEndPosition(), position) < 0) {
-		throw new RangeError("Language completion item range must contain the trigger position");
+		throw new RangeError('Language completion item range must contain the trigger position');
 	}
 }
 
 function assertModelTextEditRange(model: TextModel, range: Range): void {
 	if (!(range instanceof Range)) {
-		throw new TypeError("Language completion additional edit range must be a Range");
+		throw new TypeError('Language completion additional edit range must be a Range');
 	}
 	model.offsetAt(range.getStartPosition());
 	model.offsetAt(range.getEndPosition());

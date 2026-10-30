@@ -1,7 +1,7 @@
-import { BugIndicatingError } from "../../../../base/common/errors.js";
-import { OffsetRange } from "../ranges/offsetRange.js";
-import { Point } from "./point.js";
-import { Size2D } from "./size.js";
+import { BugIndicatingError } from '../../../../base/common/errors.js';
+import { OffsetRange } from '../ranges/offsetRange.js';
+import { Point } from './point.js';
+import { Size2D } from './size.js';
 
 export class Rect {
 	static fromPoint(point: Point): Rect { return new Rect(point.x, point.y, point.x, point.y); }
@@ -22,8 +22,8 @@ export class Rect {
 		readonly right: number,
 		readonly bottom: number,
 	) {
-		if (left > right) throw new BugIndicatingError("Invalid arguments: Horizontally offset by " + (left - right));
-		if (top > bottom) throw new BugIndicatingError("Invalid arguments: Vertically offset by " + (top - bottom));
+		if (left > right) throw new BugIndicatingError('Invalid arguments: Horizontally offset by ' + (left - right));
+		if (top > bottom) throw new BugIndicatingError('Invalid arguments: Vertically offset by ' + (top - bottom));
 	}
 
 	get width() { return this.right - this.left; }
@@ -95,7 +95,7 @@ export class Rect {
 	withVerticalRange(range: OffsetRange): Rect { return new Rect(this.left, range.start, this.right, range.endExclusive); }
 	getSize(): Size2D { return new Size2D(this.width, this.height); }
 	toStyles() {
-		return { position: "absolute", left: `${this.left}px`, top: `${this.top}px`, width: `${this.width}px`, height: `${this.height}px` };
+		return { position: 'absolute', left: `${this.left}px`, top: `${this.top}px`, width: `${this.width}px`, height: `${this.height}px` };
 	}
 	toString(): string { return `Rect{(${this.left},${this.top}), (${this.right},${this.bottom})}`; }
 }

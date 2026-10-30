@@ -1,9 +1,9 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import "./media/editortabscontrol.css";
-import type { TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { h } from "../../../../base/browser/dom.js";
-import type { EditorInstanceId } from "../../../services/editor/common/editorState.js";
+import './media/editortabscontrol.css';
+import type { TabListDropPosition } from '../../../../base/browser/ui/tablist/tabList.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { h } from '../../../../base/browser/dom.js';
+import type { EditorInstanceId } from '../../../services/editor/common/editorState.js';
 
 /** One open Editor presented by an EditorTabsControl. */
 export interface EditorTabDescriptor {
@@ -40,8 +40,8 @@ export abstract class EditorTabsControl extends Disposable {
 
 	protected constructor(container: HTMLElement) {
 		super();
-		this.domNode = h(container.ownerDocument, "div");
-		this.domNode.className = "ash-editor-tabs-control";
+		this.domNode = h(container.ownerDocument, 'div');
+		this.domNode.className = 'ash-editor-tabs-control';
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 	}

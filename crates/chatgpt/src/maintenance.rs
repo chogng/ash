@@ -15,8 +15,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use zeroize::Zeroize;
 
-/// Selects who maintains shared ChatGPT credentials. Production hosts use Automatic;
-/// tests explicitly select an owner so real credentials can never be refreshed by a fixture.
+/// Selects who maintains credentials. Product hosts borrow Codex read-only and
+/// select Ash only for an independently issued private Web credential.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ChatGptAuthManagement {
     Automatic,

@@ -1,6 +1,6 @@
-import { Position } from "../position.js";
-import { Range } from "../range.js";
-import { TextLength } from "../text/textLength.js";
+import { Position } from '../position.js';
+import { Range } from '../range.js';
+import { TextLength } from '../text/textLength.js';
 
 export class RangeMapping {
 	constructor(readonly mappings: readonly SingleRangeMapping[]) { }

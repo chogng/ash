@@ -1,6 +1,6 @@
 # Stanza：单一文本内核、可装配能力与产品边界
 
-> 本文说明 editor、文档扩展、Workbench、文件服务与 App Server 之间的系统边界。目录与装配入口见 [`src/ash/editor/README.md`](../src/ash/editor/README.md)，行式编辑与富文档的机制契约分别见 [`text-engine.md`](../src/ash/editor/text-engine.md) 和 [Academy 扩展规范](../extensions/academy/document-engine.md)。当前工作见[根 TODO](../TODO.md#stanza-编辑器--todo)，演进依赖见[编辑器设计](design/editor-roadmap.md)。
+> 本文说明 editor、文档扩展、Workbench、文件服务与 App Server 之间的系统边界。目录与装配入口见 [`src/ash/editor/README.md`](../src/ash/editor/README.md)，行式编辑与富文档的机制契约分别见 [`text-engine.md`](../src/ash/editor/text-engine.md) 和 [Academy 扩展规范](../extensions/academy/document-engine.md)。当前工作见[根 TODO](../TODO.md)，演进依赖见[编辑器设计](design/editor-roadmap.md)。
 
 ## 核心模型与产品装配
 
@@ -170,4 +170,4 @@ Rename、Code Action 和 WorkspaceEdit 使用同一 `IBulkEditService`。预览�
 
 2026-10-22 的本机补验覆盖各批次构建的 Stanza 独立包、无障碍帮助／焦点、高对比度，以及 Native／textarea 的 Windows 原生中文正文和选区读取、后续编辑、保存与关闭重开。此前记录见 `.build/stanza-local-acceptance-20261022/validation.json`；后续使用 Playwright 完成 Chromium／本机 Chrome GPU 全套与 textarea 真实 Desktop 场景，构建来源、查询客户端的首败及复验见 `.build/stanza-sdk-followup-20261022/validation.json`。当前工作区的基础复核、测试契约修正与历史台账退场依据见 `.build/stanza-completeness-audit-20261022/validation.json`。原生接口的内容暴露不等于屏幕阅读器实际朗读。
 
-LSP 输入格式化桥接的本机构建、首次失败、光标重做修复和真实 Desktop 复验见 `.build/stanza-lsp-on-type-20261022/validation.json`。其他平台／输入法与真实屏幕阅读器验收见[Stanza TODO](../TODO.md#stanza-编辑器--todo)；扩展签名包、多窗口／远端组合、Academy 跨页输入与目标 Word 往返由[Work／通用文档 TODO](../TODO.md#work--通用文档--todo)单独维护。本文不维护实施批次、通过数量或完成清单；后续实现变化直接修正所属正文，具体未完成工作只在根 TODO 维护。
+LSP 输入格式化桥接的本机构建、首次失败、光标重做修复和真实 Desktop 复验见 `.build/stanza-lsp-on-type-20261022/validation.json`。输入法和可访问性已按本轮代码与测试口径完成基础核对，覆盖范围与真实设备限制见 [Stanza 测试说明](../src/ash/editor/README.md#测试与修改影响)；扩展签名包、多窗口／远端组合、Academy 跨页输入与目标 Word 往返由[Work／通用文档 TODO](../TODO.md#work--通用文档--todo)单独维护。本文不维护实施批次、通过数量或完成清单；后续实现变化直接修正所属正文，具体未完成工作只在根 TODO 维护。

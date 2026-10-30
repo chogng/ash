@@ -4,15 +4,15 @@ import {
 	DisposableStore,
 	type IDisposable,
 	toDisposable,
-} from "../common/lifecycle.js";
-import { observeMutations } from "./observer.js";
+} from '../common/lifecycle.js';
+import { observeMutations } from './observer.js';
 import {
 	type BrowserWindow,
 	getWindows,
 	onDidRegisterWindow,
 	onWillUnregisterWindow,
-} from "./window.js";
-import { h } from "./dom.js";
+} from './window.js';
+import { h } from './dom.js';
 
 /** A disposable stylesheet attached to one document. */
 export class ManagedStyleSheet extends Disposable {
@@ -20,13 +20,13 @@ export class ManagedStyleSheet extends Disposable {
 
 	constructor(
 		ownerDocument: Document,
-		cssText = "",
+		cssText = '',
 	) {
 		super();
-		const element = h(ownerDocument, "style");
+		const element = h(ownerDocument, 'style');
 		this.element = element;
-		element.type = "text/css";
-		element.media = "screen";
+		element.type = 'text/css';
+		element.media = 'screen';
 		element.textContent = cssText;
 		ownerDocument.head.append(element);
 		this._register(toDisposable(() => element.remove()));
@@ -47,7 +47,7 @@ export class GlobalStyleSheet extends Disposable {
 	private readonly styles = this._register(new DisposableMap<BrowserWindow, ManagedStyleSheet>());
 	private cssText: string;
 
-	constructor(cssText = "") {
+	constructor(cssText = '') {
 		super();
 		this.cssText = cssText;
 		for (const registration of getWindows()) {
@@ -77,14 +77,14 @@ export class GlobalStyleSheet extends Disposable {
 
 export function createStyleSheet(
 	ownerDocument: Document,
-	cssText = "",
+	cssText = '',
 ): {
 	readonly element: HTMLStyleElement;
 	readonly registration: IDisposable;
 } {
-	const element = h(ownerDocument, "style");
-	element.type = "text/css";
-	element.media = "screen";
+	const element = h(ownerDocument, 'style');
+	element.type = 'text/css';
+	element.media = 'screen';
 	element.textContent = cssText;
 	ownerDocument.head.append(element);
 	return {

@@ -1,5 +1,5 @@
-import { expect, type ElectronApplication, type Page } from "@playwright/test";
-import { PlaywrightDriver, type WindowSize, type WorkbenchDiagnostics } from "./playwrightDriver.js";
+import { expect, type ElectronApplication, type Page } from '@playwright/test';
+import { PlaywrightDriver, type WindowSize, type WorkbenchDiagnostics } from './playwrightDriver.js';
 
 /** Adds Electron-hosted window control to the shared Workbench driver. */
 export class ElectronPlaywrightDriver extends PlaywrightDriver {
@@ -9,8 +9,8 @@ export class ElectronPlaywrightDriver extends PlaywrightDriver {
 
 	override async setWindowSize(size: WindowSize): Promise<WindowSize> {
 		const application = this.application;
-		if (!("windows" in application)) {
-			throw new Error("Electron window control requires an Electron application");
+		if (!('windows' in application)) {
+			throw new Error('Electron window control requires an Electron application');
 		}
 		const window = await application.browserWindow(this.currentPage);
 		try {

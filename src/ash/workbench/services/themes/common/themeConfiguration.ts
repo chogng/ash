@@ -79,14 +79,14 @@ export const ThemeConfigurationSettings = Object.freeze({
 		},
 	}),
 	colorTheme: configurationRegistry.registerConfiguration<string>({
-		key: "workbench.colorTheme", scope: ConfigurationScope.WINDOW, schema: { type: 'string' },
+		key: 'workbench.colorTheme', scope: ConfigurationScope.WINDOW, schema: { type: 'string' },
 		defaultValue: defaultWorkbenchColorThemePreference,
 		parse(value: unknown): string {
-			if (typeof value !== "string" || !isColorThemePreference(value)) throw new TypeError(localize('theme.invalidSetting', 'Invalid theme setting: {0}', 'workbench.colorTheme'));
+			if (typeof value !== 'string' || !isColorThemePreference(value)) throw new TypeError(localize('theme.invalidSetting', 'Invalid theme setting: {0}', 'workbench.colorTheme'));
 			return value;
 		},
 		setting: {
-			valueType: "select",
+			valueType: 'select',
 			get title() { return localize('theme.color.title', 'Color Theme'); },
 			get description() { return localize('theme.color.description', 'Choose a theme or follow the system appearance.'); },
 			get options() {

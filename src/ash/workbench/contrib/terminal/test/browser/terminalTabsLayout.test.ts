@@ -28,13 +28,13 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { IWorkbenchLayoutService, Position, positionToString } from '../../../../services/layout/browser/layoutService.js';
 
-import assert from "node:assert/strict";
-import { test, suite, suiteTeardown } from "mocha";
-import { ensureNoDisposablesAreLeakedInTestSuite } from "../../../../../base/test/common/utils.js";
-import { JSDOM } from "jsdom";
-import { h } from "../../../../../base/browser/dom.js";
+import assert from 'node:assert/strict';
+import { test, suite, suiteTeardown } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { JSDOM } from 'jsdom';
+import { h } from '../../../../../base/browser/dom.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
@@ -52,11 +52,11 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { TerminalTabbedView } = await import("../../../../../workbench/contrib/terminal/browser/terminalTabbedView.js");
+const { TerminalTabbedView } = await import('../../../../../workbench/contrib/terminal/browser/terminalTabbedView.js');
 
 suiteTeardown(() => {
 	browserEnvironment.window.close();
-	for (const name of ["window", "document", "Node", "Element", "HTMLElement", "Event", "KeyboardEvent", "MouseEvent"]) {
+	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event', 'KeyboardEvent', 'MouseEvent']) {
 		Reflect.deleteProperty(globalThis, name);
 	}
 });
@@ -161,8 +161,8 @@ suite('Terminal Panel orientation', () => {
 	});
 });
 
-test("Terminal instance list sash resizes the right column within its bounds", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Terminal instance list sash resizes the right column within its bounds', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 	const parent = h(dom.window.document, 'main');
 	using changed = new Emitter<void>();
@@ -172,7 +172,7 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 		...Disposable.None, id, instanceId: id === 'one' ? 1 : id === 'two' ? 2 : 3, dirId: 'folder', processId: 1, initialCwd: '/folder', title: id,
 		profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
 		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
-		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async setAutoReplies() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Layout fixture does not insert file paths'); }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { }, refreshProperty: async () => { throw new Error("No OS process in layout fixture"); }, serializeState: async () => { throw new Error("No process checkpoint in layout fixture"); },
+		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async setAutoReplies() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Layout fixture does not insert file paths'); }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { }, refreshProperty: async () => { throw new Error('No OS process in layout fixture'); }, serializeState: async () => { throw new Error('No process checkpoint in layout fixture'); },
 	});
 	const instances = [createInstance('one'), createInstance('two')];
 	const terminals: ITerminalService = {
@@ -208,17 +208,18 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	} as unknown as IWorkbenchLayoutService);
 	using groups = services.createInstance(TerminalGroupService);
 	services.registerInstance(ITerminalGroupService, groups);
+	services.get(IStorageService).store('tabs-list-width-horizontal', 120, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	using layout = services.createInstance(TerminalTabbedView, parent);
 	const tabs = layout.element.querySelector<HTMLElement>('.ash-terminal-tabs')!;
 	dom.window.document.body.append(layout.element);
 	layout.layout(1_000, 200);
-	const panes = layout.element.querySelectorAll<HTMLElement>(":scope > .ash-split-view-pane");
-	const sash = layout.element.querySelector<HTMLElement>(":scope > .ash-sash");
+	const panes = layout.element.querySelectorAll<HTMLElement>(':scope > .ash-split-view-pane');
+	const sash = layout.element.querySelector<HTMLElement>(':scope > .ash-sash');
 	assert.equal(panes.length, 2);
 	assert.ok(sash);
-	assert.equal(panes[0]?.style.width, "880px");
-	assert.equal(panes[1]?.style.width, "120px");
-	assert.equal(sash.getAttribute("aria-label"), "Resize terminal instance list");
+	assert.equal(panes[0]?.style.width, '880px');
+	assert.equal(panes[1]?.style.width, '120px');
+	assert.equal(sash.getAttribute('aria-label'), 'Resize terminal instance list');
 	instances.reverse();
 	changed.fire();
 	assert.deepEqual([...tabs.querySelectorAll('[role="tab"]')].map(row => row.id), ['two-tab', 'one-tab']);
@@ -227,27 +228,35 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	for (const [width, height] of [[0, 0], [1_000, 0], [0, 200]]) {
 		layout.layout(width!, height!);
 		layout.layout(1_000, 200);
-		assert.equal(panes[1]?.style.width, "120px");
-		assert.equal(tabs.classList.contains("ash-terminal-tabs-narrow"), false);
+		assert.equal(panes[1]?.style.width, '120px');
+		assert.equal(tabs.classList.contains('ash-terminal-tabs-narrow'), false);
 		assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 120);
 	}
 
-	sash.dispatchEvent(new dom.window.MouseEvent("pointerdown", { button: 0, clientX: 880, bubbles: true }));
-	dom.window.dispatchEvent(new dom.window.MouseEvent("pointermove", { clientX: 950, bubbles: true }));
-	assert.equal(panes[1]?.style.width, "46px");
-	assert.equal(tabs.classList.contains("ash-terminal-tabs-narrow"), true);
-	dom.window.dispatchEvent(new dom.window.MouseEvent("pointerup", { clientX: 950, bubbles: true }));
+	sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { button: 0, clientX: 880, bubbles: true }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 950, bubbles: true }));
+	assert.equal(panes[1]?.style.width, '46px');
+	assert.equal(tabs.classList.contains('ash-terminal-tabs-narrow'), true);
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 120, 'live presentation does not persist an unfinished drag');
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { clientX: 950, bubbles: true }));
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 46);
 
-	sash.dispatchEvent(new dom.window.MouseEvent("pointerdown", { button: 0, clientX: 954, bubbles: true }));
-	dom.window.dispatchEvent(new dom.window.MouseEvent("pointermove", { clientX: 930, bubbles: true }));
-	assert.equal(panes[1]?.style.width, "80px");
-	assert.equal(tabs.classList.contains("ash-terminal-tabs-narrow"), false);
-	dom.window.dispatchEvent(new dom.window.MouseEvent("pointerup", { clientX: 930, bubbles: true }));
+	sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { button: 0, clientX: 954, bubbles: true }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { clientX: 930, bubbles: true }));
+	assert.equal(panes[1]?.style.width, '80px');
+	assert.equal(tabs.classList.contains('ash-terminal-tabs-narrow'), false);
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 46);
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { clientX: 930, bubbles: true }));
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 80);
 
 	for (let index = 0; index < 50; index += 1) {
-		sash.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+		sash.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
 	}
-	assert.equal(panes[1]?.style.width, "500px");
+	assert.equal(panes[1]?.style.width, '500px');
+	layout.layout(200, 200);
+	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 500, 'a code-driven clamp retains the preferred width');
+	layout.layout(1_000, 200);
+	assert.equal(panes[1]?.style.width, '500px');
 
 	const third = createInstance('three');
 	instances.push(third);
@@ -294,19 +303,19 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	disposed.fire(second);
 	changed.fire();
 	assert.equal(panes[1]?.hidden, true);
-	assert.equal(panes[0]?.style.width, "1000px");
-	const hiddenSash = layout.element.querySelector<HTMLElement>(":scope > .ash-sash");
+	assert.equal(panes[0]?.style.width, '1000px');
+	const hiddenSash = layout.element.querySelector<HTMLElement>(':scope > .ash-sash');
 	assert.ok(hiddenSash);
-	assert.equal(hiddenSash.classList.contains("ash-sash-disabled"), true);
-	assert.equal(hiddenSash.getAttribute("aria-disabled"), "true");
+	assert.equal(hiddenSash.classList.contains('ash-sash-disabled'), true);
+	assert.equal(hiddenSash.getAttribute('aria-disabled'), 'true');
 
 	instances.push(second);
 	created.fire(second);
 	changed.fire();
 	assert.equal(panes[1]?.hidden, false);
-	assert.equal(panes[1]?.style.width, "500px");
-	assert.equal(layout.element.querySelector(":scope > .ash-sash"), hiddenSash);
-	assert.equal(layout.element.querySelector(":scope > .ash-sash")?.getAttribute("aria-label"), "Resize terminal instance list");
+	assert.equal(panes[1]?.style.width, '500px');
+	assert.equal(layout.element.querySelector(':scope > .ash-sash'), hiddenSash);
+	assert.equal(layout.element.querySelector(':scope > .ash-sash')?.getAttribute('aria-label'), 'Resize terminal instance list');
 	assert.equal(services.get(IStorageService).getNumber('tabs-list-width-horizontal', StorageScope.WORKSPACE), 500);
 	using recreated = services.createInstance(TerminalTabbedView, parent);
 	recreated.layout(1_000, 200);

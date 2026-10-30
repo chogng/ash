@@ -5,6 +5,90 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('quickAccess browser component', () => {
 	const browserTests = useBrowserTests();
 
+	for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }, { locale: 'en', theme: 'hcLight' }]) {
+		test(`Quick Access file icons follow the active theme for history and search (${variant.locale}, ${variant.theme})`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/quickAccess.html?fileIcons&fileSearch&${new URLSearchParams(variant)}`);
+			await expect(page.getByRole('button', { name: 'Open files' })).toBeEnabled();
+			await page.evaluate(() => window.ashQuickAccessIntegration.show(''));
+			const picker = page.getByRole('dialog');
+			const input = picker.getByRole('combobox');
+			const iconFor = (name: string) => picker.getByRole('option').filter({ has: page.getByText(name, { exact: true }) }).locator('.ash-themed-file-icon');
+			const appearance = (name: string) => iconFor(name).evaluate(element => {
+				const style = getComputedStyle(element, '::before');
+				return { glyph: style.content, color: style.color, font: style.fontFamily, size: style.fontSize, width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height };
+			});
+			const todo = await appearance('TODO.md');
+			expect(todo.glyph).toBe('"\uE096"');
+			expect(todo.color).toBe((await appearance('notes.md')).color);
+			expect(todo.font).toContain('ash-file-icon-');
+			expect(todo.size).toBe('19.5px');
+			expect([todo.width, todo.height]).toEqual([16, 16]);
+			await expect(iconFor('TODO.md')).toHaveAttribute('aria-hidden', 'true');
+			await expect(input).toBeFocused();
+			await input.fill('main');
+			await expect(iconFor('main.ts')).toHaveCount(1);
+			const typescript = await appearance('main.ts');
+			expect(typescript.glyph).not.toBe(todo.glyph);
+			expect(typescript.glyph).not.toBe('none');
+			expect(typescript.font).toBe(todo.font);
+			expect([typescript.width, typescript.height]).toEqual([16, 16]);
+			await page.evaluate(() => window.ashQuickAccessIntegration.setIconTheme(null));
+			expect((await appearance('main.ts')).glyph).toBe('none');
+			await expect(input).toBeFocused();
+			await page.evaluate(() => window.ashQuickAccessIntegration.setIconTheme('vs-seti'));
+			expect(await appearance('main.ts')).toEqual(typescript);
+			await input.press('Enter');
+			await expect(picker).toHaveCount(0);
+			await expect(page.locator('output')).toHaveText('file:///workspace/main.ts');
+		});
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`Quick Access virtualizes mixed detail rows across search mode switches (${locale})`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/quickAccess.html?manyCommands&locale=${locale}`);
+			await page.getByRole('button', { name: 'Open commands' }).click();
+			const picker = page.getByRole('dialog');
+			const input = picker.getByRole('combobox');
+			const tabs = picker.getByRole('tab');
+			await input.fill('>Bulk command');
+			const active = picker.locator('.ash-list-row.is-active');
+			await expect(active).toHaveAttribute('aria-setsize', '600');
+			for (let round = 0; round < 3; round++) {
+				expect(await picker.getByRole('option').count()).toBeLessThan(40);
+				const detailRow = picker.getByRole('option').filter({ has: page.getByText('Bulk command 000', { exact: true }) });
+				const geometry = await detailRow.evaluate(row => {
+					const bounds = row.getBoundingClientRect();
+					const detail = row.querySelector('.ash-quick-pick-row-detail')!.getBoundingClientRect();
+					const next = row.nextElementSibling!.getBoundingClientRect();
+					return { bottom: bounds.bottom, detailBottom: detail.bottom, nextTop: next.top, height: bounds.height };
+				});
+				expect(geometry.height).toBeGreaterThan(22);
+				expect(geometry.detailBottom).toBeLessThanOrEqual(geometry.bottom + 1);
+				expect(Math.abs(geometry.nextTop - geometry.bottom)).toBeLessThan(1);
+				await input.press('ArrowUp');
+				await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('Bulk command 599');
+				await expect(active).toHaveAttribute('aria-posinset', '600');
+				await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+				expect(await picker.getByRole('option').count()).toBeLessThan(40);
+				await input.press('ArrowDown');
+				await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('Bulk command 000');
+				await tabs.nth(1).click();
+				await tabs.nth(2).click();
+				await tabs.nth(3).click();
+				await tabs.nth(0).click();
+				await expect(input).toBeFocused();
+				await expect(input).toHaveValue('>Bulk command');
+				await expect(active).toHaveAttribute('aria-setsize', '600');
+			}
+			await input.press('ArrowUp');
+			await input.press('Enter');
+			await expect(picker).toHaveCount(0);
+			await expect(page.locator('output')).toHaveText('Bulk command 599');
+		});
+	}
+
 	test('Quick Input releases an interrupted drag when the picker closes', async () => {
 		const { page } = browserTests;
 		await page.goto('/quickAccess.html');

@@ -500,7 +500,7 @@ fn javascript_entry_uses_sdk_without_requesting_execution_of_its_source_file() {
     unsupported["contributions"]["editorExtensions"][0]["capabilities"] = json!(["dataChannel"]);
     unsupported["contributions"]["editorExtensions"][0]["activationEvents"] =
         json!([{"type": "startup"}]);
-    assert!(parse(&unsupported).is_err());
+    assert!(parse(&unsupported).is_ok());
     value["contributions"]["editorExtensions"][0]["entrypoint"] = json!("bin/program");
     assert!(parse(&value).is_err());
 }

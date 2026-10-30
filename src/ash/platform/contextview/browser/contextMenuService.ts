@@ -1,19 +1,19 @@
-import type { IContextMenuDelegate } from "../../../base/browser/contextmenu.js";
-import { isNode } from "../../../base/browser/dom.js";
-import { Separator, type IAction } from "../../../base/common/actions.js";
-import { Emitter } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
+import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
+import { isNode } from '../../../base/browser/dom.js';
+import { Separator, type IAction } from '../../../base/common/actions.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import {
 	getFlatContextMenuActions,
 	resolveAlternativeMenuActions,
 	shouldUseAlternativeMenuActions,
-} from "../../actions/browser/menuEntryActionViewItem.js";
-import { MenuId, IMenuService } from "../../actions/common/actions.js";
-import { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
-import { IKeybindingService } from "../../keybinding/common/keybinding.js";
-import { INotificationService } from "../../notification/common/notification.js";
-import { ContextMenuHandler } from "./contextMenuHandler.js";
-import { type IContextMenuMenuDelegate, type IContextMenuService, IContextViewService } from "./contextView.js";
+} from '../../actions/browser/menuEntryActionViewItem.js';
+import { MenuId, IMenuService } from '../../actions/common/actions.js';
+import { IContextKeyService } from '../../contextkey/browser/contextKeyService.js';
+import { IKeybindingService } from '../../keybinding/common/keybinding.js';
+import { INotificationService } from '../../notification/common/notification.js';
+import { ContextMenuHandler } from './contextMenuHandler.js';
+import { type IContextMenuMenuDelegate, type IContextMenuService, IContextViewService } from './contextView.js';
 
 /** Transforms menu contributions and delegates browser rendering to one handler. */
 export class BrowserContextMenuService extends Disposable
@@ -83,7 +83,7 @@ export function transformContextMenuDelegate(
 					shouldUseAlternativeMenuActions(targetWindow),
 				)
 				: [];
-			if (!("menuId" in delegate) || !(delegate.menuId instanceof MenuId)) {
+			if (!('menuId' in delegate) || !(delegate.menuId instanceof MenuId)) {
 				return trimSeparators(explicit);
 			}
 			const contributed = getFlatContextMenuActions(
@@ -100,7 +100,7 @@ export function transformContextMenuDelegate(
 	};
 }
 
-function getAnchorWindow(anchor: ReturnType<IContextMenuDelegate["getAnchor"]>): Window {
+function getAnchorWindow(anchor: ReturnType<IContextMenuDelegate['getAnchor']>): Window {
 	if (isNode(anchor)) return anchor.ownerDocument.defaultView ?? window;
 	return anchor.targetWindow ?? window;
 }

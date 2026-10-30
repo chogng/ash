@@ -7,16 +7,22 @@ import type { ChatContextAttachment } from '../../../services/chat/common/chatCo
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
+	readonly sessionId: string | undefined;
+	readonly threadId: string | undefined;
 	readonly domNode: HTMLElement;
 	readonly visible: boolean;
+	readonly onDidChangeVisibility: Event<void>;
 	readonly inputEditor: ICodeEditor | undefined;
 	readonly isTranscriptProgressActive: boolean;
 	readonly onDidHide: Event<void>;
 	readonly onDidChangeViewModel: Event<void>;
 	startVoiceConversation(): Promise<void>;
+	/** Prepares references within this composer’s draft lifetime and admission rules. */
+	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
 }
 
 export interface IChatWidgetService {
+	readonly onDidChangeWidgets: Event<void>;
 	/** Most recently focused, still registered and visible Chat in this window. */
 	readonly lastFocusedWidget: IChatWidget | undefined;
 	getAllWidgets(): readonly IChatWidget[];

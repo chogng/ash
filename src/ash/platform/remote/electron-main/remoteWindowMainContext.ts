@@ -1,21 +1,21 @@
-import type { Event } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { AppServerConnectionRelay } from "../../agentHost/electron-main/appServerConnectionRelay.js";
-import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
-import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
-import type { IWorkspaceContextMainChangeEvent } from "../../window/electron-main/window.js";
-import { REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL } from "../common/remoteAgentApi.js";
-import type { IRemoteConnectionApi } from "../common/remoteConnectionService.js";
-import { remoteAgentConnection } from "./remoteAgentIpc.js";
-import { remoteAgentIpcRoutes } from "./remoteAgentIpc.js";
-import type { IRemoteAgentRecoveryMainService } from "./remoteAgentIpc.js";
-import { remoteConnectionIpcRoutes } from "./remoteConnectionIpc.js";
-import { RemoteConnectionRecoveryCoordinator } from "./remoteConnectionRecoveryCoordinator.js";
+import type { Event } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { AppServerConnectionRelay } from '../../agentHost/electron-main/appServerConnectionRelay.js';
+import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
+import type { IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
+import type { IWorkspaceContextMainChangeEvent } from '../../window/electron-main/window.js';
+import { REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL } from '../common/remoteAgentApi.js';
+import type { IRemoteConnectionApi } from '../common/remoteConnectionService.js';
+import { remoteAgentConnection } from './remoteAgentIpc.js';
+import { remoteAgentIpcRoutes } from './remoteAgentIpc.js';
+import type { IRemoteAgentRecoveryMainService } from './remoteAgentIpc.js';
+import { remoteConnectionIpcRoutes } from './remoteConnectionIpc.js';
+import { RemoteConnectionRecoveryCoordinator } from './remoteConnectionRecoveryCoordinator.js';
 import type { SshPortForwardingService } from './sshPortForwardingService.js';
-import { RemoteAppServerProcessLauncher } from "./remoteAppServerProcessLauncher.js";
+import { RemoteAppServerProcessLauncher } from './remoteAppServerProcessLauncher.js';
 
-export type RemoteRuntimeRollbackConfirmation = "confirmed" | "cancelled";
+export type RemoteRuntimeRollbackConfirmation = 'confirmed' | 'cancelled';
 
 /** Electron-independent window operations needed by the Remote Main context. */
 export interface IRemoteWindowMainHost {
@@ -70,7 +70,7 @@ export class RemoteWindowMainContext extends Disposable {
 		]);
 		this._register(options.tunnels);
 		this._register(options.workspaceContext.onDidChangeWorkspace(() => {
-			void options.tunnels.closeAll().catch(error => this.reportError("Failed to close Remote tunnels after Workspace change", error));
+			void options.tunnels.closeAll().catch(error => this.reportError('Failed to close Remote tunnels after Workspace change', error));
 		}));
 		this._register(options.supervisor.onStateChange(() => {
 			options.host.send(REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL, remoteAgentConnection(options.supervisor, options.workspaceContext.getWorkspace()));
@@ -84,25 +84,25 @@ export class RemoteWindowMainContext extends Disposable {
 			try {
 				this.options.prepareForRuntimeReplacement?.();
 			} catch (error) {
-				this.reportError("Failed to prepare Remote terminals for runtime replacement", error);
+				this.reportError('Failed to prepare Remote terminals for runtime replacement', error);
 			}
 		};
 		const coordinator = new RemoteConnectionRecoveryCoordinator(this.options.supervisor, launcher, prepareForRuntimeReplacement);
 		return {
 			reconnect: () => coordinator.reconnect(),
 			rollback: async () => {
-				if (!launcher.runtimeRollbackAvailable) throw new Error("Remote runtime rollback is not available for this connection");
+				if (!launcher.runtimeRollbackAvailable) throw new Error('Remote runtime rollback is not available for this connection');
 				const confirmation = await this.options.host.confirmRuntimeRollback();
-				if (confirmation === "cancelled") return { kind: "cancelled" };
+				if (confirmation === 'cancelled') return { kind: 'cancelled' };
 				try {
 					await coordinator.rollback();
-					return { kind: "rolledBack" };
+					return { kind: 'rolledBack' };
 				} catch (error) {
-					const message = error instanceof Error ? error.message : "Remote runtime rollback failed";
+					const message = error instanceof Error ? error.message : 'Remote runtime rollback failed';
 					try {
 						await this.options.host.reportRuntimeRollbackFailure(message.slice(0, 8_000));
 					} catch (reportError) {
-						this.reportError("Failed to report Remote runtime rollback failure", reportError);
+						this.reportError('Failed to report Remote runtime rollback failure', reportError);
 					}
 					throw error;
 				}

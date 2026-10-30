@@ -5,8 +5,8 @@ import { type LanguageToken, createLanguageTokenSnapshotNormalizer, type Languag
 import { SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
 import { type LanguageWorkerModelSynchronizer, type LanguageWorkerResultSettler, type LanguageWorkerResultDisposition, type LanguageWorkerRequest } from '../model/languageRequestCoordinator.js';
 import { type WorkerTextModelCodec, type LanguageWorkerDocumentSynchronization, type LanguageWorkerDocumentSynchronizationObserver } from './textModelSync/textModelSync.protocol.js';
-import { Position } from "../core/position.js";
-import { getTextWordSegments } from "../core/textSegmentation.js";
+import { Position } from '../core/position.js';
+import { getTextWordSegments } from '../core/textSegmentation.js';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { normalizeTextLineEndings, type TextSnapshot } from '../core/textChange.js';
 import { StringText } from '../core/text/abstractText.js';
@@ -131,22 +131,22 @@ export interface LanguageWordCompletionProviderOptions {
 
 /** Creates a snapshot-local lexical word provider suitable for a worker realm. */
 export function createLanguageWordCompletionProvider(options: LanguageWordCompletionProviderOptions = {}): languages.LanguageCompletionProvider {
-	const id = options.id ?? "language.word";
-	const languageIds = Object.freeze([...(options.languageIds ?? ["*"])]);
+	const id = options.id ?? 'language.word';
+	const languageIds = Object.freeze([...(options.languageIds ?? ['*'])]);
 	const maximumItems = options.maximumItems ?? DEFAULT_MAXIMUM_WORD_COMPLETIONS;
 	if (!Number.isSafeInteger(maximumItems) || maximumItems <= 0) {
-		throw new RangeError("Maximum word completion items must be a positive safe integer");
+		throw new RangeError('Maximum word completion items must be a positive safe integer');
 	}
 	return Object.freeze({
 		id,
 		languageIds,
 		provideCompletions: (request: languages.LanguageCompletionProviderRequest, signal: AbortSignal): languages.LanguageCompletionProviderResult | undefined => {
 			signal.throwIfAborted();
-			const lines = request.snapshot.getText().split("\n");
+			const lines = request.snapshot.getText().split('\n');
 			const columnIndex = request.position.column - 1;
 			const triggerLine = lines[request.position.lineNumber - 1];
 			if (triggerLine === undefined || columnIndex < 0 || columnIndex > triggerLine.length) {
-				throw new RangeError("Word completion position is outside its snapshot");
+				throw new RangeError('Word completion position is outside its snapshot');
 			}
 			const active = getTextWordSegments(triggerLine).find(segment => (
 				segment.wordLike &&
@@ -188,7 +188,7 @@ export function createLanguageWordCompletionProvider(options: LanguageWordComple
 }
 
 function wordIdentity(word: string): string {
-	return `word-${[...word].map(character => character.codePointAt(0)!.toString(16)).join("-")}`;
+	return `word-${[...word].map(character => character.codePointAt(0)!.toString(16)).join('-')}`;
 }
 
 /** Provider host shared by in-process and Worker transports. */
@@ -208,8 +208,8 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		private readonly languageIdCodec?: languages.ILanguageIdCodec,
 		private readonly model?: TextModel,
 	) {
-		if (typeof onProviderError !== "function") {
-			throw new TypeError("Syntax provider error handler must be a function");
+		if (typeof onProviderError !== 'function') {
+			throw new TypeError('Syntax provider error handler must be a function');
 		}
 	}
 
@@ -315,7 +315,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 
 	private async runTokenization(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<LanguageTokenResult | null> {
 		const proposed = request.payload.tokenize;
-		if (!proposed || proposed.lineNumber > request.snapshot.lineCount) throw new RangeError("Hypothetical tokenization requires a start line in the document");
+		if (!proposed || proposed.lineNumber > request.snapshot.lineCount) throw new RangeError('Hypothetical tokenization requires a start line in the document');
 		const support = await this.getTokenizationSupport(request.payload.languageId);
 		signal.throwIfAborted();
 		if (support) {
@@ -391,13 +391,13 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		try {
 			this.onProviderError(providerId, operation, error);
 		} catch (reportingError) {
-			reportProviderError(providerId, operation, new AggregateError([error, reportingError], "Syntax and error reporting both failed"));
+			reportProviderError(providerId, operation, new AggregateError([error, reportingError], 'Syntax and error reporting both failed'));
 		}
 	}
 
 	private ensureAlive(): void {
 		if (this.disposed) {
-			throw new ReferenceError("SyntaxProviderWorker is already disposed");
+			throw new ReferenceError('SyntaxProviderWorker is already disposed');
 		}
 	}
 }
@@ -590,15 +590,15 @@ function encodeCompletionRequest(request: languages.LanguageCompletionRequest): 
 }
 
 function decodeCompletionRequest(value: unknown, snapshot: TextSnapshot): languages.LanguageCompletionRequest {
-	assertRecord(value, "Completion wire request");
-	if (typeof value.languageId !== "string") {
-		throw new TypeError("Completion wire language ID must be a string");
+	assertRecord(value, 'Completion wire request');
+	if (typeof value.languageId !== 'string') {
+		throw new TypeError('Completion wire language ID must be a string');
 	}
-	const position = decodePosition(value.position, "Completion wire request position");
+	const position = decodePosition(value.position, 'Completion wire request position');
 	assertSnapshotPosition(snapshot, position);
 	return Object.freeze({
 		languageId: value.languageId,
-		...(typeof value.resource === "string" ? { resource: URI.parse(value.resource) } : {}),
+		...(typeof value.resource === 'string' ? { resource: URI.parse(value.resource) } : {}),
 		position,
 		context: decodeContext(value.context),
 	});
@@ -613,15 +613,15 @@ function encodeCompletionResult(result: languages.LanguageCompletionResult): unk
 }
 
 function decodeCompletionResult(value: unknown, snapshot: TextSnapshot): languages.LanguageCompletionResult {
-	assertRecord(value, "Completion wire result");
+	assertRecord(value, 'Completion wire result');
 	if (!Array.isArray(value.items)) {
-		throw new TypeError("Completion wire result must contain an items array");
+		throw new TypeError('Completion wire result must contain an items array');
 	}
-	if (typeof value.isIncomplete !== "boolean") {
-		throw new TypeError("Completion wire isIncomplete must be a boolean");
+	if (typeof value.isIncomplete !== 'boolean') {
+		throw new TypeError('Completion wire isIncomplete must be a boolean');
 	}
 	return languages.normalizeLanguageCompletionSnapshotResult({
-		position: decodePosition(value.position, "Completion wire result position"),
+		position: decodePosition(value.position, 'Completion wire result position'),
 		items: value.items.map(decodeItem),
 		isIncomplete: value.isIncomplete,
 	}, snapshot);
@@ -656,32 +656,32 @@ function encodeItem(item: languages.LanguageCompletionItem): unknown {
 }
 
 function decodeItem(value: unknown): languages.LanguageCompletionItem {
-	assertRecord(value, "Completion wire item");
+	assertRecord(value, 'Completion wire item');
 	const range = value.range;
-	assertRecord(range, "Completion wire item range");
-	const detail = decodeOptionalString(value.detail, "Completion wire item detail");
-	const documentation = decodeOptionalString(value.documentation, "Completion wire item documentation");
-	const filterText = decodeOptionalString(value.filterText, "Completion wire item filter text");
-	const sortText = decodeOptionalString(value.sortText, "Completion wire item sort text");
+	assertRecord(range, 'Completion wire item range');
+	const detail = decodeOptionalString(value.detail, 'Completion wire item detail');
+	const documentation = decodeOptionalString(value.documentation, 'Completion wire item documentation');
+	const filterText = decodeOptionalString(value.filterText, 'Completion wire item filter text');
+	const sortText = decodeOptionalString(value.sortText, 'Completion wire item sort text');
 	const commitCharacters = decodeOptionalCommitCharacters(value.commitCharacters);
 	const additionalTextEdits = decodeOptionalAdditionalTextEdits(value.additionalTextEdits);
-	if (value.preselect !== undefined && typeof value.preselect !== "boolean") {
-		throw new TypeError("Completion wire item preselect must be a boolean");
+	if (value.preselect !== undefined && typeof value.preselect !== 'boolean') {
+		throw new TypeError('Completion wire item preselect must be a boolean');
 	}
-	if (value.hasDeferredDetails !== undefined && typeof value.hasDeferredDetails !== "boolean") {
-		throw new TypeError("Completion wire item hasDeferredDetails must be a boolean");
+	if (value.hasDeferredDetails !== undefined && typeof value.hasDeferredDetails !== 'boolean') {
+		throw new TypeError('Completion wire item hasDeferredDetails must be a boolean');
 	}
 	return {
-		providerId: decodeString(value.providerId, "Completion wire provider ID"),
-		id: decodeString(value.id, "Completion wire item ID"),
-		label: decodeString(value.label, "Completion wire item label"),
-		kind: decodeString(value.kind, "Completion wire item kind") as languages.LanguageCompletionItem["kind"],
+		providerId: decodeString(value.providerId, 'Completion wire provider ID'),
+		id: decodeString(value.id, 'Completion wire item ID'),
+		label: decodeString(value.label, 'Completion wire item label'),
+		kind: decodeString(value.kind, 'Completion wire item kind') as languages.LanguageCompletionItem['kind'],
 		range: Range.fromPositions(
-			decodePosition(range.start, "Completion wire item range start"),
-			decodePosition(range.end, "Completion wire item range end"),
+			decodePosition(range.start, 'Completion wire item range start'),
+			decodePosition(range.end, 'Completion wire item range end'),
 		),
-		insertText: decodeString(value.insertText, "Completion wire item insertion text"),
-		...(value.insertTextFormat === undefined ? {} : { insertTextFormat: decodeString(value.insertTextFormat, "Completion wire item insert text format") as languages.LanguageCompletionItem["insertTextFormat"] }),
+		insertText: decodeString(value.insertText, 'Completion wire item insertion text'),
+		...(value.insertTextFormat === undefined ? {} : { insertTextFormat: decodeString(value.insertTextFormat, 'Completion wire item insert text format') as languages.LanguageCompletionItem['insertTextFormat'] }),
 		...(detail === undefined ? {} : { detail }),
 		...(documentation === undefined ? {} : { documentation }),
 		...(filterText === undefined ? {} : { filterText }),
@@ -695,22 +695,22 @@ function decodeItem(value: unknown): languages.LanguageCompletionItem {
 
 function decodeOptionalCommitCharacters(value: unknown): readonly string[] | undefined {
 	if (value === undefined) return undefined;
-	if (!Array.isArray(value)) throw new TypeError("Completion wire item commit characters must be an array");
-	return value.map(character => decodeString(character, "Completion wire item commit character"));
+	if (!Array.isArray(value)) throw new TypeError('Completion wire item commit characters must be an array');
+	return value.map(character => decodeString(character, 'Completion wire item commit character'));
 }
 
 function decodeOptionalAdditionalTextEdits(value: unknown): readonly { readonly range: Range; readonly text: string; }[] | undefined {
 	if (value === undefined) return undefined;
-	if (!Array.isArray(value)) throw new TypeError("Completion wire item additional text edits must be an array");
+	if (!Array.isArray(value)) throw new TypeError('Completion wire item additional text edits must be an array');
 	return value.map(edit => {
-		assertRecord(edit, "Completion wire additional text edit");
-		assertRecord(edit.range, "Completion wire additional text edit range");
+		assertRecord(edit, 'Completion wire additional text edit');
+		assertRecord(edit.range, 'Completion wire additional text edit range');
 		return {
 			range: Range.fromPositions(
-				decodePosition(edit.range.start, "Completion wire additional text edit range start"),
-				decodePosition(edit.range.end, "Completion wire additional text edit range end"),
+				decodePosition(edit.range.start, 'Completion wire additional text edit range start'),
+				decodePosition(edit.range.end, 'Completion wire additional text edit range end'),
 			),
-			text: decodeString(edit.text, "Completion wire additional text edit text"),
+			text: decodeString(edit.text, 'Completion wire additional text edit text'),
 		};
 	});
 }
@@ -722,7 +722,7 @@ function encodeContext(context: languages.LanguageCompletionContext): unknown {
 }
 
 function decodeContext(value: unknown): languages.LanguageCompletionContext {
-	assertRecord(value, "Completion wire context");
+	assertRecord(value, 'Completion wire context');
 	if (value.kind === languages.LanguageCompletionTriggerKind.Invoke) {
 		return languages.createLanguageCompletionInvokeContext();
 	}
@@ -731,7 +731,7 @@ function decodeContext(value: unknown): languages.LanguageCompletionContext {
 	}
 	if (value.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter) {
 		return languages.createLanguageCompletionTriggerCharacterContext(
-			decodeString(value.triggerCharacter, "Completion wire trigger character"),
+			decodeString(value.triggerCharacter, 'Completion wire trigger character'),
 		);
 	}
 	throw new TypeError(`Unknown completion wire trigger kind '${String(value.kind)}'`);
@@ -739,7 +739,7 @@ function decodeContext(value: unknown): languages.LanguageCompletionContext {
 
 function encodePosition(position: Position): unknown {
 	if (!(position instanceof Position)) {
-		throw new TypeError("Completion wire position must be a Position");
+		throw new TypeError('Completion wire position must be a Position');
 	}
 	return Object.freeze({
 		lineIndex: position.lineNumber - 1,
@@ -748,9 +748,9 @@ function encodePosition(position: Position): unknown {
 }
 
 function assertSnapshotPosition(snapshot: TextSnapshot, position: Position): void {
-	const lines = snapshot.getText().split("\n");
+	const lines = snapshot.getText().split('\n');
 	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
-		throw new RangeError("Completion wire request position is outside its snapshot");
+		throw new RangeError('Completion wire request position is outside its snapshot');
 	}
 }
 
@@ -789,7 +789,7 @@ class SyntaxProviderOverlayWorker implements languages.SyntaxWorker, LanguageWor
 		return preferred ? this.providers.run(request, signal) : this.fallback.run(request, signal);
 	}
 
-	synchronizeModel(change: Parameters<LanguageWorkerModelSynchronizer["synchronizeModel"]>[0]): void {
+	synchronizeModel(change: Parameters<LanguageWorkerModelSynchronizer['synchronizeModel']>[0]): void {
 		const synchronizer = this.fallback as Partial<LanguageWorkerModelSynchronizer>;
 		synchronizer.synchronizeModel?.(change);
 	}

@@ -1,17 +1,17 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import type { KeybindingEvent } from "../../../../base/common/keybindings.js";
-import { resolveKeybinding } from "../../../../base/common/keybindings.js";
-import { parseKeybinding } from "../../../../base/common/keybindingParser.js";
-import { OperatingSystem } from "../../../../base/common/platform.js";
-import { loadKeybindingConformanceFixtures } from "../../../../base/test/common/keybindingConformanceFixtures.js";
-import type { Context } from "../../../contextkey/common/contextkey.js";
-import type { ContextKeyValue } from "../../../contextkey/common/contextkey.js";
-import { ContextKeyExpr } from "../../../contextkey/common/contextkey.js";
-import { KeybindingResolveKind } from "../../common/keybindingResolver.js";
-import { KeybindingResolver } from "../../common/keybindingResolver.js";
-import { KeybindingRegistry } from "../../common/keybindingsRegistry.js";
-import { KeybindingSource } from "../../common/keybindingsRegistry.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import type { KeybindingEvent } from '../../../../base/common/keybindings.js';
+import { resolveKeybinding } from '../../../../base/common/keybindings.js';
+import { parseKeybinding } from '../../../../base/common/keybindingParser.js';
+import { OperatingSystem } from '../../../../base/common/platform.js';
+import { loadKeybindingConformanceFixtures } from '../../../../base/test/common/keybindingConformanceFixtures.js';
+import type { Context } from '../../../contextkey/common/contextkey.js';
+import type { ContextKeyValue } from '../../../contextkey/common/contextkey.js';
+import { ContextKeyExpr } from '../../../contextkey/common/contextkey.js';
+import { KeybindingResolveKind } from '../../common/keybindingResolver.js';
+import { KeybindingResolver } from '../../common/keybindingResolver.js';
+import { KeybindingRegistry } from '../../common/keybindingsRegistry.js';
+import { KeybindingSource } from '../../common/keybindingsRegistry.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
 
@@ -56,7 +56,7 @@ interface ResolverFixture {
 	readonly events: readonly EventFixture[];
 	readonly rules: readonly RuleFixture[];
 	readonly result: {
-		readonly kind: "noMatch" | "pending" | "command" | "blocked";
+		readonly kind: 'noMatch' | 'pending' | 'command' | 'blocked';
 		readonly command?: string;
 	};
 }
@@ -73,12 +73,12 @@ interface RuleFixture {
 	readonly binding: string;
 	readonly command?: string;
 	readonly block?: boolean;
-	readonly source: "builtin" | "workbench" | "user";
+	readonly source: 'builtin' | 'workbench' | 'user';
 	readonly priority: number;
 	readonly when?: string;
 }
 
-test("shared keybinding resolver fixtures match the TypeScript implementation", () => {
+test('shared keybinding resolver fixtures match the TypeScript implementation', () => {
 	const fixtures = loadFixtures();
 	for (const fixture of fixtures.resolver) {
 		const registry = new KeybindingRegistry();
@@ -130,13 +130,13 @@ function loadFixtures(): ConformanceFixtures {
 	return loadKeybindingConformanceFixtures<ConformanceFixtures>();
 }
 
-function keybindingSource(source: RuleFixture["source"]): KeybindingSource {
+function keybindingSource(source: RuleFixture['source']): KeybindingSource {
 	switch (source) {
-		case "builtin":
+		case 'builtin':
 			return KeybindingSource.Builtin;
-		case "workbench":
+		case 'workbench':
 			return KeybindingSource.Workbench;
-		case "user":
+		case 'user':
 			return KeybindingSource.User;
 	}
 }
@@ -144,7 +144,7 @@ function keybindingSource(source: RuleFixture["source"]): KeybindingSource {
 function keybindingEvent(event: EventFixture): KeybindingEvent {
 	return {
 		key: event.key,
-		code: "",
+		code: '',
 		ctrlKey: Boolean(event.control),
 		shiftKey: Boolean(event.shift),
 		altKey: Boolean(event.alt),
@@ -152,16 +152,16 @@ function keybindingEvent(event: EventFixture): KeybindingEvent {
 	};
 }
 
-function resultKind(kind: KeybindingResolveKind): ResolverFixture["result"]["kind"] {
+function resultKind(kind: KeybindingResolveKind): ResolverFixture['result']['kind'] {
 	switch (kind) {
 		case KeybindingResolveKind.NoMatch:
-			return "noMatch";
+			return 'noMatch';
 		case KeybindingResolveKind.MoreChordsNeeded:
-			return "pending";
+			return 'pending';
 		case KeybindingResolveKind.Command:
-			return "command";
+			return 'command';
 		case KeybindingResolveKind.Blocked:
-			return "blocked";
+			return 'blocked';
 		case KeybindingResolveKind.PassThrough:
 			throw new Error('Pass-through rules are not part of the shared resolver fixtures');
 	}

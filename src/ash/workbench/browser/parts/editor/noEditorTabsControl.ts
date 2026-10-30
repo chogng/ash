@@ -1,12 +1,12 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 
-import { EditorTabsControl, type EditorTabDescriptor } from "./editorTabsControl.js";
+import { EditorTabsControl, type EditorTabDescriptor } from './editorTabsControl.js';
 
 /** Keeps title actions available while omitting editor tabs entirely. */
 export class NoEditorTabsControl extends EditorTabsControl {
 	constructor(container: HTMLElement) {
 		super(container);
-		this.domNode.classList.add("ash-no-editor-tabs-control");
+		this.domNode.classList.add('ash-no-editor-tabs-control');
 		this.domNode.hidden = true;
 	}
 

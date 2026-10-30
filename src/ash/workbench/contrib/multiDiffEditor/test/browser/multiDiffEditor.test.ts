@@ -7,7 +7,8 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
-import { IResourceIconRenderer } from '../../../../browser/labels.js';
+import { DEFAULT_LABELS_CONTAINER, IResourceIconRenderer, IResourceLabelService, ResourceLabels } from '../../../../browser/labels.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
@@ -30,7 +31,7 @@ import { type ITextModel } from '../../../../../editor/common/model.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { DialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -81,6 +82,12 @@ const { MultiDiffGoToFileAction } = await import('../../browser/multiDiffEditorA
 
 function registerMultiDiffTestServices(services: InstantiationService): InstantiationService {
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
+	if (!services.has(IResourceLabelService)) services.registerInstance(IResourceLabelService, {
+		createGroup: () => new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
+			workspaceContextService: services.get(IWorkspaceContextService),
+			resourceIconRenderer: services.get(IResourceIconRenderer),
+		}),
+	});
 	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));
 	if (!services.has(IUriIdentityService)) services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
 	if (!services.has(IWorkingCopyService)) services.registerSingleton(IWorkingCopyService, () => uriIdentityServices.createInstance(BrowserWorkingCopyService));
@@ -725,7 +732,7 @@ class BootstrapTextFiles implements ITextFileService {
 			text: request.bootstrapText ?? '',
 			source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
 			revision: undefined,
-			encoding: "utf8",
+			encoding: 'utf8',
 		};
 	}
 

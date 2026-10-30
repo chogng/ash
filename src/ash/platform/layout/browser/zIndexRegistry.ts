@@ -1,5 +1,5 @@
-import { GlobalStyleSheet } from "../../../base/browser/domStylesheets.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
+import { GlobalStyleSheet } from '../../../base/browser/domStylesheets.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 
 /** Named boundaries for the global browser stacking context. */
 export enum ZIndex {
@@ -40,7 +40,7 @@ export class ZIndexRegistry extends Disposable {
 			throw new Error(`z-index with name ${name} has already been registered`);
 		}
 		if (!Number.isSafeInteger(offset) || offset < 0) {
-			throw new RangeError("z-index offset must be a non-negative integer");
+			throw new RangeError('z-index offset must be a non-negative integer');
 		}
 
 		const value = relativeLayer + offset;
@@ -61,7 +61,7 @@ export class ZIndexRegistry extends Disposable {
 	private updateStyleSheet(): void {
 		const declarations = [...this.values.entries()]
 			.map(([name, value]) => `  ${this.variableName(name)}: ${value};`)
-			.join("\n");
+			.join('\n');
 		this.styleSheet.setText(`:root {\n${declarations}\n}`);
 	}
 }
@@ -69,16 +69,16 @@ export class ZIndexRegistry extends Disposable {
 const zIndexRegistry = new ZIndexRegistry();
 
 export const ZIndexVariables = Object.freeze({
-	sash: zIndexRegistry.registerZIndex(ZIndex.Sash, 0, "sash"),
+	sash: zIndexRegistry.registerZIndex(ZIndex.Sash, 0, 'sash'),
 	quickInput: zIndexRegistry.registerZIndex(
 		ZIndex.ModalDialog,
 		0,
-		"quick-input",
+		'quick-input',
 	),
 	contextView: zIndexRegistry.registerZIndex(
 		ZIndex.ContextView,
 		0,
-		"context-view",
+		'context-view',
 	),
 });
 
@@ -101,7 +101,7 @@ function findBase(value: number): ZIndex {
 function validateName(name: string): void {
 	if (!/^[a-z][a-z0-9-]*$/.test(name)) {
 		throw new TypeError(
-			"z-index name must start with a lowercase letter and contain only lowercase letters, digits, or hyphens",
+			'z-index name must start with a lowercase letter and contain only lowercase letters, digits, or hyphens',
 		);
 	}
 }

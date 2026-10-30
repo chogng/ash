@@ -2,7 +2,7 @@
 
 > 适用范围：Ash TypeScript Workbench 与 Sessions 的偏好入口和编辑页面。配置存储背景见 [Browser foundation](browser-foundation.md#configuration-architecture)，设置接入规则见 [Preferences README](../src/ash/workbench/contrib/preferences/README.md)。
 
-Preferences 负责打开偏好资源，Settings 是其中一种内容。配置读写、用户设置 JSONC 和快捷键独立资源的主链已接通；图形设置已接通用户、Workspace / Folder 目标、语言覆盖和编辑器组选项；真实系统 Policy、上游窗口配对和跨平台验收仍未完成。具体动作统一维护在 [Configuration / Preferences TODO](../TODO.md#configuration--preferences--todo)。本文描述当前架构，不作为全部 VS Code 契约已对齐或当前 HEAD 验收通过的声明。
+Preferences 负责打开偏好资源，Settings 是其中一种内容。配置读写、用户设置 JSONC 和快捷键独立资源的主链已接通；用户、Workspace / Folder 目标、语言覆盖、编辑器组选项和 Policy 已完成所选行为的代码验收。真实系统与外部账号的覆盖边界见[已有验证与限制](#已有验证与限制)。本文描述当前架构，不作为全部 VS Code 契约已对齐的声明。
 
 ## 打开路径
 
@@ -94,32 +94,47 @@ Skill 补全和引用通过 `getFullReferenceNames()`、`getFullReferenceName()`
 
 ## Models 设置
 
-模型目录由 `ChatModelsWidget` 呈现，Preferences 的 `ModelSettingsRenderer` 将它接入设置树，`ModelProviderSettingsRenderer` 呈现供应商配置。`workbench.action.chat.manage` 打开共用该列表的语言模型编辑器；其中的“打开设置”进入供应商配置。模型目录、开关、发现和凭据仍通过所属服务操作。
+模型目录由 `ChatModelsWidget` 呈现，Preferences 的 `ModelSettingsRenderer` 将它接入设置树，`ModelProviderSettingsRenderer` 呈现供应商配置。`workbench.action.chat.manage` 和聊天选择器的 Add Models 直接打开“设置 → Models”，带入可选查询并聚焦模型搜索。即使默认设置编辑器为 JSON，此入口也打开图形设置。模型目录、开关、发现和凭据仍通过所属服务操作。
 
-Workbench 和 Sessions 共用 `ModelSettingsRenderer`。模型目录按供应商排列，同一供应商内按发布时间从新到旧排列；默认收起为每家供应商的首个模型，`viewall models` 展开或收起完整列表。当前显示的列表将已开启模型排在前面，两组内部保持目录原序；关闭后回到未开启组中的原有位置，与开启先后无关。列表顶部的模型搜索框按名称和 `provider/model` ID 搜索整个目录，搜索结果使用同一排序规则，清空搜索后恢复展开状态；API key 区域不参与这个局部搜索。键盘切换开关后，保存完成时焦点留在同一个模型上。
+Workbench 和 Sessions 共用 `ModelSettingsRenderer`。模型目录按供应商排列，同一供应商内按发布时间从新到旧排列；默认收起为每家供应商的首个模型，`viewall models` 在概览与完整列表间切换。完整列表显示按连接 ID 划分的供应商分组、组开关、折叠操作和搜索筛选建议；同名连接保持独立，只有一个连接时也提供组操作。概览中的可见模型按置顶、已开启和未开启排序，完整列表在各供应商内使用相同排序，各组内部保持目录原序；关闭未置顶的模型后回到未开启组中的原有位置，与开启先后无关。列表顶部的模型搜索框按名称和 `provider/model` ID 搜索整个目录，搜索结果使用同一排序规则，清空搜索后恢复展开状态；API key 区域不参与这个局部搜索。供应商开关作用于该连接的全部模型，包括搜索结果之外的模型；失败保留服务中的实际状态并显示错误。键盘切换开关后，保存完成时焦点留在同一个控件上。从折叠分组返回概览时恢复概览模型。
 
 `ModelCatalogConfiguration` 拥有模型开关的界面默认值：只开启 GPT-6.1 Sol、GPT-6 Astra、GPT-6 Luna、Claude Opus 5.5、Claude Sonnet 5.5 和 Grok 4.7。其他内置、后续新增及自定义模型默认关闭。手动修改由配置服务写入同一份用户设置，模型选择器通过 `ILanguageModelsService` 使用这些开关。
 
 `models.hidden` 保存偏离默认值的选择。已有 `{ provider, model }` 条目继续表示关闭，新增 `{ provider, model, visible: true }` 条目表示开启默认关闭的模型；`visible` 仅接受布尔值。恢复某个模型的默认值时移除对应条目，不保存另一份模型目录。
 
-模型管理文件参考 VS Code 的职责分工：
+Models 管理命令的搜索参数通过 `IOpenSettingsOptions.sectionQuery` 交给 Models 自身的搜索框，保留 `@provider:` 和 `@capability:` 语法。`sectionQuery` 需要图形设置分类及实际提供搜索能力的 renderer；不会经过全局设置查询的规范化。Workbench 和 Sessions 均复用这一能力。
 
-| 文件                                                                           | 职责                                                                       |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `workbench/contrib/chat/common/languageModels.ts`                              | 模型服务契约与实现；目录加载、供应商发现和测试操作，两个窗口各一个实例     |
-| `workbench/contrib/chat/common/languageModelsConfiguration.ts`                 | JSONC 设置声明、六个默认开启模型、模型开关数据格式                         |
-| `workbench/contrib/chat/browser/languageModelsConfigurationService.ts`         | 模型开关、默认模型及上一次选择的保存与事件                                 |
-| `workbench/contrib/chat/browser/chatManagement/chatModelsViewModel.ts`         | 模型目录的过滤、供应商分组、折叠、选中项及可见性操作                       |
-| `workbench/contrib/chat/browser/chatManagement/chatModelsWidget.ts`            | 模型目录的搜索、折叠、开关、键盘焦点和无障碍内容，供设置页与管理编辑器共用 |
-| `workbench/contrib/chat/browser/chatManagement/chatManagementEditorInput.ts`   | 语言模型管理编辑器的稳定输入标识                                           |
-| `workbench/contrib/chat/browser/chatManagement/chatManagementEditor.ts`        | 承载共用目录并导航到供应商设置                                             |
-| `workbench/contrib/chat/browser/chatManagement/chatManagement.contribution.ts` | 注册管理编辑器、打开命令、清空搜索命令和编辑器无障碍帮助                   |
-| `workbench/contrib/chat/browser/chatManagement/media/chatModelsWidget.css`     | 共用模型列表的布局与文本溢出                                               |
-| `workbench/contrib/chat/browser/chatManagement/media/chatManagementEditor.css` | 管理编辑器的尺寸、滚动与主题样式                                           |
-| `workbench/contrib/preferences/browser/modelProviderSettingsRenderer.ts`       | 供应商表单、私有探测状态、模型表格、键盘操作与行内编辑                     |
-| `workbench/contrib/preferences/browser/modelSettingsRenderer.ts`               | 将模型管理接入两个窗口的设置树                                             |
+完整模型列表支持勾选模型、Shift 范围选择、选择全部可见结果，以及对所选模型批量显示、隐藏、置顶或取消置顶。多选仅存在于当前 Widget；置顶使用本地用户设置 `models.pinned`，和显隐设置 `models.hidden` 独立。Chat 选择器在各供应商内优先排列置顶的可见模型。搜索支持词首、驼峰首字母、高亮及 `@` 补全；供应商过滤按实际 ID 或完整名称精确匹配。
 
-公开 API、调用链和上游专属契约的逐项核对见 [chatManagement 审计](research/chat-management-api-alignment-2026-10-23.md)。目录查询、分组和显隐操作由 `ChatModelsViewModel` 提供，供应商发现与探测状态由 `ModelProviderSettingsRenderer` 的私有实现持有。选择器的“添加模型”经过 `workbench.action.chat.manage`，编辑器输入以专用 serializer 恢复单例能力；供应商凭据和手动模型仍在设置页修改。
+模型行内的 Ctrl/Cmd+A 选择所有可见模型，Shift+方向键扩展范围；搜索框仍使用原生文本选择。右键、行操作按钮或 Shift+F10 打开当前选择的菜单。未勾选模型时收起批量动作，清空选择后焦点回到全选按钮。单模型菜单只呈现当前连接实际支持的长上下文和加速选项，通过原 `setModelPreferences` 保存，不切换当前聊天的模型或推理深度。
+
+供应商菜单可以刷新目录及定位现有配置；自定义模型菜单可直接打开对应手工声明的编辑器，订阅连接复用账户管理。设置宿主接收页面的 reveal 请求，清除全局设置搜索后定位现有控件。两个窗口的模型菜单及子菜单归各自设置容器拥有，关闭设置时释放。
+
+供应商级目录状态来自 `model/list.catalog_statuses`，保留实际 provider、connection、新鲜度和稳定问题分类，不传递原始错误或凭据。发现失败保留此前目录，空目录仍保留供应商标题及配置入口；刷新进度由发起请求的 Widget 临时呈现。状态随模型服务的目录快照更新，和 API key 是否保存、模型测试或实际调用权限分开。
+
+完整列表以模型选择、显隐、置顶和批量操作为主，模型行仅附带已确认的工具调用、图像输入和 Agent 模式能力摘要，不重复铺陈未知状态、来源与价格细节。悬停模型开关，或聚焦后执行“显示或聚焦悬停提示”，可查看能力三态、模型厂商、实际连接、元数据来源及完整参考价格；无障碍视图保留同样的事实和价格依据。`@capability:tools` / `toolCalling`、`@capability:agent` / `agentMode` 只匹配明确支持的条目。磁盘恢复的目录标记为已保存的供应商数据。
+
+能力摘要按钮可以切换对应筛选条件，保留供应商和普通文本查询；按钮独立于模型显隐开关，选中反馈同时使用主题样式和 ARIA 状态。
+
+参考价格复用后端已有价目表，保留币种、每百万 token 单位、服务等级、区域、输入区间、版本及核对日期；不是订阅账单或 Copilot credits。订阅、自定义网关和显式端点覆盖不会继承厂商公开价。缺少价格表示未知，零金额保留为零。模型来源、能力、价格单独变化也刷新界面。
+
+自定义供应商的“删除供应商”经确认后，通过既有 App Server `provider/remove` 删除配置和保存的 API key，并清理该连接的本地模型偏好。内置供应商保留。进行中的密钥保存会在删除前完成，以免迟到的写入重新创建连接。
+
+模型管理的目录、分组、显隐和交互契约参考 VS Code；Ash 明确选择由 Workbench 与 Sessions 的设置页承载。独立模型 Editor、EditorInput、标签页恢复与专用页面样式不属于保留范围，不通过空壳文件补齐它们。该产品差异不代表共享能力已经全面对齐，实际差异见下方审计。
+
+| 文件                                                                           | 职责                                                                   |
+| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `workbench/contrib/chat/common/languageModels.ts`                              | 模型服务契约与实现；目录加载、供应商发现和测试操作，两个窗口各一个实例 |
+| `workbench/contrib/chat/common/languageModelsConfiguration.ts`                 | JSONC 设置声明、六个默认开启模型、模型开关数据格式                     |
+| `workbench/contrib/chat/browser/languageModelsConfigurationService.ts`         | 模型开关、置顶、默认模型及上一次选择的保存与事件                       |
+| `workbench/contrib/chat/browser/chatManagement/chatModelsViewModel.ts`         | 模型目录的过滤、供应商分组、折叠、选中项、置顶及可见性操作             |
+| `workbench/contrib/chat/browser/chatManagement/chatModelsWidget.ts`            | 两个窗口设置页中的模型概览、完整分组列表、筛选、开关、焦点和无障碍内容 |
+| `workbench/contrib/chat/browser/chatManagement/chatManagement.contribution.ts` | 注册模型管理命令，验证查询参数并调用 Preferences 打开 Models 设置      |
+| `workbench/contrib/chat/browser/chatManagement/media/chatModelsWidget.css`     | 共用模型列表的布局与文本溢出                                           |
+| `workbench/contrib/preferences/browser/modelProviderSettingsRenderer.ts`       | 供应商表单、私有探测状态、模型表格、键盘操作与行内编辑                 |
+| `workbench/contrib/preferences/browser/modelSettingsRenderer.ts`               | 将模型管理接入两个窗口的设置树                                         |
+
+公开 API、调用链和上游专属契约的逐项核对见 [chatManagement 审计](research/chat-management-api-alignment-2026-10-23.md)。目录查询、分组和显隐操作由 `ChatModelsViewModel` 提供，供应商发现与探测状态由 `ModelProviderSettingsRenderer` 的私有实现持有。选择器的“添加模型”经过 `workbench.action.chat.manage` 进入同一设置页；模型目录、供应商凭据和手动模型由各自现有服务管理。旧 Language Models 标签页的 serializer 不再注册，working set 恢复使用现有的未知编辑器跳过机制，其余标签页照常恢复。
 
 API key 输入框失焦即保存，清空即移除；成功保存不弹通知，失败显示输入框错误并进入通知服务。密钥由后端 secret store 保存，界面只用掩码表示已配置状态。
 
@@ -183,7 +198,7 @@ Windows／macOS 的进程级 `SystemPolicyService` 每 2 秒检查变化，命�
 
 仅 managed-settings 请求的 HTTP 466 映射为领域 `ManagedSettingsUpdateRequired` 和 RPC `GitHubManagedSettingsUpdateRequired`；不解析或转发错误正文及其他客户端的版本要求，也不触发 Ash 更新。它作为失败保留已有策略，成功或权威撤回后恢复状态。本链没有强制新鲜度或 AI 执行门禁；刷新失败不会写入 `chat.disableAIFeatures`。
 
-`AccountPolicyService` 只解释 registry 声明的映射。`ChatDefaultModel` 将顶层 `model` 或旧 `permissions.model` 映射到 `chat.defaultModel`；顶层非空字符串优先，空白视为缺省。实际选择仍由模型目录和聊天偏好服务负责。`ChatAIDisabled` 仅为系统策略，不伪造 Copilot 字段。`MultiplexPolicyService` 组合系统优先、账户其次；映射函数留在 renderer，Main 只传类型声明和策略值。
+`AccountPolicyService` 只解释 registry 声明的映射。新聊天模型恢复 Chat Input 上次选择，不再注册 `chat.defaultModel` 或其默认模型策略映射。`ChatAIDisabled` 仅为系统策略，不伪造 Copilot 字段。`MultiplexPolicyService` 组合系统优先、账户其次；映射函数留在 renderer，Main 只传类型声明和策略值。
 
 ## 页面与公开契约的边界
 
@@ -195,9 +210,19 @@ Sessions 保留其产品设置宿主；Workspace / Folder、语言查询以及�
 
 EditorGroupModel 是数字组 ID 的分配 owner；组操作、命令上下文、扩展边界和 Sessions 文档布局消费同一身份。旧工作集的字符串 ID 在 EditorPart 恢复边界验证并转换，保存只输出数字；嵌套布局、标签顺序和活动组随同恢复，与保留的 Sessions 产品页组冲突时重新分配文档组身份。Ash 尚未采用上游全部 Preferences 容器和公开 API。
 
-已确认缺口、真实环境验收和待复核场景统一见 [TODO](../TODO.md#configuration--preferences--todo)；registry / schema、typed parse / serialize、`ashBinding` 等额外契约按真实消费者决定，见 TODO 的发展候选，不按上游成员表整体补齐。
+registry / schema、typed parse / serialize、`ashBinding` 等额外契约按真实消费者决定，见 [TODO 的发展候选](../TODO.md#发展候选未排期)，不按上游成员表整体补齐。
 
 ## 已有验证与限制
+
+2026-10-30 按本轮代码验收口径完成系统与账户 Policy 核对：`policy.test.ts` 7 项、`systemPolicyService.test.ts` 3 项、`windowsRegistryPolicy.test.ts` 1 项及 `accountPolicyService.test.ts` 13 项通过。新增测试直接走默认 macOS 读取分支，以受控文件／进程边界验证固定 plist 路径和 plutil 参数、失败保留、删除撤回、释放取消及迟到结果；账户测试覆盖两个身份、host／凭据代次变化、非空策略保留与撤回、退出和真实配置消费者。日志为 `.build/todo-code-audit-policy-elevation-container-retest.log`。对应 TODO 按代码标准消项；本轮没有执行 macOS 系统管理配置、真实组织账号切换或界面验收，历史真实环境覆盖的限制仍适用。
+
+2026-10-30 在 Windows x64、`a174f34dfd` 上按源码契约与定向测试收口所选 Preferences 行为：`PreferencesService` 与既有配置／文本模型 owner 贯通 User、Workspace、Folder、语言覆盖、重置、JSON 脏草稿和数字编辑器组；核对本地 VS Code 的 `IOpenSettingsOptions` 与组路由公开契约，未复制其内部实现。`settings-json.test.ts` 18 项、配置服务 3 项通过；Sessions Preferences 2 项及 EditorPart 的组、模态窗口和焦点回归包含于布局批次 268 项中，控件测试另通过 14 项。日志为 `.build/todo-code-audit-contracts.log`、`.build/todo-code-audit-layout-preferences.log` 与 `.build/todo-code-audit-workflows.log`。本轮没有新增上游实窗配对证据。
+
+2026-10-30 在 Windows x64、`473f5cd4ea` 上重跑 `settings.test.ts`，49 项全部通过，覆盖注册目录、搜索与已修改过滤、重置、JSON 操作、配置保存及中英文控件契约；日志为 `.build/todo-acceptance-code-contracts.log`。Windows 125% 下另采样 32 个真实窗口宽度，相邻输入框／筛选按钮的 DOMRect 边界出现小于 0.001 CSS px 的浮点误差；对应 smoke 断言仅容忍该测量误差，仍拒绝可见重叠。采样在 `.build/todo-acceptance-20261030/preferences-fractions.json`。
+
+2026-10-29 修复 macOS 打开 Settings 失败：生产 Canvas contribution 已注册 `chat.canvases.enabled`，但 Settings 分类表遗漏该项，完整性检查因此中止窗口创建。将其纳入 Agent Defaults 的 Editing 分类，并让 Settings 单测加载真实 Canvas 注册；新增注册先复现相同错误，修复后该文件 49 项全部通过。正常 Desktop 构建及真实 App Server 的模型持久化／窗口重开场景随后通过。诊断、红绿测试和构建日志位于 `.build/macos-model-acceptance-20261029/`。
+
+2026-10-29 已用隔离 HOME、profile 和合成工作区实际启动本地 Code OSS 1.145.0，并通过命令面板打开可见 Settings。该可运行性探针解除旧的“本地无可运行构建”阻塞，不覆盖目标／语言／重置／JSON 草稿和编辑器组的完整窗口配对。运行时为 Electron 43.8.3／Chromium 150.0.7871.250；源码检出为 `6c21985de64`，未重新构建上游，因此不以该 SHA 证明已运行产物对应某个源码版本。截图仍有内置 git-base、Emmet 和 GitHub Authentication 的缺模块通知；仅确认 Settings 基础窗口可运行，涉及这些扩展的配对须先补齐上游构建。探针脚本、结果、截图和 trace 位于 `.build/macos-todo-20261029/upstream-preferences-*`。首轮在打开 Settings 后因探针将搜索控件误识别为 textbox 而失败；最终探针仅断言本次需要确认的启动和 Settings 可见性，保留首轮产物于 `upstream-first/`。
 
 2026-10-18 在 `e6b5688e5` 加本批改动上闭合配置迁移窗口复核。修复设置值在编辑器获焦前被选中时辅助 live 文本滞后：View 在收到获焦事件时读取当前选区，失焦时不覆盖帮助提示。修正 Browser 外部写入测试辅助工具的文件类型，使用 `FileKind.File`，避免重载把设置文件识别为非文件。设置菜单的 JSON 编辑入口改由真实动作回归；选择内置主题的测试依赖真实扩展宿主，断开后端的 UI 测试不假设已加载内置主题。
 

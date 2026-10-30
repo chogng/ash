@@ -1,3 +1,4 @@
+import { SESSIONS_FILES_CONTAINER_ID } from '../../files/browser/files.contribution.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { localize } from '../../../../nls.js';
@@ -64,7 +65,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		super.start();
 		this._register(this.editor.onDidChangeEditors(event => {
 			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed' && this.context.isDocumentContent && !this.isRestoringEditors && !this.context.isChangingContent && this.documentGroups.every(group => group.inputs.length === 0)) {
-				this.layout.updateParts(() => { this.layout.hidePart('editor'); this.layout.hidePart('auxiliarybar'); });
+				this.layout.hidePart('editor');
 			}
 		}));
 	}
@@ -74,7 +75,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private get documentsVisible(): boolean { return this.context.isDocumentContent && this.layout.isPartVisible('editor'); }
 	public get hasDocumentEditors(): boolean { return this.documentGroups.some(group => group.inputs.some(input => !this.tabs.isManaged(input))); }
 	public get supportsDetails(): boolean { return this.detailPanel.supportsActiveEditor; }
-	public get isRestoringEditors(): boolean { return this.restoring; }
+	public get isRestoringEditors(): boolean { return this.restoring || this.autoVisibilitySuppressions > 0; }
 
 	/** Settle the current session before capturing the document groups that the entry leaves behind. */
 	public async prepareContentChange(): Promise<void> {
@@ -86,7 +87,11 @@ export class DesktopLayoutController extends BaseLayoutController {
 	public async activate(revealDetails: boolean): Promise<void> {
 		await this.whenSettled();
 		if (this.isDisposed) { return; }
+		// Restored detail tabs must not leave an empty editor column before a conversation is selected.
+		await this.tabs.removeRestoredDetailTabs();
+		if (this.isDisposed) { return; }
 		this.editor.activateGroup(this.documentGroups[0]!.id);
+		if (this.documentGroups.every(group => group.inputs.length === 0)) { this.layout.hidePart('editor'); }
 		const selection = this.sessions.activeSelection;
 		if (selection) { await this.tabs.reconcile(selection, !this.documentsVisible && revealDetails); }
 		if (this.isDisposed) { return; }
@@ -120,7 +125,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 	protected override shouldShowEditor(): boolean {
 		return !this.context.isSessionContent || (this.context.isDocumentContent && this.editors.visibleEditors.length > 0 && (this.layout.isPartVisible('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)));
 	}
-	protected override isEditorAutoVisibilitySuppressed(): boolean { return this.restoring || this.context.isChangingContent; }
+	protected override isEditorAutoVisibilitySuppressed(): boolean { return super.isEditorAutoVisibilitySuppressed() || this.context.isChangingContent; }
 	protected override getWorkingSet(key: string): EditorWorkingSet { return this.editor.saveWorkingSet(key, [this.pageGroupId]); }
 	protected override async applyWorkingSet(saved: EditorWorkingSet | 'empty'): Promise<void> {
 		await this.editor.applyWorkingSet(saved, { preserveFocus: true, preserveGroups: [this.pageGroupId] });
@@ -130,19 +135,18 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 	protected override async onSessionRestored(selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> {
 		if (!this.context.isDocumentContent) { return; }
+		await this.tabs.removeRestoredDetailTabs();
+		if (this.isDisposed) { return; }
 		this.editor.activateGroup(this.documentGroups[0]!.id);
+		// Switching working sets preserves shared Editor visibility, even when the incoming session has no documents.
 		await this.tabs.reconcile(selection, !this.documentsVisible && this.layout.isPartVisible('auxiliarybar'));
 		if (this.isDisposed) { return; }
 		await this.detailPanel.update(false);
 	}
 	public async hideEditor(): Promise<void> {
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) return;
 		this.setDocumentsVisible(false);
-		this.layout.showPart('auxiliarybar');
-		if (this.sessions.activeSelection) { await this.tabs.reconcile(this.sessions.activeSelection, true); }
-		if (this.isDisposed) { return; }
-		await this.detailPanel.update(true);
-		if (!this.isDisposed) { this.layout.focus(); }
+		this.layout.focus();
 	}
 	public async showEditor(): Promise<void> {
 		if (this.isDisposed) { return; }
@@ -153,14 +157,22 @@ export class DesktopLayoutController extends BaseLayoutController {
 		await this.detailPanel.update(false);
 		if (!this.isDisposed) { this.editor.focus(); }
 	}
+	public async toggleFiles(): Promise<void> {
+		if (this.isDisposed) return;
+		if (
+			this.layout.isPartVisible('auxiliarybar') &&
+			this.panes.getActivePaneComposite(ViewContainerLocation.AuxiliaryBar)?.getId() ===
+			SESSIONS_FILES_CONTAINER_ID
+		)
+			await this.toggleDetails();
+		else await this.openFiles();
+	}
 	public async toggleDetails(): Promise<void> {
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) return;
 		if (this.layout.isPartVisible('auxiliarybar')) {
-			if (!this.documentsVisible) { await this.showEditor(); }
-			if (this.isDisposed) { return; }
 			this.layout.hidePart('auxiliarybar');
-		}
-		else { this.editor.activateGroup(this.documentGroups[0]!.id); await this.detailPanel.update(true); }
+			this.layout.focus();
+		} else await this.detailPanel.openFiles();
 	}
 	public async toggleSidePane(): Promise<void> {
 		if (this.isDisposed) { return; }
@@ -171,7 +183,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 			this.layout.hidePart('auxiliarybar');
 			this.layout.focus();
 		} else {
-			this.setDocumentsVisible(this.closedProfile.documents);
+			this.setDocumentsVisible(this.closedProfile.documents && this.documentGroups.some(group => group.inputs.length > 0));
 			this.editor.activateGroup(this.documentGroups[0]!.id);
 			this.setPartVisible(this.closedProfile.details);
 			await this.detailPanel.update(false);
@@ -179,21 +191,16 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 
 	public async openFiles(): Promise<void> {
-		if (this.isDisposed) { return; }
-		await this.showEditor();
-		if (this.isDisposed) { return; }
-		await this.tabs.openFiles();
-		if (this.isDisposed) { return; }
-		await this.detailPanel.update(true);
+		if (!this.isDisposed) await this.detailPanel.openFiles();
 	}
 
 	public async openChanges(): Promise<void> {
 		if (this.isDisposed) { return; }
+		// Reloading the retained pane briefly removes its visible editor; this explicit open owns visibility.
+		using suppression = this.suppressEditorAutoVisibility();
 		await this.showEditor();
 		if (this.isDisposed) { return; }
-		const selection = this.sessions.activeSelection;
-		if (selection) { await this.tabs.openChanges(selection); }
-		if (this.isDisposed) { return; }
-		await this.detailPanel.update(true);
+		await this.tabs.openChanges();
+		if (!this.isDisposed) { this.setDocumentsVisible(true); }
 	}
 }

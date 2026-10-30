@@ -314,7 +314,7 @@ function builtinPattern(name: string): unknown {
 		return { regexp: '^\\s*(?:\\d+>)?\\s*(.+?)(?:\\((\\d+(?:,\\d+(?:,\\d+,\\d+)?)?)\\))?\\s*:\\s*(?:[^:\\r\\n]*?\\s+)?(fatal +error|error|warning|info)\\s+([^:\\s]*)\\s*:\\s*(.*)$', file: 1, location: 2, severity: 3, code: 4, message: 5 };
 	}
 	if (name === '$cpp' || name === '$csc' || name === '$vb') {
-		const prefix = { '$cpp': 'C', '$csc': 'CS', '$vb': 'BC' }[name];
+		const prefix = { $cpp: 'C', $csc: 'CS', $vb: 'BC' }[name];
 		return { regexp: `^(.+?)\\((\\d+(?:,\\d+(?:,\\d+,\\d+)?)?)\\):\\s*(error|warning|info)\\s+(${prefix}\\d+)\\s*:\\s*(.*)$`, file: 1, location: 2, severity: 3, code: 4, message: 5 };
 	}
 	if (name === '$gulp-tsc') {

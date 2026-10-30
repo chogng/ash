@@ -11,7 +11,7 @@ This crate owns the backend-neutral runtime for trusted Debug Adapter Protocol (
 | `DebugAdapterService`                 | Validate active directory capabilities and own at most eight adapter processes | Product configuration or connection identity |
 | `DebugAdapterCommand::new`            | Bound program and arguments and reject NUL input                               | Executable discovery                         |
 | `read_message` / `encode_message`     | Parse and create bounded DAP frames                                            | Request pairing or DAP semantics             |
-| `DebugAdapterState`                   | Retain at most 512 messages plus bounded stderr and exit state                 | Durable history                              |
+| `DebugAdapterState`                   | Retain at most 8,192 messages / four MiB plus bounded stderr and exit state    | Durable history                              |
 | `push_message`                        | Assign ordered sequence numbers and evict the oldest retained messages         | Consumer cursors                             |
 | `refresh_process_state` / `terminate` | Observe exit and reap or kill the child                                        | Restart policy                               |
 

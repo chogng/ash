@@ -22,7 +22,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { EditorPanes } from '../../../browser/editor.js';
 import { binaryFileEditorDescriptor } from './editors/binaryFileEditor.js';
 import './editors/fileEditorHandler.js';
-import "./fileActions.contribution.js";
+import './fileActions.contribution.js';
 
 EditorPanes.registerEditorPane(binaryFileEditorDescriptor());
 

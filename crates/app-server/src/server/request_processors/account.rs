@@ -167,6 +167,8 @@ impl<'a> AccountRequestProcessor<'a> {
             }
             AccountLoginMethodDto::OpenAiChatGptBrowser => LoginMethod::OpenAiChatGptBrowser,
             AccountLoginMethodDto::OpenAiChatGptDeviceCode => LoginMethod::OpenAiChatGptDeviceCode,
+            AccountLoginMethodDto::ChatGptWebDeviceCode => LoginMethod::ChatGptWebDeviceCode,
+            AccountLoginMethodDto::ChatGptWebCodex => LoginMethod::ChatGptWebCodex,
             AccountLoginMethodDto::KimiDeviceCode => LoginMethod::KimiDeviceCode,
             AccountLoginMethodDto::XaiDeviceCode => LoginMethod::XaiDeviceCode,
             AccountLoginMethodDto::BigModelBrowser => LoginMethod::BigModelBrowser,

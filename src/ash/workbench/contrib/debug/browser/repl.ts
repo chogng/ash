@@ -31,12 +31,12 @@ import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../pla
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { DEBUG_CONSOLE_VIEW_ID, type IDebugSource } from '../common/debug.js';
 import { defaultButtonStyles, defaultFindWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
-import type { IAction } from "../../../../base/common/actions.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import { FilterViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import { IDebugService, type IDebugSession, type IReplModel, type IDebugCompletionItem, CLEAR_DEBUG_CONSOLE_COMMAND_ID } from "../common/debug.js";
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { FilterViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../browser/parts/views/viewPane.js';
+import { IDebugService, type IDebugSession, type IReplModel, type IDebugCompletionItem, CLEAR_DEBUG_CONSOLE_COMMAND_ID } from '../common/debug.js';
 
 const INPUT_HISTORY_KEY = 'debug.repl.history';
 const FILTER_HISTORY_KEY = 'debug.repl.filterHistory';
@@ -119,17 +119,17 @@ export class Repl extends FilterViewPane {
 			(entry: DebugConsoleEntry) => this.openSource(entry, entry.source as IDebugSource).catch(error => this.setStatus(message(error))),
 			(entry: DebugConsoleEntry) => this.consoleFolder(entry),
 		));
-		this.contentElement.classList.add("ash-debug-console");
+		this.contentElement.classList.add('ash-debug-console');
 		this.headerActionsElement.classList.add('ash-debug-console-title-actions');
 		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('debug.repl.actions', 'Debug Console actions') }));
-		this.titleActions.element.classList.add("ash-toolbar");
-		this.sessionSelect = h(container.ownerDocument, "select");
-		this.sessionSelect.className = "ash-debug-console-session";
-		this.sessionSelect.setAttribute("aria-label", localize('debug.repl.session', 'Debug Console session'));
-		this.output = h(container.ownerDocument, "div");
-		this.output.className = "ash-debug-console-output";
-		this.output.setAttribute("role", "log");
-		this.output.setAttribute("aria-label", this.accessibility.getWidgetAriaLabel());
+		this.titleActions.element.classList.add('ash-toolbar');
+		this.sessionSelect = h(container.ownerDocument, 'select');
+		this.sessionSelect.className = 'ash-debug-console-session';
+		this.sessionSelect.setAttribute('aria-label', localize('debug.repl.session', 'Debug Console session'));
+		this.output = h(container.ownerDocument, 'div');
+		this.output.className = 'ash-debug-console-output';
+		this.output.setAttribute('role', 'log');
+		this.output.setAttribute('aria-label', this.accessibility.getWidgetAriaLabel());
 		const dataSource = this.instantiation.createInstance(ReplDataSource, () => this.consoleService.activeSession?.elements ?? [], (entry: DebugConsoleEntry) => this.visibleEntryIds.has(entry.id));
 		this.tree = this._register(new AsyncDataTree(this.output, dataSource, {
 			ariaLabel: this.accessibility.getWidgetAriaLabel(), scrolling: 'external', reuseRows: true,
@@ -167,8 +167,8 @@ export class Repl extends FilterViewPane {
 		this._register(this.tree.onDidError(event => this.setStatus(message(event.error))));
 		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.DebugConsole);
 		if (hint) this.output.setAttribute('aria-description', hint);
-		this.form = h(container.ownerDocument, "form");
-		this.form.className = "ash-debug-console-form";
+		this.form = h(container.ownerDocument, 'form');
+		this.form.className = 'ash-debug-console-form';
 		const suggestionId = `ash-repl-completions-${++replSequence}`;
 		this.inputHost = h(container.ownerDocument, 'div');
 		this.inputHost.className = 'ash-repl-input';
@@ -229,14 +229,14 @@ export class Repl extends FilterViewPane {
 		this.suggestions.setAttribute('aria-label', localize('debug.repl.completions', 'Debug Console suggestions'));
 		this.suggestions.hidden = true;
 		this.form.append(this.suggestions);
-		this.status = h(container.ownerDocument, "div");
-		this.status.className = "ash-debug-console-status";
-		this.status.setAttribute("role", "status");
+		this.status = h(container.ownerDocument, 'div');
+		this.status.className = 'ash-debug-console-status';
+		this.status.setAttribute('role', 'status');
 		this.contentElement.append(this.sessionSelect, this.output, this.form, this.status);
 		this.configureFilter();
 		this.trackBodyMinimum(this.output, 60);
-		this._register(addDisposableListener(this.sessionSelect, "change", () => this.selectSession()));
-		this._register(addDisposableListener(this.form, "submit", event => {
+		this._register(addDisposableListener(this.sessionSelect, 'change', () => this.selectSession()));
+		this._register(addDisposableListener(this.form, 'submit', event => {
 			event.preventDefault();
 			this.acceptReplInput();
 		}));
@@ -681,7 +681,7 @@ export class Repl extends FilterViewPane {
 }
 
 function option(document: Document, value: string, label: string): HTMLOptionElement {
-	const element = h(document, "option");
+	const element = h(document, 'option');
 	element.value = value;
 	element.textContent = label;
 	return element;

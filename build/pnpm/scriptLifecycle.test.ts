@@ -1,14 +1,14 @@
-import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import test from 'node:test';
 
-test("aggregate, test and typecheck commands prepare inputs once and stop on preparation failure", async (t) => {
-	const directory = await mkdtemp(join(tmpdir(), "ash-lifecycle-"));
+test('aggregate, test and typecheck commands prepare inputs once and stop on preparation failure', async t => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-lifecycle-'));
 	t.after(() => rm(directory, { recursive: true, force: true }));
-	const manifest = JSON.parse(await readFile(resolve(import.meta.dirname, "../../package.json"), "utf8"));
+	const manifest = JSON.parse(await readFile(resolve(import.meta.dirname, '../../package.json'), 'utf8'));
 	assert.equal(manifest.scripts['test:unit:no-compile'], 'node test/unit/run.ts');
 	assert.equal(manifest.scripts['test:editor:unit:no-compile'], 'node test/unit/editor.ts');
 	assert.equal(manifest.scripts['test:unit:runner'], 'node --test test/unit/impact.test.ts test/unit/mocha.test.ts');
@@ -17,45 +17,46 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	}
 	const scripts = { ...manifest.scripts };
 	for (const [name, operation] of Object.entries({
-		"stylelint": "styles",
-		"test:build-tools": "tools",
-		"test:unit": "unit",
-		"test:unit:prepared": "unit",
-		"test:unit:runner": "unit-runner",
-		"test:unit:no-compile": "unit-reuse",
-		"test:editor:unit": "editor",
-		"test:editor:unit:no-compile": "editor-reuse",
-		"test:extensions": "extension-tests",
-		"test:browser:integration": "browser",
-		"test:browser:integration:prepared": "browser",
-		"test:editor:browser": "editor-browser",
-		"test:editor:browser:build": "browser-build",
-		"prepare:output": "output",
-		"prepare:extensions": "extensions",
-		"localization:generate": "localization",
-		"protocol:generate": "protocol",
-		"typecheck:protocol": "protocol-check",
-		"localization:check": "localization-check",
-		"typecheck:common": "common",
-		"icons:check": "icons",
-		"typecheck:renderer": "renderer",
-		"build": "desktop-build",
-		"build:prepared": "desktop-build",
-		"prepare:desktop-addons": "electron-dependencies",
-		"prepare:electron": "electron-runtime",
-		"prepare:backend": "backend",
-		"prepare:backend:web": "backend-web",
-		"bundle:web": "bundle-web",
-		"bundle:web:full": "bundle-web-full",
-		"test:smoke:browser:no-compile": "browser-ui-tests",
-		"test:smoke:browser:full:no-compile": "browser-connected-tests",
-		"test:smoke:ui:no-compile": "electron-ui-tests",
-		"test:smoke:desktop:no-compile": "electron-connected-tests",
-	})) scripts[name] = `node record.ts ${operation}`;
+		stylelint: 'styles',
+		'test:build-tools': 'tools',
+		'test:unit': 'unit',
+		'test:unit:prepared': 'unit',
+		'test:unit:runner': 'unit-runner',
+		'test:unit:no-compile': 'unit-reuse',
+		'test:editor:unit': 'editor',
+		'test:editor:unit:no-compile': 'editor-reuse',
+		'test:extensions': 'extension-tests',
+		'test:browser:integration': 'browser',
+		'test:browser:integration:prepared': 'browser',
+		'test:editor:browser': 'editor-browser',
+		'test:editor:browser:build': 'browser-build',
+		'prepare:output': 'output',
+		'prepare:extensions': 'extensions',
+		'localization:generate': 'localization',
+		'protocol:generate': 'protocol',
+		'typecheck:protocol': 'protocol-check',
+		'localization:check': 'localization-check',
+		'typecheck:common': 'common',
+		'icons:check': 'icons',
+		'typecheck:renderer': 'renderer',
+		build: 'desktop-build',
+		'build:prepared': 'desktop-build',
+		'prepare:desktop-addons': 'electron-dependencies',
+		'prepare:electron': 'electron-runtime',
+		'prepare:backend': 'backend',
+		'prepare:backend:web': 'backend-web',
+		'bundle:web': 'bundle-web',
+		'bundle:web:full': 'bundle-web-full',
+		'test:smoke:browser:no-compile': 'browser-ui-tests',
+		'test:smoke:browser:full:no-compile': 'browser-connected-tests',
+		'test:smoke:ui:no-compile': 'electron-ui-tests',
+		'test:smoke:desktop:no-compile': 'electron-connected-tests',
+	}))
+		scripts[name] = `node record.ts ${operation}`;
 	// The direct build owns generated inputs after its addon preparation hook.
 	scripts.build = 'node build/prepare.ts && node record.ts desktop-build';
-	await writeFile(join(directory, "package.json"), JSON.stringify({ private: true, type: "module", scripts }));
-	await writeFile(join(directory, "record.ts"), `
+	await writeFile(join(directory, 'package.json'), JSON.stringify({ private: true, type: 'module', scripts }));
+	await writeFile(join(directory, 'record.ts'), `
     import { appendFileSync } from 'node:fs';
     appendFileSync('operations.jsonl', JSON.stringify(process.argv[2]) + '\\n');
     if (process.argv[2] === process.env.FAIL_OPERATION) process.exitCode = 1;
@@ -75,49 +76,49 @@ test("aggregate, test and typecheck commands prepare inputs once and stop on pre
 	await chmod(checker, 0o755);
 	await writeFile(`${checker}.cmd`, `@"${process.execPath}" "%~dp0../../record.ts" automation\r\n`);
 	const pnpm = process.env.npm_execpath;
-	assert.ok(pnpm, "Run through the owning pnpm test script");
+	assert.ok(pnpm, 'Run through the owning pnpm test script');
 	const script = /\.[cm]?js$/.test(pnpm);
 	const executable = script ? process.execPath : pnpm;
 	const prefix = script ? [pnpm] : [];
 	for (const [command, expected, failure] of [
-		["build", ["electron-runtime", "electron-dependencies", "protocol", "localization", "common", "extensions", "icons", "desktop-build"], ""],
-		["build", ["electron-runtime"], "electron-runtime"],
-		["build", ["electron-runtime", "electron-dependencies"], "electron-dependencies"],
-		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit", "unit-runner"], ""],
-		["test:main", ["styles", "tools", "output", "protocol", "localization", "common", "extensions", "icons", "unit"], "unit"],
-		["test:main", ["styles"], "styles"],
-		["test:browser:integration", ["protocol"], "protocol"],
-		["test:unit", ["output", "protocol", "localization", "common", "extensions", "icons", "unit"], ""],
-		["test:unit:prepared", ["unit"], ""],
-		["test:unit:no-compile", ["unit-reuse"], ""],
-		["test:unit:no-compile", ["unit-reuse"], "unit-reuse"],
-		["test:editor:unit:no-compile", ["editor-reuse"], ""],
-		["build:prepared", ["desktop-build"], ""],
-		["test:editor:unit", ["output", "protocol", "localization", "common", "extensions", "icons", "editor"], ""],
-		["test:extensions", ["output", "protocol", "localization", "common", "extensions", "icons", "extension-tests"], ""],
-		["test:browser:integration", ["protocol", "localization", "common", "extensions", "icons", "browser"], ""],
-		["test:editor:browser", ["protocol", "localization", "common", "extensions", "icons", "editor-browser"], ""],
-		["test:editor:browser:build", ["protocol", "localization", "common", "extensions", "icons", "browser-build"], ""],
-		["prepare:extensions", ["protocol", "localization", "extensions"], ""],
-		["typecheck:protocol", ["protocol", "protocol-check"], ""],
-		["localization:check", ["protocol", "localization-check"], ""],
-		["typecheck:common", ["protocol", "localization", "common"], ""],
-		["test:browser:integration", ["protocol", "localization"], "localization"],
-		["test:main", ["styles", "tools", "output", "protocol", "localization", "common"], "common"],
-		["prepare:generated", ["protocol", "localization", "common", "extensions"], "extensions"],
+		['build', ['electron-runtime', 'electron-dependencies', 'protocol', 'localization', 'common', 'extensions', 'icons', 'desktop-build'], ''],
+		['build', ['electron-runtime'], 'electron-runtime'],
+		['build', ['electron-runtime', 'electron-dependencies'], 'electron-dependencies'],
+		['test:main', ['styles', 'tools', 'output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'unit', 'unit-runner'], ''],
+		['test:main', ['styles', 'tools', 'output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'unit'], 'unit'],
+		['test:main', ['styles'], 'styles'],
+		['test:browser:integration', ['protocol'], 'protocol'],
+		['test:unit', ['output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'unit'], ''],
+		['test:unit:prepared', ['unit'], ''],
+		['test:unit:no-compile', ['unit-reuse'], ''],
+		['test:unit:no-compile', ['unit-reuse'], 'unit-reuse'],
+		['test:editor:unit:no-compile', ['editor-reuse'], ''],
+		['build:prepared', ['desktop-build'], ''],
+		['test:editor:unit', ['output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'editor'], ''],
+		['test:extensions', ['output', 'protocol', 'localization', 'common', 'extensions', 'icons', 'extension-tests'], ''],
+		['test:browser:integration', ['protocol', 'localization', 'common', 'extensions', 'icons', 'browser'], ''],
+		['test:editor:browser', ['protocol', 'localization', 'common', 'extensions', 'icons', 'editor-browser'], ''],
+		['test:editor:browser:build', ['protocol', 'localization', 'common', 'extensions', 'icons', 'browser-build'], ''],
+		['prepare:extensions', ['protocol', 'localization', 'extensions'], ''],
+		['typecheck:protocol', ['protocol', 'protocol-check'], ''],
+		['localization:check', ['protocol', 'localization-check'], ''],
+		['typecheck:common', ['protocol', 'localization', 'common'], ''],
+		['test:browser:integration', ['protocol', 'localization'], 'localization'],
+		['test:main', ['styles', 'tools', 'output', 'protocol', 'localization', 'common'], 'common'],
+		['prepare:generated', ['protocol', 'localization', 'common', 'extensions'], 'extensions'],
 	] as const) {
-		await writeFile(join(directory, "operations.jsonl"), "");
-		const result = spawnSync(executable, [...prefix, "run", command], {
+		await writeFile(join(directory, 'operations.jsonl'), '');
+		const result = spawnSync(executable, [...prefix, 'run', command], {
 			cwd: directory,
 			env: { ...process.env, FAIL_OPERATION: failure },
-			encoding: "utf8",
+			encoding: 'utf8',
 			windowsHide: true,
 			timeout: 30_000,
 		});
 		assert.equal(result.error, undefined);
 		if (failure) assert.notEqual(result.status, 0);
 		else assert.equal(result.status, 0, result.stdout + result.stderr);
-		const operations = (await readFile(join(directory, "operations.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+		const operations = (await readFile(join(directory, 'operations.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
 		assert.deepEqual(operations, expected, command);
 	}
 

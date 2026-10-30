@@ -470,9 +470,14 @@ test('DiffEditorWidget uses registered presentation defaults and preserves expli
 	const configuration = services.get(IConfigurationService);
 	assert.equal(editor.element.querySelectorAll('.ash-diff-revert').length, 1);
 	await configuration.updateValue('diffEditor.renderMarginRevertIcon', false);
+	assert.equal(editor.element.querySelectorAll('.ash-diff-revert').length, 1);
+	await configuration.updateValue('diffEditor.renderGutterMenu', false);
 	assert.equal(editor.element.querySelectorAll('.ash-diff-revert').length, 0);
+	editor.setViewMode(true, false, 900);
 	editor.updateOptions({ renderMarginRevertIcon: true });
 	assert.equal(editor.element.querySelectorAll('.ash-diff-revert').length, 1);
+	editor.setViewMode(false, false, 900);
+	assert.equal(editor.element.querySelectorAll('.ash-diff-revert').length, 0);
 	await configuration.updateValue('diffEditor.renderOverviewRuler', false);
 	assert.equal((editor.element.querySelector('.stanza-diff-overview') as HTMLElement).hidden, true);
 	await assert.rejects(configuration.updateValue('diffEditor.experimental.showMoves', 'yes'), /boolean/);

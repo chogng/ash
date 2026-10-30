@@ -76,4 +76,3 @@ export class IndentRulesSupport {
 		return ret;
 	}
 }
-

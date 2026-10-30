@@ -1,75 +1,143 @@
-import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
-import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
+import Severity from '../../../../base/common/severity.js';
+import { getCodeEditor, type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
+import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
+import { EditorOption, filterValidationDecorations } from '../../../../editor/common/config/editorOptions.js';
+import { IMarkerDecorationsService } from '../../../../editor/common/services/markerDecorations.js';
 import { ColorDetector } from '../../../../editor/contrib/colorPicker/browser/colorDetector.js';
 import { FoldingController } from '../../../../editor/contrib/folding/browser/folding.js';
 import { localize } from '../../../../nls.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import {
-	IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor,
-} from '../../../services/statusbar/browser/statusbar.js';
+import { ILanguageStatusService, type ILanguageStatus } from '../../../services/languageStatus/common/languageStatusService.js';
 
-/** Projects the active editor's existing limit reports into its window's status bar. */
+export interface LimitInfo {
+	readonly onDidChange: Event<void>;
+	readonly limited: number | string | false;
+}
+
+/** Publishes limits from the active pane; each feature keeps its own action and lifetime. */
 export class LimitIndicatorContribution extends Disposable {
 	private readonly listeners = this._register(new DisposableStore());
-	private readonly entry = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly statuses = new Map<string, { detail: string; registration: IDisposable; }>();
+	private editor: ICodeEditor | null = null;
 
 	constructor(
-		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
-		@IEditorService editors: IEditorService,
-		@IStatusbarService private readonly statusbar: IStatusbarService,
-		@ICommandService private readonly commands: ICommandService,
+		@IEditorService private readonly editors: IEditorService,
+		@ILanguageStatusService private readonly languageStatus: ILanguageStatusService,
 	) {
 		super();
 		this._register(editors.onDidActiveEditorChange(() => this.followEditor()));
-		this._register(codeEditors.onCodeEditorRemove(() => this.followEditor()));
 		this.followEditor();
 	}
 
-	private followEditor(): void {
+	private followEditor(force = false): void {
+		const editor = getCodeEditor(this.editors.activeEditorPane?.getControl());
+		if (!force && editor === this.editor) return;
+		this.editor = editor;
 		this.listeners.clear();
-		this.entry.clear();
-		const editor = this.codeEditors.getActiveCodeEditor();
+		this.clearStatuses();
 		if (!editor || editor.isSimpleWidget) {
 			return;
 		}
-		this.listeners.add(editor.onDidChangeModel(() => this.followEditor()));
-		const colors = ColorDetector.get(editor)?.limitReporter;
-		const folding = FoldingController.get(editor)?.limitReporter;
-		const update = (): void => {
-			const messages: string[] = [];
-			const settings: string[] = [];
-			if (colors && colors.limited !== false) {
-				messages.push(localize('limitIndicator.colors', 'Only {0} of {1} color decorations are shown for performance reasons.', colors.limited, colors.computed));
-				settings.push('editor.colorDecoratorsLimit');
-			}
-			if (folding && folding.limited !== false) {
-				messages.push(localize('limitIndicator.folding', 'Only {0} of {1} folding regions are available for performance reasons.', folding.limited, folding.computed));
-				settings.push('editor.foldingMaximumRegions');
-			}
-			if (!messages.length) {
-				this.entry.clear();
-				return;
-			}
-			const text = localize('limitIndicator.title', 'Language features limited');
-			const tooltip = [...messages, localize('limitIndicator.configure', 'Activate to configure the limits.')].join('\n');
-			const value = {
-				icon: Lxicon.warning, text, tooltip, ariaLabel: `${text}. ${tooltip}`,
-				run: () => this.commands.executeCommand('workbench.action.openSettings', `@id:${settings[0]}`),
+		this.listeners.add(editor.onDidChangeModel(() => this.followEditor(true)));
+		this.listeners.add(editor.onDidDispose(() => {
+			this.listeners.clear();
+			this.clearStatuses();
+		}));
+		if (!editor.getModel()) return;
+		this.watch('decoratorsLimitInfo', ColorDetector.get(editor)?.limitReporter,
+			localize('limitIndicator.colorsLabel', 'Color decorators'),
+			localize('limitIndicator.colorsName', 'Color Decorator Status'),
+			localize('limitIndicator.colorsSource', 'Color Decorators'), 'editor.colorDecoratorsLimit');
+		this.watch('foldingLimitInfo', FoldingController.get(editor)?.limitReporter,
+			localize('limitIndicator.foldingLabel', 'Folding ranges'),
+			localize('limitIndicator.foldingName', 'Folding Status'),
+			localize('limitIndicator.foldingSource', 'Folding'), 'editor.foldingMaximumRegions');
+		this.watch('diagnosticsLimitInfo', DiagnosticDecorationLimitReporter.get(editor) ?? undefined,
+			localize('limitIndicator.problemsLabel', 'Problems'),
+			localize('limitIndicator.problemsName', 'Problems Status'),
+			localize('limitIndicator.problemsLabel', 'Problems'));
+	}
+
+	private watch(id: string, reporter: LimitInfo | undefined, label: string, name: string, source: string, setting?: string): void {
+		if (!reporter) return;
+		const update = () => {
+			const detail = typeof reporter.limited === 'string' ? reporter.limited
+				: reporter.limited === false ? undefined
+					: localize('limitIndicator.limited', 'only {0} shown for performance reasons', reporter.limited);
+			const previous = this.statuses.get(id);
+			if (detail === previous?.detail) return;
+			previous?.registration.dispose();
+			this.statuses.delete(id);
+			if (!detail) return;
+			const status: ILanguageStatus = {
+				id, name, selector: '*', severity: Severity.Warning, label, detail, source, busy: false,
+				command: setting ? {
+					id: 'workbench.action.openSettings', arguments: [setting],
+					title: localize('limitIndicator.configureAction', 'Configure'),
+				} : undefined,
+				accessibilityInfo: undefined,
 			};
-			if (this.entry.value) {
-				this.entry.value.update(value);
-			} else {
-				this.entry.value = this.statusbar.addEntry(value, { id: 'status.languageFeatureLimits', alignment: StatusbarAlignment.Right, priority: 15 });
-			}
+			this.statuses.set(id, { detail, registration: this.languageStatus.addStatus(status) });
 		};
-		if (colors) this.listeners.add(colors.onDidChange(update));
-		if (folding) this.listeners.add(folding.onDidChange(update));
+		this.listeners.add(reporter.onDidChange(update));
+		update();
+	}
+
+	private clearStatuses(): void {
+		for (const status of this.statuses.values()) status.registration.dispose();
+		this.statuses.clear();
+	}
+
+	protected override disposeCore(): void {
+		this.clearStatuses();
+		super.disposeCore();
+	}
+}
+
+/** Reads diagnostic overflow from the decoration owner without retaining marker copies. */
+export class DiagnosticDecorationLimitReporter extends Disposable implements LimitInfo {
+	static readonly ID = 'editor.contrib.diagnosticDecorationLimitReporter';
+	static get(editor: ICodeEditor): DiagnosticDecorationLimitReporter | null {
+		return editor.getContribution<DiagnosticDecorationLimitReporter>(this.ID);
+	}
+
+	private readonly changed = this._register(new Emitter<void>());
+	readonly onDidChange = this.changed.event;
+	private message: string | false = false;
+	get limited(): string | false { return this.message; }
+
+	constructor(editor: ICodeEditor, @IMarkerDecorationsService decorations: IMarkerDecorationsService) {
+		super();
+		const update = () => {
+			const model = editor.getModel();
+			const limit = model && !filterValidationDecorations(editor.getOptions())
+				? decorations.getMarkerLimits(model.uri) : undefined;
+			let message: string | false = false;
+			if (limit?.isMarkersSourceTruncated && limit.isMarkersTruncated !== undefined) {
+				message = localize('limitIndicator.diagnosticsBoth', 'Some problems are not shown in the problems view, and only {0} problems are rendered in the editor for performance reasons.', limit.isMarkersTruncated);
+			} else if (limit?.isMarkersSourceTruncated) {
+				message = localize('limitIndicator.diagnosticsSource', 'Some problems are not shown in the problems view for performance reasons.');
+			} else if (limit?.isMarkersTruncated !== undefined) {
+				message = localize('limitIndicator.diagnosticsEditor', 'Only {0} problems are rendered in the editor for performance reasons.', limit.isMarkersTruncated);
+			}
+			if (message === this.message) return;
+			this.message = message;
+			this.changed.fire();
+		};
+		this._register(editor.onDidChangeModel(update));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.renderValidationDecorations) || event.hasChanged(EditorOption.readOnly)) update();
+		}));
+		this._register(decorations.onDidChangeMarkerLimit(model => {
+			if (model === editor.getModel()) update();
+		}));
 		update();
 	}
 }
 
+registerEditorContribution(DiagnosticDecorationLimitReporter.ID, DiagnosticDecorationLimitReporter, EditorContributionInstantiation.Lazy);
 registerWorkbenchContribution('workbench.contrib.limitIndicator', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(LimitIndicatorContribution));

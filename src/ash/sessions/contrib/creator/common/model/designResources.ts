@@ -11,8 +11,28 @@ export type DesignVariableValue = string | number | boolean | { readonly alias: 
 export interface DesignVariableCollection { readonly id: string; readonly name: string; readonly modes: readonly { readonly id: string; readonly name: string; }[]; readonly defaultMode: string; }
 export interface DesignVariable { readonly id: string; readonly name: string; readonly collectionId: string; readonly type: DesignVariableType; readonly values: Readonly<Record<string, DesignVariableValue>>; }
 export const designPropertyTypes = {
-	fill: 'color', width: 'number', height: 'number', opacity: 'number', visible: 'boolean', text: 'string', fontFamily: 'string', fontSize: 'number', fontWeight: 'number', lineHeight: 'number', letterSpacing: 'number', strokeWidth: 'number',
-	'minWidth': 'number', 'maxWidth': 'number', 'minHeight': 'number', 'maxHeight': 'number', gap: 'number', crossGap: 'number', paddingTop: 'number', paddingRight: 'number', paddingBottom: 'number', paddingLeft: 'number',
+	fill: 'color',
+	width: 'number',
+	height: 'number',
+	opacity: 'number',
+	visible: 'boolean',
+	text: 'string',
+	fontFamily: 'string',
+	fontSize: 'number',
+	fontWeight: 'number',
+	lineHeight: 'number',
+	letterSpacing: 'number',
+	strokeWidth: 'number',
+	minWidth: 'number',
+	maxWidth: 'number',
+	minHeight: 'number',
+	maxHeight: 'number',
+	gap: 'number',
+	crossGap: 'number',
+	paddingTop: 'number',
+	paddingRight: 'number',
+	paddingBottom: 'number',
+	paddingLeft: 'number',
 } as const;
 export type DesignBindableProperty = keyof typeof designPropertyTypes;
 export type DesignBindings = Partial<Readonly<Record<DesignBindableProperty, string>>>;

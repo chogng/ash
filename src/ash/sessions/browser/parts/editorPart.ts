@@ -40,6 +40,11 @@ export class EditorPart extends WorkbenchEditorPart {
 		}));
 	}
 
+	public override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		this.setEditorContentVisible(visible);
+	}
+
 	public override get minimumWidth(): number { return Math.max(EDITOR_PART_MINIMUM_WIDTH, super.minimumWidth); }
 
 	public override async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {

@@ -1,7 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
-import { URI } from "../../../base/common/uri.js";
-import type { IEmptyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier, IWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+import { URI } from '../../../base/common/uri.js';
+import type { IEmptyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier, IWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
 /** Gives each new empty window its own workspace-scoped state. */
 export function createEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
@@ -19,8 +19,8 @@ export function getSingleFolderWorkspaceIdentifier(uri: URI): ISingleFolderWorks
 }
 
 export function stableWorkspaceId(uri: URI): string {
-	const identity = uri.scheme !== "file" || process.platform === "linux" ? uri.toString() : uri.toString().toLowerCase();
-	return createHash("sha256").update(identity).digest("hex");
+	const identity = uri.scheme !== 'file' || process.platform === 'linux' ? uri.toString() : uri.toString().toLowerCase();
+	return createHash('sha256').update(identity).digest('hex');
 }
 
 export const enum WorkspacePathKind {

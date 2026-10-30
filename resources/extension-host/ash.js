@@ -37,6 +37,9 @@ export function createApi(configuration, initialization) {
 	let environmentAdmitted = false;
 	let speechAdmitted = false;
 	let imageEditorAdmitted = false;
+	let canvasAdmitted = false;
+	let canvasRegistrationGeneration = 0;
+	const canvasRegistrations = new Map();
 	let treeAdmitted = false;
 	let terminalLinksAdmitted = false;
 	let terminalCompletionsAdmitted = false;
@@ -771,6 +774,38 @@ export function createApi(configuration, initialization) {
 			await provider.resolveImageEditor(Object.freeze({ source: context.source }), view, call.cancellationToken);
 			return { html: view.html, resources: [...assets], state: view.state ?? null };
 		}));
+		subscriptions.push(registration);
+		return registration;
+	}
+
+	function registerCanvasProvider(id, provider) {
+		if (!canvasAdmitted) throw new Error('Canvas providers require the admitted dataChannel capability');
+		if (typeof id !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(id) || ['resolveCanvas', 'closeCanvas', 'onDidChangeCanvases'].some(key => provider?.[key] !== undefined && typeof provider[key] !== 'function')) throw new TypeError('Invalid Canvas provider');
+		const declaration = configuration.manifest?.contributes?.canvases?.find(entry => entry.id === id);
+		if (!declaration || typeof declaration.displayName !== 'string' || !declaration.displayName.trim() || declaration.displayName.length > 256 || declaration.description !== undefined && (typeof declaration.description !== 'string' || declaration.description.length > 4096) || declaration.requiresInput !== undefined && typeof declaration.requiresInput !== 'boolean' || typeof provider?.openCanvas !== 'function') throw new TypeError('Canvas provider must be declared in package.json');
+		if (canvasRegistrations.has(id)) throw new Error('Canvas provider is already registered');
+		const registrationId = 'canvas.' + (++canvasRegistrationGeneration);
+		const handle = ashRuntime.registerContribution({ kind: 'dataChannel', registrationId, channelId: 'canvas.provider.v1' }, 'receiveData', (call, payload) => invoke(async () => {
+			const data = payload?.data;
+			if (data?.action === 'describe') return { state: 'definition', canvasId: id, displayName: declaration.displayName, description: declaration.description ?? '', requiresInput: declaration.requiresInput === true };
+			const context = data?.context;
+			if (!context || Object.keys(context).sort().join(',') !== 'instanceId,sessionId,threadId' || Object.values(context).some(value => typeof value !== 'string' || !value.trim() || value.length > 1024) || !/^[A-Za-z0-9._-]{1,128}$/.test(context.instanceId)) throw new TypeError('Invalid Canvas context');
+			const operation = data.action === 'open' ? provider.openCanvas : data.action === 'resolve' ? provider.resolveCanvas : data.action === 'close' ? provider.closeCanvas : undefined;
+			if (!['open', 'resolve', 'close'].includes(data.action)) throw new TypeError('Invalid Canvas operation');
+			if (!operation) return { state: 'unchanged' };
+			const canvas = await operation.call(provider, Object.freeze({ sessionId: context.sessionId, threadId: context.threadId, instanceId: context.instanceId }), call.cancellationToken);
+			if (data.action === 'close') return { state: 'closed' };
+			if (canvas === null) return { state: 'closed' };
+			if (canvas === undefined) return { state: 'pending' };
+			if (typeof canvas.url !== 'string' || canvas.url.length > 8192 || canvas.title !== undefined && (typeof canvas.title !== 'string' || !canvas.title.trim() || canvas.title.length > 256) || canvas.status !== undefined && (typeof canvas.status !== 'string' || canvas.status.length > 4096)) throw new TypeError('Invalid Canvas source');
+			return { state: 'ready', url: canvas.url, ...(canvas.title === undefined ? {} : { title: canvas.title }), ...(canvas.status === undefined ? {} : { status: canvas.status }) };
+		}));
+		let active = true;
+		const changed = provider.onDidChangeCanvases?.(() => {
+			if (active) void request({ operation: 'editorOperation', payload: { method: 'canvasChanged', canvasId: id } }, 'value').catch(() => { });
+		});
+		const registration = new Disposable(() => { active = false; changed?.dispose(); canvasRegistrations.delete(id); handle.dispose(); });
+		canvasRegistrations.set(id, registration);
 		subscriptions.push(registration);
 		return registration;
 	}
@@ -1966,6 +2001,7 @@ export function createApi(configuration, initialization) {
 			get activeTextEditor() { return activeEditor; },
 			registerCustomEditorProvider,
 			registerImageEditorProvider,
+			registerCanvasProvider,
 			async showImageEditor(viewType, options) {
 				if (!imageEditorAdmitted) throw new Error('Image editors require the admitted imageEditor capability');
 				if (typeof viewType !== 'string' || !['screen', 'selection'].includes(options?.source)) throw new TypeError('Invalid image editor request');
@@ -2081,6 +2117,7 @@ export function createApi(configuration, initialization) {
 			terminalQuickFixesAdmitted = capabilities.includes('terminalQuickFixProvider');
 			speechAdmitted = capabilities.includes('speechProvider');
 			imageEditorAdmitted = capabilities.includes('imageEditor');
+			canvasAdmitted = capabilities.includes('dataChannel');
 			treeAdmitted = capabilities.includes('treeView');
 			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('ash.terminalEnvironment', snapshotEnvironment));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());
@@ -2093,6 +2130,7 @@ export function createApi(configuration, initialization) {
 				environmentAdmitted = false;
 				speechAdmitted = false;
 				imageEditorAdmitted = false;
+				canvasAdmitted = false;
 				treeAdmitted = false;
 				environmentMutators.clear();
 				scmBridge.dispose();

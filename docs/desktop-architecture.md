@@ -321,6 +321,14 @@ Electron 主进程由 `code/electron-main/main.ts` 编排启动，`app.ts` 装�
 `WindowsMainService` 统一拥有窗口注册、活动窗口选择和工作区复用；`app.ts` 只保留窗口对应的
 App Server、模式和产品资源。Windows 最近项目跳转列表由 `WorkspacesHistoryMainService` 更新。
 
+`platform/windows/electron-main/windows.ts` 只定义多窗口服务契约。单窗口构造参数、标题栏与
+边框策略由 `windowImpl.ts` 拥有，辅助窗口复用同一实现；持久化位置的屏幕校验与调整由
+`windowsStateHandler.ts` 拥有，与位置恢复和保存保持在同一模块。
+
+辅助窗口创建后由 `app.ts` 接入 `LifecycleMainService.registerAuxWindow`。退出期间，生命周期
+服务阻止 Electron 提前关闭辅助窗口，让所属主窗口先完成 Renderer 布局保存握手，再由主窗口的
+资源作用域释放辅助窗口；普通关闭及退出被否决后的关闭仍走原有流程。
+
 `platform/windows/electron-main/windowImpl.ts` 的 `CodeWindow` 拥有每个窗口的 Renderer 就绪、
 加载、开发服务器断线重试、重载协调及标题栏主题／模态 dim 状态；`WindowsMainService` 通过
 实例化服务创建它，构造注入日志、系统对话框、生命周期、主题和辅助窗口服务。文件打开请求
@@ -542,7 +550,7 @@ Workspace 内容搜索通过独立的
 
 首次进入未授权目录时，Electron Renderer 在窗口内显示目录权限选择，启动阶段也先完成选择再
 建立 Workbench。Electron Main 提供按当前语言翻译的文案并等待选择；App Server 保存目录能力。
-前端 `IWorkspaceTrustRequestService` 负责取得选择，`IWorkspaceTrustManagementService` 按当前
+启动前的 `IDirectoryPermissionRequestService` 负责取得目录授权选择，`IWorkspaceTrustManagementService` 按当前
 Workspace 各目录的实际权限提供界面状态和变化通知；它每次从 App Server 读取权限，不保存独立的
 “已信任”配置。只有全部目录具备开发权限时，界面才视为已信任。只读授权显示“只读文件夹”；
 允许部分开发操作的目录显示“受限工作区”。文件读写和命令执行仍由 App Server 按具体权限检查，
@@ -559,9 +567,10 @@ Ash 的异步权限读取和只读状态是该契约的扩展，不能以信任�
 Renderer 的 `workspaceTrust` API 在 Workbench 和 Sessions 的服务容器中注册；打开目录时
 也使用同一 API，通过 `config/directoryGrants/list|read|set|forget` 与后端 config owner 对接，
 授权通过修订号和 command ID 提交，启动时仍由 `env/dirs/set` 原子应用所选授权。
-当前本地工作区的信任检查通过 `env/dir/read` 按已激活目录 ID 读取有效权限，
+当前工作区（包括远程工作区）的信任检查通过 `env/dir/read` 按已激活目录 ID 读取有效权限，
 不把 profile 中保存的授权当作当前运行时授权。该只读请求可供 Browser 使用，
 不提供路径发现、授权列表或修改能力；未知、已移除和已失效的目录被拒绝。
+工作区、授权、远端解析或目录恢复完成通知会使在途读取失效；旧结果不再发布为当前信任状态。
 设置中的目录授权列表、精确权限编辑和撤销使用 `IWorkspaceTrustApi`，设置模型只持有草稿、
 可见页快照和修订冲突状态，不保存另一份授权配置。目录别名以 Rust 返回的目录身份匹配，
 修改文件和命令能力时保留未编辑的发现与配置能力。
@@ -569,6 +578,20 @@ Renderer 的 `workspaceTrust` API 在 Workbench 和 Sessions 的服务容器中�
 检查每个目录同时具备 `useLanguageServices` 和 `executeCommands`；部分授权无需满足完整开发信任。
 桌面权限变化由信任服务通知，撤销后移除提供者并停止后续同步；Web 仍由后端检查已认证工作区，
 不新增目录授权宿主能力。旧 `dirPermissions` 服务标识、Renderer 属性和注册已退出生产调用链。
+
+工作台的 `IWorkspaceTrustRequestService` 合并同一工作区的在途信任请求，发出普通或启动请求事件，
+由 Workspace Trust contribution 使用当前窗口的对话框呈现。取消、窗口释放和工作区切换会结束原请求；
+旧请求的异步完成不能结束新请求。已信任的工作区直接返回成功，受限模式下拒绝或取消不会增加权限。
+`workspaceResolved` 在目录环境与 canonical 身份首次读取完成后释放，`workspaceTrustInitialized`
+还会等待首轮信任切换参与者；暂时启动或恢复中的连接不会提前释放这两个屏障，终止失败按受限状态结束等待。
+终端创建会先等初始化，并在缺少命令权限时请求信任；自动任务等待切换结束后再检查信任。
+
+`setWorkspaceTrust` 与 `setUrisTrust` 通过同一 Rust 授权 API 保存并恢复有效目录环境，随后依序等待
+`addWorkspaceTrustTransitionParticipant` 注册的语言提供者与诊断同步。`onDidChangeTrust` 仅在参与者
+完成后发布布尔状态，信任请求也在这之后完成。`onDidChangeTrustedFolders` 负责权限与来源失效通知，
+因此不改变信任布尔值的部分授权变更仍会更新界面和语言能力。前端同步查询使用可失效的派生投影，
+不保存另一份授权清单。多根目录的授权保存不是跨目录事务；部分保存失败仍恢复已保存的有效权限，
+但不会将整个工作区报告为已信任，也不会自动重试修订冲突。
 
 编辑器窗口的 Workspace 不归 Session catalog 所有。前端 `ISession.workspace` 只描述该 Session
 使用的 Environment、`cwd` 和目录；它可以帮助界面显示位置或请求切换运行环境，但不能改变窗口
@@ -682,6 +705,8 @@ Remote 与独立 Browser 的扩展沿上述 owner 实现，没有新增平行 wo
 macOS 系统菜单动作失败通过现有通知服务展示；用户取消保持静默，菜单实例随窗口服务作用域创建。
 真实 OpenSSH fixture 验证两根授权、第二根读写、脏文件移根拒绝及可见通知、跨根搜索、本地配置 URI 持久化、移除首根后的第二根终端存活及同一 SSH authority 下的关闭重开。此为同机隔离 SSH 服务，不代表 Windows／Linux 远端验证。
 日志与截图／trace 位于 `.build/remote-browser-evidence/`；上述证据早于 Web 多根控制与准确配置文件 proof；这些旧记录不能替代新链路的真实 Web、跨机器和系统选择器验收。
+
+2026-10-30 在 Windows x64、`a174f34dfd` 上按代码与测试验收远端多根契约：工作区识别／切换、Main 与 Browser 提交／回滚、Renderer 编辑、Remote window 生命周期及 authority resolver 共 7 个文件，首次运行发现 Main 管理测试将原始 Windows 盘符大小写与 URI 规范拼写直接比较。修正断言并让监听器随测试释放后，`workspacesManagementMainService.test.ts` 20 项通过；其中新增 Windows 盘符与 UNC 参数，与 POSIX 一起覆盖根顺序、提交给后端的路径、authority、配置保存／重开、清空保留身份、外来根拒绝和失败回滚。其余 6 文件 56 项及 `remote.test.ts` 的跨客户端路径往返 6 项通过，合计 82 项。日志为 `.build/todo-code-audit-remote-workspaces.log`、`.build/todo-code-audit-remote-workspaces-retest.log` 与 `.build/todo-code-audit-remote-workspaces-final.log`，前两份保留首次失败及修正过程。Windows／Linux 远端多根 TODO 按本轮代码口径消项；没有新增跨机器或界面验收，配置直接保存到远端机器仍未实现。
 
 执行目录、目录列表与权限的跨组件语义，以及本次 Codex 执行层核对与修复见
 [环境与目录访问 §9](environment-access.md#9-执行层实现核对codex-对照)。

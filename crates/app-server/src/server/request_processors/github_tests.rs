@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn managed_settings_snapshot_preserves_retained_data_and_provider_history() {
+    let snapshot = github::ManagedSettingsSnapshot {
+        settings: Some(serde_json::json!({"model":"managed"})),
+        refresh: github::ManagedSettingsRefresh::Failed {
+            last_attempt_at: 300,
+            last_success_at: Some(200),
+            failure: github::ManagedSettingsFailure::UpdateRequired,
+        },
+    };
+    assert_eq!(
+        serde_json::to_value(managed_settings_snapshot(snapshot)).unwrap(),
+        serde_json::json!({
+            "settings":{"model":"managed"},
+            "refresh":{"state":"failed", "lastAttemptAt":300, "lastSuccessAt":200, "failure":"updateRequired"}
+        })
+    );
+}
+
+#[test]
 fn review_threads_map_nullable_lines_and_reply_pagination_to_the_frontend_contract() {
     let thread: github::ReviewThread = serde_json::from_value(serde_json::json!({
         "id":"thread", "path":"a.rs", "line":null, "diffSide":"LEFT", "isResolved":false,

@@ -22,7 +22,9 @@ use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
 
+mod adapter;
 mod installer;
+pub use adapter::run_adapter;
 
 /// Prepares the identical managed runtime for development or offline deployment.
 /// The caller chooses the execution environment's cache directory, not an editor workspace.
@@ -162,6 +164,25 @@ impl Extension for LldbExtension {
                     None => configured.into(),
                 };
                 token.check_cancelled()?;
+                if cfg!(windows) {
+                    // Windows debuggees inherit CodeLLDB's stdout. Keep those bytes
+                    // off its DAP stream while retaining the host's process lease.
+                    let mut bridged = vec![
+                        "--stdio-adapter".into(),
+                        adapter_messages.transport.clone(),
+                        program,
+                    ];
+                    bridged.extend(arguments);
+                    return Ok(Some(Executable {
+                        program: std::env::current_exe()
+                            .map_err(|_| adapter_messages.invalid_settings())?
+                            .to_string_lossy()
+                            .into_owned(),
+                        arguments: bridged,
+                        cwd: None,
+                        env: None,
+                    }));
+                }
                 Ok(Some(Executable {
                     program,
                     arguments,
@@ -207,6 +228,8 @@ struct Messages {
     launch: String,
     #[serde(rename = "error.adapterSettings")]
     adapter_settings: String,
+    #[serde(rename = "error.transport")]
+    transport: String,
     #[serde(rename = "error.program")]
     program: String,
     #[serde(rename = "configuration.codelldbLaunch")]
@@ -396,6 +419,30 @@ impl ConfigurationProvider for LldbConfigurations {
     ) -> Result<Option<Configuration>, ExtensionError> {
         token.check_cancelled()?;
         let mut configuration = request.configuration;
+        if matches!(self.engine, Engine::CodeLldb)
+            && configuration
+                .properties
+                .get("sourceLanguages")
+                .and_then(Value::as_array)
+                .is_some_and(|languages| languages.iter().any(|language| language == "rust"))
+        {
+            let command = format!("script exec({})", json!(include_str!("formatters.py")));
+            // CodeLLDB loads toolchain providers after target creation. Startup
+            // commands run too early; patch summaries before launching/attaching.
+            let commands = configuration
+                .properties
+                .entry("preRunCommands".into())
+                .or_insert(json!([]));
+            if commands.is_null() {
+                *commands = json!([]);
+            }
+            let commands = commands
+                .as_array_mut()
+                .ok_or_else(|| self.messages.invalid_settings())?;
+            if !commands.iter().any(|value| value == &command) {
+                commands.insert(0, Value::String(command));
+            }
+        }
         let custom_launch = match self.engine {
             Engine::LldbDap => "launchCommands",
             Engine::CodeLldb => "processCreateCommands",

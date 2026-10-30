@@ -42,7 +42,7 @@ import '../../../src/ash/base/browser/ui/inputbox/inputbox.css';
 import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import '../../../src/ash/base/browser/ui/sash/sash.css';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { DictationConfiguration } from '../../../src/ash/workbench/contrib/chat/common/constants.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
@@ -72,7 +72,7 @@ import type { IContextMenuService } from '../../../src/ash/platform/contextview/
 
 import type { ChatInputDelegate } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
-import { ISecretStorageStatusService, type SecretStorageStatus, type SecretStorageMode } from '../../../src/ash/platform/secrets/common/secrets.js';
+import { ISecretStorageStatusService, type SecretStorageStatus, type SecretStorageMode, type SecretStorageState } from '../../../src/ash/platform/secrets/common/secrets.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
@@ -80,15 +80,23 @@ import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/pa
 import { ModelSettingsRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/modelSettingsRenderer.js';
 import { SettingsTreeModel, type SettingsSectionReference } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsTree } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTree.js';
+import { ConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
+import { AbstractPolicyService } from '../../../src/ash/platform/policy/common/policy.js';
+import { DefaultSettings } from '../../../src/ash/workbench/services/preferences/common/settingsModels.js';
+import { createSettingWidget } from '../../../src/ash/workbench/contrib/preferences/browser/settingsWidgets.js';
 
 declare global {
 	interface Window {
 		ashTableIntegration: {
+			showPolicySettings(presentation: 'editor' | 'general'): Promise<void>;
+			setSettingsPolicy(managed: boolean): void;
+			readPolicySettings(): Promise<string>;
 			showCredentialSettings(): void;
 			showSearchSettings(): void;
 			readonly searchSaved: readonly string[];
 			setCredentialStorage(status: SecretStorageStatus): void;
 			setCredentialStorageMode(mode: SecretStorageMode): void;
+			setCredentialStorageType(type: SecretStorageState['storageType']): void;
 			readonly credentialOperations: readonly string[];
 			progress(): void;
 			finish(): void;
@@ -146,14 +154,15 @@ services.registerSingleton(IImageEditorService, () => services.createInstance(Br
 const modelChanges = resources.add(new Emitter<void>());
 let credentialStorage: SecretStorageStatus = 'available';
 let credentialStorageMode: SecretStorageMode | undefined;
+let credentialStorageType: SecretStorageState['storageType'];
 const credentialOperations: string[] = [];
 let credentialSettings = false;
 services.registerInstance(IMessageHistoryService, undefined);
 services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IConfigurationService, configuration);
 services.registerInstance(ISecretStorageStatusService, {
-	readState: async () => ({ status: credentialStorage, mode: credentialStorageMode }),
-	authorizeAccess: async () => { credentialOperations.push('authorize'); credentialStorage = 'available'; return { status: credentialStorage, mode: credentialStorageMode }; },
+	readState: async () => ({ status: credentialStorage, mode: credentialStorageMode, storageType: credentialStorageType }),
+	authorizeAccess: async () => { credentialOperations.push('authorize'); credentialStorage = 'available'; credentialStorageType = undefined; return { status: credentialStorage, mode: credentialStorageMode }; },
 	setStorageMode: async mode => { credentialOperations.push(mode); credentialStorageMode = mode; credentialStorage = 'available'; return { status: credentialStorage, mode }; },
 });
 const dialogs = resources.add(new DialogService());
@@ -167,6 +176,7 @@ services.registerInstance(ILanguageModelsService, {
 	readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }), saveReasoningEffort: async () => { },
 	setModelVisible: async () => { }, setModelPreferences: async () => { },
 	readApprovalReviewModel: async () => ({ type: 'automatic' }), setApprovalReviewModel: async () => { },
+	removeCustomModelProvider: async () => { },
 	saveCustomModelProvider: async () => { }, testProviderModel: async () => ({ type: 'passed' }),
 	setModelProviderApiKey: async () => { }, removeModelProviderApiKey: async () => { }, discoverProviderModels: async () => [],
 });
@@ -323,7 +333,38 @@ resources.add(speechExtensions.registerActivationHandler(async (event, signal) =
 	speechBridge.update(speechSnapshot(true));
 }));
 const searchSaved: string[] = [];
+let policySettings: WorkbenchConfigurationService | undefined;
+let setSettingsPolicy: ((managed: boolean) => void) | undefined;
 window.ashTableIntegration = {
+	showPolicySettings: async presentation => {
+		const registry = new ConfigurationRegistry();
+		registry.registerConfiguration({ key: 'policy.flag', defaultValue: false, parse: value => value as boolean, policy: { name: 'ManagedFlag' }, setting: { valueType: 'boolean', title: 'Flag', description: '' } });
+		registry.registerConfiguration({ key: 'policy.count', defaultValue: 0, parse: value => value as number, policy: { name: 'ManagedCount' }, setting: { valueType: 'number', title: 'Count', description: '', minimum: 0, maximum: 10 } });
+		registry.registerConfiguration({ key: 'policy.text', defaultValue: 'same', parse: value => value as string, policy: { name: 'ManagedText' }, setting: { valueType: 'text', title: 'Text', description: '', placeholder: '' } });
+		registry.registerConfiguration({ key: 'policy.channel', defaultValue: 'stable', parse: value => value as string, policy: { name: 'ManagedChannel' }, setting: { valueType: 'select', title: 'Channel', description: '', options: [{ value: 'stable', label: 'Stable' }, { value: 'latest', label: 'Latest' }] } });
+		class Policies extends AbstractPolicyService {
+			set(managed: boolean): void { this.accept(managed ? { ManagedFlag: false, ManagedCount: 0, ManagedText: 'same', ManagedChannel: 'stable' } : {}); }
+			protected async refresh(): Promise<void> { }
+		}
+		const policies = resources.add(new Policies());
+		policySettings = resources.add(new WorkbenchConfigurationService({ registry, source: '{ "policy.flag": false, "policy.count": 0, "policy.text": "same", "policy.channel": "stable" }' }));
+		await policySettings.initialize(policySettings.fileService, policies);
+		setSettingsPolicy = managed => policies.set(managed);
+		const scope = services.createChild();
+		resources.add(scope);
+		scope.registerInstance(IConfigurationService, policySettings);
+		const root = document.createElement('div');
+		root.id = 'policy-settings';
+		root.style.width = '720px';
+		document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		for (const setting of new DefaultSettings(registry).all) {
+			const widget = resources.add(createSettingWidget(root, { ...setting, presentation }, { onStatus: (message, error) => { if (error) throw new Error(message); } }, scope));
+			root.append(widget.domNode);
+		}
+	},
+	setSettingsPolicy: managed => setSettingsPolicy!(managed),
+	readPolicySettings: async () => (await policySettings!.read()).source,
 	get searchSaved() { return searchSaved; },
 	showSearchSettings: () => {
 		let engine: 'tgrep' | 'ripgrep' = 'tgrep';
@@ -363,6 +404,7 @@ window.ashTableIntegration = {
 	},
 	setCredentialStorage: status => { credentialStorage = status; modelChanges.fire(); },
 	setCredentialStorageMode: mode => { credentialStorageMode = mode; modelChanges.fire(); },
+	setCredentialStorageType: type => { credentialStorageType = type; modelChanges.fire(); },
 	credentialOperations,
 	extensionSpeech: async (admitted, lazy = false) => {
 		if (!lazy && !declaredSpeech) { speechBridge.update(speechSnapshot(admitted)); if (!admitted) extensionEmit = undefined; return; }

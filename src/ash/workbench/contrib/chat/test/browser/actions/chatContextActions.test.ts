@@ -1169,7 +1169,15 @@ suite('chatContextActions browser component', () => {
 				const geometry = await origin.evaluate(button => {
 					const chip = button.parentElement!;
 					const bounds = chip.getBoundingClientRect();
-					return { visible: bounds.width > 40 && bounds.height > 0, contained: [...chip.querySelectorAll('button')].every(child => { const box = child.getBoundingClientRect(); return box.left >= bounds.left - 1 && box.right <= bounds.right + 1 && box.top >= bounds.top - 1 && box.bottom <= bounds.bottom + 1; }), focus: getComputedStyle(button).outlineStyle === 'solid', contrast: getComputedStyle(chip).color !== getComputedStyle(chip).backgroundColor };
+					return {
+						visible: bounds.width > 40 && bounds.height > 0,
+						contained: [...chip.querySelectorAll('button')].every(child => {
+							const box = child.getBoundingClientRect();
+							return box.left >= bounds.left - 1 && box.right <= bounds.right + 1 && box.top >= bounds.top - 1 && box.bottom <= bounds.bottom + 1;
+						}),
+						focus: getComputedStyle(button).outlineStyle === 'solid',
+						contrast: getComputedStyle(chip).color !== getComputedStyle(chip).backgroundColor
+					};
 				});
 				assert.deepEqual(geometry, { visible: true, contained: true, focus: true, contrast: true });
 				await origin.press('Enter');

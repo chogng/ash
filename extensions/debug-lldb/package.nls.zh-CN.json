@@ -9,6 +9,7 @@
   "configuration.launch": "LLDB：启动程序",
   "error.adapterSettings": "请将 LLDB 可执行文件设为路径或命令名，将参数和 sourceLanguages 设为不含 NUL 字符的字符串数组，并将 debug.lldb.runtimeDirectory 留空或设为绝对路径。",
   "error.program": "LLDB 启动配置需要非空的 program 路径。",
+  "error.transport": "无法连接 CodeLLDB 调试适配器",
   "configuration.codelldbLaunch": "CodeLLDB：启动程序",
   "command.install": "LLDB：安装或重试调试器",
   "command.cancel": "LLDB：取消调试器安装",

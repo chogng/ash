@@ -1,11 +1,11 @@
-import { Disposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { type URI } from '../../../../base/common/uri.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IBackupWorkspace } from '../../../../platform/backup/common/backup.js';
 
 export interface WorkingCopyBackup {
 	readonly resource: URI;
-	readonly kind: "text" | "structuredDocument";
+	readonly kind: 'text' | 'structuredDocument';
 	readonly content: string;
 	readonly updatedAt: number;
 	readonly languageId?: string;
@@ -24,7 +24,7 @@ export interface IWorkingCopyBackupService extends IDisposable {
 	switchWorkspace(workspaceId: string): void;
 }
 
-export const IWorkingCopyBackupService = createServiceIdentifier<IWorkingCopyBackupService>("workingCopyBackupService");
+export const IWorkingCopyBackupService = createServiceIdentifier<IWorkingCopyBackupService>('workingCopyBackupService');
 
 /** Keeps recovery semantics intact in an ephemeral Workbench host. */
 export class InMemoryWorkingCopyBackupService extends Disposable implements IWorkingCopyBackupService {

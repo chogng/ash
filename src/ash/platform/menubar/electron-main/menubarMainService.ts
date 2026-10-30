@@ -1,7 +1,7 @@
-import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type {
 	IpcRoute,
-} from "../../ipc/electron-main/trustedIpcRouter.js";
+} from '../../ipc/electron-main/trustedIpcRouter.js';
 import {
 	type INativeMenubarData,
 	NATIVE_MENUBAR_SELECT_CHANNEL,
@@ -9,7 +9,7 @@ import {
 	type NativeMenubarItem,
 	type INativeTouchBarItem,
 	validateNativeMenubarData,
-} from "../common/nativeMenubar.js";
+} from '../common/nativeMenubar.js';
 
 export interface INativeMenubarMainHost {
 	readonly applicationName: string;
@@ -26,13 +26,13 @@ export interface INativeMenubarMainWindow {
 	};
 	isDestroyed(): boolean;
 	isFocused(): boolean;
-	on(event: "focus", listener: () => void): unknown;
-	removeListener(event: "focus", listener: () => void): unknown;
+	on(event: 'focus', listener: () => void): unknown;
+	removeListener(event: 'focus', listener: () => void): unknown;
 }
 
 export interface INativeMenubarMainMenuItem {
-	readonly type?: "normal" | "separator" | "submenu" | "checkbox";
-	readonly role?: "about" | "services" | "hide" | "hideOthers" | "unhide" | "quit" | "windowMenu" | "minimize" | "zoom" | "front";
+	readonly type?: 'normal' | 'separator' | 'submenu' | 'checkbox';
+	readonly role?: 'about' | 'services' | 'hide' | 'hideOthers' | 'unhide' | 'quit' | 'windowMenu' | 'minimize' | 'zoom' | 'front';
 	readonly label?: string;
 	readonly enabled?: boolean;
 	readonly checked?: boolean;
@@ -69,12 +69,12 @@ export class NativeMenubarMainService extends Disposable {
 
 		this.windows.set(window.id, { window, data: undefined });
 		const handleFocus = (): void => this.activateWindow(window.id);
-		window.on("focus", handleFocus);
+		window.on('focus', handleFocus);
 		if (window.isFocused()) this.activateWindow(window.id);
 
 		return toDisposable(() => {
 			if (!window.isDestroyed()) this.host.setWindowTouchBar(window, [], () => { });
-			window.removeListener("focus", handleFocus);
+			window.removeListener('focus', handleFocus);
 			this.windows.delete(window.id);
 			const activationIndex = this.activationOrder.indexOf(window.id);
 			if (activationIndex >= 0) this.activationOrder.splice(activationIndex, 1);
@@ -159,18 +159,18 @@ function toTemplate(
 ): INativeMenubarMainMenuItem[] {
 	return items.map((item): INativeMenubarMainMenuItem => {
 		switch (item.type) {
-			case "separator":
-				return { type: "separator" };
-			case "submenu":
+			case 'separator':
+				return { type: 'separator' };
+			case 'submenu':
 				return {
-					type: "submenu",
+					type: 'submenu',
 					label: item.label,
 					enabled: item.enabled,
 					submenu: toTemplate(item.items, select),
 				};
-			case "action":
+			case 'action':
 				return {
-					type: item.checked === undefined ? "normal" : "checkbox",
+					type: item.checked === undefined ? 'normal' : 'checkbox',
 					label: item.label,
 					enabled: item.enabled,
 					checked: item.checked,
@@ -186,27 +186,27 @@ function applicationMenu(applicationName: string): INativeMenubarMainMenuItem {
 	return {
 		label: applicationName,
 		submenu: [
-			{ role: "about" },
-			{ type: "separator" },
-			{ role: "services" },
-			{ type: "separator" },
-			{ role: "hide" },
-			{ role: "hideOthers" },
-			{ role: "unhide" },
-			{ type: "separator" },
-			{ role: "quit" },
+			{ role: 'about' },
+			{ type: 'separator' },
+			{ role: 'services' },
+			{ type: 'separator' },
+			{ role: 'hide' },
+			{ role: 'hideOthers' },
+			{ role: 'unhide' },
+			{ type: 'separator' },
+			{ role: 'quit' },
 		],
 	};
 }
 
 function windowMenu(): INativeMenubarMainMenuItem {
 	return {
-		role: "windowMenu",
+		role: 'windowMenu',
 		submenu: [
-			{ role: "minimize" },
-			{ role: "zoom" },
-			{ type: "separator" },
-			{ role: "front" },
+			{ role: 'minimize' },
+			{ role: 'zoom' },
+			{ type: 'separator' },
+			{ role: 'front' },
 		],
 	};
 }

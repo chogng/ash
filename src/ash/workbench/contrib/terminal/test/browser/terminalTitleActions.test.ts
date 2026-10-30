@@ -27,15 +27,15 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { CommandRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { TerminalCommandId } from '../../common/terminal.js';
 import { setupTerminalMenus } from '../../browser/terminalMenus.js';
-import assert from "node:assert/strict";
-import { test, suite, suiteTeardown } from "mocha";
-import { ensureNoDisposablesAreLeakedInTestSuite } from "../../../../../base/test/common/utils.js";
-import { JSDOM } from "jsdom";
-import type { IAction } from "../../../../../base/common/actions.js";
-import { Emitter, Event } from "../../../../../base/common/event.js";
+import assert from 'node:assert/strict';
+import { test, suite, suiteTeardown } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { JSDOM } from 'jsdom';
+import type { IAction } from '../../../../../base/common/actions.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
-import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { ITerminalInstance } from "../../browser/terminal.js";
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import type { ITerminalInstance } from '../../browser/terminal.js';
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService, TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
@@ -46,7 +46,7 @@ import { BrowserContextViewService } from '../../../../../platform/contextview/b
 import { registerTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
@@ -71,22 +71,22 @@ const [
 	{ CommandService },
 	{ TerminalTitleActions },
 ] = await Promise.all([
-	import("../../../../../platform/contextkey/browser/contextKeyService.js"),
-	import("../../../../../platform/actions/common/menuService.js"),
+	import('../../../../../platform/contextkey/browser/contextKeyService.js'),
+	import('../../../../../platform/actions/common/menuService.js'),
 	import('../../../../../platform/instantiation/common/instantiationService.js'),
-	import("../../../../../workbench/services/commands/common/commandService.js"),
-	import("../../../../../workbench/contrib/terminal/browser/terminalView.js"),
+	import('../../../../../workbench/services/commands/common/commandService.js'),
+	import('../../../../../workbench/contrib/terminal/browser/terminalView.js'),
 ]);
 
 suiteTeardown(() => {
 	browserEnvironment.window.close();
-	for (const name of ["window", "document", "Node", "Element", "HTMLElement", "Event", "MouseEvent", "navigator"]) {
+	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'navigator']) {
 		Reflect.deleteProperty(globalThis, name);
 	}
 });
 
 setupTerminalMenus();
-const { registerTerminalActions } = await import("../../browser/terminalActions.js");
+const { registerTerminalActions } = await import('../../browser/terminalActions.js');
 registerTerminalActions();
 
 let shownProfileActions: readonly IAction[] = [];
@@ -105,7 +105,7 @@ const contextMenuService: IContextMenuService = {
 	hideContextMenu() { },
 };
 
-test("Terminal profile menu launches the selected shell profile", async () => {
+test('Terminal profile menu launches the selected shell profile', async () => {
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
 	shownProfileActions = [];
@@ -152,59 +152,59 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	using titleActions = registryOwner.createInstance(TerminalTitleActions, ownerDocument.body);
 	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true, 'An empty toolbar cannot clear the window-active editor terminal');
 
-	const commandPromptProfile = { profileId: "cmd", title: "Command Prompt", isDefault: true };
-	const powerShellProfile = { profileId: "pwsh", title: "PowerShell", isDefault: false };
-	const unavailableProfile = titleActions.element.querySelector<HTMLButtonElement>(".ash-dropdown-with-primary-dropdown > .ash-button");
+	const commandPromptProfile = { profileId: 'cmd', title: 'Command Prompt', isDefault: true };
+	const powerShellProfile = { profileId: 'pwsh', title: 'PowerShell', isDefault: false };
+	const unavailableProfile = titleActions.element.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button');
 	assert.ok(unavailableProfile);
 	assert.equal(unavailableProfile.disabled, false, 'The menu also offers New Terminal and Select Default Profile before discovery');
 	titleActions.setProfiles([commandPromptProfile, powerShellProfile]);
 	ownerDocument.body.append(titleActions.element);
 
 	const toolbar = titleActions.element;
-	assert.equal(toolbar.getAttribute("role"), "toolbar");
-	assert.equal(toolbar.classList.contains("highlight-toggled"), true);
-	const splitNewTerminal = toolbar.querySelector<HTMLElement>(".ash-dropdown-with-primary-action-view-item");
-	const profile = splitNewTerminal?.querySelector<HTMLButtonElement>(".ash-dropdown-with-primary-dropdown > .ash-button");
+	assert.equal(toolbar.getAttribute('role'), 'toolbar');
+	assert.equal(toolbar.classList.contains('highlight-toggled'), true);
+	const splitNewTerminal = toolbar.querySelector<HTMLElement>('.ash-dropdown-with-primary-action-view-item');
+	const profile = splitNewTerminal?.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button');
 	assert.ok(splitNewTerminal);
 	assert.ok(profile);
 	assert.equal(profile.disabled, false);
-	assert.equal(profile.querySelector(".ash-button-label")?.textContent, "Select Terminal Profile");
-	assert.equal(profile.getAttribute("aria-label"), "Select Terminal Profile");
-	assert.ok(profile.querySelector(".ash-icon"));
+	assert.equal(profile.querySelector('.ash-button-label')?.textContent, 'Select Terminal Profile');
+	assert.equal(profile.getAttribute('aria-label'), 'Select Terminal Profile');
+	assert.ok(profile.querySelector('.ash-icon'));
 	assert.equal(toolbar.querySelectorAll("[data-action-id='workbench.action.terminal.new']").length, 1);
 	assert.equal(toolbar.querySelector("[data-action-id='workbench.action.terminal.newWithProfile']"), null);
-	const newTerminal = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal");
+	const newTerminal = [...toolbar.querySelectorAll('button')].find((button) => button.textContent === 'New Terminal');
 	assert.ok(newTerminal);
-	assert.equal([...toolbar.querySelectorAll("button")].some((button) => button.textContent === "Close Panel"), false);
-	assert.equal([...toolbar.querySelectorAll("button")].some((button) => button.textContent === "Maximize Panel"), false);
-	const currentNewTerminal = [...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal");
+	assert.equal([...toolbar.querySelectorAll('button')].some((button) => button.textContent === 'Close Panel'), false);
+	assert.equal([...toolbar.querySelectorAll('button')].some((button) => button.textContent === 'Maximize Panel'), false);
+	const currentNewTerminal = [...toolbar.querySelectorAll('button')].find((button) => button.textContent === 'New Terminal');
 	assert.ok(currentNewTerminal);
 	currentNewTerminal.click();
 	await Promise.resolve();
 	assert.deepEqual(createdProfiles, [undefined]);
 	appServerAvailable.set(false);
-	assert.equal([...toolbar.querySelectorAll("button")].find(button => button.textContent === "New Terminal")?.disabled, true);
+	assert.equal([...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled, true);
 	appServerAvailable.set(true);
-	assert.equal([...toolbar.querySelectorAll("button")].find(button => button.textContent === "New Terminal")?.disabled, false);
+	assert.equal([...toolbar.querySelectorAll('button')].find(button => button.textContent === 'New Terminal')?.disabled, false);
 	titleActions.setCreating(true);
-	assert.equal([...toolbar.querySelectorAll("button")].find((button) => button.textContent === "New Terminal")?.disabled, true);
+	assert.equal([...toolbar.querySelectorAll('button')].find((button) => button.textContent === 'New Terminal')?.disabled, true);
 	titleActions.setCreating(false);
 	const activeInstance = {
-		id: "terminal-1",
-		title: "Backend shell",
+		id: 'terminal-1',
+		title: 'Backend shell',
 		profile: commandPromptProfile,
-		state: "running",
+		state: 'running',
 		onDidChangeState: Event.None,
 	} as ITerminalInstance;
-	titleActions.setActiveInstance(activeInstance, "title");
-	const activeTerminal = toolbar.querySelector<HTMLButtonElement>(".ash-terminal-active-action .ash-action-label");
+	titleActions.setActiveInstance(activeInstance, 'title');
+	const activeTerminal = toolbar.querySelector<HTMLButtonElement>('.ash-terminal-active-action .ash-action-label');
 	assert.ok(activeTerminal);
-	assert.equal(activeTerminal.querySelector(".ash-action-label-text")?.textContent, "Backend shell");
-	assert.ok(activeTerminal.querySelector(".ash-action-label-icon > .ash-icon"));
-	assert.equal(activeTerminal.classList.contains("ash-button"), false);
-	assert.equal(activeTerminal.querySelector(".ash-button-label"), null);
-	assert.equal(activeTerminal.querySelector(".ash-icon-label"), null);
-	assert.equal(activeTerminal.getAttribute("aria-label"), "Active terminal: Backend shell (Command Prompt)");
+	assert.equal(activeTerminal.querySelector('.ash-action-label-text')?.textContent, 'Backend shell');
+	assert.ok(activeTerminal.querySelector('.ash-action-label-icon > .ash-icon'));
+	assert.equal(activeTerminal.classList.contains('ash-button'), false);
+	assert.equal(activeTerminal.querySelector('.ash-button-label'), null);
+	assert.equal(activeTerminal.querySelector('.ash-icon-label'), null);
+	assert.equal(activeTerminal.getAttribute('aria-label'), 'Active terminal: Backend shell (Command Prompt)');
 	activeTerminal.click();
 	await Promise.resolve();
 	assert.equal(focusCount, 0, 'The title opens its instance menu instead of focusing the terminal');
@@ -217,18 +217,18 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	activeTerminal.dispatchEvent(new browserEnvironment.window.MouseEvent('click', { bubbles: true, altKey: true }));
 	await Promise.resolve();
 	assert.equal(splitCount, 1);
-	assert.equal(toolbar.textContent?.includes("Kill Terminal"), true);
-	assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), false);
-	const killTerminal = [...toolbar.querySelectorAll("[data-action-id]")].find((item) => item.getAttribute("data-action-id") === "workbench.action.terminal.kill");
+	assert.equal(toolbar.textContent?.includes('Kill Terminal'), true);
+	assert.equal(toolbar.textContent?.includes('Relaunch Terminal'), false);
+	const killTerminal = [...toolbar.querySelectorAll('[data-action-id]')].find((item) => item.getAttribute('data-action-id') === 'workbench.action.terminal.kill');
 	const moreActions = toolbar.querySelector<HTMLElement>("[data-action-id='ash.toolbar.moreActions']");
 	assert.ok(killTerminal);
 	assert.ok(moreActions);
 	assert.equal(killTerminal.compareDocumentPosition(moreActions) & browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING, browserEnvironment.window.Node.DOCUMENT_POSITION_FOLLOWING);
 	assert.equal(toolbar.querySelector("[data-action-id='workbench.action.toggleMaximizedPanel']"), null);
-	moreActions.querySelector("button")?.click();
-	const clearTerminal = shownProfileActions.find((action) => action.id === "workbench.action.terminal.clear");
+	moreActions.querySelector('button')?.click();
+	const clearTerminal = shownProfileActions.find((action) => action.id === 'workbench.action.terminal.clear');
 	assert.ok(clearTerminal);
-	assert.equal(shownProfileActions.some((action) => action.id.startsWith("ash.compositeBar.open.")), false);
+	assert.equal(shownProfileActions.some((action) => action.id.startsWith('ash.compositeBar.open.')), false);
 	await clearTerminal.run();
 	shownProfileMenu?.onHide?.(false);
 	assert.equal(clearCount, 1);
@@ -237,9 +237,9 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	toolbar.querySelector<HTMLButtonElement>('.ash-terminal-active-action .ash-action-label')!.click();
 	await Promise.resolve();
 	assert.equal(shownProfileActions.some(action => action.id === TerminalCommandId.Relaunch), false, 'Reattachment must preserve its existing process');
-	titleActions.setActiveInstance(activeInstance, "list");
-	assert.equal(toolbar.querySelector(".ash-terminal-active-action"), null);
-	assert.equal(toolbar.textContent?.includes("Kill Terminal"), false);
+	titleActions.setActiveInstance(activeInstance, 'list');
+	assert.equal(toolbar.querySelector('.ash-terminal-active-action'), null);
+	assert.equal(toolbar.textContent?.includes('Kill Terminal'), false);
 	contextKeyService.setContext(TerminalContextKeys.tabsNarrow.key, true);
 	assert.ok(toolbar.querySelector('.ash-terminal-active-action'));
 	assert.ok(toolbar.querySelector(`[data-action-id='${TerminalCommandId.Split}']`));
@@ -253,26 +253,26 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	await configuration.updateValue('terminal.integrated.tabs.showActiveTerminal', 'singleTerminalOrNarrow');
 	await configuration.updateValue('terminal.integrated.tabs.showActions', 'singleTerminalOrNarrow');
 	titleActions.setActiveInstance({
-		id: "terminal-1",
-		title: "Backend shell",
+		id: 'terminal-1',
+		title: 'Backend shell',
 		profile: commandPromptProfile,
-		state: "exited",
+		state: 'exited',
 		onDidChangeState: Event.None,
-	} as ITerminalInstance, "list");
-	assert.equal(toolbar.textContent?.includes("Relaunch Terminal"), false, 'Relaunch is available in the overflow menu');
-	titleActions.setActiveInstance(activeInstance, "title");
-	assert.doesNotThrow(() => titleActions.setActiveInstance(undefined, "title"));
-	assert.equal(toolbar.querySelector(".ash-terminal-active-action"), null);
-	assert.equal(toolbar.textContent?.includes("Kill Terminal"), false);
-	titleActions.setActiveInstance(activeInstance, "list");
+	} as ITerminalInstance, 'list');
+	assert.equal(toolbar.textContent?.includes('Relaunch Terminal'), false, 'Relaunch is available in the overflow menu');
+	titleActions.setActiveInstance(activeInstance, 'title');
+	assert.doesNotThrow(() => titleActions.setActiveInstance(undefined, 'title'));
+	assert.equal(toolbar.querySelector('.ash-terminal-active-action'), null);
+	assert.equal(toolbar.textContent?.includes('Kill Terminal'), false);
+	titleActions.setActiveInstance(activeInstance, 'list');
 
-	const currentProfile = toolbar.querySelector<HTMLButtonElement>(".ash-dropdown-with-primary-dropdown > .ash-button");
+	const currentProfile = toolbar.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button');
 	assert.ok(currentProfile);
 	currentProfile.click();
-	assert.equal(currentProfile.getAttribute("aria-haspopup"), "menu");
-	assert.equal(currentProfile.getAttribute("aria-expanded"), "true");
+	assert.equal(currentProfile.getAttribute('aria-haspopup'), 'menu');
+	assert.equal(currentProfile.getAttribute('aria-expanded'), 'true');
 	assert.equal(shownProfileAnchor, currentProfile);
-	assert.equal(ownerDocument.querySelector(".ash-quick-pick"), null);
+	assert.equal(ownerDocument.querySelector('.ash-quick-pick'), null);
 	assert.deepEqual(shownProfileActions.map(action => action.id), [
 		TerminalCommandId.New, TerminalCommandId.NewInNewWindow, TerminalCommandId.Split, 'ash.actions.separator',
 		`${TerminalCommandId.NewWithProfile}.cmd`, `${TerminalCommandId.NewWithProfile}.pwsh`, 'ash.actions.separator', 'split.profile', 'ash.actions.separator',
@@ -283,8 +283,8 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 		await shownProfileActions.find(action => action.id === id)!.run();
 	}
 	assert.deepEqual(dropdownCommands, [TerminalCommandId.NewInNewWindow, TerminalCommandId.ConfigureTerminalSettings, 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner']);
-	const commandPrompt = shownProfileActions.find((action) => action.label.includes("Command Prompt"));
-	const powerShell = shownProfileActions.find((action) => action.label.includes("PowerShell"));
+	const commandPrompt = shownProfileActions.find((action) => action.label.includes('Command Prompt'));
+	const powerShell = shownProfileActions.find((action) => action.label.includes('PowerShell'));
 	assert.ok(commandPrompt);
 	assert.ok(powerShell);
 	assert.match(commandPrompt.label, /Default/);
@@ -292,8 +292,16 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(powerShell.checked, undefined);
 	await powerShell.run();
 	await Promise.resolve();
-	assert.deepEqual(createdProfiles, [undefined, "pwsh"]);
+	assert.deepEqual(createdProfiles, [undefined, 'pwsh']);
 	shownProfileMenu?.onHide?.(false);
+	const splitPrimary = toolbar.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-primary button')!;
+	splitPrimary.dispatchEvent(new browserEnvironment.window.MouseEvent('mousedown', { bubbles: true, altKey: true }));
+	assert.equal(splitPrimary.getAttribute('aria-label'), 'Split Terminal');
+	splitPrimary.click();
+	await Promise.resolve();
+	assert.equal(splitCount, 2);
+	browserEnvironment.window.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keyup', { key: 'Alt' }));
+	assert.equal(splitPrimary.getAttribute('aria-label'), 'New Terminal');
 	const extensionProfiles = [
 		{ profileId: 'extension:github.copilot-chat/cli', title: 'Assistant CLI', isDefault: false },
 		{ profileId: 'extension:anthropic.claude-code/cli', title: 'Claude CLI', isDefault: false },
@@ -400,7 +408,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	const { TestNotificationService } = await import('../../../../services/notification/test/common/testNotificationService.js');
 	const { WorkbenchLayout } = await import('../../../../browser/layout.js');
 	const { Dimension } = await import('../../../../../base/browser/dom.js');
-	const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
+	const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../../services/configuration/test/common/testServices.js');
 	const { IConfigurationService } = await import('../../../../../platform/configuration/common/configuration.js');
 	const { IAccessibleViewService } = await import('../../../../../platform/accessibility/browser/accessibleView.js');
 	const { ISpeechService } = await import('../../../speech/common/speechService.js');
@@ -516,7 +524,7 @@ suite('Terminal context command lifecycle', () => {
 			xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null,
 			start() { }, attachToElement() { }, detachFromElement() { }, async setAutoReplies() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Title fixture does not insert file paths'); }, async processBinary() { }, resize() { },
 			async reuseTerminal() { }, async close() { }, clearBuffer: () => { effects.push(['clear', instanceId]); },
-			refreshProperty: async () => { throw new Error("No OS process in action fixture"); }, serializeState: async () => { throw new Error("No process checkpoint in action fixture"); },
+			refreshProperty: async () => { throw new Error('No OS process in action fixture'); }, serializeState: async () => { throw new Error('No process checkpoint in action fixture'); },
 		} satisfies ITerminalInstance);
 		const first = create(1);
 		const second = create(2);

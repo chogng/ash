@@ -10,7 +10,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { CreatePullRequestWidget, type ICreatePullRequestWidgetOptions } from '../../browser/createPullRequestWidget.js';
 import type { ISessionPullRequestDetails, ISessionPullRequestOptions } from '../../common/pullRequestCreation.js';
 import { getSessionsChangesAccessibilityProviders } from '../../browser/sessionsChangesAccessibilityHelp.js';
-import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IContextViewService, IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
@@ -25,6 +25,10 @@ const details: ISessionPullRequestDetails = {
 
 function create(services: InstantiationService, options: ICreatePullRequestWidgetOptions): CreatePullRequestWidget {
 	registerTestComponentServices(services);
+	services.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+		showContextMenu: () => { }, hideContextMenu: () => { },
+	});
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
@@ -47,7 +51,8 @@ suite('Changes Create PR form', () => {
 		assert.equal(widget.domNode.querySelector<HTMLInputElement>('input[aria-label="Title"]')!.value, details.title);
 		assert.equal(widget.domNode.querySelector<HTMLSelectElement>('select[aria-label="Merge mode"]')!.value, '');
 		assert.equal(widget.domNode.querySelector<HTMLSelectElement>('select[aria-label="Merge mode"]')!.disabled, true);
-		assert.equal(widget.domNode.querySelector<HTMLSelectElement>('select[aria-label="Pull request action"]')!.value, 'create');
+		assert.equal(widget.domNode.querySelector('[aria-label="Pull request action"]'), null);
+		assert.equal(widget.domNode.querySelector<HTMLButtonElement>('button[type="submit"]')!.textContent, 'Create pull request');
 		widget.domNode.dispatchEvent(new document.defaultView!.Event('submit', { cancelable: true }));
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.deepEqual(calls, [{ title: details.title, description: details.description, draft: true, expectedContext: details.context }]);

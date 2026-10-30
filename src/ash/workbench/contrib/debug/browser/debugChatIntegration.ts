@@ -28,7 +28,7 @@ export class DebugChatContextContribution extends Disposable {
 		const frame = this.debug.getViewModel().focusedStackFrame;
 		if (!session || session.state !== 'stopped' || !frame) return [];
 		const revision = session.inspectionRevision;
-		const scopes = await session.inspectFrame(frame.id);
+		const scopes = await session.inspectFrame(frame.id, 'all');
 		if (
 			this.isDisposed ||
 			this.debug.session !== session ||

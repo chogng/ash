@@ -3,7 +3,7 @@ import { useBrowserTests } from '../../../../../../test/unit/browser/context.js'
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../accessibility/browser/accessibleViewRegistry.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
@@ -17,6 +17,7 @@ import { getSingletonServiceDescriptors } from '../../../instantiation/common/ex
 import { getIconDefinition } from '../../../theme/common/iconRegistry.js';
 import { IActionWidgetService } from '../../browser/actionWidget.js';
 import { ActionList, ActionListItemKind } from '../../browser/actionList.js';
+import { TabbedActionListWidget } from '../../browser/tabbedActionListWidget.js';
 import { ActionWidgetDropdown } from '../../browser/actionWidgetDropdown.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -294,7 +295,7 @@ test('changing action tabs preserves the filter and the pending execution gate',
 	const dom = new JSDOM('<body><button id="source">Open</button></body>');
 	try {
 		using resources = new DisposableStore();
-		const service = createServices(dom.window.document, resources).get(IActionWidgetService);
+		const service = resources.add(createServices(dom.window.document, resources).createInstance(TabbedActionListWidget));
 		const source = dom.window.document.querySelector<HTMLButtonElement>('#source')!;
 		const items = [1, 2].map(item => ({ kind: ActionListItemKind.Action, item, label: `Run ${item}` }));
 		const selected: number[] = [];
@@ -302,13 +303,14 @@ test('changing action tabs preserves the filter and the pending execution gate',
 		const pending = new Promise<void>(resolve => { finish = resolve; });
 		let hidden = 0;
 		source.focus();
-		service.show('tabs', false, items, {
-			onSelect: async item => { selected.push(item); await pending; },
-			onHide: () => hidden++,
-		}, source, { showFilter: true }, {
+		service.show<number>({
+			user: 'tabs', anchor: source, delegate: {
+				onSelect: async item => { selected.push(item); await pending; },
+				onHide: () => hidden++,
+			},
 			tabs: [{ id: 'all', label: 'All' }, { id: 'second', label: 'Second' }],
 			initialTab: 'all',
-			createActionList: id => ({ items: id === 'all' ? items : [items[1]!] }),
+			createActionList: id => ({ items: id === 'all' ? items : [items[1]!], listOptions: { showFilter: true } }),
 		});
 		const root = dom.window.document.querySelector<HTMLElement>('.ash-action-widget')!;
 		const filter = root.querySelector<HTMLInputElement>('input')!;
@@ -330,6 +332,43 @@ test('changing action tabs preserves the filter and the pending execution gate',
 	} finally {
 		dom.window.close();
 	}
+});
+
+test('tabbed details retain the list, search and focused row until Back or popup disposal', () => {
+	const dom = new JSDOM('<body><button id="source">Open</button></body>');
+	try {
+		using resources = new DisposableStore();
+		const document = dom.window.document;
+		const widget = resources.add(createServices(document, resources).createInstance(TabbedActionListWidget));
+		const source = document.querySelector<HTMLButtonElement>('#source')!;
+		source.focus();
+		let released = 0;
+		widget.show<number>({
+			user: 'details', anchor: source, tabs: [{ id: 'all', label: 'All' }], initialTab: 'all',
+			delegate: { onSelect: () => { }, onHide: () => { } },
+			createActionList: () => ({ items: [{ id: 'one', kind: ActionListItemKind.Action, label: 'First', item: 1 }], listOptions: { showFilter: true } }),
+		});
+		const filter = document.querySelector<HTMLInputElement>('input')!;
+		filter.value = 'fir';
+		filter.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		const row = document.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+		row.focus();
+		widget.showDetails({
+			label: 'First details', backLabel: 'Back', render: container => {
+				container.textContent = 'Model configuration';
+				return toDisposable(() => { released++; });
+			}
+		});
+		assert.equal(widget.isShowingDetails, true);
+		assert.equal(document.activeElement?.textContent, 'Back');
+		assert.equal(document.querySelector<HTMLElement>('[role="tabpanel"]')!.hidden, true);
+		widget.hideDetails();
+		assert.deepEqual({ released, search: filter.value, focused: document.activeElement === row, details: widget.isShowingDetails }, {
+			released: 1, search: 'fir', focused: true, details: false,
+		});
+		widget.hide();
+		assert.equal(widget.isVisible, false);
+	} finally { dom.window.close(); }
 });
 
 test('a dropdown opens typed actions and disposal cannot close a replacement menu', async () => {
@@ -567,6 +606,13 @@ suite('actionWidget browser component', () => {
 		expect(await widget.evaluate(element => element.getBoundingClientRect().width)).toBe(shortWidth);
 		await page.keyboard.press('ArrowDown');
 		await expect(widget.getByRole('menuitemradio', { name: 'Run' })).toBeFocused();
+		await page.keyboard.press('ArrowRight');
+		await expect(widget.getByRole('button', { name: 'Back', exact: true })).toBeFocused();
+		await expect(widget.getByRole('tabpanel')).toBeHidden();
+		await widget.getByRole('button', { name: 'Back', exact: true }).click();
+		await expect(widget.getByRole('menuitemradio', { name: 'Run' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('button', { name: 'Open actions', exact: true })).toBeFocused();
 	});
 
 	test('select options and action menu rows share control geometry and retain keyboard focus across themes', async function () {

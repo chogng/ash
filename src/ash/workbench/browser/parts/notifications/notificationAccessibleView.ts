@@ -1,8 +1,8 @@
-import { localize } from "../../../../nls.js";
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from "../../../../platform/accessibility/browser/accessibleView.js";
-import { AccessibleViewRegistry } from "../../../../platform/accessibility/browser/accessibleViewRegistry.js";
+import { localize } from '../../../../nls.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 
-import { INotificationsCenter, NotificationsFocusedContext } from "./notificationsCenter.js";
+import { INotificationsCenter, NotificationsFocusedContext } from './notificationsCenter.js';
 import { DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Severity } from '../../../../platform/notification/common/notification.js';
 import type { NotificationItem } from '../../../common/notifications.js';
@@ -10,7 +10,7 @@ import type { NotificationItem } from '../../../common/notifications.js';
 AccessibleViewRegistry.register({
 	type: AccessibleViewType.Help,
 	priority: 100,
-	name: "notificationsHelp",
+	name: 'notificationsHelp',
 	when: NotificationsFocusedContext.isEqualTo(true),
 	getProvider: accessor => new AccessibleContentProvider(
 		AccessibleViewProviderId.Notifications,
@@ -24,7 +24,7 @@ AccessibleViewRegistry.register({
 AccessibleViewRegistry.register({
 	type: AccessibleViewType.View,
 	priority: 100,
-	name: "notificationsView",
+	name: 'notificationsView',
 	when: NotificationsFocusedContext.isEqualTo(true),
 	getProvider: accessor => {
 		const notifications = accessor.get(INotificationsCenter).model;

@@ -1,9 +1,9 @@
-import type { Event } from "../../../base/common/event.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import type { Event } from '../../../base/common/event.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { IQuickPickItem } from '../../quickinput/common/quickInput.js';
 
-import type { LanguagePackCatalog } from "./languagePackContract.js";
+import type { LanguagePackCatalog } from './languagePackContract.js';
 
 export interface ILanguagePackItem extends IQuickPickItem {
 	readonly id: string;
@@ -27,4 +27,4 @@ export interface ILanguagePackService {
 	refresh(): Promise<void>;
 }
 
-export const ILanguagePackService = createServiceIdentifier<ILanguagePackService>("languagePackService");
+export const ILanguagePackService = createServiceIdentifier<ILanguagePackService>('languagePackService');

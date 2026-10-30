@@ -251,8 +251,8 @@ const selectNext = registerEditorAction(AddSelectionToNextFindMatchAction);
 const selectAll = registerEditorAction(SelectHighlightsAction);
 
 registerEditorContribution({
-	id: "editor.contrib.multicursor", install: context => {
-		if (context.kind !== "text") return;
+	id: 'editor.contrib.multicursor', install: context => {
+		if (context.kind !== 'text') return;
 		context.register(context.editor.onKeyDown(event => {
 			if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) return;
 			let action: EditorAction | undefined;
@@ -273,7 +273,7 @@ registerEditorContribution({
 
 registerEditorContribution({
 	id: SelectionHighlighter.ID, install: context => {
-		if (context.kind !== "text") return;
+		if (context.kind !== 'text') return;
 		const decorations = context.register(new TextDecorationCollection<boolean>(context.model));
 		if (!context.model.largeFile.tooLargeForTokenization) {
 			return new SelectionHighlighter(
@@ -307,9 +307,9 @@ function appendUniqueCaret(selections: Selection[], position: Position): void {
 
 /** Resolves the non-conflicting VS Code add-cursor chord for a host platform. */
 export function resolveStanzaAdjacentCursorDirection(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>, targetOperatingSystem: OperatingSystem): 'up' | 'down' | undefined {
-	const direction = event.key === "ArrowUp"
+	const direction = event.key === 'ArrowUp'
 		? 'up'
-		: event.key === "ArrowDown"
+		: event.key === 'ArrowDown'
 			? 'down'
 			: undefined;
 	if (!direction) return undefined;

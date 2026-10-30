@@ -170,7 +170,7 @@ test('a remote session retains one SOCKS policy until its last page closes and n
 			assert.deepEqual(args.slice(-3), ['-D', '127.0.0.1:12345', 'test-host']);
 			return child as unknown as import('node:child_process').ChildProcess;
 		},
-		probeLoopbackListener: async () => "ready",
+		probeLoopbackListener: async () => 'ready',
 	});
 	const policies: Electron.ProxyConfig[] = [];
 	let connectionsClosed = 0;

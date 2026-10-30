@@ -35,8 +35,8 @@ export function validateDesignTokens(contents: string): DesignTokenSuggestion[] 
 			const block = source.lastIndexOf('{', match.index);
 			const selector = source.slice(Math.max(source.lastIndexOf('}', block - 1), source.lastIndexOf('{', block - 1)) + 1, block);
 			if (/\.lxicon(?:[\s.:#\[]|$|-)/.test(selector)) {
-				const token = lengths[0] === 12 ? '--ash-lxiconFontSize-compact' : '--ash-lxiconFontSize';
-				add('icon', `font-size: ${value}; use var(${token}) and review the base or compact glyph`);
+				const token = lengths[0] === 12 ? '--ash-lxiconFontSize-compact' : lengths[0] === 18 ? '--ash-lxiconFontSize-large' : '--ash-lxiconFontSize';
+				add('icon', `font-size: ${value}; use var(${token}) and review the icon size and glyph`);
 			} else {
 				const detail = fontRamp.includes(lengths[0]!) ? 'choose a heading, body, or label role' : 'review the type ramp and choose a heading, body, or label role';
 				add('font-size', `font-size: ${value}; ${detail}`);

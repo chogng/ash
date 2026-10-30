@@ -161,4 +161,3 @@ export class ClosingBracketKind extends BracketKindBase {
 		return [...this.openingBrackets];
 	}
 }
-

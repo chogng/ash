@@ -3,47 +3,47 @@ import { registerTextModelFeatures } from '../../../../common/model/textModelFea
 import { after as afterModelFeatures } from 'mocha';
 import { setImmediate } from 'node:timers/promises';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Range } from "../../../../common/core/range.js";
-import { LanguageFeatureRegistry } from "../../../../common/languageFeatureRegistry.js";
-import { TextModel } from "../../../../common/model/textModel.js";
-import { type LanguageTokenResult } from "../../../../common/tokens/languageTokens.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Range } from '../../../../common/core/range.js';
+import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
+import { TextModel } from '../../../../common/model/textModel.js';
+import { type LanguageTokenResult } from '../../../../common/tokens/languageTokens.js';
 import { SemanticTokenModifier, SemanticTokenPresentation } from '../../../../common/tokens/languageTokens.js';
 import { type LanguageSemanticTokensProvider } from '../../../../common/languages.js';
 
-test("TextModel semantic-token owner publishes only current model results", async () => {
+test('TextModel semantic-token owner publishes only current model results', async () => {
 	const providers = new LanguageFeatureRegistry<LanguageSemanticTokensProvider>();
 	const pending: Array<(value: LanguageTokenResult | undefined) => void> = [];
 	using registration = providers.register('typescript', {
 		provideSemanticTokens: () => new Promise<LanguageTokenResult | undefined>(resolve => pending.push(resolve)),
 	});
-	using model = new TextModel("value", { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
+	using model = new TextModel('value', { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
 	const semanticTokens = model.tokenization.semanticTokens!;
 	await waitFor(() => pending.length === 1);
 	model.setValue('value!');
 	await waitFor(() => pending.length === 2);
-	pending[0]!({ tokens: [{ range: new Range(1, 1, 1, 6), tokenType: "variable", modifiers: [] }] });
+	pending[0]!({ tokens: [{ range: new Range(1, 1, 1, 6), tokenType: 'variable', modifiers: [] }] });
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 	assert.deepEqual(semanticTokens.lines, []);
 
-	pending[1]!({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType: "variable", modifiers: [] }] });
+	pending[1]!({ tokens: [{ range: new Range(1, 1, 1, 7), tokenType: 'variable', modifiers: [] }] });
 	await waitFor(() => semanticTokens.lines.length === 1);
 	assert.equal(semanticTokens.getLineTokens(0)[0]!.range.endColumn, 7);
 });
 
-test("TextModel renders semantic token names and modifiers", async () => {
+test('TextModel renders semantic token names and modifiers', async () => {
 	const providers = new LanguageFeatureRegistry<LanguageSemanticTokensProvider>();
 	using registration = providers.register('typescript', {
-		provideSemanticTokens: request => ({ tokens: [{ range: new Range(1, 1, 1, request.snapshot.getText().length + 1), tokenType: "variable", modifiers: ["readonly"] }] }),
+		provideSemanticTokens: request => ({ tokens: [{ range: new Range(1, 1, 1, request.snapshot.getText().length + 1), tokenType: 'variable', modifiers: ['readonly'] }] }),
 	});
-	using model = new TextModel("value", { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
+	using model = new TextModel('value', { languageId: 'typescript', tokenization: { documentSemanticTokensProvider: providers } });
 	const semanticTokens = model.tokenization.semanticTokens!;
 	await waitFor(() => semanticTokens.lines.length === 1);
 	const token = semanticTokens.getLineTokens(0)[0]!;
 
-	assert.equal(token.tokenType, "variable");
-	assert.deepEqual(token.modifiers, ["readonly"]);
+	assert.equal(token.tokenType, 'variable');
+	assert.deepEqual(token.modifiers, ['readonly']);
 	assert.deepEqual(model.tokenization.renderedTokens.getLineTokens(0), [{
 		startColumn: 0,
 		endColumn: 5,

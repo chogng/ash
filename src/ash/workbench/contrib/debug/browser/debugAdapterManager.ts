@@ -32,7 +32,7 @@ export class AdapterManager extends Disposable implements IAdapterManager {
 
 	get(type: string): DebugAdapterFactory | undefined {
 		this.assertNotDisposed();
-		const id = normalizeIdentifier(type, "Debug Adapter type");
+		const id = normalizeIdentifier(type, 'Debug Adapter type');
 		return this.factoriesValue.find(factory => factory.type === id);
 	}
 
@@ -47,7 +47,7 @@ export class AdapterManager extends Disposable implements IAdapterManager {
 			if (this.deleteOwner(owner) && !this.isDisposed) this.updateFactories();
 		}) as DebugAdapterFactoryRegistration;
 		registration.replace = replacement => {
-			if (disposed) throw new ReferenceError("Debug Adapter factory registration is already disposed");
+			if (disposed) throw new ReferenceError('Debug Adapter factory registration is already disposed');
 			this.assertNotDisposed();
 			this.replace(owner, replacement);
 		};
@@ -55,7 +55,7 @@ export class AdapterManager extends Disposable implements IAdapterManager {
 	}
 
 	private replace(owner: object, factories: readonly DebugAdapterFactory[]): void {
-		if (!Array.isArray(factories)) throw new TypeError("Debug Adapter factories must be an array");
+		if (!Array.isArray(factories)) throw new TypeError('Debug Adapter factories must be an array');
 		const normalized = factories.map(factory => {
 			const existing = this.entries.get(factory.type)?.find(entry => entry.owner === owner && entry.source === factory);
 			return existing?.owner === owner && existing.source === factory ? existing.factory : normalizeDebugAdapterFactory(factory);

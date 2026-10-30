@@ -180,36 +180,36 @@ registerAction2(class ConfigureDebugAction extends Action2 {
 });
 
 registerAction2(class StopDebugAction extends Action2 {
-	constructor() { super({ id: STOP_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopDebugAction' }, "Stop Debugging"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), keybinding: { primary: Keybinding.single(logicalKey("F5", { shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 2 } }); }
+	constructor() { super({ id: STOP_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopDebugAction' }, 'Stop Debugging'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), keybinding: { primary: Keybinding.single(logicalKey('F5', { shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: '1_debug', order: 2 } }); }
 	override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).stop().catch(reportError); }
 });
 
 registerAction2(class RestartDebugAction extends Action2 {
-	constructor() { super({ id: RESTART_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RestartDebugAction' }, "Restart Debugging"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), keybinding: { primary: Keybinding.single(logicalKey("F5", { ctrlKey: true, shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 3 } }); }
+	constructor() { super({ id: RESTART_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RestartDebugAction' }, 'Restart Debugging'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), keybinding: { primary: Keybinding.single(logicalKey('F5', { ctrlKey: true, shiftKey: true })) }, menu: { id: MenuId.MenubarRunMenu, group: '1_debug', order: 3 } }); }
 	override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).restart().catch(reportError); }
 });
 
 registerAction2(class StopAllDebugAction extends Action2 {
-	constructor() { super({ id: STOP_ALL_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopAllDebugAction' }, "Stop All Debugging"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: "1_debug", order: 4 } }); }
+	constructor() { super({ id: STOP_ALL_DEBUG_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.StopAllDebugAction' }, 'Stop All Debugging'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: '1_debug', order: 4 } }); }
 	override run(accessor: ServicesAccessor): void { void accessor.get(IDebugService).stopAll().catch(reportError); }
 });
 
 registerAction2(class FocusDebugConsoleAction extends Action2 {
-	constructor() { super({ id: FOCUS_DEBUG_CONSOLE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.FocusDebugConsoleAction' }, "Focus on Debug Console View"), f1: true }); }
+	constructor() { super({ id: FOCUS_DEBUG_CONSOLE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.FocusDebugConsoleAction' }, 'Focus on Debug Console View'), f1: true }); }
 	override run(accessor: ServicesAccessor): Promise<boolean> { return accessor.get(IViewsService).focusView(DEBUG_CONSOLE_VIEW_ID); }
 });
 
 registerAction2(class ClearDebugConsoleAction extends Action2 {
-	constructor() { super({ id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ClearDebugConsoleAction' }, "Clear Console"), f1: true }); }
+	constructor() { super({ id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ClearDebugConsoleAction' }, 'Clear Console'), f1: true }); }
 	override run(accessor: ServicesAccessor): void | Promise<void> { return accessor.get(IDebugService).replModel.clear(); }
 });
 
 for (const [id, title, keybinding, operation] of [
-	[CONTINUE_DEBUG_COMMAND_ID, localize2('debug.continue', 'Continue'), undefined, "continue"],
-	[PAUSE_DEBUG_COMMAND_ID, localize2('debug.pause', 'Pause'), Keybinding.single(logicalKey("F6")), "pause"],
-	[STEP_OVER_DEBUG_COMMAND_ID, localize2('debug.stepOver', 'Step Over'), Keybinding.single(logicalKey("F10")), "stepOver"],
-	[STEP_INTO_DEBUG_COMMAND_ID, localize2('debug.stepInto', 'Step Into'), Keybinding.single(logicalKey("F11")), "stepInto"],
-	[STEP_OUT_DEBUG_COMMAND_ID, localize2('debug.stepOut', 'Step Out'), Keybinding.single(logicalKey("F11", { shiftKey: true })), "stepOut"],
+	[CONTINUE_DEBUG_COMMAND_ID, localize2('debug.continue', 'Continue'), undefined, 'continue'],
+	[PAUSE_DEBUG_COMMAND_ID, localize2('debug.pause', 'Pause'), Keybinding.single(logicalKey('F6')), 'pause'],
+	[STEP_OVER_DEBUG_COMMAND_ID, localize2('debug.stepOver', 'Step Over'), Keybinding.single(logicalKey('F10')), 'stepOver'],
+	[STEP_INTO_DEBUG_COMMAND_ID, localize2('debug.stepInto', 'Step Into'), Keybinding.single(logicalKey('F11')), 'stepInto'],
+	[STEP_OUT_DEBUG_COMMAND_ID, localize2('debug.stepOut', 'Step Out'), Keybinding.single(logicalKey('F11', { shiftKey: true })), 'stepOut'],
 ] as const) {
 	registerAction2(class DebugSessionAction extends Action2 {
 		constructor() { super({ id, title, f1: true, precondition: AppServerAvailableContext.isEqualTo(true), ...(keybinding ? { keybinding: { primary: keybinding, ...(operation === 'pause' ? { when: CONTEXT_DEBUG_STATE.isEqualTo('running') } : {}) } } : {}) }); }
@@ -225,7 +225,7 @@ for (const [id, title, keybinding, operation] of [
 	});
 }
 
-function reportError(error: unknown): void { console.error("Debug command failed", error); }
+function reportError(error: unknown): void { console.error('Debug command failed', error); }
 
 export const ADD_DATA_BREAKPOINT_ID = 'debug.addDataBreakpoint';
 export const ADD_INSTRUCTION_BREAKPOINT_ID = 'debug.addInstructionBreakpoint';
@@ -309,7 +309,7 @@ registerAction2(class VisualizeVariableAction extends Action2 {
 		if (!session || session.state !== 'stopped' || !frame) return;
 		const revision = session.inspectionRevision;
 		const current = () => debug.session === session && session.state === 'stopped' && session.inspectionRevision === revision && debug.getViewModel().focusedStackFrame === frame;
-		const scopes = await session.inspectFrame(frame.id);
+		const scopes = await session.inspectFrame(frame.id, 'all');
 		if (!current()) return;
 		const quickInput = accessor.get(IQuickInputService);
 		const variable = await pickDebugItem<IQuickPickItem & { variable: IDebugVariable; }>(quickInput, scopes.flatMap(scope => scope.variables.map(variable => ({ label: variable.name, description: scope.scope.name, detail: variable.value.slice(0, 256), variable }))), localize('debug.pickVariable', 'Select a variable to visualize'));

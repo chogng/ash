@@ -1,6 +1,6 @@
 import { attachRustSyntax, test } from '../../fixtures/browser/rustSyntaxProcessFixture.js';
-import { expect, type Page } from "@playwright/test";
-import { getAxeResults, injectAxe } from "axe-playwright";
+import { expect, type Page } from '@playwright/test';
+import { getAxeResults, injectAxe } from 'axe-playwright';
 import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorCommon.js';
 
 const pageErrors = new WeakMap<object, string[]>();
@@ -56,7 +56,7 @@ test('syntax theme updates repaint text and minimap through shared line support'
 test.beforeEach(async ({ page }) => {
 	const errors: string[] = [];
 	pageErrors.set(page, errors);
-	page.on("pageerror", error => errors.push(error.stack ?? error.message));
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
 });
 
 test.afterEach(async ({ page }) => {
@@ -81,16 +81,16 @@ test('save code actions apply fixes and organize imports before the keyboard sav
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('use z;\nuse a;\nfn main() { let _unused = 1; }\n');
 });
 
-test("text-model editor public API, pane, undo, save, and browser worker", async ({ page }) => {
+test('text-model editor public API, pane, undo, save, and browser worker', async ({ page }) => {
 	const workers: string[] = [];
-	page.on("worker", worker => workers.push(worker.url()));
+	page.on('worker', worker => workers.push(worker.url()));
 	await openEditor(page);
-	await expect(page.locator(".stanza-editor")).toBeVisible();
-	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.apiText)).toBe("editor-api");
+	await expect(page.locator('.stanza-editor')).toBeVisible();
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.apiText)).toBe('editor-api');
 
-	const input = page.locator(".stanza-editor-input");
+	const input = page.locator('.stanza-editor-input');
 	await input.focus();
-	await page.keyboard.press("Control+Home");
+	await page.keyboard.press('Control+Home');
 	const caret = page.locator('.stanza-editor-caret.primary');
 	await expect(caret).toHaveClass(/cursor-style-line/u);
 	await page.keyboard.press('Insert');
@@ -99,13 +99,13 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await expect(caret).toHaveText('f');
 	await page.keyboard.press('Insert');
 	await expect(caret).toHaveClass(/cursor-style-line/u);
-	await page.keyboard.type("integrated");
-	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe("integratedfn main() {\n  answer();\n}\n");
+	await page.keyboard.type('integrated');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('integratedfn main() {\n  answer();\n}\n');
 
-	await page.keyboard.press("ControlOrMeta+z");
-	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe("fn main() {\n  answer();\n}\n");
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('fn main() {\n  answer();\n}\n');
 	await page.evaluate(() => window.ashTextModelIntegration.save());
-	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSavedText())).toBe("fn main() {\n  answer();\n}\n");
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSavedText())).toBe('fn main() {\n  answer();\n}\n');
 	// Editing and saving do not need a Worker. Formatting requests minimal edits
 	// from the browser Worker, so verify that work and its concrete result.
 	await page.evaluate(() => {
@@ -398,16 +398,16 @@ test('textarea fallback routes type and composition through the standard input p
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toMatch(/^fn main/u);
 });
 
-test("text-model editor supports Rust syntax and symbol navigation without gutter symbol icons", async ({ page }) => {
+test('text-model editor supports Rust syntax and symbol navigation without gutter symbol icons', async ({ page }) => {
 	await openEditor(page);
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSyntaxAnalysisCount())).toBe(0);
-	await expect(page.locator(".stanza-editor-token.token-keyword")).toHaveText("fn");
-	await expect(page.locator(".cdr.squiggly-error")).toHaveCount(0);
-	await expect(page.locator(".stanza-editor-symbol-icon")).toHaveCount(0);
+	await expect(page.locator('.stanza-editor-token.token-keyword')).toHaveText('fn');
+	await expect(page.locator('.cdr.squiggly-error')).toHaveCount(0);
+	await expect(page.locator('.stanza-editor-symbol-icon')).toHaveCount(0);
 
-	const input = page.locator(".stanza-editor-input");
+	const input = page.locator('.stanza-editor-input');
 	await input.focus();
-	await page.keyboard.press("ControlOrMeta+Shift+o");
+	await page.keyboard.press('ControlOrMeta+Shift+o');
 	const symbol = page.locator('.ash-quick-pick-row-label');
 	await expect(symbol).toHaveText('main');
 	await page.keyboard.press('Enter');
@@ -842,7 +842,10 @@ test('format on type uses the input event and is one undo step with the typed tr
 test('formatter choice cancels on cursor changes and readonly formatting does not open a picker', async ({ page }) => {
 	await page.goto('/textModel.html');
 	await page.waitForFunction(() => !!window.ashTextModelIntegration);
-	await page.evaluate(() => { window.ashTextModelIntegration.enableFormatting('en'); void window.ashTextModelIntegration.formatDocument(); });
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.enableFormatting('en');
+		void window.ashTextModelIntegration.formatDocument();
+	});
 	await expect(page.locator('.ash-quick-pick')).toBeVisible();
 	await page.evaluate(() => window.ashTextModelIntegration.getControl().setPosition({ lineNumber: 2, column: 1 }));
 	await expect(page.locator('.ash-quick-pick')).not.toBeVisible();

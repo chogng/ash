@@ -1,7 +1,7 @@
-import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import type { ServicesAccessor } from "../../instantiation/common/instantiation.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import type { ServicesAccessor } from '../../instantiation/common/instantiation.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { JsonSchema } from '../../../base/common/jsonSchema.js';
 import { validateConstraints, type TypeConstraint } from '../../../base/common/types.js';
 import type { ILocalizedString } from '../../action/common/action.js';
@@ -62,7 +62,7 @@ export class CommandRegistry {
 			this.changed.fire();
 		}) as CommandRegistration;
 		registration.replace = replacement => {
-			if (disposed) throw new ReferenceError("Command registration is already disposed");
+			if (disposed) throw new ReferenceError('Command registration is already disposed');
 			this.replace(owner, replacement);
 		};
 		return registration;
@@ -85,7 +85,7 @@ export class CommandRegistry {
 	}
 
 	private replace(owner: object, commands: readonly CommandDefinition[]): void {
-		if (!Array.isArray(commands)) throw new TypeError("Commands must be an array");
+		if (!Array.isArray(commands)) throw new TypeError('Commands must be an array');
 		const normalized = commands.map(normalizeCommandDefinition);
 		const ids = new Set<CommandId>();
 		for (const command of normalized) {
@@ -104,9 +104,9 @@ export class CommandRegistry {
 }
 
 function normalizeCommandDefinition(command: CommandDefinition): CommandDefinition {
-	if (!command || typeof command !== "object") throw new TypeError("Command definition must be an object");
-	if (typeof command.id !== "string" || command.id.trim().length === 0 || command.id.length > 256 || command.id.includes("\0")) throw new TypeError("Command ID must contain 1 to 256 characters without NUL");
-	if (typeof command.handler !== "function") throw new TypeError(`Command '${command.id}' must provide a handler`);
+	if (!command || typeof command !== 'object') throw new TypeError('Command definition must be an object');
+	if (typeof command.id !== 'string' || command.id.trim().length === 0 || command.id.length > 256 || command.id.includes('\0')) throw new TypeError('Command ID must contain 1 to 256 characters without NUL');
+	if (typeof command.handler !== 'function') throw new TypeError(`Command '${command.id}' must provide a handler`);
 	const constraints = command.metadata?.args?.map(argument => argument.constraint);
 	const execute = command.handler;
 	const handler = constraints
@@ -131,4 +131,4 @@ export interface ICommandService {
 }
 
 export const ICommandService =
-	createServiceIdentifier<ICommandService>("commandService");
+	createServiceIdentifier<ICommandService>('commandService');

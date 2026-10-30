@@ -1,3 +1,5 @@
+import { decodeBase64 } from '../../../base/common/buffer.js';
+import { GitHubRepositoryEntryKind, type GitHubRepositoryTree, type GitHubRepositoryBlob } from '../common/githubService.js';
 import type { GitHubCheckDetails, GitHubCheckTarget } from '../common/githubService.js';
 import type { GitHubRemoteRepository, GitHubRepositoryVisibility, GitHubRepositoryBranch, GitHubBranchProtection, GitHubShareLink } from '../common/githubService.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
@@ -11,6 +13,7 @@ import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerMethod, MethodParams, MethodResult } from '../../../../../.build/protocol/typescript/index.js';
 import { GitHubError, GitHubErrorCode, GitHubDiffSide, GitHubReviewerChange } from '../common/githubService.js';
+import { GitHubManagedSettingsReadMode, type GitHubManagedSettingsSnapshot } from '../common/githubService.js';
 import type { IGitHubService, GitHubAccount, GitHubNotificationFilter, GitHubNotification, GitHubCreateFork, GitHubFork, GitHubRequestedReviewers, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel, GitHubFileContent, GitHubReviewDiff, GitHubReviewThreads, GitHubReviewComments, GitHubReviewComment, GitHubReviewThreadState } from '../common/githubService.js';
 
 type GitHubMethod = Exclude<Extract<AppServerMethod, `github/${string}`>, 'github/cancel' | `github/session/${string}`>;
@@ -77,11 +80,25 @@ export class AppServerGitHubService implements IGitHubService {
 	public async listAccounts(token?: CancellationToken): Promise<readonly GitHubAccount[]> {
 		return (await this.request('github/account/list', {}, RequestKind.Read, token)).accounts.map(account => ({ ...account, credentialRevision: BigInt(account.credentialRevision) }));
 	}
-	public async readManagedSettings(accountId: string, token?: CancellationToken) {
-		const settings = (await this.request('github/account/managedSettings', { accountId }, RequestKind.Read, token)).settings;
-		if (settings === null) return null;
-		if (typeof settings !== 'object' || Array.isArray(settings)) throw new GitHubError(GitHubErrorCode.Unavailable);
-		return settings;
+	public async readManagedSettings(accountId: string, token?: CancellationToken, mode = GitHubManagedSettingsReadMode.Automatic): Promise<GitHubManagedSettingsSnapshot> {
+		const { settings, refresh } = await this.request('github/account/managedSettings', { accountId, mode }, RequestKind.Read, token);
+		if (settings !== null && (typeof settings !== 'object' || Array.isArray(settings))) {
+			throw new GitHubError(GitHubErrorCode.Unavailable);
+		}
+		if (refresh.state === 'ready') {
+			return { settings, refresh };
+		}
+		let failure: GitHubErrorCode | 'invalidResponse';
+		switch (refresh.failure) {
+			case 'authenticationRequired': failure = GitHubErrorCode.AuthenticationRequired; break;
+			case 'permissionDenied': failure = GitHubErrorCode.PermissionDenied; break;
+			case 'rateLimited': failure = GitHubErrorCode.RateLimited; break;
+			case 'updateRequired': failure = GitHubErrorCode.ManagedSettingsUpdateRequired; break;
+			case 'invalidResponse': failure = 'invalidResponse'; break;
+			case 'unavailable': failure = GitHubErrorCode.Unavailable; break;
+			case 'timedOut': failure = GitHubErrorCode.TimedOut; break;
+		}
+		return { settings, refresh: { ...refresh, failure } };
 	}
 	public async connectToken(host: string, accessToken: string, token?: CancellationToken): Promise<GitHubAccount> {
 		const account = await this.request('github/account/connect', { host, token: accessToken }, RequestKind.Write, token);
@@ -174,6 +191,21 @@ export class AppServerGitHubService implements IGitHubService {
 		const result = await this.request('github/pullRequest/diff', { repository, number, commit, page }, RequestKind.Read, token);
 		return { baseCommit: result.baseCommit, files: { items: result.files.files.map(file => ({ ...file })), nextPage: result.files.nextPage, limitReached: result.files.limitReached } };
 	}
+	public async readRepositoryTree(repository: GitHubRepository, reference: string, token?: CancellationToken): Promise<GitHubRepositoryTree> {
+		const tree = await this.request('github/repository/tree', { repository, reference }, RequestKind.Read, token);
+		return {
+			sha: tree.sha, entries: tree.entries.map(entry => ({
+				...entry, kind: {
+					file: GitHubRepositoryEntryKind.File, directory: GitHubRepositoryEntryKind.Directory,
+					symbolicLink: GitHubRepositoryEntryKind.SymbolicLink, submodule: GitHubRepositoryEntryKind.Submodule,
+				}[entry.kind]
+			}))
+		};
+	}
+	public async readRepositoryBlob(repository: GitHubRepository, sha: string, token?: CancellationToken): Promise<GitHubRepositoryBlob> {
+		const blob = await this.request('github/repository/blob', { repository, sha }, RequestKind.Read, token);
+		return { sha: blob.sha, bytes: decodeBase64(blob.contentBase64).buffer };
+	}
 	public async readFile(repository: GitHubRepository, commit: string, path: string, token?: CancellationToken): Promise<GitHubFileContent> {
 		return { ...await this.request('github/file/read', { repository, commit, path }, RequestKind.Read, token) };
 	}
@@ -231,7 +263,7 @@ export class AppServerGitHubService implements IGitHubService {
 
 	private async request<M extends GitHubMethod>(method: M, params: Omit<MethodParams<M>, 'operationId'>, kind: RequestKind, token: CancellationToken = CancellationToken.None): Promise<MethodResult<M>> {
 		if (token.isCancellationRequested) { throw new CancellationError(); }
-		if (this.connection.state !== 'ready' || this.connection.capabilities?.github !== true || this.connection.capabilities.contracts.github?.version !== 1) { throw new GitHubError(GitHubErrorCode.Unavailable); }
+		if (this.connection.state !== 'ready' || this.connection.capabilities?.github !== true || this.connection.capabilities.contracts.github?.version !== 2) { throw new GitHubError(GitHubErrorCode.Unavailable); }
 		const operationId = generateUuid();
 		const bound = 'repository' in params ? params.repository as GitHubRepository : undefined;
 		const wire = bound ? { ...params, ...(method === 'github/share/link' ? {} : { accountId: bound.accountId }), repository: { host: bound.host, owner: bound.owner, name: bound.name } } : params;
@@ -272,7 +304,7 @@ export function createDisconnectedGitHubService(): IGitHubService {
 		listComments: unavailable, createComment: unavailable, updateComment: unavailable, deleteComment: unavailable,
 		listPullRequests: unavailable, readPullRequest: unavailable, createPullRequest: unavailable, updatePullRequest: unavailable,
 		listPullRequestFiles: unavailable, listPullRequestReviews: unavailable, reviewPullRequest: unavailable, mergePullRequest: unavailable, enableAutoMerge: unavailable,
-		readReviewDiff: unavailable, readFile: unavailable, listReviewThreads: unavailable, readReviewThreadComments: unavailable, replyReviewThread: unavailable, resolveReviewThread: unavailable,
+		readReviewDiff: unavailable, readRepositoryTree: unavailable, readRepositoryBlob: unavailable, readFile: unavailable, listReviewThreads: unavailable, readReviewThreadComments: unavailable, replyReviewThread: unavailable, resolveReviewThread: unavailable,
 		readCheckDetails: unavailable, readCheckLog: unavailable, rerunCheck: unavailable, readChecks: unavailable, listLabels: unavailable, createLabel: unavailable, updateLabelColor: unavailable, listAssignees: unavailable,
 	};
 }

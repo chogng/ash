@@ -301,5 +301,3 @@ export class PrefixSumIndexOfResult {
 		this.remainder = remainder;
 	}
 }
-
-

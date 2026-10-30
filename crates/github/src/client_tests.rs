@@ -23,7 +23,13 @@ impl GitHubProvider for WrongReply {
         _: GitHubRequest,
         _: &CancellationToken,
     ) -> Result<GitHubResponse> {
-        Ok(GitHubResponse::ManagedSettings(None))
+        Ok(GitHubResponse::ManagedSettings(ManagedSettingsSnapshot {
+            settings: None,
+            refresh: ManagedSettingsRefresh::Ready {
+                last_attempt_at: 1,
+                last_success_at: 2,
+            },
+        }))
     }
 }
 #[test]

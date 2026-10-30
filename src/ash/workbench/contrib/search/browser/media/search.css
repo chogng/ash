@@ -129,9 +129,9 @@
 }
 
 .ash-search-file-count {
+	display: flex;
 	flex: 0 0 auto;
 	margin-left: auto;
-	font-size: var(--ash-fontSize-label2);
 }
 
 .ash-search-match {

@@ -1,17 +1,17 @@
-import type { Event } from "../../../base/common/event.js";
-import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { URI } from "../../../base/common/uri.js";
+import type { Event } from '../../../base/common/event.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { URI } from '../../../base/common/uri.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { VSBufferReadableStream } from '../../../base/common/buffer.js';
 import type { ReadableStreamEvents } from '../../../base/common/stream.js';
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 /** Stable file kind used by Workbench consumers independently of wire DTOs. */
 export enum FileKind {
-	Directory = "directory",
-	File = "file",
-	SymbolicLink = "symbolicLink",
-	Other = "other",
+	Directory = 'directory',
+	File = 'file',
+	SymbolicLink = 'symbolicLink',
+	Other = 'other',
 }
 
 /** Metadata for one existing workspace resource. */
@@ -53,9 +53,9 @@ export interface IFileWriteResult {
 	readonly revision: string;
 }
 
-export type FileExistingTargetBehavior = "error" | "overwrite" | "ignore";
-export type FileMissingTargetBehavior = "error" | "ignore";
-export type FileDeleteMode = "fileOrEmptyDirectory" | "recursive";
+export type FileExistingTargetBehavior = 'error' | 'overwrite' | 'ignore';
+export type FileMissingTargetBehavior = 'error' | 'ignore';
+export type FileDeleteMode = 'fileOrEmptyDirectory' | 'recursive';
 
 export enum FileSystemProviderCapabilities {
 	None = 0,
@@ -157,7 +157,7 @@ export function hasFileReadStreamCapability(provider: IFileSystemProvider): prov
 export class FileRevisionConflictError extends Error {
 	constructor(readonly resource: URI) {
 		super(`File changed since it was read: ${resource.toString()}`);
-		this.name = "FileRevisionConflictError";
+		this.name = 'FileRevisionConflictError';
 	}
 }
 
@@ -302,16 +302,16 @@ export interface IFileSystemProviderPathIdentityChangeEvent {
 export class FileNotFoundError extends FileSystemProviderError {
 	constructor(readonly resource: URI) {
 		super(`File does not exist: ${resource.toString()}`, FileSystemProviderErrorCode.FileNotFound);
-		this.name = "FileNotFoundError";
+		this.name = 'FileNotFoundError';
 	}
 }
 
 export class FileOperationNotSupportedError extends FileSystemProviderError {
 	constructor(readonly resource: URI, readonly operation: string) {
 		super(`File operation '${operation}' is not supported for ${resource.toString()}`, FileSystemProviderErrorCode.Unavailable);
-		this.name = "FileOperationNotSupportedError";
+		this.name = 'FileOperationNotSupportedError';
 	}
 }
 
 export const IFileService =
-	createServiceIdentifier<IFileService>("fileService");
+	createServiceIdentifier<IFileService>('fileService');

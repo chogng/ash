@@ -45,6 +45,7 @@ export class BrowserView extends Disposable {
 	private passwordTimer: ReturnType<typeof setTimeout> | undefined;
 	private passwordChoiceTimer: ReturnType<typeof setTimeout> | undefined;
 	private passwordFillVersion = 0;
+	private canvas: IBrowserViewInfo['canvas'];
 
 	private cancelPasswordChoice(): void {
 		this.passwordFillVersion++;
@@ -412,6 +413,16 @@ export class BrowserView extends Disposable {
 	private readonly consoleLogs: string[] = [];
 	private consoleBytes = 0;
 	public getConsoleLogs(): string { return this.consoleLogs.join('\n'); }
+	public getAccessibilityTree(): Promise<string> {
+		return this.runOperation(this.signal, async () => {
+			using attachment = this.debugger.acquire();
+			const tree = await raceCancellationError(this.debugger.sendCommand('Accessibility.getFullAXTree'), this.signal, 'BrowserTargetUnavailable');
+			if (!isRecord(tree) || !Array.isArray(tree.nodes)) { throw new Error('BrowserAccessibilityUnavailable'); }
+			const text = JSON.stringify(tree, null, 2);
+			if (text.length > 512 * 1024) { throw new Error('BrowserAccessibilityTooLarge'); }
+			return text;
+		});
+	}
 	public captureScreenshot(options: IBrowserViewCaptureScreenshotOptions = {}): Promise<VSBuffer> {
 		return this.runOperation(this.signal, async () => {
 			this.broadcastPreload('hideUI');
@@ -634,6 +645,7 @@ export class BrowserView extends Disposable {
 		this.session = options.session;
 		this.history = options.history;
 		this.creation = options.creation;
+		this.canvas = options.creation.canvas;
 		this.remoteAuthority = options.remoteAuthority;
 		this.window = options.window;
 		this.url = options.initialUrl;
@@ -731,19 +743,22 @@ export class BrowserView extends Disposable {
 			if (this.creation.owner.type === 'agent') { return { action: 'deny' }; }
 			try {
 				this.emit({
-					type: "openRequested",
+					type: 'openRequested',
 					targetId: this.id,
 					url: normalizeBrowserViewUrl(url),
 				});
 			} catch {
 				// Invalid and privileged URLs are denied without entering renderer IPC.
 			}
-			return { action: "deny" };
+			return { action: 'deny' };
 		});
 	}
 
 	private listen(): void {
 		const contents = this.view.webContents;
+		// Closing the detached inspector is a Chromium event, not a renderer toggle.
+		this.on(contents, 'devtools-opened', () => this.emitState());
+		this.on(contents, 'devtools-closed', () => this.emitState());
 		this.on(contents, 'login', (event: ElectronEvent, details: Electron.AuthenticationResponseDetails, auth: Electron.AuthInfo, callback: (username?: string, password?: string) => void) => {
 			event.preventDefault();
 			let settled = false;
@@ -785,10 +800,10 @@ export class BrowserView extends Disposable {
 				this.emit({ type: 'selectionStopped', targetId: this.id });
 			}
 		});
-		this.on(contents, "did-start-loading", () => this.emitState());
-		this.on(contents, "did-stop-loading", () =>
+		this.on(contents, 'did-start-loading', () => this.emitState());
+		this.on(contents, 'did-stop-loading', () =>
 			this.emitState());
-		this.on(contents, "did-navigate", (
+		this.on(contents, 'did-navigate', (
 			_event: ElectronEvent,
 			url: string,
 		) => {
@@ -796,7 +811,7 @@ export class BrowserView extends Disposable {
 			this.recordVisit();
 			this.emitState();
 		});
-		this.on(contents, "did-navigate-in-page", (
+		this.on(contents, 'did-navigate-in-page', (
 			_event: ElectronEvent,
 			url: string,
 			isMainFrame: boolean,
@@ -806,7 +821,7 @@ export class BrowserView extends Disposable {
 			this.recordVisit();
 			this.emitState();
 		});
-		this.on(contents, "page-title-updated", () => {
+		this.on(contents, 'page-title-updated', () => {
 			this.historyItem?.update({ title: contents.getTitle() });
 			this.emitState();
 		});
@@ -817,7 +832,7 @@ export class BrowserView extends Disposable {
 		});
 		this.on(
 			contents,
-			"did-fail-load",
+			'did-fail-load',
 			(
 				_event: ElectronEvent,
 				errorCode: number,
@@ -828,7 +843,7 @@ export class BrowserView extends Disposable {
 				if (!isMainFrame) return;
 				this.errorDescription = errorDescription;
 				this.emit({
-					type: "loadFailed",
+					type: 'loadFailed',
 					targetId: this.id,
 					url: validatedURL,
 					errorCode,
@@ -837,32 +852,32 @@ export class BrowserView extends Disposable {
 				this.emitState();
 			},
 		);
-		this.on(contents, "render-process-gone", (
+		this.on(contents, 'render-process-gone', (
 			_event: ElectronEvent,
 			details: Electron.RenderProcessGoneDetails,
 		) => {
 			this.cancelAuthentication();
 			this.emit({
-				type: "renderProcessGone",
+				type: 'renderProcessGone',
 				targetId: this.id,
 				reason: details.reason,
 			});
 		});
-		this.on(contents, "will-navigate", (
+		this.on(contents, 'will-navigate', (
 			event: ElectronEvent,
 			url: string,
 		) =>
 			this.validateNavigation(event, url));
-		this.on(contents, "will-redirect", (
+		this.on(contents, 'will-redirect', (
 			event: ElectronEvent,
 			url: string,
 		) =>
 			this.validateNavigation(event, url));
-		this.on(contents, "will-attach-webview", (
+		this.on(contents, 'will-attach-webview', (
 			event: ElectronEvent,
 		) =>
 			event.preventDefault());
-		this.on(contents, "destroyed", () =>
+		this.on(contents, 'destroyed', () =>
 			this.dispose());
 	}
 
@@ -909,17 +924,24 @@ export class BrowserView extends Disposable {
 	}
 
 	public getInfo(): IBrowserViewInfo {
-		return { id: this.id, host: { windowId: this.window.id }, owner: this.creation.owner, session: this.creation.session, remoteAuthority: this.remoteAuthority, state: this.getState() };
+		return { id: this.id, host: { windowId: this.window.id }, owner: this.creation.owner, session: this.creation.session, remoteAuthority: this.remoteAuthority, state: this.getState(), ...(this.canvas ? { canvas: this.canvas } : {}) };
+	}
+
+	/** A successful explicit open may reveal a previously dismissed Canvas tab. */
+	public canvasOpened(canvas: NonNullable<IBrowserViewInfo['canvas']>): void {
+		this.canvas = canvas;
+		this.emit({ type: 'canvasOpened', targetId: this.id, info: this.getInfo() });
 	}
 
 	getState(): IBrowserViewState {
 		const contents = this.view.webContents;
 		if (contents.isDestroyed()) {
-			throw new Error("BrowserTargetUnavailable");
+			throw new Error('BrowserTargetUnavailable');
 		}
 		const history = contents.navigationHistory;
 		return {
 			targetId: this.id,
+			isDevToolsOpen: contents.isDevToolsOpened(),
 			permissions: this.session.permissions.snapshot(contents),
 			browserZoomIndex: browserZoomFactors.reduce<number>((best, factor, index) => Math.abs(factor - contents.getZoomFactor()) < Math.abs(browserZoomFactors[best]! - contents.getZoomFactor()) ? index : best, browserZoomDefaultIndex),
 			deviceEmulation: this.deviceEmulation,
@@ -962,7 +984,7 @@ async function waitForLoad(target: BrowserView, signal: AbortSignal): Promise<vo
 }
 
 function throwIfAborted(signal: AbortSignal): void {
-	if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new Error("BrowserRequestCancelled");
+	if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('BrowserRequestCancelled');
 }
 
 function validPreloadRect(value: unknown): value is IBrowserViewRect {

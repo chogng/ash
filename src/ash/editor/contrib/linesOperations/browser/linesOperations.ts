@@ -1,9 +1,9 @@
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
-import { Selection } from "../../../common/core/selection.js";
-import { Position } from "../../../common/core/position.js";
-import { Range } from "../../../common/core/range.js";
+import { Selection } from '../../../common/core/selection.js';
+import { Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
 
-import { type ITextModel } from "../../../common/model.js";
+import { type ITextModel } from '../../../common/model.js';
 import * as nls from '../../../../nls.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';

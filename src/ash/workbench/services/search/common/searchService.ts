@@ -8,11 +8,12 @@ import { URI } from '../../../../base/common/uri.js';
 import { USUAL_WORD_SEPARATORS } from '../../../../editor/common/core/wordHelper.js';
 import { IContentSearchService, type ContentSearchMatch, type IContentSearchQuery } from '../../../../platform/search/common/search.js';
 import { IWorkspaceContextService, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { AgentHostFileSearchProvider } from '../../agentHost/common/agentHostFileSearchProvider.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
 import { localize } from '../../../../nls.js';
+import { SearchProviderType } from './search.js';
 import type { IFileMatch, IFileQuery, ISearchComplete, ISearchProgressItem, ISearchService, ISearchResultProvider, ISearchRange, ITextQuery, ITextSearchMatch } from './search.js';
 import { editorMatchesToTextSearchResults } from './searchHelpers.js';
 
@@ -20,6 +21,7 @@ const DEFAULT_MAX_RESULTS = 2_000;
 
 /** Dispatches filename queries and owns content queries' model snapshots and result budgets. */
 export class SearchService extends Disposable implements ISearchService {
+	private readonly registeredFileProviders = new Map<string, ISearchResultProvider>();
 	private readonly fileSearchProvider: ISearchResultProvider;
 	private readonly textSearches = new Map<AbortController, IWorkspace>();
 
@@ -40,8 +42,43 @@ export class SearchService extends Disposable implements ISearchService {
 		}));
 	}
 
-	public fileSearch(query: IFileQuery, token: CancellationToken = CancellationToken.None): Promise<ISearchComplete> {
-		return this.fileSearchProvider.fileSearch(query, token);
+	public registerSearchResultProvider(scheme: string, type: SearchProviderType, provider: ISearchResultProvider): IDisposable {
+		this.assertNotDisposed();
+		if (type !== SearchProviderType.file || !/^[a-z][a-z0-9+.-]*$/.test(scheme) || this.registeredFileProviders.has(scheme)) { throw new TypeError(`Invalid or duplicate file search provider: ${scheme}`); }
+		this.registeredFileProviders.set(scheme, provider);
+		return toDisposable(() => { if (this.registeredFileProviders.get(scheme) === provider) { this.registeredFileProviders.delete(scheme); } });
+	}
+
+	public async fileSearch(query: IFileQuery, token: CancellationToken = CancellationToken.None): Promise<ISearchComplete> {
+		if (this.isDisposed || token.isCancellationRequested) { throw new CancellationError(); }
+		const groups = new Map<ISearchResultProvider, IFileQuery['folderQueries']>();
+		for (const folder of query.folderQueries) {
+			const provider = this.registeredFileProviders.get(folder.folder.scheme) ?? this.fileSearchProvider;
+			const folders = groups.get(provider) ?? [];
+			folders.push(folder);
+			groups.set(provider, folders);
+		}
+		if (groups.size < 2) {
+			return (groups.keys().next().value ?? this.fileSearchProvider).fileSearch(query, token);
+		}
+		const limit = query.maxResults ?? DEFAULT_MAX_RESULTS;
+		if (!Number.isSafeInteger(limit) || limit < 1 || limit > 5_000) { throw new RangeError(localize('search.invalidResultLimit', 'Search result limit must be between 1 and 5000.')); }
+		const complete: ISearchComplete = { results: [], messages: [], limitHit: false };
+		const seen = new Set<string>();
+		for (const [provider, folderQueries] of groups) {
+			const result = await provider.fileSearch({ ...query, folderQueries }, token);
+			if (this.isDisposed || token.isCancellationRequested) { throw new CancellationError(); }
+			complete.messages.push(...result.messages);
+			complete.limitHit ||= result.limitHit;
+			for (const file of result.results) {
+				const key = extUri.getComparisonKey(file.resource);
+				if (seen.has(key)) { continue; }
+				seen.add(key);
+				if (complete.results.length < limit) { complete.results.push(file); }
+				else { complete.limitHit = true; }
+			}
+		}
+		return complete;
 	}
 
 	public async textSearch(query: ITextQuery, token: CancellationToken = CancellationToken.None, onProgress?: (result: ISearchProgressItem) => void): Promise<ISearchComplete> {
@@ -169,6 +206,7 @@ export class SearchService extends Disposable implements ISearchService {
 	}
 
 	protected override disposeCore(): void {
+		this.registeredFileProviders.clear();
 		for (const controller of this.textSearches.keys()) { controller.abort(); }
 		this.textSearches.clear();
 		super.disposeCore();

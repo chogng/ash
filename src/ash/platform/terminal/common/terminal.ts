@@ -1,9 +1,9 @@
-import type { IDisposable } from "../../../base/common/lifecycle.js";
+import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { Event } from '../../../base/common/event.js';
 import type { OperatingSystem } from '../../../base/common/platform.js';
 import type { ThemeIcon } from '../../../base/common/themables.js';
 import type { URI } from '../../../base/common/uri.js';
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { ILogger } from '../../log/common/log.js';
 
 export const ITerminalLogService = createServiceIdentifier<ITerminalLogService>('terminalLogService');
@@ -28,7 +28,7 @@ export const enum TerminalSettingId {
 	EnableMultiLinePasteWarning = 'terminal.integrated.enableMultiLinePasteWarning',
 }
 
-export type TerminalProcessConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";
+export type TerminalProcessConnectionState = 'stopped' | 'starting' | 'initializing' | 'ready' | 'stopping' | 'crashed' | 'restarting';
 
 export interface ITerminalProcessProfile {
 	readonly profileId: string;
@@ -56,8 +56,8 @@ export const enum GeneralShellType {
 export type TerminalShellType = PosixShellType | WindowsShellType | GeneralShellType | undefined;
 
 export type TerminalProcessProfileSelection =
-	| { readonly type: "default"; }
-	| { readonly type: "profile"; readonly profileId: string; }
+	| { readonly type: 'default'; }
+	| { readonly type: 'profile'; readonly profileId: string; }
 	| { readonly type: 'custom'; readonly name: string; readonly path: readonly string[]; readonly args: TerminalArguments; };
 
 export interface ITerminalResolvedProfile {
@@ -123,7 +123,7 @@ export interface ITerminalProcessCreateOptions {
 }
 
 /** Describes whether a terminal process survives replacement of its App Server connection. */
-export type TerminalProcessConnectionPersistence = "connectionOwned" | "reconnectable";
+export type TerminalProcessConnectionPersistence = 'connectionOwned' | 'reconnectable';
 
 /** Identity and directory confirmed by the backend when the shell was spawned. */
 export interface ITerminalProcessReady {
@@ -208,7 +208,7 @@ export interface ITerminalProcessOutputChunk {
 	readonly shellIntegration?: TerminalShellIntegrationEvent;
 }
 
-export type TerminalProcessCommandStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
+export type TerminalProcessCommandStatus = 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled';
 
 export interface ITerminalProcessCommandStatusEvent {
 	readonly sequence: number;
@@ -295,12 +295,14 @@ export interface ITerminalProcessService {
 	onConnectionState(listener: (state: TerminalProcessConnectionState) => void): IDisposable;
 }
 
-export const ITerminalProcessService = createServiceIdentifier<ITerminalProcessService>("terminalProcessService");
+export const ITerminalProcessService = createServiceIdentifier<ITerminalProcessService>('terminalProcessService');
 
 export type WaitOnExitValue = boolean | string | ((exitCode: number) => string);
 
 /** Launch information shared with providers that supply their own terminal output. */
 export interface IShellLaunchConfig {
+	/** Presentation owner; task screens project their process lifecycle as one command. */
+	readonly type?: 'Task' | 'Local';
 	/** Extension mutations captured with this resolved launch, separate from inherited host values. */
 	environmentVariableCollections?: import('./environmentVariable.js').ISerializableEnvironmentVariableCollections;
 	/** False for snapshots containing transient extension values; never persist them. */

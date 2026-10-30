@@ -51,24 +51,24 @@ export function setupTerminalMenus(): void {
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 		command: {
 			id: TerminalCommandId.Focus,
-			title: localize2('terminal.title.focusActive', "Focus Active Terminal"),
-			tooltip: localize('terminal.title.focusActive', "Focus Active Terminal"),
+			title: localize2('terminal.title.focusActive', 'Focus Active Terminal'),
+			tooltip: localize('terminal.title.focusActive', 'Focus Active Terminal'),
 		},
 		alt: { id: TerminalCommandId.Split, title: localize2('terminal.group.splitMenu', 'Split Terminal'), icon: Lxicon.splitHorizontal },
 		when: TerminalActiveInstanceInTitleContext.isEqualTo(true),
-		group: "navigation",
+		group: 'navigation',
 		order: 0,
 	});
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 		command: {
 			id: TerminalCommandId.New,
-			title: localize2('terminal.title.new', "New Terminal"),
-			tooltip: localize('terminal.title.new', "New Terminal"),
+			title: localize2('terminal.title.new', 'New Terminal'),
+			tooltip: localize('terminal.title.new', 'New Terminal'),
 			icon: newTerminalIcon,
 			precondition: ContextKeyExpr.and(AppServerAvailableContext.isEqualTo(true), TerminalCreatingContext.isEqualTo(false)),
 		},
 		alt: { id: TerminalCommandId.Split, title: localize2('terminal.group.splitMenu', 'Split Terminal'), icon: Lxicon.splitHorizontal, precondition: ContextKeyExpr.and(TerminalHasActiveInstanceContext.isEqualTo(true), TerminalCreatingContext.isEqualTo(false), TerminalActiveInstanceStateContext.isEqualTo('running')) },
-		group: "navigation",
+		group: 'navigation',
 		order: 10,
 	});
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
@@ -84,35 +84,35 @@ export function setupTerminalMenus(): void {
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 		command: {
 			id: TerminalCommandId.Relaunch,
-			title: localize2('terminal.title.relaunch', "Relaunch Terminal"),
-			tooltip: localize('terminal.title.relaunch', "Relaunch Terminal"),
+			title: localize2('terminal.title.relaunch', 'Relaunch Terminal'),
+			tooltip: localize('terminal.title.relaunch', 'Relaunch Terminal'),
 			icon: Lxicon.history,
 		},
 		when: ContextKeyExpr.and(
 			TerminalHasActiveInstanceContext.isEqualTo(true),
 			ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'reconnecting'),
 		),
-		group: "1_terminal",
+		group: '1_terminal',
 		order: 20,
 	});
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 		command: {
 			id: TerminalCommandId.Kill,
-			title: localize2('terminal.title.kill', "Kill Terminal"),
-			tooltip: localize('terminal.title.kill', "Kill Terminal"),
+			title: localize2('terminal.title.kill', 'Kill Terminal'),
+			tooltip: localize('terminal.title.kill', 'Kill Terminal'),
 			icon: killTerminalIcon,
 		},
 		when: TerminalViewInlineActionsContext.isEqualTo(true),
-		group: "navigation",
+		group: 'navigation',
 		order: 30,
 	});
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 		command: {
 			id: TerminalCommandId.Clear,
-			title: localize2('terminal.title.clear', "Clear Terminal"),
-			tooltip: localize('terminal.title.clear', "Clear Terminal"),
+			title: localize2('terminal.title.clear', 'Clear Terminal'),
+			tooltip: localize('terminal.title.clear', 'Clear Terminal'),
 		},
-		group: "1_terminal",
+		group: '1_terminal',
 		order: 10,
 	});
 	MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {

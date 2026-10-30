@@ -1,5 +1,5 @@
-import { Position } from "./position.js";
-import { type IRange, Range } from "./range.js";
+import { Position } from './position.js';
+import { type IRange, Range } from './range.js';
 
 /** A single pre-transaction replacement consumed by the text model. */
 export interface ISingleEditOperation {
@@ -18,6 +18,6 @@ export class EditOperation {
 
 /** Selects how a compatible edit updates the latest grouped undo step. */
 export enum TextEditHistoryMergeMode {
-	Sequential = "sequential",
-	ReplacePrevious = "replacePrevious",
+	Sequential = 'sequential',
+	ReplacePrevious = 'replacePrevious',
 }

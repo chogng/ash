@@ -10,33 +10,33 @@ import { Schemas } from '../../base/common/network.js';
 import { BrowserURLService } from '../services/url/browser/urlService.js';
 import type { IStartWorkbenchOptions } from './workbench.js';
 import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
-import { addDisposableListener } from "../../base/browser/dom.js";
-import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
+import { addDisposableListener } from '../../base/browser/dom.js';
+import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import {
 	DisposableStore,
 	toDisposable,
 	type IDisposable,
-} from "../../base/common/lifecycle.js";
+} from '../../base/common/lifecycle.js';
 import {
 	createDisconnectedRendererApi,
-} from "./rendererApi.js";
+} from './rendererApi.js';
 import {
 	type IEmptyWorkspaceIdentifier,
 	workspaceFromIdentifier,
-} from "../../platform/workspace/common/workspace.js";
+} from '../../platform/workspace/common/workspace.js';
 import {
 	BrowserContextMenuService,
-} from "../../platform/contextview/browser/contextMenuService.js";
+} from '../../platform/contextview/browser/contextMenuService.js';
 import {
 	createBrowserTitlebarPart,
 	BrowserTitleService,
-} from "./parts/titlebar/titlebarPart.js";
+} from './parts/titlebar/titlebarPart.js';
 import type {
 	IWebWorkbench,
 	IWebWorkbenchConstructionOptions,
 	IWebWorkbenchHost,
-} from "./web.api.js";
-import { startWorkbench } from "./workbench.js";
+} from './web.api.js';
+import { startWorkbench } from './workbench.js';
 import { BrowserStorageService } from '../services/storage/browser/storageService.js';
 import { LogService } from '../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../platform/log/common/consoleLogSink.js';
@@ -168,12 +168,12 @@ export async function startWebWorkbench(
 			defaultLayout: host?.defaultLayout,
 			workspace: host?.workspace,
 			container: host?.container ??
-				document.querySelector<HTMLElement>("#app") ??
+				document.querySelector<HTMLElement>('#app') ??
 				document.body,
 		});
 		workbench.add(instance);
-		workbench.add(addDisposableListener(window, "pagehide", () => {
-			void instance.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => workbench.dispose());
+		workbench.add(addDisposableListener(window, 'pagehide', () => {
+			void instance.shutdown('pageHide').catch(error => console.error('Failed to shut down Workbench', error)).finally(() => workbench.dispose());
 		}, { once: true }));
 		await instance.whenRestored;
 		return workbench;
@@ -187,13 +187,13 @@ function readWebWorkbenchHost(): IWebWorkbenchHost | undefined {
 	const host = globalThis.ashWebWorkbenchHost;
 	if (host === undefined) return undefined;
 	if (
-		typeof host !== "object" ||
+		typeof host !== 'object' ||
 		host === null ||
-		typeof host.api !== "object" ||
+		typeof host.api !== 'object' ||
 		host.api === null
 	) {
 		throw new TypeError(
-			"globalThis.ashWebWorkbenchHost must provide a renderer API",
+			'globalThis.ashWebWorkbenchHost must provide a renderer API',
 		);
 	}
 	return host;

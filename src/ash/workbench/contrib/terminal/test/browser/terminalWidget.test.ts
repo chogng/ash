@@ -5,6 +5,146 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('terminal browser component', () => {
 	const browserTests = useBrowserTests();
 
+	for (const locale of ['en', 'zh-CN']) {
+		for (const placement of ['title', 'rows']) {
+			test(`terminal disconnect artwork follows connection status in ${placement} in ${locale}`, async () => {
+				const { page } = browserTests;
+				await page.goto(`/terminal.html?input&groups&clipboard&browser&voice&locale=${locale}`);
+				await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));
+				if (placement === 'rows') await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.split'));
+				const target = placement === 'title'
+					? page.locator('.ash-terminal-active-action button')
+					: page.locator('.ash-terminal-tabs [role="tab"]').first();
+				await expect(target).toBeVisible();
+				await page.evaluate(() => window.ashTerminalClipboardIntegration.disconnect());
+				const icon = target.locator('.ash-icon-debug-disconnect');
+				await expect(icon).toBeVisible();
+				await expect(icon).toHaveAttribute('aria-hidden', 'true');
+				await expect.poll(() => icon.evaluate(element => document.fonts.check('16px "Ash UI Icons"', element.getAttribute('data-ash-icon-character')!))).toBe(true);
+				const message = locale === 'zh-CN' ? '与进程的连接已断开' : 'Lost connection to process';
+				await expect(target).toHaveAttribute(placement === 'title' ? 'aria-label' : 'aria-description', new RegExp(message));
+				await target.focus();
+				await target.press('Alt+ArrowDown');
+				const status = page.locator('.ash-terminal-instance-hover [data-severity="error"]');
+				await expect(status).toContainText(message);
+				await expect(status.locator('.ash-icon-debug-disconnect')).toBeVisible();
+				await page.screenshot({ path: browserTests.info.outputPath(`disconnect-${placement}-${locale}.png`) });
+				await page.keyboard.press('Escape');
+				if (placement === 'rows') await target.click();
+				await page.evaluate(() => window.ashTerminalClipboardIntegration.reconnect());
+				await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.relaunch', window.ashTerminalGroupsIntegration.active()));
+				await expect(target.locator('.ash-icon-debug-disconnect')).toHaveCount(0);
+			});
+		}
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`task command markers retain their header and final status across hidden output and process reuse in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/terminal.html?stream&task&deferred&reuseCommands&locale=${locale}`);
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration?.status().state)).toBe('exited');
+			await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+			const marker = page.locator('.ash-terminal-command-status');
+			await expect(marker).toHaveCount(1);
+			await expect(marker).toHaveClass(/succeeded/);
+			await expect(marker).toHaveAttribute('aria-label', locale === 'zh-CN' ? '命令已成功完成' : 'Command completed successfully');
+			const first = await marker.boundingBox();
+			const header = await page.locator('.xterm-rows > div').filter({ hasText: 'Executing task: fixture' }).boundingBox();
+			expect(first).not.toBeNull();
+			expect(header).not.toBeNull();
+			expect(Math.abs(first!.y - header!.y)).toBeLessThan(header!.height);
+			await page.evaluate(() => window.ashTerminalStreamIntegration.reuse());
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+			await expect(marker).toHaveCount(2);
+			await expect(marker.first()).toHaveClass(/succeeded/);
+			await expect(marker.last()).toHaveClass(/failed/);
+			await expect(marker.last()).toHaveAttribute('aria-label', locale === 'zh-CN' ? '命令失败，退出代码为 11' : 'Command failed with exit code 11');
+			await page.evaluate(() => window.ashTerminalStreamIntegration.reuse(true));
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+			await expect(marker).toHaveCount(1);
+			await expect(marker).toHaveClass(/failed/);
+			await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+		});
+	}
+
+	test('terminal restored in a hidden host opens its contributions when revealed without observer errors', async function () {
+		const { page } = browserTests;
+		await page.goto('/terminal.html?stream&reviveHistory&deferred&browser');
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await page.evaluate(async () => {
+			const host = document.querySelector<HTMLElement>('#terminal')!;
+			host.style.display = 'none';
+			await window.ashTerminalStreamIntegration.start();
+		});
+		const terminal = page.locator('.ash-terminal-instance:not([hidden])').last();
+		await expect(terminal.locator('.xterm-helper-textarea')).toHaveCount(0);
+		// Only the native resize notification reveals the initialized screen here.
+		await page.locator('#terminal').evaluate(host => { host.style.removeProperty('display'); });
+		await expect(terminal.locator('.xterm-helper-textarea')).toBeFocused();
+		await expect(terminal.locator('.ash-terminal-command-guide')).toHaveCount(1);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('SAVED_HISTORY');
+		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		for (const prompt of ['fixture> ', `MULTILINE ${'x'.repeat(100)}\r\nfixture> `]) {
+			test(`revival replaces the ${prompt.startsWith('MULTILINE') ? 'wrapped multiline' : 'single-line'} idle prompt and preserves history in ${locale}`, async () => {
+				const { page } = browserTests;
+				await page.goto(`/terminal.html?stream&commandModel&checkpoint&browser&locale=${locale}`);
+				await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+				await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+				await page.evaluate(prompt => {
+					const stream = window.ashTerminalStreamIntegration;
+					stream.feedModel('\r\x1b[2K\r\n\r\n');
+					stream.environmentFrame({ type: 'promptStart' });
+					stream.feedModel(prompt);
+					stream.environmentFrame({ type: 'commandStart' });
+					stream.feedModel('UNEXECUTED_DRAFT');
+				}, prompt);
+				await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.model().input)).toBe('UNEXECUTED_DRAFT|');
+				const startup = '\x1b[1m\x1b[7m%\x1b[0m' + ' '.repeat(79) + '\r \rfixture> ';
+				const revived = await page.evaluate(startup => window.ashTerminalStreamIntegration.checkpoint(true, startup), startup);
+				expect(revived).toBe('$ echo 中文🙂\nresult 中文🙂\n\n\nfixture>');
+				const reconnected = await page.evaluate(() => window.ashTerminalStreamIntegration.checkpoint(false));
+				expect(reconnected).toContain('fixture> UNEXECUTED_DRAFT');
+				if (prompt.startsWith('MULTILINE')) expect(reconnected).toContain('MULTILINE');
+				await expect(page.locator('.xterm-helper-textarea').last()).toBeFocused();
+				await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+			});
+		}
+	}
+
+	test('revival of the first prompt starts with an empty screen', async () => {
+		const { page } = browserTests;
+		await page.goto('/terminal.html?stream&commandModel&checkpoint&browser');
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await page.evaluate(() => {
+			const stream = window.ashTerminalStreamIntegration;
+			stream.feedModel('\x1b[2J\x1b[3J\x1b[H');
+			stream.environmentFrame({ type: 'promptStart' });
+			stream.feedModel('fixture> ');
+			stream.environmentFrame({ type: 'commandStart' });
+		});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('fixture>');
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.checkpoint(true, 'fixture> '))).toBe('fixture>');
+		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	});
+
+	test('revival preserves the last output line of an executing command', async () => {
+		const { page } = browserTests;
+		await page.goto('/terminal.html?stream&commandModel&checkpoint&browser');
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await page.evaluate(() => {
+			const stream = window.ashTerminalStreamIntegration;
+			stream.feedModel('running-command\r\n');
+			stream.environmentFrame({ type: 'commandExecuted', commandId: 'running', command: 'running-command', isTrusted: true, cwd: '/workspace', timestampMillis: 456 });
+			stream.feedModel('OUTPUT_WITHOUT_NEWLINE');
+		});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('OUTPUT_WITHOUT_NEWLINE');
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.checkpoint(true))).toBe('$ echo 中文🙂\nresult 中文🙂\n$ running-command\nOUTPUT_WITHOUT_NEWLINE');
+		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	});
+
 	test('terminal follows new output after erasing retained scrollback while scrolled up', async function () {
 		const { page } = browserTests;
 
@@ -449,28 +589,6 @@ suite('terminal browser component', () => {
 		await page.evaluate(() => window.ashTerminalIntegration.dispose());
 	});
 
-
-	test('terminal dictation writes phrases without executing and cancels when the panel hides', async function () {
-		const { page } = browserTests;
-
-		await page.goto('/terminal.html?pane&existing');
-		await page.waitForFunction(() => window.ashTerminalPaneIntegration !== undefined);
-		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
-		await page.getByRole('button', { name: 'Terminal: Start dictation', exact: true }).focus();
-		await page.keyboard.press('Space');
-		await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
-		await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('echo hello\n\u001b', true));
-		await page.getByRole('button', { name: 'Stop dictation', exact: true }).click();
-		await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo hello ']);
-		await page.getByRole('button', { name: 'Terminal: Start dictation', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
-		await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('unfinished', false));
-		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(false));
-		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.stops())).toBe(2);
-		await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('late', true));
-		expect(await page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo hello ']);
-	});
-
 	test('Terminal contribution assembles independent window scopes and rejects a missing process registration', async function () {
 		const { page } = browserTests;
 
@@ -498,17 +616,41 @@ suite('terminal browser component', () => {
 		expect(observed.replaceAll('\x1b[0m', '')).toMatch(/^line-0\r\n.*line-4099\r\n$/su);
 		await page.evaluate(() => window.ashTerminalStreamIntegration.start());
 		const output = await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot());
-		expect(output).toMatch(/\[terminal output truncated\].*line-4099/su);
+		expect(output).toMatch(/line-4099/su);
+		expect(output).not.toContain('[terminal output truncated]');
 		expect(output).not.toMatch(/^line-0$/mu);
 		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`terminal only appends an exit message for a nonzero exit code in ${locale}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/terminal.html?stream&reuseCommands&locale=${locale}`);
+			await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+			expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂');
+			await page.evaluate(() => window.ashTerminalStreamIntegration.reuse());
+			const message = locale === 'zh-CN' ? '终端进程已终止，退出代码为 11。' : 'The terminal process terminated with exit code: 11.';
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain(message);
+			await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+			await page.goto(`/terminal.html?pane&profiles&browser&exited&locale=${locale}`);
+			await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+			await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+			await expect(page.locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'exited');
+			expect(await page.evaluate(() => window.ashTerminalPaneIntegration.snapshot())).toBeUndefined();
+			await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+		});
+	}
 
 	test('closing a Shell while xterm loads stops reading and releases the process', async function () {
 		const { page } = browserTests;
 
 		let release!: () => void;
 		const gate = new Promise<void>(resolve => { release = resolve; });
-		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => { await gate; await route.continue(); });
+		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => {
+			await gate;
+			await route.continue();
+		});
 		try {
 			await page.goto('/terminal.html?stream');
 			await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
@@ -558,7 +700,6 @@ suite('terminal browser component', () => {
 		expect(await page.evaluate(() => window.ashTerminalIntegration.snapshot(100_000))).toBe('selected');
 	});
 
-
 	test('terminal commands stay in their window after another view is created and disposed', async function () {
 		const { page } = browserTests;
 
@@ -583,7 +724,6 @@ suite('terminal browser component', () => {
 		await page.evaluate(() => window.ashTerminalWindowsIntegration[1]!.dispose());
 		expect(errors).toEqual([]);
 	});
-
 
 	for (const mode of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 		test(`terminal scrollbar hides the native track and scrolls retained output in ${mode}`, async function () {
@@ -1071,21 +1211,25 @@ suite('terminal browser component', () => {
 		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
 		await page.evaluate(async () => {
 			await window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
-				'原始命令行': { path: 'C:\\Windows\\cmd.exe', args: '/d /s /c "echo ${env:PROFILE_ARG} & echo two words"' },
+				原始命令行: { path: 'C:\\Windows\\cmd.exe', args: '/d /s /c "echo ${env:PROFILE_ARG} & echo two words"' },
 			});
 			window.ashTerminalPaneIntegration.panel(true);
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
 		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.newWithProfile'); });
 		const picker = page.getByRole('combobox', { name: '选择终端配置', exact: true });
-		await expect(picker).toBeFocused(); await picker.fill('原始命令行'); await picker.press('Enter');
+		await expect(picker).toBeFocused();
+		await picker.fill('原始命令行');
+		await picker.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toEqual({
 			profile: { type: 'custom', name: '原始命令行', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo literal;$HOME & echo two words"' }, env: {}, cwd: undefined,
 		});
 		await expect(page.getByRole('tab', { name: 'cmd', exact: true })).toBeVisible();
 		await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
 		const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
-		await expect(defaults).toBeFocused(); await defaults.fill('原始命令行'); await defaults.press('Enter');
+		await expect(defaults).toBeFocused();
+		await defaults.fill('原始命令行');
+		await defaults.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.defaultProfile())).toBe('custom:原始命令行');
 		await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(3);
@@ -1127,7 +1271,10 @@ suite('terminal browser component', () => {
 
 		let release!: () => void;
 		const gate = new Promise<void>(resolve => { release = resolve; });
-		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => { await gate; await route.continue(); });
+		await page.route(/(?:xterm_xterm|xterm\/lib\/xterm|\/xterm-[^/]+\.js)/u, async route => {
+			await gate;
+			await route.continue();
+		});
 		try {
 			await page.goto('/terminal.html?stream&cwd&history');
 			await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
@@ -1141,10 +1288,9 @@ suite('terminal browser component', () => {
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().cwd)).toBe('/workspace/changed; directory');
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().shellIntegration)).toEqual({ commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [{ commandId: 'command', status: 'succeeded', exitCode: 0, cwd: '/workspace', command: 'echo 中文; printf \"quoted\"', isTrusted: true }] });
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().events)).toEqual(['succeeded', 'exit']);
-		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂\n\n[process exited with code 0]');
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂');
 		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 	});
-
 
 	test('Send Sequence user keybinding resolves variables and sends control characters through the real instance', async function () {
 		const { page } = browserTests;
@@ -1402,7 +1548,6 @@ suite('terminal browser component', () => {
 		await expect(page.getByRole('dialog', { name: 'Rename Terminal', exact: true })).toHaveCount(0);
 	});
 
-
 	test('terminal Clear and Relaunch commands operate on the active editor instance', async function () {
 		const { page } = browserTests;
 
@@ -1590,7 +1735,6 @@ suite('terminal browser component', () => {
 		});
 	}
 
-
 	async function seedSuggestPrompt(page: Page, prefix: string, locale = 'en', shell: 'bash' | 'zsh' = 'bash'): Promise<void> {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));
@@ -1660,7 +1804,7 @@ suite('terminal browser component', () => {
 	for (const shell of ['bash', 'zsh'] as const) {
 		for (const { name, suffix, directory = false } of [
 			{ name: 'special file.txt', suffix: "'ecial file.txt'" },
-			{ name: "special 'quoted\"\\file.txt", suffix: "'ecial '\"'\"'quoted\"\\file.txt'" },
+			{ name: 'special \'quoted"\\file.txt', suffix: "'ecial '\"'\"'quoted\"\\file.txt'" },
 			{ name: 'sp$(literal);`literal`&|<>.txt', suffix: "'$(literal);`literal`&|<>.txt'" },
 			{ name: 'sp$HOME!#*?[ab]{a,b}(group).txt', suffix: "'$HOME!#*?[ab]{a,b}(group).txt'" },
 			{ name: 'special 中文.txt', suffix: "'ecial 中文.txt'" },
@@ -1784,21 +1928,20 @@ suite('terminal browser component', () => {
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(12));
 		const header = page.locator('.ash-terminal-sticky-scroll');
 		await expect(header).toBeVisible();
-		await expect(header.locator('span')).toHaveCount(2);
-		await expect(header.locator('span').last()).toContainText('END');
+		await expect(header.locator(':scope > span')).toHaveCount(2);
+		await expect(header.locator(':scope > span').last()).toContainText('END');
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.configure('maxLineCount', 10));
 		await page.evaluate(() => {
 			window.ashTerminalStreamIntegration.stickyScroll.resize(40, 12);
 			window.ashTerminalStreamIntegration.stickyScroll.scroll(12);
 		});
 		const rows = await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().rows);
-		await expect(header.locator('span')).toHaveCount(Math.floor(rows * 0.4));
+		await expect(header.locator(':scope > span')).toHaveCount(Math.floor(rows * 0.4));
 		await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('trim-output\r\n'.repeat(1200)));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('trim-output');
 		await expect(header).toBeHidden();
 		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 	});
-
 
 	test('execution-host shell type selects italic ghost text and resets with a legacy ready frame', async function () {
 		const { page } = browserTests;

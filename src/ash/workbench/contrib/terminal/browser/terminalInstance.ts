@@ -23,6 +23,7 @@ import {
 	type ITerminalProcessCreateOptions,
 	type TerminalProcessConnectionPersistence,
 	type TerminalProcessConnectionState,
+	type TerminalShellIntegrationEvent,
 } from '../../../../platform/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
@@ -34,8 +35,10 @@ import type { AgentHostTerminalService } from './agentHostTerminalService.js';
 import { XtermTerminal } from './xterm/xtermTerminal.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { TerminalStatus, TerminalStatusList } from './terminalStatusList.js';
 import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import { PromptInputState } from '../../../../platform/terminal/common/capabilities/commandDetection/promptInputModel.js';
 import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { TerminalRecorder } from '../../../../platform/terminal/common/terminalRecorder.js';
 import { NaiveCwdDetectionCapability } from '../../../../platform/terminal/common/capabilities/naiveCwdDetectionCapability.js';
@@ -105,7 +108,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}),
 	}));
 	private readonly _onDidChangeState = this._register(new Emitter<TerminalInstanceState>());
-	private _state: TerminalInstanceState = "running";
+	private _state: TerminalInstanceState = 'running';
 	private _exitCode: number | undefined;
 	private closed = false;
 	private frozen = false;
@@ -137,7 +140,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		onClosed: () => void,
 		private readonly onTitleChanged: () => void,
 		private custom: CustomTerminalProcessOptions | undefined,
-		private launch: (Pick<ITerminalProcessCreateOptions, 'env' | 'strictEnv' | 'cwd' | 'execution' | 'profile'> & Pick<IShellLaunchConfig, 'executable' | 'args' | 'environmentVariableCollections' | 'environmentVariableCollectionsPersistable'>) | undefined,
+		private launch: (Pick<ITerminalProcessCreateOptions, 'env' | 'strictEnv' | 'cwd' | 'execution' | 'profile'> & Pick<IShellLaunchConfig, 'type' | 'executable' | 'args' | 'environmentVariableCollections' | 'environmentVariableCollectionsPersistable'>) | undefined,
 		private initialText: IShellLaunchConfig['initialText'],
 		private waitOnExit: IShellLaunchConfig['waitOnExit'],
 		private dimensions: ITerminalDimensions,
@@ -306,9 +309,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		if (this.customProcess) {
 			const process = this.customProcess;
-			void process.start().catch(() => {
+			void process.start().catch(error => {
 				if (this.customProcess === process && !this.closed) {
-					this.setState('error');
+					this.handleProcessError(error);
 				}
 			});
 			return;
@@ -416,7 +419,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}));
 		const recorder = this.screenRecorder!;
 		const replay = recorder.generateReplayEventSync();
-		const truncated = recorder.isTruncated;
 		this.screenRecorder = undefined;
 		for (const { id, ctor } of TerminalExtensionsRegistry.getTerminalContributions()) {
 			this.contributions.set(id, screenServices.createInstance(ctor, { instance: this }));
@@ -431,7 +433,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				screen.raw.write('\r\n'.repeat(screen.raw.rows));
 				this.preserveRevivedHistory(screen);
 			}
-			if (truncated) screen.raw.write(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`);
 			for (const entry of restored ? [] : replay.events) {
 				if (entry.cols > 0 && entry.rows > 0) screen.raw.resize(entry.cols, entry.rows);
 				await new Promise<void>(resolve => screen.write(entry.data, resolve));
@@ -479,7 +480,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		});
 		// Loading can start in a background instance without a View awaiting it.
 		void this.screenInitialization.catch(error => {
-			if (!isCancellationError(error) && !this.closed) { this.setState('error'); }
+			if (!isCancellationError(error) && !this.closed) { this.handleProcessError(error); }
 		});
 	}
 
@@ -596,12 +597,17 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		handlers.add(toDisposable(() => cursor.dispose()));
 	}
 
-	private writeScreenData(data: string): void {
+	private writeScreenData(data: string, shellIntegration?: TerminalShellIntegrationEvent): void {
 		if (this.screen) {
-			void this.screenInitialization?.then(screen => screen?.write(data)).catch(onUnexpectedError);
+			void this.screenInitialization?.then(screen => {
+				if (!screen) return;
+				screen.write(data, () => {
+					if (shellIntegration && !screen.isDisposed) screen.handleShellIntegration(shellIntegration);
+				});
+			}).catch(onUnexpectedError);
 			return;
 		}
-		this.screenRecorder?.handleData(data);
+		this.screenRecorder?.handleData(data, shellIntegration);
 	}
 
 	private createScreenRecorder(): TerminalRecorder {
@@ -609,8 +615,19 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	private writeInitialText(): void {
-		if (this.initialText !== undefined) {
-			const text = typeof this.initialText === 'string' ? `${this.initialText}\r\n` : this.initialText.text + (this.initialText.trailingNewLine ? '\r\n' : '');
+		let text = this.initialText === undefined ? '' : typeof this.initialText === 'string' ? `${this.initialText}\r\n` : this.initialText.text + (this.initialText.trailingNewLine ? '\r\n' : '');
+		if (this.launch?.type === 'Task') {
+			// These are screen boundaries for the launched task, never bytes parsed
+			// from its output or entries in the backend's Shell command history.
+			this.writeScreenData('', { type: 'processReady', isWindowsPty: !this.custom && this.processes.operatingSystem === OperatingSystem.Windows });
+			if (text.startsWith('\r\n')) {
+				this.writeScreenData('\r\n');
+				text = text.slice(2);
+			}
+			this.writeScreenData('', { type: 'commandStart' });
+			this.writeScreenData(text);
+			this.writeScreenData('', { type: 'commandExecuted', commandId: generateUuid(), command: undefined, isTrusted: false, cwd: this.launch.cwd, timestampMillis: Date.now() });
+		} else if (text) {
 			this.writeScreenData(text);
 		}
 	}
@@ -619,18 +636,21 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.closed || this.isDisposed) return;
 		const screen = this.screen;
 		const generation = this.pollGeneration;
+		// Task presentation already begins before its echo. A native readiness
+		// frame must not reset that marker after the command has been displayed.
+		const shellIntegration = this.launch?.type === 'Task' && event.shellIntegration?.type === 'processReady' ? undefined : event.shellIntegration;
 		if (screen && event.trackCommit) {
 			event.writePromise = new Promise((resolve, reject) => {
 				void this.screenInitialization!.then(ready => {
 					if (!ready || this.closed || this.isDisposed) throw new CancellationError();
 					ready.write(event.data, () => {
-						if (event.shellIntegration && generation === this.pollGeneration) ready.handleShellIntegration(event.shellIntegration);
+						if (shellIntegration && generation === this.pollGeneration) ready.handleShellIntegration(shellIntegration);
 						resolve();
 					});
 				}).catch(reject);
 			});
 		} else if (!screen) {
-			this.screenRecorder?.handleData(event.data, event.shellIntegration);
+			this.screenRecorder?.handleData(event.data, shellIntegration);
 		} else {
 			this.writeScreenData(event.data);
 		}
@@ -638,12 +658,15 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	private handleProcessExit(code: number | undefined): void {
+		if (this.launch?.type === 'Task') {
+			this.writeScreenData('', { type: 'commandFinished', exitCode: code, durationMillis: undefined });
+		}
 		this._exitCode = code;
 		this.setState('exited');
-		const message = code === undefined
-			? localize('terminal.processExitedUnknown', '[process exited with unknown code]')
-			: localize('terminal.processExited', '[process exited with code {0}]', code);
-		this.writeScreenData(`\r\n${message}\r\n`);
+		if (code !== undefined && code !== 0) {
+			const message = localize('terminated.exitCodeOnly', 'The terminal process terminated with exit code: {0}.', code);
+			this.writeScreenData(`\r\n${message}\r\n`);
+		}
 		try {
 			const waitMessage = typeof this.waitOnExit === 'function' && code !== undefined ? this.waitOnExit(code) : typeof this.waitOnExit === 'string' ? this.waitOnExit : undefined;
 			if (waitMessage) this.writeScreenData(`${waitMessage}\r\n`);
@@ -674,7 +697,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		return this.relaunchTask;
 	}
 
-	async serializeState(): Promise<ITerminalSerializedState> {
+	async serializeState(options?: { readonly revive?: boolean; }): Promise<ITerminalSerializedState> {
 		const child = this.shellProcessManager;
 		if (!child || this.closed || this.relaunchTask || this.connectionPersistence !== 'reconnectable') throw new Error(localize('terminal.reload.unsupported', 'This terminal cannot preserve its process across a window reload.'));
 		const checkpoint = await child.serializeState();
@@ -683,7 +706,17 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (!screen) throw new Error(localize('terminal.reload.screenUnavailable', 'The terminal screen is unavailable for recovery.'));
 		this.frozen = true;
 		screen.raw.options.disableStdin = true;
-		const vt = await screen.getRangeAsVT();
+		const detection = options?.revive ? screen.capabilities.get(TerminalCapability.CommandDetection) : undefined;
+		const prompt = options?.revive && screen.raw.buffer.active.type === 'normal' && detection?.promptInputModel.state === PromptInputState.Input
+			? detection.currentCommand?.promptStartMarker : undefined;
+		const omitPrompt = prompt && !prompt.isDisposed;
+		// Reconnecting the same PTY needs its complete screen. A new shell instead
+		// prints its own prompt; retain only the output before the old input region,
+		// including when that prompt wraps or spans multiple lines in scrollback.
+		const history = await screen.getRangeAsVT(undefined, omitPrompt ? prompt : undefined, !!omitPrompt);
+		// Ranged serialization omits trailing blank rows on an unscrolled screen.
+		// Restore that spacing before the new shell writes at the old prompt boundary.
+		const vt = omitPrompt ? history + (screen.raw.buffer.normal.length <= screen.raw.rows ? `\x1b[${prompt.line + 1};1H` : '\r\n') : history;
 		const cwd = child.cwd ?? await child.getCwd().catch(() => this.initialCwd);
 		if (this.closed) throw new CancellationError();
 		return {
@@ -744,21 +777,20 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		// Errors require an explicit relaunch. Later host transitions must not
 		// resume failed operations or repeatedly append recovery failures.
-		if (this.closed || this._state === "exited" || this._state === "disconnected" || this._state === "error") return;
+		if (this.closed || this._state === 'exited' || this._state === 'disconnected' || this._state === 'error') return;
 		this.pollGeneration += 1;
 		this.shellProcessManager?.stop();
-		if (this.connectionPersistence === "reconnectable") {
-			this.setState("reconnecting");
+		if (this.connectionPersistence === 'reconnectable') {
+			this.setState('reconnecting');
 			return;
 		}
-		this.setState("disconnected");
-		this.handleProcessData({ data: `\r\n${localize('terminal.connectionLost', '[terminal connection lost; process was not preserved]')}\r\n`, trackCommit: false });
+		this.setState('disconnected');
 	}
 
 	restoreConnection(): void {
-		if (this.closed || this._state !== "reconnecting") return;
+		if (this.closed || this._state !== 'reconnecting') return;
 		const generation = ++this.pollGeneration;
-		void this.poll(generation, "reconnecting");
+		void this.poll(generation, 'reconnecting');
 	}
 
 	public relaunch(dimensions: ITerminalDimensions, replacement?: IShellLaunchConfig): Promise<void> {
@@ -781,8 +813,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this._state === 'running') this.setState('disconnected');
 		if (replacement) {
 			// Old reads must stop before release yields; the retained screen belongs to the new process next.
-			try { await this.closeProcess(); }
-			catch (error) { this.setState('error'); throw error; }
+			try {
+				await this.closeProcess();
+			}
+			catch (error) {
+				this.handleProcessError(error);
+				throw error;
+			}
 		} else {
 			await this.closeProcess().catch(() => { });
 		}
@@ -804,6 +841,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 					dimensions, onTitleChanged: this.onTitleChanged,
 				} : undefined;
 				this.launch = Object.freeze({
+					type: replacement.type,
 					profile: replacement.executable ? Object.freeze({
 						type: 'custom' as const, name: replacement.name ?? this._profile.title,
 						path: Object.freeze(typeof replacement.executable === 'string' ? [replacement.executable] : [...replacement.executable]),
@@ -820,13 +858,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				this._title = replacement.name ?? this._profile.title;
 				this.onTitleChanged();
 			}
-			this.writeInitialText();
 			if (this.custom) {
 				this.customLifetime.clear();
 				this.customProcess = undefined;
 				this.processCloseTask = undefined;
 				this._exitCode = undefined;
 				this.processReady = { pid: -1, cwd: replacement?.cwd ?? this.processReady.cwd };
+				this.writeInitialText();
 				this.custom.dimensions = dimensions;
 				this.createCustomProcess(this.custom);
 				this.setState('running');
@@ -860,11 +898,11 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.shellProcessManager = child;
 			this.createShellProcessManager();
 			this._exitCode = undefined;
-			if (!replacement) this.handleProcessData({ data: `\r\n${localize('terminal.relaunched', '[terminal relaunched]')}\r\n`, trackCommit: false });
-			this.setState("running");
+			this.writeInitialText();
+			this.setState('running');
 			if (!replacement?.deferStart) this.start();
 		} catch (error) {
-			this.setState("error");
+			this.handleProcessError(error);
 			throw error;
 		}
 	}
@@ -887,17 +925,15 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		lifetime.add(manager.onProcessData(event => this.handleProcessData(event)));
 		lifetime.add(manager.onDidChangeCommandStatus(event => this._onDidChangeCommandStatus.fire(event)));
 		lifetime.add(manager.onDidChangeMetadata(() => this.refreshCapabilities()));
-		lifetime.add(manager.onOutputGap(() => {
-			this.handleProcessData({ data: `\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`, trackCommit: false });
-		}));
 		lifetime.add(manager.onPtyReconnect(() => {
-			this.setState("running");
+			this.setState('running');
 		}));
 		lifetime.add(manager.onProcessExit(code => this.handleProcessExit(code)));
 		this.refreshCapabilities();
 	}
 
 	private handleProcessError(error: unknown): void {
+		if (this.closed || this.isDisposed) return;
 		this.statusList.add({
 			id: 'process-error', severity: Severity.Error,
 			tooltip: localize('terminal.status.processError', 'Terminal process failed: {0}', error instanceof Error ? error.message : String(error)),
@@ -960,18 +996,15 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 	}
 
-	private async poll(generation: number, initialState: "running" | "reconnecting" = "running", resumeDimensions?: ITerminalDimensions): Promise<void> {
+	private async poll(generation: number, initialState: 'running' | 'reconnecting' = 'running', resumeDimensions?: ITerminalDimensions): Promise<void> {
 		try {
 			if (resumeDimensions) {
 				await this.shellProcessManager!.resize(resumeDimensions.cols, resumeDimensions.rows);
 				if (this.closed || this.isDisposed || generation !== this.pollGeneration) return;
 			}
-			await this.shellProcessManager!.start(initialState === "reconnecting");
+			await this.shellProcessManager!.start(initialState === 'reconnecting');
 		} catch (error) {
 			if (!isCancellationError(error) && !this.closed && generation === this.pollGeneration) {
-				if (this._state === "reconnecting") {
-					this.handleProcessData({ data: `\r\n${localize('terminal.recoveryFailed', '[terminal recovery failed; relaunch required]')}\r\n`, trackCommit: false });
-				}
 				this.handleProcessError(error);
 			}
 		}
@@ -980,9 +1013,18 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private setState(state: TerminalInstanceState): void {
 		if (this._state === state || this.closed) return;
 		this._state = state;
+		if (state === 'reconnecting' || state === 'disconnected') {
+			this.statusList.add({
+				id: TerminalStatus.Disconnected,
+				severity: Severity.Error,
+				icon: Lxicon.debugDisconnect,
+				tooltip: localize('disconnectStatus', 'Lost connection to process'),
+			});
+		} else {
+			this.statusList.remove(TerminalStatus.Disconnected);
+		}
 		if (state === 'error') {
 			this.shellProcessManager?.stop();
-			this.writeScreenData(`\r\n${localize('terminal.operationFailed', '[terminal operation failed]')}\r\n`);
 		}
 		this._onDidChangeState.fire(state);
 	}

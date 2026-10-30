@@ -649,7 +649,10 @@ test('cancelling a queued host request prevents the handler from starting and re
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	let calls = 0;
-	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => { calls++; return { targetId: 'target' }; });
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => {
+		calls++;
+		return { targetId: 'target' };
+	});
 	await client.connect();
 	transport.hostRequest('cancel-before-start');
 	transport.frame({ method: '$/cancelRequest', params: { id: 'cancel-before-start' } });
@@ -844,7 +847,10 @@ test('initialization buffering is bounded and rejects the handshake without star
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	let calls = 0;
-	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => { calls++; return { targetId: 'target' }; });
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => {
+		calls++;
+		return { targetId: 'target' };
+	});
 	transport.onInitialize = () => { for (let index = 0; index < 129; index++) { transport.hostRequest(`queued-${index}`); } };
 	await assert.rejects(client.connect());
 	await flushHandlers();

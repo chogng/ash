@@ -610,5 +610,3 @@ export class SparseLineTokens {
 		return this._tokens[4 * tokenIndex + 3];
 	}
 }
-
-

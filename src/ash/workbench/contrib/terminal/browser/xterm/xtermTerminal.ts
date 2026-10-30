@@ -6,21 +6,22 @@ import type { TerminalShellIntegrationEvent } from '../../../../../platform/term
 import { TerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { MarkNavigationAddon } from './markNavigationAddon.js';
 import '../media/xterm.css';
-import { selectionBackground, selectionForeground } from "../../../../../platform/theme/common/colors/baseColors.js";
-import type { IColorTheme } from "../../../../../platform/theme/common/themeService.js";
-import * as terminalColors from "../../common/terminalColorRegistry.js";
+import { selectionBackground, selectionForeground } from '../../../../../platform/theme/common/colors/baseColors.js';
+import type { IColorTheme } from '../../../../../platform/theme/common/themeService.js';
+import * as terminalColors from '../../common/terminalColorRegistry.js';
 
-import type { FitAddon } from "@xterm/addon-fit";
+import type { FitAddon } from '@xterm/addon-fit';
 import type { SearchAddon, ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
 import type { SerializeAddon } from '@xterm/addon-serialize';
-import type { Terminal, ITheme, ITerminalOptions } from "@xterm/xterm";
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
-import { onUnexpectedError } from "../../../../../base/common/errors.js";
-import { ITerminalConfigurationService } from "../terminal.js";
-import type { ITerminalDimensions, ITerminalScreenHost, IXtermTerminal } from "../terminal.js";
-import { h } from "../../../../../base/browser/dom.js";
-import { observeResize } from "../../../../../base/browser/observer.js";
+import type { Terminal, IMarker, ITheme, ITerminalOptions } from '@xterm/xterm';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { onUnexpectedError } from '../../../../../base/common/errors.js';
+import { ITerminalConfigurationService } from '../terminal.js';
+import type { ITerminalDimensions, ITerminalScreenHost, IXtermTerminal } from '../terminal.js';
+import { getWindow, h } from '../../../../../base/browser/dom.js';
+import { observeResize } from '../../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../../base/browser/scheduler.js';
 import { TerminalResizeDebouncer } from '../terminalResizeDebouncer.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { Color } from '../../../../../base/common/color.js';
@@ -90,8 +91,8 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this.decorationAddon = this._register(instantiation.createInstance(DecorationAddon, this.capabilities));
 		this.onDidRequestRunCommand = this.decorationAddon.onDidRequestRunCommand;
 		this.shellIntegration = this._register(instantiation.createInstance(ShellIntegrationAddon, this.capabilities, undefined));
-		this.element = h(container.ownerDocument, "div");
-		this.element.className = "ash-terminal-instance";
+		this.element = h(container.ownerDocument, 'div');
+		this.element.className = 'ash-terminal-instance';
 		this.element.hidden = true;
 		container.append(this.element);
 		this.widgets.attachToElement(this.element);
@@ -125,7 +126,11 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				if (this.terminal) this.terminal.options.theme = terminalTheme(this.themeService.getColorTheme(), instance.target);
 			}));
 		}
-		this._register(observeResize(this.element, () => this.fit()));
+		// Fitting can flush pending xterm writes and initialize contributions that
+		// observe this same element. Do it outside ResizeObserver delivery so those
+		// observers receive their first notification without a depth-loop error.
+		const fit = this._register(new AnimationFrameScheduler(getWindow(this.element), () => this.fit()));
+		this._register(observeResize(this.element, () => fit.schedule()));
 		this._register(configuration.onConfigChanged(() => {
 			if (!this.terminal) return;
 			this.terminal.options = this.screenOptions();
@@ -148,9 +153,9 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 
 	private async loadTerminal(restored?: ITerminalDimensions & { readonly vt: string; }): Promise<void> {
 		const [{ Terminal }, { FitAddon }] = await Promise.all([
-			import("@xterm/xterm"),
-			import("@xterm/addon-fit"),
-			import("@xterm/xterm/css/xterm.css"),
+			import('@xterm/xterm'),
+			import('@xterm/addon-fit'),
+			import('@xterm/xterm/css/xterm.css'),
 		]);
 		if (this.isDisposed) return;
 		const terminal = new Terminal({
@@ -223,7 +228,10 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				this.write(data, resolve);
 			});
 		} finally {
-			if (release) { this._store.delete(release); release.dispose(); }
+			if (release) {
+				this._store.delete(release);
+				release.dispose();
+			}
 		}
 	}
 
@@ -320,7 +328,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		return previous ? addon.findPrevious(term, decoratedOptions) : addon.findNext(term, decoratedOptions);
 	}
 
-	async getRangeAsVT(): Promise<string> {
+	async getRangeAsVT(startMarker?: IMarker, endMarker?: IMarker, skipLastLine = false): Promise<string> {
 		await this.initialize();
 		if (!this.serializeAddon) {
 			const Addon = await addonImporter.importAddon('serialize');
@@ -330,7 +338,12 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		}
 		await this.parseWrite('');
 		if (this.isDisposed) throw new CancellationError();
-		return this.serializeAddon.serialize();
+		if (!startMarker && !endMarker && !skipLastLine || startMarker?.isDisposed || endMarker?.isDisposed) return this.serializeAddon.serialize();
+		const start = startMarker?.line ?? 0;
+		const end = (endMarker?.line ?? this.raw.buffer.normal.length - 1) - (skipLastLine ? 1 : 0);
+		if (end < start) return '';
+		// A range is display history, not a checkpoint of the live shell's modes or cursor.
+		return this.serializeAddon.serialize({ range: { start, end }, excludeModes: true, excludeAltBuffer: true });
 	}
 
 	private async loadSearchAddon(): Promise<SearchAddon> {
@@ -418,10 +431,10 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			});
 			this._register(toDisposable(() => registration.dispose()));
 		};
-		registerMode("h", parameters => this.alternateScroll.set(parameters, true));
-		registerMode("l", parameters => this.alternateScroll.set(parameters, false));
-		registerMode("s", parameters => this.alternateScroll.save(parameters));
-		registerMode("r", parameters => this.alternateScroll.restore(parameters));
+		registerMode('h', parameters => this.alternateScroll.set(parameters, true));
+		registerMode('l', parameters => this.alternateScroll.set(parameters, false));
+		registerMode('s', parameters => this.alternateScroll.save(parameters));
+		registerMode('r', parameters => this.alternateScroll.restore(parameters));
 		terminal.attachCustomWheelEventHandler(() => this.alternateScroll.shouldProcessWheel(
 			terminal.buffer.active.type,
 			terminal.modes.mouseTrackingMode,

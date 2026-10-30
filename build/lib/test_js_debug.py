@@ -15,7 +15,7 @@ from build.lib import js_debug
 
 
 class RuntimeTests(unittest.TestCase):
-    def fixture(self, root, extra=()):
+    def fixture(self, root, extra=(), adapter=None):
         archive = (
             root / ".build/downloads/js-debug" / js_debug.VERSION / "js-debug.tar.gz"
         )
@@ -23,7 +23,10 @@ class RuntimeTests(unittest.TestCase):
         with tarfile.open(archive, "w:gz") as output:
             for name, content in [
                 ("js-debug/LICENSE", b"MIT"),
-                ("js-debug/src/dapDebugServer.js", b"// adapter"),
+                (
+                    "js-debug/src/dapDebugServer.js",
+                    js_debug._UNKNOWN_SESSION.encode() if adapter is None else adapter,
+                ),
                 *extra,
             ]:
                 member = tarfile.TarInfo(name)
@@ -53,7 +56,7 @@ class RuntimeTests(unittest.TestCase):
                 download.assert_not_called()
             self.assertEqual((destination / "LICENSE").read_text(), "MIT")
             adapter = destination / "src/dapDebugServer.js"
-            self.assertEqual(adapter.read_text(), "// adapter")
+            self.assertEqual(adapter.read_text(), js_debug._EARLY_WORKER_EVENT)
             self.assertTrue(stat.S_ISREG(adapter.stat().st_mode))
             # Windows chmod exposes the read-only flag, rather than POSIX group/other bits.
             if os.name != "nt":
@@ -79,6 +82,29 @@ class RuntimeTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "digest mismatch"):
                     js_debug.copy_runtime(root, root / "package/runtime")
             self.assertFalse((root / "package/runtime").exists())
+
+    def test_early_worker_patch_rejects_changed_or_duplicate_upstream_code(self):
+        for content in [b"// changed adapter", js_debug._UNKNOWN_SESSION.encode() * 2]:
+            with (
+                self.subTest(content=content),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                _, artifact = self.fixture(root, adapter=content)
+                with patch.object(js_debug, "Artifact", return_value=artifact):
+                    with self.assertRaisesRegex(
+                        RuntimeError, "early-worker patch no longer matches"
+                    ):
+                        js_debug.copy_runtime(root, root / "package/runtime")
+
+    def test_runtime_upgrade_requires_reviewing_the_compatibility_patch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(js_debug, "VERSION", "new-version"):
+                with self.assertRaisesRegex(
+                    RuntimeError, "early-worker patch requires review"
+                ):
+                    js_debug.copy_runtime(root, root / "package/runtime")
 
     def test_escaping_or_duplicate_members_are_rejected(self):
         for extra in [

@@ -44,6 +44,8 @@ pub enum ConnectionRole {
     /// Remote workspace host: editor and Agent authority without local device media.
     Remote,
     Agents,
+    /// Private native-host credentials carrier; never accepts renderer JSON-RPC.
+    Credentials,
     /// Authenticated execution protocol; no Agent requests are accepted on this connection.
     Execution {
         environment: String,

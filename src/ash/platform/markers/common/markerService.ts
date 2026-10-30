@@ -1,9 +1,10 @@
 import { Emitter } from '../../../base/common/event.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
 import {
 	type IMarker,
 	type IMarkerData,
+	type IMarkerChangeOptions,
 	type IMarkerReadOptions,
 	type IMarkerService,
 	type IResourceMarker,
@@ -11,25 +12,32 @@ import {
 	type MarkerStatistics,
 } from './markers.js';
 
+interface MarkerSnapshot {
+	readonly resource: URI;
+	readonly markers: IMarker[];
+	readonly truncated: boolean;
+}
+
 /** Stores normalized diagnostic snapshots once per owner and resource. */
 export class MarkerService extends Disposable implements IMarkerService {
 	readonly _serviceBrand = undefined;
 	private readonly changed = this._register(new Emitter<readonly URI[]>());
-	private readonly byOwner = new Map<string, Map<string, IMarker[]>>();
+	private readonly byOwner = new Map<string, Map<string, MarkerSnapshot>>();
+	private readonly filters = new Map<string, Set<symbol>>();
 	readonly onMarkerChanged = this.changed.event;
 
 	changeAll(owner: string, data: IResourceMarker[]): void {
 		this.assertNotDisposed();
 		const resources = new Map<string, URI>();
-		for (const [key, markers] of this.byOwner.get(owner) ?? []) {
-			resources.set(key, markers[0].resource);
+		for (const [key, snapshot] of this.byOwner.get(owner) ?? []) {
+			resources.set(key, snapshot.resource);
 		}
-		const next = new Map<string, IMarker[]>();
+		const next = new Map<string, MarkerSnapshot>();
 		for (const { resource, marker } of data) {
 			const key = resource.toString();
-			const markers = next.get(key) ?? [];
-			markers.push(storeMarker(owner, resource, marker));
-			next.set(key, markers);
+			const snapshot = next.get(key) ?? { resource, markers: [], truncated: false };
+			snapshot.markers.push(storeMarker(owner, resource, marker));
+			next.set(key, snapshot);
 			resources.set(key, resource);
 		}
 		if (next.size === 0) this.byOwner.delete(owner);
@@ -37,16 +45,16 @@ export class MarkerService extends Disposable implements IMarkerService {
 		if (resources.size > 0) this.changed.fire([...resources.values()]);
 	}
 
-	changeOne(owner: string, resource: URI, markers: IMarkerData[]): void {
+	changeOne(owner: string, resource: URI, markers: IMarkerData[], options?: IMarkerChangeOptions): void {
 		this.assertNotDisposed();
 		const key = resource.toString();
 		const current = this.byOwner.get(owner);
-		if (markers.length === 0) {
+		if (markers.length === 0 && !options?.isTruncated) {
 			this.remove(owner, [resource]);
 			return;
 		}
-		const next = current ?? new Map<string, IMarker[]>();
-		next.set(key, markers.map(marker => storeMarker(owner, resource, marker)));
+		const next = current ?? new Map<string, MarkerSnapshot>();
+		next.set(key, { resource, markers: markers.map(marker => storeMarker(owner, resource, marker)), truncated: options?.isTruncated === true });
 		this.byOwner.set(owner, next);
 		this.changed.fire([resource]);
 	}
@@ -70,9 +78,10 @@ export class MarkerService extends Disposable implements IMarkerService {
 		const key = filter.resource?.toString();
 		for (const [owner, resources] of this.byOwner) {
 			if (filter.owner !== undefined && filter.owner !== owner) continue;
-			for (const [resource, markers] of resources) {
+			for (const [resource, snapshot] of resources) {
 				if (key !== undefined && key !== resource) continue;
-				for (const marker of markers) {
+				if (!filter.ignoreResourceFilters && this.filters.has(resource)) continue;
+				for (const marker of snapshot.markers) {
 					if (filter.severities !== undefined && (filter.severities & marker.severity) === 0) continue;
 					result.push(marker);
 					if (filter.take !== undefined && filter.take > 0 && result.length >= filter.take) return result;
@@ -80,6 +89,26 @@ export class MarkerService extends Disposable implements IMarkerService {
 			}
 		}
 		return result;
+	}
+
+	isSourceTruncated(resource: URI): boolean {
+		const key = resource.toString();
+		return !this.filters.has(key) && [...this.byOwner.values()].some(resources => resources.get(key)?.truncated);
+	}
+
+	installResourceFilter(resource: URI, reason: string): IDisposable {
+		this.assertNotDisposed();
+		const key = resource.toString();
+		const token = Symbol(reason);
+		const filters = this.filters.get(key) ?? new Set<symbol>();
+		filters.add(token);
+		this.filters.set(key, filters);
+		this.changed.fire([resource]);
+		return toDisposable(() => {
+			if (!filters.delete(token)) return;
+			if (!filters.size) this.filters.delete(key);
+			this.changed.fire([resource]);
+		});
 	}
 
 	getStatistics(): MarkerStatistics {
@@ -97,6 +126,7 @@ export class MarkerService extends Disposable implements IMarkerService {
 
 	protected override disposeCore(): void {
 		this.byOwner.clear();
+		this.filters.clear();
 		super.disposeCore();
 	}
 }

@@ -1,15 +1,15 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { navigateStanzaVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/viewModel/visualCursorNavigation.js";
-import { Selection } from "../../common/core/selection.js";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from '../../common/viewModel/visualCursorNavigation.js';
+import { Selection } from '../../common/core/selection.js';
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 
-test("Visual cursor navigation preserves measured horizontal intent across wrapped rows", () => {
-	using model = new TextModel("abcdef\na😀bc");
+test('Visual cursor navigation preserves measured horizontal intent across wrapped rows', () => {
+	using model = new TextModel('abcdef\na😀bc');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [
 		[2, 4, 6],
 		[3, 5],
@@ -60,8 +60,8 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 	);
 });
 
-test("Visual cursor navigation removes continuation indentation before resolving a target column", () => {
-	using model = new TextModel("abcdef");
+test('Visual cursor navigation removes continuation indentation before resolving a target column', () => {
+	using model = new TextModel('abcdef');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6]], [20]);
 	const result = navigateStanzaVisualCursors(
 		model,
@@ -79,8 +79,8 @@ test("Visual cursor navigation removes continuation indentation before resolving
 	assert.deepEqual(result.preferredHorizontalOffsets, [10]);
 });
 
-test("Visual cursor navigation uses browser geometry when bidirectional layout provides it", () => {
-	using model = new TextModel("abc אבג");
+test('Visual cursor navigation uses browser geometry when bidirectional layout provides it', () => {
+	using model = new TextModel('abc אבג');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3, 7]]);
 	const result = navigateStanzaVisualCursors(
 		model,
@@ -105,12 +105,12 @@ test("Visual cursor navigation uses browser geometry when bidirectional layout p
 	assert.deepEqual(result.preferredHorizontalOffsets, [91]);
 });
 
-test("Visual cursor navigation rejects stale projections and invalid preferred offsets", () => {
-	using model = new TextModel("abc");
+test('Visual cursor navigation rejects stale projections and invalid preferred offsets', () => {
+	using model = new TextModel('abc');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3]]);
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
-		text: "d",
+		text: 'd',
 	}]);
 
 	assert.throws(() => navigateStanzaVisualCursors(

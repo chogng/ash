@@ -543,6 +543,63 @@ enum BrowserHostOperation {
 }
 
 impl BrowserCapability for BrowserHost {
+    fn list_canvases(
+        &self,
+        session: &ash_protocol::SessionId,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<Vec<core_api::BrowserCanvasDefinition>>, BrowserError> {
+        use ash_app_server_protocol::protocol::browser::BrowserCanvasListParams;
+        use ash_app_server_protocol::protocol::browser::BrowserCanvasListResult;
+        let result: BrowserCanvasListResult = self.request(
+            self.create_owner()?,
+            HostMethod::BrowserCanvasList,
+            &BrowserCanvasListParams {
+                session_id: session.clone(),
+                thread_id: self.thread_id()?.to_string(),
+            },
+            cancellation,
+        )?;
+        if result.canvases.as_ref().is_some_and(|definitions| {
+            definitions.len() > 256
+                || definitions.iter().any(|definition| {
+                    definition.id.extension_id.trim().is_empty()
+                        || definition.id.extension_id.len() > 1024
+                        || definition.id.canvas_id.is_empty()
+                        || definition.id.canvas_id.len() > 128
+                        || !definition.id.canvas_id.bytes().all(|byte| {
+                            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
+                        })
+                        || definition.display_name.trim().is_empty()
+                        || definition.display_name.len() > 256
+                        || definition.description.len() > 4096
+                })
+                || definitions
+                    .iter()
+                    .map(|definition| (&definition.id.extension_id, &definition.id.canvas_id))
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+                    != definitions.len()
+        }) {
+            return Err(BrowserError::Failed(
+                "browser host returned invalid Canvas definitions".into(),
+            ));
+        }
+        Ok(result.canvases.map(|definitions| {
+            definitions
+                .into_iter()
+                .map(|definition| core_api::BrowserCanvasDefinition {
+                    id: core_api::BrowserCanvasDefinitionId {
+                        extension_id: definition.id.extension_id,
+                        canvas_id: definition.id.canvas_id,
+                    },
+                    display_name: definition.display_name,
+                    description: definition.description,
+                    requires_input: definition.requires_input,
+                })
+                .collect()
+        }))
+    }
+
     fn create_target(
         &self,
         request: CreateBrowserTargetRequest,
@@ -556,6 +613,19 @@ impl BrowserCapability for BrowserHost {
                 thread_id: self.thread_id()?.to_string(),
                 network_token: self.network_token.clone(),
                 url: request.url,
+                canvas: request.canvas.as_ref().map(|canvas| {
+                    ash_app_server_protocol::protocol::browser::BrowserCanvasPresentation {
+                        session_id: canvas.session_id.clone(),
+                        instance_id: canvas.instance_id.clone(),
+                        title: canvas.title.clone(),
+                        definition: canvas.definition.as_ref().map(|id| {
+                            ash_app_server_protocol::protocol::browser::BrowserCanvasDefinitionId {
+                                extension_id: id.extension_id.clone(),
+                                canvas_id: id.canvas_id.clone(),
+                            }
+                        }),
+                    }
+                }),
             },
             cancellation,
         )?;
@@ -571,16 +641,21 @@ impl BrowserCapability for BrowserHost {
         if !state.owners.get(&owner).is_some_and(|owner| owner.enabled) {
             return Err(BrowserError::CapabilityUnavailable);
         }
-        let Entry::Vacant(target_owner) = state.target_owners.entry(result.target_id.clone())
-        else {
-            return Err(BrowserError::Failed(
-                "browser host reused a live target ID".into(),
-            ));
-        };
-        target_owner.insert(BrowserTargetOwner {
+        let target_owner = BrowserTargetOwner {
             connection_id: owner,
             thread_id: self.thread_id()?.clone(),
-        });
+        };
+        match state.target_owners.entry(result.target_id.clone()) {
+            Entry::Vacant(entry) => {
+                entry.insert(target_owner);
+            }
+            Entry::Occupied(entry) if request.canvas.is_some() && entry.get() == &target_owner => {}
+            Entry::Occupied(_) => {
+                return Err(BrowserError::Failed(
+                    "browser host reused a live target ID".into(),
+                ));
+            }
+        }
         Ok(CreateBrowserTargetResult {
             target_id: BrowserTargetId(result.target_id),
         })

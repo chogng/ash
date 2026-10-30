@@ -27,17 +27,32 @@ Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并�
 | 适配器发现                  | 声明式 `contributes.debuggers`、动态配置 provider 与 descriptor factory，仍可显式写 `debugAdapter`                                                                                      | 发现类型不调用工厂或启动适配器；Rust 与 JS 扩展按各自宿主执行                        |
 | 完整 VS Code Debug 扩展 API | 已退出扩展生态目标                                                                                                                                                                      | 现有 API 子集、tracker 和传输保留为迁移基础；Ash 作者接口按真实消费者接入 `@ash/sdk` |
 
+## 自举调试
+
+在 Ash 中打开本仓库，通过“选择并启动调试”使用 `.vscode/launch.json`：
+
+- `Ash`、`Ash Agents` 和 `Ash (Hot Reload)` 通过 Node 启动现有 Electron launcher。launcher 准备后端并启动 Vite；`Ash` 和 `Ash Agents` 还会等待 Rust 源码 watcher 就绪，并在成功构建后自动切换后端。停止调试时，launcher 一并关闭 Electron、Vite 和 Rust watcher；准备阶段也支持取消构建。`Ash (Hot Reload)` 只监听前端和 Electron 宿主。launcher 发布调试目标后，server-ready 自动启动 `Ash Main Process` 附加会话，由附加会话等待 Inspector 就绪。主进程的 TS 构建生成 source map，`outFiles` 指向 `.build/desktop/main`，附加时暂停等待 source map 绑定已有断点。开发环境仍需本仓库的 Node、pnpm 和构建工具链。
+- 启动后选择 `Ash Renderer` 或 `Ash Agents Renderer`，通过 loopback 端口 `9222` 附加对应页面。Vite 提供渲染端 TS source map，可与主进程同时设置断点和单步。Desktop 调试的 Vite 使用 `5183`，与普通开发的 `5173` 分开；调试端口及 debug profile 同时供一个被调试实例使用。
+- `Ash (Native Debug)` 额外运行 `pnpm debug:backend`：仅为 `ash-app-server` 和 `ash-app-server-runtime` 启用完整调试信息，复用 `dev-small` 的其他设置，并发布独立的 `.build/desktop/debug/app-server/current.json`。macOS 的 packed dSYM 和 Windows 的 PDB 与二进制一起发布，避免 Cargo 后续构建改写已运行实例的符号。Electron 沿既有 generation 选择和 daemon 链路运行这个后端。原有优化仍生效，部分局部变量可能被优化掉。
+- 在终端运行 `pnpm debug:backend:status`，将输出中的 `pid` 填入 `Ash App Server (Attach)` 的输入框，即可通过同一个 CodeLLDB provider 调试当前 App Server 的 Rust 源码。配置关闭自动解引用及 Rust 1.99 的通用结构体摘要，避免暂停时遍历整个 AppServer；需要时手动展开指针。Rust provider 限制通用结构体摘要的递归深度、字段数和总量，防止读取 AppServer 大对象时阻塞适配器；成员仍可按需展开。
+
+被调试实例使用 `.build/desktop/debug/profile` 和 `.build/desktop/debug/user-data`，与启动调试的窗口分开。停止 Rust attach 会话只分离调试器；后台服务仍遵循 profile daemon 的生命周期。Native Debug 不启动 Rust watcher，保留固定的带符号后端版本。Vite 和 Rust watcher 是可复用的后台任务，可通过“任务: 终止任务”结束。
+
+`Ash Web (Chrome)`／`Ash Web (Edge)` 及带 `Server` 的配置使用现有 JS 和 server-ready provider，开发服务分别使用 `5184`／`5185`（Agents 使用 `5186`／`5187`），可与普通 Desktop 开发并行。独立 Web 调试浏览器使用隔离 profile，macOS 加入 `--use-mock-keychain`，避免临时 HOME 触发系统钥匙串提示。Renderer 和 Web 的 `webRoot` 均对应 Vite 根目录 `src/ash/code`，入口 source map 才能映射回实际 TS 文件；外部模块的 `/@fs/` URL 由 JS provider 的默认路径映射解析。Node 配置省略 `runtimeExecutable` 时使用 Ash 管理的运行时；Desktop 复用 Electron 的 Node 模式，由 provider 的启动适配跨过 js-debug 清理 `ELECTRON_RUN_AS_NODE` 的边界。显式指定的运行时和版本保留原有语义。
+
+2026-10-29 在 macOS arm64 的真实 Ash 内，整批 4 项自举场景通过：Electron 主进程与 Renderer 的 TS 断点、变量和单步，Rust App Server 的源码断点、调用栈、变量、继续及分离，以及 Chrome／Edge 的 TS 断点和 Web 启动。测试结束确认 Inspector、Vite 和调试子进程已回收。本轮未执行 Windows／Linux 实机复验。
+
 ## 当前执行链
 
 `DebugSession` 通过上游同职责的 `browser/rawDebugSession.ts` 访问 Rust 请求 client，已退出 TS 请求编号、pending response table 和请求超时实现。`ash-debug-manager` 组合 `ash-debug-client` 与既有 `ash-debug-adapter`，App Server 只增加连接与目录绑定。每个会话只有一个请求配对 owner；stdio、TCP、pipe 和 inline 使用同一 client。tracker 从有界、双向、有序的观察日志取消息，其回调可重入请求而不阻塞协议配对；关闭前先收取观察记录，再按原生命周期释放 tracker 与 transport。
 
-初始化已由 Rust 状态机决定：initialize 响应触发 launch/attach，initialized 事件开放配置阶段；Workbench 提交当前断点后调用 completeConfiguration，Rust 选择受支持的异常过滤器（省略选择使用适配器默认值，显式空数组保持清空，noDebug 下发送空数组，未知过滤器拒绝提交）、发送 setExceptionBreakpoints，并按协商能力发送 configurationDone。launch 回复可以等到配置结束；提前到达的 stopped 事件不会被迟到的 launch 或单步回复覆盖。初始化超时与失败也在 Rust 决定。capabilities 增量事件由后端合并归一化，read 返回带 revision 的只读会话快照。
+初始化已由 Rust 状态机决定：initialize 响应触发 launch/attach，initialized 事件开放配置阶段；Workbench 提交当前断点后调用 completeConfiguration，Rust 选择受支持的异常过滤器（省略选择使用适配器默认值，显式空数组保持清空，noDebug 下发送空数组，未知过滤器拒绝提交）、发送 setExceptionBreakpoints，并按协商能力发送 configurationDone。配置完成后若已收到 stopped，即使 launch/attach 尚未回复，也开放检查和继续执行；迟到的失败仍结束会话。提前到达的 stopped 事件不会被迟到的 launch 或单步回复覆盖。初始化超时与失败也在 Rust 决定。capabilities 增量事件由后端合并归一化，read 返回带 revision 的只读会话快照。
 
 Rust 同时使在途 stackTrace/scopes/variables/setVariable 在恢复执行、再次停住或 invalidated 后失效；不会重放这些请求。会话执行状态属于 Rust，选中线程/栈帧仍由 Workbench 维护。此切片沿 DebugService → DebugSession → RawDebugSession → platform capability → App Server → DebugManager 的生产链迁移，两个 Workbench 文件保留 VS Code 的对应文件路径与职责入口，协议执行落在 Rust。
 
 会话断点运行意图和绑定已迁入 `breakpoints.rs`：前端只提交带编辑版本的 source/function/data/instruction 意图；Rust 决定能力过滤、源文件分组、整组替换顺序和旧源清空，只有仍匹配当前意图的回复才能建立绑定。适配器主动的 new/changed/removed 也更新同一份绑定。前端的 protocolBreakpoints、syncedBreakpointSources 和 breakpointSync 队列已退出生产链。未支持的条件不会被降级为无条件断点，跨会话的变量/指令地址不会发送或覆盖验证状态。
 
-`inspection.rs` 已拥有 threads → stack、scopes → variables、子变量和批量 Watch 求值。每次查询携带显式线程/帧及 inspectionRevision，Rust 在发送前拒绝旧暂停代次，并使迟到的中间步骤和终态失效。Watch 单个表达式、scope 单个变量请求失败不会抹掉其他结果；任务数量、期限与结果内存都有界，终态只消费一次。Variables、Watch 和 Call Stack 独立注册并分别请求领域结果；DebugService 选择默认暂停帧并打开源码，Call Stack 提交显式线程／帧选择，不再依赖视图创建。前端不再编排这些 DAP 请求链。共享 [debug-contract](../crates/debug-contract/README.md) 定义领域值，RPC/生成 decoder 仍归 App Server protocol。
+`inspection.rs` 已拥有 threads → stack、scopes → variables、子变量和批量 Watch 求值。每次查询携带显式线程/帧及 inspectionRevision，Rust 在发送前拒绝旧暂停代次，并使迟到的中间步骤和终态失效。帧检查默认只加载首个非昂贵作用域，其余通过 `variablesLoaded` 区分未加载与空结果，Variables 展开后再读取；复制状态和添加 Chat 上下文显式读取全部作用域。Watch 单个表达式、scope 单个变量请求失败不会抹掉其他结果；任务数量、期限与结果内存都有界，终态只消费一次。Variables、Watch 和 Call Stack 独立注册并分别请求领域结果；DebugService 选择默认暂停帧并打开源码，Call Stack 提交显式线程／帧选择，不再依赖视图创建。前端不再编排这些 DAP 请求链。共享 [debug-contract](../crates/debug-contract/README.md) 定义领域值，RPC/生成 decoder 仍归 App Server protocol。
 
 工作区定义/持久化、实时异常过滤器、父子关系和结构化输出现均由 Rust 拥有。Workbench 的 REPL 模型只保留会话选择、标签和带修订的只读快照；过滤和输入历史归 UI，补全经领域会话调用 Rust 的请求 owner。`rawDebugSession.ts` 保留领域调用、inline IO 桥接和释放确认。协议端口见 [App Server DAP 会话](app-server-api.md#dap-会话与请求调度)。
 
@@ -177,6 +192,8 @@ Ash 预装两个独立 Rust provider。`debug-javascript` 复用 MIT 许可的�
 
 适配器固定为 `v1.140.0`，大小和 SHA-256 由 [runtime.json](../extensions/debug-javascript/runtime.json) 单独管理；构建通过现有下载校验器获取 standalone tar 包，拒绝越界／链接／重复成员并保留 LICENSE。随 Desktop 资源分发，运行时复用 Ash 管理的 Node 或开发时 Electron 的 Node 模式；最终用户不需要安装 Rust、Cargo 或 VS Code 扩展宿主。调试 Node 程序可指定 `runtimeExecutable`；Chrome／Edge 仍需对应浏览器。
 
+`node-terminal` 的 launch 配置通过 `command` 运行集成终端命令，也可省略命令后手动输入。终端独立拥有自动附加租约，不修改全局 Auto Attach 设置；准备脚本退出或多个 Node 程序先后运行不会结束父会话。关闭终端或停止父会话会释放终端及所属子会话，扩展退役撤销租约并回收其终端。终端由 Workbench Terminal owner 创建、读取和关闭，Debug manager 继续拥有会话图。
+
 Node 启动配置使用 `type: "node"`、`request: "launch"` 和 `program`，附加使用 `request: "attach"`。provider 同时接纳 `pwa-node`、`chrome`／`pwa-chrome`、`msedge`／`pwa-msedge`。TS 仍需编译后的 JS 与 source map；配置 `outFiles` 指向输出目录。入口脚本的 source map 绑定会先暂停，避免短脚本越过已有 TS 断点。
 
 自动附加默认关闭。运行“调试: 切换自动附加”（`ash.debug-javascript.toggleAutoAttach`）选择 `always`、`smart` 或 `onlyWithFlag`，然后新建集成终端；也可直接修改 `debug.javascript.autoAttachFilter`。选择器默认使用已有工作区覆盖所在层，否则使用用户设置，并可显式切换写入范围。启用后状态栏显示当前模式；点击可切换模式、临时禁用或恢复。临时禁用只暂停新程序的附加，保留设置、已有会话和终端环境，因此恢复后同一终端以及暂停期间新建的终端均可继续自动附加。更改自动附加设置或重新激活扩展会清除临时禁用状态；选择 Disabled 会关闭能力并隐藏状态栏项。
@@ -215,6 +232,10 @@ Debug 前端定向 171 项通过；两个 Rust provider、SDK、manager 与 App 
 2026-10-21 自动附加操作入口补验：macOS arm64 的真实 Desktop 已通过命令／状态栏键盘操作、用户与工作区模式持久化、暂停时保留已有会话、同终端及暂停期间新建终端恢复附加、重载清除暂停、停用撤销旧凭据、中英文显示和无障碍帮助。Rust 策略／helper 8 项及产品部署授权 1 项定向测试通过；Desktop 3 项回归和 5 步录屏场景通过。证据、构建来源与校验值见 [自动附加验收](../.build/ash-playwright-mcp/evidence/debug-auto-attach-controls-2026-10-21T23-31-52-960Z/validation.json)，[录屏报告](../.build/ash-playwright-mcp/evidence/debug-auto-attach-controls-2026-10-21T23-31-52-960Z/report.html) 保留实际 UI 断言与视频。本次未执行 Windows、Linux 或 SSH 的运行验收。
 
 ## 验证范围与限制
+
+2026-10-26 Windows x64 的真实 Ash 验证通过 JS／TS source map 断点、变量、单步，以及两种控制台模式的 server-ready 子会话启动和进程回收；默认 Desktop 自举配置也已验证包管理器子进程的暂停、检查与停止。自动附加、同终端暂停／恢复、停用撤权回收，以及中文错误和无障碍帮助均已验收。Rust Test Debug 修复了执行器丢失 MSVC `LIB` 等环境变量，以及 CodeLLDB 1.12.3 的目标输出混入 stdio DAP 通道的问题。Windows `lldb` 描述符通过扩展程序的内部桥接模式，用 loopback TCP 隔离协议，并将进程 stdout／stderr 转为标准 output 事件；共享 DAP runtime 仍拥有会话和请求状态。真实测试已通过发现、构建、断点、变量、单步、继续、输出及结束清理，桥接回归覆盖输入关闭和强制终止后的子进程回收；原始首败与修复验收日志保存在 `.build/debug-selfhost-audit-20261026/`。
+
+Rust 聚合格式化器对 Windows CodeView 自引用和 macOS DWARF 大对象均有循环、深度、字段数和总量保护，在工具链格式化器加载后的 `preRunCommands` 安装，保留用户命令。初次检查栈帧只加载首个非昂贵作用域，其余作用域展开时加载，避免大型程序的 Global／Static 阻塞局部变量和继续操作。`Ash Code (TUI)` 已在真实 Ash 内通过源码断点、调用栈、局部变量、继续、集成终端帮助界面及停止后的进程回收；准备任务同时提供完整调试符号和 Node 扩展运行资源。
 
 已有 macOS 验证覆盖 Debug manager／protocol／领域契约、浏览器控制台与布局，以及 Desktop/Web 的正常构建。真实 Desktop/Web 场景覆盖检查、Watch、单步、observer、inline 清理、父子终止、实时异常、结构化输出、配置取消、空 descriptor、停用／卸载回收、控制台过滤与历史恢复、多行 UTF-16 补全和所选帧求值；浏览器另覆盖焦点、中文和高对比主题。具体入口与证据由 [Workbench 验证记录](../src/ash/workbench/contrib/debug/README.md#desktop-acceptance-closure-2026-10-21)维护，不在本文重复测试数量与构建批次。
 

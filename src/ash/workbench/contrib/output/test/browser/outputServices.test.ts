@@ -3,12 +3,12 @@ import { ITextModelService } from '../../../../../editor/common/services/resolve
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import assert from "node:assert/strict";
-import { suite, test } from "mocha";
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { JSDOM } from "jsdom";
+import { JSDOM } from 'jsdom';
 import { windowLogId } from '../../../../services/log/common/logConstants.js';
-import { BrowserStorageService } from "../../../../services/storage/browser/storageService.js";
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 
 suite('Output shutdown', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -30,74 +30,74 @@ suite('Output shutdown', () => {
 	});
 });
 
-test("OutputService registers, updates, reveals, and removes independent channels", () => {
+test('OutputService registers, updates, reveals, and removes independent channels', () => {
 	using outputResources = new DisposableStore();
 	const output = workbenchInstantiationService(outputResources).get(IOutputService);
-	using first = output.createChannel({ id: "tasks", label: "Tasks" });
-	using second = output.createChannel({ id: "rust-analyzer", label: "rust-analyzer" });
+	using first = output.createChannel({ id: 'tasks', label: 'Tasks' });
+	using second = output.createChannel({ id: 'rust-analyzer', label: 'rust-analyzer' });
 	const selections: Array<string | undefined> = [];
 	using selectionListener = output.onDidChangeActiveChannel(channel => selections.push(channel?.id));
 
 	assert.equal(output.activeChannel, first);
 	const reveals: Array<[string, string]> = [];
 	using revealListener = output.onDidRequestShowChannel(request => reveals.push([request.channel.id, request.focus]));
-	first.appendLine({ severity: "log", text: "task started" });
-	second.append({ severity: "warning", text: "check failed" });
-	assert.deepEqual(first.entries.map(entry => [entry.sequence, entry.severity, entry.text]), [[1, "log", "task started\n"]]);
-	assert.deepEqual(second.entries.map(entry => [entry.sequence, entry.severity, entry.text]), [[1, "warning", "check failed"]]);
+	first.appendLine({ severity: 'log', text: 'task started' });
+	second.append({ severity: 'warning', text: 'check failed' });
+	assert.deepEqual(first.entries.map(entry => [entry.sequence, entry.severity, entry.text]), [[1, 'log', 'task started\n']]);
+	assert.deepEqual(second.entries.map(entry => [entry.sequence, entry.severity, entry.text]), [[1, 'warning', 'check failed']]);
 
 	output.selectChannel(second.id);
 	assert.equal(output.activeChannel, second);
 	assert.deepEqual(selections, [second.id]);
-	first.show({ focus: "preserve" });
+	first.show({ focus: 'preserve' });
 	assert.equal(output.activeChannel, first);
-	assert.deepEqual(reveals, [[first.id, "preserve"]]);
-	first.replace([{ severity: "information", category: "lifecycle", timestamp: 1, text: "ready" }]);
-	assert.equal(first.getText(), "ready");
-	assert.deepEqual(first.entries.map(entry => [entry.timestamp, entry.severity, entry.category, entry.text]), [[1, "information", "lifecycle", "ready"]]);
+	assert.deepEqual(reveals, [[first.id, 'preserve']]);
+	first.replace([{ severity: 'information', category: 'lifecycle', timestamp: 1, text: 'ready' }]);
+	assert.equal(first.getText(), 'ready');
+	assert.deepEqual(first.entries.map(entry => [entry.timestamp, entry.severity, entry.category, entry.text]), [[1, 'information', 'lifecycle', 'ready']]);
 	output.selectChannel(second.id);
 	second.clear();
 	assert.deepEqual(second.entries, []);
 	second.dispose();
 	assert.equal(output.activeChannel, first);
 	assert.deepEqual(output.channels.map(channel => channel.id), [first.id]);
-	assert.deepEqual(selections, ["rust-analyzer", "tasks", "rust-analyzer", "tasks"]);
+	assert.deepEqual(selections, ['rust-analyzer', 'tasks', 'rust-analyzer', 'tasks']);
 });
 
-test("OutputService rejects ambiguous channel ownership and invalid entries", () => {
+test('OutputService rejects ambiguous channel ownership and invalid entries', () => {
 	using outputResources = new DisposableStore();
 	const output = workbenchInstantiationService(outputResources).get(IOutputService);
-	using channel = output.createChannel({ id: "server", label: "Server" });
-	assert.throws(() => output.createChannel({ id: "server", label: "Duplicate" }), /already registered/);
-	assert.throws(() => output.createChannel({ id: "invalid id", label: "Invalid" }), /cannot contain whitespace/);
-	assert.throws(() => output.selectChannel("missing"), /Unknown Output channel/);
-	assert.throws(() => channel.append({ severity: "fatal" as never, text: "unsupported" }), /Unsupported Output entry severity/);
-	channel.append({ severity: "log", text: "  " });
-	assert.equal(channel.getText(), "  ");
+	using channel = output.createChannel({ id: 'server', label: 'Server' });
+	assert.throws(() => output.createChannel({ id: 'server', label: 'Duplicate' }), /already registered/);
+	assert.throws(() => output.createChannel({ id: 'invalid id', label: 'Invalid' }), /cannot contain whitespace/);
+	assert.throws(() => output.selectChannel('missing'), /Unknown Output channel/);
+	assert.throws(() => channel.append({ severity: 'fatal' as never, text: 'unsupported' }), /Unsupported Output entry severity/);
+	channel.append({ severity: 'log', text: '  ' });
+	assert.equal(channel.getText(), '  ');
 });
 
-test("OutputService restores the workspace active channel when its producer returns", () => {
-	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
-	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", backend: browser.window.localStorage, flushInterval: 0 });
+test('OutputService restores the workspace active channel when its producer returns', () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'workspace', backend: browser.window.localStorage, flushInterval: 0 });
 	{
 		using outputResources = new DisposableStore();
 		const output = workbenchInstantiationService(outputResources, storage).get(IOutputService);
-		using first = output.createChannel({ id: "first", label: "First" });
-		using second = output.createChannel({ id: "second", label: "Second" });
+		using first = output.createChannel({ id: 'first', label: 'First' });
+		using second = output.createChannel({ id: 'second', label: 'Second' });
 		output.selectChannel(second.id);
 	}
 	{
 		using outputResources = new DisposableStore();
 		const output = workbenchInstantiationService(outputResources, storage).get(IOutputService);
-		using first = output.createChannel({ id: "first", label: "First" });
+		using first = output.createChannel({ id: 'first', label: 'First' });
 		assert.equal(output.activeChannel, first);
-		using second = output.createChannel({ id: "second", label: "Second" });
+		using second = output.createChannel({ id: 'second', label: 'Second' });
 		assert.equal(output.activeChannel, second);
 	}
 	browser.window.close();
 });
 
-const entry = { sequence: 1, timestamp: 1, severity: "warning", category: "lifecycle", text: "Server restart scheduled" } as const;
+const entry = { sequence: 1, timestamp: 1, severity: 'warning', category: 'lifecycle', text: 'Server restart scheduled' } as const;
 
 test('Output keeps panel and editor references live, and recreates a released model from retained content', async () => {
 	using resources = new DisposableStore();
@@ -151,40 +151,40 @@ test('Output normalizes CRLF once when producers split it between writes', async
 	assert.equal(reference.object.textEditorModel.getValue().replaceAll('\r\n', '\n'), 'first\nsecond\n');
 });
 
-test("OutputFilterState combines include, exclude, severity, and category filters", () => {
+test('OutputFilterState combines include, exclude, severity, and category filters', () => {
 	using filterResources = new DisposableStore();
 	const filters = workbenchInstantiationService(filterResources).get(IOutputService).filters;
 	filters.setText('server restart,!failed');
 	assert.equal(filters.matches(entry, windowLogId), true);
-	filters.setText("server,!scheduled");
+	filters.setText('server,!scheduled');
 	assert.equal(filters.matches(entry, windowLogId), false);
-	filters.setText("");
-	filters.setSeverityVisible("warning", false);
+	filters.setText('');
+	filters.setSeverityVisible('warning', false);
 	assert.equal(filters.matches(entry, windowLogId), false);
-	filters.setSeverityVisible("warning", true);
-	filters.setCategoryVisible("lifecycle", false, windowLogId);
+	filters.setSeverityVisible('warning', true);
+	filters.setCategoryVisible('lifecycle', false, windowLogId);
 	assert.equal(filters.matches(entry, windowLogId), false);
 	filters.reset();
 	assert.equal(filters.matches(entry, windowLogId), true);
-	filters.setMinimumSeverity("error");
+	filters.setMinimumSeverity('error');
 	assert.equal(filters.matches(entry, windowLogId), false);
-	assert.equal(filters.matches({ ...entry, severity: "error" }, windowLogId), true);
+	assert.equal(filters.matches({ ...entry, severity: 'error' }, windowLogId), true);
 });
 
-test("OutputFilterState restores workspace-local filter choices", () => {
-	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
-	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", backend: browser.window.localStorage, flushInterval: 0 });
+test('OutputFilterState restores workspace-local filter choices', () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'workspace', backend: browser.window.localStorage, flushInterval: 0 });
 	{
 		using filterResources = new DisposableStore();
 		const filters = workbenchInstantiationService(filterResources, storage).get(IOutputService).filters;
-		filters.setText("server");
-		filters.setSeverityVisible("trace", false);
+		filters.setText('server');
+		filters.setSeverityVisible('trace', false);
 	}
 	{
 		using filterResources = new DisposableStore();
 		const filters = workbenchInstantiationService(filterResources, storage).get(IOutputService).filters;
-		assert.equal(filters.text, "server");
-		assert.equal(filters.isSeverityVisible("trace"), false);
+		assert.equal(filters.text, 'server');
+		assert.equal(filters.isSeverityVisible('trace'), false);
 	}
 	browser.window.close();
 });

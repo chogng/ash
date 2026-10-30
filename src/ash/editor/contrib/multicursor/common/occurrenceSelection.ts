@@ -1,12 +1,12 @@
-import { Selection } from "../../../common/core/selection.js";
-import { type ITextModel, type FindMatch } from "../../../common/model.js";
+import { Selection } from '../../../common/core/selection.js';
+import { type ITextModel, type FindMatch } from '../../../common/model.js';
 
 const MAX_OCCURRENCE_SELECTIONS = 100_000;
 
 /** Selects the direction in which one additional matching occurrence is found. */
 export enum EditorOccurrenceDirection {
-	Next = "next",
-	Previous = "previous",
+	Next = 'next',
+	Previous = 'previous',
 }
 
 /**
@@ -17,7 +17,7 @@ export enum EditorOccurrenceDirection {
  */
 export function addOccurrenceSelection(model: ITextModel, selections: readonly Selection[], direction: EditorOccurrenceDirection): readonly Selection[] {
 	if (!Object.values(EditorOccurrenceDirection).includes(direction)) {
-		throw new TypeError("Unknown editor occurrence direction");
+		throw new TypeError('Unknown editor occurrence direction');
 	}
 	const source = sourceSelection(model, selections);
 	if (!source) return selections;

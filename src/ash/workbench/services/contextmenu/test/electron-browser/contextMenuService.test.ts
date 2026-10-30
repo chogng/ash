@@ -9,22 +9,22 @@ import { BrowserContextViewService } from '../../../../../platform/contextview/b
 import { CommandService } from '../../../commands/common/commandService.js';
 import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 import { ElectronContextMenuService } from '../../electron-browser/contextMenuService.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { Event } from "../../../../../base/common/event.js";
+import { Event } from '../../../../../base/common/event.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
-import { AnchorAlignment, AnchorAxisAlignment, ContextViewHideReason, type ContextViewOptions } from "../../../../../base/browser/ui/contextview/contextview.js";
-import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from "../../../../../base/parts/contextmenu/common/contextmenu.js";
-import { IMenuService } from "../../../../../platform/actions/common/actions.js";
-import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
-import { ConfigurationRegistry } from "../../../../../platform/configuration/common/configurationRegistry.js";
-import { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import { IKeybindingService } from "../../../../../platform/keybinding/common/keybinding.js";
-import { INotificationService } from "../../../../../platform/notification/common/notification.js";
+import { AnchorAlignment, AnchorAxisAlignment, ContextViewHideReason, type ContextViewOptions } from '../../../../../base/browser/ui/contextview/contextview.js';
+import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from '../../../../../base/parts/contextmenu/common/contextmenu.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { KeybindingRegistry } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { KeybindingResolver } from '../../../../../platform/keybinding/common/keybindingResolver.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
@@ -88,18 +88,18 @@ test('system menus retain scoped shortcut hints, chord labels and delegate overr
 	assert.deepEqual(requests[1]!.items, actions.map((action, index) => ({ type: 'action', id: `action-${index + 1}`, label: action.label, enabled: true })));
 });
 
-test("Electron context menus run the selected action with its delegate context", async () => {
-	const environment = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
+test('Electron context menus run the selected action with its delegate context', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
 		value: environment.window,
 	});
 	const { NativeContextMenuService } = await import(
-		"../../electron-browser/contextMenuService.js"
+		'../../electron-browser/contextMenuService.js'
 	);
 	const api: INativeContextMenuApi = {
 		async popup() {
-			return { selectedId: "action-1" };
+			return { selectedId: 'action-1' };
 		},
 		async close() { },
 	};
@@ -110,7 +110,7 @@ test("Electron context menus run the selected action with its delegate context",
 		getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
 		onDidUpdateKeybindings: Event.None,
-		resolveKeybinding() { throw new Error("Not used"); },
+		resolveKeybinding() { throw new Error('Not used'); },
 		resolveUserBinding() { return undefined; },
 		lookupKeybindings() { return []; },
 		lookupKeybinding() { return undefined; },
@@ -126,7 +126,7 @@ test("Electron context menus run the selected action with its delegate context",
 	services.registerInstance(IKeybindingService, keybindingService);
 	services.registerInstance(INotificationService, notificationService);
 	using service = services.createInstance(NativeContextMenuService, api);
-	const actionContext = { resource: "test.txt" };
+	const actionContext = { resource: 'test.txt' };
 	let receivedContext: unknown;
 	let didCancel: boolean | undefined;
 	service.showContextMenu({
@@ -136,9 +136,9 @@ test("Electron context menus run the selected action with its delegate context",
 			targetWindow: environment.window as unknown as Window,
 		}),
 		getActions: () => [{
-			id: "run",
-			label: "Run",
-			tooltip: "Run",
+			id: 'run',
+			label: 'Run',
+			tooltip: 'Run',
 			enabled: true,
 			run(context) {
 				receivedContext = context;
@@ -154,13 +154,13 @@ test("Electron context menus run the selected action with its delegate context",
 	assert.equal(receivedContext, actionContext);
 	assert.equal(didCancel, false);
 	environment.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
-test("Electron context menus position element and point anchors in CSS pixels", async () => {
-	const environment = new JSDOM("<!doctype html><body><button></button></body>");
-	Object.defineProperty(globalThis, "window", { configurable: true, value: environment.window });
-	const { NativeContextMenuService } = await import("../../electron-browser/contextMenuService.js");
+test('Electron context menus position element and point anchors in CSS pixels', async () => {
+	const environment = new JSDOM('<!doctype html><body><button></button></body>');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: environment.window });
+	const { NativeContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	const requests: INativeContextMenuRequest[] = [];
 	const api: INativeContextMenuApi = {
 		async popup(request) { requests.push(request); return {}; },
@@ -173,7 +173,7 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 		getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
 		onDidUpdateKeybindings: Event.None,
-		resolveKeybinding() { throw new Error("Not used"); },
+		resolveKeybinding() { throw new Error('Not used'); },
 		resolveUserBinding() { return undefined; },
 		lookupKeybindings() { return []; },
 		lookupKeybinding() { return undefined; },
@@ -184,9 +184,9 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 	services.registerInstance(IKeybindingService, keybindingService);
 	services.registerInstance(INotificationService, { error: (error: unknown) => { throw error; } } as unknown as INotificationService);
 	using service = services.createInstance(NativeContextMenuService, api);
-	const button = environment.window.document.querySelector("button")!;
+	const button = environment.window.document.querySelector('button')!;
 	button.getBoundingClientRect = () => ({ left: 100.25, top: 50.5, right: 140.25, bottom: 70.5, width: 40, height: 20, x: 100.25, y: 50.5, toJSON: () => ({}) });
-	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() { } };
+	const action = { id: 'open', label: 'Open', tooltip: 'Open', enabled: true, run() { } };
 	service.showContextMenu({
 		getAnchor: () => button,
 		getActions: () => [action],
@@ -210,15 +210,15 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 		{ x: 10.25, y: 20.5, elementAnchor: undefined, positioningItem: undefined },
 	]);
 	environment.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
-test("macOS switches context menu implementation when the menu style changes", async () => {
-	if (process.platform !== "darwin") return;
-	const environment = new JSDOM("<!doctype html><body><button></button></body>");
-	Object.defineProperty(globalThis, "window", { configurable: true, value: environment.window });
-	Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
-	const { ElectronContextMenuService } = await import("../../electron-browser/contextMenuService.js");
+test('macOS switches context menu implementation when the menu style changes', async () => {
+	if (process.platform !== 'darwin') return;
+	const environment = new JSDOM('<!doctype html><body><button></button></body>');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: environment.window });
+	Object.defineProperty(globalThis, 'Node', { configurable: true, value: environment.window.Node });
+	const { ElectronContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	let finishPopup!: (result: INativeContextMenuResult) => void;
 	const api: INativeContextMenuApi = {
 		popup: () => new Promise(resolve => { finishPopup = resolve; }),
@@ -242,8 +242,8 @@ test("macOS switches context menu implementation when the menu style changes", a
 	} as IContextViewService;
 	using contextKeyService = new ContextKeyService();
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({ key: "window.menuStyle", defaultValue: "system", parse: value => value });
-	registry.registerConfiguration({ key: "window.titleBarStyle", defaultValue: "custom", parse: value => value });
+	registry.registerConfiguration({ key: 'window.menuStyle', defaultValue: 'system', parse: value => value });
+	registry.registerConfiguration({ key: 'window.titleBarStyle', defaultValue: 'custom', parse: value => value });
 	using configurationService = new InMemoryConfigurationService(registry);
 	const keybindingService = {
 		inChordMode: false,
@@ -251,7 +251,7 @@ test("macOS switches context menu implementation when the menu style changes", a
 		getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
 		onDidUpdateKeybindings: Event.None,
-		resolveKeybinding() { throw new Error("Not used"); },
+		resolveKeybinding() { throw new Error('Not used'); },
 		resolveUserBinding() { return undefined; },
 		lookupKeybindings() { return []; },
 		lookupKeybinding() { return undefined; },
@@ -266,29 +266,29 @@ test("macOS switches context menu implementation when the menu style changes", a
 	using service = services.createInstance(ElectronContextMenuService, api);
 	assert.equal(service.contextMenuStyle, isMacintosh ? 'system' : 'custom');
 	const events: string[] = [];
-	using shown = service.onDidShowContextMenu(() => events.push("show"));
-	using hidden = service.onDidHideContextMenu(() => events.push("hide"));
-	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() { } };
+	using shown = service.onDidShowContextMenu(() => events.push('show'));
+	using hidden = service.onDidHideContextMenu(() => events.push('hide'));
+	const action = { id: 'open', label: 'Open', tooltip: 'Open', enabled: true, run() { } };
 	service.showContextMenu({
 		getAnchor: () => ({ x: 10, y: 20, targetWindow: environment.window as unknown as Window }),
 		getActions: () => [action],
 	});
 	finishPopup({});
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
-	await configurationService.updateValue("window.menuStyle", "custom");
+	await configurationService.updateValue('window.menuStyle', 'custom');
 	assert.equal(service.contextMenuStyle, 'custom');
 	service.showContextMenu({
-		getAnchor: () => environment.window.document.querySelector("button")!,
+		getAnchor: () => environment.window.document.querySelector('button')!,
 		getActions: () => [action],
 		anchorAlignment: AnchorAlignment.Left,
 		anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 	});
-	assert.deepEqual(events, ["show", "hide", "show"]);
+	assert.deepEqual(events, ['show', 'hide', 'show']);
 	service.hideContextMenu();
-	assert.deepEqual(events, ["show", "hide", "show", "hide"]);
+	assert.deepEqual(events, ['show', 'hide', 'show', 'hide']);
 	environment.window.close();
-	Reflect.deleteProperty(globalThis, "window");
-	Reflect.deleteProperty(globalThis, "Node");
+	Reflect.deleteProperty(globalThis, 'window');
+	Reflect.deleteProperty(globalThis, 'Node');
 });
 
 test('Electron context menus reject missing window services without retaining resources', async () => {

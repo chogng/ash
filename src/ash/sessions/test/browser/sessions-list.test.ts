@@ -16,13 +16,13 @@ import { toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { computePullRequestIcon } from '../../../workbench/common/chatPullRequest.js';
 import type { IResolvedSessionPullRequest } from '../../contrib/github/common/types.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { Emitter, Event } from "../../../base/common/event.js";
-import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
-import type { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
-import { SessionsList } from "../../browser/parts/sidebar/sessionsList.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { Emitter, Event } from '../../../base/common/event.js';
+import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
+import { SessionsList } from '../../browser/parts/sidebar/sessionsList.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 
 
@@ -34,14 +34,14 @@ const emptyProjects = { onDidChange: Event.None, list: async () => [] } as unkno
 const listCommands = { executeCommand: async () => undefined } as unknown as ICommandService;
 const listContextMenus = { showContextMenu() { } } as unknown as IContextMenuService;
 
-test("SessionsList keeps session buttons and focus while refreshing", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
+test('SessionsList keeps session buttons and focus while refreshing', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const changes = new Emitter<void>();
-	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: "list", flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	const opened: string[] = [];
 	let untitledSessions = [
-		{ untitledSessionId: "first", title: "First" },
-		{ untitledSessionId: "second", title: "Second" },
+		{ untitledSessionId: 'first', title: 'First' },
+		{ untitledSessionId: 'second', title: 'Second' },
 	];
 	for (const session of untitledSessions) {
 		writeNewChatDraftState(storage, { mode: 'agent', text: session.title, contexts: [] }, `untitled:${session.untitledSessionId}`);
@@ -49,13 +49,13 @@ test("SessionsList keeps session buttons and focus while refreshing", async () =
 	const sessionService = {
 		get untitledSessions() { return untitledSessions; },
 		sessions: [],
-		state: "ready", onDidChange: changes.event,
+		state: 'ready', onDidChange: changes.event,
 		error: undefined,
 	} as unknown as ISessionsManagementService;
 	const viewService = {
 		onDidChange: changes.event,
 		activeSelection: undefined,
-		get visibleSelections() { return untitledSessions.map(session => ({ kind: "untitled", session })); },
+		get visibleSelections() { return untitledSessions.map(session => ({ kind: 'untitled', session })); },
 		openNewSession() { },
 		openUntitledSession(id: string) { opened.push(id); },
 	} as unknown as ISessionsService;
@@ -63,8 +63,8 @@ test("SessionsList keeps session buttons and focus while refreshing", async () =
 	const executed: unknown[][] = [];
 	const contextMenus = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
 	const commands = { executeCommand: async (...args: unknown[]) => { executed.push(args); } } as ICommandService;
-	const list = new SessionsList(dom.window.document.body, "Sessions", "chat", sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications);
-	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>(".ash-sessions-list-item")];
+	const list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications);
+	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')];
 	list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
 	assert.equal(actions.length, 7);
@@ -75,25 +75,25 @@ test("SessionsList keeps session buttons and focus while refreshing", async () =
 
 	buttons[0].focus();
 	untitledSessions = [
-		{ untitledSessionId: "first", title: "Renamed" },
-		{ untitledSessionId: "second", title: "Second" },
+		{ untitledSessionId: 'first', title: 'Renamed' },
+		{ untitledSessionId: 'second', title: 'Second' },
 	];
 	changes.fire();
 
-	const refreshed = [...list.domNode.querySelectorAll<HTMLButtonElement>(".ash-sessions-list-item")];
+	const refreshed = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')];
 	assert.equal(refreshed[0], buttons[0]);
 	assert.equal(refreshed[1], buttons[1]);
 	assert.equal(dom.window.document.activeElement, buttons[0]);
-	assert.equal(refreshed[0].textContent, "Renamed (draft)");
+	assert.equal(refreshed[0].textContent, 'Renamed (draft)');
 	refreshed[0].click();
-	assert.deepEqual(opened, ["first"]);
+	assert.deepEqual(opened, ['first']);
 	assert.equal(list.domNode.querySelector('input[type=search]'), null);
 
 	untitledSessions = [untitledSessions[1]];
 	changes.fire();
-	assert.deepEqual([...list.domNode.querySelectorAll(".ash-sessions-list-item")], [buttons[1]]);
+	assert.deepEqual([...list.domNode.querySelectorAll('.ash-sessions-list-item')], [buttons[1]]);
 	buttons[0].click();
-	assert.deepEqual(opened, ["first"]);
+	assert.deepEqual(opened, ['first']);
 	untitledSessions = [];
 	changes.fire();
 	list.focus();
@@ -170,7 +170,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using domLifetime = toDisposable(() => dom.window.close());
 	using changes = new Emitter<void>();
-	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: "list", flushInterval: 0 });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	const opened: string[] = [];
 	const executed: unknown[][] = [];
 	let menu: IContextMenuDelegate | undefined;

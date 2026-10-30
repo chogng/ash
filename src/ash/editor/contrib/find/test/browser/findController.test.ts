@@ -1,16 +1,16 @@
 import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../base/common/event.js';
 import { validateJsonValue } from '../../../../../base/common/jsonValue.js';
-import { EditorOption, type IEditorFindOptions } from "../../../../common/config/editorOptions.js";
-import { Selection } from "../../../../common/core/selection.js";
-import { Position } from "../../../../common/core/position.js";
-import { Range } from "../../../../common/core/range.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import { EditorOption, type IEditorFindOptions } from '../../../../common/config/editorOptions.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
+import { TextModel } from '../../../../common/model/textModel.js';
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -24,28 +24,28 @@ import { IContextKeyService } from '../../../../../platform/contextkey/browser/c
 import { showHistoryKeybindingHint } from '../../../../../platform/history/browser/historyWidgetKeybindingHint.js';
 import { type IStorageService, type StorageValue, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 const installedGlobals = installEditorTestDom(browserEnvironment, [
 	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'MouseEvent', 'KeyboardEvent',
 ]);
 
-const { CodeEditorWidget } = await import("../../../../browser/widget/codeEditor/codeEditorWidget.js");
+const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { FindController, FindStartFocusAction, getSelectionSearchString } = await import("../../browser/findController.js");
+const { FindController, FindStartFocusAction, getSelectionSearchString } = await import('../../browser/findController.js');
 
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	browserEnvironment.window.close();
 });
 
-test("find opens, highlights matches, navigates, and restores focus", () => {
-	const fixture = createFixture("alpha beta alpha", new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1));
+test('find opens, highlights matches, navigates, and restores focus', () => {
+	const fixture = createFixture('alpha beta alpha', new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1));
 	using resources = fixture;
 
 	startFind(fixture);
 	assert.equal(fixture.find.getState().isRevealed, true);
-	assert.equal(fixture.searchInput.value, "alpha");
-	assert.equal(fixture.findElement.querySelector(".stanza-editor-find-result")?.textContent, "1 of 2");
+	assert.equal(fixture.searchInput.value, 'alpha');
+	assert.equal(fixture.findElement.querySelector('.stanza-editor-find-result')?.textContent, '1 of 2');
 	assert.equal(fixture.findElement.querySelector('[data-ash-icon-id="find-selection"]')?.getAttribute('aria-hidden'), 'true');
 	assert.deepEqual(fixture.model.getAllDecorations().filter(decoration => decoration.options.className === 'findMatch' || decoration.options.className === 'currentFindMatch').map(decoration => decoration.range).sort(Range.compareRangesUsingStarts), [
 		new Range(1, 1, 1, 6),
@@ -54,13 +54,13 @@ test("find opens, highlights matches, navigates, and restores focus", () => {
 	assert.deepEqual(fixture.model.getAllDecorations().filter(decoration => decoration.options.className === 'currentFindMatch').map(decoration => decoration.range), [new Range(1, 1, 1, 6)]);
 	assert.equal(fixture.dom.window.document.activeElement, fixture.searchInput);
 
-	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
+	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, 'Enter'));
 	assert.deepEqual(fixture.editor.getSelections()![0]!.getStartPosition(), new Position((0) + 1, (11) + 1));
 	assert.deepEqual(fixture.editor.getSelections()![0]!.getEndPosition(), new Position((0) + 1, (16) + 1));
-	assert.equal(fixture.findElement.querySelector(".stanza-editor-find-result")?.textContent, "2 of 2");
+	assert.equal(fixture.findElement.querySelector('.stanza-editor-find-result')?.textContent, '2 of 2');
 	assert.deepEqual(fixture.model.getAllDecorations().filter(decoration => decoration.options.className === 'currentFindMatch').map(decoration => decoration.range), [new Range(1, 12, 1, 17)]);
 
-	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Escape"));
+	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, 'Escape'));
 	assert.equal(fixture.find.getState().isRevealed, false);
 	assert.equal(matchDecorationCount(fixture), 0);
 	assert.equal(fixture.dom.window.document.activeElement, fixture.editorInput);
@@ -263,29 +263,29 @@ test('find sash resizes by keyboard and keeps the chosen width across editor lay
 	assert.ok(parseInt(fixture.findElement.style.width, 10) > 490);
 });
 
-test("find options project checked classes and report invalid regular expressions", () => {
-	const fixture = createFixture("Stanza alpha alphabet");
+test('find options project checked classes and report invalid regular expressions', () => {
+	const fixture = createFixture('Stanza alpha alphabet');
 	using resources = fixture;
 	startFind(fixture);
-	setInputValue(fixture.searchInput, "alpha");
+	setInputValue(fixture.searchInput, 'alpha');
 
 	const matchCase = requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match case"]');
 	const wholeWord = requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match whole word"]');
 	matchCase.click();
 	wholeWord.click();
-	assert.equal(matchCase.classList.contains("checked"), true);
-	assert.equal(matchCase.getAttribute("aria-pressed"), "true");
-	assert.equal(wholeWord.classList.contains("checked"), true);
+	assert.equal(matchCase.classList.contains('checked'), true);
+	assert.equal(matchCase.getAttribute('aria-pressed'), 'true');
+	assert.equal(wholeWord.classList.contains('checked'), true);
 	assert.equal(matchDecorationCount(fixture), 1);
 
 	const regularExpression = requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Use regular expression"]');
 	regularExpression.click();
-	setInputValue(fixture.searchInput, "(");
-	assert.equal(regularExpression.classList.contains("checked"), true);
+	setInputValue(fixture.searchInput, '(');
+	assert.equal(regularExpression.classList.contains('checked'), true);
 	assert.equal(fixture.find.getState().isRegex, true);
 	assert.equal(fixture.find.getState().searchString, '(');
-	assert.equal(fixture.searchInput.getAttribute("aria-invalid"), "true");
-	assert.equal(fixture.findElement.querySelector(".stanza-editor-find-result")?.textContent, "Invalid expression");
+	assert.equal(fixture.searchInput.getAttribute('aria-invalid'), 'true');
+	assert.equal(fixture.findElement.querySelector('.stanza-editor-find-result')?.textContent, 'Invalid expression');
 	assert.equal(matchDecorationCount(fixture), 0);
 });
 
@@ -308,46 +308,46 @@ test('closed find options keep visual and accessible toggle states in sync', () 
 	assert.equal(options.hidden, true);
 });
 
-test("find in selection keeps the opening scope through match navigation and supports Alt+L", () => {
-	const fixture = createFixture("alpha beta alpha beta alpha", new Position((0) + 1, (6) + 1), new Position((0) + 1, (16) + 1));
+test('find in selection keeps the opening scope through match navigation and supports Alt+L', () => {
+	const fixture = createFixture('alpha beta alpha beta alpha', new Position((0) + 1, (6) + 1), new Position((0) + 1, (16) + 1));
 	using resources = fixture;
 	startFind(fixture);
-	setInputValue(fixture.searchInput, "alpha");
+	setInputValue(fixture.searchInput, 'alpha');
 
 	const findInSelection = requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Find in selection"]');
 	assert.equal(findInSelection.disabled, false);
 	assert.equal(matchDecorationCount(fixture), 3);
 	findInSelection.click();
 
-	assert.equal(findInSelection.classList.contains("checked"), true);
-	assert.equal(findInSelection.getAttribute("aria-pressed"), "true");
+	assert.equal(findInSelection.classList.contains('checked'), true);
+	assert.equal(findInSelection.getAttribute('aria-pressed'), 'true');
 	assert.equal(matchDecorationCount(fixture), 1);
 	assert.deepEqual(fixture.editor.getSelections()![0]!.getStartPosition(), new Position((0) + 1, (11) + 1));
 	assert.deepEqual(fixture.editor.getSelections()![0]!.getEndPosition(), new Position((0) + 1, (16) + 1));
 
-	const toggle = keyboardEvent(fixture.dom.window, "l", { altKey: true });
+	const toggle = keyboardEvent(fixture.dom.window, 'l', { altKey: true });
 	fixture.searchInput.dispatchEvent(toggle);
 	assert.equal(toggle.defaultPrevented, true);
-	assert.equal(findInSelection.classList.contains("checked"), false);
+	assert.equal(findInSelection.classList.contains('checked'), false);
 	assert.equal(matchDecorationCount(fixture), 3);
 });
 
-test("find in selection restricts replace all to its tracked opening scope", () => {
-	const fixture = createFixture("alpha beta alpha beta alpha", new Position((0) + 1, (6) + 1), new Position((0) + 1, (16) + 1));
+test('find in selection restricts replace all to its tracked opening scope', () => {
+	const fixture = createFixture('alpha beta alpha beta alpha', new Position((0) + 1, (6) + 1), new Position((0) + 1, (16) + 1));
 	using resources = fixture;
 	startFind(fixture, true);
-	setInputValue(fixture.searchInput, "alpha");
+	setInputValue(fixture.searchInput, 'alpha');
 	requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Find in selection"]').click();
 	setInputValue(fixture.replaceInput, 'x');
 	requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Replace all matches"]').click();
 
-	assert.equal(fixture.model.getText(), "alpha beta x beta alpha");
+	assert.equal(fixture.model.getText(), 'alpha beta x beta alpha');
 	fixture.model.undo();
-	assert.equal(fixture.model.getText(), "alpha beta alpha beta alpha");
+	assert.equal(fixture.model.getText(), 'alpha beta alpha beta alpha');
 });
 
-test("configured find defaults seed toggles, selection scope, and non-looping navigation", () => {
-	const fixture = createFixture("Alpha beta Alpha", new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1), {
+test('configured find defaults seed toggles, selection scope, and non-looping navigation', () => {
+	const fixture = createFixture('Alpha beta Alpha', new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1), {
 		seedSearchStringFromSelection: 'never',
 		autoFindInSelection: 'always',
 		loop: false,
@@ -357,39 +357,39 @@ test("configured find defaults seed toggles, selection scope, and non-looping na
 	requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match case"]').click();
 	requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match whole word"]').click();
 
-	assert.equal(fixture.searchInput.value, "");
-	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match case"]').classList.contains("checked"), true);
-	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match whole word"]').classList.contains("checked"), true);
-	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Find in selection"]').classList.contains("checked"), true);
-	setInputValue(fixture.searchInput, "Alpha");
-	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
-	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, "Enter"));
+	assert.equal(fixture.searchInput.value, '');
+	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match case"]').classList.contains('checked'), true);
+	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Match whole word"]').classList.contains('checked'), true);
+	assert.equal(requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Find in selection"]').classList.contains('checked'), true);
+	setInputValue(fixture.searchInput, 'Alpha');
+	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, 'Enter'));
+	fixture.searchInput.dispatchEvent(keyboardEvent(fixture.dom.window, 'Enter'));
 	assert.deepEqual(fixture.editor.getSelections()![0]!.getStartPosition(), new Position((0) + 1, (0) + 1));
 	assert.deepEqual(fixture.editor.getSelections()![0]!.getEndPosition(), new Position((0) + 1, (5) + 1));
 });
 
-test("replace current and replace all use isolated undo transactions", () => {
-	const fixture = createFixture("a a a");
+test('replace current and replace all use isolated undo transactions', () => {
+	const fixture = createFixture('a a a');
 	using resources = fixture;
 	startFind(fixture, true);
-	setInputValue(fixture.searchInput, "a");
+	setInputValue(fixture.searchInput, 'a');
 	setInputValue(fixture.replaceInput, 'long');
 
-	assert.equal(fixture.replaceInput.closest(".stanza-editor-replace-row")?.hasAttribute("hidden"), false);
+	assert.equal(fixture.replaceInput.closest('.stanza-editor-replace-row')?.hasAttribute('hidden'), false);
 	const replaceOne = requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Replace current match"]');
 	replaceOne.click();
 	assert.equal(fixture.model.getText(), 'a a a');
 	replaceOne.click();
-	assert.equal(fixture.model.getText(), "long a a");
+	assert.equal(fixture.model.getText(), 'long a a');
 
 	setInputValue(fixture.replaceInput, 'x');
 	requiredElement<HTMLButtonElement>(fixture.findElement, '[aria-label="Replace all matches"]').click();
-	assert.equal(fixture.model.getText(), "long x x");
+	assert.equal(fixture.model.getText(), 'long x x');
 
 	fixture.model.undo();
-	assert.equal(fixture.model.getText(), "long a a");
+	assert.equal(fixture.model.getText(), 'long a a');
 	fixture.model.undo();
-	assert.equal(fixture.model.getText(), "a a a");
+	assert.equal(fixture.model.getText(), 'a a a');
 });
 
 test('find shares queries through its injected clipboard without changing copied text', async () => {
@@ -472,11 +472,11 @@ interface Fixture extends Disposable {
 }
 
 function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), active = anchor, options?: IEditorFindOptions, stored?: Map<string, string>, clipboard?: IClipboardService): Fixture {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const resources = new DisposableStore();
 	resources.add(toDisposable(() => dom.window.close()));
 	try {
-		const container = requiredElement<HTMLElement>(dom.window.document, "main");
+		const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 		const model = resources.add(new TextModel(text));
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		const services = resources.add(new InstantiationService());
@@ -491,7 +491,7 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 		}));
 		editor.layout({ width: 600, height: 120 });
 		editor.setSelection(Selection.fromPositions(anchor, active));
-		const editorInput = requiredElement<HTMLTextAreaElement>(container, ".stanza-editor-input");
+		const editorInput = requiredElement<HTMLTextAreaElement>(container, '.stanza-editor-input');
 		const storageService = stored ? new TestHistoryStorageService(stored) : undefined;
 		const find = resources.add(editor.invokeWithinContext(accessor => accessor.get(IInstantiationService)).createInstance(FindController, editor,
 			storageService ? FindWidgetSearchHistory.getOrCreate(storageService) : undefined,
@@ -500,9 +500,9 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 			dom,
 			model,
 			editor,
-			get findElement() { return requiredElement<HTMLDivElement>(container, ".stanza-editor-find-widget"); },
-			get searchInput() { return requiredElement<HTMLInputElement>(this.findElement, "input[aria-label=\"Find\"]"); },
-			get replaceInput() { return requiredElement<HTMLInputElement>(this.findElement, "input[aria-label=\"Replace\"]"); },
+			get findElement() { return requiredElement<HTMLDivElement>(container, '.stanza-editor-find-widget'); },
+			get searchInput() { return requiredElement<HTMLInputElement>(this.findElement, 'input[aria-label="Find"]'); },
+			get replaceInput() { return requiredElement<HTMLInputElement>(this.findElement, 'input[aria-label="Replace"]'); },
 			editorInput,
 			find,
 			[Symbol.dispose](): void {
@@ -578,11 +578,11 @@ function matchDecorationCount(fixture: Fixture): number {
 
 function setInputValue(input: HTMLInputElement, value: string): void {
 	input.value = value;
-	input.dispatchEvent(new input.ownerDocument.defaultView!.Event("input", { bubbles: true }));
+	input.dispatchEvent(new input.ownerDocument.defaultView!.Event('input', { bubbles: true }));
 }
 
 function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit = {}): KeyboardEvent {
-	return new targetWindow.KeyboardEvent("keydown", {
+	return new targetWindow.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
 		key,

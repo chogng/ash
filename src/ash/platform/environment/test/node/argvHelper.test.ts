@@ -12,20 +12,20 @@ test('memory credential storage is an explicit process flag and does not become 
 	assert.equal(parseLaunchArguments(['--', '--use-inmemory-secretstorage']).useInMemorySecretStorage, undefined);
 });
 
-test("packaged second-instance arguments retain the Workspace target without process-only switches", () => {
+test('packaged second-instance arguments retain the Workspace target without process-only switches', () => {
 	assert.deepEqual(parseMainProcessArgv({
-		arguments: ["/Applications/Ash.app/Contents/MacOS/Ash", "--user-data-dir", "/tmp/ash", "--remote-ssh", "build", "--folder", "/srv/project"],
-		packaging: "packaged",
-		appPath: "/Applications/Ash.app/Contents/Resources/app.asar",
-	}), ["--remote-ssh", "build", "--folder", "/srv/project"]);
+		arguments: ['/Applications/Ash.app/Contents/MacOS/Ash', '--user-data-dir', '/tmp/ash', '--remote-ssh', 'build', '--folder', '/srv/project'],
+		packaging: 'packaged',
+		appPath: '/Applications/Ash.app/Contents/Resources/app.asar',
+	}), ['--remote-ssh', 'build', '--folder', '/srv/project']);
 });
 
-test("development second-instance arguments remove Electron and the app entry", () => {
+test('development second-instance arguments remove Electron and the app entry', () => {
 	assert.deepEqual(parseMainProcessArgv({
-		arguments: ["/repo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron", "/repo", "/repo", "--folder", "/repo/project"],
-		packaging: "development",
-		appPath: "/repo",
-	}), ["--folder", "/repo/project"]);
+		arguments: ['/repo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron', '/repo', '/repo', '--folder', '/repo/project'],
+		packaging: 'development',
+		appPath: '/repo',
+	}), ['--folder', '/repo/project']);
 });
 
 test('development process switches before a custom entry do not turn the entry into a requested file', () => {

@@ -284,5 +284,3 @@ export class AnnotationsUpdate<T> {
 		return new AnnotationsUpdate(annotations);
 	}
 }
-
-

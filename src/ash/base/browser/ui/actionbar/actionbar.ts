@@ -1,17 +1,18 @@
 import './actionbar.css';
-import { addDisposableListener, h, isElement, isHTMLElement } from "../../dom.js";
-import { DataTransfers, DragAndDropObserver } from "../../dnd.js";
-import type { IAction } from "../../../common/actions.js";
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../common/lifecycle.js";
-import { rot } from "../../../common/numbers.js";
-import { type ActionViewItem, type ActionViewItemOptions, createActionViewItem } from "./actionViewItems.js";
-import { DndCssClasses } from "../dnd/dnd.js";
+import { addDisposableListener, h, isElement, isHTMLElement } from '../../dom.js';
+import { DataTransfers, DragAndDropObserver } from '../../dnd.js';
+import type { IAction } from '../../../common/actions.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
+import { rot } from '../../../common/numbers.js';
+import { type ActionViewItem, type ActionViewItemOptions, createActionViewItem } from './actionViewItems.js';
+import { DndCssClasses } from '../dnd/dnd.js';
 import type { Event } from '../../../common/event.js';
 import { DropdownMenuActionViewItem } from '../dropdown/dropdownMenuActionViewItem.js';
 import { disposableWindowTimeout } from '../../scheduler.js';
+import { createUuid } from '../../../common/uuid.js';
 
-export type ActionBarOrientation = "horizontal" | "vertical";
-export type ActionBarDropPosition = "before" | "after";
+export type ActionBarOrientation = 'horizontal' | 'vertical';
+export type ActionBarDropPosition = 'before' | 'after';
 
 export type ActionViewItemProvider = (
 	action: IAction,
@@ -32,7 +33,7 @@ export interface ActionBarDragAndDrop {
 export interface ActionBarOptions {
 	readonly actions?: readonly IAction[];
 	readonly ariaLabel?: string;
-	readonly ariaRole?: "toolbar" | "tablist";
+	readonly ariaRole?: 'toolbar' | 'tablist';
 	readonly orientation?: ActionBarOrientation;
 	readonly actionViewItemProvider?: ActionViewItemProvider;
 	readonly actionViewItemOptions?: ActionViewItemOptions;
@@ -78,27 +79,30 @@ export class ActionBar extends Disposable {
 	constructor(container: HTMLElement, options: ActionBarOptions = {}) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "div");
+		const element = h(ownerDocument, 'div');
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = "ash-action-bar";
+		element.className = 'ash-action-bar';
 		container.append(element);
-		this.orientation = options.orientation ?? "horizontal";
+		this.orientation = options.orientation ?? 'horizontal';
 		element.classList.add(this.orientation);
-		element.classList.toggle("highlight-toggled", options.highlightToggledItems === true);
-		element.setAttribute("role", options.ariaRole ?? "toolbar");
-		element.setAttribute("aria-orientation", this.orientation);
+		element.classList.toggle('highlight-toggled', options.highlightToggledItems === true);
+		element.setAttribute('role', options.ariaRole ?? 'toolbar');
+		element.setAttribute('aria-orientation', this.orientation);
 		if (options.ariaLabel) {
-			element.setAttribute("aria-label", options.ariaLabel);
+			element.setAttribute('aria-label', options.ariaLabel);
 		}
 		this.actionViewItemProvider = options.actionViewItemProvider;
-		this.actionViewItemOptions = options.actionViewItemOptions ?? {};
+		this.actionViewItemOptions = {
+			...options.actionViewItemOptions,
+			hoverGroupId: options.actionViewItemOptions?.hoverGroupId ?? createUuid(),
+		};
 		this.dragAndDrop = options.dragAndDrop;
-		element.classList.toggle("ash-action-bar-dnd", this.dragAndDrop !== undefined);
-		this._register(addDisposableListener(element, "keydown", (event) => {
+		element.classList.toggle('ash-action-bar-dnd', this.dragAndDrop !== undefined);
+		this._register(addDisposableListener(element, 'keydown', (event) => {
 			this.handleNavigation(event);
 		}));
-		this._register(addDisposableListener(element, "focusin", () => {
+		this._register(addDisposableListener(element, 'focusin', () => {
 			const activeElement = this.element.ownerDocument.activeElement;
 			const entry = this.entries.find(
 				({ container }) => container.contains(activeElement),
@@ -132,11 +136,11 @@ export class ActionBar extends Disposable {
 	}
 
 	add(action: IAction): ActionViewItem {
-		const container = h(this.element.ownerDocument, "div");
-		container.className = "ash-action-view-item";
-		container.classList.toggle("icon", action.icon !== undefined);
+		const container = h(this.element.ownerDocument, 'div');
+		container.className = 'ash-action-view-item';
+		container.classList.toggle('icon', action.icon !== undefined);
 		container.dataset.actionId = action.id;
-		container.setAttribute("role", "presentation");
+		container.setAttribute('role', 'presentation');
 		const entry = this.createEntry(action, container);
 		this.element.append(container);
 		this.entries.push(entry);
@@ -156,18 +160,21 @@ export class ActionBar extends Disposable {
 		const focusedControl = focusedEntry ? [...focusedEntry.container.querySelectorAll('button, [tabindex]')].indexOf(activeElement!) : -1;
 		// Retained action identities keep their view and DOM through selection and reordering.
 		const retained = new Map(this.entries.map(entry => [entry.action, entry]));
+		const created = new Set<ActionBarEntry>();
 		const next = actions.map(action => {
 			const entry = retained.get(action);
 			if (entry) {
 				retained.delete(action);
 				return entry;
 			}
-			const container = h(this.element.ownerDocument, "div");
-			container.className = "ash-action-view-item";
-			container.classList.toggle("icon", action.icon !== undefined);
+			const container = h(this.element.ownerDocument, 'div');
+			container.className = 'ash-action-view-item';
+			container.classList.toggle('icon', action.icon !== undefined);
 			container.dataset.actionId = action.id;
-			container.setAttribute("role", "presentation");
-			return this.createEntry(action, container);
+			container.setAttribute('role', 'presentation');
+			const createdEntry = this.createEntry(action, container);
+			created.add(createdEntry);
+			return createdEntry;
 		});
 		for (const entry of retained.values()) {
 			entry.store.dispose();
@@ -182,8 +189,11 @@ export class ActionBar extends Disposable {
 		}
 		const tabStop = next.find(entry => entry.action.enabled && entry.item === this.tabStop)
 			?? next.find(entry => entry.action.enabled);
+		// Retained slots already project their Tab state; only new or changed slots need a DOM write.
+		for (const entry of next) {
+			if (created.has(entry) || (entry.item === this.tabStop) !== (entry === tabStop)) entry.item.setTabbable(entry === tabStop);
+		}
 		this.tabStop = tabStop?.item;
-		for (const entry of next) entry.item.setTabbable(entry === tabStop);
 		if (focusedActionId && this.element.ownerDocument.activeElement !== activeElement) {
 			const entry = next.find(({ action }) => action.id === focusedActionId && action.enabled)
 				?? next.find(({ action }) => action.enabled);
@@ -270,14 +280,14 @@ export class ActionBar extends Disposable {
 			({ container }) => container.contains(activeElement),
 		);
 		let targetIndex: number;
-		if (direction === "first") {
+		if (direction === 'first') {
 			targetIndex = 0;
-		} else if (direction === "last") {
+		} else if (direction === 'last') {
 			targetIndex = entries.length - 1;
 		} else if (currentIndex === -1) {
-			targetIndex = direction === "next" ? 0 : entries.length - 1;
+			targetIndex = direction === 'next' ? 0 : entries.length - 1;
 		} else {
-			const delta = direction === "next" ? 1 : -1;
+			const delta = direction === 'next' ? 1 : -1;
 			targetIndex = rot(currentIndex + delta, entries.length);
 		}
 		const target = entries[targetIndex]!.item;
@@ -378,12 +388,13 @@ export class ActionBar extends Disposable {
 			store.add(visibility(visible => this.dropdownVisibilityChanged(item, visible)));
 			store.add(toDisposable(() => this.visibleDropdowns.delete(item)));
 		}
+		item.setHoverGroupId(this.actionViewItemOptions.hoverGroupId);
 		item.render(container);
 		const entry = { action, container, item, store };
 		if (item.draggable) {
 			container.draggable = true;
 			container.classList.add(DndCssClasses.Draggable);
-			store.add(addDisposableListener(container, "dragstart", (event: DragEvent) => {
+			store.add(addDisposableListener(container, 'dragstart', (event: DragEvent) => {
 				event.dataTransfer?.setData(DataTransfers.TEXT, action.label);
 			}));
 		}
@@ -404,7 +415,7 @@ export class ActionBar extends Disposable {
 		this.dragging = true;
 		this.draggingEntry = entry;
 		entry.container.classList.add(DndCssClasses.Dragging);
-		if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+		if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
 		this.dragAndDrop?.onDragStart(entry.action, event);
 	}
 
@@ -414,7 +425,7 @@ export class ActionBar extends Disposable {
 			this.clearDropTarget();
 			return;
 		}
-		if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
 		if (this.isNoopDrop(entry, position)) {
 			this.clearDropTarget();
 			return;
@@ -438,7 +449,7 @@ export class ActionBar extends Disposable {
 	private onEntryDragEnter(entry: ActionBarEntry, event: DragEvent): void {
 		const position = this.dropPositionForEntry(entry, event);
 		if (!this.dragAndDrop?.canDrop(event, entry.action, position)) return;
-		if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
 		this.dragAndDrop.onDragEnter?.(entry.action, position, event);
 	}
 
@@ -448,7 +459,7 @@ export class ActionBar extends Disposable {
 			this.clearDropTarget();
 			return;
 		}
-		if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
 		if (this.isNoopDrop(entry, position)) {
 			this.clearDropTarget();
 			return;
@@ -481,44 +492,44 @@ export class ActionBar extends Disposable {
 
 	private entryFromEvent(event: DragEvent): ActionBarEntry | undefined {
 		const target = event.target as Element | null;
-		let container = target?.closest<HTMLElement>(".ash-action-view-item");
+		let container = target?.closest<HTMLElement>('.ash-action-view-item');
 		while (container && this.element.contains(container)) {
 			const entry = this.entries.find((candidate) => candidate.container === container);
 			if (entry) return entry;
-			container = container.parentElement?.closest<HTMLElement>(".ash-action-view-item") ?? null;
+			container = container.parentElement?.closest<HTMLElement>('.ash-action-view-item') ?? null;
 		}
 		return undefined;
 	}
 
 	private dropTargetFromEvent(event: DragEvent): { entry: ActionBarEntry | undefined; position: ActionBarDropPosition; } {
-		const coordinate = this.orientation === "horizontal" ? event.clientX : event.clientY;
+		const coordinate = this.orientation === 'horizontal' ? event.clientX : event.clientY;
 		let lastLaidOutEntry: ActionBarEntry | undefined;
 		for (const entry of this.entries) {
 			const rect = entry.container.getBoundingClientRect();
-			const start = this.orientation === "horizontal" ? rect.left : rect.top;
-			const extent = this.orientation === "horizontal" ? rect.width : rect.height;
+			const start = this.orientation === 'horizontal' ? rect.left : rect.top;
+			const extent = this.orientation === 'horizontal' ? rect.width : rect.height;
 			if (extent <= 0) continue;
 			lastLaidOutEntry = entry;
-			if (coordinate < start + extent / 2) return { entry, position: "before" };
+			if (coordinate < start + extent / 2) return { entry, position: 'before' };
 		}
-		if (lastLaidOutEntry) return { entry: lastLaidOutEntry, position: "after" };
+		if (lastLaidOutEntry) return { entry: lastLaidOutEntry, position: 'after' };
 		const entry = this.entryFromEvent(event);
-		return { entry, position: entry ? "before" : "after" };
+		return { entry, position: entry ? 'before' : 'after' };
 	}
 
 	private isNoopDrop(entry: ActionBarEntry | undefined, position: ActionBarDropPosition): boolean {
 		const sourceIndex = this.draggingEntry ? this.entries.indexOf(this.draggingEntry) : -1;
 		if (sourceIndex < 0) return false;
 		const targetIndex = entry ? this.entries.indexOf(entry) : this.entries.length;
-		const insertionIndex = targetIndex + (entry && position === "after" ? 1 : 0);
+		const insertionIndex = targetIndex + (entry && position === 'after' ? 1 : 0);
 		return insertionIndex === sourceIndex || insertionIndex === sourceIndex + 1;
 	}
 
 	private dropPositionForEntry(entry: ActionBarEntry, event: DragEvent): ActionBarDropPosition {
 		const rect = entry.container.getBoundingClientRect();
-		const offset = this.orientation === "horizontal" ? event.clientX - rect.left : event.clientY - rect.top;
-		const extent = this.orientation === "horizontal" ? rect.width : rect.height;
-		return offset <= extent / 2 ? "before" : "after";
+		const offset = this.orientation === 'horizontal' ? event.clientX - rect.left : event.clientY - rect.top;
+		const extent = this.orientation === 'horizontal' ? rect.width : rect.height;
+		return offset <= extent / 2 ? 'before' : 'after';
 	}
 
 	private updateDropTarget(target: HTMLElement | undefined, position: ActionBarDropPosition): void {
@@ -527,12 +538,12 @@ export class ActionBar extends Disposable {
 		if (!target) return;
 		this.dropTarget = target;
 		this.dropPosition = position;
-		target.classList.add(position === "before" ? DndCssClasses.DropBefore : DndCssClasses.DropAfter);
+		target.classList.add(position === 'before' ? DndCssClasses.DropBefore : DndCssClasses.DropAfter);
 	}
 
 	private clearDropTarget(): void {
 		if (!this.dropTarget || !this.dropPosition) return;
-		this.dropTarget.classList.remove(this.dropPosition === "before" ? DndCssClasses.DropBefore : DndCssClasses.DropAfter);
+		this.dropTarget.classList.remove(this.dropPosition === 'before' ? DndCssClasses.DropBefore : DndCssClasses.DropAfter);
 		this.dropTarget = undefined;
 		this.dropPosition = undefined;
 	}
@@ -555,7 +566,7 @@ export class ActionBar extends Disposable {
 		const focusedControl = [...entry.container.querySelectorAll('button, [tabindex]')].indexOf(activeElement!);
 		entry.store.dispose();
 		entry.container.replaceChildren();
-		entry.container.classList.toggle("icon", action.icon !== undefined);
+		entry.container.classList.toggle('icon', action.icon !== undefined);
 		entry.action = action;
 		const replacement = this.createEntry(action, entry.container);
 		entry.item = replacement.item;
@@ -575,16 +586,16 @@ export class ActionBar extends Disposable {
 
 	private navigationDirection(
 		key: string,
-	): "first" | "last" | "next" | "previous" | undefined {
-		if (key === "Home") return "first";
-		if (key === "End") return "last";
-		if (this.orientation === "horizontal") {
-			if (key === "ArrowRight") return "next";
-			if (key === "ArrowLeft") return "previous";
+	): 'first' | 'last' | 'next' | 'previous' | undefined {
+		if (key === 'Home') return 'first';
+		if (key === 'End') return 'last';
+		if (this.orientation === 'horizontal') {
+			if (key === 'ArrowRight') return 'next';
+			if (key === 'ArrowLeft') return 'previous';
 			return undefined;
 		}
-		if (key === "ArrowDown") return "next";
-		if (key === "ArrowUp") return "previous";
+		if (key === 'ArrowDown') return 'next';
+		if (key === 'ArrowUp') return 'previous';
 		return undefined;
 	}
 }

@@ -118,6 +118,24 @@ test('Collapsing provider groups and searching uses one projection and preserves
 	assert.equal(models('').length, 3);
 });
 
+test('A single configured provider retains its group visibility and collapse controls', async () => {
+	using resources = new DisposableStore();
+	const { view, source, writes } = setup(resources);
+	source.read = async () => catalog.slice(0, 2);
+	await view.refresh();
+	const group = view.viewModelEntries.find(isLanguageModelProviderEntry)!;
+	assert.ok(group);
+	view.collapseAll();
+	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 0);
+	view.toggleCollapsed(view.viewModelEntries.find(isLanguageModelProviderEntry)!);
+	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 2);
+	await view.toggleGroupHidden(group);
+	assert.deepEqual(writes, [
+		{ provider: 'first', model: 'newest', visible: false },
+		{ provider: 'first', model: 'older', visible: false },
+	]);
+});
+
 test('Catalog refresh is independent of a pending provider credential observation', async () => {
 	using resources = new DisposableStore();
 	const { view, source, models } = setup(resources);
@@ -175,4 +193,73 @@ test('Model hover exposes supplied identity, description and context without fab
 	assert.ok(text.includes('128,000'));
 	assert.equal(hover.isTrusted, false);
 	assert.doesNotMatch(hover.value, /credits|cost|tool calling/iu);
+});
+
+
+test('Provider filters use exact identities and fuzzy model searches retain source highlight ranges', async () => {
+	using resources = new DisposableStore();
+	const { view, source, models } = setup(resources);
+	source.read = async () => [
+		{ model: { provider: 'openai', model: 'vision' }, displayName: 'ClaudeCodeModel', longContext: null },
+		{ model: { provider: 'openai-compatible', model: 'other' }, displayName: 'Claude Code Model', longContext: null },
+	];
+	source.providers = async () => [
+		{ connection: 'openai', provider: 'openai', displayName: 'OpenAI' },
+		{ connection: 'openai-compatible', provider: 'custom', displayName: 'OpenAI Compatible' },
+	] as ModelProviderCredentialStatus[];
+	await view.refresh();
+	assert.deepEqual(models('@provider:OPENAI').map(entry => entry.model.model.provider), ['openai']);
+	assert.deepEqual(models('@provider:" OpenAI Compatible "').map(entry => entry.model.model.provider), ['openai-compatible']);
+	assert.equal(models('@provider:open').length, 0);
+	assert.equal(models('@provider:openai @provider:openai-compatible').length, 2);
+	assert.deepEqual(models('CCM').map(entry => entry.modelNameMatches), [
+		[{ start: 0, end: 1 }, { start: 6, end: 7 }, { start: 10, end: 11 }],
+		[{ start: 0, end: 1 }, { start: 7, end: 8 }, { start: 12, end: 13 }],
+	]);
+});
+
+test('Tools and Agent filters require independent affirmative declarations and support their aliases', async () => {
+	using resources = new DisposableStore();
+	const { view, source, models } = setup(resources);
+	source.read = async () => [
+		{ ...catalog[0], capabilities: { toolCalling: 'supported', agentMode: 'unknown' } },
+		{ ...catalog[1], capabilities: { toolCalling: 'unsupported', agentMode: 'supported' } },
+		{ ...catalog[2], capabilities: { toolCalling: 'unknown', agentMode: 'unsupported' } },
+	];
+	await view.refresh();
+	for (const filter of ['@capability:tools', '@capability:toolCalling']) { assert.deepEqual(models(filter).map(entry => entry.model.model.model), ['newest']); }
+	for (const filter of ['@capability:agent', '@capability:agentMode']) { assert.deepEqual(models(filter).map(entry => entry.model.model.model), ['older']); }
+	assert.equal(models('@capability:tools @capability:agent').length, 0);
+	using rendered = renderMarkdown(getModelHoverContent(models('newest')[0].model), { ownerDocument: browserEnvironment.window.document });
+	const hover = rendered.element.textContent!.replaceAll('\u00a0', ' ');
+	assert.match(hover, /Tools: Supported; Agent mode: Unknown/);
+	assert.match(hover, /Pricing unavailable/);
+});
+
+
+test('Model descriptions render reference rates with currency, tier, range, provenance and exact zero prices', async () => {
+	using resources = new DisposableStore();
+	const { view, source, models } = setup(resources);
+	source.read = async () => [{ ...catalog[0], source: { providerId: 'openai', connectionId: 'api-connection', metadata: 'persistedObservation' }, pricing: [{ currency: 'USD', serviceTier: 'priority', region: 'global', minInputTokens: 0, maxInputTokens: 272001, input: '0', output: '2.000001', cacheRead: null, cacheWrite: null, revision: 'published-card', reviewedAt: '2026-09-04', sourceUrls: ['https://example.test/prices'] }] }];
+	await view.refresh();
+	using rendered = renderMarkdown(getModelHoverContent(models('')[0].model), { ownerDocument: browserEnvironment.window.document });
+	const hover = rendered.element.textContent!.replaceAll('\u00a0', ' ');
+	for (const fact of ['Saved provider observation', 'api-connection', 'USD per 1M tokens', 'Input 0', '2.000001', 'priority', '272,001', '2026-09-04', 'published-card', 'https://example.test/prices']) { assert.ok(hover.includes(fact), fact); }
+});
+
+test('Connection errors and empty observations remain scoped while healthy providers retain their models', async () => {
+	using resources = new DisposableStore();
+	const { view, source } = setup(resources);
+	const connection = { access: 'apiKey' as const, active: true, configured: true, ready: true, apiKeyPolicy: 'optional' as const, apiKeyConfigured: true };
+	source.providers = async () => [
+		{ ...connection, connection: 'first', provider: 'vendor-a', displayName: 'First Provider', catalog: { provider: 'first', connection: 'first', freshness: 'staleUsable', issues: ['refreshFailed'] } },
+		{ ...connection, connection: 'empty-connection', provider: 'empty-connection', displayName: 'Empty Connection', catalog: { provider: 'empty-connection', connection: 'empty-connection', freshness: 'fresh', issues: [] } },
+	];
+	await view.refresh(); await new Promise(resolve => setTimeout(resolve, 0));
+	const entries = view.filter('');
+	assert.ok(entries.some(entry => entry.type === 'model' && entry.model.model.provider === 'second'));
+	assert.ok(entries.some(entry => entry.type === 'status' && entry.provider === 'first' && entry.message.includes('Previously known models')));
+	assert.ok(entries.some(entry => entry.type === 'status' && entry.provider === 'empty-connection' && entry.message.includes('no models')));
+	assert.ok(view.filter('@provider:empty-connection').some(entry => entry.type === 'vendor'));
+	assert.ok(!view.filter('@provider:second').some(entry => entry.type === 'status'));
 });

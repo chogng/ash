@@ -1,7 +1,7 @@
 import { defaultButtonStyles, defaultCountBadgeStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Button, ButtonWithDropdown } from '../../../../base/browser/ui/button/button.js';
 import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
 import type { TreeElement as ObjectTreeElement } from '../../../../base/browser/ui/tree/tree.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
@@ -47,9 +47,8 @@ export class ScmViewPane extends ViewPane {
 	private readonly welcomeController: ViewWelcomeController;
 	private readonly commitInput: SCMInputWidget;
 	private readonly commitForm: HTMLFormElement;
-	private readonly commitButton: Button;
+	private readonly commitActionButton = this._register(new MutableDisposable<Button | ButtonWithDropdown>());
 	private readonly commitActions: HTMLDivElement;
-	private readonly commitDropdown: Button;
 	private readonly statusElement: HTMLDivElement;
 	private readonly tree: WorkbenchObjectTree<TreeElement>;
 	private readonly resourceLabels: ResourceLabels;
@@ -95,7 +94,7 @@ export class ScmViewPane extends ViewPane {
 		this.canCommitContext = SCMCanCommitContext.bindTo(this.titleContext);
 		this.viewModeContext = SCMViewModeContext.bindTo(this.titleContext);
 		this.viewSortKeyContext = SCMViewSortKeyContext.bindTo(this.titleContext);
-		this._viewMode = storageService.get('scm.viewMode', StorageScope.WORKSPACE) === 'list' ? 'list' : 'tree';
+		this._viewMode = storageService.get('scm.viewMode', StorageScope.WORKSPACE) === 'tree' ? 'tree' : 'list';
 		const sortKey = storageService.get('scm.viewSortKey', StorageScope.WORKSPACE);
 		this._viewSortKey = sortKey === 'name' || sortKey === 'status' ? sortKey : 'path';
 		this.viewModeContext.set(this._viewMode);
@@ -110,44 +109,6 @@ export class ScmViewPane extends ViewPane {
 		this.commitActions = h(document, 'div');
 		this.commitActions.className = 'ash-scm-commit-actions';
 		commitForm.append(this.commitActions);
-		const commitButton = this._register(new Button(this.commitActions, {
-			...defaultButtonStyles,
-			label: localize('scm.commit', 'Commit'),
-			icon: Lxicon.check,
-			contentAlignment: 'labelCentered',
-			type: 'submit',
-			title: localize('scm.commit', 'Commit'),
-		}));
-		commitButton.toggleClassName('ash-scm-commit', true);
-		this.commitButton = commitButton;
-		this.commitDropdown = this._register(new Button(this.commitActions, {
-			...defaultButtonStyles,
-			label: localize('scm.actionButton.moreActions', 'More commit actions'),
-			icon: Lxicon.chevronDown,
-			iconOnly: true,
-			title: localize('scm.actionButton.moreActions', 'More commit actions'),
-		}));
-		this.commitDropdown.toggleClassName('ash-scm-commit-dropdown', true);
-		this.commitDropdown.domNode.setAttribute('aria-haspopup', 'menu');
-		this.commitDropdown.domNode.setAttribute('aria-expanded', 'false');
-		this._register(this.commitDropdown.onDidClick(() => this.showCommitMenu()));
-		this._register(toDisposable(() => {
-			if (this.commitDropdown.domNode.getAttribute('aria-expanded') === 'true') this.contextMenuProvider.hideContextMenu();
-		}));
-		this._register(addDisposableListener(this.commitActions, 'keydown', event => {
-			const key = (event as KeyboardEvent).key;
-			if (key === 'ArrowDown' && !this.commitDropdown.hidden) {
-				event.preventDefault();
-				event.stopPropagation();
-				this.showCommitMenu();
-			} else if (key === 'ArrowRight' && event.target === commitButton.domNode && !this.commitDropdown.hidden) {
-				event.preventDefault();
-				this.commitDropdown.focus();
-			} else if (key === 'ArrowLeft' && event.target === this.commitDropdown.domNode) {
-				event.preventDefault();
-				commitButton.focus();
-			}
-		}));
 		this.statusElement = h(document, 'div');
 		this.statusElement.className = 'ash-scm-status ash-aria-live';
 		this.statusElement.setAttribute('role', 'status');
@@ -227,6 +188,10 @@ export class ScmViewPane extends ViewPane {
 	}
 
 	private get provider(): ISCMProvider | undefined { return this.scmViewService.activeRepository?.provider; }
+	private get commitButton(): Button {
+		const button = this.commitActionButton.value!;
+		return button instanceof ButtonWithDropdown ? button.primaryButton : button;
+	}
 
 	public override shouldShowWelcome(): boolean {
 		return [...this.scmService.repositories].length === 0;
@@ -328,11 +293,13 @@ export class ScmViewPane extends ViewPane {
 		}
 	}
 
-	private showCommitMenu(): void {
+	private getCommitMenuActions(): readonly IAction[] {
 		const provider = this.provider;
-		if (!provider || !this.commitDropdown.enabled || this.commitDropdown.hidden) return;
+		if (!provider) {
+			return [];
+		}
 		const groups = provider.actionButton?.secondaryCommands ?? [];
-		const actions = Separator.join(...groups.map(group => group.map(command => ({
+		return Separator.join(...groups.map(group => group.map(command => ({
 			id: command.id, label: stripIcons(command.title), tooltip: command.tooltip ?? stripIcons(command.title), enabled: true,
 			run: async () => {
 				// A menu belongs to the repository that opened it, even if selection changes before execution.
@@ -340,16 +307,6 @@ export class ScmViewPane extends ViewPane {
 				await this.executeCommand(command);
 			},
 		}))));
-		this.commitDropdown.focus();
-		this.commitDropdown.domNode.setAttribute('aria-expanded', 'true');
-		this.contextMenuProvider.showContextMenu({
-			getAnchor: () => this.commitDropdown.domNode,
-			getActions: () => actions,
-			autoSelectFirstItem: true,
-			onHide: () => {
-				this.commitDropdown.domNode.setAttribute('aria-expanded', 'false');
-			},
-		});
 	}
 
 	public get viewMode(): SCMViewMode { return this._viewMode; }
@@ -387,30 +344,55 @@ export class ScmViewPane extends ViewPane {
 			this.busyContext.set(provider?.isBusy === true);
 			this.canCommitContext.set(provider?.isBusy !== true && provider?.input.enabled === true && provider.input.canAccept);
 		});
-		if (this.commitDropdown.domNode.getAttribute('aria-expanded') === 'true'
-			&& (!provider || provider !== this.renderedProvider || provider.isBusy || provider.input.buttonVisible === false || !provider.actionButton?.enabled)) {
-			this.contextMenuProvider.hideContextMenu();
+		const descriptor = provider?.actionButton;
+		const hasDropdown = descriptor?.secondaryCommands?.some(group => group.length > 0) === true;
+		let actionButton = this.commitActionButton.value;
+		if (!actionButton || (actionButton instanceof ButtonWithDropdown) !== hasDropdown) {
+			const hadFocus = actionButton instanceof ButtonWithDropdown
+				? actionButton.element.contains(this.element.ownerDocument.activeElement)
+				: actionButton?.hasFocus();
+			const options = {
+				...defaultButtonStyles, label: localize('scm.commit', 'Commit'), presentation: 'primary' as const,
+				contentAlignment: 'labelCentered' as const, type: 'submit' as const,
+			};
+			actionButton = hasDropdown ? new ButtonWithDropdown(this.commitActions, {
+				...options, contextMenuProvider: this.contextMenuProvider,
+				actions: { getActions: () => this.getCommitMenuActions() }, addPrimaryActionToDropdown: false,
+			}) : new Button(this.commitActions, options);
+			this.commitActionButton.value = actionButton;
+			this.commitButton.toggleClassName('ash-scm-commit', true);
+			if (actionButton instanceof ButtonWithDropdown) {
+				const dropdown = actionButton.dropdownButton;
+				dropdown.toggleClassName('ash-scm-commit-dropdown', true);
+				dropdown.domNode.setAttribute('aria-label', localize('scm.actionButton.moreActions', 'More commit actions'));
+				dropdown.setTitle(localize('scm.actionButton.moreActions', 'More commit actions'));
+			}
+			this.commitTooltip = '';
+			if (hadFocus) {
+				this.commitButton.focus();
+			}
+		}
+		if (actionButton instanceof ButtonWithDropdown && (!provider || provider !== this.renderedProvider || provider.isBusy || provider.input.buttonVisible === false || !descriptor?.enabled)) {
+			actionButton.enabled = false;
 		}
 		this.commitForm.hidden = !provider;
 		this.commitForm.classList.toggle('hidden', !provider);
 		this.commitInput.input = provider?.input;
 		this.commitInput.domNode.hidden = provider?.input.visible === false;
 		this.commitActions.hidden = provider?.input.buttonVisible === false;
-		const descriptor = provider?.actionButton;
 		const buttonTitle = descriptor?.command.title ?? provider?.input.buttonLabel ?? localize('scm.commit', 'Commit');
 		const buttonLabel = stripIcons(buttonTitle).trim();
-		const icon = buttonTitle.match(/^\$\(([a-z0-9-]+)\)/u)?.[1];
+		const iconToken = buttonTitle.match(/^\$\(([a-z0-9-]+)(?:~([a-z]+))?\)/u);
+		const icon = iconToken?.[1];
 		this.commitButton.icon = icon ? getRegisteredIcon(icon, this.element.ownerDocument) : descriptor ? undefined : Lxicon.check;
+		this.commitButton.toggleClassName('ash-scm-commit-spinning', iconToken?.[2] === 'spin');
 		if (this.commitButton.label !== buttonLabel) this.commitButton.label = buttonLabel;
 		const buttonTooltip = descriptor?.command.tooltip ?? provider?.input.buttonTooltip ?? buttonLabel;
 		if (this.commitTooltip !== buttonTooltip) {
 			this.commitTooltip = buttonTooltip;
 			this.commitButton.setTitle(buttonTooltip);
 		}
-		this.commitButton.enabled = provider?.isBusy !== true && provider?.input.enabled === true && (descriptor?.enabled ?? provider.input.canAccept);
-		this.commitDropdown.hidden = !descriptor?.secondaryCommands?.some(group => group.length > 0);
-		this.commitDropdown.enabled = this.commitButton.enabled;
-		this.commitActions.classList.toggle('has-dropdown', !this.commitDropdown.hidden);
+		actionButton.enabled = provider?.isBusy !== true && provider?.input.enabled === true && (descriptor?.enabled ?? provider.input.canAccept);
 		this.statusElement.classList.toggle('ash-aria-live', !!provider);
 		this.statusElement.hidden = !provider;
 		this.statusElement.textContent = provider?.input.validationMessage || provider?.statusMessage || '';
@@ -497,10 +479,11 @@ export class ScmViewPane extends ViewPane {
 			this.showGroupMenu(group, heading, event as MouseEvent);
 		}));
 		this.renderActionToolbar(heading, group.actions, `${group.label} actions`, resources).classList.add('ash-scm-section-actions');
-		const count = resources.add(new CountBadge(heading, {
+		const countContainer = h(heading.ownerDocument, 'span', { className: 'ash-scm-section-count' });
+		heading.append(countContainer);
+		const count = resources.add(new CountBadge(countContainer, {
 			titleFormat: localize('scm.resourceCount', '{0} changes')
 		}, defaultCountBadgeStyles));
-		count.domNode.classList.add('ash-scm-section-count');
 		count.setCount(group.resources.length);
 		return heading;
 	}

@@ -32,8 +32,8 @@ suite('sessions browser component', () => {
 		await expect(titlebarAccounts).toHaveCount(horizontal ? 1 : 0);
 		if (horizontal) {
 			await expect(navigation.getByRole('button', { name: 'Accounts', exact: true })).toHaveCount(0);
-			await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('width', '16px');
-			await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('height', '16px');
+			await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('width', '18px');
+			await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('height', '18px');
 			await expect(titlebarAccounts).toHaveAttribute('aria-haspopup', 'menu');
 		}
 		for (const icon of await icons.all()) {
@@ -73,13 +73,61 @@ suite('sessions browser component', () => {
 		expect(runtimeErrors.get(page)).toEqual([]);
 	});
 
+	test('update download becomes Restart to Update above Accounts and supports retry', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?update&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const download = page.locator('.ash-sessions-update-status');
+		const account = page.locator('.ash-sessions-activity-host.bottom');
+		await expect(download).toBeHidden();
+		await page.evaluate(() => window.ashSessionsIntegration.setUpdateState('downloading'));
+		await expect(download.locator('.ash-sessions-update-row')).toHaveText('正在下载更新...');
+		await expect(download).toHaveAttribute('role', 'status');
+		const statusBounds = (await download.boundingBox())!;
+		const accountBounds = (await account.boundingBox())!;
+		expect(Math.abs(statusBounds.y + statusBounds.height - accountBounds.y)).toBeLessThan(1);
+		expect(Math.abs(statusBounds.x - accountBounds.x)).toBeLessThan(1);
+		expect(Math.abs(statusBounds.width - accountBounds.width)).toBeLessThan(1);
+		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('workbench.reduceMotion', 'on'));
+		await expect(download.locator('.ash-sessions-update-spinner')).toHaveCSS('animation-name', 'none');
+		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+		await expect(download).toBeVisible();
+		await page.evaluate(() => window.ashSessionsIntegration.setUpdateState('ready'));
+		const restart = download.getByRole('button', { name: '重启更新', exact: true });
+		await expect(restart).toBeEnabled();
+		await expect(download.locator('.ash-sessions-update-row')).toBeHidden();
+		expect(await download.boundingBox()).toEqual(statusBounds);
+		await restart.focus();
+		await restart.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.getUpdateInstallCount())).toBe(1);
+		await expect(download.getByRole('button', { name: '正在重启...' })).toBeDisabled();
+		await page.evaluate(() => window.ashSessionsIntegration.finishUpdateInstall(true));
+		await expect(page.locator('.ash-notification-message:visible').filter({ hasText: '无法安装更新。' })).toBeVisible();
+		await expect(restart).toBeEnabled();
+		await expect(restart).toBeFocused();
+		await restart.press('Space');
+		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.getUpdateInstallCount())).toBe(2);
+		await page.evaluate(() => window.ashSessionsIntegration.finishUpdateInstall(false));
+		await expect(download.getByRole('button', { name: '正在重启...' })).toBeDisabled();
+		await expect(download).toBeVisible();
+		await expect(account).toBeVisible();
+	});
+
+	test('a newly opened window retains Restart to Update when the update is ready', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?update=ready');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await expect(page.getByRole('button', { name: 'Restart to Update', exact: true })).toBeEnabled();
+		await expect(page.locator('.ash-sessions-update-spinner')).toBeHidden();
+	});
+
 	test('Sessions navigation icons and surface controls follow the selected component', async function () {
 		const { page } = browserTests;
 		const activityBar = page.locator('[data-part="activitybar"]');
 		await expect(activityBar).toHaveCount(0);
 		await expect(page.locator('.ash-workbench-activitybar, .ash-activity-bar-content')).toHaveCount(0);
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
-		await expectActivityIconSize(activityNavigation, 16);
+		await expectActivityIconSize(activityNavigation, 18);
 		await expect(activityNavigation.getByRole('button', { name: 'New' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
 		await expect(activityNavigation.getByRole('button', { name: 'New' })).toHaveAttribute('aria-current', 'page');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'code');
@@ -147,7 +195,8 @@ suite('sessions browser component', () => {
 				await surface.getByRole('button', { name: 'Search projects', exact: true }).click();
 			}
 			await surface.getByRole('searchbox').focus();
-			await expect(surface.getByRole('searchbox')).toHaveCSS('outline-style', 'solid');
+			await expect(surface.getByRole('searchbox')).toBeFocused();
+			await expect(surface.locator('.ash-toolbar-search-field')).toHaveCSS('border-top-style', 'solid');
 			await expect(activityNavigation).toBeVisible();
 		}
 	});
@@ -277,7 +326,7 @@ suite('sessions browser component', () => {
 			await layoutStyle.click();
 			await page.getByRole('option', { name: changedLayoutStyle }).click();
 			await expect(layoutStyle).toHaveText(changedLayoutStyle);
-			await expectActivityIconSize(activityNavigation, 16);
+			await expectActivityIconSize(activityNavigation, 18);
 			await layoutStyle.click();
 			await page.getByRole('option', { name: originalLayoutStyle }).click();
 			await page.keyboard.press('Escape');
@@ -298,17 +347,17 @@ suite('sessions browser component', () => {
 		expect(iconBounds).not.toBeNull();
 		expect(buttonBounds!.width).toBeGreaterThan(36);
 		expect(buttonBounds!.height).toBe(32);
-		expect(iconBounds!.width).toBe(16);
-		expect(iconBounds!.height).toBe(16);
+		expect(iconBounds!.width).toBe(18);
+		expect(iconBounds!.height).toBe(18);
 		const projectsIcon = activityNavigation.locator('button .ash-icon-label-icon:has(> [data-ash-icon-id="projects"])');
-		await expect(projectsIcon).toHaveCSS('width', '16px');
+		await expect(projectsIcon).toHaveCSS('width', '18px');
 		expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - (buttonBounds!.y + buttonBounds!.height / 2))).toBeLessThanOrEqual(1);
 		await chatButton.click({ button: 'right' });
 		await expect(page.getByRole('menuitem', { name: 'Activity Bar Size' })).toHaveCount(0);
 		await page.keyboard.press('Escape');
 		await expect(chatButton).toHaveCSS('height', '32px');
-		await expect(projectsIcon).toHaveCSS('width', '16px');
-		await expectActivityIconSize(activityNavigation, 16);
+		await expect(projectsIcon).toHaveCSS('width', '18px');
+		await expectActivityIconSize(activityNavigation, 18);
 		await expect(activityBar).toHaveCount(0);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
@@ -316,7 +365,7 @@ suite('sessions browser component', () => {
 		await expect(activityBar).toHaveCount(0);
 		const topHost = page.locator('.ash-sessions-activity-host.top');
 		await expect(topHost).toBeVisible();
-		await expectActivityIconSize(activityNavigation, 16, true);
+		await expectActivityIconSize(activityNavigation, 18, true);
 		const titlebarAccounts = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
 		await titlebarAccounts.press('Enter');
 		await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'true');
@@ -329,27 +378,27 @@ suite('sessions browser component', () => {
 		await page.getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
 		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
 		await expect(topHost).toBeHidden();
-		await expectActivityIconSize(activityNavigation, 16, true);
+		await expectActivityIconSize(activityNavigation, 18, true);
 		await page.locator('.ash-sessions-activity-host.bottom button').first().click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
 		await expect(activityBar).toHaveCount(0);
-		await expectActivityIconSize(activityNavigation, 16);
+		await expectActivityIconSize(activityNavigation, 18);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemcheckbox', { name: 'Top' }).click();
 		await expect(topHost).toBeVisible();
-		await expectActivityIconSize(activityNavigation, 16, true);
+		await expectActivityIconSize(activityNavigation, 18, true);
 		await topHost.locator('button').first().click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemcheckbox', { name: 'Bottom' }).click();
 		const bottomHost = page.locator('.ash-sessions-activity-host.bottom');
 		await expect(bottomHost).toBeVisible();
-		await expectActivityIconSize(activityNavigation, 16, true);
+		await expectActivityIconSize(activityNavigation, 18, true);
 		await titlebarAccounts.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemcheckbox', { name: 'Default' }).click();
-		await expectActivityIconSize(activityNavigation, 16);
+		await expectActivityIconSize(activityNavigation, 18);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemcheckbox', { name: 'Hidden' }).click();
@@ -564,7 +613,7 @@ suite('sessions browser component', () => {
 		await expect(navigation).toBeVisible();
 		await expect(modes).toBeVisible();
 		await expect(page.getByRole('button', { name: chinese ? '账户' : 'Accounts', exact: true })).toBeVisible();
-		if (!chinese) { await expectActivityIconSize(navigation, 16); }
+		if (!chinese) { await expectActivityIconSize(navigation, 18); }
 		await expect.poll(async () => Math.round((await sessions.boundingBox())!.width)).toBe(Math.round(expanded.width));
 	});
 
@@ -648,17 +697,26 @@ suite('sessions browser component', () => {
 		const primary = page.locator('[data-part="titlebar"] .ash-icon-label-icon > .ash-icon, .ash-window-mode-control .ash-segmented-control-option > .ash-icon, .ash-sessions-activity-item .ash-icon, :is(.ash-chat-input-send-action, .ash-chat-input-voice-action) .ash-icon');
 		const inline = page.locator('.ash-sessions-list-section-icon').first();
 		const accounts = page.locator('[data-action-id="sessions.activity.accounts"] button');
+		await page.locator('.ash-sessions-window').evaluate(element => {
+			const icon = element.querySelector('.ash-icon')!.cloneNode(true) as HTMLElement;
+			icon.dataset.iconSizeProbe = 'base';
+			icon.style.position = 'absolute';
+			icon.style.left = '-10000px';
+			element.append(icon);
+		});
+		const baseIcon = page.locator('[data-icon-size-probe="base"]');
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+			await expect(baseIcon).toHaveCSS('font-size', '16px');
 			expect(await primary.count()).toBeGreaterThan(5);
 			for (const icon of await primary.all()) {
-				await expect(icon).toHaveCSS('font-size', '16px');
-				await expect(icon).toHaveCSS('width', '16px');
-				await expect(icon).toHaveCSS('height', '16px');
+				await expect(icon).toHaveCSS('font-size', '18px');
+				await expect(icon).toHaveCSS('width', '18px');
+				await expect(icon).toHaveCSS('height', '18px');
 			}
-			await expect(inline).toHaveCSS('width', '16px');
-			await expect(inline.locator('.ash-icon')).toHaveCSS('font-size', '16px');
-			await expect(page.getByRole('note').locator('.ash-icon')).toHaveCSS('font-size', '16px');
+			await expect(inline).toHaveCSS('width', '18px');
+			await expect(inline.locator('.ash-icon')).toHaveCSS('font-size', '18px');
+			await expect(page.getByRole('note').locator('.ash-icon')).toHaveCSS('font-size', '18px');
 			await page.locator('[data-action-id="sessions.newSession"] button').click({ button: 'right' });
 			const auxiliary = page.locator('.ash-menu .ash-submenu-indicator > .ash-icon').first();
 			await expect(auxiliary).toHaveCSS('font-size', '12px');
@@ -668,16 +726,27 @@ suite('sessions browser component', () => {
 			const menuIcons = page.locator('.ash-menu .ash-icon');
 			expect(await menuIcons.count()).toBeGreaterThan(0);
 			for (const icon of await menuIcons.all()) {
-				await expect(icon).toHaveCSS('font-size', '16px');
-				await expect(icon).toHaveCSS('width', '16px');
+				await expect(icon).toHaveCSS('font-size', '18px');
+				await expect(icon).toHaveCSS('width', '18px');
 			}
 			await page.keyboard.press('Escape');
 			await expect(accounts).toBeFocused();
 		}
+		await page.locator('.ash-sessions-window').evaluate(element => (element as HTMLElement).style.setProperty('--ash-lxiconFontSize-large', '20px'));
+		for (const icon of await primary.all()) {
+			await expect(icon).toHaveCSS('font-size', '20px');
+			await expect(icon).toHaveCSS('width', '20px');
+		}
+		await expect(baseIcon).toHaveCSS('font-size', '16px');
+		await page.locator('[data-action-id="sessions.newSession"] button').click({ button: 'right' });
+		await expect(page.locator('.ash-menu .ash-submenu-indicator > .ash-icon').first()).toHaveCSS('font-size', '12px');
+		await page.keyboard.press('Escape');
+		await page.locator('.ash-sessions-window').evaluate(element => (element as HTMLElement).style.removeProperty('--ash-lxiconFontSize-large'));
+		await baseIcon.evaluate(element => element.remove());
 		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
 		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox').focus();
 		await page.keyboard.insertText('Icon sizing draft');
-		await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-send-action .ash-icon')).toHaveCSS('font-size', '16px');
+		await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-send-action .ash-icon')).toHaveCSS('font-size', '18px');
 		await page.screenshot({ path: testInfo.outputPath(`sessions-icon-roles-${locale}.png`) });
 		const ide = await context.newPage();
 		try {

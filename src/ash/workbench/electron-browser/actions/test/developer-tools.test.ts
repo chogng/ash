@@ -1,14 +1,14 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import {
 	MenuId,
 	registerAction2,
-} from "../../../../platform/actions/common/actions.js";
+} from '../../../../platform/actions/common/actions.js';
 import {
 	MenuService,
-} from "../../../../platform/actions/common/menuService.js";
-import { ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { InstantiationService } from "../../../../platform/instantiation/common/instantiationService.js";
+} from '../../../../platform/actions/common/menuService.js';
+import { ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import {
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
 	NATIVE_HOST_PICK_FOLDER_CHANNEL,
@@ -18,25 +18,44 @@ import {
 	NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL,
 	NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL,
 	NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
-} from "../../../../platform/native/common/nativeHost.js";
+} from '../../../../platform/native/common/nativeHost.js';
 import {
 	nativeHostIpcRoutes,
-} from "../../../../platform/native/electron-main/nativeHostIpc.js";
+} from '../../../../platform/native/electron-main/nativeHostIpc.js';
 import {
 	INativeHostService,
-} from "../../../../workbench/common/services.js";
+} from '../../../../workbench/common/services.js';
 import {
 	ToggleDeveloperToolsCommandId,
-} from "../../../../workbench/electron-browser/actions/developerActions.js";
+} from '../../../../workbench/electron-browser/actions/developerActions.js';
 import { OpenFolderAction, OpenFolderCommandId } from '../../../../workbench/browser/actions/workspaceActions.js';
-import "../../../../workbench/electron-browser/desktop.contribution.js";
+import '../../../../workbench/electron-browser/desktop.contribution.js';
 import {
 	CommandService,
-} from "../../../../workbench/services/commands/common/commandService.js";
+} from '../../../../workbench/services/commands/common/commandService.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { OpenFolderWorkspaceSupportContext } from '../../../../workbench/common/contextkeys.js';
+import { KeybindingRuleKind, KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { logicalKey } from '../../../../base/common/keybindings.js';
+import { isMacintosh } from '../../../../base/common/platform.js';
+import { createTestWorkbenchContextKeysHandler } from '../../../test/common/testWorkbenchContextKeys.js';
 
-test("native host routes validate folder picking and developer tools", async () => {
+test('the desktop inspector shortcut follows the host development context', () => {
+	using contexts = new ContextKeyService();
+	const rule = KeybindingsRegistry.getKeybindings().find(rule => rule.kind === KeybindingRuleKind.Command && rule.command === ToggleDeveloperToolsCommandId);
+	assert.ok(rule);
+	assert.deepEqual(rule.keybinding.chords, [logicalKey('i', isMacintosh ? { primaryKey: true, altKey: true } : { primaryKey: true, shiftKey: true })]);
+	assert.equal(contexts.contextMatchesRules(rule.when), false);
+	{
+		using development = createTestWorkbenchContextKeysHandler(contexts, { isBuilt: false });
+		assert.equal(contexts.contextMatchesRules(rule.when), true);
+	}
+	assert.equal(contexts.contextMatchesRules(rule.when), false);
+	using packaged = createTestWorkbenchContextKeysHandler(contexts, { isBuilt: true });
+	assert.equal(contexts.contextMatchesRules(rule.when), false);
+});
+
+test('native host routes validate folder picking and developer tools', async () => {
 	let pickedFolder: string | undefined;
 	let toggles = 0;
 	let savedFileOptions: unknown;
@@ -56,7 +75,7 @@ test("native host routes validate folder picking and developer tools", async () 
 		isAdmin: async () => false,
 		performDialogOperation: () => undefined,
 		pickFolder: async () => {
-			pickedFolder = "/tmp/trusted-folder";
+			pickedFolder = '/tmp/trusted-folder';
 			return pickedFolder;
 		},
 		showOpenDialog: async () => ({ canceled: false, filePaths: ['C:\\project\\paper.md'] }),
@@ -66,7 +85,7 @@ test("native host routes validate folder picking and developer tools", async () 
 		revealFile: () => { },
 		showSaveDialog: async (options) => {
 			savedFileOptions = options;
-			return { canceled: false, filePath: "C:\\project\\draft.txt" };
+			return { canceled: false, filePath: 'C:\\project\\draft.txt' };
 		},
 		isAccessibilitySupportEnabled: () => false,
 		setWindowTheme: (theme) => {
@@ -118,8 +137,8 @@ test("native host routes validate folder picking and developer tools", async () 
 		() => pickFolder.validate(null),
 		/does not accept parameters/,
 	);
-	assert.equal(await pickFolder.invoke(pickFolder.validate(undefined)), "/tmp/trusted-folder");
-	assert.equal(pickedFolder, "/tmp/trusted-folder");
+	assert.equal(await pickFolder.invoke(pickFolder.validate(undefined)), '/tmp/trusted-folder');
+	assert.equal(pickedFolder, '/tmp/trusted-folder');
 	assert.throws(() => pickFile.validate(null), /Invalid open dialog options/);
 	assert.throws(() => pickFile.validate({ properties: ['invalid'] }), /Invalid dialog properties/);
 	assert.throws(() => pickFile.validate({ properties: ['openFile'], filters: [{ name: 'Text', extensions: ['../txt'] }] }), /Invalid file filter/);
@@ -135,9 +154,9 @@ test("native host routes validate folder picking and developer tools", async () 
 		() => saveFile.validate({ defaultPath: 42 }),
 		/Invalid dialog defaultPath/,
 	);
-	const validatedSaveFile = saveFile.validate({ defaultPath: "Untitled-1" });
-	assert.deepEqual(await saveFile.invoke(validatedSaveFile), { canceled: false, filePath: "C:\\project\\draft.txt" });
-	assert.deepEqual(savedFileOptions, { defaultPath: "Untitled-1" });
+	const validatedSaveFile = saveFile.validate({ defaultPath: 'Untitled-1' });
+	assert.deepEqual(await saveFile.invoke(validatedSaveFile), { canceled: false, filePath: 'C:\\project\\draft.txt' });
+	assert.deepEqual(savedFileOptions, { defaultPath: 'Untitled-1' });
 	assert.deepEqual(saveFile.validate({ defaultPath: 'C:\\project\\report.txt', filters: [{ name: 'Text', extensions: ['txt'] }] }), { defaultPath: 'C:\\project\\report.txt', filters: [{ name: 'Text', extensions: ['txt'] }] });
 	assert.throws(
 		() => accessibilitySupport.validate(null),
@@ -145,18 +164,18 @@ test("native host routes validate folder picking and developer tools", async () 
 	);
 	assert.equal(accessibilitySupport.invoke(accessibilitySupport.validate(undefined)), false);
 	assert.throws(
-		() => setWindowTheme.validate({ backgroundColor: "white", symbolColor: "#000000", backdropColor: '#00000073' }),
+		() => setWindowTheme.validate({ backgroundColor: 'white', symbolColor: '#000000', backdropColor: '#00000073' }),
 		/backgroundColor must be an opaque hexadecimal color/,
 	);
 	const validatedTheme = setWindowTheme.validate({
-		backgroundColor: "#F3F3F3",
-		symbolColor: "#424242",
+		backgroundColor: '#F3F3F3',
+		symbolColor: '#424242',
 		backdropColor: '#00000073',
 	});
 	setWindowTheme.invoke(validatedTheme);
 	assert.deepEqual(windowThemes, [{
-		backgroundColor: "#f3f3f3",
-		symbolColor: "#424242",
+		backgroundColor: '#f3f3f3',
+		symbolColor: '#424242',
 		backdropColor: '#00000073',
 	}]);
 	assert.throws(() => setWindowDimmed.validate('true'), /boolean/);
@@ -172,7 +191,7 @@ test("native host routes validate folder picking and developer tools", async () 
 	assert.equal(toggles, 1);
 });
 
-test("desktop commands are available from the command palette", async () => {
+test('desktop commands are available from the command palette', async () => {
 	registerAction2(OpenFolderAction);
 	const services = new InstantiationService();
 	let toggles = 0;
@@ -246,7 +265,7 @@ test("desktop commands are available from the command palette", async () => {
 	const action = paletteActions.find(
 		({ id }) => id === ToggleDeveloperToolsCommandId,
 	);
-	assert.equal(action?.label, "Developer: Toggle Developer Tools");
+	assert.equal(action?.label, 'Developer: Toggle Developer Tools');
 	await action?.run();
 	assert.equal(toggles, 1);
 	const helpMenuActions = new MenuService(commands, contexts)
@@ -255,14 +274,14 @@ test("desktop commands are available from the command palette", async () => {
 	const helpMenuAction = helpMenuActions.find(
 		({ id }) => id === ToggleDeveloperToolsCommandId,
 	);
-	assert.equal(helpMenuAction?.label, "Developer: Toggle Developer Tools");
+	assert.equal(helpMenuAction?.label, 'Developer: Toggle Developer Tools');
 	await helpMenuAction?.run();
 	assert.equal(toggles, 2);
 
 	const openFolder = paletteActions.find(
 		({ id }) => id === OpenFolderCommandId,
 	);
-	assert.equal(openFolder?.label, "Open Folder...");
+	assert.equal(openFolder?.label, 'Open Folder...');
 	await openFolder?.run();
 	assert.equal(folderOpens, 1);
 	const fileMenuActions = new MenuService(commands, contexts)
@@ -271,7 +290,7 @@ test("desktop commands are available from the command palette", async () => {
 	const openFolderFromMenu = fileMenuActions.find(
 		({ id }) => id === OpenFolderCommandId,
 	);
-	assert.equal(openFolderFromMenu?.label, "Open Folder...");
+	assert.equal(openFolderFromMenu?.label, 'Open Folder...');
 	await openFolderFromMenu?.run();
 	assert.equal(folderOpens, 2);
 });

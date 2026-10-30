@@ -1,10 +1,10 @@
-import { localize } from "../../../../nls.js";
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { ICommandService } from "../../../../platform/commands/common/commands.js";
-import { INotificationService, NotificationPriority, NotificationsFilter, Severity, type INotificationHandle } from "../../../../platform/notification/common/notification.js";
+import { localize } from '../../../../nls.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { INotificationService, NotificationPriority, NotificationsFilter, Severity, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { ProgressLocation, type IProgress, type IProgressService, type IProgressOptions, type IProgressWindowOptions, type IProgressNotificationOptions, type IProgressStep } from "../../../../platform/progress/common/progress.js";
-import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from "../../statusbar/browser/statusbar.js";
+import { ProgressLocation, type IProgress, type IProgressService, type IProgressOptions, type IProgressWindowOptions, type IProgressNotificationOptions, type IProgressStep } from '../../../../platform/progress/common/progress.js';
+import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from '../../statusbar/browser/statusbar.js';
 import { IViewsService } from '../../views/common/viewsService.js';
 import { IViewDescriptorService, WorkbenchViewContainerId } from '../../../common/views.js';
 import { IPaneCompositePartService } from '../../panecomposite/browser/panecomposite.js';
@@ -144,7 +144,7 @@ export class ProgressService extends Disposable implements IProgressService {
 			finally { record.finish(); }
 		}
 		super.disposeCore();
-		if (errors.length) throw new AggregateError(errors, "Failed to cancel progress tasks");
+		if (errors.length) throw new AggregateError(errors, 'Failed to cancel progress tasks');
 	}
 
 	private showNotification(record: ProgressTask): void {
@@ -157,7 +157,7 @@ export class ProgressService extends Disposable implements IProgressService {
 		record.notificationWorked = record.total === undefined ? 0 : record.worked;
 		record.notification = this.notifications.notify({
 			severity: Severity.Info,
-			message: this.taskText(record) || localize('progress.running', "Working…"),
+			message: this.taskText(record) || localize('progress.running', 'Working…'),
 			source: options.source,
 			priority,
 			progress: record.total === undefined ? { infinite: true } : { total: record.total, worked: record.worked },
@@ -166,7 +166,7 @@ export class ProgressService extends Disposable implements IProgressService {
 					tooltip: '',
 					enabled: true,
 					id: 'progress.cancel',
-					label: typeof options.cancellable === 'string' ? options.cancellable : localize('progress.cancel', "Cancel"),
+					label: typeof options.cancellable === 'string' ? options.cancellable : localize('progress.cancel', 'Cancel'),
 					run: () => record.cancel(),
 				}]
 			} : undefined,
@@ -187,7 +187,7 @@ export class ProgressService extends Disposable implements IProgressService {
 	private updateNotification(record: ProgressTask): void {
 		const handle = record.notification;
 		if (!handle) return;
-		handle.updateMessage(this.taskText(record) || localize('progress.running', "Working…"));
+		handle.updateMessage(this.taskText(record) || localize('progress.running', 'Working…'));
 		if (record.total === undefined) { handle.progress.infinite(); record.notificationWorked = 0; }
 		else {
 			handle.progress.total(record.total);
@@ -200,7 +200,7 @@ export class ProgressService extends Disposable implements IProgressService {
 	private taskText(record: ProgressTask): string {
 		const title = record.options.title;
 		return title && record.message
-			? localize('progress.titleMessage', "{0}: {1}", title, record.message)
+			? localize('progress.titleMessage', '{0}: {1}', title, record.message)
 			: title || record.message || '';
 	}
 
@@ -218,10 +218,10 @@ export class ProgressService extends Disposable implements IProgressService {
 		const entry = {
 			text, ariaLabel: text,
 			icon: Lxicon.sync, showProgress: true,
-			tooltip: source ? localize('progress.sourceTooltip', "[{0}] {1}", source, text) : text,
+			tooltip: source ? localize('progress.sourceTooltip', '[{0}] {1}', source, text) : text,
 			run: () => this.commands.executeCommand(command),
 		};
 		if (this.windowStatus.value) this.windowStatus.value.update(entry);
-		else this.windowStatus.value = this.statusbar.addEntry(entry, { id: "status.progress", alignment: StatusbarAlignment.Left, priority: -Number.MAX_SAFE_INTEGER });
+		else this.windowStatus.value = this.statusbar.addEntry(entry, { id: 'status.progress', alignment: StatusbarAlignment.Left, priority: -Number.MAX_SAFE_INTEGER });
 	}
 }

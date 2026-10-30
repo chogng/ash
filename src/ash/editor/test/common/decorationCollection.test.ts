@@ -1,9 +1,9 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { TextDecorationChangeReason, TextDecorationCollection } from "../../common/model/decorationCollection.js";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { TextDecorationChangeReason, TextDecorationCollection } from '../../common/model/decorationCollection.js';
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
 import { TrackedRangeStickiness } from '../../common/model.js';
 
 
@@ -16,8 +16,8 @@ const range = (
 	position(0, endColumn),
 );
 
-test("TextDecorationCollection owns stable IDs and opaque metadata", () => {
-	using model = new TextModel("abcdef");
+test('TextDecorationCollection owns stable IDs and opaque metadata', () => {
+	using model = new TextModel('abcdef');
 	using decorations =
 		new TextDecorationCollection<{ readonly kind: string; }>(model);
 	const reasons: TextDecorationChangeReason[] = [];
@@ -29,12 +29,12 @@ test("TextDecorationCollection owns stable IDs and opaque metadata", () => {
 	const id = decorations.add({
 		range: range(1, 3),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: { kind: "search" },
+		metadata: { kind: 'search' },
 	});
 	decorations.update(id, {
 		range: range(2, 5),
 		stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
-		metadata: { kind: "diagnostic" },
+		metadata: { kind: 'diagnostic' },
 	});
 	const updated = decorations.get(id);
 	const snapshot = decorations.decorations;
@@ -54,12 +54,12 @@ test("TextDecorationCollection owns stable IDs and opaque metadata", () => {
 		updated: {
 			id,
 			range: range(2, 5),
-			metadata: { kind: "diagnostic" },
+			metadata: { kind: 'diagnostic' },
 		},
 		snapshot: [{
 			id,
 			range: range(2, 5),
-			metadata: { kind: "diagnostic" },
+			metadata: { kind: 'diagnostic' },
 		}],
 		snapshotFrozen: true,
 		entryFrozen: true,
@@ -73,18 +73,18 @@ test("TextDecorationCollection owns stable IDs and opaque metadata", () => {
 	});
 });
 
-test("TextDecorationCollection reports tracked range movement", () => {
-	using model = new TextModel("abc");
+test('TextDecorationCollection reports tracked range movement', () => {
+	using model = new TextModel('abc');
 	using decorations = new TextDecorationCollection<string>(model);
 	const id = decorations.add({
 		range: range(1, 2),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "match",
+		metadata: 'match',
 	});
 	const events: unknown[] = [];
 	using listener = decorations.onDidChange(event => events.push(event));
 
-	model.applyOperations([{ range: range(0, 0), text: "X" }]);
+	model.applyOperations([{ range: range(0, 0), text: 'X' }]);
 	model.undo();
 
 	assert.deepEqual(events, [
@@ -94,7 +94,7 @@ test("TextDecorationCollection reports tracked range movement", () => {
 			decorations: [{
 				id,
 				range: range(2, 3),
-				metadata: "match",
+				metadata: 'match',
 			}],
 		},
 		{
@@ -103,14 +103,14 @@ test("TextDecorationCollection reports tracked range movement", () => {
 			decorations: [{
 				id,
 				range: range(1, 2),
-				metadata: "match",
+				metadata: 'match',
 			}],
 		},
 	]);
 });
 
-test("TextDecorationCollection exposes tracked ranges before change listeners finish", () => {
-	using model = new TextModel("abc");
+test('TextDecorationCollection exposes tracked ranges before change listeners finish', () => {
+	using model = new TextModel('abc');
 	let decorations: TextDecorationCollection<string>;
 	let observedRange: Range | undefined;
 	using earlyListener = model.onDidChangeContent(() => {
@@ -121,21 +121,21 @@ test("TextDecorationCollection exposes tracked ranges before change listeners fi
 	decorations.add({
 		range: range(1, 2),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "match",
+		metadata: 'match',
 	});
 
-	model.applyOperations([{ range: range(0, 0), text: "X" }]);
+	model.applyOperations([{ range: range(0, 0), text: 'X' }]);
 
 	assert.deepEqual(observedRange, range(2, 3));
 });
 
-test("TextDecorationCollection validates replaceAll atomically", () => {
-	using model = new TextModel("abc");
+test('TextDecorationCollection validates replaceAll atomically', () => {
+	using model = new TextModel('abc');
 	using decorations = new TextDecorationCollection<string>(model);
 	const originalId = decorations.add({
 		range: range(0, 1),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "original",
+		metadata: 'original',
 	});
 	let eventCount = 0;
 	using listener = decorations.onDidChange(() => eventCount += 1);
@@ -144,18 +144,18 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 		{
 			range: range(1, 2),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			metadata: "valid",
+			metadata: 'valid',
 		},
 		{
 			range: Range.fromPositions(position(2, 0)),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			metadata: "invalid",
+			metadata: 'invalid',
 		},
 	]), /lineNumber/);
 	assert.deepEqual(decorations.decorations, [{
 		id: originalId,
 		range: range(0, 1),
-		metadata: "original",
+		metadata: 'original',
 	}]);
 	assert.equal(eventCount, 0);
 
@@ -163,12 +163,12 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 		{
 			range: range(0, 1),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			metadata: "first",
+			metadata: 'first',
 		},
 		{
 			range: range(2, 3),
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			metadata: "second",
+			metadata: 'second',
 		},
 	]);
 	assert.deepEqual({
@@ -186,27 +186,27 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 	});
 });
 
-test("TextDecorationCollection applies a delta in one event and retains reusable IDs", () => {
-	using model = new TextModel("abc");
+test('TextDecorationCollection applies a delta in one event and retains reusable IDs', () => {
+	using model = new TextModel('abc');
 	using decorations = new TextDecorationCollection<string>(model);
-	const first = decorations.add({ range: range(0, 1), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: "first" });
-	const second = decorations.add({ range: range(1, 2), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: "second" });
+	const first = decorations.add({ range: range(0, 1), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: 'first' });
+	const second = decorations.add({ range: range(1, 2), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges, metadata: 'second' });
 	let eventCount = 0;
 	using listener = decorations.onDidChange(() => eventCount += 1);
 
 	const ids = decorations.deltaDecorations([first, second], [{
 		range: range(2, 3),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "updated",
+		metadata: 'updated',
 	}]);
 
 	assert.deepEqual(ids, [first]);
-	assert.deepEqual(decorations.decorations, [{ id: first, range: range(2, 3), metadata: "updated" }]);
+	assert.deepEqual(decorations.decorations, [{ id: first, range: range(2, 3), metadata: 'updated' }]);
 	assert.equal(eventCount, 1);
 });
 
-test("Decoration owners remain independent over a shared model", () => {
-	using model = new TextModel("abc");
+test('Decoration owners remain independent over a shared model', () => {
+	using model = new TextModel('abc');
 	using diagnostics =
 		new TextDecorationCollection<{ readonly severity: number; }>(model);
 	using search = new TextDecorationCollection<string>(model);
@@ -218,7 +218,7 @@ test("Decoration owners remain independent over a shared model", () => {
 	const searchId = search.add({
 		range: range(2, 3),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "result",
+		metadata: 'result',
 	});
 
 	diagnostics.delete(diagnosticId);
@@ -231,22 +231,22 @@ test("Decoration owners remain independent over a shared model", () => {
 		search: [{
 			id: searchId,
 			range: range(2, 3),
-			metadata: "result",
+			metadata: 'result',
 		}],
 	});
 });
 
-test("TextDecorationCollection disposal does not own the model", () => {
-	using model = new TextModel("abc");
+test('TextDecorationCollection disposal does not own the model', () => {
+	using model = new TextModel('abc');
 	const decorations = new TextDecorationCollection<string>(model);
 	decorations.add({
 		range: range(0, 1),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-		metadata: "owned",
+		metadata: 'owned',
 	});
 	decorations.dispose();
 
 	assert.throws(() => decorations.decorations, /already disposed/);
-	model.applyEdits([{ range: range(0, 1), text: "A" }]);
-	assert.equal(model.getText(), "Abc");
+	model.applyEdits([{ range: range(0, 1), text: 'A' }]);
+	assert.equal(model.getText(), 'Abc');
 });

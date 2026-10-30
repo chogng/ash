@@ -1,5 +1,5 @@
-import type { SkillDescriptor, SkillReference } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { SkillSelectorDefinition } from "../../../services/chat/common/chatService.js";
+import type { SkillDescriptor, SkillReference } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { SkillSelectorDefinition } from '../../../services/chat/common/chatService.js';
 
 const SKILL_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const SKILL_TOKEN = /(^|\s)\$([a-z0-9](?:[a-z0-9-]*[a-z0-9])?)(?=\s|$)/g;
@@ -13,7 +13,7 @@ export function toSkillSelectors(skills: readonly SkillDescriptor[]): readonly S
 		name: skill.id.name,
 		description: skill.description,
 		source: skill.id.source,
-		skill: { id: { ...skill.id }, version: { type: "pinnedDigest", digest: skill.contentDigest } },
+		skill: { id: { ...skill.id }, version: { type: 'pinnedDigest', digest: skill.contentDigest } },
 	}));
 }
 

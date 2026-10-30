@@ -1,10 +1,10 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { observeElementSize, observeResize } from "../../browser/observer.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { observeElementSize, observeResize } from '../../browser/observer.js';
 
-test("resize observation uses the target document and owns all targets", () => {
-	const ownerDocument = new JSDOM("<!doctype html><body><div></div><span></span></body>").window.document;
+test('resize observation uses the target document and owns all targets', () => {
+	const ownerDocument = new JSDOM('<!doctype html><body><div></div><span></span></body>').window.document;
 	const instances: TestResizeObserver[] = [];
 	class WindowResizeObserver extends TestResizeObserver {
 		constructor(callback: ResizeObserverCallback) {
@@ -12,24 +12,24 @@ test("resize observation uses the target document and owns all targets", () => {
 			instances.push(this);
 		}
 	}
-	Object.defineProperty(ownerDocument.defaultView, "ResizeObserver", {
+	Object.defineProperty(ownerDocument.defaultView, 'ResizeObserver', {
 		value: WindowResizeObserver,
 	});
 	const targets = [...ownerDocument.body.children];
 	const deliveries: (readonly ResizeObserverEntry[])[] = [];
-	const registration = observeResize(targets, entries => deliveries.push(entries), { box: "border-box" });
+	const registration = observeResize(targets, entries => deliveries.push(entries), { box: 'border-box' });
 
 	assert.equal(instances.length, 1);
 	assert.deepEqual(instances[0]?.targets, targets);
-	assert.deepEqual(instances[0]?.options, [{ box: "border-box" }, { box: "border-box" }]);
+	assert.deepEqual(instances[0]?.options, [{ box: 'border-box' }, { box: 'border-box' }]);
 	instances[0]?.emit([]);
 	assert.equal(deliveries.length, 1);
 	registration.dispose();
 	assert.equal(instances[0]?.disconnected, true);
 });
 
-test("element-size observation falls back to the content rectangle", () => {
-	const ownerDocument = new JSDOM("<!doctype html><body><div></div></body>").window.document;
+test('element-size observation falls back to the content rectangle', () => {
+	const ownerDocument = new JSDOM('<!doctype html><body><div></div></body>').window.document;
 	let observer: TestResizeObserver | undefined;
 	class WindowResizeObserver extends TestResizeObserver {
 		constructor(callback: ResizeObserverCallback) {
@@ -37,7 +37,7 @@ test("element-size observation falls back to the content rectangle", () => {
 			observer = this;
 		}
 	}
-	Object.defineProperty(ownerDocument.defaultView, "ResizeObserver", {
+	Object.defineProperty(ownerDocument.defaultView, 'ResizeObserver', {
 		value: WindowResizeObserver,
 	});
 	const sizes: { readonly width: number; readonly height: number; }[] = [];
@@ -52,17 +52,17 @@ test("element-size observation falls back to the content rectangle", () => {
 	assert.equal(sizes[0]?.height, 180);
 });
 
-test("resize observation is disposable when the capability is unavailable", () => {
-	const ownerDocument = new JSDOM("<!doctype html><body><div></div></body>").window.document;
+test('resize observation is disposable when the capability is unavailable', () => {
+	const ownerDocument = new JSDOM('<!doctype html><body><div></div></body>').window.document;
 	using registration = observeResize(ownerDocument.body.firstElementChild!, () => {
-		throw new Error("Unavailable observers must not deliver");
+		throw new Error('Unavailable observers must not deliver');
 	});
 	registration.dispose();
 });
 
-test("resize observation keeps auxiliary-window constructors isolated", () => {
-	const firstDocument = new JSDOM("<!doctype html><body><div></div></body>").window.document;
-	const secondDocument = new JSDOM("<!doctype html><body><div></div></body>").window.document;
+test('resize observation keeps auxiliary-window constructors isolated', () => {
+	const firstDocument = new JSDOM('<!doctype html><body><div></div></body>').window.document;
+	const secondDocument = new JSDOM('<!doctype html><body><div></div></body>').window.document;
 	const firstInstances: TestResizeObserver[] = [];
 	const secondInstances: TestResizeObserver[] = [];
 	installResizeObserver(firstDocument, firstInstances);
@@ -89,7 +89,7 @@ function installResizeObserver(ownerDocument: Document, instances: TestResizeObs
 			instances.push(this);
 		}
 	}
-	Object.defineProperty(ownerDocument.defaultView, "ResizeObserver", { value: WindowResizeObserver });
+	Object.defineProperty(ownerDocument.defaultView, 'ResizeObserver', { value: WindowResizeObserver });
 }
 
 class TestResizeObserver {

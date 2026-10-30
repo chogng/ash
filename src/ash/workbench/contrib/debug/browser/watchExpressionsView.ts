@@ -40,27 +40,27 @@ export class WatchExpressionsView extends ViewPane {
 		this.watchElement.className = 'ash-debug-list ash-debug-watch';
 		this.watchElement.setAttribute('aria-label', localize('debug.watch', 'Watch'));
 		this.contentElement.append(this.watchElement);
-		this.watchForm = h(document, "form");
-		this.watchForm.className = "ash-debug-input-form empty";
+		this.watchForm = h(document, 'form');
+		this.watchForm.className = 'ash-debug-input-form empty';
 		this.watchForm.hidden = true;
-		this.watchInput = h(document, "input");
-		this.watchInput.type = "text";
+		this.watchInput = h(document, 'input');
+		this.watchInput.type = 'text';
 		this.watchForm.append(this.watchInput);
 		this.addWatchButton = this._register(new Button(this.watchForm, {
 			...defaultButtonStyles,
-			label: localize("debug.addWatch", "Add watch expression"),
+			label: localize('debug.addWatch', 'Add watch expression'),
 			icon: Lxicon.add,
 			iconOnly: true,
-			type: "submit",
-			title: localize("debug.addWatch", "Add watch expression"),
+			type: 'submit',
+			title: localize('debug.addWatch', 'Add watch expression'),
 		}));
 		this.contentElement.prepend(this.watchForm);
-		this.watchToolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, contextMenus, { ariaLabel: localize("debug.watch", "Watch") }));
-		const addWatchLabel = localize("debug.addWatch", "Add watch expression");
-		const removeAllWatchesLabel = localize("debug.removeAllWatches", "Remove All Expressions");
+		this.watchToolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, contextMenus, { ariaLabel: localize('debug.watch', 'Watch') }));
+		const addWatchLabel = localize('debug.addWatch', 'Add watch expression');
+		const removeAllWatchesLabel = localize('debug.removeAllWatches', 'Remove All Expressions');
 		this.watchToolbar.setActions([
 			{
-				id: "debug.addWatch",
+				id: 'debug.addWatch',
 				label: addWatchLabel,
 				tooltip: addWatchLabel,
 				enabled: true,
@@ -68,12 +68,12 @@ export class WatchExpressionsView extends ViewPane {
 				run: () => {
 					this.setCollapsed(false);
 					this.watchForm.hidden = false;
-					this.watchForm.classList.remove("empty");
+					this.watchForm.classList.remove('empty');
 					this.watchInput.focus();
 				},
 			},
 			{
-				id: "debug.removeAllWatches",
+				id: 'debug.removeAllWatches',
 				label: removeAllWatchesLabel,
 				tooltip: removeAllWatchesLabel,
 				enabled: true,
@@ -85,12 +85,12 @@ export class WatchExpressionsView extends ViewPane {
 				},
 			},
 		]);
-		this._register(addDisposableListener(this.watchInput, "keydown", event => {
-			if (event.key === "Escape" && !event.isComposing) {
+		this._register(addDisposableListener(this.watchInput, 'keydown', event => {
+			if (event.key === 'Escape' && !event.isComposing) {
 				event.preventDefault();
-				this.watchInput.value = "";
+				this.watchInput.value = '';
 				this.watchForm.hidden = true;
-				this.watchForm.classList.add("empty");
+				this.watchForm.classList.add('empty');
 				this.watchToolbar.focus();
 			}
 		}));
@@ -129,21 +129,21 @@ export class WatchExpressionsView extends ViewPane {
 		this.watchElement.replaceChildren(...this.debug.watchExpressions.map((expression, index) => watchItem(this.rowControls, this.element.ownerDocument, expression, this.watchResults.find(result => result.expression === expression), index)));
 	}
 	private isCurrentInspection(session: IDebugSession, generation: number): boolean {
-		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === "stopped";
+		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === 'stopped';
 	}
 
 	private addWatch(event: Event): void {
 		event.preventDefault();
 		const expression = this.watchInput.value;
 		this.debug.addWatchExpression(expression);
-		this.watchInput.value = "";
+		this.watchInput.value = '';
 		this.watchForm.hidden = true;
-		this.watchForm.classList.add("empty");
+		this.watchForm.classList.add('empty');
 		this.watchToolbar.focus();
 	}
 
 	private removeWatch(event: Event): void {
-		const index = indexFromEvent(event, ".ash-debug-watch-remove", "watchIndex", this.element.ownerDocument);
+		const index = indexFromEvent(event, '.ash-debug-watch-remove', 'watchIndex', this.element.ownerDocument);
 		const expression = index === undefined ? undefined : this.debug.watchExpressions[index];
 		if (expression) this.debug.removeWatchExpression(expression);
 	}
@@ -151,7 +151,7 @@ export class WatchExpressionsView extends ViewPane {
 	private async refreshWatches(generation: number): Promise<void> {
 		const session = this.debug.session;
 		const expressions = this.debug.watchExpressions;
-		if (!session || session.state !== "stopped") { this.watchResults = expressions.map(expression => ({ expression })); this.render(); return; }
+		if (!session || session.state !== 'stopped') { this.watchResults = expressions.map(expression => ({ expression })); this.render(); return; }
 		const frameId = this.debug.getViewModel().focusedStackFrame?.id;
 		const loading = session.evaluateWatchExpressions(expressions, frameId);
 		const progress = this.getProgressIndicator().show(true, 150);
@@ -169,21 +169,21 @@ export class WatchExpressionsView extends ViewPane {
 
 }
 function watchItem(owner: DisposableStore, document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement {
-	const item = h(document, "li");
-	const value = h(document, "span");
-	value.className = "ash-debug-watch-value";
-	value.textContent = `${expression}${result?.result ? ` = ${result.result.result}` : result?.error ? ` — ${result.error}` : ""}`;
+	const item = h(document, 'li');
+	const value = h(document, 'span');
+	value.className = 'ash-debug-watch-value';
+	value.textContent = `${expression}${result?.result ? ` = ${result.result.result}` : result?.error ? ` — ${result.error}` : ''}`;
 	owner.add(getHoverDelegate().setupHover({ target: value, content: value.textContent }));
 	item.append(value);
 	const remove = owner.add(new Button(item, {
 		...defaultButtonStyles,
-		label: localize("debug.removeWatch", "Remove watch expression"),
+		label: localize('debug.removeWatch', 'Remove watch expression'),
 		icon: Lxicon.close,
 		iconOnly: true,
-		size: "small",
-		title: localize("debug.removeWatch", "Remove watch expression"),
+		size: 'small',
+		title: localize('debug.removeWatch', 'Remove watch expression'),
 	})).domNode;
-	remove.classList.add("ash-debug-watch-remove");
+	remove.classList.add('ash-debug-watch-remove');
 	remove.dataset.watchIndex = String(index);
 	return item;
 }

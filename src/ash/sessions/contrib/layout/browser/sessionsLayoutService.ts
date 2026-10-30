@@ -17,6 +17,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
@@ -44,6 +45,9 @@ const activeEntryKey = 'sessions.layout.activeEntry';
 
 /** Applies feature-supplied entries without owning their resource or workspace selection. */
 export class SessionsLayoutService extends Disposable implements ISessionsLayoutService, IDesktopLayoutContext {
+	public get editorWorkingSetState() { return this.controller.editorWorkingSetState; }
+	public retainEditor(input: IResourceEditorInput) { return this.controller.retainEditor(input); }
+	public suppressEditorAutoVisibility() { return this.controller.suppressEditorAutoVisibility(); }
 	private readonly conversationChanged = this._register(new Emitter<void>());
 	public readonly onDidChangeConversationVisibility = this.conversationChanged.event;
 	public get conversationVisible(): boolean { return this.activeEntry.get()?.conversation === 'optional' && this.layout.isPartVisible('sessions'); }
@@ -82,7 +86,9 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		const raw = storage.get(visibilityKey, StorageScope.PROFILE) ?? storage.get('sessions.layout.modeState', StorageScope.PROFILE);
 		if (raw !== undefined) {
 			const value: unknown = JSON.parse(raw);
-			if (!isRecord(value)) { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
+			if (!isRecord(value)) {
+				throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
+			}
 			for (const [id, state] of Object.entries(value)) {
 				if (!isRecord(state) || ['details', 'panel', 'documents'].some(field => typeof state[field] !== 'boolean')) {
 					throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));

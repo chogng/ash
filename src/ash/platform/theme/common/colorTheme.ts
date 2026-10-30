@@ -1,21 +1,21 @@
-import { Color } from "../../../base/common/color.js";
-import { Colors, type ColorIdentifier, type ColorValue, type ResolvedColorContribution } from "./colorRegistry.js";
-import "./colors/baseColors.js";
-import "./colors/chartsColors.js";
-import "./colors/componentColors.js";
-import "./colors/editorColors.js";
-import "./colors/inputColors.js";
-import "./colors/listColors.js";
-import "./colors/menuColors.js";
-import "./colors/minimapColors.js";
-import "./colors/miscColors.js";
-import "./colors/quickpickColors.js";
-import "./colors/searchColors.js";
+import { Color } from '../../../base/common/color.js';
+import { Colors, type ColorIdentifier, type ColorValue, type ResolvedColorContribution } from './colorRegistry.js';
+import './colors/baseColors.js';
+import './colors/chartsColors.js';
+import './colors/componentColors.js';
+import './colors/editorColors.js';
+import './colors/inputColors.js';
+import './colors/listColors.js';
+import './colors/menuColors.js';
+import './colors/minimapColors.js';
+import './colors/miscColors.js';
+import './colors/quickpickColors.js';
+import './colors/searchColors.js';
 import { getTokenClassificationRegistry, type TokenStyleData } from './tokenClassificationRegistry.js';
-import { Sizes } from "./sizeRegistry.js";
-import "./sizes/baseSizes.js";
-import { ColorScheme } from "./theme.js";
-import type { IColorTheme, ITokenStyle, ThemeColors } from "./themeService.js";
+import { Sizes } from './sizeRegistry.js';
+import './sizes/baseSizes.js';
+import { ColorScheme } from './theme.js';
+import type { IColorTheme, ITokenStyle, ThemeColors } from './themeService.js';
 
 export interface IColorThemeOptions {
 	readonly id: string;
@@ -138,7 +138,7 @@ function resolveThemeColors(scheme: ColorScheme, overrides: Readonly<Record<stri
 	return { entries, map, colors };
 }
 
-export const darkColorTheme = createColorTheme({ id: "ash-dark", label: "Ash Dark", colorScheme: ColorScheme.Dark });
-export const lightColorTheme = createColorTheme({ id: "ash-light", label: "Ash Light", colorScheme: ColorScheme.Light });
-export const highContrastDarkColorTheme = createColorTheme({ id: "ash-high-contrast-dark", label: "Ash High Contrast Dark", colorScheme: ColorScheme.HighContrastDark });
-export const highContrastLightColorTheme = createColorTheme({ id: "ash-high-contrast-light", label: "Ash High Contrast Light", colorScheme: ColorScheme.HighContrastLight });
+export const darkColorTheme = createColorTheme({ id: 'ash-dark', label: 'Ash Dark', colorScheme: ColorScheme.Dark });
+export const lightColorTheme = createColorTheme({ id: 'ash-light', label: 'Ash Light', colorScheme: ColorScheme.Light });
+export const highContrastDarkColorTheme = createColorTheme({ id: 'ash-high-contrast-dark', label: 'Ash High Contrast Dark', colorScheme: ColorScheme.HighContrastDark });
+export const highContrastLightColorTheme = createColorTheme({ id: 'ash-high-contrast-light', label: 'Ash High Contrast Light', colorScheme: ColorScheme.HighContrastLight });

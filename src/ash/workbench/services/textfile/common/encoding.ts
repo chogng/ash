@@ -35,4 +35,3 @@ export function assertEncoding(encoding: unknown): asserts encoding is string {
 		throw new RangeError(localize('files.unsupportedEncoding', 'Unsupported file encoding: {0}', String(encoding)));
 	}
 }
-

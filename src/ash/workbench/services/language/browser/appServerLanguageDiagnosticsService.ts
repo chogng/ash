@@ -1,28 +1,28 @@
-import { ITextFileService } from "../../textfile/common/textfiles.js";
-import { VSBuffer } from "../../../../base/common/buffer.js";
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, combinedDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
-import { Position } from "../../../../editor/common/core/position.js";
-import { Range } from "../../../../editor/common/core/range.js";
+import { ITextFileService } from '../../textfile/common/textfiles.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, combinedDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { type URI } from '../../../../base/common/uri.js';
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range } from '../../../../editor/common/core/range.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../../editor/common/languages.js';
-import { type TextModel } from "../../../../editor/common/model/textModel.js";
-import { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { AppServerRemoteError } from "../../../../platform/agentHost/common/appServerError.js";
-import { workspaceResourceFromPath } from "../../../../platform/workspace/common/workspace.js";
-import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
-import { workspaceRelativePath, IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { type TextModel } from '../../../../editor/common/model/textModel.js';
+import { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
+import { workspaceResourceFromPath } from '../../../../platform/workspace/common/workspace.js';
+import { type ILanguageApi } from '../../../../platform/language/common/languageApi.js';
+import { workspaceRelativePath, IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
-import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../.build/protocol/typescript/index.js";
-import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
-import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
+import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from '../../../../../../.build/protocol/typescript/index.js';
+import { type ICodeIntelligenceDocumentService } from '../../codeIntelligence/common/codeIntelligenceDocumentService.js';
+import { AppServerLanguageSupport } from './appServerLanguageSupport.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
-import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
+import { resolveAppServerLanguageDirAccess } from './appServerLanguageWorkspace.js';
+import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from '../common/languageDiagnosticsService.js';
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const SYNCHRONIZE_DELAY_MS = 150;
-const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(["LanguageServiceUnavailable", "PermissionRequired"]);
+const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(['LanguageServiceUnavailable', 'PermissionRequired']);
 
 interface PullDiagnosticCapabilities {
 	readonly server: string;
@@ -95,7 +95,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			this.enqueueSynchronization(entry, event.content);
 		}));
 		const subscription = events.subscribe(event => {
-			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
+			if (event.method === 'language/diagnostics') this.acceptDiagnostics(event.params);
 			if (event.method === 'language/diagnosticsRefresh') {
 				const dirId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
 				const queued = this.diagnosticRefreshes.size > 0;
@@ -120,13 +120,22 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				}
 			}
 			if (event.method === 'extensions/changed') this.clearPullCapabilities();
-			if (event.method === "extensions/changed" || event.method === "config/changed") this.queuePermissionRefresh();
+			if (event.method === 'extensions/changed' || event.method === 'config/changed') this.queuePermissionRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('rust-analyzer')) this.queuePermissionRefresh();
 		}));
-		if (checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queuePermissionRefresh()));
+		if (checkWorkspaceTrust) {
+			this._register(workspaceTrust.onDidChangeTrustedFolders(() => this.queuePermissionRefresh()));
+			this._register(workspaceTrust.addWorkspaceTrustTransitionParticipant({
+				participate: async () => {
+					this.queuePermissionRefresh();
+					await Promise.resolve();
+					await this.permissionQueue;
+				}
+			}));
+		}
 		this._register(workspace.onDidChangeWorkspace(() => {
 			this.clearPullCapabilities();
 			this.languageAllowed = false;
@@ -178,7 +187,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		const target = this.workspaceTarget(resource);
 		const key = resource.toString();
 		const existing = this.entries.get(key);
-		if (existing && (existing.model !== model || existing.languageId !== languageId)) throw new Error("One language document resource cannot bind multiple models or languages");
+		if (existing && (existing.model !== model || existing.languageId !== languageId)) throw new Error('One language document resource cannot bind multiple models or languages');
 		if (!target || model.largeFile.tooLargeForSynchronization) return Disposable.None;
 		if (existing) {
 			const reopening = existing.references === 0;
@@ -260,8 +269,8 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		let disposed = false;
 		return toDisposablePublisher(
 			(revision, diagnostics) => {
-				if (disposed) throw new ReferenceError("Language diagnostics publisher is already disposed");
-				if (!Number.isSafeInteger(revision) || revision < 1) throw new RangeError("Language diagnostics revision must be a positive safe integer");
+				if (disposed) throw new ReferenceError('Language diagnostics publisher is already disposed');
+				if (!Number.isSafeInteger(revision) || revision < 1) throw new RangeError('Language diagnostics revision must be a positive safe integer');
 				const snapshot = Object.freeze({ resource, revision, diagnostics: Object.freeze([...diagnostics]) });
 				const current = this.publishedDiagnostics.get(id)?.snapshot;
 				if (current?.revision === revision && equalDiagnostics(current.diagnostics, snapshot.diagnostics)) return;
@@ -326,7 +335,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				try {
 					const report = await this.api.documentDiagnostics({ document }, { signal: request.signal });
 					if (!this.alive || request.signal.aborted || generation !== this.permissionRefreshGeneration || languageGeneration !== entry.languageGeneration || entry.references === 0 || this.pullCapabilities.get(key) !== capabilities) return;
-					if (report.kind === "full") this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics }, capabilities);
+					if (report.kind === 'full') this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics }, capabilities);
 				} catch (error) {
 					if (!request.signal.aborted && !isUnsupportedDiagnosticPull(error)) throw error;
 				} finally {
@@ -569,18 +578,18 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 }
 
 function reportCodeIntelligenceSynchronizationError(error: unknown): void {
-	console.error("Code-intelligence document synchronization failed", error);
+	console.error('Code-intelligence document synchronization failed', error);
 }
 
 function reportDirAccessRefreshError(error: unknown): void {
-	console.error("Directory access refresh for language services failed", error);
+	console.error('Directory access refresh for language services failed', error);
 }
 
 function isUnsupportedDiagnosticPull(error: unknown): boolean {
 	return error instanceof AppServerRemoteError && UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES.has(error.errorName);
 }
 
-function toDisposablePublisher(update: LanguageDiagnosticsPublisher["update"], dispose: () => void): LanguageDiagnosticsPublisher {
+function toDisposablePublisher(update: LanguageDiagnosticsPublisher['update'], dispose: () => void): LanguageDiagnosticsPublisher {
 	return { update, dispose, [Symbol.dispose]: dispose };
 }
 
@@ -600,14 +609,14 @@ function deduplicateDiagnostics(diagnostics: readonly LanguageDiagnostic[]): rea
 
 function diagnosticKey(diagnostic: LanguageDiagnostic): string {
 	const range = diagnostic.range;
-	return `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ""}:${diagnostic.code ?? ""}`;
+	return `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ''}:${diagnostic.code ?? ''}`;
 }
 
 function projectDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto, model: TextModel): readonly LanguageDiagnostic[] {
 	const message = diagnostic.message.trim();
 	if (!message) return [];
 	const source = diagnostic.source?.trim() || undefined;
-	const code = typeof diagnostic.code === "string" ? diagnostic.code.trim() || undefined : typeof diagnostic.code === "number" && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
+	const code = typeof diagnostic.code === 'string' ? diagnostic.code.trim() || undefined : typeof diagnostic.code === 'number' && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
 	try {
 		const range = Range.fromPositions(new Position((diagnostic.range.start.lineIndex) + 1, (diagnostic.range.start.columnIndex) + 1), new Position((diagnostic.range.end.lineIndex) + 1, (diagnostic.range.end.columnIndex) + 1));
 		model.offsetAt(range.getStartPosition());
@@ -628,15 +637,21 @@ function projectWorkspaceDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto)
 	const message = diagnostic.message.trim();
 	if (!message) return [];
 	const source = diagnostic.source?.trim() || undefined;
-	const code = typeof diagnostic.code === "string" ? diagnostic.code.trim() || undefined : typeof diagnostic.code === "number" && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
+	const code = typeof diagnostic.code === 'string' ? diagnostic.code.trim() || undefined : typeof diagnostic.code === 'number' && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
 	try {
 		const range = Range.fromPositions(new Position((diagnostic.range.start.lineIndex) + 1, (diagnostic.range.start.columnIndex) + 1), new Position((diagnostic.range.end.lineIndex) + 1, (diagnostic.range.end.columnIndex) + 1));
-		return [Object.freeze({ range, severity: diagnostic.severity as LanguageDiagnosticSeverity, message, ...(code === undefined ? {} : { code }), ...(source === undefined ? {} : { source }) })];
+		return [Object.freeze({
+			range,
+			severity: diagnostic.severity as LanguageDiagnosticSeverity,
+			message,
+			...(code === undefined ? {} : { code }),
+			...(source === undefined ? {} : { source })
+		})];
 	} catch {
 		return [];
 	}
 }
 
 function reportLanguageSynchronizationError(error: unknown): void {
-	console.error("App Server language document synchronization failed", error);
+	console.error('App Server language document synchronization failed', error);
 }

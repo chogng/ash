@@ -4,14 +4,16 @@ import { suite, test } from 'mocha';
 import { chatGPTModelCatalog, simpleChatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import type { ChatGPTRequest, IChatGPTTransport } from '../../common/chatGPTTransport.js';
+import { ChatGPTAuthenticationError, type ChatGPTRequest, type IChatGPTTransport } from '../../common/chatGPTTransport.js';
 import { ChatGPTService } from '../../browser/chatGPTService.js';
 
-function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, retained?: string) {
+function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, retained?: string, onDidChangeAuthentication?: Event<void>) {
 	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 	const transport: IChatGPTTransport = {
+		onDidChangeAuthentication,
 		async request(id, request) {
 			const pending = { controller: new AbortController(), reader: undefined as ReadableStreamDefaultReader<Uint8Array> | undefined };
 			requests.set(id, pending);
@@ -36,6 +38,120 @@ function response(path: string): Response {
 }
 suite('ChatGPT shared service', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('account changes discard old history and file bindings, cancel a pending read and preserve local draft text', async () => {
+		using changes = new Emitter<void>();
+		const entered = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		const restored = new DeferredPromise<void>();
+		let account = 'old';
+		let oldSignal: AbortSignal | undefined;
+		using chat = fixture(async (path, signal) => {
+			if (account === 'old' && path.endsWith('/two')) { oldSignal = signal; await entered.complete(); await release.p; }
+			if (account === 'new' && path.includes('/conversations?')) { return Response.json({ items: [{ id: 'new-account-chat', title: 'New account chat' }], total: 1 }); }
+			return response(path);
+		}, undefined, changes.event);
+		await chat.reload(); await chat.select('one');
+		chat.setDraft('Local unsent draft');
+		const oldRead = chat.select('two');
+		await entered.p;
+		using listener = chat.state.onDidChange(state => { if (state.connected && state.conversations[0]?.id === 'new-account-chat') { void restored.complete(); } });
+		account = 'new';
+		changes.fire();
+		assert.ok(oldSignal?.aborted);
+		assert.deepEqual(chat.state.get().messages, []);
+		assert.deepEqual(chat.state.get().attachments, []);
+		assert.equal(chat.state.get().conversationId, undefined);
+		assert.equal(chat.state.get().draft, 'Local unsent draft');
+		await restored.p;
+		await release.complete(); await oldRead;
+		assert.equal(chat.state.get().conversationId, undefined);
+		assert.equal(chat.state.get().conversations[0]?.id, 'new-account-chat');
+		assert.equal(chat.state.get().error, '');
+		assert.doesNotMatch(chat.getAccessibleContent(), /one reply|two reply/u);
+	});
+	test('a local sign-in failure preserves an unsent draft without reporting an HTTP rejection or an uncertain reply', async () => {
+		let unavailable = false;
+		using chat = fixture(async path => {
+			if (unavailable) { throw new ChatGPTAuthenticationError('sanitized host failure'); }
+			return response(path);
+		});
+		await chat.reload();
+		chat.setDraft('Unsent message');
+		const before = chat.state.get();
+		unavailable = true;
+		await chat.send();
+		const after = chat.state.get();
+		assert.equal(after.draft, 'Unsent message');
+		assert.deepEqual(after.messages, before.messages);
+		assert.equal(after.parentId, before.parentId);
+		assert.equal(after.uncertain, false);
+		assert.equal(after.sending, false);
+		assert.match(after.error, /sign-in is unavailable/u);
+		assert.doesNotMatch(after.error, /401|sanitized host failure/u);
+		assert.ok(chat.getAccessibleContent().includes(after.error));
+	});
+
+	test('reopening retries failed initialization without duplicating pending or successful loads', async () => {
+		let rejected = true;
+		let modelRequests = 0;
+		let pending = new DeferredPromise<void>();
+		let completed = new DeferredPromise<void>();
+		using chat = fixture(async path => {
+			if (path.includes('/models?')) {
+				modelRequests++;
+				await pending.p;
+				if (rejected) { return new Response(null, { status: 401 }); }
+			}
+			return response(path);
+		});
+		using listener = chat.state.onDidChange(state => {
+			if (!state.busy) { void completed.complete(); }
+		});
+
+		chat.initialize();
+		chat.initialize();
+		assert.equal(modelRequests, 1);
+		await pending.complete();
+		await completed.p;
+		assert.equal(chat.state.get().connected, false);
+		assert.match(chat.state.get().error, /401/u);
+
+		rejected = false;
+		pending = new DeferredPromise<void>();
+		completed = new DeferredPromise<void>();
+		chat.initialize();
+		chat.initialize();
+		assert.equal(modelRequests, 2);
+		await pending.complete();
+		await completed.p;
+		assert.equal(chat.state.get().connected, true);
+		assert.equal(chat.state.get().error, '');
+		assert.equal(chat.state.get().model, 'model');
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['one', 'two']);
+
+		chat.initialize();
+		assert.equal(modelRequests, 2);
+	});
+
+	test('New while the first authentication/catalog read is pending keeps initialization alive', async () => {
+		const ready = new DeferredPromise<void>();
+		const connected = new DeferredPromise<void>();
+		const signals: AbortSignal[] = [];
+		using chat = fixture(async (path, signal) => {
+			if (path.includes('/models?')) { signals.push(signal); await ready.p; }
+			return response(path);
+		});
+		using listener = chat.state.onDidChange(state => { if (state.connected) { void connected.complete(); } });
+		chat.initialize();
+		chat.newChat();
+		assert.equal(signals.length, 2);
+		assert.ok(signals[0]!.aborted);
+		assert.equal(chat.state.get().busy, true);
+		await ready.complete(); await connected.p;
+		assert.equal(chat.state.get().model, 'model');
+		assert.equal(chat.state.get().error, '');
+	});
+
 	test('identifies the region being read and clears loading on completion, failure and navigation', async () => {
 		let pending: DeferredPromise<void> | undefined;
 		let fail = false;

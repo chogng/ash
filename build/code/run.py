@@ -14,6 +14,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 from build.code.build import build_binaries  # noqa: E402
 from build.code.build import development_binaries  # noqa: E402
 from build.code.build import stage_runtime  # noqa: E402
+from build.code.build import prepare_runtime_environment  # noqa: E402
 from build.lib.targets import TARGETS, default_target  # noqa: E402
 from build.lib.tgrep import resolve_tgrep  # noqa: E402
 
@@ -56,6 +57,11 @@ def requires_selected_server(arguments: list[str]) -> bool:
 def main(arguments: list[str] | None = None) -> int:
     arguments = arguments or []
     environment = os.environ.copy()
+    if requires_selected_server(arguments):
+        status, resources = prepare_runtime_environment(REPOSITORY_ROOT)
+        if status:
+            return status
+        environment.update(resources)
     binaries = development_binaries()
     returncode, built = build_binaries(binaries, environment)
     if returncode != 0:

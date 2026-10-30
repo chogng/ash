@@ -3,24 +3,24 @@ import { after as afterCodeFeatures } from 'mocha';
 import './testEditorDom.js';
 import { browserEnvironment } from './testEditorDom.js';
 import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { Selection } from "../../common/core/selection.js";
-import { Position } from "../../common/core/position.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { h } from "../../../base/browser/dom.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { Selection } from '../../common/core/selection.js';
+import { Position } from '../../common/core/position.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { h } from '../../../base/browser/dom.js';
 import { CursorState } from '../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../common/cursorEvents.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
-import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
-const { TestView: View } = await import("./viewModel/testViewModel.js");
-const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
+const { TestView: View } = await import('./viewModel/testViewModel.js');
+const { installCoreTextEditorCommands } = await import('../../browser/coreCommands.js');
 const { KeyboardNavigationController } = await import('../../browser/view/viewController.js');
 await import('../../contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
@@ -53,11 +53,11 @@ test('workbench select-all command selects the focused or active editor model', 
 	dom.window.close();
 });
 
-test("core commands select all", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('core commands select all', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	using model = new TextModel("one\n  two\nthree");
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using model = new TextModel('one\n  two\nthree');
 	using viewport = new View({
 		container,
 		model,
@@ -70,7 +70,7 @@ test("core commands select all", () => {
 	const input = viewport.controller;
 	using commands = installCoreTextEditorCommands(input.element, viewport, viewport.testViewModel);
 
-	const selectAll = keyboardEvent(dom.window, "a", { metaKey: true });
+	const selectAll = keyboardEvent(dom.window, 'a', { metaKey: true });
 	input.element.dispatchEvent(selectAll);
 	assert.equal(selectAll.defaultPrevented, true);
 	assert.deepEqual(selections.getSelections()[0]!.getEndPosition(), new Position((2) + 1, (5) + 1));
@@ -78,20 +78,20 @@ test("core commands select all", () => {
 	dom.window.close();
 });
 
-test("line selection remains an independent editor extension", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('line selection remains an independent editor extension', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	using model = new TextModel("one\ntwo\nthree");
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using model = new TextModel('one\ntwo\nthree');
 	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.view.layout({ width: 400, height: 100 });
 	editor.setSelection(Selection.fromPositions(new Position((0) + 1, (1) + 1)));
 
-	const first = keyboardEvent(dom.window, "l", { ctrlKey: true });
+	const first = keyboardEvent(dom.window, 'l', { ctrlKey: true });
 	editor.controller.element.dispatchEvent(first);
 	assert.equal(first.defaultPrevented, true);
 	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
-	editor.controller.element.dispatchEvent(keyboardEvent(dom.window, "l", { ctrlKey: true }));
+	editor.controller.element.dispatchEvent(keyboardEvent(dom.window, 'l', { ctrlKey: true }));
 	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
 
 	dom.window.close();
@@ -123,25 +123,25 @@ test('keyboard word navigation consumes standard WordOperations boundaries', () 
 	dom.window.close();
 });
 
-test("core commands reject dependencies from different text models", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('core commands reject dependencies from different text models', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	using model = new TextModel("one");
-	using otherModel = new TextModel("two");
+	using model = new TextModel('one');
+	using otherModel = new TextModel('two');
 	using viewport = new View({
-		container: dom.window.document.querySelector<HTMLElement>("main")!,
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 	});
-	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
+	const input = h(dom.window.document, 'textarea') as unknown as HTMLTextAreaElement;
 	using otherViewport = new View({ container: h(dom.window.document, 'div'), model: otherModel, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	assert.throws(() => installCoreTextEditorCommands(input, viewport, otherViewport.testViewModel), /must share one text model/);
 	dom.window.close();
 });
 
 function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit = {}): KeyboardEvent {
-	return new targetWindow.KeyboardEvent("keydown", {
+	return new targetWindow.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
 		key,

@@ -139,7 +139,9 @@ impl InteractiveLoginDriver for FakeDriver {
             | LoginMethod::BigModelStartPlanBrowser
             | LoginMethod::ZaiStartPlanBrowser
             | LoginMethod::GitHubBrowser
-            | LoginMethod::GitHubEnterpriseBrowser { .. } => unreachable!(),
+            | LoginMethod::GitHubEnterpriseBrowser { .. }
+            | LoginMethod::ChatGptWebDeviceCode
+            | LoginMethod::ChatGptWebCodex => unreachable!(),
         })
     }
 
@@ -437,4 +439,22 @@ fn refresh_discards_only_the_provider_changed_during_the_read() {
     let result = read.join().unwrap();
     assert_eq!(result.accounts, vec![account(), kimi_account]);
     assert_eq!(result.revision, updated.revision + 1);
+}
+
+#[test]
+fn cancelled_login_never_runs_a_late_provider_credential_commit() {
+    let driver = Arc::new(FakeDriver::default());
+    let service = LoginService::new(driver).unwrap();
+    let started = service.begin(LoginMethod::OpenAiChatGptDeviceCode).unwrap();
+    service.cancel(started.login_id()).unwrap();
+    let committed = std::sync::atomic::AtomicBool::new(false);
+    let failure = service
+        .complete_with(started.login_id().clone(), || {
+            committed.store(true, Ordering::SeqCst);
+            LoginCompletionOutcome::Succeeded { account: account() }
+        })
+        .unwrap_err();
+    assert_eq!(failure.kind(), LoginErrorKind::NotFound);
+    assert!(!committed.load(Ordering::SeqCst));
+    assert!(service.read().unwrap().accounts.is_empty());
 }

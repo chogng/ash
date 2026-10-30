@@ -1,5 +1,5 @@
-import "../../../../../../editor/test/browser/testEditorDom.js";
-import { registerCodeEditorServices } from "../../../../../../editor/test/browser/testCodeEditor.js";
+import '../../../../../../editor/test/browser/testEditorDom.js';
+import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';

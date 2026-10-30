@@ -445,7 +445,12 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 		},
 	};
 	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		instantiationService: services,
+		model,
+		languageFeaturesService: features
+	});
 	editor.setSelection(new Selection(1, 1, 1, 7));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -613,7 +618,12 @@ test('Paste command resolves after delayed provider edits', async () => {
 		},
 	});
 	using model = new TextModel('');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services, languageFeaturesService: features });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		instantiationService: services,
+		languageFeaturesService: features
+	});
 	editor.focus();
 	clipboard.data.setData('text/plain', 'raw');
 	let complete = false;
@@ -651,7 +661,12 @@ test('Cancelling a paste ends the command before an uncooperative provider retur
 		},
 	});
 	using model = new TextModel('');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services, languageFeaturesService: features });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		instantiationService: services,
+		languageFeaturesService: features
+	});
 	editor.focus();
 	clipboard.data.setData('text/plain', 'raw');
 	const commands = services.get((await import('../../../../../platform/commands/common/commands.js')).ICommandService);
@@ -755,7 +770,12 @@ test('command Paste As matches copied preparation metadata read from a byte snap
 		},
 	});
 	using model = new TextModel('source');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		instantiationService: services,
+		model,
+		languageFeaturesService: features
+	});
 	editor.setSelection(new Selection(1, 1, 1, 7));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -798,7 +818,12 @@ for (const mime of ['image/png', 'application/pdf', 'application/x-test-binary',
 			},
 		});
 		using model = new TextModel('');
-		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features });
+		using editor = createTestCodeEditor({
+			container: dom.window.document.querySelector<HTMLElement>('main')!,
+			instantiationService: services,
+			model,
+			languageFeaturesService: features
+		});
 		await editor.getAction('editor.action.pasteAs')!.run({ kind: 'custom' });
 		const expectedExtension = mime === 'image/png' ? '.png' : mime === 'application/pdf' ? '.pdf' : '.bin';
 		assert.deepEqual({ received, text: model.getText() }, {

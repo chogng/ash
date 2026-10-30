@@ -38,6 +38,7 @@ ash-app-server-client = { workspace = true }
 ash-app-server-protocol = { workspace = true }
 ash-exec = { workspace = true }
 ash-install-context = { workspace = true }
+ash-installation = { workspace = true }
 ash-protocol = { workspace = true }
 ash-product-update = { workspace = true, features = ["archives"] }
 ash-remote = { workspace = true }

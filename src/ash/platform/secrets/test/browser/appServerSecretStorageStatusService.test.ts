@@ -22,6 +22,12 @@ test('Secret storage status reads the current backend observation on every query
 	assert.equal(reads, states.length);
 });
 
+test('Secret storage observations distinguish usable memory fallback from durable keyring availability', async () => {
+	const state = { status: 'accessDenied', mode: 'encrypted', storageType: 'in-memory' } as const;
+	const service = createAppServerSecretStorageStatusService({ request: async () => state } as unknown as AppServerProtocolClient);
+	assert.deepEqual(await service.readState(), state);
+});
+
 test('Secret storage adapter converts structured failures to localized domain errors', async () => {
 	const failures = [
 		['SecretStorageUnavailable', 'unavailable'],

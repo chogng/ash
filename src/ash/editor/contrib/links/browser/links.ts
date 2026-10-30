@@ -1,7 +1,7 @@
-import "./links.css";
-import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from "../../../browser/editorFeatureRegistration.js";
-import { addDisposableListener, stopEvent, ModifierKeyEmitter, type IModifierKeyStatus } from "../../../../base/browser/dom.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import './links.css';
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
+import { addDisposableListener, stopEvent, ModifierKeyEmitter, type IModifierKeyStatus } from '../../../../base/browser/dom.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
@@ -9,9 +9,9 @@ import { isMacintosh } from '../../../../base/common/platform.js';
 import { Range } from '../../../common/core/range.js';
 import { computeLinks } from '../../../common/languages/linkComputer.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../common/languages.js';
-import type { LanguageLink } from "../../../common/languages.js";
-import { Position } from "../../../common/core/position.js";
-import { type View } from "../../../browser/view.js";
+import type { LanguageLink } from '../../../common/languages.js';
+import { Position } from '../../../common/core/position.js';
+import { type View } from '../../../browser/view.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { localize2 } from '../../../../nls.js';
@@ -57,9 +57,9 @@ export class LinkDetector extends Disposable {
 			this.builtinLinks = undefined;
 			this.dirtyBuiltinLines.clear();
 		}));
-		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointermove", event => this.update(event)));
-		this._register(addDisposableListener(viewport.domNode.domNode, "pointerleave", () => this.clearHover()));
-		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointerdown", event => {
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointermove', event => this.update(event)));
+		this._register(addDisposableListener(viewport.domNode.domNode, 'pointerleave', () => this.clearHover()));
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerdown', event => {
 			if (event.button !== 0 || !this.editor.getOption(EditorOption.links) || !this.isTrigger(event) || event.getModifierState('AltGraph')) return;
 			const target = viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
 			const link = target?.kind === 'text' ? this.links?.find(link => link.range.containsPosition(target.position)) : undefined;
@@ -111,7 +111,7 @@ export class LinkDetector extends Disposable {
 	private update(event: PointerEvent): void {
 		if (!this.editor.getOption(EditorOption.links)) return;
 		const target = this.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
-		if (!target || target.kind !== "text") {
+		if (!target || target.kind !== 'text') {
 			this.clearHover();
 			return;
 		}
@@ -157,7 +157,7 @@ export class LinkDetector extends Disposable {
 			const result = await provider.provideLinks(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			for (const link of result) {
-				if (typeof link.target !== "string" || link.target.length === 0) continue;
+				if (typeof link.target !== 'string' || link.target.length === 0) continue;
 				const key = `${model.offsetAt(link.range.getStartPosition())}:${model.offsetAt(link.range.getEndPosition())}:${link.target}`;
 				if (seen.has(key)) continue;
 				seen.add(key);
@@ -217,7 +217,7 @@ export class LinkDetector extends Disposable {
 	private clearHover(): void {
 		this.activeLink = undefined;
 		this.hoverPosition = undefined;
-		this.viewport.domNode.domNode.classList.remove("stanza-editor-link-target");
+		this.viewport.domNode.domNode.classList.remove('stanza-editor-link-target');
 	}
 
 	private clear(): void {
@@ -250,7 +250,7 @@ class OpenLinkAction extends EditorAction {
 
 registerEditorContribution({
 	id: LinkDetector.ID, install: context => {
-		if (context.kind !== "text") return;
+		if (context.kind !== 'text') return;
 		return context.instantiationService.createInstance(LinkDetector, context.view, context.editor, context.onLanguageError);
 	}
 });

@@ -2,58 +2,58 @@ import { getActionBarActions } from '../../../../platform/actions/browser/menuEn
 import type { IActiveEditorActions } from '../../../services/editor/common/editorGroupsService.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import { EditorPane } from './editorPane.js';
-import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { Dimension, type IDimension } from "../../../../base/browser/dom.js";
-import { CancellationError, isCancellationError } from "../../../../base/common/errors.js";
-import { Emitter, Event } from "../../../../base/common/event.js";
-import { validateJsonValue } from "../../../../base/common/jsonValue.js";
-import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { localize } from "../../../../nls.js";
+import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { Dimension, type IDimension } from '../../../../base/browser/dom.js';
+import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { validateJsonValue } from '../../../../base/common/jsonValue.js';
+import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
-import { URI } from "../../../../base/common/uri.js";
+import { URI } from '../../../../base/common/uri.js';
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import type { ITextFileService } from "../../../services/textfile/common/textfiles.js";
-import type { IFileService } from "../../../../platform/files/common/files.js";
-import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import type { IDiffService } from "../../../services/diff/common/diffService.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import type { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import type { ITextFileService } from '../../../services/textfile/common/textfiles.js';
+import type { IFileService } from '../../../../platform/files/common/files.js';
+import type { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
+import type { IDiffService } from '../../../services/diff/common/diffService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
-import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
-import type { IDocumentCollaborationApi } from "../../../../platform/collab/common/documentCollaborationApi.js";
-import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { EditorOpenOptions } from "./editorInput.js";
+import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import type { IDocumentCollaborationApi } from '../../../../platform/collab/common/documentCollaborationApi.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { EditorOpenOptions } from './editorInput.js';
 import type { EditorCloseOptions } from '../../../services/editor/common/editorGroupsService.js';
 import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { extractSelection } from '../../../../platform/opener/common/opener.js';
 import type { IEditorGroupView } from './editor.js';
 import { ActiveEditorContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
-import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
+import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 
 import { getEditorWorkingCopies, EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput, type IEditorIdentifier, isEditorPaneWithStatus, type IEditorPane } from '../../../common/editor.js';
-import { isEditorPaneWithViewState } from "./editorWithViewState.js";
+import { isEditorPaneWithViewState } from './editorWithViewState.js';
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
-import { extractExternalEditorInputs } from "./editorDropData.js";
-import type { IEditorPaneDescriptor, IEditorPaneRegistry } from "../../editor.js";
-import type { IEditorTabDragAndDrop, EditorTabDropPosition } from "./editorTabDragAndDrop.js";
+import { extractExternalEditorInputs } from './editorDropData.js';
+import type { IEditorPaneDescriptor, IEditorPaneRegistry } from '../../editor.js';
+import type { IEditorTabDragAndDrop, EditorTabDropPosition } from './editorTabDragAndDrop.js';
 import './media/editorgroupview.css';
 import { h } from '../../../../base/browser/dom.js';
 import { EditorGroupModel, type IEditorGroupModelEntry } from '../../../common/editor/editorGroupModel.js';
 import { EditorGroupWatermark } from './editorGroupWatermark.js';
 import { EditorTitleControl } from './editorTitleControl.js';
-import { ErrorPlaceholderEditor } from "./editorPlaceholder.js";
-import type { EditorTabDescriptor, EditorTabsDelegate } from "./editorTabsControl.js";
-import type { EditorHeaderActions } from "./editorHeaderControl.js";
-import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
-import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
-import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import type { IContextKeyService, IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { getFlatContextMenuActions } from "../../../../platform/actions/browser/menuEntryActionViewItem.js";
-import { MenuId } from "../../../../platform/actions/common/actions.js";
-import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceId, EditorInstanceState } from "../../../services/editor/common/editorState.js";
-import type { SerializedEditorViewState } from "../../../services/editor/common/editorWorkingSet.js";
+import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
+import type { EditorTabDescriptor, EditorTabsDelegate } from './editorTabsControl.js';
+import type { EditorHeaderActions } from './editorHeaderControl.js';
+import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../../editor/common/languages.js';
+import type { ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
+import type { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import type { IContextKeyService, IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
+import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceId, EditorInstanceState } from '../../../services/editor/common/editorState.js';
+import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
 import { EditorGroupContextKeyController } from './editorContextKeys.js';
 import type { FileElement } from './breadcrumbsModel.js';
 import type { IBreadcrumbsService } from './breadcrumbs.js';
@@ -155,9 +155,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
 	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>) | undefined;
 	private readonly titleActions: EditorHeaderActions | undefined;
-	private readonly resolveOpenError: EditorGroupOptions["resolveOpenError"];
-	private readonly onWillOpenEditor: EditorGroupOptions["onWillOpenEditor"];
-	private readonly onOpenError: EditorGroupOptions["onOpenError"];
+	private readonly resolveOpenError: EditorGroupOptions['resolveOpenError'];
+	private readonly onWillOpenEditor: EditorGroupOptions['onWillOpenEditor'];
+	private readonly onOpenError: EditorGroupOptions['onOpenError'];
 	private readonly model: EditorGroupModel;
 	private readonly paneEntries = this._register(new DisposableMap<EditorInstanceId, EditorGroupEntry>());
 
@@ -226,7 +226,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			drop: (target, position) => options.dragAndDrop?.drop(this, target, position),
 			dropExternal: (event, target, position) => {
 				void this.openExternalEditors(event.dataTransfer, target, position).catch((error: unknown) => {
-					console.error("Failed to open dropped editor resources", error);
+					console.error('Failed to open dropped editor resources', error);
 				});
 			},
 			endDrag: () => options.dragAndDrop?.end(),
@@ -304,7 +304,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			));
 		}
 		if (options.onDidActivate) {
-			this._register(addDisposableListener(this.domNode, "focusin", () => {
+			this._register(addDisposableListener(this.domNode, 'focusin', () => {
 				options.onDidActivate?.();
 			}));
 		}
@@ -324,7 +324,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const entry = this.requireEntry(input);
 		const editorIndex = this.model.indexOf(entry.input);
 		const context = { groupId: this.id, editorIndex };
-		const anchor = event.type === "contextmenu"
+		const anchor = event.type === 'contextmenu'
 			? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: tab.ownerDocument.defaultView ?? undefined }
 			: tab;
 		const menuContext = this.scopedContextKeyService?.createScoped(tab);
@@ -382,7 +382,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 
 	setLocked(locked: boolean): void {
 		this.model.setLocked(locked);
-		this.domNode.classList.toggle("ash-editor-group-locked", locked);
+		this.domNode.classList.toggle('ash-editor-group-locked', locked);
 		this.titleControl.setLocked(locked);
 		this.renderChrome();
 	}
@@ -391,10 +391,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const pane = this.activePane;
 		const menu = this.titleActions ? disposables.add(this.titleActions.menuService.createMenu(menuId, this.scopedContextKeyService)) : undefined;
 		return {
+			get titleControl() { return pane instanceof EditorPane ? pane.getTitleControl() : undefined; },
 			get actions() {
 				const menuActions = getActionBarActions(menu?.getActions() ?? []);
 				return {
-					primary: [...(pane instanceof EditorPane ? pane.getActions() : []), ...menuActions.primary],
+					primary: [...(pane instanceof EditorPane ? pane.getActions(menuId) : []), ...menuActions.primary],
 					secondary: [...(pane instanceof EditorPane ? pane.getSecondaryActions() : []), ...menuActions.secondary],
 				};
 			},
@@ -419,14 +420,14 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (!pane || !isEditorPaneWithViewState(pane)) return undefined;
 		return Object.freeze({
 			typeId: pane.viewStateTypeId,
-			value: validateJsonValue(pane.saveViewState(), { path: "editor view state" }),
+			value: validateJsonValue(pane.saveViewState(), { path: 'editor view state' }),
 		});
 	}
 
 	restoreEditorViewState(input: IResourceEditorInput, state: SerializedEditorViewState | undefined): boolean {
 		const pane = this.entry(input)?.paneInstance.pane;
 		if (!pane || !state || !isEditorPaneWithViewState(pane) || pane.viewStateTypeId !== state.typeId) return false;
-		pane.restoreViewState(validateJsonValue(state.value, { path: "editor view state" }));
+		pane.restoreViewState(validateJsonValue(state.value, { path: 'editor view state' }));
 		return true;
 	}
 
@@ -466,16 +467,16 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			return;
 		}
 		const previousIndex = this.model.indexOf(input);
-		const focusedTab = this.domNode.ownerDocument.activeElement?.closest(".ash-tab");
+		const focusedTab = this.domNode.ownerDocument.activeElement?.closest('.ash-tab');
 		// Moving rows replaces the tab's action button; restore focus to its stable tab identity.
-		const focusedTabId = focusedTab && this.domNode.contains(focusedTab) ? focusedTab.querySelector<HTMLElement>(".ash-tab-label")?.id : undefined;
+		const focusedTabId = focusedTab && this.domNode.contains(focusedTab) ? focusedTab.querySelector<HTMLElement>('.ash-tab-label')?.id : undefined;
 		if (sticky) {
 			this.model.stick(input);
 		} else {
 			this.model.unstick(input);
 		}
 		if (this.model.indexOf(input) !== previousIndex) {
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(entry), previousIndex }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorMoved', editor: this.editorState(entry), previousIndex }));
 		}
 		this.publishEditorState(entry);
 		if (focusedTabId) {
@@ -549,7 +550,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this.model.updateEditor(input, { ...options, pinned: options.pinned ?? (options.index !== undefined) });
 			if (this.model.indexOf(input) !== previousIndex) {
 				this.model.pin(input);
-				this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(existing), previousIndex }));
+				this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorMoved', editor: this.editorState(existing), previousIndex }));
 			}
 			existing.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(existing));
 			if (options.inactive && this.activeInput) {
@@ -592,7 +593,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 				onApplyWorkspaceEdit: this.onApplyWorkspaceEdit,
 				...(this.onSave ? {
 					onSave: () => {
-						if (!createdPane) return Promise.reject(new Error("Editor save is unavailable"));
+						if (!createdPane) return Promise.reject(new Error('Editor save is unavailable'));
 						return this.onSave!(this, input, createdPane).then(result => !!result);
 					},
 				} : {}),
@@ -661,7 +662,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const entry = new EditorGroupEntry(state, paneInstance, this.uriIdentity.retainUri(input.resource));
 		this.paneEntries.set(entry.instanceId, entry);
 		if (closedState) {
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason: existing || this.model.editorLimit === 1 ? "replace" : "previewReplace" }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorClosed', editor: closedState, reason: existing || this.model.editorLimit === 1 ? 'replace' : 'previewReplace' }));
 		}
 		entry.labelListener.value = input.onDidChangeLabel?.(() => this.publishEditorState(entry));
 		if (isEditorPaneWithStatus(pane)) {
@@ -676,7 +677,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			this.publishEditorState(entry);
 		});
 		this.ordinaryContent = undefined;
-		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorOpened", editor: this.editorState(entry) }));
+		this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorOpened', editor: this.editorState(entry) }));
 		if (options.inactive && this.activeInput) {
 			paneInstance.setVisible(false);
 			this.renderContent();
@@ -711,7 +712,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.commitEditorPane(input, options, paneInstance, existing);
 		await this.onOpenError?.(displayError, input, options);
 		const current = this.entry(input)?.paneInstance.pane;
-		if (!current) throw new CancellationError("The failed editor was closed");
+		if (!current) throw new CancellationError('The failed editor was closed');
 		return current;
 	}
 
@@ -729,6 +730,9 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const entry = this.entry(input);
 		if (!entry || this.isDisposed) { return undefined; }
 		const pane = entry.paneInstance.pane;
+		if (input.resource.scheme === Schemas.untitled && pane.saveDraft) {
+			return pane.saveDraft();
+		}
 		if (options.saveAs || input.resource.scheme === Schemas.untitled) {
 			return this.onSave?.(this, entry.input, pane);
 		}
@@ -755,7 +759,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (!entry) return false;
 		if (!options.skipConfirmation && !await this.confirmCloseEditor(input)) return false;
 		if (this.paneEntries.get(entry.instanceId) !== entry) return true;
-		this.doCloseEditor(entry, options.reason ?? "close");
+		this.doCloseEditor(entry, options.reason ?? 'close');
 		return true;
 	}
 
@@ -768,12 +772,12 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const nextInput = this.model.closeEditor(entry.input, this.configurationService?.getValue<boolean>(EditorFocusRecentEditorAfterCloseConfiguration) !== false);
 		this.paneEntries.deleteAndDispose(entry.instanceId);
 		this.panes.disposePane(entry.paneInstance);
-		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorClosed", editor: closedState, reason }));
+		this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorClosed', editor: closedState, reason }));
 		if (wasActive) {
 			const next = nextInput ? this.entry(nextInput) : undefined;
-			if (next) this.activateEntry(next, true);
+			if (next) this.activateEntry(next, restoreFocus);
 			else {
-				this.editorChangeEmitter.fire(Object.freeze({ kind: "activeEditorChanged", editor: undefined }));
+				this.editorChangeEmitter.fire(Object.freeze({ kind: 'activeEditorChanged', editor: undefined }));
 			}
 		}
 		this.renderContent();
@@ -789,7 +793,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const wasActive = this.activeEntry === this.entry(input);
 		await this.openEditor(replacement, { index });
 		if (wasSticky) this.stickEditor(replacement);
-		await this.closeEditor(input, { skipConfirmation: true, reason: "replace" });
+		await this.closeEditor(input, { skipConfirmation: true, reason: 'replace' });
 		if (previouslyActive && !wasActive) this.activateEditor(previouslyActive);
 	}
 
@@ -797,7 +801,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		if (!target) return this.entries.length;
 		const index = this.model.indexOf(target);
 		if (index < 0) return this.entries.length;
-		return position === "before" ? index : index + 1;
+		return position === 'before' ? index : index + 1;
 	}
 
 	moveEditor(input: IResourceEditorInput, targetIndex: number): void {
@@ -811,7 +815,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.model.pin(input);
 		this.renderContent();
 		this.renderChrome();
-		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorMoved", editor: this.editorState(entry), previousIndex: sourceIndex }));
+		this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorMoved', editor: this.editorState(entry), previousIndex: sourceIndex }));
 		if (wasPreview) this.publishEditorState(entry);
 	}
 
@@ -841,7 +845,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const viewState = this.saveEditorViewState(input);
 		await target.openEditor(input, { index: targetIndex, pinned: true, preferredEditorId: entry.paneInstance.pane.id }, entry.instanceId);
 		if (entry.sticky) target.stickEditor(input);
-		await this.closeEditor(input, { skipConfirmation: true, reason: "move" });
+		await this.closeEditor(input, { skipConfirmation: true, reason: 'move' });
 		target.activateEditor(input);
 		// Removing the source can resize the target; restore after its final layout and activation.
 		target.restoreEditorViewState(input, viewState);
@@ -854,7 +858,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		}
 		this.openSequence += 1;
 		this.cancelPendingOpen();
-		for (const entry of [...this.entries]) this.doCloseEditor(entry, "reset");
+		for (const entry of [...this.entries]) this.doCloseEditor(entry, 'reset');
 		this.ordinaryContent = content;
 		this.renderContent();
 		this.renderChrome();
@@ -917,7 +921,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			entry.paneInstance.setVisible(false);
 		}
 		if (changed) {
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "activeEditorChanged", editor: this.editorState(entry) }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'activeEditorChanged', editor: this.editorState(entry) }));
 		}
 		this.renderChrome();
 		if (focus) this.panes.focus();
@@ -988,7 +992,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private publishEditorState(entry: EditorGroupEntry): void {
 		if (this.paneEntries.get(entry.instanceId) !== entry) return;
 		this.renderChrome();
-		this.editorChangeEmitter.fire(Object.freeze({ kind: "editorStateChanged", editor: this.editorState(entry) }));
+		this.editorChangeEmitter.fire(Object.freeze({ kind: 'editorStateChanged', editor: this.editorState(entry) }));
 	}
 
 	private editorState(entry: EditorGroupEntry, index = this.model.indexOf(entry.input)): EditorInstanceState {
@@ -1043,10 +1047,10 @@ function applyEditorOpenOptions(pane: IEditorPane, options: EditorOpenOptions): 
 export class EditorOpenSupersededError extends CancellationError {
 	constructor(readonly input: IResourceEditorInput) {
 		super(`Editor opening was superseded: ${input.resource}`);
-		this.name = "EditorOpenSupersededError";
+		this.name = 'EditorOpenSupersededError';
 	}
 }
 
 function reportEditorCloseError(error: unknown): void {
-	console.error("Failed to close editor", error);
+	console.error('Failed to close editor', error);
 }

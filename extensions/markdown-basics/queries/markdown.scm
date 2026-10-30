@@ -14,7 +14,7 @@
   (atx_h6_marker)
   (setext_h1_underline)
   (setext_h2_underline)
-] @punctuation.special
+] @text.title
 
 [
   (link_title)

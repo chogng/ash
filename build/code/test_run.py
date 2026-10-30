@@ -15,6 +15,13 @@ from build.code import build
 
 class SourceRunnerTests(unittest.TestCase):
     def setUp(self) -> None:
+        resources = patch.object(
+            run,
+            "prepare_runtime_environment",
+            return_value=(0, {"ASH_DEV_RUNTIME_ROOT": "/prepared/shared"}),
+        )
+        resources.start()
+        self.addCleanup(resources.stop)
         boundary = patch("build.code.build.generate_protocol", return_value=False)
         boundary.start()
         self.addCleanup(boundary.stop)
@@ -29,6 +36,50 @@ class SourceRunnerTests(unittest.TestCase):
         )
         cache.start()
         self.addCleanup(cache.stop)
+
+    def test_shared_resources_use_the_complete_standalone_node_package(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / "shared runtime"
+            with (
+                patch.object(build, "current_package", return_value=package),
+                patch.object(
+                    build.subprocess,
+                    "run",
+                    return_value=build.subprocess.CompletedProcess([], 0),
+                ) as prepare,
+            ):
+                self.assertEqual(
+                    build.prepare_runtime_environment(root),
+                    (0, {"ASH_DEV_RUNTIME_ROOT": str(package.resolve())}),
+                )
+                self.assertEqual(
+                    prepare.call_args.args[0][-2:],
+                    ["--javascript-runtime", "packaged-node"],
+                )
+                self.assertEqual(prepare.call_args.kwargs["cwd"], root)
+
+    def test_shared_resource_failure_does_not_select_an_old_package(self) -> None:
+        with (
+            patch.object(build, "current_package") as package,
+            patch.object(
+                build.subprocess,
+                "run",
+                return_value=build.subprocess.CompletedProcess([], 17),
+            ),
+        ):
+            self.assertEqual(
+                build.prepare_runtime_environment(Path("/checkout")), (17, {})
+            )
+            package.assert_not_called()
+
+    def test_resource_failure_prevents_building_or_launching_the_tui(self) -> None:
+        with (
+            patch.object(run, "prepare_runtime_environment", return_value=(17, {})),
+            patch.object(run, "build_binaries") as compile_binaries,
+        ):
+            self.assertEqual(run.main([]), 17)
+            compile_binaries.assert_not_called()
 
     def test_main_selects_the_built_server_before_launching_the_tui(self) -> None:
         staged = self._executables(Path("C:/staged"))
@@ -52,7 +103,9 @@ class SourceRunnerTests(unittest.TestCase):
 
             self.assertEqual(run.main([]), 0)
 
-        runtime = run.runtime_environment({"PATH": "tools"}, staged)
+        runtime = run.runtime_environment(
+            {"PATH": "tools", "ASH_DEV_RUNTIME_ROOT": "/prepared/shared"}, staged
+        )
         subprocess_run.assert_has_calls(
             [
                 call(

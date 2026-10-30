@@ -1,13 +1,13 @@
 import { ThemeConfigurationSettings } from '../services/themes/common/themeConfiguration.js';
 import { NotificationsPosition, NotificationsSettings } from './notifications.js';
 import { localize } from '../../nls.js';
-import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
-import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
-import { Registry } from "../../platform/registry/common/platform.js";
-import { isMacintosh, isWeb } from "../../base/common/platform.js";
-import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
+import { AccessibilityConfiguration } from '../../platform/accessibility/common/accessibility.js';
+import { Registry } from '../../platform/registry/common/platform.js';
+import { isMacintosh, isWeb } from '../../base/common/platform.js';
+import { DEFAULT_MENU_STYLE, DEFAULT_TITLE_BAR_STYLE, MenuSettings, TitleBarSetting, parseMenuStyle, parseTitleBarStyle, type MenuStyleConfiguration, type TitleBarStyleConfiguration } from '../../platform/window/common/window.js';
 
-export type WorkbenchLayoutStyle = "modern" | "flat";
+export type WorkbenchLayoutStyle = 'modern' | 'flat';
 export type ModernUIEditorTabStyle = 'standard' | 'connected' | 'pill';
 export const enum ActivityBarPosition {
 	DEFAULT = 'default',
@@ -189,19 +189,19 @@ export const WorkbenchConfiguration = Object.freeze({
 	} : {}),
 	...ThemeConfigurationSettings,
 	layoutStyle: configurationRegistry.registerConfiguration<WorkbenchLayoutStyle>({
-		key: "workbench.layoutStyle",
-		defaultValue: "modern",
+		key: 'workbench.layoutStyle',
+		defaultValue: 'modern',
 		parse(value: unknown): WorkbenchLayoutStyle {
-			if (value === "modern" || value === "flat") return value;
+			if (value === 'modern' || value === 'flat') return value;
 			throw new TypeError(`Unknown Workbench layout style: ${String(value)}`);
 		},
 		setting: {
-			valueType: "select",
-			title: "Layout style",
-			description: "Choose floating Modern surfaces or edge-to-edge Flat Workbench regions.",
+			valueType: 'select',
+			title: 'Layout style',
+			description: 'Choose floating Modern surfaces or edge-to-edge Flat Workbench regions.',
 			options: [
-				{ value: "modern", label: "Modern" },
-				{ value: "flat", label: "Flat" },
+				{ value: 'modern', label: 'Modern' },
+				{ value: 'flat', label: 'Flat' },
 			],
 		},
 	}),

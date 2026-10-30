@@ -1,5 +1,5 @@
-import { OffsetRange } from "../ranges/offsetRange.js";
-import { BaseEdit, BaseReplacement } from "./edit.js";
+import { OffsetRange } from '../ranges/offsetRange.js';
+import { BaseEdit, BaseReplacement } from './edit.js';
 
 /** A simultaneous edit over an array of values. */
 export class ArrayEdit<T> extends BaseEdit<ArrayReplacement<T>, ArrayEdit<T>> {

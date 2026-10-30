@@ -1,4 +1,4 @@
-import { Dimension, getWindow, type IDimension } from "./dom.js";
+import { Dimension, getWindow, type IDimension } from './dom.js';
 
 export interface IPosition {
 	readonly left: number;

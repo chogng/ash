@@ -4,17 +4,17 @@ import type { AppServerConnectionState } from './appServerApi.js';
 import type { DisposableHandle } from '../../ipc/common/ipc.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type ExtensionHostReconcileMode = "refresh" | "restartFailed";
-export type ExtensionHostRuntimeLifecycle = "dormant" | "stopped" | "starting" | "handshaking" | "ready" | "recovering" | "crashLoop" | "failed";
-export type ExtensionHostFailureCode = "authorityDenied" | "staleSnapshot" | "isolationUnavailable" | "launchFailed" | "handshakeFailed" | "activationFailed" | "registrationNotFound" | "operationNotSupported" | "cancelled" | "deadlineExceeded" | "quotaExceeded" | "hostExited" | "hostRestarted" | "outcomeIndeterminate" | "crashLoop" | "invalidProtocol" | "internal";
-export type ExtensionHostLanguageProviderOperation = "diagnostics" | "selectionRanges" | "documentHighlights" | "workspaceSymbols" | "completion" | "definition" | "hover" | "references" | "rename" | "formatting" | "codeAction" | "codeLens" | "documentSymbols" | "foldingRanges" | "documentLinks" | "documentColors" | "semanticTokens" | "inlayHints" | "linkedEditing" | "parameterHints";
-export type ExtensionHostCancellationReason = "caller" | "deadline" | "authorityRevoked" | "shutdown";
-export type ExtensionHostOutputSeverity = "trace" | "debug" | "information" | "warning" | "error" | "log";
+export type ExtensionHostReconcileMode = 'refresh' | 'restartFailed';
+export type ExtensionHostRuntimeLifecycle = 'dormant' | 'stopped' | 'starting' | 'handshaking' | 'ready' | 'recovering' | 'crashLoop' | 'failed';
+export type ExtensionHostFailureCode = 'authorityDenied' | 'staleSnapshot' | 'isolationUnavailable' | 'launchFailed' | 'handshakeFailed' | 'activationFailed' | 'registrationNotFound' | 'operationNotSupported' | 'cancelled' | 'deadlineExceeded' | 'quotaExceeded' | 'hostExited' | 'hostRestarted' | 'outcomeIndeterminate' | 'crashLoop' | 'invalidProtocol' | 'internal';
+export type ExtensionHostLanguageProviderOperation = 'diagnostics' | 'selectionRanges' | 'documentHighlights' | 'workspaceSymbols' | 'completion' | 'definition' | 'hover' | 'references' | 'rename' | 'formatting' | 'codeAction' | 'codeLens' | 'documentSymbols' | 'foldingRanges' | 'documentLinks' | 'documentColors' | 'semanticTokens' | 'inlayHints' | 'linkedEditing' | 'parameterHints';
+export type ExtensionHostCancellationReason = 'caller' | 'deadline' | 'authorityRevoked' | 'shutdown';
+export type ExtensionHostOutputSeverity = 'trace' | 'debug' | 'information' | 'warning' | 'error' | 'log';
 export type ExtensionHostOutputOperation =
-	| { readonly operation: "create"; readonly channelId: string; readonly label: string; readonly kind: "output" | "log"; }
-	| { readonly operation: "append" | "replace"; readonly channelId: string; readonly text: string; readonly severity: ExtensionHostOutputSeverity; readonly category: string | undefined; }
-	| { readonly operation: "clear" | "dispose"; readonly channelId: string; }
-	| { readonly operation: "show"; readonly channelId: string; readonly preserveFocus: boolean; };
+	| { readonly operation: 'create'; readonly channelId: string; readonly label: string; readonly kind: 'output' | 'log'; }
+	| { readonly operation: 'append' | 'replace'; readonly channelId: string; readonly text: string; readonly severity: ExtensionHostOutputSeverity; readonly category: string | undefined; }
+	| { readonly operation: 'clear' | 'dispose'; readonly channelId: string; }
+	| { readonly operation: 'show'; readonly channelId: string; readonly preserveFocus: boolean; };
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue; };
 
 export interface ExtensionHostRuntimeFailure {
@@ -40,7 +40,7 @@ export interface ExtensionHostWorkspaceEventsRegistration extends ExtensionHostR
 }
 
 export interface ExtensionHostCommandRegistration extends ExtensionHostRegistrationBase {
-	readonly kind: "command";
+	readonly kind: 'command';
 	readonly command: string;
 	readonly title: string;
 	readonly category?: string;
@@ -60,7 +60,7 @@ export interface ExtensionHostCustomEditorRegistration extends ExtensionHostRegi
 }
 
 export interface ExtensionHostLanguageRegistration extends ExtensionHostRegistrationBase {
-	readonly kind: "languageProvider";
+	readonly kind: 'languageProvider';
 	readonly languageIds: readonly string[];
 	readonly operations: readonly ExtensionHostLanguageProviderOperation[];
 	readonly completionTriggerCharacters?: readonly string[];
@@ -87,7 +87,7 @@ export interface ExtensionHostStatusBarRegistration extends ExtensionHostRegistr
 }
 
 export interface ExtensionHostDebugAdapterRegistration extends ExtensionHostRegistrationBase {
-	readonly kind: "debugAdapter";
+	readonly kind: 'debugAdapter';
 	readonly debuggerType: string;
 }
 
@@ -98,7 +98,7 @@ export interface ExtensionHostDebugConfigurationProviderRegistration extends Ext
 }
 
 export interface ExtensionHostTaskProviderRegistration extends ExtensionHostRegistrationBase {
-	readonly kind: "taskProvider";
+	readonly kind: 'taskProvider';
 	readonly taskType: string;
 }
 
@@ -145,7 +145,7 @@ export interface ExtensionHostTaskEventsRegistration extends ExtensionHostRegist
 }
 
 export interface ExtensionHostTestProfileProviderRegistration extends ExtensionHostRegistrationBase {
-	readonly kind: "testProfileProvider";
+	readonly kind: 'testProfileProvider';
 	readonly providerId: string;
 	readonly label: string;
 }
@@ -280,11 +280,11 @@ export interface ExtensionClientSource {
 /** Host boundaries validate callback messages before forwarding them to the owning client adapter. */
 export type ExtensionHostClientHandler = (operation: unknown, signal: AbortSignal, source: ExtensionClientSource) => Promise<unknown>;
 
-export const IExtensionHostApi = createServiceIdentifier<IExtensionHostApi>("extensionHostApi");
+export const IExtensionHostApi = createServiceIdentifier<IExtensionHostApi>('extensionHostApi');
 
 export class ExtensionHostInvocationError extends Error {
 	constructor(readonly code: ExtensionHostFailureCode, message: string) {
 		super(message);
-		this.name = "ExtensionHostInvocationError";
+		this.name = 'ExtensionHostInvocationError';
 	}
 }

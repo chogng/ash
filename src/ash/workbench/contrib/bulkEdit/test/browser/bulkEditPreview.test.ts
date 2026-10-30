@@ -4,15 +4,15 @@ import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult
 import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { TestEditorService } from './bulkEditTestServices.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { Emitter, Event as EventUtils, Event } from "../../../../../base/common/event.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { Position } from "../../../../../editor/common/core/position.js";
-import { Range } from "../../../../../editor/common/core/range.js";
-import { TextModel } from "../../../../../editor/common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { Emitter, Event as EventUtils, Event } from '../../../../../base/common/event.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { Range } from '../../../../../editor/common/core/range.js';
+import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { BulkFileOperations } from '../../browser/preview/bulkEditPreview.js';
 import { ConflictDetector } from '../../browser/conflicts.js';
 import { BulkEditPane } from '../../browser/preview/bulkEditPane.js';
@@ -20,11 +20,11 @@ import { ViewContainerLocation, WorkbenchViewContainerId, ViewsRegistry } from '
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { BulkEditPreviewContribution } from '../../browser/preview/bulkEdit.contribution.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
-import { IFileTextModelService, ITextModelResourceService, type ITextModelSaveParticipant, type ITextModelSaveCompletionParticipant, type TextModelReference } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
+import { IFileTextModelService, ITextModelResourceService, type ITextModelSaveParticipant, type ITextModelSaveCompletionParticipant, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { SaveReason } from '../../../../common/editor.js';
-import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages.js";
-import { FileKind, FileNotFoundError, IFileService } from "../../../../../platform/files/common/files.js";
-import { IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
+import { type LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
+import { FileKind, FileNotFoundError, IFileService } from '../../../../../platform/files/common/files.js';
+import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { ResourceFileEdit, ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { BulkEditService } from '../../browser/bulkEditService.js';
@@ -39,19 +39,19 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-test("bulk edit preview follows ordered create and text operations without mutating files", async () => {
-	const browser = new JSDOM("<!doctype html><body></body>");
+test('bulk edit preview follows ordered create and text operations without mutating files', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
-	const existing = URI.file("C:\\workspace\\existing.ts");
-	const created = URI.file("C:\\workspace\\created.ts");
-	using files = new PreviewFileService([[existing, "alpha"]]);
-	using models = new PreviewTextModelService([[existing, "alpha"]], [existing]);
+	const existing = URI.file('C:\\workspace\\existing.ts');
+	const created = URI.file('C:\\workspace\\created.ts');
+	using files = new PreviewFileService([[existing, 'alpha']]);
+	using models = new PreviewTextModelService([[existing, 'alpha']], [existing]);
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
-			{ kind: "create", resource: created, existing: "error", contents: 'seed' },
-			{ kind: "textDocument", resource: created, expectedText: "seed", edits: [{ range: new Range(1, 5, 1, 5), text: "hello" }] },
-			{ kind: "textDocument", resource: existing, expectedText: "alpha", edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "omega" }] },
-			{ kind: "textDocument", resource: existing, expectedText: "omega", edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
+			{ kind: 'create', resource: created, existing: 'error', contents: 'seed' },
+			{ kind: 'textDocument', resource: created, expectedText: 'seed', edits: [{ range: new Range(1, 5, 1, 5), text: 'hello' }] },
+			{ kind: 'textDocument', resource: existing, expectedText: 'alpha', edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: 'omega' }] },
+			{ kind: 'textDocument', resource: existing, expectedText: 'omega', edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }] },
 		],
 	};
 
@@ -60,13 +60,13 @@ test("bulk edit preview follows ordered create and text operations without mutat
 
 		assert.equal(preview.canApply, true);
 		assert.equal(preview.entries.every(entry => entry.error === undefined), true);
-		assert.equal(preview.entries[1]?.before, "seed");
-		assert.equal(preview.entries[1]?.after, "seedhello");
-		assert.equal(preview.entries[2]?.before, "alpha");
-		assert.equal(preview.entries[2]?.after, "omega");
-		assert.equal(preview.entries[3]?.before, "omega");
-		assert.equal(preview.entries[3]?.after, "omega!");
-		assert.equal(files.read(existing), "alpha");
+		assert.equal(preview.entries[1]?.before, 'seed');
+		assert.equal(preview.entries[1]?.after, 'seedhello');
+		assert.equal(preview.entries[2]?.before, 'alpha');
+		assert.equal(preview.entries[2]?.after, 'omega');
+		assert.equal(preview.entries[3]?.before, 'omega');
+		assert.equal(preview.entries[3]?.after, 'omega!');
+		assert.equal(files.read(existing), 'alpha');
 		assert.equal(files.has(created), false);
 	} finally {
 		installedGlobals.dispose();
@@ -258,7 +258,7 @@ class PreviewTextModelService extends Disposable implements IFileTextModelServic
 	async acquire(input: { readonly resource: URI; readonly initialText?: string; }): Promise<TextModelReference> {
 		const key = input.resource.toString();
 		const existing = this.persistentModels.get(key);
-		const model = existing ?? new TextModel(input.initialText ?? this.resources.get(key) ?? "", { resource: input.resource });
+		const model = existing ?? new TextModel(input.initialText ?? this.resources.get(key) ?? '', { resource: input.resource });
 		const persistent = this.persistentResources.has(key);
 		if (persistent) this.persistentModels.set(key, model);
 		if (!existing && persistent) this.modelAdded.fire(model);
@@ -314,7 +314,7 @@ class PreviewFileService extends Disposable implements IFileSystemProvider {
 	notify(resource: URI): void { this.changeEmitter.fire({ resources: [resource] }); }
 
 	has(resource: URI): boolean { return this.resources.has(resource.toString()); }
-	read(resource: URI): string { return this.resources.get(resource.toString()) ?? ""; }
+	read(resource: URI): string { return this.resources.get(resource.toString()) ?? ''; }
 	async stat(resource: URI) {
 		if (!this.has(resource)) throw new FileNotFoundError(resource);
 		return { resource, kind: FileKind.File, sizeBytes: this.read(resource).length, readonly: false, modifiedAtMillis: undefined };
@@ -326,15 +326,15 @@ class PreviewFileService extends Disposable implements IFileSystemProvider {
 		return { resource, bytes: new TextEncoder().encode(content), revision: '1' };
 	}
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
-		if (!options.overwrite) { throw new Error("Preview must not write files"); }
+		if (!options.overwrite) { throw new Error('Preview must not write files'); }
 		const request = { resource, content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) };
-		throw new Error("Preview must not write files");
+		throw new Error('Preview must not write files');
 	}
-	async createFile(): Promise<never> { throw new Error("Preview must not create files"); }
-	async createDirectory(): Promise<never> { throw new Error("Preview must not create directories"); }
-	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }
-	async rename(): Promise<never> { throw new Error("Preview must not rename files"); }
-	async delete(): Promise<never> { throw new Error("Preview must not delete files"); }
+	async createFile(): Promise<never> { throw new Error('Preview must not create files'); }
+	async createDirectory(): Promise<never> { throw new Error('Preview must not create directories'); }
+	async copy(): Promise<void> { throw new Error('Copy is not used in this test'); }
+	async rename(): Promise<never> { throw new Error('Preview must not rename files'); }
+	async delete(): Promise<never> { throw new Error('Preview must not delete files'); }
 }
 
 function emptyWorkingCopies(): IWorkingCopyService {

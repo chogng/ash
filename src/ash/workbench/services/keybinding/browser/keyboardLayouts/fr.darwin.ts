@@ -34,7 +34,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Digit1: ['&', '1', '', '´', 8],
 		Digit2: ['é', '2', 'ë', '„', 0],
 		Digit3: ['"', '3', '“', '”', 0],
-		Digit4: ['\'', '4', '‘', '’', 0],
+		Digit4: ["'", '4', '‘', '’', 0],
 		Digit5: ['(', '5', '{', '[', 0],
 		Digit6: ['§', '6', '¶', 'å', 0],
 		Digit7: ['è', '7', '«', '»', 0],
@@ -125,4 +125,3 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		MetaRight: []
 	}
 });
-

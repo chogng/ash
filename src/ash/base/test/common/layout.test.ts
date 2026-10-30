@@ -1,16 +1,16 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
 import {
 	AnchorAlignment,
 	AnchorAxisAlignment,
 	AnchorPosition,
 	layout2d,
-} from "../../common/layout.js";
+} from '../../common/layout.js';
 
 const viewport = { left: 0, top: 0, width: 800, height: 600 };
 const view = { width: 200, height: 120 };
 
-test("layout2d uses the requested side and alignment when they fit", () => {
+test('layout2d uses the requested side and alignment when they fit', () => {
 	const result = layout2d(
 		viewport,
 		view,
@@ -24,7 +24,7 @@ test("layout2d uses the requested side and alignment when they fit", () => {
 	assert.equal(result.anchorPosition, AnchorPosition.Below);
 });
 
-test("layout2d flips above when there is no room below", () => {
+test('layout2d flips above when there is no room below', () => {
 	const result = layout2d(
 		viewport,
 		view,
@@ -36,7 +36,7 @@ test("layout2d flips above when there is no room below", () => {
 	assert.equal(result.anchorPosition, AnchorPosition.Above);
 });
 
-test("layout2d flips cross-axis alignment before clamping", () => {
+test('layout2d flips cross-axis alignment before clamping', () => {
 	const result = layout2d(
 		viewport,
 		view,
@@ -47,14 +47,14 @@ test("layout2d flips cross-axis alignment before clamping", () => {
 	assert.equal(result.anchorAlignment, AnchorAlignment.Right);
 });
 
-test("layout2d centers a view on its anchor and clamps it at the viewport edge", () => {
+test('layout2d centers a view on its anchor and clamps it at the viewport edge', () => {
 	const centered = layout2d(viewport, { width: 120, height: 40 }, { left: 100, top: 50, width: 24, height: 24 }, { anchorAlignment: AnchorAlignment.Center });
 	const clamped = layout2d(viewport, { width: 120, height: 40 }, { left: 780, top: 50, width: 24, height: 24 }, { anchorAlignment: AnchorAlignment.Center });
 
 	assert.deepEqual([centered.left, clamped.left, clamped.anchorAlignment], [52, 680, AnchorAlignment.Center]);
 });
 
-test("layout2d respects a non-zero visual viewport origin", () => {
+test('layout2d respects a non-zero visual viewport origin', () => {
 	const result = layout2d(
 		{ left: 30, top: 20, width: 300, height: 200 },
 		{ width: 400, height: 260 },
@@ -65,7 +65,7 @@ test("layout2d respects a non-zero visual viewport origin", () => {
 	assert.equal(result.top, 20);
 });
 
-test("layout2d supports horizontal anchored views", () => {
+test('layout2d supports horizontal anchored views', () => {
 	const result = layout2d(
 		viewport,
 		{ width: 160, height: 100 },

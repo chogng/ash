@@ -705,6 +705,14 @@ async fn disk_cache_restores_each_subscription_scope_after_restart() {
         assert_eq!(snapshot.entries().len(), 1);
         assert_eq!(snapshot.entries()[0].model().model, model_id(model_name));
         assert_eq!(
+            snapshot.entries()[0].metadata_quality(),
+            ash_protocol::ModelMetadataQuality::PersistedObservation
+        );
+        assert_eq!(
+            snapshot.entries()[0].provenance().display_name,
+            Some(crate::MetadataSource::PersistedObservation)
+        );
+        assert_eq!(
             snapshot.entries()[0].availability(),
             ModelAvailability::Available
         );
@@ -1148,4 +1156,41 @@ fn retirement_patch_round_trips_omission_withdrawal_and_undated_announcement() {
             patch
         );
     }
+}
+
+#[tokio::test]
+async fn agent_capability_preserves_unknown_and_explicit_negative_independently_of_tools() {
+    let manager = ModelsManager::new(registry());
+    let scope = dynamic_scope("strict", "account-a");
+    let patch = ModelMetadataPatch {
+        capabilities: ModelCapabilitiesPatch {
+            agent_mode: Some(CapabilitySupport::Unsupported),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let source = Arc::new(QueueSource::new([Ok(modified(
+        &scope,
+        DiscoveryCoverage::Partial,
+        [DiscoveredModel::new(model_id("alpha")).with_metadata(patch)],
+    ))]));
+    manager.refresh(scope.clone(), source).await.unwrap();
+    let snapshot = manager.snapshot(&scope).unwrap();
+    let entry = snapshot
+        .entries()
+        .iter()
+        .find(|entry| entry.model().model == model_id("alpha"))
+        .unwrap();
+    assert_eq!(
+        entry.info().capabilities.agent_mode,
+        CapabilitySupport::Unsupported
+    );
+    assert_eq!(
+        entry.info().capabilities.tools,
+        CapabilitySupport::Supported
+    );
+    assert_eq!(
+        entry.provenance().capabilities.agent_mode,
+        Some(crate::MetadataSource::ProviderLive)
+    );
 }

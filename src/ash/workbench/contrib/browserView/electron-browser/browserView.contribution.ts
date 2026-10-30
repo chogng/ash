@@ -12,7 +12,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/c
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { BrowserEditor } from './browserEditor.js';
+import { BrowserEditor, CONTEXT_BROWSER_HAS_ERROR, CONTEXT_BROWSER_HAS_URL } from './browserEditor.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 
@@ -82,7 +82,7 @@ registerWorkbenchContribution('workbench.contrib.browserView.restore', Workbench
 });
 
 import '../browser/browserView.contribution.js';
-import './features/browserDevToolsFeature.js';
+import { CONTEXT_BROWSER_DEVTOOLS_OPEN } from './features/browserDevToolsFeature.js';
 import './features/browserDataStorageFeatures.js';
 
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -109,10 +109,17 @@ function bindNavigationContext(services: ServicesAccessor): DisposableStore {
 	const contexts = services.get(IContextKeyService);
 	const back = CONTEXT_BROWSER_CAN_GO_BACK.bindTo(contexts);
 	const forward = CONTEXT_BROWSER_CAN_GO_FORWARD.bindTo(contexts);
+	const hasUrl = CONTEXT_BROWSER_HAS_URL.bindTo(contexts);
+	const hasError = CONTEXT_BROWSER_HAS_ERROR.bindTo(contexts);
+	const devToolsOpen = CONTEXT_BROWSER_DEVTOOLS_OPEN.bindTo(contexts);
 	const update = (): void => {
 		active.clear();
 		const pane = editors.activePane;
 		const render = (): void => contexts.bufferChangeEvents(() => {
+			const state = pane instanceof BrowserEditor ? pane.model?.state : undefined;
+			hasUrl.set(!!state?.url && state.url !== 'about:blank');
+			hasError.set(state?.errorDescription !== undefined);
+			devToolsOpen.set(pane instanceof BrowserEditor && pane.model?.isDevToolsOpen === true);
 			back.set(pane instanceof BrowserEditor && pane.model?.state.canGoBack === true);
 			forward.set(pane instanceof BrowserEditor && pane.model?.state.canGoForward === true);
 		});
@@ -123,7 +130,7 @@ function bindNavigationContext(services: ServicesAccessor): DisposableStore {
 		render();
 	};
 	store.add(editors.onDidChangeEditors(update));
-	store.add(toDisposable(() => { back.reset(); forward.reset(); }));
+	store.add(toDisposable(() => { back.reset(); forward.reset(); hasUrl.reset(); hasError.reset(); devToolsOpen.reset(); }));
 	update();
 	return store;
 }

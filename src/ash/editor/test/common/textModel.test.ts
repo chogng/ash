@@ -1,14 +1,14 @@
 import { createTextModelFeatures } from '../../common/model/modelFeatures.js';
 import { registerTextModelFeatures } from '../../common/model/textModelFeatures.js';
 import { after as afterModelFeatures } from 'mocha';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
 import { Selection } from '../../common/core/selection.js';
-import { TextChange, TextModelChangeReason } from "../../common/core/textChange.js";
+import { TextChange, TextModelChangeReason } from '../../common/core/textChange.js';
 import { EndOfLinePreference, EndOfLineSequence, MinimapPosition, OverviewRulerLane, PositionAffinity, TrackedRangeStickiness, isITextSnapshot } from '../../common/model.js';
-import { TextModel } from "../../common/model/textModel.js";
+import { TextModel } from '../../common/model/textModel.js';
 import { createTestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../common/languages.js';
 import type { IViewModel } from '../../common/viewModel.js';
@@ -24,8 +24,8 @@ const range = (
 	position(endLine, endColumn),
 );
 
-test("TextModel normalizes line endings and maps UTF-16 positions", () => {
-	using model = new TextModel("A😀\r\nbeta\rgamma\u2028");
+test('TextModel normalizes line endings and maps UTF-16 positions', () => {
+	using model = new TextModel('A😀\r\nbeta\rgamma\u2028');
 
 	assert.deepEqual({
 		text: model.getText(),
@@ -35,9 +35,9 @@ test("TextModel normalizes line endings and maps UTF-16 positions", () => {
 		emojiInterior: model.positionAt(2),
 		end: model.positionAt(model.getText().length),
 	}, {
-		text: "A😀\r\nbeta\r\ngamma\u2028",
+		text: 'A😀\r\nbeta\r\ngamma\u2028',
 		lineCount: 3,
-		lines: ["A😀", "beta", "gamma\u2028"],
+		lines: ['A😀', 'beta', 'gamma\u2028'],
 		emojiEndOffset: 3,
 		emojiInterior: position(0, 2),
 		end: position(2, 6),
@@ -118,8 +118,8 @@ test('TextModel expands a cross-line UTF-16 edit to complete surrogate pairs', (
 	});
 });
 
-test("TextModel exposes allocation-free document and line lengths", () => {
-	using model = new TextModel("alpha\n😀");
+test('TextModel exposes allocation-free document and line lengths', () => {
+	using model = new TextModel('alpha\n😀');
 
 	assert.equal(model.length, 8);
 	assert.equal(model.getLineLength((0) + 1), 5);
@@ -355,40 +355,40 @@ test('TextModel exposes stable large-file and long-line policy', () => {
 	assert.equal(model.isTooLargeForHeapOperation(), false);
 });
 
-test("TextModel reset replaces content and clears undo and redo history", () => {
-	using model = new TextModel("initial");
+test('TextModel reset replaces content and clears undo and redo history', () => {
+	using model = new TextModel('initial');
 	const snapshot = model.createVersionedSnapshot();
 	const events: unknown[] = [];
 	using listener = model.onDidChangeContent(change => events.push(change));
-	model.applyOperations([{ range: range(0, 0, 0, 7), text: "edited" }]);
+	model.applyOperations([{ range: range(0, 0, 0, 7), text: 'edited' }]);
 	model.undo();
 
-	const reset = model.reset("next\r\nline");
+	const reset = model.reset('next\r\nline');
 
 	assert.ok(reset);
-	assert.equal(model.getText(), "next\r\nline");
+	assert.equal(model.getText(), 'next\r\nline');
 	assert.equal(model.length, 10);
 	assert.equal(model.getEndOfLineSequence(), EndOfLineSequence.CRLF);
 	assert.equal(model.canUndo(), false);
 	assert.equal(model.canRedo(), false);
 	assert.equal(model.undo(), undefined);
 	assert.equal(model.redo(), undefined);
-	assert.equal(snapshot.getText(), "initial");
+	assert.equal(snapshot.getText(), 'initial');
 	assert.equal(reset.reason, TextModelChangeReason.Reset);
 	assert.equal(reset.changes.length, 1);
 	assert.equal(events.length, 3);
 
-	const eolReset = model.reset("next\nline");
+	const eolReset = model.reset('next\nline');
 	assert.ok(eolReset);
 	assert.equal(model.getEndOfLineSequence(), EndOfLineSequence.LF);
 	assert.equal(model.version, reset.version + 1);
 	assert.equal(events.length, 4);
-	const bomReset = model.reset("\uFEFFnext\nline");
+	const bomReset = model.reset('\uFEFFnext\nline');
 	assert.ok(bomReset);
-	assert.equal(model.getValue(EndOfLinePreference.TextDefined, true), "\uFEFFnext\nline");
-	assert.equal(model.createSnapshot(true).read(), "\uFEFFnext\nline");
+	assert.equal(model.getValue(EndOfLinePreference.TextDefined, true), '\uFEFFnext\nline');
+	assert.equal(model.createSnapshot(true).read(), '\uFEFFnext\nline');
 	assert.equal(events.length, 5);
-	const identicalReset = model.reset("\uFEFFnext\nline");
+	const identicalReset = model.reset('\uFEFFnext\nline');
 	assert.ok(identicalReset);
 	assert.equal(identicalReset.version, bomReset.version + 1);
 	assert.equal(identicalReset.changes.length, 0);
@@ -423,15 +423,15 @@ test('TextModel EOL changes preserve positions, history, and event identity', ()
 	assert.equal(model.getEOL(), '\n');
 });
 
-test("TextModel applies unordered edits against one atomic snapshot", () => {
-	using model = new TextModel("alpha\nbeta\ngamma");
+test('TextModel applies unordered edits against one atomic snapshot', () => {
+	using model = new TextModel('alpha\nbeta\ngamma');
 	const events: unknown[] = [];
 	using listener = model.onDidChangeContent(event => events.push(event));
 
 	const change = model.applyOperations([
-		{ range: range(2, 0, 2, 5), text: "G" },
-		{ range: range(0, 5, 0, 5), text: "!" },
-		{ range: range(1, 0, 1, 4), text: "B\r\nB2" },
+		{ range: range(2, 0, 2, 5), text: 'G' },
+		{ range: range(0, 5, 0, 5), text: '!' },
+		{ range: range(1, 0, 1, 4), text: 'B\r\nB2' },
 	]);
 
 	assert.deepEqual({
@@ -440,7 +440,7 @@ test("TextModel applies unordered edits against one atomic snapshot", () => {
 		change,
 		eventCount: events.length,
 	}, {
-		text: "alpha!\nB\nB2\nG",
+		text: 'alpha!\nB\nB2\nG',
 		version: 2,
 		change: {
 			version: 2,
@@ -455,19 +455,19 @@ test("TextModel applies unordered edits against one atomic snapshot", () => {
 					range: range(0, 5, 0, 5),
 					rangeOffset: 5,
 					rangeLength: 0,
-					text: "!",
+					text: '!',
 				},
 				{
 					range: range(1, 0, 1, 4),
 					rangeOffset: 6,
 					rangeLength: 4,
-					text: "B\nB2",
+					text: 'B\nB2',
 				},
 				{
 					range: range(2, 0, 2, 5),
 					rangeOffset: 11,
 					rangeLength: 5,
-					text: "G",
+					text: 'G',
 				},
 			],
 		},
@@ -475,36 +475,36 @@ test("TextModel applies unordered edits against one atomic snapshot", () => {
 	});
 });
 
-test("TextModel rejects overlapping edits without mutating", () => {
-	using model = new TextModel("abcdef");
+test('TextModel rejects overlapping edits without mutating', () => {
+	using model = new TextModel('abcdef');
 
 	assert.throws(() => model.applyEdits([
-		{ range: range(0, 1, 0, 4), text: "x" },
-		{ range: range(0, 3, 0, 5), text: "y" },
+		{ range: range(0, 1, 0, 4), text: 'x' },
+		{ range: range(0, 3, 0, 5), text: 'y' },
 	]), /must not overlap/);
 	assert.throws(() => model.applyEdits([
-		{ range: Range.fromPositions(position(0, 2)), text: "x" },
-		{ range: Range.fromPositions(position(0, 2)), text: "y" },
+		{ range: Range.fromPositions(position(0, 2)), text: 'x' },
+		{ range: Range.fromPositions(position(0, 2)), text: 'y' },
 	]), /must not overlap/);
 	assert.deepEqual({
 		text: model.getText(),
 		version: model.version,
 		canUndo: model.canUndo(),
 	}, {
-		text: "abcdef",
+		text: 'abcdef',
 		version: 1,
 		canUndo: false,
 	});
 });
 
-test("TextModel undo and redo preserve transaction boundaries", () => {
-	using model = new TextModel("abcdef");
+test('TextModel undo and redo preserve transaction boundaries', () => {
+	using model = new TextModel('abcdef');
 	const reasons: TextModelChangeReason[] = [];
 	using listener = model.onDidChangeContent(event => reasons.push(event.reason));
 
 	model.applyOperations([
-		{ range: range(0, 1, 0, 3), text: "LONG" },
-		{ range: range(0, 5, 0, 6), text: "" },
+		{ range: range(0, 1, 0, 3), text: 'LONG' },
+		{ range: range(0, 5, 0, 6), text: '' },
 	]);
 	const edited = model.getText();
 	model.undo();
@@ -520,9 +520,9 @@ test("TextModel undo and redo preserve transaction boundaries", () => {
 		canRedo: model.canRedo(),
 		reasons,
 	}, {
-		edited: "aLONGde",
-		undone: "abcdef",
-		redone: "aLONGde",
+		edited: 'aLONGde',
+		undone: 'abcdef',
+		redone: 'aLONGde',
 		version: 4,
 		canUndo: true,
 		canRedo: false,
@@ -587,20 +587,20 @@ test('TextModel applies external undo and redo payloads without taking history o
 	assert.deepEqual(events.at(-1), { reason: TextModelChangeReason.Undo, selection: undoSelection });
 });
 
-test("TextModel clears redo on a new edit and ignores exact no-ops", () => {
-	using model = new TextModel("abc");
+test('TextModel clears redo on a new edit and ignores exact no-ops', () => {
+	using model = new TextModel('abc');
 	let eventCount = 0;
 	using listener = model.onDidChangeContent(() => eventCount += 1);
 
 	assert.equal(model.applyOperations([
-		{ range: range(0, 0, 0, 3), text: "abc" },
+		{ range: range(0, 0, 0, 3), text: 'abc' },
 	]), undefined);
 	model.applyOperations([
-		{ range: range(0, 0, 0, 1), text: "A" },
+		{ range: range(0, 0, 0, 1), text: 'A' },
 	]);
 	model.undo();
 	model.applyOperations([
-		{ range: range(0, 1, 0, 2), text: "B" },
+		{ range: range(0, 1, 0, 2), text: 'B' },
 	]);
 
 	assert.deepEqual({
@@ -609,15 +609,15 @@ test("TextModel clears redo on a new edit and ignores exact no-ops", () => {
 		canRedo: model.canRedo(),
 		eventCount,
 	}, {
-		text: "aBc",
+		text: 'aBc',
 		version: 4,
 		canRedo: false,
 		eventCount: 3,
 	});
 });
 
-test("TextModel validates positions and rejects access after disposal", () => {
-	const model = new TextModel("abc");
+test('TextModel validates positions and rejects access after disposal', () => {
+	const model = new TextModel('abc');
 
 	assert.throws(() => model.offsetAt(position(1, 0)), /lineNumber/);
 	assert.throws(() => model.offsetAt(position(0, 4)), /column/);
@@ -626,8 +626,8 @@ test("TextModel validates positions and rejects access after disposal", () => {
 	assert.throws(() => model.getText(), /already disposed/);
 });
 
-test("TextModel owns attached editor count and visible-line handles", () => {
-	using model = new TextModel("one\ntwo");
+test('TextModel owns attached editor count and visible-line handles', () => {
+	using model = new TextModel('one\ntwo');
 	let attachedChanges = 0;
 	using listener = model.onDidChangeAttached(() => attachedChanges++);
 	const first = model.onBeforeAttached();
@@ -645,18 +645,18 @@ test("TextModel owns attached editor count and visible-line handles", () => {
 	assert.throws(() => second.setVisibleLines([], false), /not attached/);
 });
 
-test("TextModel owns VS Code tracked-range identifiers", () => {
-	using model = new TextModel("abc");
+test('TextModel owns VS Code tracked-range identifiers', () => {
+	using model = new TextModel('abc');
 	const id = model._setTrackedRange(null, new Range(1, 2, 1, 3), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 	assert.deepEqual(model._getTrackedRange(id), new Range(1, 2, 1, 3));
-	model.applyOperations([{ range: new Range(1, 1, 1, 1), text: "X" }]);
+	model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'X' }]);
 	assert.deepEqual(model._getTrackedRange(id), new Range(1, 3, 1, 4));
 	assert.equal(model._setTrackedRange(id, null, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges), null);
 	assert.equal(model._getTrackedRange(id), null);
 });
 
-test("TextModel owns decoration identifiers, ranges, and lane invalidation", () => {
-	using model = new TextModel("abc");
+test('TextModel owns decoration identifiers, ranges, and lane invalidation', () => {
+	using model = new TextModel('abc');
 	const events: Array<{ minimap: boolean; overview: boolean; glyph: boolean; lineNumber: boolean; }> = [];
 	using listener = model.onDidChangeDecorations(event => events.push({
 		minimap: event.affectsMinimap,
@@ -668,26 +668,26 @@ test("TextModel owns decoration identifiers, ranges, and lane invalidation", () 
 	let ids = model.deltaDecorations([], [{
 		range: new Range(1, 2, 1, 3),
 		options: {
-			description: "cursor-auto-close",
+			description: 'cursor-auto-close',
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			minimap: { color: "#f00", position: MinimapPosition.Inline },
-			overviewRuler: { color: "#f00", position: OverviewRulerLane.Right },
-			glyphMarginClassName: "glyph",
-			lineNumberClassName: "line-number",
+			minimap: { color: '#f00', position: MinimapPosition.Inline },
+			overviewRuler: { color: '#f00', position: OverviewRulerLane.Right },
+			glyphMarginClassName: 'glyph',
+			lineNumberClassName: 'line-number',
 		},
 	}], 7);
 	assert.equal(ids.length, 1);
 	assert.deepEqual(model.getDecorationRange(ids[0]), new Range(1, 2, 1, 3));
 	assert.deepEqual(events, [{ minimap: true, overview: true, glyph: true, lineNumber: true }]);
 
-	model.applyOperations([{ range: new Range(1, 1, 1, 1), text: "X" }]);
+	model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'X' }]);
 	assert.deepEqual(model.getDecorationRange(ids[0]), new Range(1, 3, 1, 4));
 	assert.equal(events.length, 2);
 
 	const previousId = ids[0];
 	ids = model.deltaDecorations(ids, [{
 		range: new Range(1, 1, 1, 2),
-		options: { description: "cursor-auto-close" },
+		options: { description: 'cursor-auto-close' },
 	}], 7);
 	assert.equal(ids[0], previousId);
 	assert.deepEqual(model.getDecorationRange(ids[0]), new Range(1, 1, 1, 2));
@@ -696,15 +696,15 @@ test("TextModel owns decoration identifiers, ranges, and lane invalidation", () 
 	assert.equal(model.getDecorationRange(previousId), null);
 });
 
-test("TextModel rejects an invalid decoration delta atomically", () => {
-	using model = new TextModel("abc");
+test('TextModel rejects an invalid decoration delta atomically', () => {
+	using model = new TextModel('abc');
 	const ids = model.deltaDecorations([], [{
 		range: new Range(1, 1, 1, 2),
-		options: { description: "existing" },
+		options: { description: 'existing' },
 	}]);
 	assert.throws(() => model.deltaDecorations(ids, [
-		{ range: new Range(1, 2, 1, 3), options: { description: "valid" } },
-		{ range: new Range(1, 3, 1, 4), options: { description: "" } },
+		{ range: new Range(1, 2, 1, 3), options: { description: 'valid' } },
+		{ range: new Range(1, 3, 1, 4), options: { description: '' } },
 	]), /non-empty description/);
 	assert.deepEqual(model.getDecorationRange(ids[0]), new Range(1, 1, 1, 2));
 });
@@ -869,20 +869,20 @@ test('TextModel owns view-model delivery and model-part events', () => {
 	assert.deepEqual(order, ['content']);
 });
 
-test("TextModel commits history before reentrant change listeners run", () => {
-	using model = new TextModel("abc");
+test('TextModel commits history before reentrant change listeners run', () => {
+	using model = new TextModel('abc');
 	const versions: number[] = [];
 	using listener = model.onDidChangeContent(event => {
 		versions.push(event.version);
 		if (event.version === 2) {
 			model.applyOperations([
-				{ range: range(0, 1, 0, 2), text: "B" },
+				{ range: range(0, 1, 0, 2), text: 'B' },
 			]);
 		}
 	});
 
 	model.applyOperations([
-		{ range: range(0, 0, 0, 1), text: "A" },
+		{ range: range(0, 0, 0, 1), text: 'A' },
 	]);
 	model.undo();
 	const afterFirstUndo = model.getText();
@@ -893,8 +893,8 @@ test("TextModel commits history before reentrant change listeners run", () => {
 		afterSecondUndo: model.getText(),
 		versions,
 	}, {
-		afterFirstUndo: "Abc",
-		afterSecondUndo: "abc",
+		afterFirstUndo: 'Abc',
+		afterSecondUndo: 'abc',
 		versions: [2, 3, 4, 5],
 	});
 });

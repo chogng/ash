@@ -43,4 +43,3 @@ export interface ITerminalReloadCredentials {
 	readonly expiresAt: number;
 	readonly leases: readonly ITerminalReconnectLease[];
 }
-

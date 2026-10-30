@@ -1,3 +1,5 @@
+import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
 import { IHostColorSchemeService } from '../../services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../services/themes/browser/browserHostColorSchemeService.js';
 import assert from 'node:assert/strict';
@@ -36,6 +38,7 @@ class ThemeWindow extends Disposable {
 			}
 		});
 		this.services.registerInstance(IConfigurationService, this.configuration);
+		this.services.registerInstance(ITelemetryService, NullTelemetryService);
 		this.services.registerInstance(ILanguageService, this._register(new LanguageService()));
 		this.services.registerInstance(IHostColorSchemeService, this._register(new BrowserHostColorSchemeService(this.browser.window as unknown as Window)));
 		this.themes = this._register(this.services.createInstance(WorkbenchThemeService, this.root));
@@ -197,7 +200,7 @@ test('automatic appearance uses preferred themes and explicit selection remains 
 	await configuration.updateValue('window.autoDetectColorScheme', true);
 	systemTheme.setMatches(true);
 	assert.equal(themes.getColorTheme().id, 'ash-high-contrast-dark');
-	await themes.setColorTheme('ash-dark');
+	await themes.setColorTheme('ash-dark', 'themePicker');
 	assert.equal(configuration.getValue('workbench.preferredDarkColorTheme'), 'ash-dark');
 	assert.equal(themes.getColorTheme().id, 'ash-dark');
 	systemTheme.setMatches(false);

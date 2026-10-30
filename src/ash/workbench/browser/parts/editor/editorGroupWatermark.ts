@@ -1,19 +1,19 @@
 import { defaultKeybindingLabelStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import "./media/editorGroupWatermark.css";
-import { KeybindingLabel } from "../../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
+import './media/editorGroupWatermark.css';
+import { KeybindingLabel } from '../../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, type IDisposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { ICommandService, type CommandId } from "../../../../platform/commands/common/commands.js";
-import { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
-import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { onUnexpectedError } from "../../../../base/common/errors.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, type IDisposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { ICommandService, type CommandId } from '../../../../platform/commands/common/commands.js';
+import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { Icon } from '../../../../base/common/icon.js';
-import { localize } from "../../../../nls.js";
-import { ShowAllCommandsCommandId } from "../../quickaccess.js";
+import { localize } from '../../../../nls.js';
+import { ShowAllCommandsCommandId } from '../../quickaccess.js';
 
 /** One command presented while an editor group has no active editor. */
 export interface IEditorGroupWatermarkEntry {
@@ -87,9 +87,9 @@ export class EditorGroupWatermark extends Disposable {
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.domNode = h(ownerDocument, "div");
-		this.domNode.className = "ash-editor-group-watermark-shortcuts";
-		this.domNode.setAttribute("aria-label", localize('workbench.editor.shortcuts', 'Editor shortcuts'));
+		this.domNode = h(ownerDocument, 'div');
+		this.domNode.className = 'ash-editor-group-watermark-shortcuts';
+		this.domNode.setAttribute('aria-label', localize('workbench.editor.shortcuts', 'Editor shortcuts'));
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
@@ -124,9 +124,9 @@ export class EditorGroupWatermark extends Disposable {
 		entries.className = 'ash-editor-group-watermark-entries';
 		const rows = EditorGroupWatermarkEntries.getEntries()
 			.map((entry) => {
-				const row = h(ownerDocument, "button");
+				const row = h(ownerDocument, 'button');
 				row.type = 'button';
-				row.className = "ash-editor-group-watermark-entry";
+				row.className = 'ash-editor-group-watermark-entry';
 				// Keep the action name concise and announce its shortcut through the description.
 				row.setAttribute('aria-label', entry.label);
 				const name = h(ownerDocument, 'span');
@@ -134,8 +134,8 @@ export class EditorGroupWatermark extends Disposable {
 				if (entry.icon) {
 					appendIcon(entry.icon, name);
 				}
-				const label = h(ownerDocument, "span");
-				label.className = "ash-editor-group-watermark-label";
+				const label = h(ownerDocument, 'span');
+				label.className = 'ash-editor-group-watermark-label';
 				label.textContent = entry.label;
 				name.append(label);
 				row.append(name);

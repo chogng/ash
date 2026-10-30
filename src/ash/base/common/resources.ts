@@ -1,5 +1,5 @@
-import { isMacintosh, isWindows } from "./platform.js";
-import { URI } from "./uri.js";
+import { isMacintosh, isWindows } from './platform.js';
+import { URI } from './uri.js';
 
 /** Metadata carried in a data URI before its content. */
 export namespace DataUri {
@@ -27,8 +27,8 @@ export namespace DataUri {
 
 /** Path comparison behavior selected for a resource. */
 export enum ResourcePathCasing {
-	Sensitive = "sensitive",
-	Insensitive = "insensitive",
+	Sensitive = 'sensitive',
+	Insensitive = 'insensitive',
 }
 
 /**
@@ -159,7 +159,7 @@ export class ExtUri implements IExtUri {
 		const path = comparisonPath(encoded.path, this.ignorePathCasing(uri));
 		const fragment = includeFragment
 			? normalizePercentEncoding(encoded.fragment)
-			: "";
+			: '';
 
 		return [
 			keyPart(uri.scheme.toLowerCase()),
@@ -167,7 +167,7 @@ export class ExtUri implements IExtUri {
 			keyPart(path),
 			keyPart(normalizePercentEncoding(encoded.query)),
 			keyPart(fragment),
-		].join("");
+		].join('');
 	}
 }
 
@@ -189,7 +189,7 @@ export function basename(uri: URI): string {
  */
 export const extUriBiasedIgnorePathCase = new ExtUri((uri) => {
 	if (
-		uri.scheme === "file"
+		uri.scheme === 'file'
 		&& (isWindows || isMacintosh)
 	) {
 		return ResourcePathCasing.Insensitive;

@@ -127,3 +127,33 @@
 		transparent
 	);
 }
+
+.ash-button-dropdown {
+	display: inline-flex;
+	align-items: stretch;
+	min-width: 0;
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-small)
+	);
+}
+
+.ash-button-dropdown > .ash-button:first-child {
+	flex: 1;
+	min-width: 0;
+	border-start-end-radius: 0;
+	border-end-end-radius: 0;
+}
+
+.ash-button-dropdown > .ash-button:last-child {
+	flex: 0 0 auto;
+	aspect-ratio: 1;
+	padding-inline: var(--ash-spacing-size20);
+	border-start-start-radius: 0;
+	border-end-start-radius: 0;
+	border-inline-start-color: currentColor;
+}
+
+.ash-button-dropdown > .ash-button-primary {
+	border-color: var(--ash-contrastBorder, transparent);
+}

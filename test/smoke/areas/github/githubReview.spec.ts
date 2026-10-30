@@ -35,7 +35,25 @@ test('Workbench and Sessions open the shared GitHub editor and restore focus aft
 });
 
 
-test('GitHub settings share the Preferences renderer in Workbench and Sessions and restore help focus', async ({ workbench, target, application }) => {
+test('Sessions GitHub repository browser prompts for a ref and supports cancellation and reopening', async ({ workbench, target }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await new QuickAccess(page).runCommand('sessions.github.browseRepositoryFiles');
+	const repository = page.getByPlaceholder('owner/name or https://github.com/owner/name', { exact: true });
+	await expect(repository).toBeVisible();
+	await repository.fill('team/repo');
+	await repository.press('Enter');
+	const reference = page.getByRole('dialog').getByRole('textbox');
+	await expect(reference).toHaveValue('HEAD');
+	await reference.press('Escape');
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await new QuickAccess(page).runCommand('sessions.github.browseRepositoryFiles');
+	await expect(repository).toBeVisible();
+	await repository.press('Escape');
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+
+test('GitHub settings share the Preferences renderer in Workbench and Sessions and restore help focus', async ({ workbench, target }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectCategory('github');
@@ -50,7 +68,7 @@ test('GitHub settings share the Preferences renderer in Workbench and Sessions a
 	await page.keyboard.press('Escape');
 	await expect(workbench.settingsEditor.element).toBeHidden();
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
-	await new Menus(sessionsPage).select(application, () => sessionsPage.locator('[data-part="activitybar"] .ash-sessions-activity-bottom button').last().click(), ['Settings']);
+	await new QuickAccess(sessionsPage).runCommand('workbench.action.openSettings');
 	const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings', exact: true });
 	await settings.getByRole('button', { name: 'Git & PRs', exact: true }).click();
 	const sessionsSection = settings.locator('.ash-settings-section');

@@ -1,8 +1,8 @@
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type VersionedLanguageResultStore } from '../../../common/model/languageResultStore.js';
 import { type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource, LanguageDiagnosticSeverity } from '../../../common/languages.js';
-import { type URI } from "../../../../base/common/uri.js";
+import { type URI } from '../../../../base/common/uri.js';
 import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../common/model.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
 import { accentForeground, errorForeground, warningForeground } from '../../../../platform/theme/common/colors/baseColors.js';
@@ -103,7 +103,7 @@ function deduplicateDiagnostics(diagnostics: readonly LanguageDiagnostic[]): rea
 	const seen = new Set<string>();
 	return diagnostics.filter(diagnostic => {
 		const range = diagnostic.range;
-		const key = `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ""}:${diagnostic.code ?? ""}`;
+		const key = `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ''}:${diagnostic.code ?? ''}`;
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;

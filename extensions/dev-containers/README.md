@@ -46,9 +46,30 @@ Check file/PTY execution, a completed Session turn, connection/Provider reopen w
 Sessions and terminal reattachment, then Stop and Remove. Docker's running state and labels
 provide the independent lifecycle check, including after the source configuration is removed.
 
-The SDK process tests cover registration, invocation, missing tools/configuration, cancellation
-and disablement. They do not exercise the Agents UI, host gateway admission/persisted inventory
-or authenticated catalog bootstrap.
+On 2026-10-30, `just test ash-dev-container-provider` passed 2 library tests and 5 process tests;
+`devContainerAgentHostService.test.ts` passed 3 tests. The SDK process tests cover registration,
+invocation, missing tools/configuration, cancellation, persisted control inventory across profile
+reopen, Stop/Remove and admission revocation. They use controlled tool processes and readiness;
+the real protocol probe belongs to the App Server gateway tests. Logs are
+`.build/todo-code-audit-dev-container-rust.log` and
+`.build/todo-code-audit-policy-elevation-container-retest.log`.
+The shared catalog's 3 tests also passed via `just test ash-remote-connections --lib catalog_tests`,
+covering digest verification before parsing, exact target selection and invalid archive paths;
+the log is `.build/todo-code-audit-container-catalog-rust.log`.
+
+The subsequent `just verify ash-dev-container-provider` passed check, all 9 tests and the
+all-target warnings check. Two new process tests run the copied Provider from a temporary product
+package through its default missing-runtime branch. The real catalog reader, archive validation
+and receipt parser verify product authorization, exact archive stdin and immutable runtime
+selection before admission. Five rejection cases cover missing authorization, incorrect catalog
+or archive digest, an incorrect receipt digest and an absent receipt; none may select a runtime
+or admit a target. The CLI uses controlled processes and captures the uploaded bytes independently
+of its receipt. Logs are `.build/todo-code-audit-container-bootstrap.log` and
+`.build/todo-code-audit-container-bootstrap-verify.log`.
+
+The automatic-installation TODO is retired under the code-and-tests acceptance scope. This run
+did not exercise the Agents UI, a real Docker environment, signed distribution provenance or
+the URL-download helper branch; it used a product-bound local catalog fixture.
 
 Automatic installation requires an authenticated Remote catalog and the POSIX prerequisites
 checked by the shared installer, including tar and SHA-256. An image with a compatible installed

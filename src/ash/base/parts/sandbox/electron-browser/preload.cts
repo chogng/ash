@@ -1,11 +1,11 @@
 (function () {
 	const { contextBridge, ipcRenderer, webUtils } =
-		require("electron") as typeof import("electron");
+		require('electron') as typeof import('electron');
 	type ISandboxGlobals =
-		import("./sandboxTypes.js").ISandboxGlobals;
+		import('./sandboxTypes.js').ISandboxGlobals;
 
 	const validateChannel = (channel: string): string => {
-		if (!channel?.startsWith("ash:")) {
+		if (!channel?.startsWith('ash:')) {
 			throw new Error(`Unsupported IPC channel '${channel}'`);
 		}
 		return channel;
@@ -50,11 +50,12 @@
 		process: {
 			platform: process.platform,
 			arch: process.arch,
+			isBuilt: process.argv.includes('--ash-is-built'),
 		},
 		webUtils: {
 			getPathForFile: (file) => webUtils.getPathForFile(file),
 		},
 	};
 
-	contextBridge.exposeInMainWorld("ash", globals);
+	contextBridge.exposeInMainWorld('ash', globals);
 })();

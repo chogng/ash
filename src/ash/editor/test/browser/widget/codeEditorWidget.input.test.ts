@@ -2,15 +2,15 @@ import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/
 import '../testEditorDom.js';
 
 import { h, text } from '../../../../base/browser/dom.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import type { browserEnvironment } from '../testEditorDom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { StandardKeyboardEvent, type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { StandardMouseEvent } from '../../../../base/browser/mouseEvent.js';
 import { Event as EditorEvent } from '../../../../base/common/event.js';
-import { toDisposable } from "../../../../base/common/lifecycle.js";
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { MouseTargetType, type ICodeEditor, type IMouseTarget } from '../../../browser/editorBrowser.js';
 import { NavigationCommandRevealType } from '../../../browser/coreCommands.js';
 import { ViewUserInputEvents } from '../../../browser/view/viewUserInputEvents.js';
@@ -18,7 +18,7 @@ import { type ICoordinatesConverter } from '../../../common/coordinatesConverter
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
-import { TextModel } from "../../../common/model/textModel.js";
+import { TextModel } from '../../../common/model/textModel.js';
 import { ScrollType } from '../../../common/editorCommon.js';
 import { EditorLineWrapping, EditorOption } from '../../../common/config/editorOptions.js';
 import { type ViewConfigurationChangedEvent } from '../../../common/viewEvents.js';
@@ -27,14 +27,14 @@ import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { ViewContext } from '../../../common/viewModel/viewContext.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 
-const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
+const { CodeEditorWidget } = await import('../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { NativeEditContext } = await import('../../../browser/controller/editContext/native/nativeEditContext.js');
 const { NativeEditContextRegistry } = await import('../../../browser/controller/editContext/native/nativeEditContextRegistry.js');
 const { ScreenReaderSupport } = await import('../../../browser/controller/editContext/native/screenReaderSupport.js');
 const { TextAreaEditContext } = await import('../../../browser/controller/editContext/textArea/textAreaEditContext.js');
 const { TestView } = await import('../viewModel/testViewModel.js');
-const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
+const { InstantiationService } = await import('../../../../platform/instantiation/common/instantiationService.js');
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 
 const enabledAccessibilityService: IAccessibilityService = {
@@ -66,7 +66,11 @@ test('code editor reports vertical scroll changes for linked editor views', () =
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel(Array.from({ length: 100 }, (_, index) => `line ${index}`).join('\n'));
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		lineHeight: 20
+	});
 	editor.layout({ width: 320, height: 80 });
 	const changes: { readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }[] = [];
 	using listener = editor.onDidScrollChange(event => changes.push(event));
@@ -416,9 +420,7 @@ test('editor focus updates the view overlay presentation', () => {
 	dom.window.close();
 });
 
-test('browser EditContext reattaches its editing object after DOM ownership changes', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main></body>');
-	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+function installTestNativeEditContext(dom: JSDOM) {
 	class TestEditContext extends dom.window.EventTarget implements EditContext {
 		public text = '';
 		public selectionStart = 0;
@@ -441,6 +443,13 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 		}
 	}
 	Object.defineProperty(dom.window, 'EditContext', { configurable: true, value: TestEditContext });
+	return TestEditContext;
+}
+
+test('browser EditContext reattaches its editing object after DOM ownership changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const TestEditContext = installTestNativeEditContext(dom);
 	using model = new TextModel('alpha');
 	using services = new InstantiationService();
 	services.registerInstance(ILogService, new NullLoggerService());
@@ -457,8 +466,8 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	editor.layout({ width: 320, height: 80 });
 	assert.strictEqual(NativeEditContextRegistry.get(ownerId), editContext);
 	assert.ok(editContext.nativeContext.updateSelectionBounds);
-	assert.ok((editContext.nativeContext as TestEditContext).selectionBounds);
-	assert.ok((editContext.nativeContext as TestEditContext).controlBounds);
+	assert.ok((editContext.nativeContext as InstanceType<typeof TestEditContext>).selectionBounds);
+	assert.ok((editContext.nativeContext as InstanceType<typeof TestEditContext>).controlBounds);
 	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown; };
 	assert.strictEqual(input.editContext, editContext.nativeContext);
 	editContext.focus();
@@ -484,7 +493,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.notStrictEqual(richContent, simpleContent);
 	assert.equal(simpleContent.isConnected, false);
 	assert.equal(richContent.querySelector('span[data-line-index="0"]')?.textContent, 'alpha');
-	const nativeComposition = editContext.nativeContext as TestEditContext;
+	const nativeComposition = editContext.nativeContext as InstanceType<typeof TestEditContext>;
 	nativeComposition.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { data: '' }));
 	assert.equal(editor.inComposition, true);
 	const textUpdate = Object.assign(new dom.window.Event('textupdate'), {
@@ -531,6 +540,70 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	adoptedDom.window.close();
 	dom.window.close();
 });
+
+for (const backend of ['textarea', 'native'] as const) {
+	for (const completion of ['commit', 'empty cancellation', 'Escape cancellation'] as const) {
+		test(`${backend} IME ${completion} preserves backward selection and transaction history`, () => {
+			const dom = new JSDOM('<!doctype html><body><main></main></body>');
+			dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+			if (backend === 'native') installTestNativeEditContext(dom);
+			try {
+				using model = new TextModel('A原文B');
+				using services = new InstantiationService();
+				services.registerInstance(ILogService, new NullLoggerService());
+				using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, instantiationService: services });
+				editor.executeEdits('test', [{ range: new Range(1, 5, 1, 5), text: '!' }]);
+				editor.pushUndoStop();
+				const selection = new Selection(1, 4, 1, 2);
+				editor.setSelection(selection);
+				const editContext = editor.controller.editContext;
+				assert.equal(editContext instanceof NativeEditContext, backend === 'native');
+				editContext.focus();
+				const candidate = '日本語🙂';
+				const input = editContext.domNode.domNode;
+				const events = editContext instanceof NativeEditContext ? editContext.nativeContext : input;
+				events.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { data: '' }));
+				if (editContext instanceof NativeEditContext) {
+					events.dispatchEvent(Object.assign(new dom.window.Event('textupdate'), {
+						text: candidate, updateRangeStart: 1, updateRangeEnd: 3,
+						selectionStart: 1 + candidate.length, selectionEnd: 1 + candidate.length,
+					}));
+				} else {
+					const textArea = input as HTMLTextAreaElement;
+					textArea.value = `A${candidate}B!`;
+					textArea.setSelectionRange(1 + candidate.length, 1 + candidate.length);
+					events.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: candidate }));
+				}
+				assert.equal(editor.inComposition, true);
+				assert.equal(model.getText(), `A${candidate}B!`);
+				if (completion === 'Escape cancellation') {
+					input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true, cancelable: true }));
+				}
+				events.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: completion === 'empty cancellation' ? '' : candidate }));
+				assert.equal(editor.inComposition, false);
+				assert.equal(model.getAllDecorations().some(decoration => decoration.options.description === 'composition-decoration'), false);
+				if (completion === 'commit') {
+					assert.equal(model.getText(), `A${candidate}B!`);
+					editor.controller.undo();
+					assert.equal(model.getText(), 'A原文B!');
+					assert.deepEqual(editor.getSelection(), selection);
+					editor.controller.redo();
+					assert.equal(model.getText(), `A${candidate}B!`);
+				} else {
+					assert.equal(model.getText(), 'A原文B!');
+					assert.deepEqual(editor.getSelection(), selection);
+					// Cancellation must leave the earlier edit as the next undoable transaction.
+					editor.controller.undo();
+					assert.equal(model.getText(), 'A原文B');
+					editor.controller.redo();
+					assert.equal(model.getText(), 'A原文B!');
+				}
+			} finally {
+				dom.window.close();
+			}
+		});
+	}
+}
 
 test('ScreenReaderSupport projects one model and screen-reader selection returns through its content owner', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -805,11 +878,11 @@ test('pointer selection uses outside-editor targets to scroll both axes and stop
 	dom.window.close();
 });
 
-test("CodeEditorWidget creates one selection controller for its model", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('CodeEditorWidget creates one selection controller for its model', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
 	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	assert.equal(editor.getModel(), model);
 	dom.window.close();

@@ -1,16 +1,16 @@
-import { Emitter, type Event } from "../../base/common/event.js";
+import { Emitter, type Event } from '../../base/common/event.js';
 import {
 	Disposable, DisposableMap, DisposableStore,
 	type IDisposable,
 	toDisposable,
-} from "../../base/common/lifecycle.js";
+} from '../../base/common/lifecycle.js';
 import {
 	ContextKeyExpr, type ContextKeyExpression,
-} from "../../platform/contextkey/common/contextkey.js";
-import type { SyncDescriptor } from "../../platform/instantiation/common/descriptors.js";
-import type { Icon } from "../../base/common/icon.js";
-import { createServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
-import { localize2, type LocalizationKey } from "../../nls.js";
+} from '../../platform/contextkey/common/contextkey.js';
+import type { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
+import type { Icon } from '../../base/common/icon.js';
+import { createServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
+import { localize2, type LocalizationKey } from '../../nls.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { getVisibleViewContextKey } from './contextkeys.js';
@@ -64,10 +64,10 @@ MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, {
 
 /** Workbench region capable of hosting registered view containers. */
 export enum ViewContainerLocation {
-	Sidebar = "sidebar",
-	Panel = "panel",
-	AuxiliaryBar = "auxiliarybar",
-	AgentSidebar = "agentSidebar",
+	Sidebar = 'sidebar',
+	Panel = 'panel',
+	AuxiliaryBar = 'auxiliarybar',
+	AgentSidebar = 'agentSidebar',
 }
 
 /** Static declaration of a named workbench view container. */
@@ -187,17 +187,17 @@ export interface IViewContainerModel {
 
 /** Stable identifiers for the containers supplied by the core workbench. */
 export const WorkbenchViewContainerId = Object.freeze({
-	Sidebar: "ash.sidebar",
-	Search: "ash.search",
-	SourceControl: "ash.git",
-	Problems: "ash.panel.problems",
-	Output: "ash.panel.output",
-	BulkEdit: "ash.panel.bulkEdit",
-	DebugConsole: "ash.panel.debugConsole",
-	Terminal: "ash.panel.terminal",
-	Ports: "ash.panel.ports",
-	Testing: "ash.testing",
-	Debug: "ash.debug",
+	Sidebar: 'ash.sidebar',
+	Search: 'ash.search',
+	SourceControl: 'ash.git',
+	Problems: 'ash.panel.problems',
+	Output: 'ash.panel.output',
+	BulkEdit: 'ash.panel.bulkEdit',
+	DebugConsole: 'ash.panel.debugConsole',
+	Terminal: 'ash.panel.terminal',
+	Ports: 'ash.panel.ports',
+	Testing: 'ash.testing',
+	Debug: 'ash.debug',
 });
 
 /**
@@ -276,8 +276,8 @@ export class WorkbenchViewRegistry extends Disposable {
 		descriptor: IViewContainerDescriptor,
 	): IRegisteredViewContainer {
 		this.assertNotDisposed();
-		validateId(descriptor.id, "view container");
-		validateTitle(descriptor.title, "View container");
+		validateId(descriptor.id, 'view container');
+		validateTitle(descriptor.title, 'View container');
 		if (this.containers.has(descriptor.id)) {
 			throw new Error(
 				`View container is already registered: ${descriptor.id}`,
@@ -361,8 +361,8 @@ export class WorkbenchViewRegistry extends Disposable {
 
 		const batchIds = new Set<string>();
 		for (const descriptor of descriptors) {
-			validateId(descriptor.id, "view");
-			validateTitle(descriptor.title, "View");
+			validateId(descriptor.id, 'view');
+			validateTitle(descriptor.title, 'View');
 			if (
 				batchIds.has(descriptor.id) ||
 				this.views.has(descriptor.id)
@@ -583,11 +583,11 @@ export interface IViewDescriptorService {
 	getViewContainerModel(
 		containerId: string,
 	): IViewContainerModel;
-	moveViewContainer(location: ViewContainerLocation, containerId: string, targetContainerId: string | undefined, position: "before" | "after"): void;
+	moveViewContainer(location: ViewContainerLocation, containerId: string, targetContainerId: string | undefined, position: 'before' | 'after'): void;
 	setViewContainerOrder(location: ViewContainerLocation, containerIds: readonly string[]): void;
 }
 
 export const IViewDescriptorService =
 	createServiceIdentifier<IViewDescriptorService>(
-		"viewDescriptorService",
+		'viewDescriptorService',
 	);

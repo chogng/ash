@@ -59,6 +59,19 @@ import type { IResourceEditorInput } from '../../../../../common/editor.js';
 import type { IEditorPart as EditorPartContract } from '../../../../../browser/parts/editor/editorPart.js';
 import { BrowserStorageService } from '../../../../../services/storage/browser/storageService.js';
 import { IPreferencesService } from '../../../../../services/preferences/common/preferences.js';
+import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
+import { LanguageService } from '../../../../../../editor/common/services/languageService.js';
+import { IFileTextModelService } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { FileIconThemeData } from '../../../../../services/themes/browser/fileIconThemeData.js';
+import { WorkbenchThemeService } from '../../../../../services/themes/browser/workbenchThemeService.js';
+import { WorkbenchFileIconThemesRegistry } from '../../../../../services/themes/common/themeExtensionPoints.js';
+import { IHostColorSchemeService } from '../../../../../services/themes/common/hostColorSchemeService.js';
+import { BrowserHostColorSchemeService } from '../../../../../services/themes/browser/browserHostColorSchemeService.js';
+import { ITelemetryService } from '../../../../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../../../../platform/telemetry/common/telemetryUtils.js';
+import { WorkbenchConfiguration } from '../../../../../common/configuration.js';
+import setiDocument from '../../../../../../../../extensions/theme-seti/icons/vs-seti-icon-theme.json' with { type: 'json' };
+import setiFontUrl from '../../../../../../../../extensions/theme-seti/icons/seti.woff?url';
 import '../../../../../browser/media/style.css';
 import '../../../../../../base/browser/ui/inputbox/inputbox.css';
 
@@ -71,6 +84,7 @@ declare global {
 			setNavigationBinding(mode: 'default' | 'rebound' | 'blocked'): void;
 			setHistoryLength(value: number): Promise<void>;
 			setSearchPatterns(include: string, exclude: string): Promise<void>;
+			setIconTheme(id: string | null): Promise<void>;
 			writeShortcutBindings(bindings: readonly IUserFriendlyKeybinding[]): Promise<void>;
 			show(value: string, scoped?: boolean): void;
 			setSignedIn(value: boolean): void;
@@ -95,6 +109,11 @@ const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
 const configuration = resources.add(new InMemoryConfigurationService());
 services.registerInstance(IConfigurationService, configuration);
+const languages = resources.add(new LanguageService());
+resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] }));
+resources.add(languages.registerLanguage({ id: 'markdown', extensions: ['.md'] }));
+services.registerInstance(ILanguageService, languages);
+services.registerInstance(IFileTextModelService, { getModel: () => null } as unknown as IFileTextModelService);
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'quick-access', flushInterval: 0 })));
 services.registerInstance(IEditorPartsService, { activePane: undefined } as unknown as IEditorPartsService);
 services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
@@ -122,21 +141,29 @@ if (!parameters.has('shortcuts')) {
 	} as IEditorService);
 }
 services.registerInstance(IPathService, { getPath: async () => posix } as unknown as IPathService);
-services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/Fix.ts') }] } as unknown as IHistoryService);
+services.registerInstance(IHistoryService, {
+	getHistory: () => (parameters.has('fileIcons') ? ['TODO.md', 'notes.md'] : ['Fix.ts']).map(name => ({ resource: URI.file(`/workspace/${name}`) })),
+} as unknown as IHistoryService);
 services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
 if (parameters.has('fileSearch')) {
 	const files = resources.add(new FileService());
 	const storage = resources.add(new InMemoryFileSystemProvider());
 	resources.add(files.registerProvider('file', storage));
 	await files.createDirectory(URI.file('/workspace/src'));
-	for (const path of ['needle.ts', 'src/needle_skip.ts', 'src/long_needle.ts', 'src/long_needle.md']) {
+	const paths = ['needle.ts', 'src/needle_skip.ts', 'src/long_needle.ts', 'src/long_needle.md'];
+	if (parameters.has('fileIcons')) paths.push('TODO.md', 'notes.md', 'main.ts');
+	for (const path of paths) {
 		await files.writeFile({ resource: URI.file(`/workspace/${path}`), content: 'fixture' }, { create: true, overwrite: false });
 	}
 	services.registerInstance(IFileService, files);
 	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'quick-access', folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'repo', index: 0 }] })));
 	services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 	const provider = resources.add(services.createInstance(AgentHostFileSearchProvider));
-	services.registerInstance(ISearchService, { fileSearch: provider.fileSearch.bind(provider), textSearch: async () => { throw new Error('Filename fixture must not search contents'); } });
+	services.registerInstance(ISearchService, {
+		registerSearchResultProvider: () => { throw new Error('Filename fixture does not register search providers'); },
+		fileSearch: provider.fileSearch.bind(provider),
+		textSearch: async () => { throw new Error('Filename fixture must not search contents'); },
+	});
 } else {
 	services.registerInstance(IFileService, { hasProvider: () => true } as unknown as IFileService);
 	services.registerInstance(IWorkspaceContextService, {
@@ -236,7 +263,20 @@ if (parameters.get('reopen') === '1') {
 }
 const quickAccess = quickInput.quickAccess;
 const theme = parameters.get('theme') === 'hc' ? highContrastDarkColorTheme : parameters.get('theme') === 'dark' ? darkColorTheme : lightColorTheme;
-resources.add(bindTestColorTheme(resources.add(new TestThemeService(theme)), document.body));
+if (parameters.has('fileIcons')) {
+	const seti = await FileIconThemeData.load('vs-seti', 'Seti', setiDocument, async () => new Uint8Array(await (await fetch(setiFontUrl)).arrayBuffer()));
+	const registration = resources.add(WorkbenchFileIconThemesRegistry.registerThemes());
+	registration.replace([seti]);
+	document.body.classList.add('ash-workbench');
+	await configuration.updateValue(WorkbenchConfiguration.colorTheme, parameters.get('theme') === 'hcLight' ? 'ash-high-contrast-light' : theme.id);
+	await configuration.updateValue(WorkbenchConfiguration.iconTheme, 'vs-seti');
+	services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
+	services.registerInstance(ITelemetryService, NullTelemetryService);
+	const themes = resources.add(services.createInstance(WorkbenchThemeService, document.body));
+	themes.initialize();
+} else {
+	resources.add(bindTestColorTheme(resources.add(new TestThemeService(theme)), document.body));
+}
 if (parameters.has('shortcuts')) {
 	await import('../../../../../browser/parts/editor/editor.contribution.js');
 	const { IEditorPart } = await import('../../../../../browser/parts/editor/editorPart.js');
@@ -338,6 +378,21 @@ if (parameters.has('shortcuts')) {
 	await import('../../../../preferences/browser/preferencesActions.js');
 }
 const executions: string[] = [];
+if (parameters.has('manyCommands')) {
+	for (let index = 0; index < 600; index++) {
+		const title = `Bulk command ${String(index).padStart(3, '0')}`;
+		resources.add(registerAction2(class extends Action2 {
+			constructor() {
+				super({
+					id: `test.quickAccess.bulk${index}`,
+					title: index % 5 === 0 ? { value: title, original: `Original command ${index}` } : title,
+					f1: true,
+				});
+			}
+			public override run(): void { document.querySelector('output')!.textContent = title; }
+		}));
+	}
+}
 if (parameters.has('scrollRows')) {
 	for (let index = 0; index < 60; index++) {
 		const id = `test.quickAccess.scroll${index}`;
@@ -405,6 +460,7 @@ window.ashQuickAccessIntegration = {
 		if (mode === 'rebound') bindings.add(KeybindingsRegistry.registerKeybindingRule({ command: 'quickInput.next', keybinding: KeyCode.F8, when: inQuickInputContext.isEqualTo(true), source: KeybindingSource.User }));
 	},
 	setHistoryLength: value => configuration.updateValue('workbench.commandPalette.history', value),
+	setIconTheme: id => configuration.updateValue(WorkbenchConfiguration.iconTheme, id),
 	setSearchPatterns: async (include, exclude) => {
 		await configuration.updateValue('search.includePatterns', include);
 		await configuration.updateValue('search.excludePatterns', exclude);

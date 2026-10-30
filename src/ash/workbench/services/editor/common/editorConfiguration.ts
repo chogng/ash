@@ -1,12 +1,12 @@
 import type { IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
-import { localize } from "../../../../nls.js";
-import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
-import { Registry } from "../../../../platform/registry/common/platform.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import type { IDocumentDiffProviderOptions } from "../../../../editor/common/diff/documentDiffProvider.js";
+import { localize } from '../../../../nls.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import type { IDocumentDiffProviderOptions } from '../../../../editor/common/diff/documentDiffProvider.js';
 
-export type EditorAutoSaveMode = "off" | "afterDelay" | "onFocusChange" | "onWindowChange";
-export type EditorTabsMode = "multiple" | "single" | "none";
+export type EditorAutoSaveMode = 'off' | 'afterDelay' | 'onFocusChange' | 'onWindowChange';
+export type EditorTabsMode = 'multiple' | 'single' | 'none';
 export type EditorLabelFormat = 'default' | 'short' | 'medium' | 'long';
 export type EditorTabSizing = 'fit' | 'shrink' | 'fixed';
 export type EditorTitleScrollbarSizing = 'default' | 'large';
@@ -189,57 +189,57 @@ export const EditorTitleScrollbarVisibilityConfiguration = configurationRegistry
 });
 
 export const EditorTabsModeConfiguration = configurationRegistry.registerConfiguration<EditorTabsMode>({
-	key: "workbench.editor.showTabs",
-	defaultValue: "multiple",
-	parse: value => value === "single" || value === "none" ? value : "multiple",
+	key: 'workbench.editor.showTabs',
+	defaultValue: 'multiple',
+	parse: value => value === 'single' || value === 'none' ? value : 'multiple',
 	setting: {
-		title: "Workbench › Editor: Show Tabs",
-		description: "Controls whether editor groups show all tabs, only the active tab, or no tabs.",
-		valueType: "select",
+		title: 'Workbench › Editor: Show Tabs',
+		description: 'Controls whether editor groups show all tabs, only the active tab, or no tabs.',
+		valueType: 'select',
 		options: [
-			{ value: "multiple", label: "Multiple" },
-			{ value: "single", label: "Single" },
-			{ value: "none", label: "None" },
+			{ value: 'multiple', label: 'Multiple' },
+			{ value: 'single', label: 'Single' },
+			{ value: 'none', label: 'None' },
 		],
 	},
 });
 
 export const EditorShowIconsConfiguration = configurationRegistry.registerConfiguration<boolean>({
-	key: "workbench.editor.showIcons",
+	key: 'workbench.editor.showIcons',
 	defaultValue: true,
-	parse: value => typeof value === "boolean" ? value : true,
+	parse: value => typeof value === 'boolean' ? value : true,
 	setting: {
 		get title() { return localize('workbench.editor.showIcons.title', 'Workbench › Editor: Show Icons'); },
 		get description() { return localize('workbench.editor.showIcons.description', 'Show file icons in editor tabs.'); },
-		valueType: "boolean",
+		valueType: 'boolean',
 	},
 });
 
 export const EditorAutoSaveConfiguration = configurationRegistry.registerConfiguration<EditorAutoSaveMode>({
-	key: "files.autoSave",
-	defaultValue: "off",
-	parse: value => value === "afterDelay" || value === "onFocusChange" || value === "onWindowChange" ? value : "off",
+	key: 'files.autoSave',
+	defaultValue: 'off',
+	parse: value => value === 'afterDelay' || value === 'onFocusChange' || value === 'onWindowChange' ? value : 'off',
 	setting: {
-		title: "Files: Auto Save",
-		description: "Controls when editors with unsaved changes are saved automatically.",
-		valueType: "select",
+		title: 'Files: Auto Save',
+		description: 'Controls when editors with unsaved changes are saved automatically.',
+		valueType: 'select',
 		options: [
-			{ value: "off", label: "Off" },
-			{ value: "afterDelay", label: "After Delay" },
-			{ value: "onFocusChange", label: "On Focus Change" },
-			{ value: "onWindowChange", label: "On Window Change" },
+			{ value: 'off', label: 'Off' },
+			{ value: 'afterDelay', label: 'After Delay' },
+			{ value: 'onFocusChange', label: 'On Focus Change' },
+			{ value: 'onWindowChange', label: 'On Window Change' },
 		],
 	},
 });
 
 export const EditorAutoSaveDelayConfiguration = configurationRegistry.registerConfiguration<number>({
-	key: "files.autoSaveDelay",
+	key: 'files.autoSaveDelay',
 	defaultValue: 1_000,
-	parse: value => typeof value === "number" && Number.isFinite(value) ? Math.min(60_000, Math.max(100, Math.round(value))) : 1_000,
+	parse: value => typeof value === 'number' && Number.isFinite(value) ? Math.min(60_000, Math.max(100, Math.round(value))) : 1_000,
 	setting: {
-		title: "Files: Auto Save Delay",
-		description: "Delay in milliseconds before a dirty editor is automatically saved.",
-		valueType: "number",
+		title: 'Files: Auto Save Delay',
+		description: 'Delay in milliseconds before a dirty editor is automatically saved.',
+		valueType: 'number',
 		minimum: 100,
 		maximum: 60_000,
 	},
@@ -248,14 +248,14 @@ export const EditorAutoSaveDelayConfiguration = configurationRegistry.registerCo
 /** Reads computation settings shared by single-file and multi-file diff panes. */
 export function getDiffComputationOptions(configuration: IConfigurationService, languageId: string): IDocumentDiffProviderOptions {
 	return {
-		ignoreTrimWhitespace: configuration.getValue<boolean>("diffEditor.ignoreTrimWhitespace", { overrideIdentifier: languageId }),
-		maxComputationTimeMs: configuration.getValue<number>("diffEditor.maxComputationTime", { overrideIdentifier: languageId }),
+		ignoreTrimWhitespace: configuration.getValue<boolean>('diffEditor.ignoreTrimWhitespace', { overrideIdentifier: languageId }),
+		maxComputationTimeMs: configuration.getValue<number>('diffEditor.maxComputationTime', { overrideIdentifier: languageId }),
 		computeMoves: configuration.getValue<boolean>('diffEditor.experimental.showMoves'),
 	};
 }
 
 export function getDiffWordWrap(configuration: IConfigurationService, languageId?: string): NonNullable<IEditorOptions['wordWrap']> {
 	const overrides = { overrideIdentifier: languageId };
-	const value = configuration.getValue<"off" | "on" | "inherit">("diffEditor.wordWrap", overrides);
-	return value === "inherit" ? configuration.getValue<NonNullable<IEditorOptions['wordWrap']>>("editor.wordWrap", overrides) : value;
+	const value = configuration.getValue<'off' | 'on' | 'inherit'>('diffEditor.wordWrap', overrides);
+	return value === 'inherit' ? configuration.getValue<NonNullable<IEditorOptions['wordWrap']>>('editor.wordWrap', overrides) : value;
 }

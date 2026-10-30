@@ -1,6 +1,6 @@
 # Stanza 编辑能力边界审计（M0）
 
-2026-10-18，对当前工作区（包括暂停中的未提交段落改动）做静态职责与调用链审计。本报告保留迁移前的静态调查及当时的 M0–M6 编号；这些编号不再作为当前实施阶段。当前设计见[编辑器设计与演进](editor-roadmap.md)，未完成工作见[根 TODO](../../TODO.md#stanza-编辑器--todo)。静态调查不包含运行时验收或性能结论。
+2026-10-18，对当前工作区（包括暂停中的未提交段落改动）做静态职责与调用链审计。本报告保留迁移前的静态调查及当时的 M0–M6 编号；这些编号不再作为当前实施阶段。当前设计见[编辑器设计与演进](editor-roadmap.md)，未完成工作见[根 TODO](../../TODO.md)。静态调查不包含运行时验收或性能结论。
 
 **边界是通用文本内核 + 客户端内置 Code + 外部 Academy 能力包；Academy 由独立 Rust 扩展经共享扩展宿主和通用编辑器桥注入，Sessions 消费已注册能力。** IDE 不增加 Academy 的入口、菜单、布局或适配验收。`src/ash/workbench` 同时包含 IDE 产品接线和 Sessions 已在复用的基础设施，不能把“无需适配 IDE”解释成“不能复用 Workbench 服务”。
 
@@ -188,4 +188,4 @@ M2a／M2b 是同一门禁的两个切片，不要求 Code 全迁完才开始 Aca
 | Sessions editor-history、Chat／Cowork 输入、Changes、Creator                                                                                                                                         | 验证保存／恢复／并排、会话切换／草稿、Diff 和现有产品回归；不把 Creator 模型改造成 Academy 模型。                                                                                  |
 | Editor README、text-engine、document-engine、根 TODO；`docs/editor-{architecture,extensions}.md`；[旧 Work / Code 设计](work-code-workbench.md)；Sessions 说明                                       | 随实现更新当前事实与目标边界；旧 Work 产品入口不能作为 Academy 必须适配 IDE 的依据。历史行为记录保持为历史，不自动升级为新边界验收。                                               |
 
-本报告仅记录 2026-10-18 的静态调查，当时未重跑行为测试。上表中的缺口与失败不作为当前待办；后续实现及验证范围见[编辑器架构](../editor-architecture.md#验证范围)，仍未完成的工作统一见[根 TODO](../../TODO.md#stanza-编辑器--todo)。
+本报告仅记录 2026-10-18 的静态调查，当时未重跑行为测试。上表中的缺口与失败不作为当前待办；后续实现及验证范围见[编辑器架构](../editor-architecture.md#验证范围)，仍未完成的工作统一见[根 TODO](../../TODO.md)。

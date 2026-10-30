@@ -5,26 +5,26 @@ import { IPolicyService } from '../../platform/policy/common/policy.js';
 import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
 import { AppToolsHost } from '../contrib/appTools/browser/appToolsHost.js';
 import { AppServerAppToolsHost } from '../services/appTools/browser/appServerAppToolsHost.js';
-import { ElectronUpdateService } from '../../platform/update/electron-browser/updateService.js';
+import { IUpdateService } from '../../platform/update/common/updateService.js';
 import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
 import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';
 import { OpenAgentsWindowSystemWideKeybindingContribution } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
-import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
-import { URI } from "../../base/common/uri.js";
-import { IFileService } from "../../platform/files/common/files.js";
+import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
+import { URI } from '../../base/common/uri.js';
+import { IFileService } from '../../platform/files/common/files.js';
 import { FileService } from '../../platform/files/common/fileService.js';
-import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
-import { addDisposableListener } from "../../base/browser/dom.js";
-import { DisposableStore, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
-import { onUnexpectedError } from "../../base/common/errors.js";
-import { createElectronRendererApi } from "../../workbench/electron-browser/rendererApi.js";
+import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
+import { addDisposableListener } from '../../base/browser/dom.js';
+import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { onUnexpectedError } from '../../base/common/errors.js';
+import { createElectronRendererApi } from '../../workbench/electron-browser/rendererApi.js';
 import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { DirectoryPermissionDialog } from '../../workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
-import { ElectronContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
-import type { SessionsProfile } from "../common/sessionsProfile.js";
+import { BrowserContextMenuService } from '../../platform/contextview/browser/contextMenuService.js';
+import type { SessionsProfile } from '../common/sessionsProfile.js';
 import type { Workbench } from '../browser/workbench.js';
 import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
 import { isMacintosh } from '../../base/common/platform.js';
@@ -37,7 +37,7 @@ import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
 import { NativeHostColorSchemeService } from '../../workbench/services/themes/electron-browser/nativeHostColorSchemeService.js';
-import { showStartupError } from "../../workbench/browser/startupError.js";
+import { showStartupError } from '../../workbench/browser/startupError.js';
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
 import { IBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
@@ -55,14 +55,15 @@ import { NativeWorkbenchStorageService } from '../../workbench/services/storage/
 import { NativeLogService } from '../../workbench/services/log/electron-browser/logService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-browser/appServerBrowserHost.js';
+import { IAgentHostCanvasCollection } from '../../workbench/contrib/canvases/common/agentHostCanvas.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 
 /** Starts the Code-specific Electron Sessions page. */
 export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	installBaseUiStyles();
-	const container = document.querySelector<HTMLElement>("#app");
-	if (!container) throw new Error("Sessions renderer requires an #app container");
+	const container = document.querySelector<HTMLElement>('#app');
+	if (!container) throw new Error('Sessions renderer requires an #app container');
 	const sessions = new DisposableStore();
 	let workbench: Workbench | undefined;
 	let drainRequested = false;
@@ -109,7 +110,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		// Release automation dependencies before their Main IPC connection during window shutdown.
 		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		const mainProcessService = profileServices.get(IMainProcessService);
-		const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'));
+		const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'), false, sandboxProcess.isBuilt);
 		profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 		const playwrightService = profileServices.get(IPlaywrightService);
 		serviceCollection.set(IMainProcessService, mainProcessService);
@@ -154,102 +155,160 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		});
 		sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 		const hostColorScheme = await api.nativeHost.getOSColorScheme();
-		workbench = sessions.add(await createSessionsWorkbench({
-			serviceCollection,
-			createAppToolsHost: documentClient ? services => new AppServerAppToolsHost(documentClient!, services.createInstance(AppToolsHost, container.ownerDocument, services.createInstance(ElectronUpdateService))) : undefined,
-			createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, services.get(IPlaywrightService), services.get(IMainProcessService), services.get(IConfigurationService)) : undefined,
-			createTextDocumentHost: documentClient ? services => {
-				const editing = services.get(IChatEditingService);
-				return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
-			} : undefined,
-			contributionIds: [
-				'workbench.contrib.limitIndicator',
-				'workbench.contrib.opener',
-				'chatResponseResourceWorkbenchContribution',
-				'terminalAutoReplies',
-				'terminalTelemetry',
-				'workbench.contrib.settingsChangeRelauncher',
-				'workbench.contrib.partsSplash',
-				'workbench.contrib.preferences',
-				'workbench.contrib.extensionRecommendations',
-				'workbench.contrib.snippets',
-				'workbench.contrib.defaultFormatter',
-				'workbench.contrib.sessionsLayout',
-				'terminal.native',
-				'workbench.contrib.call',
-				'sessions.contrib.multiDiffSource',
-				'sessions.contrib.automationsCustomView',
-				'workbench.contrib.nativeWindow',
-				OpenAgentsWindowSystemWideKeybindingContribution.ID,
-				'workbench.contrib.chatScreenshot',
-				'workbench.contrib.agentsWindowInvitation',
-				'chat.edits.editorOverlay',
-				'chat.promptLanguageFeatures',
-				'workbench.contrib.chatEnablement',
-				'workbench.contrib.dataChannels',
-				'workbench.contrib.output',
-				'workbench.contrib.logs',
-				'workbench.contrib.appServerRecovery',
-				'workbench.contrib.workspacePermissionStatus',
-				'workbench.contrib.githubLinkPresentations',
-				'workbench.contrib.url',
-				'workbench.contrib.externalUriOpener',
-				'workbench.contrib.browserView',
-				'workbench.contrib.browserView.windowZoomSynchronizer',
-				'workbench.contrib.browserView.autoReload',
-				'workbench.contrib.sessionBrowserViewController',
-				'sessions.chatgpt.web',
-				'workbench.contrib.browserView.restore',
-				'workbench.contrib.chatAccessibilitySignals',
-				'workbench.contrib.speechAccessibilitySignal',
-				'workbench.contrib.saveAccessibilitySignals',
-			],
-			createLogService: () => {
-				// The factory owns failure cleanup and transfers the logger to the Workbench.
-				sessions.delete(logger);
-				return logger;
-			},
-			createStorageService: async options => {
-				const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
-				try { await storage.initialize(); return storage; }
-				catch (error) { storage.dispose(); throw error; }
-			},
-			profile,
-			api,
-			workspaceSelection: () => workspaceSelection,
-			workspace: () => workspace,
-			createFileDialogService: services => services.createInstance(FileDialogService),
-			createLifecycleService: services => {
-				lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
-				sessions.add(lifecycleService.onWillShutdown(event => event.join(logger.flush().catch(error => console.error('Could not flush Agents logs during shutdown', error)), 'Agents logs flush')));
-				return lifecycleService;
-			},
-			nativeHostApi: api.nativeHost,
-			createAuxiliaryWindowService: (opener, root, services) => services.createInstance(ElectronAuxiliaryWindowService, opener, root),
-			keyboardLayoutProvider: api.keyboardLayout,
-			userKeyboardLayoutApi: api.userKeyboardLayout,
-			returnToWorkbench: () => { void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError); },
-			createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
-			createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
-			createHostColorSchemeService: services => {
-				const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
-				void colors.initialize().catch(onUnexpectedError);
-				return colors;
-			},
-			createTitlebarPart: (titlebarContainer, services) => {
-				if (isMacintosh) {
-					// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
-					sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
-				}
-				return services.createInstance(TitlebarPart, titlebarContainer, isMacintosh ? 'actions-only' : 'application-menu');
-			},
-			container,
-		}));
+		workbench = sessions.add(
+			await createSessionsWorkbench({
+				serviceCollection,
+				createAppToolsHost: documentClient
+					? services =>
+						new AppServerAppToolsHost(
+							documentClient!,
+							services.createInstance(
+								AppToolsHost,
+								container.ownerDocument,
+								services.get(IUpdateService),
+							),
+						)
+					: undefined,
+				createBrowserHost: documentClient
+					? services =>
+						registerAppServerBrowserHost(
+							documentClient!,
+							services.get(IPlaywrightService),
+							services.get(IMainProcessService),
+							services.get(IConfigurationService),
+							services.get(IAgentHostCanvasCollection),
+						)
+					: undefined,
+				createTextDocumentHost: documentClient
+					? services => {
+						const editing = services.get(IChatEditingService);
+						return services.createInstance(AppServerTextDocumentHost, documentClient!, {
+							applyEdits: editing.applyEdits.bind(editing),
+							finishTurn: editing.finishTurn.bind(editing),
+						});
+					}
+					: undefined,
+				contributionIds: [
+					'workbench.contrib.policyTelemetry',
+					'workbench.contrib.limitIndicator',
+					'status.languageStatus',
+					'workbench.contrib.opener',
+					'chatResponseResourceWorkbenchContribution',
+					'terminalAutoReplies',
+					'terminalTelemetry',
+					'workbench.contrib.settingsChangeRelauncher',
+					'workbench.contrib.partsSplash',
+					'workbench.contrib.preferences',
+					'workbench.contrib.extensionRecommendations',
+					'workbench.contrib.snippets',
+					'workbench.contrib.defaultFormatter',
+					'workbench.contrib.sessionsLayout',
+					'terminal.native',
+					'workbench.contrib.call',
+					'sessions.contrib.multiDiffSource',
+					'sessions.contrib.automationsCustomView',
+					'workbench.contrib.nativeWindow',
+					OpenAgentsWindowSystemWideKeybindingContribution.ID,
+					'workbench.contrib.chatScreenshot',
+					'workbench.contrib.agentsWindowInvitation',
+					'chat.edits.editorOverlay',
+					'chat.promptLanguageFeatures',
+					'workbench.contrib.chatEnablement',
+					'workbench.contrib.dataChannels',
+					'workbench.contrib.output',
+					'workbench.contrib.logs',
+					'sessions.contrib.workspaceStatus',
+					'workbench.contrib.githubLinkPresentations',
+					'workbench.contrib.githubFileSystemProvider',
+					'workbench.contrib.url',
+					'workbench.contrib.externalUriOpener',
+					'workbench.contrib.browserView',
+					'workbench.contrib.canvases',
+					'sessions.contrib.canvases',
+					'workbench.contrib.browserView.windowZoomSynchronizer',
+					'workbench.contrib.browserView.autoReload',
+					'workbench.contrib.sessionBrowserViewController',
+					'sessions.chatgpt.web',
+					'workbench.contrib.browserView.restore',
+					'workbench.contrib.chatAccessibilitySignals',
+					'workbench.contrib.speechAccessibilitySignal',
+					'workbench.contrib.saveAccessibilitySignals',
+				],
+				createLogService: () => {
+					// The factory owns failure cleanup and transfers the logger to the Workbench.
+					sessions.delete(logger);
+					return logger;
+				},
+				createStorageService: async options => {
+					const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
+					try {
+						await storage.initialize();
+						return storage;
+					} catch (error) {
+						storage.dispose();
+						throw error;
+					}
+				},
+				profile,
+				api,
+				workspaceSelection: () => workspaceSelection,
+				workspace: () => workspace,
+				createFileDialogService: services => services.createInstance(FileDialogService),
+				createLifecycleService: services => {
+					lifecycleService = services.createInstance(ElectronLifecycleService, {
+						ownerWindow: window,
+						onError: onUnexpectedError,
+					});
+					sessions.add(
+						lifecycleService.onWillShutdown(event =>
+							event.join(
+								logger
+									.flush()
+									.catch(error =>
+										console.error('Could not flush Agents logs during shutdown', error),
+									),
+								'Agents logs flush',
+							),
+						),
+					);
+					return lifecycleService;
+				},
+				nativeHostApi: api.nativeHost,
+				createAuxiliaryWindowService: (opener, root, services) =>
+					services.createInstance(ElectronAuxiliaryWindowService, opener, root),
+				keyboardLayoutProvider: api.keyboardLayout,
+				userKeyboardLayoutApi: api.userKeyboardLayout,
+				returnToWorkbench: () => {
+					void invoke<void>(RETURN_TO_WORKBENCH_CHANNEL).catch(onUnexpectedError);
+				},
+				createUserDataFileSystemProvider: async () =>
+					new FileUserDataProvider(api.localFiles, api.userDataHome),
+				// Keep content menus in the window's themed DOM, independently of IDE menu preferences.
+				createContextMenuService: services => services.createInstance(BrowserContextMenuService),
+				createHostColorSchemeService: services => {
+					const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
+					void colors.initialize().catch(onUnexpectedError);
+					return colors;
+				},
+				createTitlebarPart: (titlebarContainer, services) => {
+					if (isMacintosh) {
+						// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
+						sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
+					}
+					return services.createInstance(
+						TitlebarPart,
+						titlebarContainer,
+						isMacintosh ? 'actions-only' : 'application-menu',
+					);
+				},
+				container,
+			}),
+		);
 		requestDrain();
 		sessions.add(bindWindowControlTheme(workbench.themeService, api.nativeHost));
 		const activeWorkbench = workbench;
-		sessions.add(addDisposableListener(window, "pagehide", () => {
-			void activeWorkbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Sessions Workbench", error)).finally(() => sessions.dispose());
+		sessions.add(addDisposableListener(window, 'pagehide', () => {
+			void activeWorkbench.shutdown('pageHide').catch(error => console.error('Failed to shut down Sessions Workbench', error)).finally(() => sessions.dispose());
 		}, { once: true }));
 		await lifecycleService.initialize();
 		await workbench.whenRestored;
@@ -261,3 +320,4 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 }
 import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
 import { ElectronWorkbenchEnvironmentService } from '../../workbench/services/environment/electron-browser/environmentService.js';
+import { sandboxProcess } from '../../base/parts/sandbox/electron-browser/globals.js';

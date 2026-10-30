@@ -46,8 +46,9 @@ pub use ash_debug_client::DebugResponse;
 use ash_file_access::Authorization;
 use serde_json::Value;
 
-const MAX_SESSIONS: usize = 8;
-const MAX_OBSERVATIONS: usize = 512;
+// Desktop self hosting combines launcher/main sessions, a renderer and workers.
+const MAX_SESSIONS: usize = 16;
+const MAX_OBSERVATIONS: usize = ash_debug_adapter::MAX_BUFFERED_MESSAGES;
 const MAX_OBSERVATION_BYTES: usize = ash_debug_adapter::MAX_MESSAGE_BYTES;
 const MAX_STDERR_BYTES: usize = 64 * 1024;
 

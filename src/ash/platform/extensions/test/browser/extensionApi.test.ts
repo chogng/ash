@@ -1,10 +1,10 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
-import type { IResourceApi } from "../../../agentHost/common/appServerApi.js";
-import type { AppServerProtocolClient } from "../../../agentHost/browser/appServerProtocolClient.js";
-import { createAppServerExtensionApi } from "../../browser/extensionApi.js";
-import { MAX_EXTENSION_RESOURCE_BYTES, type ExtensionResourceRequest, type IExtensionApi } from "../../common/extensionApi.js";
+import type { IResourceApi } from '../../../agentHost/common/appServerApi.js';
+import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
+import { createAppServerExtensionApi } from '../../browser/extensionApi.js';
+import { MAX_EXTENSION_RESOURCE_BYTES, type ExtensionResourceRequest, type IExtensionApi } from '../../common/extensionApi.js';
 import { createHash } from 'node:crypto';
 
 test('App Server extension resources require a published catalog before opening a handle', async () => {
@@ -78,7 +78,7 @@ test('extension catalogs reuse only a backend-confirmed version from the same co
 	await assert.rejects(api.list('refresh'), /retired/);
 });
 
-test("Vite extension resources reject oversized open metadata before reading", async () => {
+test('Vite extension resources reject oversized open metadata before reading', async () => {
 	let reads = 0;
 	let releases = 0;
 	const { api, request } = await initializedExtensionApi({
@@ -86,7 +86,7 @@ test("Vite extension resources reject oversized open metadata before reading", a
 	}, resourceApi({
 		read: async () => {
 			reads += 1;
-			throw new Error("resource read must not run");
+			throw new Error('resource read must not run');
 		},
 		release: async () => { releases++; },
 	}));
@@ -135,13 +135,13 @@ for (const invalid of [{ offset: 1 }, { resourceId: 'other-resource' }, { decode
 	});
 }
 
-test("Vite extension resources reject malformed chunks and release the handle", async () => {
+test('Vite extension resources reject malformed chunks and release the handle', async () => {
 	let releases = 0;
 	const { api, request } = await initializedExtensionApi({ resource: metadata(1) }, resourceApi({
 		read: async () => ({
-			resourceId: "resource_0000000000000001",
+			resourceId: 'resource_0000000000000001',
 			offset: 0,
-			dataBase64: "YQ==",
+			dataBase64: 'YQ==',
 			decodedLength: 1,
 			eof: true,
 			unexpected: true,
@@ -153,10 +153,10 @@ test("Vite extension resources reject malformed chunks and release the handle", 
 	assert.equal(releases, 1);
 });
 
-test("Vite extension resources verify assembled bytes and release a corrupted handle", async () => {
+test('Vite extension resources verify assembled bytes and release a corrupted handle', async () => {
 	let releases = 0;
 	const { api, request } = await initializedExtensionApi({ resource: metadata(1) }, resourceApi({
-		read: async () => ({ resourceId: "resource_0000000000000001", offset: 0, dataBase64: "YQ==", decodedLength: 1, eof: true }),
+		read: async () => ({ resourceId: 'resource_0000000000000001', offset: 0, dataBase64: 'YQ==', decodedLength: 1, eof: true }),
 		release: async () => { releases += 1; },
 	}));
 
@@ -243,7 +243,7 @@ function resourceApi(overrides: Partial<IResourceApi>): IResourceApi {
 	return {
 		connectionGeneration: 0,
 		metadata: async () => metadata(0),
-		read: async () => { throw new Error("resource read is unavailable"); },
+		read: async () => { throw new Error('resource read is unavailable'); },
 		release: async () => { },
 		...overrides,
 	};
@@ -251,9 +251,9 @@ function resourceApi(overrides: Partial<IResourceApi>): IResourceApi {
 
 function metadata(size: number) {
 	return {
-		resourceId: "resource_0000000000000001",
-		mimeType: "application/json",
+		resourceId: 'resource_0000000000000001',
+		mimeType: 'application/json',
 		size,
-		sha256: `sha256:${"a".repeat(64)}`,
+		sha256: `sha256:${'a'.repeat(64)}`,
 	};
 }

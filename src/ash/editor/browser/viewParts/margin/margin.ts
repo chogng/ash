@@ -1,8 +1,8 @@
 import { h } from '../../../../base/browser/dom.js';
-import "./margin.css";
-import { createFastDomNode, FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { type RenderingContext, type RestrictedRenderingContext } from "../../view/renderingContext.js";
-import { ViewPart } from "../../view/viewPart.js";
+import './margin.css';
+import { createFastDomNode, FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { type RenderingContext, type RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import * as viewEvents from '../../../common/viewEvents.js';

@@ -1,6 +1,6 @@
 export const PDF_ANNOTATION_DOCUMENT_VERSION = 1;
 
-export type PdfAnnotationKind = "highlight" | "ink" | "note";
+export type PdfAnnotationKind = 'highlight' | 'ink' | 'note';
 
 /** A point stored in page-relative coordinates, independent of zoom and DPI. */
 export interface PdfAnnotationPoint {
@@ -25,19 +25,19 @@ interface PdfAnnotationBase {
 
 /** A translucent rectangular markup anchored to one rendered PDF page. */
 export interface PdfHighlightAnnotation extends PdfAnnotationBase {
-	readonly kind: "highlight";
+	readonly kind: 'highlight';
 	readonly rect: PdfAnnotationRect;
 }
 
 /** A freehand stroke anchored to one rendered PDF page. */
 export interface PdfInkAnnotation extends PdfAnnotationBase {
-	readonly kind: "ink";
+	readonly kind: 'ink';
 	readonly points: readonly PdfAnnotationPoint[];
 }
 
 /** A text comment anchored to one point on a rendered PDF page. */
 export interface PdfNoteAnnotation extends PdfAnnotationBase {
-	readonly kind: "note";
+	readonly kind: 'note';
 	readonly point: PdfAnnotationPoint;
 	readonly text: string;
 }
@@ -61,14 +61,14 @@ export function parsePdfAnnotationDocument(source: string): PdfAnnotationDocumen
 	try {
 		value = JSON.parse(source);
 	} catch (error) {
-		throw new SyntaxError("PDF annotation document is not valid JSON", { cause: error });
+		throw new SyntaxError('PDF annotation document is not valid JSON', { cause: error });
 	}
-	const document = record(value, "PDF annotation document");
-	requireExactKeys(document, ["version", "annotations"], "PDF annotation document");
+	const document = record(value, 'PDF annotation document');
+	requireExactKeys(document, ['version', 'annotations'], 'PDF annotation document');
 	if (document.version !== PDF_ANNOTATION_DOCUMENT_VERSION) {
 		throw new RangeError(`Unsupported PDF annotation document version: ${String(document.version)}`);
 	}
-	if (!Array.isArray(document.annotations)) throw new TypeError("PDF annotation document annotations must be an array");
+	if (!Array.isArray(document.annotations)) throw new TypeError('PDF annotation document annotations must be an array');
 	const ids = new Set<string>();
 	const annotations = document.annotations.map((annotation, index) => {
 		const decoded = parseAnnotation(annotation, `PDF annotation document annotations[${index}]`);
@@ -96,18 +96,18 @@ function parseAnnotation(value: unknown, path: string): PdfAnnotation {
 		updatedAt: timestamp(annotation.updatedAt, `${path}.updatedAt`),
 	};
 	switch (kind) {
-		case "highlight":
-			requireExactKeys(annotation, ["id", "kind", "page", "color", "createdAt", "updatedAt", "rect"], path);
+		case 'highlight':
+			requireExactKeys(annotation, ['id', 'kind', 'page', 'color', 'createdAt', 'updatedAt', 'rect'], path);
 			return Object.freeze({ ...base, kind, rect: rect(annotation.rect, `${path}.rect`) });
-		case "ink": {
-			requireExactKeys(annotation, ["id", "kind", "page", "color", "createdAt", "updatedAt", "points"], path);
+		case 'ink': {
+			requireExactKeys(annotation, ['id', 'kind', 'page', 'color', 'createdAt', 'updatedAt', 'points'], path);
 			if (!Array.isArray(annotation.points) || annotation.points.length < 2 || annotation.points.length > 8192) {
 				throw new RangeError(`${path}.points must contain between 2 and 8192 points`);
 			}
 			return Object.freeze({ ...base, kind, points: Object.freeze(annotation.points.map((point, index) => pointValue(point, `${path}.points[${index}]`))) });
 		}
-		case "note":
-			requireExactKeys(annotation, ["id", "kind", "page", "color", "createdAt", "updatedAt", "point", "text"], path);
+		case 'note':
+			requireExactKeys(annotation, ['id', 'kind', 'page', 'color', 'createdAt', 'updatedAt', 'point', 'text'], path);
 			return Object.freeze({ ...base, kind, point: pointValue(annotation.point, `${path}.point`), text: text(annotation.text, `${path}.text`) });
 		default:
 			throw new RangeError(`${path}.kind is not supported: ${kind}`);
@@ -116,13 +116,13 @@ function parseAnnotation(value: unknown, path: string): PdfAnnotation {
 
 function pointValue(value: unknown, path: string): PdfAnnotationPoint {
 	const point = record(value, path);
-	requireExactKeys(point, ["x", "y"], path);
+	requireExactKeys(point, ['x', 'y'], path);
 	return Object.freeze({ x: relative(point.x, `${path}.x`), y: relative(point.y, `${path}.y`) });
 }
 
 function rect(value: unknown, path: string): PdfAnnotationRect {
 	const result = record(value, path);
-	requireExactKeys(result, ["x", "y", "width", "height"], path);
+	requireExactKeys(result, ['x', 'y', 'width', 'height'], path);
 	const x = relative(result.x, `${path}.x`);
 	const y = relative(result.y, `${path}.y`);
 	const width = positiveRelative(result.width, `${path}.width`);
@@ -132,7 +132,7 @@ function rect(value: unknown, path: string): PdfAnnotationRect {
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
 	return value as Record<string, unknown>;
 }
 
@@ -145,27 +145,27 @@ function requireExactKeys(value: Record<string, unknown>, keys: readonly string[
 }
 
 function identifier(value: unknown, path: string): string {
-	if (typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value)) throw new TypeError(`${path} must be a stable annotation ID`);
+	if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/.test(value)) throw new TypeError(`${path} must be a stable annotation ID`);
 	return value;
 }
 
 function string(value: unknown, path: string): string {
-	if (typeof value !== "string") throw new TypeError(`${path} must be a string`);
+	if (typeof value !== 'string') throw new TypeError(`${path} must be a string`);
 	return value;
 }
 
 function color(value: unknown, path: string): string {
-	if (typeof value !== "string" || !/^#[0-9a-fA-F]{6}$/.test(value)) throw new TypeError(`${path} must be a six-digit hexadecimal color`);
+	if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) throw new TypeError(`${path} must be a six-digit hexadecimal color`);
 	return value.toLowerCase();
 }
 
 function timestamp(value: unknown, path: string): string {
-	if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) throw new TypeError(`${path} must be an ISO timestamp`);
+	if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) throw new TypeError(`${path} must be an ISO timestamp`);
 	return value;
 }
 
 function text(value: unknown, path: string): string {
-	if (typeof value !== "string" || value.length > 10_000) throw new RangeError(`${path} must be text no longer than 10000 characters`);
+	if (typeof value !== 'string' || value.length > 10_000) throw new RangeError(`${path} must be text no longer than 10000 characters`);
 	return value;
 }
 
@@ -175,11 +175,11 @@ function positiveInteger(value: unknown, path: string): number {
 }
 
 function relative(value: unknown, path: string): number {
-	if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) throw new RangeError(`${path} must be between 0 and 1`);
+	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) throw new RangeError(`${path} must be between 0 and 1`);
 	return value;
 }
 
 function positiveRelative(value: unknown, path: string): number {
-	if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > 1) throw new RangeError(`${path} must be greater than 0 and no more than 1`);
+	if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > 1) throw new RangeError(`${path} must be greater than 0 and no more than 1`);
 	return value;
 }

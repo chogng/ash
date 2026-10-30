@@ -133,9 +133,9 @@ export function isConfigured<T>(value: IConfigurationValue<T>): value is IConfig
 }
 
 export function isConfigurationOverrides(value: unknown): value is IConfigurationOverrides {
-	if (!value || typeof value !== "object") return false;
+	if (!value || typeof value !== 'object') return false;
 	const candidate = value as IConfigurationOverrides;
-	return (candidate.overrideIdentifier == null || typeof candidate.overrideIdentifier === "string")
+	return (candidate.overrideIdentifier == null || typeof candidate.overrideIdentifier === 'string')
 		&& (candidate.resource == null || candidate.resource instanceof URI);
 }
 

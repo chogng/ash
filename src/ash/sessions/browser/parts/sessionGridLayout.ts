@@ -1,3 +1,5 @@
+import { LayoutPriority } from '../../../base/browser/ui/splitview/splitview.js';
+import { Orientation } from '../../../base/browser/ui/sash/sash.js';
 import { scheduleAtNextAnimationFrame, isHTMLElement, type IDimension } from '../../../base/browser/dom.js';
 import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView, type IView, type SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -176,8 +178,8 @@ export class SessionGridLayout extends Disposable {
 					const widths = this.items.map(item => this.legacyWidths!.get(item.entry.id) ?? this.grid.value!.getViewSize(item).width);
 					const total = widths.reduce((sum, width) => sum + width, 0);
 					this.savedLayout = {
-						type: 'branch', orientation: 'horizontal', size: this.dimension!.width, priority: 'normal',
-						children: this.items.map((item, index) => ({ type: 'leaf', data: { id: item.entry.id }, size: widths[index]! / total * this.dimension!.width, visible: true, priority: 'normal' })),
+						type: 'branch', orientation: Orientation.HORIZONTAL, size: this.dimension!.width, priority: LayoutPriority.Normal,
+						children: this.items.map((item, index) => ({ type: 'leaf', data: { id: item.entry.id }, size: widths[index]! / total * this.dimension!.width, visible: true, priority: LayoutPriority.Normal })),
 					};
 					this.legacyWidths = undefined;
 				}
@@ -218,7 +220,7 @@ class SessionGridItem implements ISerializableView {
 }
 
 function horizontalLayout(items: readonly SessionGridItem[], width: number): GridDescriptor<SessionGridItem> {
-	return { type: 'branch', orientation: 'horizontal', size: width, children: items.map(view => ({ type: 'leaf', view, size: width / items.length })) };
+	return { type: 'branch', orientation: Orientation.HORIZONTAL, size: width, children: items.map(view => ({ type: 'leaf', view, size: width / items.length })) };
 }
 
 function bindLayout(node: SessionGridNode, bindings: ReadonlyMap<string, SessionGridItem>): GridDescriptor<SessionGridItem> | undefined {
@@ -236,7 +238,7 @@ function layoutIds(node: SessionGridNode): Set<string> {
 
 function scaleLayout(node: GridDescriptor<SessionGridItem>, dimension: IDimension): GridDescriptor<SessionGridItem> {
 	if (node.type === 'leaf') return node;
-	const horizontal = node.orientation === 'horizontal';
+	const horizontal = node.orientation === Orientation.HORIZONTAL;
 	const available = horizontal ? dimension.width : dimension.height;
 	const total = node.children.reduce((sum, child) => sum + child.size, 0);
 	return {
@@ -280,19 +282,22 @@ function parseStoredLayout(value: unknown): SessionGridNode {
 		}
 	}
 	const seen = new Set<string>();
-	const visit = (node: unknown, parentOrientation?: string, depth = 0): SessionGridNode => {
-		if (!isRecord(node) || depth > 64 || typeof node.size !== 'number' || !Number.isFinite(node.size) || node.size < 0
-			|| (node.priority !== 'low' && node.priority !== 'normal' && node.priority !== 'high')) throw new TypeError('Invalid stored Sessions grid geometry');
+	const visit = (node: unknown, parentOrientation?: Orientation, depth = 0): SessionGridNode => {
+		if (!isRecord(node)) throw new TypeError('Invalid stored Sessions grid node');
+		const priority = node.priority === 'normal' ? LayoutPriority.Normal : node.priority === 'low' ? LayoutPriority.Low : node.priority === 'high' ? LayoutPriority.High : node.priority;
+		const orientation = node.orientation === 'vertical' ? Orientation.VERTICAL : node.orientation === 'horizontal' ? Orientation.HORIZONTAL : node.orientation;
+		if (depth > 64 || typeof node.size !== 'number' || !Number.isFinite(node.size) || node.size < 0
+			|| (priority !== LayoutPriority.Low && priority !== LayoutPriority.Normal && priority !== LayoutPriority.High)) throw new TypeError('Invalid stored Sessions grid geometry');
 		if (node.type === 'leaf') {
 			const reference = isRecord(node.data) ? value.version === 2 ? node.data.groupId : node.data.id : undefined;
 			const id = typeof reference === 'string' && value.version === 2 ? groups.get(reference) : reference;
 			if (typeof id !== 'string' || !id.length || seen.has(id) || typeof node.visible !== 'boolean') throw new TypeError('Invalid stored Sessions grid reference');
 			seen.add(id);
-			return { type: 'leaf', data: { id }, size: node.size, priority: node.priority, visible: node.visible };
+			return { type: 'leaf', data: { id }, size: node.size, priority, visible: node.visible };
 		}
-		if (node.type !== 'branch' || (node.orientation !== 'horizontal' && node.orientation !== 'vertical') || node.orientation === parentOrientation
+		if (node.type !== 'branch' || (orientation !== Orientation.HORIZONTAL && orientation !== Orientation.VERTICAL) || orientation === parentOrientation
 			|| !Array.isArray(node.children) || !node.children.length) throw new TypeError('Invalid stored Sessions grid branch');
-		return { type: 'branch', orientation: node.orientation, size: node.size, priority: node.priority, children: node.children.map(child => visit(child, node.orientation as string, depth + 1)) };
+		return { type: 'branch', orientation, size: node.size, priority, children: node.children.map(child => visit(child, orientation, depth + 1)) };
 	};
 	const layout = visit(value.layout);
 	if (value.version === 2 && seen.size !== groups.size) throw new TypeError('Incomplete stored Sessions grid bindings');

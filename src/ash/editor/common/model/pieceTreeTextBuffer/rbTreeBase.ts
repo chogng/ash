@@ -1,4 +1,4 @@
-import type { PieceNode } from "./pieceTreeBase.js";
+import type { PieceNode } from './pieceTreeBase.js';
 
 export const enum NodeColor {
 	Black = 0,
@@ -35,15 +35,15 @@ export function insertBefore(root: PieceNode | undefined, reference: PieceNode |
 		node.color = NodeColor.Black;
 		return node;
 	}
-	if (!reference) return insertChild(root, rightmost(root)!, "right", node);
-	if (!reference.left) return insertChild(root, reference, "left", node);
-	return insertChild(root, rightmost(reference.left)!, "right", node);
+	if (!reference) return insertChild(root, rightmost(root)!, 'right', node);
+	if (!reference.left) return insertChild(root, reference, 'left', node);
+	return insertChild(root, rightmost(reference.left)!, 'right', node);
 }
 
 /** Inserts a node immediately after a document-order reference. */
 export function insertAfter(root: PieceNode, reference: PieceNode, node: PieceNode): PieceNode {
-	if (!reference.right) return insertChild(root, reference, "right", node);
-	return insertChild(root, leftmost(reference.right)!, "left", node);
+	if (!reference.right) return insertChild(root, reference, 'right', node);
+	return insertChild(root, leftmost(reference.right)!, 'left', node);
 }
 
 /** Removes one node while preserving red-black ordering and subtree metadata. */
@@ -108,7 +108,7 @@ interface TreeState {
 	root: PieceNode | undefined;
 }
 
-function insertChild(root: PieceNode, parent: PieceNode, side: "left" | "right", node: PieceNode): PieceNode {
+function insertChild(root: PieceNode, parent: PieceNode, side: 'left' | 'right', node: PieceNode): PieceNode {
 	node.parent = parent;
 	node.left = undefined;
 	node.right = undefined;

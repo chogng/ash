@@ -2,12 +2,12 @@ import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type Lan
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
-import "./hover.css";
-import { addDisposableListener, h, ModifierKeyEmitter } from "../../../../base/browser/dom.js";
-import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
-import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type Position } from "../../../common/core/position.js";
-import { type View } from "../../../browser/view.js";
+import './hover.css';
+import { addDisposableListener, h, ModifierKeyEmitter } from '../../../../base/browser/dom.js';
+import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { type Position } from '../../../common/core/position.js';
+import { type View } from '../../../browser/view.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { HoverParticipantRegistry, type HoverAnchor, type IEditorHoverParticipant, type IRenderedHoverParts } from './hoverTypes.js';
@@ -38,10 +38,10 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		this.element = h(viewport.domNode.domNode.ownerDocument, "div");
-		this.element.className = "stanza-editor-hover";
+		this.element = h(viewport.domNode.domNode.ownerDocument, 'div');
+		this.element.className = 'stanza-editor-hover';
 		this.element.hidden = true;
-		this.element.setAttribute("role", "tooltip");
+		this.element.setAttribute('role', 'tooltip');
 		this.element.setAttribute('aria-label', localize('hover.title', 'Editor hover'));
 		this.element.tabIndex = -1;
 		this.participants = HoverParticipantRegistry.getAll().map(Participant => instantiationService.createInstance(Participant, editor));
@@ -59,8 +59,8 @@ export class ContentHoverController extends Disposable implements IContentWidget
 			}
 		}));
 		this._register(toDisposable(() => { this.hide(); editor.removeContentWidget(this); this.element.remove(); }));
-		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointermove", event => this.schedule(event)));
-		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointerleave", event => {
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointermove', event => this.schedule(event)));
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerleave', event => {
 			if (event.relatedTarget instanceof this.element.ownerDocument.defaultView!.Node && this.element.contains(event.relatedTarget as Node)) { return; }
 			this.scheduleHide();
 		}));
@@ -69,7 +69,7 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		this._register(addDisposableListener(this.element, 'keydown', event => {
 			if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this.hide(); editor.focus(); }
 		}));
-		this._register(addDisposableListener(viewport.domNode.domNode, "scroll", () => this.hide()));
+		this._register(addDisposableListener(viewport.domNode.domNode, 'scroll', () => this.hide()));
 		this._register(viewport.textModel.onDidChangeContent(() => { if (!this.renderedParts.value?.isUpdatingEditor()) { this.hide(); } }));
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.hide()));
 		this._register(viewport.textModel.onWillDispose(() => this.hide()));
@@ -119,7 +119,7 @@ export class ContentHoverController extends Disposable implements IContentWidget
 		if (this.element.contains(event.target as Node)) { return; }
 		if (!this.element.hidden && this.element.contains(this.element.ownerDocument.activeElement)) { return; }
 		const target = this.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
-		if (!target || target.kind !== "text") {
+		if (!target || target.kind !== 'text') {
 			this.hide();
 			return;
 		}
@@ -193,9 +193,9 @@ export class ContentHoverController extends Disposable implements IContentWidget
 
 	private render(hover: LanguageHover, position: Position): void {
 		this.element.append(...hover.contents.map(content => {
-			const node = h(this.element.ownerDocument, "div");
-			node.className = "stanza-editor-hover-content";
-			node.textContent = typeof content === "string" ? content : content.value;
+			const node = h(this.element.ownerDocument, 'div');
+			node.className = 'stanza-editor-hover-content';
+			node.textContent = typeof content === 'string' ? content : content.value;
 			return node;
 		}));
 		this.hoverPosition ??= hover.range?.getStartPosition() ?? position;
@@ -232,10 +232,10 @@ export class ContentHoverController extends Disposable implements IContentWidget
 }
 
 function normalizeLanguageHover(value: LanguageHover): LanguageHover {
-	if (!value || typeof value !== "object" || !isNonEmptyArray(value.contents)) throw new TypeError("Language hover must contain content");
+	if (!value || typeof value !== 'object' || !isNonEmptyArray(value.contents)) throw new TypeError('Language hover must contain content');
 	const contents = value.contents.map(content => {
-		if (typeof content === "string") return content;
-		if (!content || typeof content !== "object" || typeof content.value !== "string") throw new TypeError("Language hover content must contain a string value");
+		if (typeof content === 'string') return content;
+		if (!content || typeof content !== 'object' || typeof content.value !== 'string') throw new TypeError('Language hover content must contain a string value');
 		return Object.freeze({ value: content.value, ...(content.language !== undefined ? { language: content.language } : {}) });
 	});
 	return Object.freeze({ ...(value.range ? { range: value.range } : {}), contents: Object.freeze(contents) });

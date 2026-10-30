@@ -8,7 +8,10 @@ import { WorkspaceTrustEditor } from './workspaceTrustEditor.js';
 import { MANAGE_TRUST_COMMAND_ID } from '../common/workspace.js';
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { IWorkspaceTrustManagementService, type IWorkspaceTrustInfo } from '../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService, type IWorkspaceTrustInfo, type WorkspaceTrustRequestOptions } from '../../../../platform/workspace/common/workspaceTrust.js';
+import { IDialogsModel, type IDialogHandle } from '../../../common/dialogs.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { getErrorMessage } from '../../../../base/common/errors.js';
 import { registerWorkbenchContribution, WorkbenchPhase, type IWorkbenchContribution } from '../../../common/contributions.js';
 import { StatusbarAlignment, IStatusbarService, type IStatusbarEntryAccessor } from '../../../services/statusbar/browser/statusbar.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -61,7 +64,7 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 	) {
 		super();
 		this.workspaceId = workspace.getWorkspace().id;
-		this._register(trust.onDidChangeTrust(() => { void this.refresh(); }));
+		this._register(trust.onDidChangeTrustedFolders(() => { void this.refresh(); }));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(bannerSetting)) this.updateEntry();
 		}));
@@ -85,6 +88,8 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 			this.updateEntry();
 		}
 		try {
+			await this.trust.workspaceTrustInitialized;
+			await this.trust.resolveWorkspaceTrust();
 			const trustInfo = await this.trust.getWorkspaceTrustInfo();
 			if (this.isDisposed || generation !== this.generation) return;
 			this.trustInfo = trustInfo;
@@ -121,7 +126,7 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 		this.banners.show({
 			id: bannerId,
 			icon: Lxicon.lock,
-			actions: [{ label: localize('workspaceTrust.manage', 'Manage permissions'), href: `command:${MANAGE_TRUST_COMMAND_ID}` }],
+			actions: [{ label: localize('workspaceTrust.manage', 'Manage'), href: `command:${MANAGE_TRUST_COMMAND_ID}` }],
 			message: this.trustInfo.isReadOnly
 				? localize('workspaceTrust.readOnlyBanner', 'This workspace is read-only. Editing files and running commands are unavailable.')
 				: localize('workspaceTrust.restrictedBanner', 'This workspace has limited directory permissions. Some features are unavailable.'),
@@ -132,6 +137,82 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 		});
 	}
 }
+
+/** Dialog presentation is separate from the window's single pending trust decision. */
+class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContribution {
+	private generation = 0;
+	private dialog: IDialogHandle | undefined;
+
+	constructor(
+		@IWorkspaceTrustRequestService private readonly requests: IWorkspaceTrustRequestService,
+		@IWorkspaceTrustManagementService private readonly management: IWorkspaceTrustManagementService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IDialogsModel private readonly dialogs: IDialogsModel,
+		@IEditorService private readonly editors: IEditorService,
+		@INotificationService private readonly notifications: INotificationService,
+	) {
+		super();
+		this._register(requests.onDidInitiateWorkspaceTrustRequest(options => { void this.showRequest(options); }));
+		this._register(requests.onDidInitiateWorkspaceTrustRequestOnStartup(() => { void this.showRequest(); }));
+		this._register(workspace.onDidChangeWorkspace(() => { this.generation++; this.dialog?.item.cancel(); this.dialog = undefined; }));
+		void management.workspaceTrustInitialized.then(async () => {
+			// A saved read-only decision has already been answered by the directory prompt.
+			if (this.isDisposed || !management.canSetWorkspaceTrust()) return;
+			const generation = this.generation;
+			const info = await management.getWorkspaceTrustInfo();
+			if (!this.isDisposed && generation === this.generation && info === undefined) requests.requestWorkspaceTrustOnStartup();
+		}).catch(error => { if (!this.isDisposed) notifications.error(getErrorMessage(error)); });
+	}
+
+	private async showRequest(options?: WorkspaceTrustRequestOptions): Promise<void> {
+		const generation = ++this.generation;
+		this.dialog?.item.cancel();
+		const current = (): boolean => !this.isDisposed && generation === this.generation;
+		try {
+			await this.management.workspaceResolved;
+			if (!current()) return;
+			const buttons = options?.buttons ?? [
+				{ label: localize('workspaceTrust.enableDevelopment', 'Trust workspace'), type: 'ContinueWithTrust' },
+				{ label: localize('workspaceTrust.manage', 'Manage'), type: 'Manage' },
+			] as const;
+			const actions = buttons.filter(button => button.type !== 'Cancel');
+			const dialog = this.dialog = this.dialogs.show({
+				kind: 'choice',
+				title: localize('workspaceTrust.editorTitle', 'Workspace Trust'),
+				message: options?.message ?? localize('workspaceTrust.requestMessage', 'Do you trust the authors of the files in this workspace?'),
+				detail: localize('workspaceTrust.requestDetail', 'Trusting this workspace enables commands and workspace integrations in every folder. Only continue if you trust this project. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost.'),
+				buttons: actions.map(button => button.label),
+				cancelButton: buttons.find(button => button.type === 'Cancel')?.label ?? localize('cancel', 'Cancel'),
+			});
+			const result = await dialog.result;
+			if (this.dialog === dialog) this.dialog = undefined;
+			if (!current()) return;
+			switch (result.buttonIndex === undefined ? undefined : actions[result.buttonIndex]?.type) {
+				case 'ContinueWithTrust': await this.requests.completeWorkspaceTrustRequest(true); break;
+				case 'ContinueWithoutTrust': await this.requests.completeWorkspaceTrustRequest(false); break;
+				case 'Manage':
+					this.requests.cancelWorkspaceTrustRequest();
+					await this.editors.openEditor(new WorkspaceTrustEditorInput(), { pinned: true, modal: { size: { width: 560, height: 360 } } }, 'modalGroup');
+					break;
+				default: this.requests.cancelWorkspaceTrustRequest();
+			}
+		} catch (error) {
+			if (current()) { this.requests.cancelWorkspaceTrustRequest(); this.notifications.error(getErrorMessage(error)); }
+		}
+	}
+
+	protected override disposeCore(): void {
+		this.dialog?.item.cancel();
+		this.dialog = undefined;
+		super.disposeCore();
+	}
+}
+
+registerWorkbenchContribution(
+	'workbench.contrib.workspaceTrustRequestHandler',
+	WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(WorkspaceTrustRequestHandler),
+);
 
 registerWorkbenchContribution(
 	'workbench.contrib.workspacePermissionStatus',

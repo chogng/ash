@@ -1,15 +1,15 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { toDisposable } from "../../../base/common/lifecycle.js";
-import { EditorLineWrapping, WrappingIndent } from "../../common/config/editorOptions.js";
-import { FontInfo } from "../../common/config/fontInfo.js";
-import { ViewModelLinesFromModelAsIs, ViewModelLinesFromProjectedModel } from "../../common/viewModel/viewModelLines.js";
-import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { InjectedTextCursorStops, PositionAffinity } from "../../common/model.js";
+import { toDisposable } from '../../../base/common/lifecycle.js';
+import { EditorLineWrapping, WrappingIndent } from '../../common/config/editorOptions.js';
+import { FontInfo } from '../../common/config/fontInfo.js';
+import { ViewModelLinesFromModelAsIs, ViewModelLinesFromProjectedModel } from '../../common/viewModel/viewModelLines.js';
+import { DOMLineBreaksComputerFactory } from '../../browser/view/domLineBreaksComputer.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { InjectedTextCursorStops, PositionAffinity } from '../../common/model.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 import { LineInjectedText } from '../../common/textModelEvents.js';
 
@@ -90,8 +90,8 @@ test('DOM wrapping reuses one canvas for a batch of long lines and preserves wor
 	assert.equal(contexts, 1);
 });
 
-test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
-	using model = new TextModel("ab😀cd\nxyz");
+test('browser visual-line projection wraps at grapheme boundaries and rebuilds after edits', () => {
+	using model = new TextModel('ab😀cd\nxyz');
 	using projection = createViewModelLines(model, new FixedTextMeasurer(), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
@@ -113,7 +113,7 @@ test("browser visual-line projection wraps at grapheme boundaries and rebuilds a
 
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (0) + 1)),
-		text: "qq",
+		text: 'qq',
 	}]);
 	assert.equal(changes, 1);
 	assert.equal(projection.projection.visualLineCount, 6);
@@ -122,8 +122,8 @@ test("browser visual-line projection wraps at grapheme boundaries and rebuilds a
 	assert.equal(projection.projection.visualLineCount, 2);
 });
 
-test("browser visual-line projection applies wrapping indent modes to continuation rows", () => {
-	using model = new TextModel("  abcdefghijkl");
+test('browser visual-line projection applies wrapping indent modes to continuation rows', () => {
+	using model = new TextModel('  abcdefghijkl');
 	const measurer = new FixedTextMeasurer();
 	assert.equal(computeWrappedIndent(model, measurer, 110, WrappingIndent.None), 0);
 	assert.equal(computeWrappedIndent(model, measurer, 110, WrappingIndent.Same), 20);
@@ -173,8 +173,8 @@ test('DOM soft wrapping prefers word boundaries and honors keepAll for CJK text'
 	assert.deepEqual(Array.from({ length: cjkLines.getLineCount() }, (_, index) => cjkLines.getLineContent(index + 1)), ['a ', '中文测试', '很多']);
 });
 
-test("view-model lines expose wrapped cursor rows and convert positions through the same projection", () => {
-	using model = new TextModel("abcdef\nxy");
+test('view-model lines expose wrapped cursor rows and convert positions through the same projection', () => {
+	using model = new TextModel('abcdef\nxy');
 	using lines = createViewModelLines(model, new FixedTextMeasurer(), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
@@ -183,39 +183,39 @@ test("view-model lines expose wrapped cursor rows and convert positions through 
 
 	assert.deepEqual(
 		Array.from({ length: lines.getLineCount() }, (_, index) => lines.getLineContent(index + 1)),
-		["ab", "cd", "ef", "xy"],
+		['ab', 'cd', 'ef', 'xy'],
 	);
 	assert.deepEqual(coordinates.convertViewPositionToModelPosition(new Position(2, 2)), new Position(1, 4));
 	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3)), new Position(2, 1));
 	assert.deepEqual(coordinates.convertModelPositionToViewPosition(new Position(1, 3), PositionAffinity.Left), new Position(1, 3));
 	assert.equal(coordinates.getModelLineViewLineCount(1), 3);
-	assert.deepEqual(lines.getViewLinesData(1, 4, [true, false, true, true]).map(line => line?.content ?? null), ["ab", null, "ef", "xy"]);
+	assert.deepEqual(lines.getViewLinesData(1, 4, [true, false, true, true]).map(line => line?.content ?? null), ['ab', null, 'ef', 'xy']);
 });
 
-test("model-as-is view-model lines preserve one view row per model row", () => {
-	using model = new TextModel("first\nsecond");
+test('model-as-is view-model lines preserve one view row per model row', () => {
+	using model = new TextModel('first\nsecond');
 	using lines = new ViewModelLinesFromModelAsIs(model);
 	const computer = lines.createLineBreaksComputer();
 	computer.addRequest(1, null);
 	computer.addRequest(2, null);
 
 	assert.equal(lines.getViewLineCount(), 2);
-	assert.equal(lines.getViewLineContent(2), "second");
-	assert.equal(lines.getViewLineData(1).content, "first");
+	assert.equal(lines.getViewLineContent(2), 'second');
+	assert.equal(lines.getViewLineData(1).content, 'first');
 	assert.deepEqual(computer.finalize(), [null, null]);
 	assert.deepEqual(lines.createCoordinatesConverter().convertViewPositionToModelPosition(new Position(2, 3)), new Position(2, 3));
 });
 
-test("browser visual-line projection validates its public wrapping inputs", () => {
-	using model = new TextModel("text");
+test('browser visual-line projection validates its public wrapping inputs', () => {
+	using model = new TextModel('text');
 	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
-		wrapping: "invalid" as EditorLineWrapping,
+		wrapping: 'invalid' as EditorLineWrapping,
 	}), /wrapping mode/);
 	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
 		wrapWidth: -1,
 	}), /wrap width/);
 	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
-		wrappingIndent: "Same" as unknown as WrappingIndent,
+		wrappingIndent: 'Same' as unknown as WrappingIndent,
 	}), /wrapping indent mode/);
 	assert.throws(() => createViewModelLines(model, new FixedTextMeasurer(), {
 		initialWrappingMeasurement: { schedule: undefined as never },
@@ -225,8 +225,8 @@ test("browser visual-line projection validates its public wrapping inputs", () =
 	}), /measurement count/);
 });
 
-test("browser visual-line projection measures initial wrapped rows in cancellable idle slices", () => {
-	using model = new TextModel("abc\ndefg\nhij");
+test('browser visual-line projection measures initial wrapped rows in cancellable idle slices', () => {
+	using model = new TextModel('abc\ndefg\nhij');
 	const scheduled: (() => void)[] = [];
 	const measurer = new CountingTextMeasurer();
 	using projection = createViewModelLines(model, measurer, {
@@ -262,8 +262,8 @@ test("browser visual-line projection measures initial wrapped rows in cancellabl
 	assert.deepEqual(projection.projection.lines.map(line => line.endColumn), [2, 3, 2, 4, 2, 3]);
 });
 
-test("browser visual-line projection restarts an incomplete wrapped scan after an edit", () => {
-	using model = new TextModel("abc\ndef");
+test('browser visual-line projection restarts an incomplete wrapped scan after an edit', () => {
+	using model = new TextModel('abc\ndef');
 	const scheduled: (() => void)[] = [];
 	using projection = createViewModelLines(model, new FixedTextMeasurer(), {
 		wrapping: EditorLineWrapping.On,
@@ -283,7 +283,7 @@ test("browser visual-line projection restarts an incomplete wrapped scan after a
 
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
-		text: "d",
+		text: 'd',
 	}]);
 	assert.equal(projection.complete, false);
 	assert.deepEqual(projection.projection.lines.map(line => ({ logical: line.logicalLineIndex, end: line.endColumn })), [
@@ -309,7 +309,7 @@ class FixedTextMeasurer implements TextMeasurer {
 	measureLineWidth(text: string): number {
 		let width = 0;
 		for (const character of text) {
-			width = character === "\t"
+			width = character === '\t'
 				? (Math.floor(width / 10 / 4) + 1) * 4 * 10
 				: width + 10;
 		}

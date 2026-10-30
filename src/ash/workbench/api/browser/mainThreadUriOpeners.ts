@@ -156,4 +156,3 @@ registerWorkbenchContribution('workbench.contrib.extensionUriOpeners', Workbench
 	void openers.start().catch(error => logService.error('externalUriOpener', 'Could not start extension URL openers', error));
 	return openers;
 });
-

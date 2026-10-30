@@ -1,7 +1,7 @@
-import "./decorations.css";
+import './decorations.css';
 import { Range } from '../../../common/core/range.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
-import { HorizontalRange, type RenderingContext } from "../../view/renderingContext.js";
+import { HorizontalRange, type RenderingContext } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import * as viewEvents from '../../../common/viewEvents.js';

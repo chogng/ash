@@ -22,16 +22,16 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import type { DebugSessionStartOptions } from '../../browser/debugSession.js';
-import assert from "node:assert/strict";
-import { suite, test } from "mocha";
-import { Emitter } from "../../../../../base/common/event.js";
-import { URI } from "../../../../../base/common/uri.js";
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
+import { Emitter } from '../../../../../base/common/event.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
-import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
-import { type AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { createSshRemoteWorkspaceUri } from "../../../../../platform/remote/common/remote.js";
-import { DebugSession } from "../../browser/debugSession.js";
-import { DebugBreakpoint, type IDebugBreakpoint, type IDebugConfiguration } from "../../common/debug.js";
+import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
+import { type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+import { DebugSession } from '../../browser/debugSession.js';
+import { DebugBreakpoint, type IDebugBreakpoint, type IDebugConfiguration } from '../../common/debug.js';
 import { DeferredPromise, timeout } from '../../../../../base/common/async.js';
 import { mock } from 'node:test';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -163,7 +163,7 @@ suite('Debug observation isolation', () => {
 
 });
 
-test("DebugSession handles zero-sequence DAP messages, clears breakpoints, and resolves an omitted stopped thread", async () => {
+test('DebugSession handles zero-sequence DAP messages, clears breakpoints, and resolves an omitted stopped thread', async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	let breakpoints: readonly IDebugBreakpoint[] = [breakpoint(4)];
 	const workspace = URI.from({ scheme: 'file', path: '/C:/workspace' });
@@ -172,66 +172,66 @@ test("DebugSession handles zero-sequence DAP messages, clears breakpoints, and r
 	const terminalRequests: unknown[] = [];
 	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => breakpoints, workspace, runInTerminal: async value => { terminalRequests.push(value); return {}; }, updateBreakpoints: values => updates.push(...values) });
 
-	assert.equal(session.state, "running");
+	assert.equal(session.state, 'running');
 	assert.deepEqual(processes.started, { program: 'C:\\workspace\\adapter', arguments: ['--stdio', 'C:\\workspace'] });
-	assert.deepEqual(processes.request("launch").arguments, { type: "example", request: "launch", name: "Test", program: 'C:\\workspace\\bin\\app', cwd: 'C:\\workspace' });
-	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: breakpointPath }, breakpoints: [{ line: 4 }] });
-	assert.deepEqual(processes.request("setExceptionBreakpoints").arguments, { filters: ["uncaught"] });
-	assert.deepEqual(updates, [{ id: "main:4", verified: true }]);
-	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsReadMemoryRequest: false, supportsWriteMemoryRequest: false, supportsLoadedSourcesRequest: false, supportsExceptionInfoRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: true, supportsCancelRequest: true, completionTriggerCharacters: ['.'], exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
-	processes.event("output", { output: "adapter ready\n" });
-	await waitFor(() => session.output === "adapter ready\n");
+	assert.deepEqual(processes.request('launch').arguments, { type: 'example', request: 'launch', name: 'Test', program: 'C:\\workspace\\bin\\app', cwd: 'C:\\workspace' });
+	assert.deepEqual(processes.request('setBreakpoints').arguments, { source: { path: breakpointPath }, breakpoints: [{ line: 4 }] });
+	assert.deepEqual(processes.request('setExceptionBreakpoints').arguments, { filters: ['uncaught'] });
+	assert.deepEqual(updates, [{ id: 'main:4', verified: true }]);
+	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsReadMemoryRequest: false, supportsWriteMemoryRequest: false, supportsLoadedSourcesRequest: false, supportsExceptionInfoRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: true, supportsCancelRequest: true, completionTriggerCharacters: ['.'], exceptionBreakpointFilters: [{ filter: 'uncaught', label: 'Uncaught Exceptions', default: true }, { filter: 'caught', label: 'Caught Exceptions', default: false }] });
+	processes.event('output', { output: 'adapter ready\n' });
+	await waitFor(() => session.output === 'adapter ready\n');
 
-	processes.reverseRequest("runInTerminal", { kind: "integrated", args: ["app"] });
-	await waitFor(() => processes.responses("runInTerminal").length === 1);
-	assert.deepEqual(terminalRequests, [{ kind: "integrated", args: ["app"] }]);
-	assert.equal(processes.responses("runInTerminal")[0]?.success, true);
+	processes.reverseRequest('runInTerminal', { kind: 'integrated', args: ['app'] });
+	await waitFor(() => processes.responses('runInTerminal').length === 1);
+	assert.deepEqual(terminalRequests, [{ kind: 'integrated', args: ['app'] }]);
+	assert.equal(processes.responses('runInTerminal')[0]?.success, true);
 
 	breakpoints = [];
 	await session.syncBreakpoints();
-	assert.deepEqual(processes.requests("setBreakpoints").at(-1)?.arguments, { source: { path: breakpointPath }, breakpoints: [] });
+	assert.deepEqual(processes.requests('setBreakpoints').at(-1)?.arguments, { source: { path: breakpointPath }, breakpoints: [] });
 
-	processes.event("stopped", { reason: "breakpoint", allThreadsStopped: true });
-	await waitFor(() => session.state === "stopped");
+	processes.event('stopped', { reason: 'breakpoint', allThreadsStopped: true });
+	await waitFor(() => session.state === 'stopped');
 	const frames = await session.stackTrace();
-	assert.equal(processes.requests("threads").length, 1);
-	assert.deepEqual(frames.map(frame => ({ ...frame, source: frame.source ? { ...frame.source, resource: frame.source.resource?.toString() } : undefined })), [{ id: 11, threadId: 7, name: "main", source: { name: "main.ts", path: "C:\\workspace\\main.ts", resource: URI.parse('file:///C:/workspace/main.ts').toString() }, lineNumber: 4, columnNumber: 1 }, { id: 12, threadId: 7, name: "system", source: undefined, lineNumber: 0, columnNumber: 0 }]);
+	assert.equal(processes.requests('threads').length, 1);
+	assert.deepEqual(frames.map(frame => ({ ...frame, source: frame.source ? { ...frame.source, resource: frame.source.resource?.toString() } : undefined })), [{ id: 11, threadId: 7, name: 'main', source: { name: 'main.ts', path: 'C:\\workspace\\main.ts', resource: URI.parse('file:///C:/workspace/main.ts').toString() }, lineNumber: 4, columnNumber: 1 }, { id: 12, threadId: 7, name: 'system', source: undefined, lineNumber: 0, columnNumber: 0 }]);
 
-	assert.deepEqual(await session.threads(), [{ id: 7, name: "main" }, { id: 8, name: "worker" }]);
+	assert.deepEqual(await session.threads(), [{ id: 7, name: 'main' }, { id: 8, name: 'worker' }]);
 	session.selectThread(8);
 	await session.stackTrace();
-	assert.equal((processes.requests("stackTrace").at(-1)?.arguments as Record<string, unknown>).threadId, 8);
-	assert.deepEqual(await session.scopes(11), [{ name: "Locals", variablesReference: 20, expensive: false }]);
-	assert.deepEqual(await session.variables(20), [{ name: "answer", value: "42", variablesReference: 0, type: "number" }]);
-	assert.deepEqual(await session.setVariable(20, "answer", "43"), { name: "answer", value: "43", variablesReference: 0, type: "number" });
-	assert.deepEqual(processes.request("setVariable").arguments, { variablesReference: 20, name: "answer", value: "43" });
-	assert.deepEqual(await session.evaluate("answer", 11, "watch"), { result: "42", variablesReference: 0, type: "number" });
-	assert.deepEqual(await session.source({ name: "generated.ts", sourceReference: 33 }), { content: "const generated = true;", mimeType: "text/typescript" });
-	await session.setExceptionBreakpoints(["caught"]);
-	assert.deepEqual(processes.requests("setExceptionBreakpoints").at(-1)?.arguments, { filters: ["caught"] });
+	assert.equal((processes.requests('stackTrace').at(-1)?.arguments as Record<string, unknown>).threadId, 8);
+	assert.deepEqual(await session.scopes(11), [{ name: 'Locals', variablesReference: 20, expensive: false }]);
+	assert.deepEqual(await session.variables(20), [{ name: 'answer', value: '42', variablesReference: 0, type: 'number' }]);
+	assert.deepEqual(await session.setVariable(20, 'answer', '43'), { name: 'answer', value: '43', variablesReference: 0, type: 'number' });
+	assert.deepEqual(processes.request('setVariable').arguments, { variablesReference: 20, name: 'answer', value: '43' });
+	assert.deepEqual(await session.evaluate('answer', 11, 'watch'), { result: '42', variablesReference: 0, type: 'number' });
+	assert.deepEqual(await session.source({ name: 'generated.ts', sourceReference: 33 }), { content: 'const generated = true;', mimeType: 'text/typescript' });
+	await session.setExceptionBreakpoints(['caught']);
+	assert.deepEqual(processes.requests('setExceptionBreakpoints').at(-1)?.arguments, { filters: ['caught'] });
 	await session.restart();
-	assert.equal(processes.requests("restart").length, 1);
-	await assert.rejects(session.setVariable(20, "answer", "44"), /Pause execution/);
+	assert.equal(processes.requests('restart').length, 1);
+	await assert.rejects(session.setVariable(20, 'answer', '44'), /Pause execution/);
 
 	await session.disconnect();
 	assert.equal(processes.closed, true);
 });
 
-test("DebugSession keeps Remote adapter paths on the Remote Workspace authority", async () => {
-	using processes = new FakeDebugAdapterProcessService("/srv/project/src/main file.ts");
-	const workspace = createSshRemoteWorkspaceUri("work-server", "/srv/project");
-	const configurationValue: IDebugConfiguration = { ...configuration(), adapter: { program: "${workspaceFolder}/adapter", arguments: ["--stdio"] }, arguments: { program: "${workspaceFolder}/bin/app", cwd: "${workspaceFolder}" } };
-	const remoteBreakpoint: IDebugBreakpoint = { id: "remote:4", resource: createSshRemoteWorkspaceUri("work-server", "/srv/project/src/main file.ts"), lineNumber: 4, enabled: true, verified: false };
+test('DebugSession keeps Remote adapter paths on the Remote Workspace authority', async () => {
+	using processes = new FakeDebugAdapterProcessService('/srv/project/src/main file.ts');
+	const workspace = createSshRemoteWorkspaceUri('work-server', '/srv/project');
+	const configurationValue: IDebugConfiguration = { ...configuration(), adapter: { program: '${workspaceFolder}/adapter', arguments: ['--stdio'] }, arguments: { program: '${workspaceFolder}/bin/app', cwd: '${workspaceFolder}' } };
+	const remoteBreakpoint: IDebugBreakpoint = { id: 'remote:4', resource: createSshRemoteWorkspaceUri('work-server', '/srv/project/src/main file.ts'), lineNumber: 4, enabled: true, verified: false };
 	const session = await startSession({ configuration: configurationValue, processService: processes, breakpoints: () => [remoteBreakpoint], workspace });
 
-	assert.deepEqual(processes.started, { program: "/srv/project/adapter", arguments: ["--stdio"] });
-	assert.deepEqual(processes.request("launch").arguments, { type: "example", request: "launch", name: "Test", program: "/srv/project/bin/app", cwd: "/srv/project" });
-	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: "/srv/project/src/main file.ts" }, breakpoints: [{ line: 4 }] });
-	processes.event("stopped", { reason: "breakpoint", allThreadsStopped: true });
-	await waitFor(() => session.state === "stopped");
+	assert.deepEqual(processes.started, { program: '/srv/project/adapter', arguments: ['--stdio'] });
+	assert.deepEqual(processes.request('launch').arguments, { type: 'example', request: 'launch', name: 'Test', program: '/srv/project/bin/app', cwd: '/srv/project' });
+	assert.deepEqual(processes.request('setBreakpoints').arguments, { source: { path: '/srv/project/src/main file.ts' }, breakpoints: [{ line: 4 }] });
+	processes.event('stopped', { reason: 'breakpoint', allThreadsStopped: true });
+	await waitFor(() => session.state === 'stopped');
 	const frame = (await session.stackTrace())[0];
-	assert.equal(frame?.source?.path, "/srv/project/src/main file.ts");
-	assert.equal(frame?.source?.resource?.toString(), "ash-remote://ssh+work-server/srv/project/src/main%20file.ts");
+	assert.equal(frame?.source?.path, '/srv/project/src/main file.ts');
+	assert.equal(frame?.source?.resource?.toString(), 'ash-remote://ssh+work-server/srv/project/src/main%20file.ts');
 
 	await session.disconnect();
 });
@@ -253,32 +253,32 @@ for (const root of ['C:/workspace', '//server/share/workspace']) {
 	});
 }
 
-test("DebugSession gates mutations on adapter capability and validates adapter replies", async () => {
+test('DebugSession gates mutations on adapter capability and validates adapter replies', async () => {
 	using unsupported = new FakeDebugAdapterProcessService(undefined, false);
 	const unsupportedSession = await startSession({ configuration: configuration(), processService: unsupported, breakpoints: () => [], workspace: URI.file('/workspace') });
 	try {
-		await assert.rejects(unsupportedSession.setVariable(20, "answer", "43"), /does not support changing variables/);
-		assert.deepEqual(unsupported.requests("setVariable"), []);
+		await assert.rejects(unsupportedSession.setVariable(20, 'answer', '43'), /does not support changing variables/);
+		assert.deepEqual(unsupported.requests('setVariable'), []);
 	} finally {
 		await unsupportedSession.disconnect();
 	}
 	using processes = new FakeDebugAdapterProcessService();
 	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
 	try {
-		processes.event("stopped", { reason: "breakpoint", threadId: 7 });
-		await waitFor(() => session.state === "stopped");
-		await assert.rejects(session.setVariable(20, "answer", "\0"), /no null characters/);
-		assert.deepEqual(processes.requests("setVariable"), []);
-		processes.setVariableReply = { value: "Object", type: "object", variablesReference: 21 };
-		assert.deepEqual(await session.setVariable(20, "answer", "{}"), { name: "answer", value: "Object", type: "object", variablesReference: 21 });
+		processes.event('stopped', { reason: 'breakpoint', threadId: 7 });
+		await waitFor(() => session.state === 'stopped');
+		await assert.rejects(session.setVariable(20, 'answer', '\0'), /no null characters/);
+		assert.deepEqual(processes.requests('setVariable'), []);
+		processes.setVariableReply = { value: 'Object', type: 'object', variablesReference: 21 };
+		assert.deepEqual(await session.setVariable(20, 'answer', '{}'), { name: 'answer', value: 'Object', type: 'object', variablesReference: 21 });
 		processes.setVariableReply = { value: 43 };
-		await assert.rejects(session.setVariable(20, "answer", "43"), /value must be a string/);
+		await assert.rejects(session.setVariable(20, 'answer', '43'), /value must be a string/);
 	} finally {
 		await session.disconnect();
 	}
 });
 
-test("DebugSession sends expressions unchanged and does not install unsupported breakpoint types", async () => {
+test('DebugSession sends expressions unchanged and does not install unsupported breakpoint types', async () => {
 	let points: readonly IDebugBreakpoint[] = [breakpoint(4), { ...breakpoint(5), condition: 'answer > 0' }, { ...breakpoint(6), hitCondition: '% 3' }, { ...breakpoint(7), logMessage: ' answer = {answer} ' }];
 	using supported = new FakeDebugAdapterProcessService();
 	const session = await startSession({ configuration: configuration(), processService: supported, breakpoints: () => points, workspace: URI.file('/workspace') });
@@ -306,7 +306,7 @@ test("DebugSession sends expressions unchanged and does not install unsupported 
 	} finally { await other.disconnect(); }
 });
 
-test("DebugSession groups interleaved source breakpoints and clears a retired source", async () => {
+test('DebugSession groups interleaved source breakpoints and clears a retired source', async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	const otherResource = URI.file('C:\\workspace\\other.ts');
 	let points: readonly IDebugBreakpoint[] = [breakpoint(4), { ...breakpoint(5), resource: otherResource }, breakpoint(6)];
@@ -322,7 +322,7 @@ test("DebugSession groups interleaved source breakpoints and clears a retired so
 	} finally { await session.disconnect(); }
 });
 
-test("DebugSession cancels pending breakpoint replacements when disposed", async () => {
+test('DebugSession cancels pending breakpoint replacements when disposed', async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [breakpoint(4)], workspace: URI.file('/workspace') });
 	processes.holdBreakpoints = true;
@@ -334,7 +334,7 @@ test("DebugSession cancels pending breakpoint replacements when disposed", async
 	assert.equal(processes.requests('setBreakpoints').length, 2);
 });
 
-test("DebugSession orders breakpoint replacements and discards verification for an edited point", async () => {
+test('DebugSession orders breakpoint replacements and discards verification for an edited point', async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	let points: readonly IDebugBreakpoint[] = [breakpoint(4)];
 	const updates: unknown[] = [];
@@ -358,7 +358,7 @@ test("DebugSession orders breakpoint replacements and discards verification for 
 	} finally { await session.disconnect(); }
 });
 
-test("DebugSession configures all breakpoint families and queries variable access without crossing sessions", async () => {
+test('DebugSession configures all breakpoint families and queries variable access without crossing sessions', async () => {
 	using processes = new FakeDebugAdapterProcessService(undefined, true, true, true);
 	let points: readonly Exclude<DebugBreakpoint, IDebugBreakpoint>[] = [
 		{ kind: 'function', id: 'function', name: 'app::worker', enabled: true, verified: false, condition: 'counter > 0', hitCondition: '>= 2' },
@@ -408,7 +408,7 @@ test('DebugSession excludes unsupported conditions from every additional family'
 	} finally { await session.disconnect(); }
 });
 
-test("DebugSession reports unsupported breakpoint families without sending their commands", async () => {
+test('DebugSession reports unsupported breakpoint families without sending their commands', async () => {
 	using processes = new FakeDebugAdapterProcessService();
 	const updates: unknown[] = [];
 	const session = await startSession({
@@ -570,31 +570,31 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	dataInfoReply: Record<string, unknown> = { dataId: 'memory:counter', description: 'counter', canPersist: false, accessTypes: ['read', 'write', 'readWrite'] };
 	readonly onConnectionState = this.connectionEmitter.event;
 
-	constructor(private readonly stackFramePath = "C:\\workspace\\main.ts", private readonly supportsSetVariable = true, private readonly supportsAdvancedBreakpoints = true, private readonly supportsBreakpointFamilies = false, private readonly supportsDisassembly = false, public threadId = 7, public frameId = 11) { installDebugClientFixture(this); }
+	constructor(private readonly stackFramePath = 'C:\\workspace\\main.ts', private readonly supportsSetVariable = true, private readonly supportsAdvancedBreakpoints = true, private readonly supportsBreakpointFamilies = false, private readonly supportsDisassembly = false, public threadId = 7, public frameId = 11) { installDebugClientFixture(this); }
 
-	async start(options: unknown): Promise<string> { this.started = options; return "debug-1"; }
+	async start(options: unknown): Promise<string> { this.started = options; return 'debug-1'; }
 
 	async send(_sessionId: string, message: unknown): Promise<void> {
 		const request = message as Record<string, unknown>;
 		this.sent.push(request);
-		if (request.type !== "request") return;
+		if (request.type !== 'request') return;
 		const command = String(request.command);
-		if (command === "launch" || command === "attach") this.event("initialized");
-		const body = this.extraReplies.has(command) ? this.extraReplies.get(command) : command === "initialize" ? { ...this.completionCapabilities, supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, supportsSetVariable: this.supportsSetVariable, supportsConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsHitConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsLogPoints: this.supportsAdvancedBreakpoints, supportsFunctionBreakpoints: this.supportsBreakpointFamilies, supportsDataBreakpoints: this.supportsBreakpointFamilies, supportsInstructionBreakpoints: this.supportsBreakpointFamilies, supportsDisassembleRequest: this.supportsDisassembly, supportsSteppingGranularity: this.supportsDisassembly, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
-			: command === "completions" ? this.completionReply
-				: command === "threads" ? { threads: [{ id: this.threadId, name: "main" }, { id: 8, name: "worker" }] }
-					: command === "stackTrace" ? { stackFrames: [{ id: this.frameId, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }, { id: 12, name: "system", line: 0, column: 0 }] }
-						: command === "scopes" ? { scopes: [{ name: "Locals", variablesReference: 20 }] }
-							: command === "variables" ? { variables: [{ name: "answer", value: "42", type: "number", variablesReference: 0 }] }
-								: command === "setVariable" ? this.setVariableReply ?? { value: (request.arguments as Record<string, unknown>).value, type: "number" }
-									: command === "evaluate" ? { result: "42", type: "number", variablesReference: 0 }
-										: command === "source" ? { content: "const generated = true;", mimeType: "text/typescript" }
-											: command === "disassemble" ? this.disassemblyReply
-												: command === "dataBreakpointInfo" ? this.dataInfoReply
+		if (command === 'launch' || command === 'attach') this.event('initialized');
+		const body = this.extraReplies.has(command) ? this.extraReplies.get(command) : command === 'initialize' ? { ...this.completionCapabilities, supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, supportsSetVariable: this.supportsSetVariable, supportsConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsHitConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsLogPoints: this.supportsAdvancedBreakpoints, supportsFunctionBreakpoints: this.supportsBreakpointFamilies, supportsDataBreakpoints: this.supportsBreakpointFamilies, supportsInstructionBreakpoints: this.supportsBreakpointFamilies, supportsDisassembleRequest: this.supportsDisassembly, supportsSteppingGranularity: this.supportsDisassembly, exceptionBreakpointFilters: [{ filter: 'uncaught', label: 'Uncaught Exceptions', default: true }, { filter: 'caught', label: 'Caught Exceptions' }] }
+			: command === 'completions' ? this.completionReply
+				: command === 'threads' ? { threads: [{ id: this.threadId, name: 'main' }, { id: 8, name: 'worker' }] }
+					: command === 'stackTrace' ? { stackFrames: [{ id: this.frameId, name: 'main', source: { name: 'main.ts', path: this.stackFramePath }, line: 4, column: 1 }, { id: 12, name: 'system', line: 0, column: 0 }] }
+						: command === 'scopes' ? { scopes: [{ name: 'Locals', variablesReference: 20 }] }
+							: command === 'variables' ? { variables: [{ name: 'answer', value: '42', type: 'number', variablesReference: 0 }] }
+								: command === 'setVariable' ? this.setVariableReply ?? { value: (request.arguments as Record<string, unknown>).value, type: 'number' }
+									: command === 'evaluate' ? { result: '42', type: 'number', variablesReference: 0 }
+										: command === 'source' ? { content: 'const generated = true;', mimeType: 'text/typescript' }
+											: command === 'disassemble' ? this.disassemblyReply
+												: command === 'dataBreakpointInfo' ? this.dataInfoReply
 													: ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].includes(command) ? { breakpoints: ((request.arguments as { breakpoints: unknown[]; }).breakpoints).map(() => ({ verified: true })) }
-														: command === "setBreakpoints" && Array.isArray((request.arguments as Record<string, unknown>)?.breakpoints) && ((request.arguments as Record<string, unknown>).breakpoints as unknown[]).length > 0 ? { breakpoints: [{ verified: true }] }
+														: command === 'setBreakpoints' && Array.isArray((request.arguments as Record<string, unknown>)?.breakpoints) && ((request.arguments as Record<string, unknown>).breakpoints as unknown[]).length > 0 ? { breakpoints: [{ verified: true }] }
 															: {};
-		const response = { seq: 0, type: "response", request_seq: request.seq, success: true, command, body };
+		const response = { seq: 0, type: 'response', request_seq: request.seq, success: true, command, body };
 		if (command === 'completions' && this.holdCompletions) this.heldCompletionResponse = response;
 		else if (command === 'setBreakpoints' && this.holdBreakpoints) this.heldBreakpointResponse = response;
 		else this.enqueue(response);
@@ -603,11 +603,11 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	async read(_sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
 		const messages = this.messages.filter(message => message.sequence >= afterSequence).slice(0, maxMessages);
 		this.readPages.push(messages.length);
-		return { messages, nextSequence: messages.at(-1)?.sequence !== undefined ? messages.at(-1)!.sequence + 1 : afterSequence, outputGap: false, stderr: "", exited: this.exited, exitCode: this.exited ? 0 : null, protocolError: null };
+		return { messages, nextSequence: messages.at(-1)?.sequence !== undefined ? messages.at(-1)!.sequence + 1 : afterSequence, outputGap: false, stderr: '', exited: this.exited, exitCode: this.exited ? 0 : null, protocolError: null };
 	}
 
 	async close(): Promise<void> { this.closed = true; }
-	async getConnectionState(): Promise<AppServerConnectionState> { return "ready"; }
+	async getConnectionState(): Promise<AppServerConnectionState> { return 'ready'; }
 	dispose(): void { this.connectionEmitter.dispose(); }
 	releaseBreakpoints(): void {
 		assert.ok(this.heldBreakpointResponse);
@@ -618,26 +618,26 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	releaseCompletions(): void { assert.ok(this.heldCompletionResponse); this.enqueue(this.heldCompletionResponse); this.heldCompletionResponse = undefined; }
 	[Symbol.dispose](): void { this.dispose(); }
 
-	event(event: string, body?: unknown): void { this.enqueue({ seq: 0, type: "event", event, ...(body === undefined ? {} : { body }) }); }
-	reverseRequest(command: string, argumentsValue: unknown): void { this.enqueue({ seq: 0, type: "request", command, arguments: argumentsValue }); }
+	event(event: string, body?: unknown): void { this.enqueue({ seq: 0, type: 'event', event, ...(body === undefined ? {} : { body }) }); }
+	reverseRequest(command: string, argumentsValue: unknown): void { this.enqueue({ seq: 0, type: 'request', command, arguments: argumentsValue }); }
 	request(command: string): Record<string, unknown> { const request = this.requests(command)[0]; assert.ok(request); return request; }
-	requests(command: string): Record<string, unknown>[] { return this.sent.filter(message => message.type === "request" && message.command === command); }
-	responses(command: string): Record<string, unknown>[] { return this.sent.filter(message => message.type === "response" && message.command === command); }
+	requests(command: string): Record<string, unknown>[] { return this.sent.filter(message => message.type === 'request' && message.command === command); }
+	responses(command: string): Record<string, unknown>[] { return this.sent.filter(message => message.type === 'response' && message.command === command); }
 	private enqueue(message: unknown): void { this.messages.push({ sequence: this.nextMessageSequence++, message }); }
 }
 
 function configuration(): IDebugConfiguration {
-	return { id: "launch:0:test", name: "Test", type: "example", request: "launch", adapter: { program: "${workspaceFolder}\\adapter", arguments: ["--stdio", "${workspaceFolder}"] }, arguments: { program: "${workspaceFolder}\\bin\\app", cwd: "${workspaceFolder}" } };
+	return { id: 'launch:0:test', name: 'Test', type: 'example', request: 'launch', adapter: { program: '${workspaceFolder}\\adapter', arguments: ['--stdio', '${workspaceFolder}'] }, arguments: { program: '${workspaceFolder}\\bin\\app', cwd: '${workspaceFolder}' } };
 }
 
 function breakpoint(lineNumber: number): IDebugBreakpoint {
-	return { id: `main:${lineNumber}`, resource: URI.file("C:\\workspace\\main.ts"), lineNumber, enabled: true, verified: false };
+	return { id: `main:${lineNumber}`, resource: URI.file('C:\\workspace\\main.ts'), lineNumber, enabled: true, verified: false };
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
 	const deadline = Date.now() + 2_000;
 	while (!predicate()) {
-		if (Date.now() >= deadline) throw new Error("Timed out waiting for debug session state");
+		if (Date.now() >= deadline) throw new Error('Timed out waiting for debug session state');
 		await new Promise(resolve => setTimeout(resolve, 10));
 	}
 }
@@ -654,6 +654,28 @@ async function startSession(options: Omit<DebugSessionStartOptions, 'resolvedCon
 	return DebugSession.start({ id: 'debug-1', ...options, resolvedConfiguration: { ...resolvedConfiguration, adapter: resolvedConfiguration.adapter } });
 }
 
+
+test('DebugSession shares paused frame identities across stack observers and refreshes after invalidation', async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+	try {
+		processes.event('stopped', { threadId: processes.threadId });
+		await waitFor(() => session.state === 'stopped');
+		const [editor, panel] = await Promise.all([session.inspectStack(), session.inspectStack(session.threadId)]);
+		assert.strictEqual(editor, panel);
+		assert.equal(processes.requests('stackTrace').length, 1);
+		processes.frameId = 42;
+		assert.strictEqual((await session.inspectStack()).frames[0], editor.frames[0]);
+		const revision = session.inspectionRevision;
+		processes.event('invalidated', { areas: ['stacks'] });
+		await waitFor(() => session.inspectionRevision !== revision);
+		assert.equal((await session.inspectStack()).frames[0].id, 42);
+		assert.equal(processes.requests('stackTrace').length, 2);
+		await session.inspectStack(8);
+		assert.equal(processes.requests('stackTrace').length, 3);
+		assert.equal((processes.requests('stackTrace').at(-1)!.arguments as { threadId: number; }).threadId, 8);
+	} finally { await session.disconnect(); }
+});
 
 for (const id of [0, -1]) {
 	test(`DebugSession preserves thread and frame identifier ${id} across inspection and execution`, async () => {

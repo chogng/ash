@@ -131,10 +131,11 @@ export class SCMRepositoriesViewPane extends ViewPane {
 		path.className = 'ash-scm-repository-path';
 		const resources = new DisposableStore();
 		this.rowResources.set(domNode, resources);
-		const badge = resources.add(new CountBadge(domNode, {
+		const countContainer = h(document, 'span', { className: 'ash-scm-repository-count' });
+		const badge = resources.add(new CountBadge(countContainer, {
 			count: 0, titleFormat: localize('scm.repositories.changes', '{0} changed files')
 		}, defaultCountBadgeStyles));
-		domNode.append(name, branch, badge.domNode, path);
+		domNode.append(name, branch, countContainer, path);
 		this.rows.set(repository.id, { domNode, name, branch, path, badge });
 		resources.add(toDisposable(() => this.rows.delete(repository.id)));
 		resources.add(this.hoverService.setupDelayedHover(domNode, () => ({ content: this.repositoryDescription(repository) })));

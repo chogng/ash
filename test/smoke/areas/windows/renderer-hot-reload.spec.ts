@@ -290,7 +290,9 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 				else if (current !== source.original) concurrent.push(source.file);
 			}
 			if (electron) {
-				await electron.evaluate(({ BrowserWindow }) => { for (const window of BrowserWindow.getAllWindows()) window.destroy(); });
+				await electron.evaluate(({ BrowserWindow }) => {
+					for (const window of BrowserWindow.getAllWindows()) window.destroy();
+				});
 				await electron.close();
 			}
 			await browser?.close();
@@ -389,7 +391,9 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 		const current = await readFile(sourceFile, 'utf8');
 		if (current === written) await writeFile(sourceFile, original);
 		if (electron) {
-			await electron.evaluate(({ BrowserWindow }) => { for (const window of BrowserWindow.getAllWindows()) window.destroy(); });
+			await electron.evaluate(({ BrowserWindow }) => {
+				for (const window of BrowserWindow.getAllWindows()) window.destroy();
+			});
 			await electron.close();
 		}
 		await browser?.close();

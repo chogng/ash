@@ -103,6 +103,7 @@ fn remove_annotations(schema: &mut Value) {
 }
 
 const DECODER_ROOTS: &[&str] = &[
+    "HostCredentialResponse",
     "AppServerListenInfo",
     "ClientRequestSchema",
     "ClientResultSchema",

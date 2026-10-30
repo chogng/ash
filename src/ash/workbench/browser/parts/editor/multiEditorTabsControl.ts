@@ -1,26 +1,26 @@
-import "./media/multiEditorTabsControl.css";
-import { DataTransfers } from "../../../../base/browser/dnd.js";
+import './media/multiEditorTabsControl.css';
+import { DataTransfers } from '../../../../base/browser/dnd.js';
 import { EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, type IResourceEditorInput } from '../../../common/editor.js';
 import { TAB_CLOSE_ACTION_ID, type TabListOptions } from '../../../../base/browser/ui/tablist/tabList.js';
-import { addDisposableListener, isElement } from "../../../../base/browser/dom.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import type { IAction } from "../../../../base/common/actions.js";
-import { assertDefined } from "../../../../base/common/types.js";
-import { localize } from "../../../../nls.js";
-import { containsExternalEditorDrop } from "./editorDropData.js";
-import { EditorTabsControl, editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
-import { IResourceLabelService, type IResourceLabel, type ResourceLabels } from "../../labels.js";
-import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorTabsFocusContext } from "../../../common/contextkeys.js";
-import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { addDisposableListener, isElement } from '../../../../base/browser/dom.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { assertDefined } from '../../../../base/common/types.js';
+import { localize } from '../../../../nls.js';
+import { containsExternalEditorDrop } from './editorDropData.js';
+import { EditorTabsControl, editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from './editorTabsControl.js';
+import { IResourceLabelService, type IResourceLabel, type ResourceLabels } from '../../labels.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorTabsFocusContext } from '../../../common/contextkeys.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ILabelService } from '../../../../platform/label/common/label.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { basename, dirname } from '../../../../base/common/resources.js';
 import { shorten } from '../../../../base/common/labels.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
-import { EditorLabelFormatConfiguration, EditorShowIconsConfiguration, type EditorLabelFormat } from "../../../services/editor/common/editorConfiguration.js";
+import { EditorLabelFormatConfiguration, EditorShowIconsConfiguration, type EditorLabelFormat } from '../../../services/editor/common/editorConfiguration.js';
 import { WorkbenchTabsControl } from './workbenchTabsControl.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
@@ -51,7 +51,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container);
-		this.domNode.classList.add("ash-multi-editor-tabs-control");
+		this.domNode.classList.add('ash-multi-editor-tabs-control');
 		this.tabContext = this._register(contextKeyService.createScoped(this.domNode));
 		this.labels = this._register(resourceLabels.createGroup());
 		this.labels.setIconVisibility(configurationService.getValue<boolean>(EditorShowIconsConfiguration));
@@ -70,15 +70,15 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				canDrop: (event) => delegate.isDragging() || containsExternalEditorDrop(event),
 				onDragStart: (editor, event) => {
 					event.dataTransfer?.setData(DataTransfers.TEXT, editor.instanceId);
-					if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+					if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
 					delegate.startDrag(editor.input);
 				},
 				onDragEnter: (_target, _position, event) => {
 					this.previewedInput = undefined;
-					if (event.dataTransfer) event.dataTransfer.dropEffect = delegate.isDragging() ? "move" : "copy";
+					if (event.dataTransfer) event.dataTransfer.dropEffect = delegate.isDragging() ? 'move' : 'copy';
 				},
 				onDragOver: (target, _position, event, duration) => {
-					if (event.dataTransfer) event.dataTransfer.dropEffect = delegate.isDragging() ? "move" : "copy";
+					if (event.dataTransfer) event.dataTransfer.dropEffect = delegate.isDragging() ? 'move' : 'copy';
 					if (target && duration >= DRAG_OVER_ACTIVATE_DELAY && target.input !== this.previewedInput) {
 						this.previewedInput = target.input;
 						delegate.preview(target.input);
@@ -102,17 +102,17 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			onSelect: (editor, event) => delegate.select?.(editor.input, { toggle: event.ctrlKey || event.metaKey, range: event.shiftKey }) ?? false,
 			onClose: (editor) => delegate.close(editor.input),
 		} satisfies TabListOptions<EditorTabDescriptor>));
-		this._register(addDisposableListener(this.tabs.tabList.element, "contextmenu", event => {
+		this._register(addDisposableListener(this.tabs.tabList.element, 'contextmenu', event => {
 			this.showTabContextMenu(event);
 		}));
-		this._register(addDisposableListener(this.tabs.tabList.element, "keydown", event => {
-			if (!event.shiftKey || event.key !== "F10") {
+		this._register(addDisposableListener(this.tabs.tabList.element, 'keydown', event => {
+			if (!event.shiftKey || event.key !== 'F10') {
 				return;
 			}
 			this.showTabContextMenu(event);
 		}));
-		this._register(addDisposableListener(this.tabs.tabList.element, "dblclick", event => {
-			const label = (event.target as Element).closest<HTMLButtonElement>(".ash-tab-label");
+		this._register(addDisposableListener(this.tabs.tabList.element, 'dblclick', event => {
+			const label = (event.target as Element).closest<HTMLButtonElement>('.ash-tab-label');
 			if (!label || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
 				return;
 			}
@@ -129,7 +129,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		if (!isElement(target)) {
 			return;
 		}
-		const tab = target.closest<HTMLElement>(".ash-tab");
+		const tab = target.closest<HTMLElement>('.ash-tab');
 		if (!tab || !this.tabs.tabList.element.contains(tab)) {
 			return;
 		}
@@ -178,9 +178,9 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			const label = labels.get(editor.input)!;
 			let primaryAction = this.unpinActions.get(editor.instanceId);
 			if (editor.sticky && !primaryAction) {
-				const unpinLabel = localize("workbench.unpinEditor", "Unpin");
+				const unpinLabel = localize('workbench.unpinEditor', 'Unpin');
 				primaryAction = {
-					id: "workbench.action.unpinActiveEditor",
+					id: 'workbench.action.unpinActiveEditor',
 					label: unpinLabel,
 					tooltip: unpinLabel,
 					icon: Lxicon.pinned,
@@ -193,7 +193,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				// Retain the action across state updates so its focused button stays in place.
 				this.unpinActions.set(editor.instanceId, primaryAction);
 			}
-			const state = editor.hasExternalChange ? "conflict" : editor.isDirty ? "dirty" : undefined;
+			const state = editor.hasExternalChange ? 'conflict' : editor.isDirty ? 'dirty' : undefined;
 			if (!editor.sticky && ((editor.input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.CannotClose)) {
 				let closeAction = this.protectedCloseActions.get(editor.instanceId);
 				if (!closeAction) {
@@ -209,12 +209,12 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				}
 				primaryAction = closeAction;
 			}
-			const stateLabel = editor.hasExternalChange ? "conflict with changes on disk" : editor.isDirty ? "unsaved changes" : undefined;
-			let ariaDescription = localize("workbench.editorUnpinnedTabHint", "Use Pin to pin this tab.");
+			const stateLabel = editor.hasExternalChange ? 'conflict with changes on disk' : editor.isDirty ? 'unsaved changes' : undefined;
+			let ariaDescription = localize('workbench.editorUnpinnedTabHint', 'Use Pin to pin this tab.');
 			if (editor.sticky) {
-				ariaDescription = localize("workbench.editorPinnedTabHint", "Pinned tab. Use Unpin to unpin.");
+				ariaDescription = localize('workbench.editorPinnedTabHint', 'Pinned tab. Use Unpin to unpin.');
 			} else if (editor.preview) {
-				ariaDescription = localize("workbench.editorPreviewTabHint", "Double-click or use Keep Open to keep this tab open. Use Pin to pin this tab.");
+				ariaDescription = localize('workbench.editorPreviewTabHint', 'Double-click or use Keep Open to keep this tab open. Use Pin to pin this tab.');
 			}
 			return {
 				id: editor.instanceId,
@@ -223,7 +223,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				description: label.description,
 				renderLabel: container => {
 					const store = new DisposableStore();
-					const resourceLabel = store.add(this.labels.create(container));
+					const resourceLabel = store.add(this.labels.create(container, { hoverTargetOverride: container }));
 					store.add(resourceLabel.onDidRender(() => {
 						const current = this.editors.find(candidate => candidate.instanceId === editor.instanceId)!;
 						this.updateTabAriaLabel(current, resourceLabel);
@@ -236,7 +236,8 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 					store.add(toDisposable(() => this.protectedCloseActions.delete(editor.instanceId)));
 					return store;
 				},
-				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
+				// The resource label owns one hover for the whole tab, including its padding.
+				tooltip: '',
 				closeActionTooltip: editor.closeActionTooltip,
 				ariaLabel: stateLabel ? `${label.name}, ${stateLabel}` : label.name,
 				ariaDescription,

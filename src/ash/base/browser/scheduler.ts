@@ -1,4 +1,4 @@
-import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../common/lifecycle.js';
 
 interface ScheduledAnimationFrame {
 	readonly callback: () => void;
@@ -50,7 +50,7 @@ export function scheduleAtNextAnimationFrame(
 				queue.currentTasks = undefined;
 			}
 		};
-		queue.frame = typeof targetWindow.requestAnimationFrame === "function"
+		queue.frame = typeof targetWindow.requestAnimationFrame === 'function'
 			? targetWindow.requestAnimationFrame(flush)
 			: targetWindow.setTimeout(flush, 16);
 	}

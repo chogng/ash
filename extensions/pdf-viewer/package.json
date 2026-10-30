@@ -8,6 +8,11 @@
   "version": "1.0.0",
   "displayName": "%pdfViewer.displayName%",
   "description": "%pdfViewer.description%",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "engines": {
     "ash": "*"
   },

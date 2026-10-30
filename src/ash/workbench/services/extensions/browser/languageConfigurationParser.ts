@@ -66,8 +66,8 @@ function parseOnEnterRules(value: unknown, owner: string): OnEnterRule[] {
 		const rule = record(candidate, `${owner}[${index}]`);
 		return Object.freeze({
 			beforeText: regularExpression(rule.beforeText, `${owner}[${index}].beforeText`),
-			...optionalRegularExpressionProperty(rule.afterText, `${owner}[${index}].afterText`, "afterText"),
-			...optionalRegularExpressionProperty(rule.previousLineText, `${owner}[${index}].previousLineText`, "previousLineText"),
+			...optionalRegularExpressionProperty(rule.afterText, `${owner}[${index}].afterText`, 'afterText'),
+			...optionalRegularExpressionProperty(rule.previousLineText, `${owner}[${index}].previousLineText`, 'previousLineText'),
 			action: parseEnterAction(rule.action, `${owner}[${index}].action`),
 		});
 	});
@@ -84,10 +84,10 @@ function parseEnterAction(value: unknown, owner: string): EnterAction {
 	});
 }
 
-function optionalRegularExpressionProperty(value: unknown, owner: string, key: "afterText" | "previousLineText"): { readonly afterText?: RegExp; } | { readonly previousLineText?: RegExp; } | Record<never, never> {
+function optionalRegularExpressionProperty(value: unknown, owner: string, key: 'afterText' | 'previousLineText'): { readonly afterText?: RegExp; } | { readonly previousLineText?: RegExp; } | Record<never, never> {
 	if (value === undefined || value === null) return {};
 	const expression = regularExpression(value, owner);
-	return key === "afterText" ? { afterText: expression } : { previousLineText: expression };
+	return key === 'afterText' ? { afterText: expression } : { previousLineText: expression };
 }
 
 function parseAutoClosingPairs(value: unknown, owner: string): IAutoClosingPairConditional[] {
@@ -138,8 +138,8 @@ function optionalRegularExpression(value: unknown, owner: string): RegExp | null
 }
 
 function regularExpression(value: unknown, owner: string): RegExp {
-	const { source, flags } = typeof value === "string"
-		? { source: text(value, owner, 4096), flags: "" }
+	const { source, flags } = typeof value === 'string'
+		? { source: text(value, owner, 4096), flags: '' }
 		: parseRegularExpressionObject(value, owner);
 	try {
 		return Object.freeze(new RegExp(source, flags));
@@ -151,10 +151,10 @@ function regularExpression(value: unknown, owner: string): RegExp {
 function parseRegularExpressionObject(value: unknown, owner: string): { readonly source: string; readonly flags: string; } {
 	const expression = record(value, owner);
 	const keys = Object.keys(expression);
-	if (keys.some(key => key !== "pattern" && key !== "flags") || expression.pattern === undefined) {
+	if (keys.some(key => key !== 'pattern' && key !== 'flags') || expression.pattern === undefined) {
 		throw new TypeError(`${owner} must contain only pattern and flags`);
 	}
-	const flags = expression.flags === undefined ? "" : text(expression.flags, `${owner}.flags`, 16);
+	const flags = expression.flags === undefined ? '' : text(expression.flags, `${owner}.flags`, 16);
 	if (!/^[dgimsuvy]*$/u.test(flags) || new Set(flags).size !== flags.length) {
 		throw new TypeError(`${owner}.flags contains unsupported flags`);
 	}
@@ -162,12 +162,12 @@ function parseRegularExpressionObject(value: unknown, owner: string): { readonly
 }
 
 function text(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== "string" || value.length > maximum || /[\r\n]/u.test(value)) throw new TypeError(`${owner} must be bounded text`);
+	if (typeof value !== 'string' || value.length > maximum || /[\r\n]/u.test(value)) throw new TypeError(`${owner} must be bounded text`);
 	return value;
 }
 
 function boundedString(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== "string" || value.length > maximum) throw new TypeError(`${owner} must be a bounded string`);
+	if (typeof value !== 'string' || value.length > maximum) throw new TypeError(`${owner} must be a bounded string`);
 	return value;
 }
 
@@ -182,7 +182,7 @@ function nonNegativeInteger(value: unknown, owner: string): number {
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, unknown>;
 }
 

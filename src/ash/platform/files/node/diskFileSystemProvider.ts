@@ -123,7 +123,10 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 							if (event === 'rename') void bindEntry().catch(fail);
 							return;
 						}
-						if (filename === null) { this.changes.fire({ resources: [resource] }); return; }
+						if (filename === null) {
+							this.changes.fire({ resources: [resource] });
+							return;
+						}
 						const name = filename.toString();
 						// macOS can report the watched directory's own name for inode changes.
 						// Recheck that entry instead of publishing a nonexistent child of it.

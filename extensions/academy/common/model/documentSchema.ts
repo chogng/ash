@@ -1,20 +1,20 @@
 import { validateReviewAttributes } from './documentReview.js';
-import { createDocumentNode, createDocumentRoot, createTextNode, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from "./document.js";
+import { createDocumentNode, createDocumentRoot, createTextNode, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from './document.js';
 import { validateDocumentPageAttributes } from './documentPageLayout.js';
 import { validateDocumentParagraphAttributes, validateDocumentParagraphStyles } from './documentParagraph.js';
 
 /** Structural layers available to Stanza schemas. */
-export type DocumentNodeKind = "root" | "group" | "block" | "line" | "inline" | "text";
+export type DocumentNodeKind = 'root' | 'group' | 'block' | 'line' | 'inline' | 'text';
 
 /** Persistent document kind; schemas own the interpretation of their document trees. */
-type DocumentType = "general" | "academy";
+type DocumentType = 'general' | 'academy';
 
 export interface DocumentMarkSpec {
 	readonly validateAttributes?: (attrs: DocumentAttributes) => void;
 }
 
 /** Font families that Stanza stores as semantic document text styles. */
-export type DocumentTextStyleFontFamily = "sans" | "serif" | "monospace";
+export type DocumentTextStyleFontFamily = 'sans' | 'serif' | 'monospace';
 
 /** Persistent typography attributes applied by Stanza's document-formatting controls. */
 export interface DocumentTextStyleAttributes {
@@ -61,7 +61,7 @@ export interface CreateNodeOptions {
 	readonly text?: string;
 }
 
-const DEFAULT_TOP_NODE_TYPE = "doc";
+const DEFAULT_TOP_NODE_TYPE = 'doc';
 
 /** Schema and content validator for Stanza's structured document tree. */
 export class DocumentSchema {
@@ -73,7 +73,7 @@ export class DocumentSchema {
 	private nextGeneratedId = 1;
 
 	constructor(options: DocumentSchemaOptions = {}) {
-		this.documentType = options.documentType ?? "general";
+		this.documentType = options.documentType ?? 'general';
 		this.topNodeType = options.topNodeType ?? DEFAULT_TOP_NODE_TYPE;
 		const nodes = options.nodes ?? defaultNodeSpecs();
 		const marks = options.marks ?? defaultMarkSpecs();
@@ -99,7 +99,7 @@ export class DocumentSchema {
 	/** Returns whether a node type is a leaf according to the schema content contract. */
 	isLeafNode(node: DocumentNode): boolean {
 		const spec = this.requireNodeSpec(node.type);
-		return spec.kind === "text" || ((spec.content?.length ?? 0) === 0 && (spec.allowedChildren?.length ?? 0) === 0 && (spec.allowedChildGroups?.length ?? 0) === 0);
+		return spec.kind === 'text' || ((spec.content?.length ?? 0) === 0 && (spec.allowedChildren?.length ?? 0) === 0 && (spec.allowedChildGroups?.length ?? 0) === 0);
 	}
 
 	/** Returns whether a parent type accepts a child type directly or through a declared group. */
@@ -127,12 +127,12 @@ export class DocumentSchema {
 
 	createText(
 		text: string,
-		options: Omit<CreateNodeOptions, "text"> = {},
+		options: Omit<CreateNodeOptions, 'text'> = {},
 	): DocumentNode {
-		if (typeof text !== "string" || text.length === 0) {
-			throw new TypeError("Text nodes must contain non-empty text");
+		if (typeof text !== 'string' || text.length === 0) {
+			throw new TypeError('Text nodes must contain non-empty text');
 		}
-		return this.createNode("text", { ...options, text });
+		return this.createNode('text', { ...options, text });
 	}
 
 	createDocument(
@@ -150,12 +150,12 @@ export class DocumentSchema {
 			throw new TypeError(`Document root must be '${this.topNodeType}'`);
 		}
 		this.validateNode(document, new Set(), true, false);
-		if (document.attrs.trackChanges !== undefined && typeof document.attrs.trackChanges !== "boolean") throw new TypeError("Invalid track changes option");
-		if (document.content.filter(node => node.type === "reviewComment" || node.type === "reviewChange").length > 1000) throw new TypeError("Too many review records");
+		if (document.attrs.trackChanges !== undefined && typeof document.attrs.trackChanges !== 'boolean') throw new TypeError('Invalid track changes option');
+		if (document.content.filter(node => node.type === 'reviewComment' || node.type === 'reviewChange').length > 1000) throw new TypeError('Too many review records');
 		validateDocumentParagraphStyles(document);
 		const visitSections = (node: DocumentNode): void => {
 			for (const child of node.content) {
-				if ((child.type === "documentSection" || child.type === "reviewComment" || child.type === "reviewChange") && node !== document) throw new TypeError("Document metadata and sections must be root children");
+				if ((child.type === 'documentSection' || child.type === 'reviewComment' || child.type === 'reviewChange') && node !== document) throw new TypeError('Document metadata and sections must be root children');
 				visitSections(child);
 			}
 		};
@@ -174,18 +174,18 @@ export class DocumentSchema {
 		isRoot: boolean,
 		allowIncompleteContent: boolean,
 	): void {
-		if (!node || typeof node !== "object") throw new TypeError("Document node is required");
+		if (!node || typeof node !== 'object') throw new TypeError('Document node is required');
 		if (ids.has(node.id)) throw new Error(`Duplicate document node id '${node.id}'`);
 		ids.add(node.id);
 		this.allocatedNodeIds.add(node.id);
 		const spec = this.requireNodeSpec(node.type);
-		if (isRoot && spec.kind !== "root") throw new TypeError("Document root must use a root node spec");
-		if (!isRoot && spec.kind === "root") throw new TypeError("Root node cannot be nested");
+		if (isRoot && spec.kind !== 'root') throw new TypeError('Document root must use a root node spec');
+		if (!isRoot && spec.kind === 'root') throw new TypeError('Root node cannot be nested');
 		validateAttributes(node.attrs, node.type);
 		spec.validateAttributes?.(node.attrs);
-		if (spec.kind === "text") {
-			if (node.text === undefined || node.text.length === 0) throw new TypeError("Text nodes must contain non-empty text");
-			if (node.content.length > 0) throw new TypeError("Text nodes cannot contain child nodes");
+		if (spec.kind === 'text') {
+			if (node.text === undefined || node.text.length === 0) throw new TypeError('Text nodes must contain non-empty text');
+			if (node.content.length > 0) throw new TypeError('Text nodes cannot contain child nodes');
 			this.validateMarks(node.marks);
 		} else {
 			if (node.text !== undefined) throw new TypeError(`Node '${node.type}' cannot contain text`);
@@ -193,8 +193,8 @@ export class DocumentSchema {
 		}
 		const minChildren = spec.minChildren ?? 0;
 		const maxChildren = spec.maxChildren;
-		if (!allowIncompleteContent && node.content.length < minChildren) throw new RangeError(`Node '${node.type}' requires at least ${minChildren} child${minChildren === 1 ? "" : "ren"}`);
-		if (maxChildren !== undefined && node.content.length > maxChildren) throw new RangeError(`Node '${node.type}' allows at most ${maxChildren} child${maxChildren === 1 ? "" : "ren"}`);
+		if (!allowIncompleteContent && node.content.length < minChildren) throw new RangeError(`Node '${node.type}' requires at least ${minChildren} child${minChildren === 1 ? '' : 'ren'}`);
+		if (maxChildren !== undefined && node.content.length > maxChildren) throw new RangeError(`Node '${node.type}' allows at most ${maxChildren} child${maxChildren === 1 ? '' : 'ren'}`);
 		for (const child of node.content) {
 			if (!this.canContainChild(node.type, child.type)) {
 				throw new TypeError(`Node '${node.type}' cannot contain '${child.type}'`);
@@ -231,7 +231,7 @@ export class DocumentSchema {
 
 	private validateSchemaDefinition(): void {
 		const root = this.nodeSpecs.get(this.topNodeType);
-		if (!root || root.kind !== "root") throw new TypeError(`Schema top node '${this.topNodeType}' must be a root node`);
+		if (!root || root.kind !== 'root') throw new TypeError(`Schema top node '${this.topNodeType}' must be a root node`);
 		const declaredGroups = new Set<string>();
 		for (const [type, spec] of this.nodeSpecs) {
 			if (!/^[a-z][a-zA-Z0-9_-]*$/.test(type)) throw new TypeError(`Invalid document node type '${type}'`);
@@ -244,7 +244,7 @@ export class DocumentSchema {
 				declaredGroups.add(group);
 			}
 			for (const group of spec.allowedChildGroups ?? []) validateGroupName(group, `Node '${type}' allowed child group`);
-			if (spec.kind === "text" && ((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0)) throw new TypeError(`Text node '${type}' cannot declare child content`);
+			if (spec.kind === 'text' && ((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0)) throw new TypeError(`Text node '${type}' cannot declare child content`);
 			if (spec.content && ((spec.allowedChildren?.length ?? 0) > 0 || (spec.allowedChildGroups?.length ?? 0) > 0)) throw new TypeError(`Node '${type}' cannot combine content terms with allowed child lists`);
 			for (const childType of spec.allowedChildren ?? []) {
 				if (!this.nodeSpecs.has(childType)) throw new TypeError(`Node '${type}' references unknown child '${childType}'`);
@@ -266,38 +266,38 @@ export function createDefaultDocumentSchema(): DocumentSchema {
 }
 
 function defaultNodeSpecs(): Readonly<Record<string, DocumentNodeSpec>> {
-	const blocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "codeBlock", "table", "horizontalRule"] as const;
-	const listBlocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "codeBlock", "table"] as const;
-	const tableCellBlocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "codeBlock", "table"] as const;
+	const blocks = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'table', 'horizontalRule'] as const;
+	const listBlocks = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'table'] as const;
+	const tableCellBlocks = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'codeBlock', 'table'] as const;
 	return {
-		doc: { kind: "root", allowedChildren: [...blocks, "documentSection", "reviewComment", "reviewChange"] },
-		reviewComment: { kind: "group", groups: ["block"], validateAttributes: attrs => validateReviewAttributes("reviewComment", attrs) },
-		reviewChange: { kind: "group", groups: ["block"], validateAttributes: attrs => validateReviewAttributes("reviewChange", attrs) },
-		documentSection: { kind: "group", groups: ["block"], allowedChildren: blocks, minChildren: 1, validateAttributes: validateDocumentPageAttributes },
-		paragraph: { kind: "block", allowedChildren: ["text", "hardBreak", "image"], validateAttributes: validateDocumentParagraphAttributes },
+		doc: { kind: 'root', allowedChildren: [...blocks, 'documentSection', 'reviewComment', 'reviewChange'] },
+		reviewComment: { kind: 'group', groups: ['block'], validateAttributes: attrs => validateReviewAttributes('reviewComment', attrs) },
+		reviewChange: { kind: 'group', groups: ['block'], validateAttributes: attrs => validateReviewAttributes('reviewChange', attrs) },
+		documentSection: { kind: 'group', groups: ['block'], allowedChildren: blocks, minChildren: 1, validateAttributes: validateDocumentPageAttributes },
+		paragraph: { kind: 'block', allowedChildren: ['text', 'hardBreak', 'image'], validateAttributes: validateDocumentParagraphAttributes },
 		heading: {
-			kind: "block", allowedChildren: ["text", "hardBreak", "image"], defaultAttrs: { level: 1 }, validateAttributes: attrs => {
-				validateIntegerAttribute(attrs, "level", 1, 6);
+			kind: 'block', allowedChildren: ['text', 'hardBreak', 'image'], defaultAttrs: { level: 1 }, validateAttributes: attrs => {
+				validateIntegerAttribute(attrs, 'level', 1, 6);
 				validateDocumentParagraphAttributes(attrs);
 			}
 		},
-		blockquote: { kind: "block", allowedChildren: listBlocks, minChildren: 1 },
-		bulletList: { kind: "block", allowedChildren: ["listItem"], minChildren: 1 },
+		blockquote: { kind: 'block', allowedChildren: listBlocks, minChildren: 1 },
+		bulletList: { kind: 'block', allowedChildren: ['listItem'], minChildren: 1 },
 		orderedList: {
-			kind: "block", allowedChildren: ["listItem"], minChildren: 1, defaultAttrs: { order: 1 }, validateAttributes: attrs => {
-				validateIntegerAttribute(attrs, "order", 1, Number.MAX_SAFE_INTEGER);
+			kind: 'block', allowedChildren: ['listItem'], minChildren: 1, defaultAttrs: { order: 1 }, validateAttributes: attrs => {
+				validateIntegerAttribute(attrs, 'order', 1, Number.MAX_SAFE_INTEGER);
 				if (attrs.numbering !== undefined && !['decimal', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman'].includes(String(attrs.numbering))) throw new TypeError('Invalid list numbering format');
 			}
 		},
-		listItem: { kind: "block", allowedChildren: listBlocks, minChildren: 1 },
-		codeBlock: { kind: "block", content: [{ type: "text", min: 0, max: 1 }], defaultAttrs: { language: "text" }, validateAttributes: attrs => validateStringAttribute(attrs, "language", false) },
-		table: { kind: "block", allowedChildren: ["tableRow"], minChildren: 1 },
-		tableRow: { kind: "block", allowedChildren: ["tableCell"], minChildren: 1 },
-		tableCell: { kind: "block", allowedChildren: tableCellBlocks, minChildren: 1 },
-		horizontalRule: { kind: "block" },
-		hardBreak: { kind: "inline" },
-		image: { kind: "inline", validateAttributes: attrs => validateStringAttribute(attrs, "src", true) },
-		text: { kind: "text" },
+		listItem: { kind: 'block', allowedChildren: listBlocks, minChildren: 1 },
+		codeBlock: { kind: 'block', content: [{ type: 'text', min: 0, max: 1 }], defaultAttrs: { language: 'text' }, validateAttributes: attrs => validateStringAttribute(attrs, 'language', false) },
+		table: { kind: 'block', allowedChildren: ['tableRow'], minChildren: 1 },
+		tableRow: { kind: 'block', allowedChildren: ['tableCell'], minChildren: 1 },
+		tableCell: { kind: 'block', allowedChildren: tableCellBlocks, minChildren: 1 },
+		horizontalRule: { kind: 'block' },
+		hardBreak: { kind: 'inline' },
+		image: { kind: 'inline', validateAttributes: attrs => validateStringAttribute(attrs, 'src', true) },
+		text: { kind: 'text' },
 	};
 }
 
@@ -306,13 +306,13 @@ function defaultMarkSpecs(): Readonly<Record<string, DocumentMarkSpec>> {
 		strong: {},
 		em: {},
 		code: {},
-		link: { validateAttributes: attrs => validateStringAttribute(attrs, "href", true) },
+		link: { validateAttributes: attrs => validateStringAttribute(attrs, 'href', true) },
 		textStyle: { validateAttributes: validateTextStyleMarkAttributes },
 	};
 }
 
 function validateAttributes(attrs: DocumentAttributes, owner: string): void {
-	if (!attrs || typeof attrs !== "object" || Array.isArray(attrs)) throw new TypeError(`Attributes for '${owner}' must be an object`);
+	if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs)) throw new TypeError(`Attributes for '${owner}' must be an object`);
 	for (const [key, value] of Object.entries(attrs)) {
 		if (!/^[a-z][a-zA-Z0-9_-]*$/.test(key)) throw new TypeError(`Invalid attribute '${key}' on '${owner}'`);
 		if (!isDocumentAttributeValue(value)) throw new TypeError(`Attribute '${key}' on '${owner}' has an invalid value`);
@@ -320,30 +320,30 @@ function validateAttributes(attrs: DocumentAttributes, owner: string): void {
 }
 
 function isDocumentAttributeValue(value: unknown): value is DocumentAttributeValue {
-	return value === null || typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value));
+	return value === null || typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value));
 }
 
 function validateStringAttribute(attrs: DocumentAttributes, name: string, required: boolean): void {
 	const value = attrs[name];
 	if (value === undefined && !required) return;
-	if (typeof value !== "string" || (required && value.length === 0)) throw new TypeError(`Attribute '${name}' must be a ${required ? "non-empty " : ""}string`);
+	if (typeof value !== 'string' || (required && value.length === 0)) throw new TypeError(`Attribute '${name}' must be a ${required ? 'non-empty ' : ''}string`);
 }
 
 function validateIntegerAttribute(attrs: DocumentAttributes, name: string, min: number, max: number): void {
 	const value = attrs[name];
-	if (typeof value !== "number" || !Number.isSafeInteger(value) || value < min || value > max) throw new RangeError(`Attribute '${name}' must be an integer between ${min} and ${max}`);
+	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min || value > max) throw new RangeError(`Attribute '${name}' must be an integer between ${min} and ${max}`);
 }
 
 function validateTextStyleMarkAttributes(attrs: DocumentAttributes): void {
 	const fontFamily = attrs.fontFamily;
 	const fontSize = attrs.fontSize;
-	if (fontFamily === undefined && fontSize === undefined) throw new TypeError("Text style marks require a font family or font size");
-	if (fontFamily !== undefined && fontFamily !== "sans" && fontFamily !== "serif" && fontFamily !== "monospace") {
-		throw new TypeError("Text style font family must be sans, serif, or monospace");
+	if (fontFamily === undefined && fontSize === undefined) throw new TypeError('Text style marks require a font family or font size');
+	if (fontFamily !== undefined && fontFamily !== 'sans' && fontFamily !== 'serif' && fontFamily !== 'monospace') {
+		throw new TypeError('Text style font family must be sans, serif, or monospace');
 	}
-	if (fontSize !== undefined) validateIntegerAttribute(attrs, "fontSize", 8, 72);
+	if (fontSize !== undefined) validateIntegerAttribute(attrs, 'fontSize', 8, 72);
 	for (const key of Object.keys(attrs)) {
-		if (key !== "fontFamily" && key !== "fontSize") throw new TypeError(`Unknown text style attribute '${key}'`);
+		if (key !== 'fontFamily' && key !== 'fontSize') throw new TypeError(`Unknown text style attribute '${key}'`);
 	}
 }
 
@@ -356,7 +356,7 @@ function validateCardinality(type: string, spec: DocumentNodeSpec): void {
 }
 
 function validateGroupName(group: string, owner: string): void {
-	if (typeof group !== "string" || !/^[a-z][a-zA-Z0-9_-]*$/.test(group)) throw new TypeError(`${owner} must use a valid group name`);
+	if (typeof group !== 'string' || !/^[a-z][a-zA-Z0-9_-]*$/.test(group)) throw new TypeError(`${owner} must use a valid group name`);
 }
 
 function contentTermMatches(term: DocumentContentTerm, childType: string, childGroups: readonly string[] | undefined): boolean {
@@ -365,7 +365,7 @@ function contentTermMatches(term: DocumentContentTerm, childType: string, childG
 
 function validateContentTerms(owner: string, spec: DocumentNodeSpec, nodeSpecs: ReadonlyMap<string, DocumentNodeSpec>): void {
 	if (!spec.content) return;
-	if (spec.kind === "text") throw new TypeError(`Text node '${owner}' cannot declare content terms`);
+	if (spec.kind === 'text') throw new TypeError(`Text node '${owner}' cannot declare content terms`);
 	const declaredGroups = new Set<string>();
 	for (const candidate of nodeSpecs.values()) for (const group of candidate.groups ?? []) declaredGroups.add(group);
 	for (const term of spec.content) {

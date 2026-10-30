@@ -1,9 +1,9 @@
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { IAppServerApi, type AppServerConnectionState } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
-import type { IRemoteAgentApi, RemoteAgentConnection, RemoteAgentReconnectResult, RemoteRuntimeRollbackResult } from "../../../../platform/remote/common/remoteAgentApi.js";
-import type { IAppServerRemoteAgentService } from "../common/appServerRemoteAgentService.js";
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { IAppServerApi, type AppServerConnectionState } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { RemoteConnectionState } from '../../../../platform/remote/common/remote.js';
+import type { IRemoteAgentApi, RemoteAgentConnection, RemoteAgentReconnectResult, RemoteRuntimeRollbackResult } from '../../../../platform/remote/common/remoteAgentApi.js';
+import type { IAppServerRemoteAgentService } from '../common/appServerRemoteAgentService.js';
 
 export interface AppServerRemoteAgentServiceOptions {
 	/** The current window host supplies SSH operations; Web windows have no SSH host. */
@@ -42,7 +42,7 @@ export class AppServerRemoteAgentService extends Disposable implements IAppServe
 			}, error => {
 				if (this.isDisposed || this.revision !== readRevision) return;
 				(options.onReadError ?? defaultReadErrorHandler)(error);
-				this.setConnectionState("disconnected");
+				this.setConnectionState('disconnected');
 			});
 	}
 
@@ -55,14 +55,14 @@ export class AppServerRemoteAgentService extends Disposable implements IAppServe
 	}
 
 	reconnect(): Promise<RemoteAgentReconnectResult> {
-		if (!this.remoteApi) return Promise.reject(new Error("Remote reconnect requires a native Remote host"));
-		if (this._connection?.kind !== "ssh") return Promise.reject(new Error("Remote reconnect requires an SSH Remote Workspace"));
+		if (!this.remoteApi) return Promise.reject(new Error('Remote reconnect requires a native Remote host'));
+		if (this._connection?.kind !== 'ssh') return Promise.reject(new Error('Remote reconnect requires an SSH Remote Workspace'));
 		return this.remoteApi.reconnect();
 	}
 
 	rollbackRuntime(): Promise<RemoteRuntimeRollbackResult> {
-		if (!this.remoteApi) return Promise.reject(new Error("Remote runtime rollback requires a native Remote host"));
-		if (this._connection?.kind !== "ssh") return Promise.reject(new Error("Remote runtime rollback requires an SSH Remote Workspace"));
+		if (!this.remoteApi) return Promise.reject(new Error('Remote runtime rollback requires a native Remote host'));
+		if (this._connection?.kind !== 'ssh') return Promise.reject(new Error('Remote runtime rollback requires an SSH Remote Workspace'));
 		return this.remoteApi.rollbackRuntime();
 	}
 
@@ -100,30 +100,30 @@ export class AppServerRemoteAgentService extends Disposable implements IAppServe
 
 function toRemoteConnectionState(state: AppServerConnectionState): RemoteConnectionState {
 	switch (state) {
-		case "starting":
-		case "initializing":
-			return "connecting";
-		case "ready":
-			return "connected";
-		case "stopping":
-			return "disconnecting";
-		case "restarting":
-			return "reconnecting";
-		case "stopped":
-		case "crashed":
-			return "disconnected";
+		case 'starting':
+		case 'initializing':
+			return 'connecting';
+		case 'ready':
+			return 'connected';
+		case 'stopping':
+			return 'disconnecting';
+		case 'restarting':
+			return 'reconnecting';
+		case 'stopped':
+		case 'crashed':
+			return 'disconnected';
 	}
 }
 
 function defaultReadErrorHandler(error: unknown): void {
-	console.error("Failed to read remote agent connection state", error);
+	console.error('Failed to read remote agent connection state', error);
 }
 
 function defaultConnectionReadErrorHandler(error: unknown): void {
-	console.error("Failed to read remote agent connection metadata", error);
+	console.error('Failed to read remote agent connection metadata', error);
 }
 
 function sameConnection(first: RemoteAgentConnection | undefined, second: RemoteAgentConnection): boolean {
 	if (!first || first.kind !== second.kind || first.generation !== second.generation) return false;
-	return first.kind === "local" || second.kind === "local" || first.authority === second.authority;
+	return first.kind === 'local' || second.kind === 'local' || first.authority === second.authority;
 }

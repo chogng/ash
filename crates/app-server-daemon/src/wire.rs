@@ -57,7 +57,10 @@ pub(crate) enum ConnectionGrantSource {
 impl ConnectionPrelude {
     pub(crate) fn from_options(options: &ConnectionOptions) -> Self {
         Self {
-            version: if matches!(options.role(), ConnectionRole::Execution { .. }) {
+            version: if matches!(
+                options.role(),
+                ConnectionRole::Execution { .. } | ConnectionRole::Credentials
+            ) {
                 PRELUDE_VERSION
             } else if options.ssh().is_some() {
                 SSH_PRELUDE_VERSION
@@ -113,6 +116,14 @@ impl ConnectionPrelude {
             }
             exec_server_protocol::validate_id(environment)
                 .map_err(|_| "invalid execution environment identity".to_owned())?;
+        }
+        if self.role == ConnectionRole::Credentials
+            && (self.version != PRELUDE_VERSION
+                || self.dir_root.is_some()
+                || self.web.is_some()
+                || self.ssh.is_some())
+        {
+            return Err("invalid native credential consumer scope".into());
         }
         Ok(())
     }
@@ -218,7 +229,10 @@ pub(crate) struct ControlResponse {
 impl ControlResponse {
     pub(crate) fn validate_connection(&self, options: &ConnectionOptions) -> Result<(), String> {
         self.validate()?;
-        let required_version = if matches!(options.role(), ConnectionRole::Execution { .. }) {
+        let required_version = if matches!(
+            options.role(),
+            ConnectionRole::Execution { .. } | ConnectionRole::Credentials
+        ) {
             PRELUDE_VERSION
         } else if options.ssh().is_some() {
             SSH_PRELUDE_VERSION

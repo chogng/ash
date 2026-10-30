@@ -55,15 +55,15 @@ function parseUrl(value: string): URL {
 	}
 
 	if (url.username || url.password) {
-		throw new TypeError("Resource URIs must not contain credentials");
+		throw new TypeError('Resource URIs must not contain credentials');
 	}
 	if (!url.host && url.pathname.startsWith('//')) {
 		throw new TypeError('URI path without an authority must not start with //');
 	}
 
-	validatePercentEncoding(url.pathname, "path");
-	validatePercentEncoding(url.search, "query");
-	validatePercentEncoding(url.hash, "fragment");
+	validatePercentEncoding(url.pathname, 'path');
+	validatePercentEncoding(url.search, 'query');
+	validatePercentEncoding(url.hash, 'fragment');
 	return url;
 }
 
@@ -123,17 +123,17 @@ export class URI {
 	 */
 	static file(path: string): URI {
 		if (path.length === 0) {
-			throw new TypeError("File path must not be empty");
+			throw new TypeError('File path must not be empty');
 		}
 
-		const normalized = isWindows ? path.replaceAll("\\", "/") : path;
-		if (normalized.startsWith("//")) {
-			const withoutPrefix = normalized.replace(/^\/+/, "");
-			const separator = withoutPrefix.indexOf("/");
+		const normalized = isWindows ? path.replaceAll('\\', '/') : path;
+		if (normalized.startsWith('//')) {
+			const withoutPrefix = normalized.replace(/^\/+/, '');
+			const separator = withoutPrefix.indexOf('/');
 			const authority = separator < 0
 				? withoutPrefix
 				: withoutPrefix.slice(0, separator);
-			const resourcePath = separator < 0 ? "/" : withoutPrefix.slice(separator);
+			const resourcePath = separator < 0 ? '/' : withoutPrefix.slice(separator);
 			if (!authority) {
 				throw new TypeError(`UNC path must contain a host: ${path}`);
 			}
@@ -142,14 +142,14 @@ export class URI {
 			return new URI(url);
 		}
 
-		if (!normalized.startsWith("/") && !WINDOWS_DRIVE_PATH.test(path)) {
+		if (!normalized.startsWith('/') && !WINDOWS_DRIVE_PATH.test(path)) {
 			throw new TypeError(`File path must be absolute: ${path}`);
 		}
 
 		const resourcePath = WINDOWS_DRIVE_PATH.test(path)
 			? `/${normalized}`
 			: normalized;
-		const url = new URL("file:///");
+		const url = new URL('file:///');
 		url.pathname = encodePath(resourcePath);
 		return new URI(url);
 	}
@@ -189,7 +189,7 @@ export class URI {
 	 * Returns the decoded native path represented by a `file:` URI.
 	 */
 	get fsPath(): string {
-		if (this.scheme !== "file") {
+		if (this.scheme !== 'file') {
 			throw new TypeError(`URI scheme is not file: ${this.scheme}`);
 		}
 		return uriToFsPath(this);
@@ -197,8 +197,8 @@ export class URI {
 
 	/** Creates a URI from decoded components. */
 	static from(components: UriComponents, strict = false): URI {
-		if (components.authority && components.path && !components.path.startsWith("/")) {
-			throw new TypeError("URI paths with an authority must start with /");
+		if (components.authority && components.path && !components.path.startsWith('/')) {
+			throw new TypeError('URI paths with an authority must start with /');
 		}
 		if (!components.authority && components.path?.startsWith('//')) {
 			throw new TypeError('URI path without an authority must not start with //');
@@ -207,8 +207,8 @@ export class URI {
 		const scheme = components.scheme || 'file';
 		const path = (scheme === 'file' && !components.path?.startsWith('/')) ? `/${components.path ?? ''}` : components.path ?? '';
 		let value = `${scheme}:`;
-		if (components.authority || scheme === "file") {
-			value += `//${components.authority ?? ""}`;
+		if (components.authority || scheme === 'file') {
+			value += `//${components.authority ?? ''}`;
 		}
 		value += encodePath(path);
 		if (components.query) {
@@ -279,7 +279,7 @@ export class URI {
 
 	/** Changes the encoded path without merging escaped separators with path boundaries. */
 	withEncodedPath(path: string): URI {
-		validatePercentEncoding(path, "path");
+		validatePercentEncoding(path, 'path');
 		const url = new URL(this.url.href);
 		url.pathname = path;
 		return new URI(url);
@@ -320,7 +320,7 @@ function uriToFsPath(uri: URI): string {
 	const path = uri.path;
 	if (uri.authority) {
 		const uncPath = `//${uri.authority}${path}`;
-		return isWindows ? uncPath.replaceAll("/", "\\") : uncPath;
+		return isWindows ? uncPath.replaceAll('/', '\\') : uncPath;
 	}
 
 	const hasDriveLetter = path.length >= 3
@@ -332,5 +332,5 @@ function uriToFsPath(uri: URI): string {
 		return isWindows ? path.replaceAll('/', '\\') : path;
 	}
 	const filePath = `${path[1].toLowerCase()}${path.slice(2)}`;
-	return isWindows ? filePath.replaceAll("/", "\\") : filePath;
+	return isWindows ? filePath.replaceAll('/', '\\') : filePath;
 }

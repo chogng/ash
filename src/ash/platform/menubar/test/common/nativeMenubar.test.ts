@@ -1,31 +1,31 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import {
 	validateNativeMenubarData,
-} from "../../../../platform/menubar/common/nativeMenubar.js";
+} from '../../../../platform/menubar/common/nativeMenubar.js';
 
-test("native menubar validation accepts a versioned nested snapshot", () => {
+test('native menubar validation accepts a versioned nested snapshot', () => {
 	const data = {
 		revision: 3,
 		menus: [{
-			label: "File",
+			label: 'File',
 			items: [
 				{
-					type: "action",
-					id: "action-1",
-					altId: "action-1-alt",
-					label: "New conversation",
+					type: 'action',
+					id: 'action-1',
+					altId: 'action-1-alt',
+					label: 'New conversation',
 					enabled: true,
 				},
-				{ type: "separator" },
+				{ type: 'separator' },
 				{
-					type: "submenu",
-					label: "Recent",
+					type: 'submenu',
+					label: 'Recent',
 					enabled: true,
 					items: [{
-						type: "action",
-						id: "action-2",
-						label: "Pinned",
+						type: 'action',
+						id: 'action-2',
+						label: 'Pinned',
 						enabled: false,
 						checked: true,
 					}],
@@ -44,11 +44,11 @@ test("native menubar validation accepts a versioned nested snapshot", () => {
 	});
 });
 
-test("native menubar validation rejects unsafe snapshots", () => {
+test('native menubar validation rejects unsafe snapshots', () => {
 	const action = {
-		type: "action",
-		id: "duplicate",
-		label: "Action",
+		type: 'action',
+		id: 'duplicate',
+		label: 'Action',
 		enabled: true,
 	};
 
@@ -56,7 +56,7 @@ test("native menubar validation rejects unsafe snapshots", () => {
 		() => validateNativeMenubarData({
 			revision: 1,
 			menus: [{
-				label: "File",
+				label: 'File',
 				items: [action, action],
 			}],
 		}),
@@ -73,7 +73,7 @@ test("native menubar validation rejects unsafe snapshots", () => {
 		() => validateNativeMenubarData({
 			revision: 1,
 			menus: [{
-				label: "File",
+				label: 'File',
 				items: [{ ...action, unexpected: true }],
 			}],
 		}),
@@ -83,7 +83,7 @@ test("native menubar validation rejects unsafe snapshots", () => {
 		() => validateNativeMenubarData({
 			revision: 1,
 			menus: [{
-				label: "File",
+				label: 'File',
 				items: [{ ...action, altId: action.id }],
 			}],
 		}),

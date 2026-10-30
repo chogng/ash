@@ -10,7 +10,7 @@ import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import type { IAction } from '../../../../base/common/actions.js';
-import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IChannelService, type Channel, type ChannelRole, type ChannelFailure } from '../../../../platform/collab/common/channelService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -39,7 +39,7 @@ export class CollabViewPane extends ViewPane {
 	private readonly selectionToolbar: WorkbenchToolBar;
 	private readonly watching = this._register(new MutableDisposable<IDisposable>());
 	private readonly quickPicks = this._register(new DisposableStore());
-	private readonly rowResources = this._register(new DisposableStore());
+	private readonly rowResources = this._register(new DisposableMap<string>());
 	private readonly channelService: IChannelService | undefined;
 	private get channels(): readonly Channel[] | undefined { return this.channelService?.space?.channels; }
 	private get role(): ChannelRole | undefined { const space = this.channelService?.space; return space?.members.find(member => member.id === space.memberId)?.role; }
@@ -85,7 +85,7 @@ export class CollabViewPane extends ViewPane {
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: channel => channel.name },
 			multipleSelectionSupport: false, expandOnlyOnTwistieClick: true, indent: 16,
 			getHeight: () => 32,
-			onWillRender: () => this.rowResources.clear(),
+			onDidRemoveRow: row => this.rowResources.deleteAndDispose(row.dataset.treeId!),
 			renderElement: channel => {
 				const row = h(document, 'span');
 				row.className = 'collaboration-channel';
@@ -98,7 +98,7 @@ export class CollabViewPane extends ViewPane {
 				label.className = 'collaboration-channel-name';
 				label.textContent = channel.name;
 				row.append(icon, label);
-				this.rowResources.add(this.hover.setupDelayedHover(row, { content: channel.name }));
+				this.rowResources.set(channel.id, this.hover.setupDelayedHover(row, { content: channel.name }));
 				return row;
 			},
 		}));

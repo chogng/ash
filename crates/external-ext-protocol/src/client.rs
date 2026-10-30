@@ -67,6 +67,52 @@ fn validate_operation(
 ) -> Result<(), ProtocolError> {
     validate_encoded_size(operation, limits.maximum_payload_bytes)?;
     match operation {
+        ExtensionClientOperation::CreateTerminal {
+            name,
+            cwd,
+            env,
+            append_env,
+            command,
+        } => {
+            if name.is_empty()
+                || name.len() > 256
+                || name.contains('\0')
+                || cwd
+                    .as_ref()
+                    .is_some_and(|value| value.len() > 8192 || value.contains('\0'))
+                || command
+                    .as_ref()
+                    .is_some_and(|value| value.len() > 32768 || value.contains('\0'))
+                || env.len() + append_env.as_ref().map_or(0, |values| values.len()) > 128
+                || append_env.iter().flatten().any(|(key, value)| {
+                    key.is_empty()
+                        || key.len() > 256
+                        || key.contains(['=', '\0'])
+                        || value.len() > 32768
+                        || value.contains('\0')
+                })
+                || env.iter().any(|(key, value)| {
+                    key.is_empty()
+                        || key.len() > 256
+                        || key.contains(['=', '\0'])
+                        || value
+                            .as_ref()
+                            .is_some_and(|value| value.len() > 32768 || value.contains('\0'))
+                })
+            {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid terminal creation request".into(),
+                ));
+            }
+        }
+        ExtensionClientOperation::ReadTerminal { terminal_id, .. }
+        | ExtensionClientOperation::DisposeTerminal { terminal_id } => {
+            if terminal_id.is_empty() || terminal_id.len() > 256 || terminal_id.contains('\0') {
+                return Err(ProtocolError::InvalidProtocol(
+                    "invalid terminal identity".into(),
+                ));
+            }
+        }
         ExtensionClientOperation::BackendRequest {
             capability,
             method,
@@ -385,6 +431,24 @@ pub struct ExtensionProgressOptions {
     deny_unknown_fields
 )]
 pub enum ExtensionClientOperation {
+    CreateTerminal {
+        name: String,
+        cwd: Option<String>,
+        env: std::collections::BTreeMap<String, Option<String>>,
+        /// Append after resolving the shell and explicit env, preserving inherited runtime flags.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(feature = "export", ts(optional))]
+        append_env: Option<std::collections::BTreeMap<String, String>>,
+        command: Option<String>,
+    },
+    ReadTerminal {
+        terminal_id: String,
+        #[cfg_attr(feature = "export", ts(type = "number"))]
+        after_sequence: u64,
+    },
+    DisposeTerminal {
+        terminal_id: String,
+    },
     /// The client authorizes every route against the product package's declared capability.
     BackendRequest {
         capability: String,

@@ -117,21 +117,15 @@
 
 .stanza-multi-diff-editor-title {
 	display: inline-flex;
+	flex: 1;
+	align-items: center;
 	min-width: 0;
+	gap: var(--ash-spacing-size80);
 	overflow: hidden;
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-family: var(--ash-font-family);
+	font-weight: var(--ash-fontWeight-regular);
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.stanza-multi-diff-editor-labels {
-	min-width: 0;
-	margin-left: auto;
-	padding-left: 16px;
-	overflow: hidden;
-	color: var(--ash-description-foreground);
-	font-size: 0.9em;
-	text-overflow: ellipsis;
 }
 
 .stanza-multi-diff-editor-file-actions {

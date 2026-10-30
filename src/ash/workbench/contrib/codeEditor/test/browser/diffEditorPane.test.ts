@@ -3,15 +3,15 @@ import { IWorkingCopyService } from '../../../../services/workingCopy/common/wor
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { URI } from "../../../../../base/common/uri.js";
+import { URI } from '../../../../../base/common/uri.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -29,8 +29,8 @@ import { type DiffEditorWidget } from '../../../../../editor/browser/widget/diff
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../../editor/common/diff/documentDiffProvider.js";
-import { DefaultLinesDiffComputer } from "../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js";
+import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../../editor/common/diff/documentDiffProvider.js';
+import { DefaultLinesDiffComputer } from '../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../../../editor/common/model.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
@@ -39,15 +39,15 @@ import { createTextModelFeatures } from '../../../../../editor/common/model/mode
 import { registerTextModelFeatures } from '../../../../../editor/common/model/textModelFeatures.js';
 
 import { EditorPaneSelectionChangeReason, type IResourceEditorInput } from '../../../../common/editor.js';
-import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
-import { type ITextFileService } from "../../../../services/textfile/common/textfiles.js";
+import { TextFileContentSource, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
+import { type ITextFileService } from '../../../../services/textfile/common/textfiles.js';
 
 import { StatusbarAlignment } from '../../../../services/statusbar/browser/statusbar.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
@@ -61,7 +61,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorStatusContribution } = await import('../../../../browser/parts/editor/editorStatus.js');
-const { TextDiffEditor: DiffEditorPane } = await import("../../../../browser/parts/editor/textDiffEditor.js");
+const { TextDiffEditor: DiffEditorPane } = await import('../../../../browser/parts/editor/textDiffEditor.js');
 await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 await import('../../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js');
 await import('../../../../contrib/accessibility/browser/accessibilityConfiguration.js');
@@ -74,9 +74,9 @@ function createDiffServices(resources: DisposableStore) {
 	return services;
 }
 
-const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
-const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
-const { createDiffEditorInput, isDiffEditorInput } = await import("../../../../common/editor/diffEditorInput.js");
+const { BrowserTextModelService } = await import('../../../../services/textmodelResolver/browser/browserTextModelService.js');
+const { BrowserTextResourceStore } = await import('../../browser/browserTextResourceStore.js');
+const { createDiffEditorInput, isDiffEditorInput } = await import('../../../../common/editor/diffEditorInput.js');
 const { DiffEditorCommandsService, IDiffEditorCommandsService } = await import('../../../../browser/parts/editor/diffEditorCommandsService.js');
 const { DIFF_FOCUS_SECONDARY_SIDE, DIFF_OPEN_SIDE, DIFF_SWAP_SIDES, GOTO_NEXT_CHANGE, SET_DIFF_VIEW_MODE_INLINE, SET_DIFF_VIEW_MODE_SIDE_BY_SIDE, SET_DIFF_VIEW_MODE_AUTOMATIC, TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, registerDiffEditorCommands } = await import('../../../../browser/parts/editor/diffEditorCommands.js');
 registerDiffEditorCommands();
@@ -236,14 +236,14 @@ test('Diff commands navigate and focus the active comparison through the Workben
 	dom.window.close();
 });
 
-test("Stanza diff pane rejects a missing Workbench diff computation service", () => {
+test('Stanza diff pane rejects a missing Workbench diff computation service', () => {
 	using services = new DisposableStore();
 	assert.throws(() => createDiffServices(services).createInstance(DiffEditorPane, new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires a Workbench diff computation service/);
 });
 
-test("Stanza diff pane acquires both models, lays out the review view, and releases both references", async () => {
+test('Stanza diff pane acquires both models, lays out the review view, and releases both references', async () => {
 	const dom = createTestDom();
-	const parent = requiredElement<HTMLElement>(dom.window.document, "main");
+	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const textFiles = new BootstrapTextFiles();
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
@@ -254,7 +254,7 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
 		lineHeight: 24,
-		fontFamily: "Test Mono",
+		fontFamily: 'Test Mono',
 		fontSize: 15,
 		fontLigatures: true,
 		showLineNumbers: false,
@@ -264,13 +264,13 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
 	await pane.setInput(createDiffEditorInput(
-		{ resource: URI.file("C:\\project\\before.ts"), initialText: "const oldValue = 1;", label: "before.ts" },
-		{ resource: URI.file("C:\\project\\after.ts"), initialText: "const newValue = 2;", label: "after.ts" },
+		{ resource: URI.file('C:\\project\\before.ts'), initialText: 'const oldValue = 1;', label: 'before.ts' },
+		{ resource: URI.file('C:\\project\\after.ts'), initialText: 'const newValue = 2;', label: 'after.ts' },
 	), new AbortController().signal);
 
-	assert.equal(parent.querySelectorAll(".stanza-diff-editor-pane").length, 1);
-	assert.equal(parent.querySelectorAll(".stanza-diff-editor").length, 1);
-	const editor = requiredElement<HTMLElement>(dom.window.document, ".stanza-diff-editor");
+	assert.equal(parent.querySelectorAll('.stanza-diff-editor-pane').length, 1);
+	assert.equal(parent.querySelectorAll('.stanza-diff-editor').length, 1);
+	const editor = requiredElement<HTMLElement>(dom.window.document, '.stanza-diff-editor');
 	const diffWidget = codeEditorService.listDiffEditors()[0] as DiffEditorWidget;
 	assert.equal(editor.querySelectorAll('.stanza-editor').length, 2);
 	assert.equal(diffWidget.originalEditor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
@@ -297,7 +297,7 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	assert.equal(pane.workingCopy?.isDirty, true);
 	await pane.save();
 	assert.equal(pane.workingCopy?.isDirty, false);
-	assert.match(parent.querySelector(".stanza-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
+	assert.match(parent.querySelector('.stanza-diff-editor')?.getAttribute('aria-label') ?? '', /before\.ts/);
 	assert.equal(codeEditorService.listDiffEditors().length, 1);
 	pane.focus();
 	assert.equal(editor.contains(dom.window.document.activeElement), true);
@@ -309,7 +309,7 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	});
 	pane.clearInput();
 	assert.equal(detachedBeforeModelDisposal, true);
-	assert.equal(parent.querySelectorAll(".stanza-diff-editor").length, 0);
+	assert.equal(parent.querySelectorAll('.stanza-diff-editor').length, 0);
 	assert.equal(codeEditorService.listDiffEditors().length, 0);
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
@@ -773,10 +773,10 @@ class BootstrapTextFiles implements ITextFileService {
 	async resolve(request: TextFileResolveRequest): Promise<ResolvedTextFileContent> {
 		return {
 			resource: request.resource,
-			text: request.bootstrapText ?? "",
+			text: request.bootstrapText ?? '',
 			source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
 			revision: undefined,
-			encoding: "utf8",
+			encoding: 'utf8',
 		};
 	}
 
@@ -825,7 +825,10 @@ test('Diff editor status follows the selected side and ignores the inactive side
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using services = new DisposableStore();
 	const container = createDiffServices(services);
-	using pane = container.createInstance(DiffEditorPane, resourceStore, { modelService: models, createComputationService: () => new PaneTestDiffComputationService() });
+	using pane = container.createInstance(DiffEditorPane, resourceStore, {
+		modelService: models,
+		createComputationService: () => new PaneTestDiffComputationService()
+	});
 	pane.create(parent);
 	pane.layout({ width: 600, height: 300 });
 	const input = createDiffEditorInput(

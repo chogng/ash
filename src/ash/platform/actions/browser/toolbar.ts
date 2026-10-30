@@ -1,13 +1,13 @@
 import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
-import type { ActionBarOrientation, ActionViewItemProvider } from "../../../base/browser/ui/actionbar/actionbar.js";
-import type { AnchorPosition } from "../../../base/browser/ui/contextview/contextview.js";
-import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from "../../../base/browser/ui/toolbar/toolbar.js";
-import { SubmenuAction, type IAction } from "../../../base/common/actions.js";
-import { Emitter } from "../../../base/common/event.js";
-import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import type { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
-import { createActionViewItem, getActionBarActions } from "./menuEntryActionViewItem.js";
-import { MenuId, type IMenu, type IMenuActionOptions, type IMenuChangeEvent, type IMenuService } from "../common/actions.js";
+import type { ActionBarOrientation, ActionViewItemProvider } from '../../../base/browser/ui/actionbar/actionbar.js';
+import type { AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
+import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from '../../../base/browser/ui/toolbar/toolbar.js';
+import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
+import { Emitter } from '../../../base/common/event.js';
+import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
+import type { IContextKeyService } from '../../contextkey/browser/contextKeyService.js';
+import { createActionViewItem, getActionBarActions } from './menuEntryActionViewItem.js';
+import { MenuId, type IMenu, type IMenuActionOptions, type IMenuChangeEvent, type IMenuService } from '../common/actions.js';
 
 export interface IWorkbenchToolBarOptions {
 	readonly ariaLabel?: string;
@@ -100,7 +100,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 	}
 
 	override setActions(_primaryActions: readonly IAction[], _secondaryActions: readonly IAction[] = []): never {
-		throw new Error("MenuWorkbenchToolBar actions are owned by its MenuId");
+		throw new Error('MenuWorkbenchToolBar actions are owned by its MenuId');
 	}
 
 	private update(event?: IMenuChangeEvent): void {
@@ -114,7 +114,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 		const actions = [...this.leadingActions, ...primary];
 		const empty = actions.length === 0 && secondary.length === 0 && this.menuTrailingActions.length === 0;
 		this.element.hidden = empty;
-		this.element.classList.toggle("empty", empty);
+		this.element.classList.toggle('empty', empty);
 		if (event?.isStructuralChange === false) {
 			super.updateActions(actions, secondary, this.menuTrailingActions);
 			return;

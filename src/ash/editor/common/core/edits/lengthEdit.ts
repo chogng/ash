@@ -1,5 +1,5 @@
-import { OffsetRange } from "../ranges/offsetRange.js";
-import { AnyEdit, BaseEdit, BaseReplacement } from "./edit.js";
+import { OffsetRange } from '../ranges/offsetRange.js';
+import { AnyEdit, BaseEdit, BaseReplacement } from './edit.js';
 
 /** An edit that records only how many values each range produces. */
 export class LengthEdit extends BaseEdit<LengthReplacement, LengthEdit> {
@@ -43,7 +43,7 @@ export class LengthReplacement extends BaseReplacement<LengthReplacement> {
 
 	constructor(range: OffsetRange, readonly newLength: number) {
 		super(range);
-		if (!Number.isSafeInteger(newLength) || newLength < 0) throw new RangeError("Replacement length must be non-negative");
+		if (!Number.isSafeInteger(newLength) || newLength < 0) throw new RangeError('Replacement length must be non-negative');
 	}
 
 	getNewLength(): number { return this.newLength; }

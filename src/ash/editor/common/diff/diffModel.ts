@@ -1,10 +1,10 @@
-import { CancellationTokenSource } from "../../../base/common/cancellation.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { toError } from "../../../base/common/errors.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type TextModel } from "../model/textModel.js";
-import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "./documentDiffProvider.js";
-import { toLineDiff, type LineDiff } from "./lineDiff.js";
+import { CancellationTokenSource } from '../../../base/common/cancellation.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { toError } from '../../../base/common/errors.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { type TextModel } from '../model/textModel.js';
+import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from './documentDiffProvider.js';
+import { toLineDiff, type LineDiff } from './lineDiff.js';
 
 export interface DiffModelOptions {
 	readonly original: TextModel;
@@ -14,13 +14,13 @@ export interface DiffModelOptions {
 }
 
 export interface DiffModelLoadingState {
-	readonly kind: "loading";
+	readonly kind: 'loading';
 	readonly originalVersion: number;
 	readonly modifiedVersion: number;
 }
 
 export interface DiffModelReadyState {
-	readonly kind: "ready";
+	readonly kind: 'ready';
 	readonly originalVersion: number;
 	readonly modifiedVersion: number;
 	readonly quitEarly: boolean;
@@ -28,7 +28,7 @@ export interface DiffModelReadyState {
 }
 
 export interface DiffModelErrorState {
-	readonly kind: "error";
+	readonly kind: 'error';
 	readonly originalVersion: number;
 	readonly modifiedVersion: number;
 	readonly error: Error;
@@ -58,7 +58,7 @@ export class DiffModel extends Disposable {
 		validateOptions(options);
 		this.diffOptions = options.diffOptions;
 		this._state = Object.freeze({
-			kind: "loading",
+			kind: 'loading',
 			originalVersion: options.original.version,
 			modifiedVersion: options.modified.version,
 		});
@@ -87,7 +87,7 @@ export class DiffModel extends Disposable {
 	}
 
 	get diff(): LineDiff | undefined {
-		return this._state.kind === "ready" ? this._state.diff : undefined;
+		return this._state.kind === 'ready' ? this._state.diff : undefined;
 	}
 
 	updateOptions(options: IDocumentDiffProviderOptions): void {
@@ -109,7 +109,7 @@ export class DiffModel extends Disposable {
 		this.activeRequest = source;
 		const generation = ++this.requestGeneration;
 		this.setState(Object.freeze({
-			kind: "loading",
+			kind: 'loading',
 			originalVersion,
 			modifiedVersion,
 		}));
@@ -129,7 +129,7 @@ export class DiffModel extends Disposable {
 			source.dispose();
 			this.activeRequest = undefined;
 			this.setState(Object.freeze({
-				kind: "ready",
+				kind: 'ready',
 				originalVersion,
 				modifiedVersion,
 				quitEarly: result.quitEarly,
@@ -140,7 +140,7 @@ export class DiffModel extends Disposable {
 			source.dispose();
 			this.activeRequest = undefined;
 			this.setState(Object.freeze({
-				kind: "error",
+				kind: 'error',
 				originalVersion,
 				modifiedVersion,
 				error: toError(error),
@@ -163,10 +163,10 @@ export class DiffModel extends Disposable {
 }
 
 function validateOptions(options: DiffModelOptions): void {
-	if (!options || typeof options !== "object" || !options.original || !options.modified) {
-		throw new TypeError("Diff model requires original and modified text models");
+	if (!options || typeof options !== 'object' || !options.original || !options.modified) {
+		throw new TypeError('Diff model requires original and modified text models');
 	}
-	if (!options.diffProvider || typeof options.diffProvider.computeDiff !== "function") {
-		throw new TypeError("Diff model requires a document diff provider");
+	if (!options.diffProvider || typeof options.diffProvider.computeDiff !== 'function') {
+		throw new TypeError('Diff model requires a document diff provider');
 	}
 }

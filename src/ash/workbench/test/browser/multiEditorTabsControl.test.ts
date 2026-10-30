@@ -7,24 +7,24 @@ import { Registry } from '../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { EditorShowIconsConfiguration, EditorLabelFormatConfiguration, EditorTabSizingConfiguration, EditorTabSizingFixedMinWidthConfiguration, EditorTabSizingFixedMaxWidthConfiguration } from '../../services/editor/common/editorConfiguration.js';
 import { createTestEditorServices } from '../common/testEditorServices.js';
-import assert from "node:assert/strict";
-import { suite, test } from "mocha";
-import { JSDOM } from "jsdom";
-import { DndCssClasses } from "../../../base/browser/ui/dnd/dnd.js";
-import { URI } from "../../../base/common/uri.js";
-import { Emitter } from "../../../base/common/event.js";
-import { Position } from "../../../editor/common/core/position.js";
-import { Range } from "../../../editor/common/core/range.js";
-import type { LanguageDocumentSymbol } from "../../../editor/common/languages.js";
-import { TextModel } from "../../../editor/common/model/textModel.js";
-import { LanguageFeaturesService } from "../../../editor/common/services/languageFeaturesService.js";
-import { InMemoryConfigurationService } from "../../../platform/configuration/common/inMemoryConfigurationService.js";
-import type { EditorTabsDelegate } from "../../browser/parts/editor/editorTabsControl.js";
-import { MultiEditorTabsControl } from "../../browser/parts/editor/multiEditorTabsControl.js";
-import { updateConnectedTabClipping } from "../../browser/parts/editor/connectedTabClipping.js";
-import { EditorTitleControl } from "../../browser/parts/editor/editorTitleControl.js";
-import { EditorTabsModeConfiguration } from "../../services/editor/common/editorConfiguration.js";
-import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, BreadcrumbsSymbolPathConfiguration } from "../../browser/parts/editor/breadcrumbs.js";
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { DndCssClasses } from '../../../base/browser/ui/dnd/dnd.js';
+import { URI } from '../../../base/common/uri.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Position } from '../../../editor/common/core/position.js';
+import { Range } from '../../../editor/common/core/range.js';
+import type { LanguageDocumentSymbol } from '../../../editor/common/languages.js';
+import { TextModel } from '../../../editor/common/model/textModel.js';
+import { LanguageFeaturesService } from '../../../editor/common/services/languageFeaturesService.js';
+import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
+import type { EditorTabsDelegate } from '../../browser/parts/editor/editorTabsControl.js';
+import { MultiEditorTabsControl } from '../../browser/parts/editor/multiEditorTabsControl.js';
+import { updateConnectedTabClipping } from '../../browser/parts/editor/connectedTabClipping.js';
+import { EditorTitleControl } from '../../browser/parts/editor/editorTitleControl.js';
+import { EditorTabsModeConfiguration } from '../../services/editor/common/editorConfiguration.js';
+import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, BreadcrumbsSymbolPathConfiguration } from '../../browser/parts/editor/breadcrumbs.js';
 
 import { WorkbenchConfiguration } from '../../common/configuration.js';
 import { EditorBreadcrumbsControl } from '../../browser/parts/editor/breadcrumbsControl.js';
@@ -34,7 +34,8 @@ import { EditorGroupModel } from '../../common/editor/editorGroupModel.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { FileKind } from '../../../platform/files/common/files.js';
-import type { FileElement } from '../../browser/parts/editor/breadcrumbsModel.js';
+import { SymbolElement, type FileElement } from '../../browser/parts/editor/breadcrumbsModel.js';
+import { createDiffEditorInput } from '../../common/editor/diffEditorInput.js';
 
 test('Editor breadcrumbs initialize their navigation label in Chinese', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -46,6 +47,9 @@ test('Editor breadcrumbs initialize their navigation label in Chinese', () => {
 		control.setInput(input('folder/file.ts'));
 
 		assert.equal(control.domNode.getAttribute('aria-label'), '编辑器面包屑');
+		using comparison = createDiffEditorInput(input('old.ts'), input('new.ts'));
+		control.setInput(comparison);
+		assert.equal(control.domNode.getAttribute('aria-label'), '差异编辑器面包屑');
 		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(EditorShowIconsConfiguration)?.setting;
 		assert.deepEqual([setting?.title, setting?.description], ['工作台 › 编辑器：显示图标', '在编辑器标签中显示文件图标。']);
 		const tabStyle = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)?.setting;
@@ -130,6 +134,50 @@ test('Editor breadcrumbs respect URI segment boundaries for remote, Windows and 
 	}
 });
 
+test('Editor breadcrumbs keep historical paths separate from comparison behavior and content identity', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using services = createTestEditorServices();
+		const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
+		workspace.updateWorkspace({ id: 'project', uri: URI.file('/project') });
+		const selections: FileElement[] = [];
+		using control = services.createInstance(EditorBreadcrumbsControl, dom.window.document.body,
+			(element: FileElement) => selections.push(element), undefined);
+		const historical = {
+			resource: URI.parse('git-commit:/a684989/src/a684989/method.ts?repository=repo&side=modified'),
+			preferredResource: URI.file('/project/src/a684989/method.ts'),
+			label: 'method.ts (a684989)', readOnly: true,
+		};
+		const range = new Range(1, 1, 2, 1);
+		const symbol = new SymbolElement({ name: 'run', kind: 'method', range, selectionRange: range });
+		control.setInput(historical);
+		control.setSymbols([symbol]);
+		const labels = (): (string | null)[] => [...control.domNode.querySelectorAll('.ash-breadcrumb-item')].map(button => button.textContent);
+		assert.deepEqual(labels(), ['src', 'a684989', 'method.ts', 'run']);
+		assert.equal(control.domNode.querySelector('[data-ash-icon-id="symbol-method"]') !== null, true);
+		control.domNode.querySelector<HTMLButtonElement>('.ash-breadcrumb-item')!.click();
+		assert.equal(selections.length, 0);
+		assert.equal(control.domNode.querySelector('.ash-breadcrumb-item')!.getAttribute('aria-disabled'), 'true');
+
+		using comparison = createDiffEditorInput({ ...historical, preferredResource: URI.file('/project/old/method.ts') }, historical);
+		control.setInput(comparison);
+		control.setSymbols([symbol]);
+		assert.deepEqual(labels(), ['src', 'a684989', 'method.ts']);
+		assert.equal(control.domNode.title, '/project/old/method.ts → /project/src/a684989/method.ts');
+		assert.equal(control.focus(), false);
+		assert.equal([...control.domNode.querySelectorAll<HTMLButtonElement>('.ash-breadcrumb-item')].every(button => button.disabled), true);
+		assert.equal(comparison.modified.resource, historical.resource);
+
+		control.setInput({ resource: historical.preferredResource });
+		assert.deepEqual(labels(), ['src', 'a684989', 'method.ts']);
+		assert.equal(control.focus(), true);
+		control.domNode.querySelector<HTMLButtonElement>('.ash-breadcrumb-item')!.click();
+		assert.equal(selections[0]?.uri.toString(), URI.file('/project/src').toString());
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('Pinned editor action preserves its target and keyboard focus across state updates', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -163,9 +211,9 @@ test('Pinned editor action preserves its target and keyboard focus across state 
 	}
 });
 
-test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion point", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const drops: Array<{ target: IResourceEditorInput | undefined; position: "before" | "after"; }> = [];
+test('MultiEditorTabsControl reports the tab edge used as a drag drop insertion point', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const drops: Array<{ target: IResourceEditorInput | undefined; position: 'before' | 'after'; }> = [];
 	const previews: IResourceEditorInput[] = [];
 	const keptEditors: IResourceEditorInput[] = [];
 	let dragging = false;
@@ -186,27 +234,27 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 			dragging = false;
 		},
 	} satisfies EditorTabsDelegate, new EditorGroupModel());
-	const first = input("first");
-	const second = input("second");
+	const first = input('first');
+	const second = input('second');
 	control.setEditors([descriptor(first), descriptor(second)], first);
-	const tabs = control.domNode.querySelectorAll<HTMLElement>(".ash-tab");
+	const tabs = control.domNode.querySelectorAll<HTMLElement>('.ash-tab');
 	const firstTab = tabs[0];
 	const secondTab = tabs[1];
 	assert.ok(firstTab);
 	assert.ok(secondTab);
 	assert.match(firstTab.querySelector('.ash-tab-label')?.getAttribute('aria-description') ?? '', /Pin to pin/u);
-	Object.defineProperty(secondTab, "getBoundingClientRect", {
+	Object.defineProperty(secondTab, 'getBoundingClientRect', {
 		value: () => ({ left: 100, width: 100 }),
 	});
 
-	firstTab.dispatchEvent(dragEvent(dom.window, "dragstart"));
-	secondTab.dispatchEvent(dragEvent(dom.window, "dragenter", 175, 100));
-	secondTab.dispatchEvent(dragEvent(dom.window, "dragover", 175, 1700));
+	firstTab.dispatchEvent(dragEvent(dom.window, 'dragstart'));
+	secondTab.dispatchEvent(dragEvent(dom.window, 'dragenter', 175, 100));
+	secondTab.dispatchEvent(dragEvent(dom.window, 'dragover', 175, 1700));
 	assert.deepEqual(previews, [second]);
 	assert.equal(secondTab.classList.contains(DndCssClasses.DropAfter), true);
-	secondTab.dispatchEvent(dragEvent(dom.window, "drop", 175));
+	secondTab.dispatchEvent(dragEvent(dom.window, 'drop', 175));
 
-	assert.deepEqual(drops, [{ target: second, position: "after" }]);
+	assert.deepEqual(drops, [{ target: second, position: 'after' }]);
 	assert.equal(firstTab.querySelectorAll('.ash-tab-close-action').length, 1);
 	assert.equal(firstTab.querySelector('[data-action-id="workbench.editor.toggleSticky"]'), null);
 	const firstLabel = firstTab.querySelector<HTMLButtonElement>('.ash-tab-label');
@@ -218,9 +266,9 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	dom.window.close();
 });
 
-test("MultiEditorTabsControl forwards external resource drops to the target tab", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const drops: Array<{ target: IResourceEditorInput | undefined; position: "before" | "after"; }> = [];
+test('MultiEditorTabsControl forwards external resource drops to the target tab', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const drops: Array<{ target: IResourceEditorInput | undefined; position: 'before' | 'after'; }> = [];
 	using services = createTestEditorServices();
 	const control = services.createInstance(MultiEditorTabsControl, dom.window.document.body, {
 		activate: () => undefined,
@@ -234,26 +282,26 @@ test("MultiEditorTabsControl forwards external resource drops to the target tab"
 		dropExternal: (_event, target, position) => drops.push({ target, position }),
 		endDrag: () => undefined,
 	} satisfies EditorTabsDelegate, new EditorGroupModel());
-	const target = input("target");
+	const target = input('target');
 	control.setEditors([descriptor(target)], target);
-	const tab = control.domNode.querySelector<HTMLElement>(".ash-tab");
+	const tab = control.domNode.querySelector<HTMLElement>('.ash-tab');
 	assert.ok(tab);
 	tab.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
 	const dataTransfer = externalDataTransfer();
 
-	tab.dispatchEvent(dragEvent(dom.window, "dragover", 125, undefined, dataTransfer));
-	assert.equal(dataTransfer.dropEffect, "copy");
-	tab.dispatchEvent(dragEvent(dom.window, "drop", 125, undefined, dataTransfer));
+	tab.dispatchEvent(dragEvent(dom.window, 'dragover', 125, undefined, dataTransfer));
+	assert.equal(dataTransfer.dropEffect, 'copy');
+	tab.dispatchEvent(dragEvent(dom.window, 'drop', 125, undefined, dataTransfer));
 
-	assert.deepEqual(drops, [{ target, position: "before" }]);
+	assert.deepEqual(drops, [{ target, position: 'before' }]);
 	control.dispose();
 	dom.window.close();
 });
 
-test("Connected tab clipping follows the visible tab strip", () => {
+test('Connected tab clipping follows the visible tab strip', () => {
 	const dom = new JSDOM("<!doctype html><body><div id='strip'><div id='tab'></div></div></body>");
-	const strip = dom.window.document.getElementById("strip")!;
-	const tab = dom.window.document.getElementById("tab")!;
+	const strip = dom.window.document.getElementById('strip')!;
+	const tab = dom.window.document.getElementById('tab')!;
 	const bounds = {
 		tab,
 		overflowEdge: strip,
@@ -265,31 +313,31 @@ test("Connected tab clipping follows the visible tab strip", () => {
 	};
 
 	updateConnectedTabClipping(bounds, 80);
-	assert.equal(tab.classList.contains("connected-tab-right-clipped"), true);
-	assert.equal(strip.classList.contains("connected-tab-right-clipped"), true);
+	assert.equal(tab.classList.contains('connected-tab-right-clipped'), true);
+	assert.equal(strip.classList.contains('connected-tab-right-clipped'), true);
 	updateConnectedTabClipping(bounds, 130);
-	assert.equal(tab.classList.contains("connected-tab-left-clipped"), true);
-	assert.equal(tab.classList.contains("connected-tab-right-clipped"), false);
+	assert.equal(tab.classList.contains('connected-tab-left-clipped'), true);
+	assert.equal(tab.classList.contains('connected-tab-right-clipped'), false);
 	updateConnectedTabClipping(bounds, 230);
-	assert.equal(tab.classList.contains("connected-tab-hidden"), true);
-	assert.equal(strip.classList.contains("connected-tab-left-clipped"), false);
+	assert.equal(tab.classList.contains('connected-tab-hidden'), true);
+	assert.equal(strip.classList.contains('connected-tab-left-clipped'), false);
 
 	dom.window.close();
 });
 
-test("EditorTitleControl switches tab modes and breadcrumbs from configuration", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('EditorTitleControl switches tab modes and breadcrumbs from configuration', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const configuration = new InMemoryConfigurationService();
 	const group = new EditorGroupModel();
 	using services = createTestEditorServices(configuration);
 	const control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
-	const first = input("folder/first");
-	const second = input("folder/second");
+	const first = input('folder/first');
+	const second = input('folder/second');
 	group.openEditor(first);
 	group.openEditor(second);
 	control.setEditors([descriptor(first), descriptor(second)], second);
 
-	assert.equal(control.domNode.querySelectorAll(".ash-tab").length, 2);
+	assert.equal(control.domNode.querySelectorAll('.ash-tab').length, 2);
 	const firstTab = control.domNode.querySelector('.ash-tab');
 	const ordinaryRow = control.domNode.querySelector('.ash-ordinary-editor-tabs-row')!;
 	const stickyRow = control.domNode.querySelector('.ash-sticky-editor-tabs-row')!;
@@ -313,7 +361,7 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), false);
 	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'connected');
 	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), true);
-	assert.match(control.domNode.querySelector(".ash-editor-breadcrumbs")?.textContent ?? "", /folder.*second/);
+	assert.match(control.domNode.querySelector('.ash-editor-breadcrumbs')?.textContent ?? '', /folder.*second/);
 	assert.equal(control.height, 57);
 	group.stick(first);
 	control.setEditors([{ ...descriptor(first), sticky: true }, descriptor(second)], second);
@@ -331,15 +379,15 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 	assert.equal((control.domNode.querySelector('.ash-sticky-editor-tabs-row') as HTMLElement).hidden, true);
 	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), true);
 
-	await configuration.updateValue(EditorTabsModeConfiguration, "single");
+	await configuration.updateValue(EditorTabsModeConfiguration, 'single');
 	assert.equal(control.height, 57);
-	assert.equal(control.domNode.querySelectorAll(".ash-tab").length, 1);
-	assert.equal(control.domNode.querySelector(".ash-tab-label")?.textContent, "folder/second");
+	assert.equal(control.domNode.querySelectorAll('.ash-tab').length, 1);
+	assert.equal(control.domNode.querySelector('.ash-tab-label')?.textContent, 'folder/second');
 
-	await configuration.updateValue(EditorTabsModeConfiguration, "none");
-	assert.equal(control.domNode.querySelectorAll(".ash-tab").length, 0);
+	await configuration.updateValue(EditorTabsModeConfiguration, 'none');
+	assert.equal(control.domNode.querySelectorAll('.ash-tab').length, 0);
 	await configuration.updateValue(BreadcrumbsEnabledConfiguration, false);
-	assert.equal((control.domNode.querySelector(".ash-editor-breadcrumbs") as HTMLElement).hidden, true);
+	assert.equal((control.domNode.querySelector('.ash-editor-breadcrumbs') as HTMLElement).hidden, true);
 	assert.equal(control.height, 35);
 
 	control.dispose();
@@ -376,16 +424,16 @@ test('editor tab width changes reach both rows and preserve focused actions', as
 	}
 });
 
-test("EditorTitleControl follows nested document symbols and opens outline selection", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('EditorTitleControl follows nested document symbols and opens outline selection', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using configuration = new InMemoryConfigurationService();
-	using model = new TextModel("function Alpha\n  member Beta", { languageId: "typescript" });
+	using model = new TextModel('function Alpha\n  member Beta', { languageId: 'typescript' });
 	using features = new LanguageFeaturesService();
 	const outerRange = new Range(1, 1, 2, 14);
 	const innerRange = new Range(2, 3, 2, 14);
-	const inner: LanguageDocumentSymbol = { name: "Beta", kind: "method", range: innerRange, selectionRange: innerRange };
-	const outer: LanguageDocumentSymbol = { name: "Alpha", kind: "function", range: outerRange, selectionRange: outerRange, children: [inner] };
-	using provider = features.documentSymbolProvider.register("*", { provideDocumentSymbols: () => [outer] });
+	const inner: LanguageDocumentSymbol = { name: 'Beta', kind: 'method', range: innerRange, selectionRange: innerRange };
+	const outer: LanguageDocumentSymbol = { name: 'Alpha', kind: 'function', range: outerRange, selectionRange: outerRange, children: [inner] };
+	using provider = features.documentSymbolProvider.register('*', { provideDocumentSymbols: () => [outer] });
 	const cursorChanges = new Emitter<void>();
 	let position = new Position(2, 5);
 	let chosen: LanguageDocumentSymbol | undefined;
@@ -398,25 +446,34 @@ test("EditorTitleControl follows nested document symbols and opens outline selec
 	using services = createTestEditorServices(configuration);
 	const control = services.createInstance(EditorTitleControl, dom.window.document.body, inertDelegate, group, undefined, configuration, undefined, undefined, undefined, features,
 		(_symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => { chosen = selected; reveal(selected.selectionRange); });
-	const resource = input("folder/symbols.ts");
+	const resource = input('folder/symbols.ts');
 	group.openEditor(resource);
 	control.setEditors([descriptor(resource)], resource, pane);
-	for (let attempt = 0; attempt < 50 && !control.domNode.textContent?.includes("Beta"); attempt++) {
+	for (let attempt = 0; attempt < 50 && !control.domNode.textContent?.includes('Beta'); attempt++) {
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
-	assert.match(control.domNode.querySelector(".ash-editor-breadcrumbs")?.textContent ?? "", /symbols\.ts.*Alpha.*Beta/u);
-	const buttons = control.domNode.querySelectorAll<HTMLButtonElement>(".ash-breadcrumb-item");
+	assert.match(control.domNode.querySelector('.ash-editor-breadcrumbs')?.textContent ?? '', /symbols\.ts.*Alpha.*Beta/u);
+	assert.equal(control.domNode.querySelectorAll('[data-ash-icon-id="symbol-method"]').length, 2);
+	const buttons = control.domNode.querySelectorAll<HTMLButtonElement>('.ash-breadcrumb-item');
 	buttons[buttons.length - 1]?.click();
-	assert.equal(chosen?.name, "Beta");
+	assert.equal(chosen?.name, 'Beta');
 	assert.deepEqual(revealed, innerRange);
 
 	position = new Position(1, 5);
 	cursorChanges.fire();
-	assert.doesNotMatch(control.domNode.querySelector(".ash-editor-breadcrumbs")?.textContent ?? "", /Beta/u);
-	await configuration.updateValue(BreadcrumbsFilePathConfiguration, "off");
-	assert.doesNotMatch(control.domNode.querySelector(".ash-editor-breadcrumbs")?.textContent ?? "", /symbols\.ts/u);
-	await configuration.updateValue(BreadcrumbsSymbolPathConfiguration, "off");
+	assert.doesNotMatch(control.domNode.querySelector('.ash-editor-breadcrumbs')?.textContent ?? '', /Beta/u);
+	await configuration.updateValue(BreadcrumbsFilePathConfiguration, 'off');
+	assert.doesNotMatch(control.domNode.querySelector('.ash-editor-breadcrumbs')?.textContent ?? '', /symbols\.ts/u);
+	await configuration.updateValue(BreadcrumbsSymbolPathConfiguration, 'off');
 	assert.equal(control.height, 35);
+	await configuration.updateValue(BreadcrumbsFilePathConfiguration, 'on');
+	await configuration.updateValue(BreadcrumbsSymbolPathConfiguration, 'on');
+	using comparison = createDiffEditorInput(input('folder/old.ts'), resource);
+	group.openEditor(comparison);
+	control.setEditors([descriptor(resource), descriptor(comparison)], comparison, pane);
+	await new Promise(resolve => setTimeout(resolve, 0));
+	cursorChanges.fire();
+	assert.doesNotMatch(control.domNode.querySelector('.ash-editor-breadcrumbs')?.textContent ?? '', /Alpha|Beta/u);
 	control.dispose();
 	cursorChanges.dispose();
 	dom.window.close();
@@ -555,17 +612,17 @@ function descriptor(input: IResourceEditorInput): { readonly instanceId: string;
 
 function dragEvent(targetWindow: { readonly Event: typeof Event; }, type: string, clientX = 0, timeStamp?: number, dataTransfer?: DataTransfer): DragEvent {
 	const event = new targetWindow.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
-	Object.defineProperty(event, "clientX", { value: clientX });
-	if (timeStamp !== undefined) Object.defineProperty(event, "timeStamp", { value: timeStamp });
-	if (dataTransfer) Object.defineProperty(event, "dataTransfer", { value: dataTransfer });
+	Object.defineProperty(event, 'clientX', { value: clientX });
+	if (timeStamp !== undefined) Object.defineProperty(event, 'timeStamp', { value: timeStamp });
+	if (dataTransfer) Object.defineProperty(event, 'dataTransfer', { value: dataTransfer });
 	return event;
 }
 
 function externalDataTransfer(): DataTransfer {
 	return {
-		types: ["text/uri-list"],
-		dropEffect: "none",
-		getData: () => "file:///C:/project/dropped.ts",
+		types: ['text/uri-list'],
+		dropEffect: 'none',
+		getData: () => 'file:///C:/project/dropped.ts',
 	} as unknown as DataTransfer;
 }
 
@@ -594,6 +651,8 @@ suite('Editor resource decorations', () => {
 		control.setEditors([descriptor(file)], file);
 		const tab = control.domNode.querySelector<HTMLButtonElement>('.ash-tab-label')!;
 		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Modified');
+		assert.equal(tab.title, '/file.ts • Modified');
+		assert.equal(tab.querySelector('[title]'), null);
 		tab.focus();
 		control.setEditors([{ ...descriptor(file), isDirty: true }], file);
 		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Modified, unsaved changes');
@@ -601,11 +660,13 @@ suite('Editor resource decorations', () => {
 		data = { letter: 'D', strikethrough: true, tooltip: 'Deleted' };
 		changes.fire([file.resource]);
 		assert.equal(tab.getAttribute('aria-label'), 'file.ts, Deleted, unsaved changes');
+		assert.equal(tab.title, '/file.ts • Deleted');
+		assert.equal(tab.querySelector('[title]'), null);
 		assert.equal(control.domNode.querySelector('.ash-tab-label'), tab);
 		assert.equal(dom.window.document.activeElement, tab);
 		provider.dispose();
 		assert.equal(tab.getAttribute('aria-label'), 'file.ts, unsaved changes');
+		assert.equal(tab.title, '/file.ts');
 		dom.window.close();
 	});
 });
-

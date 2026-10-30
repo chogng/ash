@@ -7,19 +7,19 @@ import { DisposableStore, toDisposable, type IDisposable } from '../../../../bas
 import { type IFileWriteOptions, type IWatchOptions, FileSystemProviderCapabilities } from '../../common/files.js';
 import { FileService } from '../../../../platform/files/common/fileService.js';
 import { FileOperationNotSupportedError, type IFileSystemProvider, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat, type IFileWriteResult } from '../../../../platform/files/common/files.js';
-import assert from "node:assert/strict";
-import { suite, test } from "mocha";
-import { Emitter, Event } from "../../../../base/common/event.js";
-import { URI } from "../../../../base/common/uri.js";
-import { AppServerRemoteError } from "../../../agentHost/common/appServerError.js";
-import { createDisconnectedFileApi } from "../../../../platform/files/browser/fileApi.js";
-import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from "../../../agentHost/common/agentHostFileSystemProvider.js";
-import { workspaceResourceFromPath } from "../../../workspace/common/workspace.js";
-import { FileKind, FileNotFoundError, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
-import type { FsChanged } from "../../../../../../.build/protocol/typescript/index.js";
-import { workspaceRelativePath, type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { TestWorkspaceService } from "../../../../workbench/services/configuration/test/common/testServices.js";
-import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { URI } from '../../../../base/common/uri.js';
+import { AppServerRemoteError } from '../../../agentHost/common/appServerError.js';
+import { createDisconnectedFileApi } from '../../../../platform/files/browser/fileApi.js';
+import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from '../../../agentHost/common/agentHostFileSystemProvider.js';
+import { workspaceResourceFromPath } from '../../../workspace/common/workspace.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError } from '../../../../platform/files/common/files.js';
+import type { FsChanged } from '../../../../../../.build/protocol/typescript/index.js';
+import { workspaceRelativePath, type IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../../workbench/services/configuration/test/common/testServices.js';
+import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { WorkspaceWatcher } from '../../../../workbench/contrib/files/browser/workspaceWatcher.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -27,12 +27,12 @@ import { consumeStream } from '../../../../base/common/stream.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 
-test("disconnected file API declines system file paste without requiring App Server", async () => {
-	const api = createDisconnectedFileApi(() => { throw new Error("App Server unavailable"); });
-	assert.equal(await api.pasteSystemFiles({ dirId: "root", path: ".", moveRequested: false }), false);
+test('disconnected file API declines system file paste without requiring App Server', async () => {
+	const api = createDisconnectedFileApi(() => { throw new Error('App Server unavailable'); });
+	assert.equal(await api.pasteSystemFiles({ dirId: 'root', path: '.', moveRequested: false }), false);
 });
 
-test("AgentHostFileSystemProvider passes the paste destination and move request to App Server", async () => {
+test('AgentHostFileSystemProvider passes the paste destination and move request to App Server', async () => {
 	using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 	const requests: unknown[] = [];
 	using service = new AgentHostFileSystemProvider({
@@ -80,44 +80,44 @@ test('workspace configuration access follows the current metadata file without a
 	await assert.rejects(provider.readFile(URI.file('/metadata/sibling.txt')), /no authorized directory/);
 });
 
-test("workspaceRelativePath confines resources to the folder", () => {
-	const root = URI.parse("file:///C:/project");
+test('workspaceRelativePath confines resources to the folder', () => {
+	const root = URI.parse('file:///C:/project');
 	const releasedResources: string[] = [];
-	assert.equal(workspaceRelativePath(root, URI.parse("file:///C:/project")), ".");
+	assert.equal(workspaceRelativePath(root, URI.parse('file:///C:/project')), '.');
 	assert.equal(
-		workspaceRelativePath(root, URI.parse("file:///C:/project/src/main.ts")),
-		"src/main.ts",
+		workspaceRelativePath(root, URI.parse('file:///C:/project/src/main.ts')),
+		'src/main.ts',
 	);
 	assert.throws(
-		() => workspaceRelativePath(root, URI.parse("file:///C:/project-other/file.ts")),
+		() => workspaceRelativePath(root, URI.parse('file:///C:/project-other/file.ts')),
 		/outside/,
 	);
 });
 
-test("workspaceRelativePath preserves case-sensitive Remote resource identity", () => {
-	const root = createSshRemoteWorkspaceUri("work-server", "/home/ash/Project");
-	assert.equal(workspaceRelativePath(root, root), ".");
+test('workspaceRelativePath preserves case-sensitive Remote resource identity', () => {
+	const root = createSshRemoteWorkspaceUri('work-server', '/home/ash/Project');
+	assert.equal(workspaceRelativePath(root, root), '.');
 	assert.equal(workspaceRelativePath(root, root.with({ path: '/home/ash/Project/src/main.ts' })), 'src/main.ts');
 	assert.throws(() => workspaceRelativePath(root, root.with({ path: '/home/ash/project/src/main.ts' })), /outside/);
-	assert.throws(() => workspaceRelativePath(root, createSshRemoteWorkspaceUri("other-server", "/home/ash/Project/src/main.ts")), /current workspace/);
+	assert.throws(() => workspaceRelativePath(root, createSshRemoteWorkspaceUri('other-server', '/home/ash/Project/src/main.ts')), /current workspace/);
 });
 
-test("workspace paths preserve backslashes as POSIX filename characters for Remote resources", () => {
-	const root = createSshRemoteWorkspaceUri("work-server", "/home/ash/Project");
+test('workspace paths preserve backslashes as POSIX filename characters for Remote resources', () => {
+	const root = createSshRemoteWorkspaceUri('work-server', '/home/ash/Project');
 	const resource = root.with({ path: '/home/ash/Project/src\\generated/main.ts' });
 
-	assert.equal(workspaceRelativePath(root, resource), "src\\generated/main.ts");
-	assert.equal(workspaceResourceFromPath(root, "src\\generated/main.ts")?.toString(), resource.toString());
-	assert.equal(workspaceResourceFromPath(URI.parse("file:///C:/project"), "src\\generated\\main.ts")?.toString(), "file:///C:/project/src/generated/main.ts");
+	assert.equal(workspaceRelativePath(root, resource), 'src\\generated/main.ts');
+	assert.equal(workspaceResourceFromPath(root, 'src\\generated/main.ts')?.toString(), resource.toString());
+	assert.equal(workspaceResourceFromPath(URI.parse('file:///C:/project'), 'src\\generated\\main.ts')?.toString(), 'file:///C:/project/src/generated/main.ts');
 });
 
-test("workspaceResourceFromPath rejects invalid protocol path segments", () => {
-	for (const root of [URI.parse("file:///C:/project"), createSshRemoteWorkspaceUri("work-server", "/home/ash/Project")]) {
-		for (const path of ["", "/main.ts", "src/", "src//main.ts", "./main.ts", "../main.ts", "src/../main.ts"]) {
+test('workspaceResourceFromPath rejects invalid protocol path segments', () => {
+	for (const root of [URI.parse('file:///C:/project'), createSshRemoteWorkspaceUri('work-server', '/home/ash/Project')]) {
+		for (const path of ['', '/main.ts', 'src/', 'src//main.ts', './main.ts', '../main.ts', 'src/../main.ts']) {
 			assert.equal(workspaceResourceFromPath(root, path), undefined, path);
 		}
 	}
-	assert.equal(workspaceResourceFromPath(URI.parse("file:///C:/project"), "src\\..\\main.ts"), undefined);
+	assert.equal(workspaceResourceFromPath(URI.parse('file:///C:/project'), 'src\\..\\main.ts'), undefined);
 });
 
 test('AppServer file operations and notifications preserve POSIX basenames on disk', async () => {
@@ -156,28 +156,28 @@ test('AppServer file operations and notifications preserve POSIX basenames on di
 	assert.deepEqual(notifications, [[target.path]]);
 });
 
-test("AgentHostFileSystemProvider maps wire entries back to resource URIs", async () => {
-	const root = URI.parse("file:///C:/project");
+test('AgentHostFileSystemProvider maps wire entries back to resource URIs', async () => {
+	const root = URI.parse('file:///C:/project');
 	const releasedResources: string[] = [];
 	using workspaceContextService: IWorkspaceContextService =
-		new TestWorkspaceService({ id: "workspace", uri: root });
+		new TestWorkspaceService({ id: 'workspace', uri: root });
 	const service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: {
 			...unavailableFileApi(),
 			getMetadata: async ({ path }) => {
-				assert.equal(path, ".");
+				assert.equal(path, '.');
 				return {
-					fileType: "directory",
+					fileType: 'directory',
 					sizeBytes: 0,
 					readonly: false,
 					modifiedAtMillis: null,
 				};
 			},
 			readDirectory: async ({ path }) => {
-				assert.equal(path, "src");
+				assert.equal(path, 'src');
 				return {
-					entries: [{ name: "main.ts", fileType: "file" }],
+					entries: [{ name: 'main.ts', fileType: 'file' }],
 				};
 			},
 			readFile: async () => { throw new Error('Provider reads must use the binary endpoint'); },
@@ -185,10 +185,10 @@ test("AgentHostFileSystemProvider maps wire entries back to resource URIs", asyn
 				if (path === 'src/main.ts') return {
 					resource: { resourceId: 'resource-text', mimeType: 'text/plain', size: 10, sha256: 'sha256:text' }, revision: 'revision-read',
 				};
-				assert.equal(path, "paper.pdf");
+				assert.equal(path, 'paper.pdf');
 				return {
-					resource: { resourceId: "resource-pdf", mimeType: "application/octet-stream", size: 9, sha256: "sha256:pdf" },
-					revision: "revision-binary",
+					resource: { resourceId: 'resource-pdf', mimeType: 'application/octet-stream', size: 9, sha256: 'sha256:pdf' },
+					revision: 'revision-binary',
 				};
 			},
 			writeFile: async () => { throw new Error('Provider writes must use the binary endpoint'); },
@@ -203,10 +203,15 @@ test("AgentHostFileSystemProvider maps wire entries back to resource URIs", asyn
 				assert.deepEqual(options, { mode: 'create' });
 				return { metadata: { fileType: 'file', sizeBytes: 3, readonly: false, modifiedAtMillis: null }, revision: 'revision-bytes' };
 			},
-			createFile: async ({ path }) => ({ fileType: "file", sizeBytes: path.length - path.length, readonly: false, modifiedAtMillis: null }),
+			createFile: async ({ path }) => ({ fileType: 'file', sizeBytes: path.length - path.length, readonly: false, modifiedAtMillis: null }),
 			createDirectory: async ({ path }) => {
 				assert.equal(path, 'new-folder');
-				return { fileType: 'directory', sizeBytes: 0, readonly: false, modifiedAtMillis: null };
+				return {
+					fileType: 'directory',
+					sizeBytes: 0,
+					readonly: false,
+					modifiedAtMillis: null
+				};
 			},
 			copy: async () => { throw new Error('not used'); },
 			pasteSystemFiles: async () => false,
@@ -215,13 +220,13 @@ test("AgentHostFileSystemProvider maps wire entries back to resource URIs", asyn
 		},
 		resourceApi: {
 			connectionGeneration: 0,
-			metadata: async () => { throw new Error("not used"); },
+			metadata: async () => { throw new Error('not used'); },
 			read: async ({ resourceId, offset, maxBytes }) => {
 				if (resourceId === 'resource-text') return { resourceId, offset, dataBase64: 'ZXhwb3J0IHt9Ow==', decodedLength: 10, eof: true };
-				assert.equal(resourceId, "resource-pdf");
+				assert.equal(resourceId, 'resource-pdf');
 				assert.equal(offset, 0);
 				assert.equal(maxBytes, 9);
-				return { resourceId, offset, dataBase64: "JVBERi0xLjcK", decodedLength: 9, eof: true };
+				return { resourceId, offset, dataBase64: 'JVBERi0xLjcK', decodedLength: 9, eof: true };
 			},
 			release: async ({ resourceId }) => { releasedResources.push(resourceId); },
 		},
@@ -229,34 +234,34 @@ test("AgentHostFileSystemProvider maps wire entries back to resource URIs", asyn
 
 	assert.equal((await service.stat(root)).kind, FileKind.Directory);
 	assert.deepEqual(
-		(await service.readDirectory(URI.parse("file:///C:/project/src"))).map(entry => ({ ...entry, resource: entry.resource.toString() })),
+		(await service.readDirectory(URI.parse('file:///C:/project/src'))).map(entry => ({ ...entry, resource: entry.resource.toString() })),
 		[{
-			resource: URI.parse("file:///C:/project/src/main.ts").toString(),
-			name: "main.ts",
+			resource: URI.parse('file:///C:/project/src/main.ts').toString(),
+			name: 'main.ts',
 			kind: FileKind.File,
 		}],
 	);
 	assert.deepEqual(
-		await service.readFile(URI.parse("file:///C:/project/src/main.ts")),
-		{ resource: URI.parse("file:///C:/project/src/main.ts"), bytes: new TextEncoder().encode('export {};'), revision: "revision-read" },
+		await service.readFile(URI.parse('file:///C:/project/src/main.ts')),
+		{ resource: URI.parse('file:///C:/project/src/main.ts'), bytes: new TextEncoder().encode('export {};'), revision: 'revision-read' },
 	);
 	assert.deepEqual(
-		await service.readFile(URI.parse("file:///C:/project/paper.pdf")),
-		{ resource: URI.parse("file:///C:/project/paper.pdf"), bytes: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10]), revision: "revision-binary" },
+		await service.readFile(URI.parse('file:///C:/project/paper.pdf')),
+		{ resource: URI.parse('file:///C:/project/paper.pdf'), bytes: new Uint8Array([37, 80, 68, 70, 45, 49, 46, 55, 10]), revision: 'revision-binary' },
 	);
-	assert.deepEqual(releasedResources, ['resource-text', "resource-pdf"]);
+	assert.deepEqual(releasedResources, ['resource-text', 'resource-pdf']);
 	assert.equal((await service.createDirectory(URI.parse('file:///C:/project/new-folder'))).kind, FileKind.Directory);
 	assert.deepEqual(
-		await service.writeFile(URI.parse("file:///C:/project/src/main.ts"), new TextEncoder().encode("export const saved = true;"), { create: true, overwrite: true, expectedRevision: "revision-read" }),
+		await service.writeFile(URI.parse('file:///C:/project/src/main.ts'), new TextEncoder().encode('export const saved = true;'), { create: true, overwrite: true, expectedRevision: 'revision-read' }),
 		{
 			stat: {
-				resource: URI.parse("file:///C:/project/src/main.ts"),
+				resource: URI.parse('file:///C:/project/src/main.ts'),
 				kind: FileKind.File,
 				sizeBytes: 26,
 				readonly: false,
 				modifiedAtMillis: 123,
 			},
-			revision: "revision-write",
+			revision: 'revision-write',
 		},
 	);
 	assert.deepEqual(await service.writeFile(URI.parse('file:///C:/project/payload.bin'), new Uint8Array([0, 255, 42]), { create: true, overwrite: false }), {
@@ -397,31 +402,31 @@ suite('AgentHost file resource connection ownership', () => {
 	}
 });
 
-test("AgentHostFileSystemProvider maps App Server revision conflicts to the file contract", async () => {
-	const resource = URI.parse("file:///C:/project/src/main.ts");
-	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: "workspace", uri: URI.parse("file:///C:/project") });
+test('AgentHostFileSystemProvider maps App Server revision conflicts to the file contract', async () => {
+	const resource = URI.parse('file:///C:/project/src/main.ts');
+	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: 'workspace', uri: URI.parse('file:///C:/project') });
 	const service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		resourceApi: unavailableResourceApi(),
 		api: {
 			...unavailableFileApi(),
-			getMetadata: async () => { throw new Error("unavailable"); },
-			readDirectory: async () => { throw new Error("unavailable"); },
-			readFile: async () => { throw new Error("unavailable"); },
-			readBinaryFile: async () => { throw new Error("unavailable"); },
+			getMetadata: async () => { throw new Error('unavailable'); },
+			readDirectory: async () => { throw new Error('unavailable'); },
+			readFile: async () => { throw new Error('unavailable'); },
+			readBinaryFile: async () => { throw new Error('unavailable'); },
 			writeFile: async () => { throw new Error('unavailable'); },
 			writeFileElevated: async () => { throw new Error('Unexpected elevated write'); },
-			writeBinaryFile: async () => { throw new AppServerRemoteError(-32000, "Revision conflict", { kind: "FileSystemRevisionConflict" }); },
-			createFile: async () => { throw new Error("unavailable"); },
+			writeBinaryFile: async () => { throw new AppServerRemoteError(-32000, 'Revision conflict', { kind: 'FileSystemRevisionConflict' }); },
+			createFile: async () => { throw new Error('unavailable'); },
 			createDirectory: async () => { throw new Error('unavailable'); },
 			copy: async () => { throw new Error('unavailable'); },
 			pasteSystemFiles: async () => false,
-			rename: async () => { throw new Error("unavailable"); },
-			delete: async () => { throw new Error("unavailable"); },
+			rename: async () => { throw new Error('unavailable'); },
+			delete: async () => { throw new Error('unavailable'); },
 		},
 	});
 
-	await assert.rejects(service.writeFile(resource, new TextEncoder().encode("local"), { create: true, overwrite: true, expectedRevision: "stale" }), FileRevisionConflictError);
+	await assert.rejects(service.writeFile(resource, new TextEncoder().encode('local'), { create: true, overwrite: true, expectedRevision: 'stale' }), FileRevisionConflictError);
 });
 
 test('AgentHostFileSystemProvider reports missing entries through the file contract for every read operation', async () => {
@@ -442,47 +447,47 @@ test('AgentHostFileSystemProvider reports missing entries through the file contr
 	for (const read of reads) { await assert.rejects(read, value => value === error); }
 });
 
-test("AgentHostFileSystemProvider reads connection-owned binary resources in bounded chunks", async () => {
-	const root = URI.parse("file:///C:/project");
-	const resource = URI.parse("file:///C:/project/large.pdf");
+test('AgentHostFileSystemProvider reads connection-owned binary resources in bounded chunks', async () => {
+	const root = URI.parse('file:///C:/project');
+	const resource = URI.parse('file:///C:/project/large.pdf');
 	const bytes = new Uint8Array(17 * 1024 * 1024 + 1);
 	bytes[0] = 37;
 	bytes[bytes.length - 1] = 70;
 	const readOffsets: number[] = [];
 	const releasedResources: string[] = [];
-	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: "workspace", uri: root });
+	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: 'workspace', uri: root });
 	const service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 		api: {
 			...unavailableFileApi(),
-			getMetadata: async () => { throw new Error("not used"); },
-			readDirectory: async () => { throw new Error("not used"); },
-			readFile: async () => { throw new Error("not used"); },
+			getMetadata: async () => { throw new Error('not used'); },
+			readDirectory: async () => { throw new Error('not used'); },
+			readFile: async () => { throw new Error('not used'); },
 			readBinaryFile: async () => ({
-				resource: { resourceId: "resource-large", mimeType: "application/octet-stream", size: bytes.length, sha256: "sha256:large" },
-				revision: "revision-large",
+				resource: { resourceId: 'resource-large', mimeType: 'application/octet-stream', size: bytes.length, sha256: 'sha256:large' },
+				revision: 'revision-large',
 			}),
-			writeFile: async () => { throw new Error("not used"); },
+			writeFile: async () => { throw new Error('not used'); },
 			writeFileElevated: async () => { throw new Error('Unexpected elevated write'); },
 			writeBinaryFile: async () => { throw new Error('not used'); },
-			createFile: async () => { throw new Error("not used"); },
+			createFile: async () => { throw new Error('not used'); },
 			createDirectory: async () => { throw new Error('not used'); },
 			copy: async () => { throw new Error('not used'); },
 			pasteSystemFiles: async () => false,
-			rename: async () => { throw new Error("not used"); },
-			delete: async () => { throw new Error("not used"); },
+			rename: async () => { throw new Error('not used'); },
+			delete: async () => { throw new Error('not used'); },
 		},
 		resourceApi: {
 			connectionGeneration: 0,
-			metadata: async () => { throw new Error("not used"); },
+			metadata: async () => { throw new Error('not used'); },
 			read: async ({ resourceId, offset, maxBytes }) => {
-				assert.equal(resourceId, "resource-large");
+				assert.equal(resourceId, 'resource-large');
 				readOffsets.push(offset);
 				const data = bytes.slice(offset, offset + maxBytes);
 				return {
 					resourceId,
 					offset,
-					dataBase64: Buffer.from(data).toString("base64"),
+					dataBase64: Buffer.from(data).toString('base64'),
 					decodedLength: data.length,
 					eof: offset + data.length === bytes.length,
 				};
@@ -493,12 +498,12 @@ test("AgentHostFileSystemProvider reads connection-owned binary resources in bou
 
 	assert.deepEqual((await service.readFile(resource)).bytes, bytes);
 	assert.deepEqual(readOffsets, Array.from({ length: Math.ceil(bytes.length / 262_144) }, (_, index) => index * 262_144));
-	assert.deepEqual(releasedResources, ["resource-large"]);
+	assert.deepEqual(releasedResources, ['resource-large']);
 });
 
-test("AgentHostFileSystemProvider maps App Server invalidations to workspace resources", () => {
-	const root = URI.parse("file:///C:/project");
-	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: "workspace", uri: root });
+test('AgentHostFileSystemProvider maps App Server invalidations to workspace resources', () => {
+	const root = URI.parse('file:///C:/project');
+	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({ id: 'workspace', uri: root });
 	using changes = new Emitter<FsChanged>();
 	using service = new AgentHostFileSystemProvider({
 		directories: () => workspaceContextService.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
@@ -509,20 +514,20 @@ test("AgentHostFileSystemProvider maps App Server invalidations to workspace res
 	const observed: (readonly URI[] | undefined)[] = [];
 	using listener = service.onDidChangeFiles(event => observed.push(event.resources));
 
-	changes.fire({ type: "pathsChanged", paths: ["src/main.ts", "src/main.ts", "README.md"] });
-	changes.fire({ type: "rescanRequired" });
+	changes.fire({ type: 'pathsChanged', paths: ['src/main.ts', 'src/main.ts', 'README.md'] });
+	changes.fire({ type: 'rescanRequired' });
 
-	assert.deepEqual(observed, [[URI.parse("file:///C:/project/src/main.ts"), URI.parse("file:///C:/project/README.md")], undefined]);
+	assert.deepEqual(observed, [[URI.parse('file:///C:/project/src/main.ts'), URI.parse('file:///C:/project/README.md')], undefined]);
 });
 
-test("AgentHostFileSystemProvider routes nested multi-root resources by Workspace folder id", async () => {
+test('AgentHostFileSystemProvider routes nested multi-root resources by Workspace folder id', async () => {
 	using workspaceContextService: IWorkspaceContextService = new TestWorkspaceService({
-		id: "multi-root",
+		id: 'multi-root',
 		folders: [
-			{ id: "parent", uri: URI.parse("file:///C:/project"), name: "parent", index: 0 },
-			{ id: "nested", uri: URI.parse("file:///C:/project/packages/nested"), name: "nested", index: 1 },
+			{ id: 'parent', uri: URI.parse('file:///C:/project'), name: 'parent', index: 0 },
+			{ id: 'nested', uri: URI.parse('file:///C:/project/packages/nested'), name: 'nested', index: 1 },
 		],
-		configuration: URI.parse("file:///C:/project.code-workspace"),
+		configuration: URI.parse('file:///C:/project.code-workspace'),
 	});
 	const requests: { readonly dirId?: string; readonly path: string; }[] = [];
 	const copies: unknown[] = [];
@@ -541,19 +546,19 @@ test("AgentHostFileSystemProvider routes nested multi-root resources by Workspac
 		},
 	});
 
-	await service.readFile(URI.parse("file:///C:/project/README.md"));
-	await service.readFile(URI.parse("file:///C:/project/packages/nested/src/main.ts"));
+	await service.readFile(URI.parse('file:///C:/project/README.md'));
+	await service.readFile(URI.parse('file:///C:/project/packages/nested/src/main.ts'));
 
 	assert.deepEqual(requests, [
-		{ dirId: "parent", path: "README.md" },
-		{ dirId: "nested", path: "src/main.ts" },
+		{ dirId: 'parent', path: 'README.md' },
+		{ dirId: 'nested', path: 'src/main.ts' },
 	]);
-	await service.copy(URI.parse("file:///C:/project/README.md"), URI.parse("file:///C:/project/packages/nested/README.md"));
+	await service.copy(URI.parse('file:///C:/project/README.md'), URI.parse('file:///C:/project/packages/nested/README.md'));
 	assert.deepEqual(copies, [{ sourceDirId: 'parent', source: 'README.md', targetDirId: 'nested', target: 'README.md' }]);
 	assert.equal(await service.pasteSystemFiles(URI.parse('file:///C:/project/packages/nested'), true), true);
 	assert.deepEqual(pastes, [{ dirId: 'nested', path: '.', moveRequested: true }]);
 	await assert.rejects(service.pasteSystemFiles(URI.parse('file:///C:/outside'), false), /no authorized directory/);
-	await assert.rejects(service.rename(URI.parse("file:///C:/project/README.md"), URI.parse("file:///C:/project/packages/nested/README.md"), "error"), /across authorized directories/i);
+	await assert.rejects(service.rename(URI.parse('file:///C:/project/README.md'), URI.parse('file:///C:/project/packages/nested/README.md'), 'error'), /across authorized directories/i);
 });
 
 function unavailableFileApi() {
@@ -562,28 +567,28 @@ function unavailableFileApi() {
 		onDidChangeConnection: Event.None,
 		resolvePath: async () => { throw new Error('Resource has no authorized directory'); },
 		readPathCaseSensitivity: async () => { throw new Error('unavailable'); },
-		getMetadata: async () => { throw new Error("unavailable"); },
-		readDirectory: async () => { throw new Error("unavailable"); },
-		readFile: async () => { throw new Error("unavailable"); },
-		readBinaryFile: async () => { throw new Error("unavailable"); },
-		writeFile: async () => { throw new Error("unavailable"); },
+		getMetadata: async () => { throw new Error('unavailable'); },
+		readDirectory: async () => { throw new Error('unavailable'); },
+		readFile: async () => { throw new Error('unavailable'); },
+		readBinaryFile: async () => { throw new Error('unavailable'); },
+		writeFile: async () => { throw new Error('unavailable'); },
 		writeFileElevated: async () => { throw new Error('Unexpected elevated write'); },
 		writeBinaryFile: async () => { throw new Error('unavailable'); },
-		createFile: async () => { throw new Error("unavailable"); },
+		createFile: async () => { throw new Error('unavailable'); },
 		createDirectory: async () => { throw new Error('unavailable'); },
 		copy: async () => { throw new Error('unavailable'); },
 		pasteSystemFiles: async () => false,
-		rename: async () => { throw new Error("unavailable"); },
-		delete: async () => { throw new Error("unavailable"); },
+		rename: async () => { throw new Error('unavailable'); },
+		delete: async () => { throw new Error('unavailable'); },
 	};
 }
 
 function unavailableResourceApi() {
 	return {
 		connectionGeneration: 0,
-		metadata: async () => { throw new Error("unavailable"); },
-		read: async () => { throw new Error("unavailable"); },
-		release: async () => { throw new Error("unavailable"); },
+		metadata: async () => { throw new Error('unavailable'); },
+		read: async () => { throw new Error('unavailable'); },
+		release: async () => { throw new Error('unavailable'); },
 	};
 }
 

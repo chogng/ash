@@ -13,6 +13,38 @@ use crate::GitPathspecSet;
 use crate::test_support::TestRepository;
 
 #[tokio::test]
+async fn head_metadata_matches_status_for_unborn_tracking_gone_and_detached_heads() {
+    let repository = TestRepository::init();
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    assert_eq!(
+        client.head(&opened).await.unwrap(),
+        *client.snapshot(&opened).await.unwrap().head()
+    );
+    repository.write("tracked.txt", "initial\n");
+    repository.commit_all("initial");
+    repository.git(&["branch", "upstream"]);
+    repository.git(&["branch", "--set-upstream-to=upstream", "main"]);
+    repository.write("tracked.txt", "committed\n");
+    repository.commit_all("ahead");
+    for operation in [
+        None,
+        Some(vec!["branch", "-D", "upstream"]),
+        Some(vec!["checkout", "--detach"]),
+    ] {
+        if let Some(arguments) = operation {
+            repository.git(&arguments);
+        }
+        repository.write("tracked.txt", "dirty\n");
+        repository.write("untracked.txt", "untracked\n");
+        assert_eq!(
+            client.head(&opened).await.unwrap(),
+            *client.snapshot(&opened).await.unwrap().head()
+        );
+    }
+}
+
+#[tokio::test]
 async fn scoped_snapshot_keeps_head_and_queries_literal_prefixes_only() {
     let repository = TestRepository::init();
     for path in [

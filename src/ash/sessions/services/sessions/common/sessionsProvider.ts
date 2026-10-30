@@ -1,7 +1,7 @@
-import type { Event } from "../../../../base/common/event.js";
-import type { IDisposable } from "../../../../base/common/lifecycle.js";
+import type { Event } from '../../../../base/common/event.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IObservable } from '../../../../base/common/observable.js';
-import type { IActiveSessionThread, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from "./session.js";
+import type { IActiveSessionThread, ISession, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from './session.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IAutomationStore } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 

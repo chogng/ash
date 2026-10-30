@@ -9,7 +9,7 @@ import { isPositiveSafeInteger } from '../../../base/common/numbers.js';
 export function createLanguageDiagnosticStore(model: TextModel): VersionedLanguageResultStore<LanguageDiagnosticResult> {
 	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageDiagnosticResult(
 		value,
-		range => assertDiagnosticModelRange(currentModel, range, "Language diagnostic"),
+		range => assertDiagnosticModelRange(currentModel, range, 'Language diagnostic'),
 	));
 }
 
@@ -21,17 +21,17 @@ function assertDiagnosticModelRange(model: TextModel, range: Range, owner: strin
 
 /** The outcome of offering one versioned result to a result store. */
 export enum LanguageResultAcceptance {
-	Applied = "applied",
-	StaleVersion = "staleVersion",
-	SupersededRequest = "supersededRequest",
-	DuplicateRequest = "duplicateRequest",
-	ModelUnavailable = "modelUnavailable",
+	Applied = 'applied',
+	StaleVersion = 'staleVersion',
+	SupersededRequest = 'supersededRequest',
+	DuplicateRequest = 'duplicateRequest',
+	ModelUnavailable = 'modelUnavailable',
 }
 
 export enum LanguageResultStoreChangeReason {
-	Result = "result",
-	ModelChanged = "modelChanged",
-	Cleared = "cleared",
+	Result = 'result',
+	ModelChanged = 'modelChanged',
+	Cleared = 'cleared',
 }
 
 export interface LanguageResultStoreUpdate<TResult> {
@@ -75,9 +75,9 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 		private readonly normalize: LanguageResultNormalizer<TResult>,
 	) {
 		super();
-		if (typeof normalize !== "function") {
+		if (typeof normalize !== 'function') {
 			this.dispose();
-			throw new TypeError("Language result normalizer must be a function");
+			throw new TypeError('Language result normalizer must be a function');
 		}
 		this._register(model.onDidChangeContent(() => this.acceptModelChange()));
 		this._register(toDisposable(() => {
@@ -103,7 +103,7 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 		this.assertNotDisposed();
 		assertResultEnvelope(result);
 		if (result.textModel !== this.model) {
-			throw new TypeError("Language result store and result must share one text model");
+			throw new TypeError('Language result store and result must share one text model');
 		}
 		const currentModelVersion = this.readModelVersion();
 		if (currentModelVersion === undefined) {
@@ -115,7 +115,7 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 		const requestAcceptance = this.classifyRequest(result);
 		if (requestAcceptance !== undefined) return requestAcceptance;
 		if (this.normalizing) {
-			throw new Error("Language result normalization must not be reentrant");
+			throw new Error('Language result normalization must not be reentrant');
 		}
 
 		let value: TResult;
@@ -198,11 +198,11 @@ export class VersionedLanguageResultStore<TResult> extends Disposable {
 }
 
 function assertResultEnvelope<TResult>(result: VersionedLanguageResult<TResult>): void {
-	if (typeof result !== "object" || result === null) {
-		throw new TypeError("Language result must be an object");
+	if (typeof result !== 'object' || result === null) {
+		throw new TypeError('Language result must be an object');
 	}
-	assertPositiveSafeInteger(result.requestId, "requestId");
-	assertPositiveSafeInteger(result.modelVersion, "modelVersion");
+	assertPositiveSafeInteger(result.requestId, 'requestId');
+	assertPositiveSafeInteger(result.modelVersion, 'modelVersion');
 }
 
 function assertPositiveSafeInteger(value: number, name: string): void {

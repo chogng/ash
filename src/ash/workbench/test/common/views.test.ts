@@ -7,20 +7,20 @@ import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CommandService } from '../../services/commands/common/commandService.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../base/common/lifecycle.js';
-import { ContextKeyExpr } from "../../../platform/contextkey/common/contextkey.js";
-import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
-import { SyncDescriptor } from "../../../platform/instantiation/common/descriptors.js";
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
 import {
 	IViewDescriptorService,
 	type IView,
 	type IViewDescriptor,
 	ViewContainerLocation,
 	WorkbenchViewRegistry,
-} from "../../../workbench/common/views.js";
+} from '../../../workbench/common/views.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 
 test('container commands open in the invoking window and expire with their declaration', async () => {
@@ -67,35 +67,62 @@ test('moving a container changes routing while retaining its model and independe
 	assert.equal(first.getViewContainerById(container.id), null);
 });
 
-test("view descriptor models project registry and context visibility", () => {
+test('host view presentations preserve model identity and leave other windows and registrations intact', () => {
+	using registry = new WorkbenchViewRegistry();
+	registry.registerStaticViewContainer({ id: 'test.preview', title: 'Preview', location: ViewContainerLocation.Panel });
+	using registration = registry.registerViews('test.preview', [testView('test.preview.terminal', 'Terminal')]);
+	const original = registry.getView('test.preview.terminal')!;
+	const replacement = new SyncDescriptor(TestView);
+	using contexts = new ContextKeyService();
+	using otherContexts = new ContextKeyService();
+	using preview = new TestViewDescriptorService({ registry, viewConstructors: new Map([[original.id, replacement]]) }, contexts);
+	using other = new TestViewDescriptorService({ registry }, otherContexts);
+	const projected = preview.getViewDescriptorById(original.id)!;
+	const model = preview.getViewContainerModel('test.preview');
+	assert.equal(projected.ctorDescriptor, replacement);
+	assert.equal(model.visibleViewDescriptors[0], projected);
+	assert.equal(other.getViewDescriptorById(original.id), original);
+	assert.equal(registry.getView(original.id), original);
+	// Registry changes must not remove/recreate a live preview pane or lose its visibility.
+	model.setVisible(original.id, false);
+	using added = registry.registerViews('test.preview', [testView('test.preview.other', 'Other')]);
+	assert.equal(preview.getViewDescriptorById(original.id), projected);
+	assert.equal(model.allViewDescriptors.find(view => view.id === original.id), projected);
+	assert.equal(model.isVisible(original.id), false);
+	registration.dispose();
+	assert.equal(preview.getViewDescriptorById(original.id), null);
+	assert.deepEqual(model.allViewDescriptors.map(view => view.id), ['test.preview.other']);
+});
+
+test('view descriptor models project registry and context visibility', () => {
 	using contextKeys = new ContextKeyService();
 	using registry = new WorkbenchViewRegistry();
 	using descriptors = new TestViewDescriptorService({
 		registry,
 	}, contextKeys);
 	using containerRegistration = registry.registerViewContainer({
-		id: "test.sidebar",
-		title: "Test",
+		id: 'test.sidebar',
+		title: 'Test',
 		location: ViewContainerLocation.Sidebar,
 		isDefault: true,
 	});
-	const model = descriptors.getViewContainerModel("test.sidebar");
+	const model = descriptors.getViewContainerModel('test.sidebar');
 	const changes: string[] = [];
 	using listener = model.onDidChangeVisibleViewDescriptors((event) => {
 		changes.push(
-			`+${event.added.map((view) => view.id).join(",")}` +
-			` -${event.removed.map((view) => view.id).join(",")}`,
+			`+${event.added.map((view) => view.id).join(',')}` +
+			` -${event.removed.map((view) => view.id).join(',')}`,
 		);
 	});
-	using viewRegistrations = registry.registerViews("test.sidebar", [
-		testView("test.always", "Always", {
+	using viewRegistrations = registry.registerViews('test.sidebar', [
+		testView('test.always', 'Always', {
 			order: 10,
 		}),
-		testView("test.conditional", "Conditional", {
+		testView('test.conditional', 'Conditional', {
 			order: 20,
-			when: ContextKeyExpr.has("test.featureEnabled"),
+			when: ContextKeyExpr.has('test.featureEnabled'),
 		}),
-		testView("test.hidden", "Hidden", {
+		testView('test.hidden', 'Hidden', {
 			order: 30,
 			hideByDefault: true,
 		}),
@@ -103,31 +130,31 @@ test("view descriptor models project registry and context visibility", () => {
 
 	assert.deepEqual(
 		model.visibleViewDescriptors.map((view) => view.id),
-		["test.always"],
+		['test.always'],
 	);
-	assert.equal(contextKeys.getValue("view.test.always.visible"), true);
+	assert.equal(contextKeys.getValue('view.test.always.visible'), true);
 	assert.equal(
-		contextKeys.getValue("view.test.conditional.visible"),
+		contextKeys.getValue('view.test.conditional.visible'),
 		false,
 	);
 
-	contextKeys.setContext("test.featureEnabled", true);
+	contextKeys.setContext('test.featureEnabled', true);
 	assert.deepEqual(
 		model.visibleViewDescriptors.map((view) => view.id),
-		["test.always", "test.conditional"],
+		['test.always', 'test.conditional'],
 	);
-	model.setVisible("test.hidden", true);
+	model.setVisible('test.hidden', true);
 	assert.deepEqual(
 		model.visibleViewDescriptors.map((view) => view.id),
-		["test.always", "test.conditional", "test.hidden"],
+		['test.always', 'test.conditional', 'test.hidden'],
 	);
-	model.setVisible("test.always", false);
-	assert.equal(contextKeys.getValue("view.test.always.visible"), false);
+	model.setVisible('test.always', false);
+	assert.equal(contextKeys.getValue('view.test.always.visible'), false);
 	assert.deepEqual(changes, [
-		"+test.always -",
-		"+test.conditional -",
-		"+test.hidden -",
-		"+ -test.always",
+		'+test.always -',
+		'+test.conditional -',
+		'+test.hidden -',
+		'+ -test.always',
 	]);
 });
 
@@ -241,18 +268,18 @@ test('view ownership follows external profile changes without affecting another 
 	assert.equal(secondContext.getValue('view.test.shared.view.visible'), true);
 });
 
-test("view descriptor service resolves default containers by location", () => {
+test('view descriptor service resolves default containers by location', () => {
 	using contextKeys = new ContextKeyService();
 	using registry = new WorkbenchViewRegistry();
 	using first = registry.registerViewContainer({
-		id: "test.first",
-		title: "First",
+		id: 'test.first',
+		title: 'First',
 		location: ViewContainerLocation.Sidebar,
 		order: 20,
 	});
 	using defaultContainer = registry.registerViewContainer({
-		id: "test.default",
-		title: "Default",
+		id: 'test.default',
+		title: 'Default',
 		location: ViewContainerLocation.Sidebar,
 		order: 30,
 		isDefault: true,
@@ -265,36 +292,36 @@ test("view descriptor service resolves default containers by location", () => {
 		descriptors.getDefaultViewContainer(
 			ViewContainerLocation.Sidebar,
 		)?.id,
-		"test.default",
+		'test.default',
 	);
 	assert.deepEqual(
 		descriptors.getViewContainers(ViewContainerLocation.Sidebar)
 			.map((container) => container.id),
-		["test.first", "test.default"],
+		['test.first', 'test.default'],
 	);
 });
 
-test("view descriptor service keeps a window-local container order", () => {
+test('view descriptor service keeps a window-local container order', () => {
 	using contextKeys = new ContextKeyService();
 	using registry = new WorkbenchViewRegistry();
-	using first = registry.registerViewContainer({ id: "test.first", title: "First", location: ViewContainerLocation.Panel, order: 10 });
-	using second = registry.registerViewContainer({ id: "test.second", title: "Second", location: ViewContainerLocation.Panel, order: 20 });
-	using third = registry.registerViewContainer({ id: "test.third", title: "Third", location: ViewContainerLocation.Panel, order: 30 });
+	using first = registry.registerViewContainer({ id: 'test.first', title: 'First', location: ViewContainerLocation.Panel, order: 10 });
+	using second = registry.registerViewContainer({ id: 'test.second', title: 'Second', location: ViewContainerLocation.Panel, order: 20 });
+	using third = registry.registerViewContainer({ id: 'test.third', title: 'Third', location: ViewContainerLocation.Panel, order: 30 });
 	using descriptors = new TestViewDescriptorService({ registry }, contextKeys);
 	const changes: ViewContainerLocation[] = [];
 	using listener = descriptors.onDidChangeViewContainerOrder((location) => changes.push(location));
 
-	descriptors.moveViewContainer(ViewContainerLocation.Panel, "test.third", "test.first", "before");
-	assert.deepEqual(descriptors.getViewContainers(ViewContainerLocation.Panel).map((container) => container.id), ["test.third", "test.first", "test.second"]);
+	descriptors.moveViewContainer(ViewContainerLocation.Panel, 'test.third', 'test.first', 'before');
+	assert.deepEqual(descriptors.getViewContainers(ViewContainerLocation.Panel).map((container) => container.id), ['test.third', 'test.first', 'test.second']);
 	assert.deepEqual(changes, [ViewContainerLocation.Panel]);
 
-	descriptors.moveViewContainer(ViewContainerLocation.Panel, "test.third", undefined, "after");
-	assert.deepEqual(descriptors.getViewContainers(ViewContainerLocation.Panel).map((container) => container.id), ["test.first", "test.second", "test.third"]);
+	descriptors.moveViewContainer(ViewContainerLocation.Panel, 'test.third', undefined, 'after');
+	assert.deepEqual(descriptors.getViewContainers(ViewContainerLocation.Panel).map((container) => container.id), ['test.first', 'test.second', 'test.third']);
 });
 
 type TestViewDescriptorOptions = Omit<
 	IViewDescriptor,
-	"id" | "title" | "ctorDescriptor"
+	'id' | 'title' | 'ctorDescriptor'
 >;
 
 function testView(

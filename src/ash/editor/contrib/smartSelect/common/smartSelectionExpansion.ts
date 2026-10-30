@@ -1,7 +1,7 @@
-import { Selection } from "../../../common/core/selection.js";
-import { Position } from "../../../common/core/position.js";
-import { Range } from "../../../common/core/range.js";
-import { type TextModel } from "../../../common/model/textModel.js";
+import { Selection } from '../../../common/core/selection.js';
+import { Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
+import { type TextModel } from '../../../common/model/textModel.js';
 
 /** Expands one selection through word, parser, enclosing-pair, line, and document scopes. */
 export function expandSmartSelection(model: TextModel, selection: Selection, syntaxRanges: readonly Range[] = []): Selection {
@@ -42,7 +42,7 @@ function smallestStrictlyContainingRange(model: TextModel, current: Range, range
 }
 
 function findEnclosingPair(model: TextModel, range: Range): Range | undefined {
-	const pairs: readonly [string, string][] = [["(", ")"], ["[", "]"], ["{", "}"], ["\"", "\""], ["'", "'"]];
+	const pairs: readonly [string, string][] = [['(', ')'], ['[', ']'], ['{', '}'], ['"', '"'], ["'", "'"]];
 	const startOffset = model.offsetAt(range.getStartPosition());
 	const endOffset = model.offsetAt(range.getEndPosition());
 	const text = model.getText();

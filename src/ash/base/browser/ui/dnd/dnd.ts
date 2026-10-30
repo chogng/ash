@@ -1,17 +1,17 @@
-import "./dnd.css";
+import './dnd.css';
 
 export const DndCssClasses = {
-	Draggable: "ash-dnd-draggable",
-	Dragging: "ash-dnd-dragging",
-	DropTarget: "ash-dnd-drop-target",
-	DropBefore: "ash-dnd-drop-before",
-	DropAfter: "ash-dnd-drop-after",
+	Draggable: 'ash-dnd-draggable',
+	Dragging: 'ash-dnd-dragging',
+	DropTarget: 'ash-dnd-drop-target',
+	DropBefore: 'ash-dnd-drop-before',
+	DropAfter: 'ash-dnd-drop-after',
 } as const;
 
 export const DragAndDropDataKind = Object.freeze({
-	Internal: "internal",
-	External: "external",
-	Native: "native",
+	Internal: 'internal',
+	External: 'external',
+	Native: 'native',
 } as const);
 
 export type DragAndDropDataKind = typeof DragAndDropDataKind[keyof typeof DragAndDropDataKind];

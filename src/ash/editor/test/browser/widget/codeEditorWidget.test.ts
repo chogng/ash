@@ -5,36 +5,36 @@ import '../testEditorDom.js';
 import { h, text } from '../../../../base/browser/dom.js';
 import { IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { Event as EditorEvent } from '../../../../base/common/event.js';
-import { toDisposable } from "../../../../base/common/lifecycle.js";
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IGlyphMarginWidget } from '../../../browser/editorBrowser.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
-import { TextModel } from "../../../common/model/textModel.js";
+import { TextModel } from '../../../common/model/textModel.js';
 import { SyntaxProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { GlyphMarginLane } from '../../../common/model.js';
 import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { EditorType, ScrollType, type IEditor } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
-import { IContextKeyService, ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { errorHandler, setUnexpectedErrorHandler } from '../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { TestLanguageFeaturesService } from '../../common/testLanguageFeaturesService.js';
 
-const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
+const { CodeEditorWidget } = await import('../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { TextAreaEditContextRegistry } = await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
 const { ViewPart } = await import('../../../browser/view/viewPart.js');
 const { observableCodeEditor } = await import('../../../browser/observableCodeEditor.js');
-const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
+const { InstantiationService } = await import('../../../../platform/instantiation/common/instantiationService.js');
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
-const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
+const { PlaceholderTextContribution } = await import('../../../contrib/placeholderText/browser/placeholderTextContribution.js');
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
 const { EditorWorker } = await import('../../../common/services/editorWebWorker.js');
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
@@ -200,12 +200,12 @@ test('editor reads long-line wrapping from each attached model and honors access
 	assert.deepEqual(states, [true, false, false, true, false, false, true]);
 });
 
-test("CodeEditorWidget owns one canonical browser editing surface", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('CodeEditorWidget owns one canonical browser editing surface', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
-	const editor = createTestCodeEditor({ container, model, lineHeight: 20, ariaLabel: "Code" });
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	const editor = createTestCodeEditor({ container, model, lineHeight: 20, ariaLabel: 'Code' });
 	const ownerId = editor.getId();
 
 	editor.layout({ width: 320, height: 80 });
@@ -213,8 +213,8 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	editor.applyFontInfo(fontTarget);
 
 	assert.equal(editor.getDomNode().parentElement, container);
-	assert.equal(editor.getDomNode().getAttribute("aria-label"), "Code");
-	assert.equal(editor.controller.element.getAttribute("aria-label"), "Code");
+	assert.equal(editor.getDomNode().getAttribute('aria-label'), 'Code');
+	assert.equal(editor.controller.element.getAttribute('aria-label'), 'Code');
 	const margin = requiredElement<HTMLElement>(editor.getDomNode(), '.margin');
 	assert.equal(margin.getAttribute('role'), 'presentation');
 	assert.equal(margin.hasAttribute('aria-hidden'), false);
@@ -230,7 +230,7 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	editor.dispose();
 	assert.equal(TextAreaEditContextRegistry.get(ownerId), undefined);
 	assert.equal(editor.getDomNode().isConnected, false);
-	assert.equal(model.getText(), "alpha");
+	assert.equal(model.getText(), 'alpha');
 	assert.equal(editor.getModel(), null);
 	assert.equal(editor.getSelections(), null);
 	dom.window.close();
@@ -285,7 +285,11 @@ test('force retokenize action refreshes the active model through its syntax prov
 	assert.equal(model.tokenization.getLanguageTokens(0)[0]?.tokenType, 'string');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	try {
 		const action = editor.getAction('editor.action.forceRetokenize');
 		assert.ok(action);
@@ -371,7 +375,11 @@ test('move selected text actions update text, selection and undo through the edi
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('012345');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	try {
 		const left = editor.getAction('editor.action.moveCarretLeftAction');
 		const right = editor.getAction('editor.action.moveCarretRightAction');
@@ -430,7 +438,11 @@ test('insert final new line action appends the model EOL and keeps the selection
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	try {
 		const action = editor.getAction('editor.action.insertFinalNewLine');
 		assert.ok(action);
@@ -691,7 +703,11 @@ test('embedded editor content height shrinks below the viewport when lines are h
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\ntwo\nthree\nfour\nfive');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		lineHeight: 20
+	});
 	editor.layout({ width: 240, height: 300 });
 	const heights: number[] = [];
 	using listener = editor.onDidContentSizeChange(event => {
@@ -713,7 +729,11 @@ test('common editor reveal modes scroll without changing selection or borrowing 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	using model = new TextModel(Array.from({ length: 60 }, () => 'line').join('\n'));
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		lineHeight: 20
+	});
 	const control: IEditor = editor;
 	control.layout({ width: 300, height: 100 });
 	control.setPosition(new Position(2, 2));
@@ -1004,31 +1024,31 @@ test('CodeEditorWidget selects the full replacement and keeps an empty caret col
 	dom.window.close();
 });
 
-test("CodeEditorWidget owns padding, placeholder, and current-line presentation for embedded editors", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('CodeEditorWidget owns padding, placeholder, and current-line presentation for embedded editors', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
+	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel();
 	using editor = createTestCodeEditor({
 		container,
 		model,
 		lineHeight: 20,
-		placeholder: "Ask Ash",
-		presentation: "embedded",
+		placeholder: 'Ask Ash',
+		presentation: 'embedded',
 		padding: { top: 20, bottom: 20 },
 	});
 
 	editor.layout({ width: 320, height: 40 });
 	editor.view.render(true, false);
 
-	assert.equal(editor.getDomNode().querySelector(".view-line.active"), null);
-	assert.ok(editor.getDomNode().querySelector(".stanza-editor-caret"));
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".view-lines").style.top, "0px");
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".view-lines").style.transform, "");
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".view-line").style.top, "20px");
-	assert.equal(editor.getDomNode().style.getPropertyValue("--stanza-editor-padding-left"), "12px");
-	assert.equal(editor.getDomNode().style.getPropertyValue("--stanza-editor-padding-right"), "12px");
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".stanza-editor-placeholder-text").style.top, "20px");
+	assert.equal(editor.getDomNode().querySelector('.view-line.active'), null);
+	assert.ok(editor.getDomNode().querySelector('.stanza-editor-caret'));
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.view-lines').style.top, '0px');
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.view-lines').style.transform, '');
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.view-line').style.top, '20px');
+	assert.equal(editor.getDomNode().style.getPropertyValue('--stanza-editor-padding-left'), '12px');
+	assert.equal(editor.getDomNode().style.getPropertyValue('--stanza-editor-padding-right'), '12px');
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.stanza-editor-placeholder-text').style.top, '20px');
 	assert.equal(editor.view.viewportLayout.contentSize.height, 60);
 	dom.window.close();
 });
@@ -1093,22 +1113,22 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	dom.window.close();
 });
 
-test("PlaceholderTextContribution follows model emptiness and editor layout", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('PlaceholderTextContribution follows model emptiness and editor layout', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
+	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel();
 	using editor = createTestCodeEditor({
 		container,
 		model,
 		lineHeight: 20,
-		placeholder: "Ask Ash",
+		placeholder: 'Ask Ash',
 		padding: { top: 8, bottom: 8 },
 	});
 
 	editor.layout({ width: 320, height: 80 });
 	editor.view.render(true, false);
-	const placeholder = requiredElement<HTMLElement>(editor.getDomNode(), ".stanza-editor-placeholder-text");
+	const placeholder = requiredElement<HTMLElement>(editor.getDomNode(), '.stanza-editor-placeholder-text');
 	const layout = editor.getLayoutInfo();
 	assert.strictEqual(PlaceholderTextContribution.get(editor), editor.getContribution(PlaceholderTextContribution.ID));
 	assert.deepEqual({
@@ -1118,19 +1138,19 @@ test("PlaceholderTextContribution follows model emptiness and editor layout", ()
 		width: placeholder.style.width,
 		lineHeight: placeholder.style.lineHeight,
 	}, {
-		display: "block",
+		display: 'block',
 		left: `${layout.contentLeft}px`,
-		top: "8px",
+		top: '8px',
 		width: `${layout.contentWidth - layout.verticalScrollbarWidth}px`,
-		lineHeight: "20px",
+		lineHeight: '20px',
 	});
 
-	model.reset("alpha");
+	model.reset('alpha');
 	editor.view.render(true, false);
-	assert.equal(dom.window.getComputedStyle(placeholder).display, "none");
-	model.reset("");
+	assert.equal(dom.window.getComputedStyle(placeholder).display, 'none');
+	model.reset('');
 	editor.view.render(true, false);
-	assert.equal(dom.window.getComputedStyle(placeholder).display, "block");
+	assert.equal(dom.window.getComputedStyle(placeholder).display, 'block');
 	dom.window.close();
 });
 
@@ -1164,7 +1184,11 @@ test('trigger dispatches actions and commands in the receiving editor with its c
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
 	using otherModel = new TextModel('beta');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	using other = createTestCodeEditor({ container: requiredElement(dom.window.document, 'aside'), model: otherModel, contributions: [] });
 	const context = editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
 	context.setContext('test.trigger.enabled', false);
@@ -1199,7 +1223,11 @@ test('trigger reports synchronous command errors and rejected action promises', 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: []
+	});
 	const previous = errorHandler.getUnexpectedErrorHandler();
 	const errors: unknown[] = [];
 	setUnexpectedErrorHandler(error => errors.push(error));

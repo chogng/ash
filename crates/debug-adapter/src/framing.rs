@@ -7,7 +7,8 @@ use crate::service::DebugAdapterError;
 
 pub const MAX_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
 
-pub(crate) async fn read_message(
+/// Reads one bounded, validated DAP frame without taking ownership of its requests.
+pub async fn read_message(
     reader: &mut (impl AsyncBufRead + Unpin),
 ) -> Result<Option<Value>, DebugAdapterError> {
     let mut content_length = None;
@@ -60,7 +61,8 @@ pub(crate) async fn read_message(
     Ok(Some(value))
 }
 
-pub(crate) fn encode_message(value: &Value) -> Result<Vec<u8>, DebugAdapterError> {
+/// Encodes one validated DAP message for an adapter transport bridge.
+pub fn encode_message(value: &Value) -> Result<Vec<u8>, DebugAdapterError> {
     validate_message(value)?;
     let payload = serde_json::to_vec(value)?;
     if payload.is_empty() || payload.len() > MAX_MESSAGE_BYTES {

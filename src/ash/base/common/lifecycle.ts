@@ -84,7 +84,7 @@ export function registerDisposableTracker(
 	tracker: IDisposableTracker,
 ): globalThis.Disposable {
 	if (disposableTracker) {
-		throw new Error("A disposable tracker is already installed");
+		throw new Error('A disposable tracker is already installed');
 	}
 	disposableTracker = tracker;
 	let disposed = false;
@@ -92,7 +92,7 @@ export function registerDisposableTracker(
 		[Symbol.dispose](): void {
 			if (disposed) return;
 			if (disposableTracker !== tracker) {
-				throw new Error("The installed disposable tracker changed unexpectedly");
+				throw new Error('The installed disposable tracker changed unexpectedly');
 			}
 			disposed = true;
 			disposableTracker = undefined;
@@ -193,7 +193,7 @@ export class DisposableTracker implements IDisposableTracker {
 		owner: TrackableDisposable,
 	): void {
 		if (disposable === owner) {
-			throw new Error("A disposable cannot own itself");
+			throw new Error('A disposable cannot own itself');
 		}
 		if (this.disposed.has(disposable)) {
 			throw new ReferenceError(
@@ -212,7 +212,7 @@ export class DisposableTracker implements IDisposableTracker {
 			ancestor = this.records.get(ancestor)?.owner
 		) {
 			if (ancestor === disposable) {
-				throw new Error("Disposable ownership cannot contain a cycle");
+				throw new Error('Disposable ownership cannot contain a cycle');
 			}
 		}
 	}
@@ -290,11 +290,11 @@ export class DisposableTracker implements IDisposableTracker {
 		const details = leaks.map((leak) => {
 			const ownership = leak.ownerLabel
 				? ` owned by ${leak.ownerLabel}`
-				: " without an owner";
-			return `${leak.label}${ownership}${leak.createdAt ? `\n${leak.createdAt}` : ""}`;
+				: ' without an owner';
+			return `${leak.label}${ownership}${leak.createdAt ? `\n${leak.createdAt}` : ''}`;
 		});
 		throw new Error(
-			`Detected ${leaks.length} undisposed disposable(s):\n${details.join("\n")}`,
+			`Detected ${leaks.length} undisposed disposable(s):\n${details.join('\n')}`,
 		);
 	}
 
@@ -314,16 +314,16 @@ export function installDisposableTracker(
 
 function disposableLabel(disposable: TrackableDisposable): string {
 	const constructor = (disposable as object).constructor;
-	return typeof constructor === "function" && constructor.name
+	return typeof constructor === 'function' && constructor.name
 		? constructor.name
-		: "Disposable";
+		: 'Disposable';
 }
 
 function captureCreationStack(): string | undefined {
 	return new Error().stack
-		?.split("\n")
+		?.split('\n')
 		.slice(3)
-		.join("\n");
+		.join('\n');
 }
 
 /**
@@ -380,7 +380,7 @@ export function toDisposable(fn: () => void): IDisposable {
 		dispose,
 		[Symbol.dispose]: dispose,
 	};
-	trackDisposable(resource, "toDisposable");
+	trackDisposable(resource, 'toDisposable');
 	return resource;
 }
 
@@ -410,7 +410,7 @@ export class DisposableStore extends AbstractDisposable {
 	public add<T extends IDisposable | null | undefined>(resource: T): T {
 		if (!resource) return resource;
 		if ((resource as unknown) === this) {
-			throw new Error("Cannot register a disposable store on itself");
+			throw new Error('Cannot register a disposable store on itself');
 		}
 		this.assertNotDisposed();
 		validateDisposableOwner(resource, this);
@@ -463,7 +463,7 @@ export abstract class Disposable extends AbstractDisposable {
 
 	protected _register<T extends IDisposable | null | undefined>(resource: T): T {
 		if (resource && (resource as unknown) === this) {
-			throw new Error("Cannot register a disposable on itself");
+			throw new Error('Cannot register a disposable on itself');
 		}
 		return this._store.add(resource);
 	}
@@ -495,10 +495,10 @@ export class AsyncDisposableStore implements IAsyncDisposable {
 	>(resource: T): T {
 		if (!resource) return resource;
 		if ((resource as unknown) === this) {
-			throw new Error("Cannot register an async disposable store on itself");
+			throw new Error('Cannot register an async disposable store on itself');
 		}
 		if (this.isDisposed) {
-			throw new ReferenceError("AsyncDisposableStore is already disposed");
+			throw new ReferenceError('AsyncDisposableStore is already disposed');
 		}
 		validateDisposableOwner(resource, this);
 		const owned = this.stack.use(resource);

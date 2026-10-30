@@ -86,6 +86,12 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 		assert.match(view.getAccessibleContent(), /first\.ts, Unsaved changes/);
 		const firstRow = [...view.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => row.textContent?.includes('first.ts'));
 		assert.ok(firstRow);
+		const closeButton = firstRow.querySelector<HTMLButtonElement>('.ash-open-editors-close')!;
+		const secondGroupRow = [...view.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => row.textContent === 'Group 2')!;
+		secondGroupRow.click();
+		view.element.querySelector('.ash-tree')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+		assert.equal(firstRow.querySelector('.ash-open-editors-close'), closeButton);
+		view.element.querySelector('.ash-tree')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
 		firstRow.click();
 		assert.equal(activated, 'first');
 		firstRow.querySelector<HTMLButtonElement>('.ash-open-editors-close')?.click();

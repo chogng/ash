@@ -231,10 +231,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('innerWidth'))).toBe(390);
 				await pick(labels.emulation, labels.off);
 				await expect.poll(() => view.evaluate(view => view.webContents.executeJavaScript('innerWidth'))).toBeGreaterThan(390);
-				await select(labels.devTools);
+				const developerTools = editor.getByRole('button', { name: labels.devTools, exact: true });
+				await expect(developerTools).toHaveAttribute('aria-pressed', 'false');
+				await developerTools.click();
 				await expect.poll(() => view.evaluate(view => view.webContents.isDevToolsOpened())).toBe(true);
-				await select(labels.devTools);
+				await expect(developerTools).toHaveAttribute('aria-pressed', 'true');
+				await developerTools.click();
 				await expect.poll(() => view.evaluate(view => view.webContents.isDevToolsOpened())).toBe(false);
+				await expect(developerTools).toHaveAttribute('aria-pressed', 'false');
 				await select(labels.favorite);
 				await address.fill(`${url}other`); await address.press('Enter');
 				await expect(editor.getByRole('status')).toHaveText('Other page');
@@ -598,7 +602,7 @@ test('desktop browser agent observes loaded pages, edits fields and follows navi
 		await hostCall('perform', { action: { type: 'hover', targetId: created.targetId, target: { nodeId: nodeId('button', 'Hover target') } } });
 		await hostCall('perform', { action: { type: 'drag', targetId: created.targetId, source: { nodeId: nodeId('button', 'Drag source') }, destination: { nodeId: nodeId('button', 'Drag destination') } } });
 		const scripted = decodeAppServerServerRequestResult('browser/perform', await hostCall('perform', {
-			action: { type: 'runPlaywright', targetId: created.targetId, code: "return { hovered: await page.evaluate(() => !!window.hovered), dragged: await page.evaluate(() => !!window.dragged), node: typeof process };" },
+			action: { type: 'runPlaywright', targetId: created.targetId, code: 'return { hovered: await page.evaluate(() => !!window.hovered), dragged: await page.evaluate(() => !!window.dragged), node: typeof process };' },
 		}));
 		expect(JSON.parse(scripted.output!)).toEqual({ hovered: true, dragged: true, node: 'undefined' });
 		await expect(hostCall('perform', { action: { type: 'runPlaywright', targetId: created.targetId, code: 'while (true) {}' } })).rejects.toThrow(/[Cc]ancelled|TimedOut/);
@@ -1196,5 +1200,8 @@ test('desktop browser opens visible pages, navigates history, resizes and releas
 		await hostCall('close', { targetId: slow.targetId });
 		await expect(page.getByRole('tab', { name: 'Browser', exact: true })).toHaveCount(0);
 		await expect.poll(async () => (await views()).filter(view => view.url.startsWith(url)).length).toBe(0);
-	} finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
 });

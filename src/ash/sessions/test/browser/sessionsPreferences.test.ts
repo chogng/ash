@@ -30,6 +30,8 @@ import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js'
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../platform/github/common/githubService.js';
 import { IAccountPolicyService } from '../../../workbench/services/policies/common/accountPolicyService.js';
+import { IManagedSettingsUpdateService } from '../../../workbench/services/policies/common/managedSettingsUpdate.js';
+import { ManagedSettingsUpdateService } from '../../../workbench/services/policies/browser/managedSettingsUpdateService.js';
 import { IGitHubConnectionService } from '../../../workbench/services/accounts/common/gitHubConnectionService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../workbench/contrib/github/browser/githubReviewModel.js';
 import '../../contrib/projects/browser/projects.contribution.js';
@@ -198,7 +200,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IContextViewService, windowContextView);
 	services.registerSingleton(ContextMenus, () => services.createInstance(BrowserContextMenuService));
 	services.registerInstance(AccessibleView, accessibleView);
-	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { } });
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error('No Skill body in this test fixture'); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { } });
 	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None, listInstalled: async () => [], listEditorExtensions: async () => ({ extensions: [] }) } as unknown as IExtensionManagementService);
 	// Search renders Customize as well as Models; its required services belong to this dialog fixture.
 	const unsupportedExtensionAction = async (): Promise<never> => { throw new Error('Extension mutation is outside this Preferences test'); };
@@ -231,7 +233,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
 		showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
 	});
-	services.registerInstance(IChatSessionNavigationService, { revision: 0, getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error("Unexpected voice start"); }, appendToActiveDraft: () => { } });
+	services.registerInstance(IChatSessionNavigationService, { revision: 0, getActiveConversation: () => undefined, getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { }, startVoiceConversation: async () => { throw new Error('Unexpected voice start'); }, appendToActiveDraft: () => { } });
 	const editorOpens: { resource: string; target: unknown; }[] = [];
 	services.registerInstance(IEditorService, {
 		openEditor: async (input, _options, target) => {
@@ -262,6 +264,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
+	services.registerSingleton(IManagedSettingsUpdateService, () => services.createInstance(ManagedSettingsUpdateService));
 	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 	using githubReview = services.createInstance(GitHubReviewModel);
 	services.registerInstance(IGitHubReviewModel, githubReview);
@@ -422,6 +425,15 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.deepEqual(removedKeys, ['openai']);
 	const modelSearch = window.document.querySelector<HTMLInputElement>('.ash-sessions-settings-search input[type="search"]');
 	assert.ok(modelSearch);
+	await preferences.open({ section: 'models', query: '', sectionQuery: '@provider:openai @capability:vision', focusSearch: true });
+	const scopedSearch = window.document.querySelector<HTMLInputElement>('.ash-chat-models-catalog [role="combobox"]')!;
+	assert.equal(scopedSearch.value, '@provider:openai @capability:vision');
+	assert.equal(modelSearch.value, '');
+	assert.equal(window.document.activeElement, scopedSearch);
+	await preferences.open({ section: 'models', query: '', sectionQuery: '', focusSearch: false });
+	assert.equal(window.document.activeElement, scopedSearch);
+	await assert.rejects(preferences.open({ section: 'general', sectionQuery: 'unsupported' }), /does not provide its own search/);
+
 	await import('../../../workbench/contrib/preferences/browser/preferencesActions.js');
 	await commands.executeCommand('workbench.action.openSettings', 'chat.disableAIFeatures');
 	assert.equal(window.document.querySelector('.ash-sessions-settings-search input[type="search"]'), modelSearch);

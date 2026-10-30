@@ -1,9 +1,9 @@
-import type { ILogSink, LogEntry } from "./log.js";
-import { LogLevel } from "./log.js";
+import type { ILogSink, LogEntry } from './log.js';
+import { LogLevel } from './log.js';
 
 /** Development and host-console projection of structured log entries. */
 export class ConsoleLogSink implements ILogSink {
-	constructor(private readonly target: Pick<Console, "debug" | "error" | "info" | "warn"> = console) { }
+	constructor(private readonly target: Pick<Console, 'debug' | 'error' | 'info' | 'warn'> = console) { }
 
 	log(entry: LogEntry): void {
 		const message = `[${entry.category}] ${entry.message}`;

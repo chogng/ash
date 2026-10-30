@@ -1,4 +1,4 @@
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { Event } from '../../../base/common/event.js';
 
 import { syntaxLanguageDefinitions } from './syntaxLanguages.generated.js';
@@ -33,7 +33,7 @@ export interface SyntaxRange {
 	readonly end: SyntaxPosition;
 }
 
-export type SyntaxTokenKind = "attribute" | "comment" | "constant" | "constructor" | "embedded" | "function" | "keyword" | "label" | "module" | "number" | "operator" | "property" | "punctuation" | "string" | "type" | "variable";
+export type SyntaxTokenKind = 'attribute' | 'comment' | 'constant' | 'constructor' | 'embedded' | 'function' | 'keyword' | 'label' | 'module' | 'number' | 'operator' | 'property' | 'punctuation' | 'string' | 'type' | 'variable';
 
 export interface SyntaxToken {
 	readonly range: SyntaxRange;
@@ -48,7 +48,7 @@ export interface SyntaxSelectionRange {
 	readonly range: SyntaxRange;
 }
 
-export type SyntaxSymbolKind = "constant" | "enum" | "field" | "function" | "macro" | "method" | "module" | "static" | "struct" | "trait" | "type" | "variable";
+export type SyntaxSymbolKind = 'constant' | 'enum' | 'field' | 'function' | 'macro' | 'method' | 'module' | 'static' | 'struct' | 'trait' | 'type' | 'variable';
 
 export interface SyntaxSymbol {
 	readonly name: string;
@@ -59,7 +59,7 @@ export interface SyntaxSymbol {
 
 export interface SyntaxDiagnostic {
 	readonly range: SyntaxRange;
-	readonly kind: "error" | "missing";
+	readonly kind: 'error' | 'missing';
 }
 
 export interface SyntaxOpenParams {
@@ -164,4 +164,4 @@ export interface ISyntaxApi {
 	close(params: SyntaxCloseParams): Promise<void>;
 }
 
-export const ISyntaxApi = createServiceIdentifier<ISyntaxApi>("syntaxApi");
+export const ISyntaxApi = createServiceIdentifier<ISyntaxApi>('syntaxApi');

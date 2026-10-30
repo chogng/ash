@@ -1,12 +1,12 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
 import { LanguageRequestCoordinator, LanguageRequestStatus, type LanguageWorker, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
 import { LanguageResultAcceptance, LanguageResultStoreChangeReason, VersionedLanguageResultStore, createLanguageDiagnosticStore } from '../../common/model/languageResultStore.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../common/languages.js';
 import { createLanguageTokenStore, type LanguageTokenResult } from '../../common/tokens/languageTokens.js';
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (lineIndex: number, startColumn: number, endColumn: number): Range => Range.fromPositions(
@@ -14,22 +14,22 @@ const range = (lineIndex: number, startColumn: number, endColumn: number): Range
 	position(lineIndex, endColumn),
 );
 
-test("Language token stores freeze current-version results and invalidate on edit", () => {
-	using model = new TextModel("const value = 1;\n");
+test('Language token stores freeze current-version results and invalidate on edit', () => {
+	using model = new TextModel('const value = 1;\n');
 	using store = createLanguageTokenStore(model);
 	const events: unknown[] = [];
 	using listener = store.onDidChange(event => events.push(event));
-	const modifiers = ["declaration"];
+	const modifiers = ['declaration'];
 	const result: LanguageTokenResult = {
 		tokens: [
 			{
 				range: range(0, 0, 5),
-				tokenType: "keyword",
+				tokenType: 'keyword',
 				modifiers: [],
 			},
 			{
 				range: range(0, 6, 11),
-				tokenType: "variable",
+				tokenType: 'variable',
 				modifiers,
 			},
 		],
@@ -41,14 +41,14 @@ test("Language token stores freeze current-version results and invalidate on edi
 		modelVersion: 1,
 		value: result,
 	}), LanguageResultAcceptance.Applied);
-	modifiers.push("readonly");
+	modifiers.push('readonly');
 	const stored = store.result!;
 	assert.equal(Object.isFrozen(stored), true);
 	assert.equal(Object.isFrozen(stored.value), true);
 	assert.equal(Object.isFrozen(stored.value.tokens), true);
 	assert.equal(Object.isFrozen(stored.value.tokens[0]), true);
 	assert.equal(Object.isFrozen(stored.value.tokens[1]!.modifiers), true);
-	assert.deepEqual(stored.value.tokens[1]!.modifiers, ["declaration"]);
+	assert.deepEqual(stored.value.tokens[1]!.modifiers, ['declaration']);
 	assert.deepEqual(events, [{
 		reason: LanguageResultStoreChangeReason.Result,
 		modelVersion: 1,
@@ -57,7 +57,7 @@ test("Language token stores freeze current-version results and invalidate on edi
 
 	model.applyEdits([{
 		range: Range.fromPositions(position(0, 0)),
-		text: "// ",
+		text: '// ',
 	}]);
 	assert.equal(store.result, undefined);
 	assert.deepEqual(events[1], {
@@ -74,10 +74,10 @@ test("Language token stores freeze current-version results and invalidate on edi
 	assert.equal(events.length, 2);
 });
 
-test("Language result stores reject duplicate and superseded request IDs", () => {
-	using model = new TextModel("x");
+test('Language result stores reject duplicate and superseded request IDs', () => {
+	using model = new TextModel('x');
 	using store = createLanguageTokenStore(model);
-	const value = tokenResult(0, 1, "variable");
+	const value = tokenResult(0, 1, 'variable');
 
 	assert.equal(store.accept({
 		requestId: 5,
@@ -95,19 +95,19 @@ test("Language result stores reject duplicate and superseded request IDs", () =>
 		requestId: 5,
 		textModel: model,
 		modelVersion: 1,
-		value: tokenResult(0, 1, "keyword"),
+		value: tokenResult(0, 1, 'keyword'),
 	}), LanguageResultAcceptance.DuplicateRequest);
 	assert.equal(store.result!.requestId, 5);
-	assert.equal(store.result!.value.tokens[0]!.tokenType, "variable");
+	assert.equal(store.result!.value.tokens[0]!.tokenType, 'variable');
 
 	assert.equal(store.accept({
 		requestId: 6,
 		textModel: model,
 		modelVersion: 1,
-		value: tokenResult(0, 1, "keyword"),
+		value: tokenResult(0, 1, 'keyword'),
 	}), LanguageResultAcceptance.Applied);
 	assert.equal(store.result!.requestId, 6);
-	using otherModel = new TextModel("x");
+	using otherModel = new TextModel('x');
 	assert.throws(() => store.accept({
 		requestId: 7,
 		textModel: otherModel,
@@ -129,8 +129,8 @@ test("Language result stores reject duplicate and superseded request IDs", () =>
 	assert.equal(store.result!.requestId, 6);
 });
 
-test("Language result clear is explicit and suppresses empty no-ops", () => {
-	using model = new TextModel("x");
+test('Language result clear is explicit and suppresses empty no-ops', () => {
+	using model = new TextModel('x');
 	using store = createLanguageTokenStore(model);
 	const events: unknown[] = [];
 	using listener = store.onDidChange(event => events.push(event));
@@ -138,7 +138,7 @@ test("Language result clear is explicit and suppresses empty no-ops", () => {
 		requestId: 5,
 		textModel: model,
 		modelVersion: 1,
-		value: tokenResult(0, 1, "variable"),
+		value: tokenResult(0, 1, 'variable'),
 	});
 
 	store.clear();
@@ -149,13 +149,13 @@ test("Language result clear is explicit and suppresses empty no-ops", () => {
 		requestId: 5,
 		textModel: model,
 		modelVersion: 1,
-		value: tokenResult(0, 1, "keyword"),
+		value: tokenResult(0, 1, 'keyword'),
 	}), LanguageResultAcceptance.DuplicateRequest);
 	assert.equal(store.accept({
 		requestId: 4,
 		textModel: model,
 		modelVersion: 1,
-		value: tokenResult(0, 1, "keyword"),
+		value: tokenResult(0, 1, 'keyword'),
 	}), LanguageResultAcceptance.SupersededRequest);
 	assert.deepEqual(events.map(event => (
 		event as { readonly reason: LanguageResultStoreChangeReason; }
@@ -170,23 +170,23 @@ test("Language result clear is explicit and suppresses empty no-ops", () => {
 	});
 });
 
-test("Language diagnostics validate atomically while allowing points and overlap", () => {
-	using model = new TextModel("abc\ndef");
+test('Language diagnostics validate atomically while allowing points and overlap', () => {
+	using model = new TextModel('abc\ndef');
 	using store = createLanguageDiagnosticStore(model);
 	const valid: LanguageDiagnosticResult = {
 		diagnostics: [
 			{
 				range: range(0, 0, 2),
 				severity: LanguageDiagnosticSeverity.Error,
-				message: "first",
+				message: 'first',
 				code: 1001,
-				source: "parser",
+				source: 'parser',
 			},
 			{
 				range: Range.fromPositions(position(0, 1)),
 				severity: LanguageDiagnosticSeverity.Hint,
-				message: "overlapping point",
-				code: "hint-code",
+				message: 'overlapping point',
+				code: 'hint-code',
 			},
 		],
 	};
@@ -205,28 +205,28 @@ test("Language diagnostics validate atomically while allowing points and overlap
 			diagnostics: [{
 				range: Range.fromPositions(position(2, 0)),
 				severity: LanguageDiagnosticSeverity.Error,
-				message: "outside",
+				message: 'outside',
 			}],
 		},
 		{
 			diagnostics: [{
 				range: range(0, 0, 1),
-				severity: "fatal" as LanguageDiagnosticSeverity,
-				message: "unknown severity",
+				severity: 'fatal' as LanguageDiagnosticSeverity,
+				message: 'unknown severity',
 			}],
 		},
 		{
 			diagnostics: [{
 				range: range(0, 0, 1),
 				severity: LanguageDiagnosticSeverity.Warning,
-				message: "   ",
+				message: '   ',
 			}],
 		},
 		{
 			diagnostics: [{
 				range: range(0, 0, 1),
 				severity: LanguageDiagnosticSeverity.Information,
-				message: "bad code",
+				message: 'bad code',
 				code: Number.POSITIVE_INFINITY,
 			}],
 		},
@@ -234,8 +234,8 @@ test("Language diagnostics validate atomically while allowing points and overlap
 			diagnostics: [{
 				range: range(0, 0, 1),
 				severity: LanguageDiagnosticSeverity.Information,
-				message: "bad source",
-				source: " source ",
+				message: 'bad source',
+				source: ' source ',
 			}],
 		},
 	];
@@ -250,49 +250,49 @@ test("Language diagnostics validate atomically while allowing points and overlap
 	}
 });
 
-test("Language tokens reject ambiguous spans without replacing prior state", () => {
-	using model = new TextModel("abc\ndef");
+test('Language tokens reject ambiguous spans without replacing prior state', () => {
+	using model = new TextModel('abc\ndef');
 	using store = createLanguageTokenStore(model);
 	store.accept({
 		requestId: 1,
 		textModel: model,
 		modelVersion: 1,
-		value: tokenResult(0, 1, "variable"),
+		value: tokenResult(0, 1, 'variable'),
 	});
 	const original = store.result;
 	const invalidResults: LanguageTokenResult[] = [
-		tokenResult(1, 1, "empty"),
+		tokenResult(1, 1, 'empty'),
 		{
 			tokens: [{
 				range: Range.fromPositions(position(0, 1), position(1, 1)),
-				tokenType: "string",
+				tokenType: 'string',
 				modifiers: [],
 			}],
 		},
 		{
 			tokens: [
-				token(0, 0, 2, "first"),
-				token(0, 1, 3, "overlap"),
+				token(0, 0, 2, 'first'),
+				token(0, 1, 3, 'overlap'),
 			],
 		},
 		{
 			tokens: [
-				token(0, 2, 3, "later"),
-				token(0, 0, 1, "earlier"),
+				token(0, 2, 3, 'later'),
+				token(0, 0, 1, 'earlier'),
 			],
 		},
 		{
 			tokens: [{
 				range: range(0, 0, 1),
-				tokenType: " variable ",
+				tokenType: ' variable ',
 				modifiers: [],
 			}],
 		},
 		{
 			tokens: [{
 				range: range(0, 0, 1),
-				tokenType: "variable",
-				modifiers: ["readonly", "readonly"],
+				tokenType: 'variable',
+				modifiers: ['readonly', 'readonly'],
 			}],
 		},
 	];
@@ -308,8 +308,8 @@ test("Language tokens reject ambiguous spans without replacing prior state", () 
 	}
 });
 
-test("Model mutation during normalization cannot publish the captured version", () => {
-	using model = new TextModel("a");
+test('Model mutation during normalization cannot publish the captured version', () => {
+	using model = new TextModel('a');
 	let mutate = false;
 	using store = new VersionedLanguageResultStore<{ readonly value: number; }>(
 		model,
@@ -317,7 +317,7 @@ test("Model mutation during normalization cannot publish the captured version", 
 			if (mutate) {
 				model.applyEdits([{
 					range: Range.fromPositions(position(0, 1)),
-					text: "!",
+					text: '!',
 				}]);
 			}
 			return Object.freeze({ ...value });
@@ -349,11 +349,11 @@ test("Model mutation during normalization cannot publish the captured version", 
 	]);
 });
 
-test("Normalizer failures preserve accepted state and are not reentrant", () => {
-	using model = new TextModel("x");
+test('Normalizer failures preserve accepted state and are not reentrant', () => {
+	using model = new TextModel('x');
 	let store!: VersionedLanguageResultStore<number>;
 	store = new VersionedLanguageResultStore(model, value => {
-		if (value < 0) throw new RangeError("negative result");
+		if (value < 0) throw new RangeError('negative result');
 		if (value === 2) {
 			store.accept({
 				requestId: 3,
@@ -389,14 +389,14 @@ test("Normalizer failures preserve accepted state and are not reentrant", () => 
 	assert.equal(store.result, original);
 });
 
-test("Language result store lifecycle does not own the text model", () => {
-	const disposedModel = new TextModel("x");
+test('Language result store lifecycle does not own the text model', () => {
+	const disposedModel = new TextModel('x');
 	const unavailableStore = createLanguageTokenStore(disposedModel);
 	unavailableStore.accept({
 		requestId: 1,
 		textModel: disposedModel,
 		modelVersion: 1,
-		value: tokenResult(0, 1, "variable"),
+		value: tokenResult(0, 1, 'variable'),
 	});
 	disposedModel.dispose();
 	assert.equal(unavailableStore.result, undefined);
@@ -404,11 +404,11 @@ test("Language result store lifecycle does not own the text model", () => {
 		requestId: 2,
 		textModel: disposedModel,
 		modelVersion: 1,
-		value: tokenResult(0, 1, "variable"),
+		value: tokenResult(0, 1, 'variable'),
 	}), LanguageResultAcceptance.ModelUnavailable);
 	unavailableStore.dispose();
 
-	using liveModel = new TextModel("x");
+	using liveModel = new TextModel('x');
 	const store = createLanguageTokenStore(liveModel);
 	assert.equal(store.textModel, liveModel);
 	store.dispose();
@@ -416,24 +416,24 @@ test("Language result store lifecycle does not own the text model", () => {
 	assert.throws(() => store.textModel, /already disposed/);
 	liveModel.applyEdits([{
 		range: range(0, 0, 1),
-		text: "X",
+		text: 'X',
 	}]);
-	assert.equal(liveModel.getText(), "X");
+	assert.equal(liveModel.getText(), 'X');
 });
 
-test("Language request coordinator publishes directly into a typed result store", async () => {
-	using model = new TextModel("x");
+test('Language request coordinator publishes directly into a typed result store', async () => {
+	using model = new TextModel('x');
 	using store = createLanguageTokenStore(model);
 	const worker = new ImmediateTokenWorker();
-	using coordinator = new LanguageRequestCoordinator<"tokens", LanguageTokenResult, LanguageTokenResult>(
+	using coordinator = new LanguageRequestCoordinator<'tokens', LanguageTokenResult, LanguageTokenResult>(
 		model,
 		() => worker,
 	);
 	let acceptance: LanguageResultAcceptance | undefined;
 
 	const outcome = await coordinator.runLatest(
-		"tokens",
-		tokenResult(0, 1, "variable"),
+		'tokens',
+		tokenResult(0, 1, 'variable'),
 		result => {
 			acceptance = store.accept(result);
 		},
@@ -443,13 +443,13 @@ test("Language request coordinator publishes directly into a typed result store"
 	assert.equal(acceptance, LanguageResultAcceptance.Applied);
 	assert.equal(store.result!.requestId, outcome.requestId);
 	assert.equal(store.result!.textModel, model);
-	assert.equal(store.result!.value.tokens[0]!.tokenType, "variable");
+	assert.equal(store.result!.value.tokens[0]!.tokenType, 'variable');
 });
 
-class ImmediateTokenWorker implements LanguageWorker<"tokens", LanguageTokenResult, LanguageTokenResult> {
+class ImmediateTokenWorker implements LanguageWorker<'tokens', LanguageTokenResult, LanguageTokenResult> {
 	disposed = false;
 
-	async run(request: LanguageWorkerRequest<"tokens", LanguageTokenResult>, signal: AbortSignal): Promise<LanguageTokenResult> {
+	async run(request: LanguageWorkerRequest<'tokens', LanguageTokenResult>, signal: AbortSignal): Promise<LanguageTokenResult> {
 		assert.equal(signal.aborted, false);
 		return request.payload;
 	}
@@ -467,7 +467,7 @@ function tokenResult(startColumn: number, endColumn: number, tokenType: string):
 	return { tokens: [token(0, startColumn, endColumn, tokenType)] };
 }
 
-function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string): LanguageTokenResult["tokens"][number] {
+function token(lineIndex: number, startColumn: number, endColumn: number, tokenType: string): LanguageTokenResult['tokens'][number] {
 	return {
 		range: range(lineIndex, startColumn, endColumn),
 		tokenType,

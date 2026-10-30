@@ -1,9 +1,9 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { ILogService } from "../../../../platform/log/common/log.js";
-import { ITaskService } from "../../../contrib/tasks/common/taskService.js";
-import { type ITaskRun } from "../../../contrib/tasks/common/tasks.js";
-import { type ITestCase, type ITestCaseResult, type ITestProfile, type ITestRun, type ITestingService, type TestProfileContribution, type TestProfileProvider, type TestProfileProviderRegistration, type TestRunStatus } from "../common/testingService.js";
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { ITaskService } from '../../../contrib/tasks/common/taskService.js';
+import { type ITaskRun } from '../../../contrib/tasks/common/tasks.js';
+import { type ITestCase, type ITestCaseResult, type ITestProfile, type ITestRun, type ITestingService, type TestProfileContribution, type TestProfileProvider, type TestProfileProviderRegistration, type TestRunStatus } from '../common/testingService.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
@@ -47,6 +47,7 @@ export class TestingService extends Disposable implements ITestingService {
 	private get debugSession() { return this.debug.sessions.find(session => session.configuration.id === this.debugConfigurationId && session.state !== 'terminated' && session.state !== 'error'); }
 	readonly onDidChangeTests = this.testsEmitter.event;
 	private readonly profilesEmitter = this._register(new Emitter<readonly ITestProfile[]>());
+	private readonly providersEmitter = this._register(new Emitter<void>());
 	private readonly startRunEmitter = this._register(new Emitter<ITestRun>());
 	private readonly changeRunEmitter = this._register(new Emitter<ITestRun>());
 	private readonly providers = new Map<string, OwnedTestProfileProvider>();
@@ -59,6 +60,7 @@ export class TestingService extends Disposable implements ITestingService {
 	private loaded = false;
 
 	readonly onDidChangeProfiles: Event<readonly ITestProfile[]> = this.profilesEmitter.event;
+	readonly onDidChangeTestCapability: Event<void> = Event.any(Event.map(this.onDidChangeProfiles, () => undefined), this.providersEmitter.event);
 	readonly onDidStartRun: Event<ITestRun> = this.startRunEmitter.event;
 	readonly onDidChangeRun: Event<ITestRun> = this.changeRunEmitter.event;
 
@@ -105,6 +107,7 @@ export class TestingService extends Disposable implements ITestingService {
 		this.projectProfiles();
 	}
 
+	get hasTestCapability(): boolean { return this.providers.size > 0 || this.currentProfiles.length > 0; }
 	get profiles(): readonly ITestProfile[] { return this.currentProfiles; }
 	get runs(): readonly ITestRun[] { return this.currentRuns; }
 	get tests(): readonly ITestCase[] { return this.currentTests; }
@@ -328,7 +331,7 @@ export class TestingService extends Disposable implements ITestingService {
 			if (removed.length > 0) this.providersChanged(removed);
 		}) as TestProfileProviderRegistration;
 		registration.replace = replacement => {
-			if (disposed) throw new ReferenceError("Test Profile provider registration is already disposed");
+			if (disposed) throw new ReferenceError('Test Profile provider registration is already disposed');
 			this.assertNotDisposed();
 			this.replaceProviders(owner, replacement);
 		};
@@ -350,8 +353,8 @@ export class TestingService extends Disposable implements ITestingService {
 
 	async run(profile: ITestProfile): Promise<ITestRun> {
 		const currentProfile = this.currentProfiles.find(candidate => candidate.id === profile.id);
-		const task = currentProfile ? this.taskService.tasks.find(candidate => candidate.id === currentProfile.taskId && candidate.group === "test") : undefined;
-		if (!task) throw new Error("Test profile is no longer present in the current workspace");
+		const task = currentProfile ? this.taskService.tasks.find(candidate => candidate.id === currentProfile.taskId && candidate.group === 'test') : undefined;
+		if (!task) throw new Error('Test profile is no longer present in the current workspace');
 		const taskRun = await this.taskService.run(task);
 		const run = this._register(new TestRun(currentProfile!, taskRun, current => this.changeRunEmitter.fire(current)));
 		this.currentRuns = [...this.currentRuns, run].slice(-50);
@@ -375,7 +378,7 @@ export class TestingService extends Disposable implements ITestingService {
 	}
 
 	private projectProfiles(): void {
-		const tasks = new Map(this.taskService.tasks.filter(task => task.group === "test").map(task => [task.id, task]));
+		const tasks = new Map(this.taskService.tasks.filter(task => task.group === 'test').map(task => [task.id, task]));
 		const taskProfiles = [...tasks.values()].map(task => Object.freeze({ id: task.id, label: task.label, source: task.source, taskId: task.id, detail: task.detail ?? task.command }));
 		const profiles = Object.freeze([...taskProfiles, ...this.providerProfiles.filter(profile => tasks.has(profile.taskId))]);
 		if (JSON.stringify(profiles) === JSON.stringify(this.currentProfiles)) return;
@@ -384,7 +387,7 @@ export class TestingService extends Disposable implements ITestingService {
 	}
 
 	private replaceProviders(owner: object, providers: readonly TestProfileProvider[]): void {
-		if (!Array.isArray(providers)) throw new TypeError("Test Profile providers must be an array");
+		if (!Array.isArray(providers)) throw new TypeError('Test Profile providers must be an array');
 		const normalized = providers.map(normalizeTestProfileProvider);
 		const ids = new Set<string>();
 		for (const provider of normalized) {
@@ -414,6 +417,7 @@ export class TestingService extends Disposable implements ITestingService {
 		const refresh = this.loaded || this.activeProviderRefresh !== undefined;
 		this.providerProfiles = Object.freeze(this.providerProfiles.filter(profile => !changedProviders.has(profile.source)));
 		this.projectProfiles();
+		this.providersEmitter.fire();
 		this.activeProviderRefresh?.abort();
 		this.providerRefreshGeneration += 1;
 		if (refresh) void this.refreshProviderProfiles().catch(error => this.reportError(error));
@@ -429,7 +433,7 @@ export class TestingService extends Disposable implements ITestingService {
 		try {
 			const providerProfiles = (await Promise.all(providers.map(provider => this.provideProfiles(provider, controller.signal)))).flat();
 			if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.isDisposed) return this.currentProfiles;
-			const ids = new Set(this.taskService.tasks.filter(task => task.group === "test").map(task => task.id));
+			const ids = new Set(this.taskService.tasks.filter(task => task.group === 'test').map(task => task.id));
 			for (const profile of providerProfiles) {
 				if (ids.has(profile.id)) throw new Error(`Test Profile '${profile.id}' is already registered`);
 				ids.add(profile.id);
@@ -461,7 +465,7 @@ export class TestingService extends Disposable implements ITestingService {
 
 
 	private reportError(error: unknown): void {
-		this.logService.error("testing", "Test operation failed", error);
+		this.logService.error('testing', 'Test operation failed', error);
 	}
 }
 
@@ -485,30 +489,30 @@ class TestRun extends Disposable implements ITestRun {
 	get status(): TestRunStatus { return this._status; }
 }
 
-function projectTestStatus(status: ITaskRun["status"]): TestRunStatus {
-	if (status === "succeeded") return "passed";
+function projectTestStatus(status: ITaskRun['status']): TestRunStatus {
+	if (status === 'succeeded') return 'passed';
 	return status;
 }
 
 function normalizeTestProfileProvider(provider: TestProfileProvider): TestProfileProvider {
-	if (!provider || typeof provider !== "object") throw new TypeError("Test Profile provider must be an object");
-	const id = normalizeText(provider.id, "Test Profile provider ID", 256);
-	if (typeof provider.provideTestProfiles !== "function") throw new TypeError(`Test Profile provider '${id}' must implement provideTestProfiles`);
+	if (!provider || typeof provider !== 'object') throw new TypeError('Test Profile provider must be an object');
+	const id = normalizeText(provider.id, 'Test Profile provider ID', 256);
+	if (typeof provider.provideTestProfiles !== 'function') throw new TypeError(`Test Profile provider '${id}' must implement provideTestProfiles`);
 	return Object.freeze({ id, provideTestProfiles: (signal: AbortSignal) => provider.provideTestProfiles.call(provider, signal) });
 }
 
 function projectProviderProfile(providerId: string, contribution: TestProfileContribution, taskService: ITaskService): ITestProfile {
-	if (!contribution || typeof contribution !== "object") throw new TypeError(`Test Profile provider '${providerId}' returned an invalid profile`);
+	if (!contribution || typeof contribution !== 'object') throw new TypeError(`Test Profile provider '${providerId}' returned an invalid profile`);
 	const id = normalizeText(contribution.id, `Test Profile provider '${providerId}' profile ID`, 256);
 	const label = normalizeText(contribution.label, `Test Profile provider '${providerId}' profile label`, 256);
 	const taskId = normalizeText(contribution.taskId, `Test Profile provider '${providerId}' task ID`, 1024);
-	if (!taskService.tasks.some(task => task.id === taskId && task.group === "test")) throw new Error(`Test Profile provider '${providerId}' references unavailable test task '${taskId}'`);
+	if (!taskService.tasks.some(task => task.id === taskId && task.group === 'test')) throw new Error(`Test Profile provider '${providerId}' references unavailable test task '${taskId}'`);
 	const detail = contribution.detail === undefined ? undefined : normalizeText(contribution.detail, `Test Profile provider '${providerId}' profile detail`, 4096, false);
 	return Object.freeze({ id: `extension-profile:${encodeURIComponent(providerId)}:${encodeURIComponent(id)}`, label, source: providerId, taskId, ...(detail === undefined ? {} : { detail }) });
 }
 
 function normalizeText(value: string, owner: string, maximum: number, trim = true): string {
-	if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
+	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || value.includes('\0')) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
 	return trim ? value.trim() : value;
 }
 

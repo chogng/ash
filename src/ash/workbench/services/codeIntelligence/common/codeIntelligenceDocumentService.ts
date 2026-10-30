@@ -1,4 +1,4 @@
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 export interface CodeIntelligenceDocumentSnapshot {
 	readonly path: string;
@@ -13,4 +13,4 @@ export interface ICodeIntelligenceDocumentService {
 	close(path: string): Promise<void>;
 }
 
-export const ICodeIntelligenceDocumentService = createServiceIdentifier<ICodeIntelligenceDocumentService>("codeIntelligenceDocumentService");
+export const ICodeIntelligenceDocumentService = createServiceIdentifier<ICodeIntelligenceDocumentService>('codeIntelligenceDocumentService');

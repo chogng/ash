@@ -1,8 +1,8 @@
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { Emitter } from "../../../../base/common/event.js";
-import { NotificationPriority, NotificationsFilter, Severity, type INotificationService, type INotificationHandle, type INotification, type NotificationMessage, type INotificationSource, type INotificationSourceFilter, type IStatusMessageOptions, type IStatusHandle } from "../../../../platform/notification/common/notification.js";
-import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
-import { NotificationsModel } from "../../../common/notifications.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { NotificationPriority, NotificationsFilter, Severity, type INotificationService, type INotificationHandle, type INotification, type NotificationMessage, type INotificationSource, type INotificationSourceFilter, type IStatusMessageOptions, type IStatusHandle } from '../../../../platform/notification/common/notification.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { NotificationsModel } from '../../../common/notifications.js';
 
 /** Window-scoped service; notification presentation belongs to the Workbench parts. */
 export class NotificationService extends Disposable implements INotificationService {
@@ -130,19 +130,19 @@ function isSourceFilter(value: unknown): value is INotificationSourceFilter {
 }
 
 function validateNotification(options: INotification): void {
-	if (![Severity.Info, Severity.Warning, Severity.Error].includes(options.severity)) throw new TypeError("Unknown notification severity");
+	if (![Severity.Info, Severity.Warning, Severity.Error].includes(options.severity)) throw new TypeError('Unknown notification severity');
 	const message = options.message instanceof Error ? options.message.message : options.message;
-	if (typeof message !== "string" || message.trim().length === 0) throw new TypeError("Notification message must not be empty");
+	if (typeof message !== 'string' || message.trim().length === 0) throw new TypeError('Notification message must not be empty');
 	if (options.sticky !== undefined && typeof options.sticky !== 'boolean') throw new TypeError('Notification sticky state must be a boolean');
-	const source = typeof options.source === "object" ? options.source?.label : options.source;
-	if (options.source !== undefined && (typeof source !== "string" || source.trim().length === 0)) throw new TypeError("Notification source must not be empty");
+	const source = typeof options.source === 'object' ? options.source?.label : options.source;
+	if (options.source !== undefined && (typeof source !== 'string' || source.trim().length === 0)) throw new TypeError('Notification source must not be empty');
 	if (typeof options.source === 'object' && (typeof options.source.id !== 'string' || !options.source.id.trim())) throw new TypeError('Notification source ID must not be empty');
 	const actionIds = new Set<string>();
 	for (const action of [...(options.actions?.primary ?? []), ...(options.actions?.secondary ?? [])]) {
 		if (!/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(action.id)) throw new TypeError(`Invalid notification action ID: ${action.id}`);
 		if (actionIds.has(action.id)) throw new RangeError(`Duplicate notification action ID: ${action.id}`);
 		actionIds.add(action.id);
-		if (typeof action.label !== "string" || action.label.trim().length === 0) throw new TypeError("Notification action label must not be empty");
-		if (typeof action.run !== "function") throw new TypeError(`Notification action '${action.id}' must provide a callback`);
+		if (typeof action.label !== 'string' || action.label.trim().length === 0) throw new TypeError('Notification action label must not be empty');
+		if (typeof action.run !== 'function') throw new TypeError(`Notification action '${action.id}' must provide a callback`);
 	}
 }

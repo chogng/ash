@@ -47,7 +47,7 @@ function mergeWorkspaceSymbols(providerResults: readonly (readonly LanguageWorks
 }
 
 function normalizeWorkspaceSymbol(symbol: LanguageWorkspaceSymbol): LanguageWorkspaceSymbol {
-	if (!symbol || typeof symbol !== "object" || typeof symbol.name !== "string" || symbol.name.trim().length === 0 || !symbol.resource) throw new TypeError("Workspace symbol requires a name and resource");
+	if (!symbol || typeof symbol !== 'object' || typeof symbol.name !== 'string' || symbol.name.trim().length === 0 || !symbol.resource) throw new TypeError('Workspace symbol requires a name and resource');
 	return Object.freeze({
 		name: symbol.name,
 		kind: symbol.kind,
@@ -61,12 +61,12 @@ function normalizeWorkspaceSymbol(symbol: LanguageWorkspaceSymbol): LanguageWork
 /** Captures symbol text only while its local index revision still matches the source. */
 export async function readWorkspaceSymbolSource(symbol: LanguageWorkspaceSymbol, files: IFileService, workingCopies: IWorkingCopyService): Promise<string | undefined> {
 	const revision = getWorkspaceSymbolRevision(symbol);
-	const contents = workingCopies.get(symbol.resource).filter(workingCopy => workingCopy.backupKind === "text").map(workingCopy => workingCopy.backup());
+	const contents = workingCopies.get(symbol.resource).filter(workingCopy => workingCopy.backupKind === 'text').map(workingCopy => workingCopy.backup());
 	if (contents.length > 0) {
 		const content = contents[0] as string;
 		if (contents.some(candidate => candidate !== content)) return undefined;
-		const digest = await globalThis.crypto.subtle.digest("SHA-256", VSBuffer.fromString(content).buffer);
-		const currentRevision = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
+		const digest = await globalThis.crypto.subtle.digest('SHA-256', VSBuffer.fromString(content).buffer);
+		const currentRevision = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')}`;
 		return !revision || revision === currentRevision ? content : undefined;
 	}
 	const current = await files.readFile(symbol.resource);
@@ -74,7 +74,7 @@ export async function readWorkspaceSymbolSource(symbol: LanguageWorkspaceSymbol,
 }
 
 export function getWorkspaceSymbolRevision(symbol: LanguageWorkspaceSymbol): string | undefined {
-	if (!symbol.data || typeof symbol.data !== "object") return undefined;
+	if (!symbol.data || typeof symbol.data !== 'object') return undefined;
 	const data = symbol.data as { source?: unknown; sourceRevision?: unknown; };
-	return data.source === "codebaseSymbols" && typeof data.sourceRevision === "string" && data.sourceRevision.startsWith("sha256:") ? data.sourceRevision : undefined;
+	return data.source === 'codebaseSymbols' && typeof data.sourceRevision === 'string' && data.sourceRevision.startsWith('sha256:') ? data.sourceRevision : undefined;
 }

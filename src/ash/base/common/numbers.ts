@@ -10,12 +10,12 @@ export function rot(index: number, modulo: number): number {
 
 /** Returns whether a value is a finite number. */
 export function isFiniteNumber(value: unknown): value is number {
-	return typeof value === "number" && Number.isFinite(value);
+	return typeof value === 'number' && Number.isFinite(value);
 }
 
 /** Returns whether a value is a safe integer. */
 export function isSafeInteger(value: unknown): value is number {
-	return typeof value === "number" && Number.isSafeInteger(value);
+	return typeof value === 'number' && Number.isSafeInteger(value);
 }
 
 /** Returns whether a value is a non-negative safe integer. */

@@ -3,33 +3,33 @@ import { IWorkingCopyService, type IWorkingCopy } from '../../../services/workin
 import { EditorWorkingCopy } from './textResourceEditor.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import { type IDimension } from "../../../../base/browser/dom.js";
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { type IDimension } from '../../../../base/browser/dom.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import type { Range } from '../../../../editor/common/core/range.js';
 import { ScrollType } from '../../../../editor/common/editorCommon.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import { assertDefined } from "../../../../base/common/types.js";
+import { assertDefined } from '../../../../base/common/types.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IEditorPaneWithScrolling, type IEditorPaneScrollPosition, type IResourceEditorInput, type ISaveOptions } from '../../../common/editor.js';
 
-import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
+import { DIFF_EDITOR_ID, isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
 import { TextDiffEditorModel } from '../../../common/editor/textDiffEditorModel.js';
 import { applyTextEditorOptions } from '../../../common/editor/editorOptions.js';
-import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
-import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
+import { type ITextResourceStore } from '../../../services/textmodelResolver/common/textResourceStore.js';
+import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { type HideUnchangedRegionsOptions } from '../../../../editor/common/config/diffEditor.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../editor/common/diff/documentDiffProvider.js";
-import { DiffEditorWidget } from "../../../../editor/browser/widget/diffEditor/diffEditorWidget.js";
-import { type TextModelReference, type ITextModelResourceService } from "../../../services/textmodelResolver/common/textModelResourceService.js";
-import { h } from "../../../../base/browser/dom.js";
+import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from '../../../../editor/common/diff/documentDiffProvider.js';
+import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
+import { type TextModelReference, type ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { h } from '../../../../base/browser/dom.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { getDiffComputationOptions, getDiffWordWrap } from "../../../services/editor/common/editorConfiguration.js";
+import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
 import { toEditorPaneSelectionChangeReason } from './textEditor.js';
 import { editorOptionsRegistry, type IDiffEditorOptions, type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 
@@ -102,17 +102,17 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 		@IStorageService storageService: IStorageService,
 	) {
 		super(DIFF_EDITOR_ID, themeService, storageService);
-		if (!resourceStore || typeof resourceStore.resolve !== "function") {
+		if (!resourceStore || typeof resourceStore.resolve !== 'function') {
 			this.dispose();
-			throw new TypeError("Diff editor pane requires a text resource store");
+			throw new TypeError('Diff editor pane requires a text resource store');
 		}
-		if (!options || typeof options !== "object" || typeof options.createComputationService !== "function") {
+		if (!options || typeof options !== 'object' || typeof options.createComputationService !== 'function') {
 			this.dispose();
-			throw new TypeError("Diff editor pane requires a Workbench diff computation service");
+			throw new TypeError('Diff editor pane requires a Workbench diff computation service');
 		}
-		if (!options.modelService || typeof options.modelService.acquire !== "function") {
+		if (!options.modelService || typeof options.modelService.acquire !== 'function') {
 			this.dispose();
-			throw new TypeError("Diff editor pane requires a text model service");
+			throw new TypeError('Diff editor pane requires a text model service');
 		}
 		this.modelService = options.modelService;
 		let computationService: IDocumentDiffProvider & IDisposable;
@@ -126,9 +126,9 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 	}
 
 	public override create(parent: HTMLElement): void {
-		if (this.container) throw new ReferenceError("DiffEditorPane has already been created");
-		const container = h(parent.ownerDocument, "div");
-		container.className = "stanza-diff-editor-pane";
+		if (this.container) throw new ReferenceError('DiffEditorPane has already been created');
+		const container = h(parent.ownerDocument, 'div');
+		container.className = 'stanza-diff-editor-pane';
 		parent.append(container);
 		super.create(container);
 		this.container = container;
@@ -140,10 +140,10 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isDiffEditorInput(input)) {
-			throw new TypeError("Diff editor pane requires a diff editor input");
+			throw new TypeError('Diff editor pane requires a diff editor input');
 		}
 		const container = this.requireContainer();
-		throwIfCancelled(signal, "Diff editor input loading was cancelled");
+		throwIfCancelled(signal, 'Diff editor input loading was cancelled');
 		using references = new DisposableStore();
 		const acquisition = new AbortController();
 		const acquisitionSignal = AbortSignal.any([signal, acquisition.signal]);
@@ -162,7 +162,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 			[original, modified] = await Promise.all([acquire(input.original), acquire(input.modified)]);
 			references.delete(original);
 			references.delete(modified);
-			throwIfCancelled(signal, "Diff editor input loading was cancelled");
+			throwIfCancelled(signal, 'Diff editor input loading was cancelled');
 			next = this.instantiationService.createInstance(
 				DiffEditorPaneSession, container, original, modified,
 				input.original.label, input.modified, this.options, this.computationService,
@@ -174,7 +174,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 				original.model.tokenization.whenReady(acquisitionSignal),
 				modified.model.tokenization.whenReady(acquisitionSignal),
 			]);
-			throwIfCancelled(signal, "Diff editor input loading was cancelled");
+			throwIfCancelled(signal, 'Diff editor input loading was cancelled');
 		} catch (error) {
 			acquisition.abort();
 			next?.dispose();
@@ -231,7 +231,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 	}
 
 	private requireContainer(): HTMLDivElement {
-		assertDefined(this.container, new ReferenceError("Diff editor pane has not been created"));
+		assertDefined(this.container, new ReferenceError('Diff editor pane has not been created'));
 		return this.container;
 	}
 }
@@ -294,15 +294,15 @@ class DiffEditorPaneSession extends Disposable {
 				|| event.affectsConfiguration('diffEditor.codeLens', { overrideIdentifier: languageId })) {
 				this.editor.updateOptions(readEditorOptions());
 			}
-			if (event.affectsConfiguration("diffEditor.ignoreTrimWhitespace", { overrideIdentifier: languageId })
-				|| event.affectsConfiguration("diffEditor.maxComputationTime", { overrideIdentifier: languageId })
+			if (event.affectsConfiguration('diffEditor.ignoreTrimWhitespace', { overrideIdentifier: languageId })
+				|| event.affectsConfiguration('diffEditor.maxComputationTime', { overrideIdentifier: languageId })
 				|| event.affectsConfiguration('diffEditor.experimental.showMoves')) {
 				this.updateOptions(getDiffComputationOptions(configuration, languageId));
 			}
-			if (event.affectsConfiguration("diffEditor.hideUnchangedRegions.enabled")
-				|| event.affectsConfiguration("diffEditor.hideUnchangedRegions.contextLineCount")
-				|| event.affectsConfiguration("diffEditor.hideUnchangedRegions.minimumLineCount")
-				|| event.affectsConfiguration("diffEditor.hideUnchangedRegions.revealLineCount")) {
+			if (event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled')
+				|| event.affectsConfiguration('diffEditor.hideUnchangedRegions.contextLineCount')
+				|| event.affectsConfiguration('diffEditor.hideUnchangedRegions.minimumLineCount')
+				|| event.affectsConfiguration('diffEditor.hideUnchangedRegions.revealLineCount')) {
 				this.editor.setHideUnchangedRegionsOptions(getHideUnchangedRegionsOptions(configuration));
 			}
 			if (event.affectsConfiguration('diffEditor.renderSideBySide')
@@ -387,10 +387,10 @@ class DiffEditorPaneSession extends Disposable {
 
 function getHideUnchangedRegionsOptions(configuration: IConfigurationService): HideUnchangedRegionsOptions {
 	return {
-		enabled: configuration.getValue<boolean>("diffEditor.hideUnchangedRegions.enabled"),
-		contextLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.contextLineCount"),
-		minimumLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.minimumLineCount"),
-		revealLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.revealLineCount"),
+		enabled: configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'),
+		contextLineCount: configuration.getValue<number>('diffEditor.hideUnchangedRegions.contextLineCount'),
+		minimumLineCount: configuration.getValue<number>('diffEditor.hideUnchangedRegions.minimumLineCount'),
+		revealLineCount: configuration.getValue<number>('diffEditor.hideUnchangedRegions.revealLineCount'),
 	};
 }
 

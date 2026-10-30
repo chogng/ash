@@ -131,8 +131,10 @@ suite('Desktop built-in Voice Mode command', () => {
 		owner.add(toDisposable(() => input.remove()));
 		let starts = 0;
 		const widget: IChatWidget & { visible: boolean; isTranscriptProgressActive: boolean; } = {
+			sessionId: undefined, threadId: undefined, onDidChangeVisibility: Event.None,
 			domNode: input, visible: true, inputEditor: undefined, isTranscriptProgressActive: false,
 			onDidHide: Event.None, onDidChangeViewModel: Event.None,
+			acquireContext: async () => { throw new Error('Unexpected context preparation'); },
 			startVoiceConversation: async () => { starts++; },
 		};
 		const registration = owner.add(widgets.register(widget));

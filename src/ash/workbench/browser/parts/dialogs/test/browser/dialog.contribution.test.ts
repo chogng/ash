@@ -6,29 +6,29 @@ import type { MessageBoxOptions } from '../../../../../../base/parts/sandbox/com
 import { DialogMainService } from '../../../../../../platform/dialogs/electron-main/dialogMainService.js';
 import { validateNativeDialogOperation, type INativeHostApi } from '../../../../../../platform/native/common/nativeHost.js';
 import { NativeDialogHandler } from '../../../../../electron-browser/parts/dialogs/dialogHandler.js';
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
 import { test, suite } from 'mocha';
-import "../../dialog.web.contribution.js";
+import '../../dialog.web.contribution.js';
 import {
 	type DialogRequest,
 	DialogResult,
 	DialogSeverity,
 	type IDialogHandler,
 	type IDialogOutcome,
-} from "../../../../../../platform/dialogs/common/dialogs.js";
-import { InstantiationService } from "../../../../../../platform/instantiation/common/instantiationService.js";
+} from '../../../../../../platform/dialogs/common/dialogs.js';
+import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import {
 	IDialogsModel,
 	IWorkbenchDialogHandler,
-} from "../../../../../../workbench/common/dialogs.js";
+} from '../../../../../../workbench/common/dialogs.js';
 import { DialogHandlerContribution } from '../../dialog.web.contribution.js';
 import {
 	WorkbenchContributionsRegistry,
 	WorkbenchPhase,
-} from "../../../../../../workbench/common/contributions.js";
+} from '../../../../../../workbench/common/contributions.js';
 import {
 	DialogService,
-} from "../../../../../../workbench/services/dialogs/common/dialogService.js";
+} from '../../../../../../workbench/services/dialogs/common/dialogService.js';
 
 class TestDialogHandler implements IDialogHandler {
 	readonly calls: Array<{
@@ -48,7 +48,7 @@ class TestDialogHandler implements IDialogHandler {
 	}
 }
 
-test("dialog handler contribution starts at BlockStartup", async () => {
+test('dialog handler contribution starts at BlockStartup', async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
 	const services = new InstantiationService();
@@ -57,43 +57,43 @@ test("dialog handler contribution starts at BlockStartup", async () => {
 	using host = WorkbenchContributionsRegistry.createHost(services);
 
 	host.advance(WorkbenchPhase.BlockStartup);
-	const confirmation = service.confirm({ message: "Ready?" });
+	const confirmation = service.confirm({ message: 'Ready?' });
 
 	assert.equal(handler.calls.length, 1);
 	handler.calls[0]?.resolve(DialogResult.Primary);
 	assert.equal((await confirmation).confirmed, true);
 });
 
-test("dialog handler contribution presents the model queue serially", async () => {
+test('dialog handler contribution presents the model queue serially', async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
 	using contribution = new DialogHandlerContribution(
 		service.model,
 		handler,
 	);
-	const confirmation = service.confirm({ message: "Continue?" });
+	const confirmation = service.confirm({ message: 'Continue?' });
 	const message = service.showMessage({
 		severity: DialogSeverity.Info,
-		message: "Finished",
+		message: 'Finished',
 	});
 
 	assert.equal(service.model.dialogs.length, 2);
 	assert.equal(handler.calls.length, 1);
-	assert.equal(handler.calls[0]?.request.kind, "confirmation");
+	assert.equal(handler.calls[0]?.request.kind, 'confirmation');
 
 	handler.calls[0]?.resolve(DialogResult.Primary);
 	assert.equal((await confirmation).confirmed, true);
 	assert.equal(handler.calls.length, 2);
-	assert.equal(handler.calls[1]?.request.kind, "message");
+	assert.equal(handler.calls[1]?.request.kind, 'message');
 
 	handler.calls[1]?.resolve(DialogResult.Primary);
 	await message;
 	assert.equal(service.model.dialogs.length, 0);
 });
 
-test("dialog handler contribution picks up existing model items", async () => {
+test('dialog handler contribution picks up existing model items', async () => {
 	using service = new DialogService();
-	const confirmation = service.confirm({ message: "Pending" });
+	const confirmation = service.confirm({ message: 'Pending' });
 	const handler = new TestDialogHandler();
 	using contribution = new DialogHandlerContribution(
 		service.model,
@@ -101,19 +101,19 @@ test("dialog handler contribution picks up existing model items", async () => {
 	);
 
 	assert.equal(handler.calls.length, 1);
-	assert.equal(handler.calls[0]?.request.message, "Pending");
+	assert.equal(handler.calls[0]?.request.message, 'Pending');
 	handler.calls[0]?.resolve(DialogResult.Cancel);
 	assert.equal((await confirmation).confirmed, false);
 });
 
-test("closing the active model item aborts its handler", async () => {
+test('closing the active model item aborts its handler', async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
 	using contribution = new DialogHandlerContribution(
 		service.model,
 		handler,
 	);
-	const confirmation = service.confirm({ message: "Cancel?" });
+	const confirmation = service.confirm({ message: 'Cancel?' });
 	const item = service.model.dialogs[0];
 	const call = handler.calls[0];
 
@@ -124,7 +124,7 @@ test("closing the active model item aborts its handler", async () => {
 	call?.resolve(DialogResult.Cancel);
 });
 
-test("dialog handler contribution continues after a handler failure", async () => {
+test('dialog handler contribution continues after a handler failure', async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
 	using contribution = new DialogHandlerContribution(
@@ -133,11 +133,11 @@ test("dialog handler contribution continues after a handler failure", async () =
 	);
 	const failed = service.showMessage({
 		severity: DialogSeverity.Error,
-		message: "Failure",
+		message: 'Failure',
 	});
-	const next = service.confirm({ message: "Retry?" });
+	const next = service.confirm({ message: 'Retry?' });
 
-	handler.calls[0]?.reject(new Error("render failed"));
+	handler.calls[0]?.reject(new Error('render failed'));
 	await assert.rejects(failed, /render failed/);
 	assert.equal(handler.calls.length, 2);
 
@@ -145,14 +145,14 @@ test("dialog handler contribution continues after a handler failure", async () =
 	assert.equal((await next).confirmed, true);
 });
 
-test("disposing the contribution cancels its active model item", async () => {
+test('disposing the contribution cancels its active model item', async () => {
 	using service = new DialogService();
 	const handler = new TestDialogHandler();
 	const contribution = new DialogHandlerContribution(
 		service.model,
 		handler,
 	);
-	const confirmation = service.confirm({ message: "Active" });
+	const confirmation = service.confirm({ message: 'Active' });
 	const call = handler.calls[0];
 
 	contribution.dispose();
@@ -254,13 +254,35 @@ suite('dialog browser component', () => {
 	test('base Dialog updates its accessible message and uses cancelId for Escape and close', async function () {
 		const { page } = browserTests;
 		await page.goto('/dialog.html');
-		for (const close of ['Escape', 'button']) {
+		for (const close of ['Escape', 'button', 'keyboard']) {
 			await page.evaluate(() => window.ashDialogIntegration.showCore('standard'));
 			await page.evaluate(() => window.ashDialogIntegration.updateCoreMessage('Updated message'));
 			const dialog = page.getByRole('dialog', { name: 'Updated message' });
 			await expect(dialog.locator('.ash-dialog-title')).toHaveText('Updated message');
+			const toolbar = dialog.getByRole('toolbar', { name: 'Close Dialog' });
+			await expect(toolbar).toHaveClass(/ash-action-bar/);
+			await expect(toolbar.locator('[data-action-id="dialog.close"]')).toHaveCount(1);
+			const closeButton = toolbar.getByRole('button', { name: 'Close Dialog' });
+			await expect(closeButton).toHaveText('');
+			const geometry = await closeButton.evaluate(button => {
+				const bounds = button.getBoundingClientRect();
+				const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
+				return {
+					width: bounds.width, height: bounds.height, iconWidth: icon.width,
+					centerX: bounds.x + bounds.width / 2 - icon.x - icon.width / 2,
+					centerY: bounds.y + bounds.height / 2 - icon.y - icon.height / 2,
+				};
+			});
+			expect(geometry).toEqual({ width: 28, height: 28, iconWidth: 16, centerX: 0, centerY: 0 });
 			if (close === 'Escape') await page.keyboard.press('Escape');
-			else await dialog.getByRole('button', { name: 'Close Dialog' }).click();
+			else if (close === 'button') await closeButton.click();
+			else {
+				await closeButton.focus();
+				await closeButton.press('ArrowLeft');
+				await expect(closeButton).toBeFocused();
+				await expect(closeButton).not.toHaveCSS('outline-style', 'none');
+				await closeButton.press('Enter');
+			}
 			await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult?.button)).toBe(1);
 			await expect(dialog).toHaveCount(0);
 		}
@@ -408,6 +430,7 @@ suite('dialog browser component', () => {
 		await expect(detail).toHaveAttribute('tabindex', '0');
 		expect(await detail.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
 		const confirm = page.getByRole('button', { name: 'Confirm' });
+		await expect(confirm).toBeFocused();
 		await confirm.focus();
 		await page.keyboard.press('Shift+Tab');
 		await expect(detail).toBeFocused();
@@ -566,7 +589,11 @@ suite('dialog browser component', () => {
 		const dialog = page.getByRole('dialog', { name: 'Connect' });
 		const input = dialog.getByRole('textbox', { name: 'Server address' });
 		await expect(input).toBeFocused();
-		await input.fill('https://example.test');
+		expect(await input.evaluate(element => {
+			const input = element as HTMLInputElement;
+			return [input.selectionStart, input.selectionEnd];
+		})).toEqual([0, 'https://'.length]);
+		await input.pressSequentially('https://example.test');
 		await dialog.getByRole('checkbox', { name: 'Remember server' }).check();
 		await input.press('Enter');
 		await expect(dialog).toHaveCount(0);
@@ -583,6 +610,7 @@ suite('dialog browser component', () => {
 		await page.goto('/dialog.html');
 		await page.evaluate(() => window.ashDialogIntegration.showCheckboxConfirmation());
 		const dialog = page.getByRole('dialog', { name: 'Remove server' });
+		await expect(dialog.getByRole('button', { name: 'Confirm' })).toBeFocused();
 		await dialog.getByRole('checkbox', { name: 'Also remove credentials' }).check();
 		await dialog.getByRole('button', { name: 'Confirm' }).click();
 		await expect(dialog).toHaveCount(0);
@@ -590,6 +618,85 @@ suite('dialog browser component', () => {
 			button: 'primary', checkboxChecked: true, values: undefined,
 		});
 	});
+
+	test('modified Enter and IME composition do not accept an input dialog', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showInput());
+		const dialog = page.getByRole('dialog', { name: 'Connect' });
+		const input = dialog.getByRole('textbox', { name: 'Server address' });
+		for (const key of ['Shift+Enter', 'Control+Enter', 'Meta+Enter', 'Alt+Enter']) {
+			await input.press(key);
+			await expect(dialog).toBeVisible();
+		}
+		const composing = await input.evaluate(element => {
+			const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, isComposing: true });
+			element.dispatchEvent(event);
+			return event.defaultPrevented;
+		});
+		expect(composing).toBe(false);
+		await expect(dialog).toBeVisible();
+		await input.press('Enter');
+		await expect(dialog).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+			button: 'primary', checkboxChecked: false, values: ['https://'],
+		});
+	});
+
+	for (const platform of [
+		{ name: 'macOS', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', secondaryShortcut: true },
+		{ name: 'Windows', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', secondaryShortcut: false },
+		{ name: 'Linux', userAgent: 'Mozilla/5.0 (X11; Linux x86_64)', secondaryShortcut: false },
+	]) {
+		suite(platform.name, () => {
+			browserTests.use({ userAgent: platform.userAgent });
+
+			test('Command+D chooses the secondary action only on macOS', async function () {
+				const { page } = browserTests;
+				await page.goto('/dialog.html');
+				await page.evaluate(() => window.ashDialogIntegration.showChoice());
+				const dialog = page.getByRole('dialog', { name: 'Choose action' });
+				await dialog.getByRole('checkbox', { name: 'Remember choice' }).check();
+				await page.keyboard.press('Meta+d');
+				if (platform.secondaryShortcut) {
+					await expect(dialog).toHaveCount(0);
+					await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+						button: 'primary', buttonIndex: 1, checkboxChecked: true, values: undefined,
+					});
+				} else {
+					await expect(dialog).toBeVisible();
+					await page.keyboard.press('Escape');
+					await expect(dialog).toHaveCount(0);
+				}
+			});
+
+			if (platform.secondaryShortcut) {
+				test('Command+D respects disabled and cancel actions and extra modifiers', async function () {
+					const { page } = browserTests;
+					await page.goto('/dialog.html');
+					await page.evaluate(() => window.ashDialogIntegration.showPrompt());
+					const prompt = page.getByRole('dialog', { name: 'Save changes' });
+					for (const key of ['Meta+Shift+d', 'Meta+Alt+d', 'Meta+Control+d']) {
+						await page.keyboard.press(key);
+						await expect(prompt).toBeVisible();
+					}
+					await prompt.getByRole('button', { name: 'Discard' }).evaluate(element => { (element as HTMLButtonElement).disabled = true; });
+					await page.keyboard.press('Meta+d');
+					await expect(prompt).toBeVisible();
+					await page.keyboard.press('Escape');
+					await expect(prompt).toHaveCount(0);
+
+					await page.evaluate(() => window.ashDialogIntegration.showCore('custom'));
+					const core = page.getByRole('dialog', { name: 'Core dialog' });
+					await expect(core.getByRole('textbox', { name: 'Custom text' })).toBeFocused();
+					await page.keyboard.press('Meta+d');
+					await expect(core).toBeVisible();
+					await page.keyboard.press('Escape');
+					await expect(core).toHaveCount(0);
+				});
+			}
+		});
+	}
 
 	test('a failed Command Palette action opens an error dialog', async function () {
 		const { page } = browserTests;

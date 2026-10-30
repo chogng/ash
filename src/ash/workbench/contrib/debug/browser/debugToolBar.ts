@@ -7,6 +7,7 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IDebugService, type IDebugSession } from '../common/debug.js';
 import './media/debugToolBar.css';
@@ -35,7 +36,18 @@ export class DebugToolBar extends Disposable {
 		container.append(controls, this.status);
 		this._register(toDisposable(() => { controls.remove(); this.status.remove(); }));
 		this.sessions = h(container.ownerDocument, 'select');
-		this.toolbar = this._register(new WorkbenchToolBar(controls, contextMenus, { ariaLabel: localize('debug.controls', 'Debug controls') }));
+		this.toolbar = this._register(new WorkbenchToolBar(controls, contextMenus, {
+			ariaLabel: localize('debug.controls', 'Debug controls'),
+			actionViewItemProvider: (action, options) => {
+				if (action.id !== 'ash.debug.stop' || this.debug.sessions.length < 2) {
+					return undefined;
+				}
+				const label = localize('debug.stopActions', 'More Stop Actions');
+				return new DropdownWithPrimaryActionViewItem(action, {
+					id: 'ash.debug.stopActions', label, tooltip: label, enabled: true, run: () => { },
+				}, [this.debugAction('stopAll', localize('debug.stopAll', 'Stop All'), Lxicon.square)], contextMenus, options);
+			},
+		}));
 		controls.prepend(this.sessions);
 		this._register(toDisposable(() => this.sessions.remove()));
 		this._register(addDisposableListener(this.sessions, 'change', () => {
@@ -48,6 +60,7 @@ export class DebugToolBar extends Disposable {
 			if (event.affectsSome(new Set(['debugUx']))) this.render();
 		}));
 		this._register(debug.onDidChangeSession(() => { this.error = undefined; this.render(); }));
+		this._register(debug.onDidNewSession(() => this.render()));
 		this._register(debug.getViewModel().onDidFocusStackFrame(() => { this.error = undefined; this.render(); }));
 		this.render();
 	}
@@ -105,7 +118,7 @@ export class DebugToolBar extends Disposable {
 			this.debugAction('stepOut', localize('debug.stepOut', 'Step Out'), Lxicon.arrowUp, stopped),
 			this.debugAction('restart', localize('debug.restart', 'Restart'), Lxicon.refresh, session.state !== 'starting'),
 			this.debugAction('stop', localize('debug.stop', 'Stop'), Lxicon.square),
-		] : [], this.debug.sessions.length > 1 ? [this.debugAction('stopAll', localize('debug.stopAll', 'Stop All'), Lxicon.square)] : []);
+		] : []);
 		this.sessions.setAttribute('aria-label', localize('debug.session', 'Active debug session'));
 		this.sessions.replaceChildren(...this.debug.sessions.map(candidate => {
 			const option = h(this.sessions.ownerDocument, 'option');
@@ -120,12 +133,12 @@ export class DebugToolBar extends Disposable {
 	}
 }
 
-function sessionStateLabel(state: IDebugSession["state"]): string {
+function sessionStateLabel(state: IDebugSession['state']): string {
 	switch (state) {
-		case "starting": return localize("debug.state.starting", "starting");
-		case "running": return localize("debug.state.running", "running");
-		case "stopped": return localize("debug.state.stopped", "stopped");
-		case "terminated": return localize("debug.state.terminated", "terminated");
-		case "error": return localize("debug.state.error", "error");
+		case 'starting': return localize('debug.state.starting', 'starting');
+		case 'running': return localize('debug.state.running', 'running');
+		case 'stopped': return localize('debug.state.stopped', 'stopped');
+		case 'terminated': return localize('debug.state.terminated', 'terminated');
+		case 'error': return localize('debug.state.error', 'error');
 	}
 }

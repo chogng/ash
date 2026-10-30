@@ -12,7 +12,7 @@ fn browser_tools_are_complete_strict_and_require_one_time_approval() {
         ResourceStore::default(),
     )))));
     let definitions = service.definitions();
-    assert_eq!(definitions.len(), 18);
+    assert_eq!(definitions.len(), 20);
     assert!(definitions.iter().all(|definition| definition.strict));
     assert!(
         definitions
@@ -63,6 +63,89 @@ fn browser_tools_reject_privileged_urls_and_ambiguous_element_ids() {
                     "browser_click",
                     json!({ "target_id": "browser_target_1", "node_id": node_id }),
                 ))
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn canvas_open_validates_identity_and_uses_the_existing_browser_review() {
+    let service = BrowserToolService::new(Arc::new(browser_host(Arc::new(Mutex::new(
+        ResourceStore::default(),
+    )))));
+    let valid = json!({"url":"https://example.test/app", "canvas":{"instance_id":"preview-1", "title":"Preview"}});
+    let request = service
+        .materialize(&call("browser_open", valid.clone()))
+        .unwrap();
+    assert!(matches!(
+        request,
+        BrowserToolRequest::Open {
+            canvas: Some(_),
+            ..
+        }
+    ));
+    assert_eq!(
+        service
+            .prepare(&call("browser_open", valid))
+            .unwrap()
+            .action()
+            .kind(),
+        &ActionKind::BrowserInteraction
+    );
+    for canvas in [
+        json!({"instance_id":"../other", "title":"Preview"}),
+        json!({"instance_id":"preview", "title":" "}),
+        json!({"instance_id":"preview", "title":"Preview", "thread_id":"other"}),
+    ] {
+        assert!(
+            service
+                .prepare(&call(
+                    "browser_open",
+                    json!({"url":"https://example.test/app", "canvas":canvas})
+                ))
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn registered_canvas_tools_admit_only_type_identity_without_model_supplied_session_or_source() {
+    let service = BrowserToolService::new(Arc::new(browser_host(Arc::new(Mutex::new(
+        ResourceStore::default(),
+    )))));
+    assert!(matches!(
+        service
+            .materialize(&call("canvas_list", json!({})))
+            .unwrap(),
+        BrowserToolRequest::CanvasList
+    ));
+    let valid =
+        json!({"extension_id":"fixture.extension", "canvas_id":"board", "instance_id":"preview"});
+    assert!(matches!(
+        service
+            .materialize(&call("canvas_open", valid.clone()))
+            .unwrap(),
+        BrowserToolRequest::CanvasOpen(_)
+    ));
+    for (key, value) in [
+        ("session_id", "forged"),
+        ("thread_id", "forged"),
+        ("url", "https://forged.test"),
+    ] {
+        let mut arguments = valid.clone();
+        arguments[key] = json!(value);
+        assert!(
+            service
+                .materialize(&call("canvas_open", arguments))
+                .is_err()
+        );
+    }
+    for invalid in ["", "../board", "board/other", "board?token=secret"] {
+        let mut arguments = valid.clone();
+        arguments["canvas_id"] = json!(invalid);
+        assert!(
+            service
+                .materialize(&call("canvas_open", arguments))
                 .is_err()
         );
     }

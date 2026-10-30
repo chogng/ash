@@ -1,12 +1,12 @@
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { rot } from "../../../../base/common/numbers.js";
-import { type ICodeEditor } from "../../../browser/editorBrowser.js";
-import { type Snippet } from "../common/snippetParser.js";
-import { applySnippetTransform, type SnippetTransform } from "../common/snippetTransform.js";
-import { Selection } from "../../../common/core/selection.js";
-import { Range } from "../../../common/core/range.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { type TrackedRange } from "../../../common/model/trackedRange.js";
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { rot } from '../../../../base/common/numbers.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
+import { type Snippet } from '../common/snippetParser.js';
+import { applySnippetTransform, type SnippetTransform } from '../common/snippetTransform.js';
+import { Selection } from '../../../common/core/selection.js';
+import { Range } from '../../../common/core/range.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+import { type TrackedRange } from '../../../common/model/trackedRange.js';
 import { TrackedRangeStickiness, type IIdentifiedSingleEditOperation } from '../../../common/model.js';
 
 /**
@@ -33,20 +33,20 @@ export class SnippetSession extends Disposable {
 		super();
 		if (model !== editor.getModel()) {
 			this.dispose();
-			throw new TypeError("Language completion snippet session must share its editor text model");
+			throw new TypeError('Language completion snippet session must share its editor text model');
 		}
 		const starts = typeof insertionStartOffsets === 'number' ? [insertionStartOffsets] : insertionStartOffsets;
 		if (starts.length === 0 || starts.some(start => !Number.isSafeInteger(start) || start < 0 || start > model.getText().length)) {
 			this.dispose();
-			throw new RangeError("Snippet insertion offset is outside its text model");
+			throw new RangeError('Snippet insertion offset is outside its text model');
 		}
-		if (!snippet || typeof snippet.text !== "string" || snippet.placeholderGroups.length === 0) {
+		if (!snippet || typeof snippet.text !== 'string' || snippet.placeholderGroups.length === 0) {
 			this.dispose();
-			throw new TypeError("Language completion snippet session requires at least one parsed tabstop");
+			throw new TypeError('Language completion snippet session requires at least one parsed tabstop');
 		}
 		if (!Number.isSafeInteger(finalOffsetWithinInsertion) || finalOffsetWithinInsertion < snippet.text.length) {
 			this.dispose();
-			throw new RangeError("Language completion snippet final offset must follow its expansion text");
+			throw new RangeError('Language completion snippet final offset must follow its expansion text');
 		}
 		try {
 			this.groups = this.trackExpansion(starts, snippet, index => index);
@@ -182,7 +182,7 @@ export class SnippetSession extends Disposable {
 
 	private selectGroup(index: number): void {
 		const group = this.groups[index];
-		if (!group) throw new RangeError("Language completion snippet tabstop index is outside its session");
+		if (!group) throw new RangeError('Language completion snippet tabstop index is outside its session');
 		this.updateGroupStickiness(index);
 		this.editor.setSelections(group.ranges.map(range => Selection.fromPositions(range.range.getStartPosition(), range.range.getEndPosition())));
 	}
@@ -242,7 +242,7 @@ export class SnippetSession extends Disposable {
 		}
 		const version = model.version;
 		if (!this.editor.pushUndoStop()) return false;
-		this.editor.executeEdits("snippet.choice", edits, inverseEdits => inverseEdits
+		this.editor.executeEdits('snippet.choice', edits, inverseEdits => inverseEdits
 			.filter(edit => edit.identifier?.major === 0)
 			.sort((left, right) => left.identifier!.minor - right.identifier!.minor)
 			.map(edit => Selection.fromPositions(edit.range.getStartPosition(), edit.range.getEndPosition())));

@@ -1,6 +1,6 @@
-import { Position } from "../../../common/core/position.js";
-import { Range } from "../../../common/core/range.js";
-import { type TextModel } from "../../../common/model/textModel.js";
+import { Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
+import { type TextModel } from '../../../common/model/textModel.js';
 
 /** Returns non-LF line-separator characters that survived model normalization. */
 export function findUnusualLineTerminators(model: TextModel): readonly Range[] {

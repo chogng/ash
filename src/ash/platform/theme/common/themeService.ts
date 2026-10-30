@@ -1,13 +1,13 @@
 import type { IconFontDefinition } from './iconRegistry.js';
-import type { Event } from "../../../base/common/event.js";
-import type { IconDefinition } from "../../../base/common/icon.js";
-import type { Color } from "../../../base/common/color.js";
+import type { Event } from '../../../base/common/event.js';
+import type { IconDefinition } from '../../../base/common/icon.js';
+import type { Color } from '../../../base/common/color.js';
 import {
 	createServiceIdentifier,
-} from "../../instantiation/common/instantiation.js";
-import type { ColorIdentifier, ResolvedColorContribution } from "./colorRegistry.js";
-import type { SizeContribution } from "./sizeRegistry.js";
-import type { SizeValue } from "./sizeUtils.js";
+} from '../../instantiation/common/instantiation.js';
+import type { ColorIdentifier, ResolvedColorContribution } from './colorRegistry.js';
+import type { SizeContribution } from './sizeRegistry.js';
+import type { SizeValue } from './sizeUtils.js';
 import { ColorScheme } from './theme.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
@@ -212,7 +212,7 @@ export interface IThemeService {
 }
 
 export const IThemeService =
-	createServiceIdentifier<IThemeService>("themeService");
+	createServiceIdentifier<IThemeService>('themeService');
 
 /** Keeps a component's resolved theme current for its entire lifetime. */
 export class Themable extends Disposable {

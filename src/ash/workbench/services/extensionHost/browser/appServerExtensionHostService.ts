@@ -9,19 +9,19 @@ import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
 import { ILifecycleService, LifecyclePhase } from '../../lifecycle/common/lifecycle.js';
-import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
-import { CancellationError, getErrorMessage } from "../../../../base/common/errors.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { CommandRegistry } from "../../../../platform/commands/common/commands.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { Emitter, runWithBufferedEvents, type Event } from '../../../../base/common/event.js';
+import { CancellationError, getErrorMessage } from '../../../../base/common/errors.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { CommandRegistry } from '../../../../platform/commands/common/commands.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { createExtensionHostInitialization } from '../../extensions/common/extensionHostProtocol.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type ExtensionHostActivationEvent } from '../../../../platform/agentHost/common/extensionHostApi.js';
-import type { AppServerConnectionState } from "../../../../platform/agentHost/common/appServerApi.js";
-import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from "../../output/common/output.js";
-import { MainThreadExtensionApi, type ExtensionApiIssue } from "../../../api/browser/mainThreadExtensionApi.js";
-import { EmptyExtensionHostSnapshot, type ExtensionHostExtension, type ExtensionHostFailure, type ExtensionHostRegistration as WorkbenchExtensionHostRegistration, type ExtensionHostSnapshot, type ExtensionHostState, type IExtensionHostService } from "../common/extensionHostService.js";
+import type { AppServerConnectionState } from '../../../../platform/agentHost/common/appServerApi.js';
+import { IOutputService, type IOutputChannel, type OutputEntrySeverity } from '../../output/common/output.js';
+import { MainThreadExtensionApi, type ExtensionApiIssue } from '../../../api/browser/mainThreadExtensionApi.js';
+import { EmptyExtensionHostSnapshot, type ExtensionHostExtension, type ExtensionHostFailure, type ExtensionHostRegistration as WorkbenchExtensionHostRegistration, type ExtensionHostSnapshot, type ExtensionHostState, type IExtensionHostService } from '../common/extensionHostService.js';
 
-type RefreshAction = "list" | "reconcile";
+type RefreshAction = 'list' | 'reconcile';
 
 /** Owns one coherent frontend projection of the App Server Extension Host fleet. */
 export class AppServerExtensionHostService extends Disposable implements IExtensionHostService {
@@ -31,7 +31,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 	private readonly extensionApi: MainThreadExtensionApi;
 	private readonly clientEditors: MainThreadClientEditors;
 	private readonly fleetOutput: IOutputChannel;
-	private _state: ExtensionHostState = "stopped";
+	private _state: ExtensionHostState = 'stopped';
 	private snapshot: ExtensionHostSnapshot = EmptyExtensionHostSnapshot;
 	private connectionReady = false;
 	private connectionRevision = 0;
@@ -60,7 +60,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 	) {
 		super();
 		const timeout = normalizeTimeout(invocationTimeoutMillis);
-		this.fleetOutput = this._register(output.createChannel({ id: "extension-host", label: "Extension Host", kind: "log", source: "core" }));
+		this.fleetOutput = this._register(output.createChannel({ id: 'extension-host', label: 'Extension Host', kind: 'log', source: 'core' }));
 		this.extensionApi = this._register(instantiationService.createInstance(MainThreadExtensionApi, commands, timeout, this.fleetOutput));
 		this.clientEditors = this._register(instantiationService.createInstance(MainThreadClientEditors, timeout, loadExtensionEditorModule));
 		this._register(extensions.registerActivationHandler((event, signal) => this.activateByEvent(event, signal)));
@@ -94,7 +94,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		this.assertNotDisposed();
 		if (this.started) return this.refreshRunner ?? Promise.resolve();
 		this.started = true;
-		this.setState("starting");
+		this.setState('starting');
 		const revision = this.connectionRevision;
 		try {
 			const state = await this.api.getConnectionState();
@@ -118,10 +118,10 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		this.assertNotDisposed();
 		if (!this.started) return this.start();
 		if (!this.connectionReady) {
-			this.setState("starting");
+			this.setState('starting');
 			return Promise.resolve();
 		}
-		return this.requestRefresh("reconcile");
+		return this.requestRefresh('reconcile');
 	}
 
 	stop(): Promise<void> {
@@ -136,7 +136,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			this.extensionApi.clear();
 			this.clientEditors.clear();
 			this.setSnapshot(EmptyExtensionHostSnapshot);
-			this.setState("stopped");
+			this.setState('stopped');
 		});
 		return Promise.resolve();
 	}
@@ -144,18 +144,18 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 	private acceptChanged(generation: number): void {
 		if (this.isDisposed || !this.started) return;
 		if (!Number.isSafeInteger(generation) || generation < 1) {
-			this.failRefresh(new TypeError("Extension Host notification generation is invalid"));
+			this.failRefresh(new TypeError('Extension Host notification generation is invalid'));
 			return;
 		}
 		this.desiredGeneration = Math.max(this.desiredGeneration, generation);
-		if (this.connectionReady) void this.requestRefresh("list").catch(reportExtensionHostError);
+		if (this.connectionReady) void this.requestRefresh('list').catch(reportExtensionHostError);
 	}
 
 	private async acceptConnectionState(state: AppServerConnectionState, fromEvent = true): Promise<void> {
 		if (this.isDisposed) return;
 		if (fromEvent) this.connectionRevision += 1;
 		if (!this.started) return;
-		if (state === "ready") {
+		if (state === 'ready') {
 			const revision = this.connectionRevision;
 			const available = await this.api.isAvailable();
 			// Provider callbacks inspect registered configuration and package identities.
@@ -169,11 +169,11 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 					this.extensionApi.clear();
 					this.clientEditors.clear();
 					this.setSnapshot(EmptyExtensionHostSnapshot);
-					this.setState("stopped");
+					this.setState('stopped');
 				});
 				return;
 			}
-			await this.requestRefresh("reconcile");
+			await this.requestRefresh('reconcile');
 			return;
 		}
 		this.connectionReady = false;
@@ -184,14 +184,14 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			this.extensionApi.clear();
 			this.clientEditors.clear();
 			this.setSnapshot(EmptyExtensionHostSnapshot);
-			this.setState(state === "crashed" ? "failed" : "starting");
+			this.setState(state === 'crashed' ? 'failed' : 'starting');
 		});
 	}
 
 	private requestRefresh(action: RefreshAction): Promise<void> {
 		if (this.isDisposed || !this.started || !this.connectionReady) return Promise.resolve();
 		this.pendingAction = mergeAction(this.pendingAction, action);
-		if (!this.extensionApi.hasContributions) this.setState("starting");
+		if (!this.extensionApi.hasContributions) this.setState('starting');
 		if (!this.refreshRunner) this.refreshRunner = this.drainRefreshes();
 		return this.refreshRunner;
 	}
@@ -203,10 +203,10 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 				this.pendingAction = undefined;
 				const revision = this.authorityRevision;
 				try {
-					const snapshot = action === "reconcile" ? await this.api.reconcile("refresh") : await this.api.list();
+					const snapshot = action === 'reconcile' ? await this.api.reconcile('refresh') : await this.api.list();
 					if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) continue;
 					if (snapshot.generation < this.desiredGeneration) {
-						this.pendingAction = mergeAction(this.pendingAction, "list");
+						this.pendingAction = mergeAction(this.pendingAction, 'list');
 						continue;
 					}
 					this.desiredGeneration = 0;
@@ -250,8 +250,8 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		} catch (error) {
 			runWithBufferedEvents(() => {
 				this.fleetOutput.appendLine({ severity: 'error', category: 'registration', text: errorMessage(error) });
-				this.failureEmitter.fire({ extensionId: undefined, code: "registrationProjectionFailed", incarnation: undefined, message: errorMessage(error) });
-				this.setState(this.extensionApi.hasContributions ? "degraded" : "failed");
+				this.failureEmitter.fire({ extensionId: undefined, code: 'registrationProjectionFailed', incarnation: undefined, message: errorMessage(error) });
+				this.setState(this.extensionApi.hasContributions ? 'degraded' : 'failed');
 			});
 		}
 	}
@@ -322,13 +322,13 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			if (!runtime.failure) continue;
 			this.failureEmitter.fire({ extensionId: runtime.id, code: runtime.failure.code, incarnation: runtime.failure.incarnation, message: runtime.failure.message });
 		}
-		for (const issue of issues) this.failureEmitter.fire({ extensionId: issue.extensionId, code: "unsupportedRegistrationBridge", incarnation: undefined, message: issue.message });
+		for (const issue of issues) this.failureEmitter.fire({ extensionId: issue.extensionId, code: 'unsupportedRegistrationBridge', incarnation: undefined, message: issue.message });
 	}
 
 	private failRefresh(error: unknown): void {
 		runWithBufferedEvents(() => {
-			this.failureEmitter.fire({ extensionId: undefined, code: "extensionHostRefreshFailed", incarnation: undefined, message: errorMessage(error) });
-			this.setState(this.extensionApi.hasContributions ? "degraded" : "failed");
+			this.failureEmitter.fire({ extensionId: undefined, code: 'extensionHostRefreshFailed', incarnation: undefined, message: errorMessage(error) });
+			this.setState(this.extensionApi.hasContributions ? 'degraded' : 'failed');
 		});
 	}
 
@@ -341,7 +341,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 	private setState(state: ExtensionHostState): void {
 		if (this._state === state) return;
 		this._state = state;
-		this.fleetOutput?.appendLine({ severity: fleetStateSeverity(state), category: "lifecycle", text: `Extension Host fleet is ${state}.` });
+		this.fleetOutput?.appendLine({ severity: fleetStateSeverity(state), category: 'lifecycle', text: `Extension Host fleet is ${state}.` });
 		this.stateEmitter.fire(state);
 	}
 
@@ -352,6 +352,7 @@ function selectActivationEvent(declarations: readonly string[], event: string): 
 		if (event === `onTerminal:${capability}` && declarations.includes(`onDemand:${capability}`)) return { type: 'capability', capability };
 	}
 	if (event === 'onTerminal' && declarations.includes('onDemand:terminalLinkProvider')) return { type: 'capability', capability: 'terminalLinkProvider' };
+	if (event === 'onCanvas' && declarations.includes('onDemand:dataChannel')) return { type: 'capability', capability: 'dataChannel' };
 	if (event === 'onSpeech' && (declarations.includes('onSpeech') || declarations.includes('onDemand:speechProvider'))) return { type: 'speech' };
 	if (event.startsWith('onTerminalProfile:')) {
 		const profileId = event.slice('onTerminalProfile:'.length);
@@ -387,33 +388,33 @@ function projectSnapshot(snapshot: ExtensionHostFleetSnapshot): ExtensionHostSna
 			state: runtime.lifecycle,
 			failure: runtime.failure,
 			stderr: runtime.stderr,
-			registrations: Object.freeze(runtime.registrations.map((registration): WorkbenchExtensionHostRegistration => Object.freeze({ id: registration.registrationId, kind: registration.kind === "testProfileProvider" ? "testProfileProvider" : registration.kind }))),
+			registrations: Object.freeze(runtime.registrations.map((registration): WorkbenchExtensionHostRegistration => Object.freeze({ id: registration.registrationId, kind: registration.kind === 'testProfileProvider' ? 'testProfileProvider' : registration.kind }))),
 		}))),
 	});
 }
 
 function fleetStateSeverity(state: ExtensionHostState): OutputEntrySeverity {
-	if (state === "failed") return "error";
-	if (state === "degraded") return "warning";
-	return state === "ready" ? "information" : "log";
+	if (state === 'failed') return 'error';
+	if (state === 'degraded') return 'warning';
+	return state === 'ready' ? 'information' : 'log';
 }
 
 function projectState(snapshot: ExtensionHostFleetSnapshot, bridgeIssues: boolean): ExtensionHostState {
-	if (snapshot.extensions.length === 0) return bridgeIssues ? "degraded" : "ready";
-	const ready = snapshot.extensions.filter(extension => (extension.lifecycle === "ready" || extension.lifecycle === "dormant")).length;
-	if (ready === snapshot.extensions.length) return bridgeIssues ? "degraded" : "ready";
-	if (ready > 0) return "degraded";
-	if (snapshot.extensions.every(extension => extension.lifecycle === "stopped")) return "stopped";
-	if (snapshot.extensions.some(extension => extension.lifecycle === "starting" || extension.lifecycle === "handshaking" || extension.lifecycle === "recovering")) return "starting";
-	return "failed";
+	if (snapshot.extensions.length === 0) return bridgeIssues ? 'degraded' : 'ready';
+	const ready = snapshot.extensions.filter(extension => (extension.lifecycle === 'ready' || extension.lifecycle === 'dormant')).length;
+	if (ready === snapshot.extensions.length) return bridgeIssues ? 'degraded' : 'ready';
+	if (ready > 0) return 'degraded';
+	if (snapshot.extensions.every(extension => extension.lifecycle === 'stopped')) return 'stopped';
+	if (snapshot.extensions.some(extension => extension.lifecycle === 'starting' || extension.lifecycle === 'handshaking' || extension.lifecycle === 'recovering')) return 'starting';
+	return 'failed';
 }
 
 function mergeAction(current: RefreshAction | undefined, next: RefreshAction): RefreshAction {
-	return current === "reconcile" || next === "reconcile" ? "reconcile" : "list";
+	return current === 'reconcile' || next === 'reconcile' ? 'reconcile' : 'list';
 }
 
 function normalizeTimeout(value: number): number {
-	if (!Number.isSafeInteger(value) || value < 100 || value > 300_000) throw new TypeError("Extension Host invocation timeout is invalid");
+	if (!Number.isSafeInteger(value) || value < 100 || value > 300_000) throw new TypeError('Extension Host invocation timeout is invalid');
 	return value;
 }
 
@@ -422,5 +423,5 @@ function errorMessage(error: unknown): string {
 }
 
 function reportExtensionHostError(error: unknown): void {
-	console.error("Extension Host refresh failed", error);
+	console.error('Extension Host refresh failed', error);
 }

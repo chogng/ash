@@ -1,10 +1,10 @@
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageInlayHint } from '../../../common/languages.js';
-import "./media/inlayHints.css";
-import { registerEditorContribution } from "../../../browser/editorFeatureRegistration.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Position } from "../../../common/core/position.js";
-import { type View } from "../../../browser/view.js";
-import { addDisposableListener, ModifierKeyEmitter } from "../../../../base/browser/dom.js";
+import './media/inlayHints.css';
+import { registerEditorContribution } from '../../../browser/editorFeatureRegistration.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Position } from '../../../common/core/position.js';
+import { type View } from '../../../browser/view.js';
+import { addDisposableListener, ModifierKeyEmitter } from '../../../../base/browser/dom.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
@@ -154,11 +154,11 @@ export class InlayHintsController extends Disposable {
 function normalizeLanguageInlayHint(hint: LanguageInlayHint): LanguageInlayHint {
 	if (!hint || !Number.isSafeInteger(hint.position?.lineNumber) || !Number.isSafeInteger(hint.position?.column)
 		|| hint.position.lineNumber < 1 || hint.position.column < 1) {
-		throw new TypeError("Inlay hint has invalid position");
+		throw new TypeError('Inlay hint has invalid position');
 	}
 	return Object.freeze({
 		position: new Position(hint.position.lineNumber, hint.position.column),
-		label: typeof hint.label === "string" ? hint.label : Object.freeze(hint.label.map(part => Object.freeze({
+		label: typeof hint.label === 'string' ? hint.label : Object.freeze(hint.label.map(part => Object.freeze({
 			value: part.value,
 			...(part.location ? { location: part.location } : {}),
 		}))),
@@ -171,7 +171,7 @@ function normalizeLanguageInlayHint(hint: LanguageInlayHint): LanguageInlayHint 
 
 registerEditorContribution({
 	id: InlayHintsController.ID, install: context => {
-		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
+		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;
 		return context.instantiationService.createInstance(InlayHintsController, context.view, context.editor, context.onLanguageError);
 	}
 });

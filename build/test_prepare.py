@@ -324,6 +324,19 @@ class PrepareTests(unittest.TestCase):
             self.assertEqual("sourceDigest", reuse.call_args.kwargs["digest_key"])
             build.assert_not_called()
 
+    def test_protocol_failure_stops_before_cache_selection_and_build(self) -> None:
+        with (
+            patch.object(
+                prepare, "generate_protocol", side_effect=RuntimeError("export failed")
+            ),
+            patch.object(prepare, "reusable_package") as reuse,
+            patch.object(prepare, "build_binaries") as build,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "export failed"):
+                prepare.prepare_development_package(prepare.parse_arguments([]))
+        reuse.assert_not_called()
+        build.assert_not_called()
+
     def test_preparation_builds_one_backend_set_and_delegates_assembly(self) -> None:
         self.assert_preparation_contract("x86_64-pc-windows-msvc")
 
@@ -424,6 +437,7 @@ class PrepareTests(unittest.TestCase):
                 result = prepare.prepare_development_package(args, root=root)
             self.assertEqual(root / "published", result)
             self.assertEqual(1, build.call_count)
+            self.assertTrue(build.call_args.kwargs["protocol_prepared"])
             self.assertEqual(set(binaries), set(build.call_args.args[2]))
             self.assertEqual(binaries["ash-package-store"], publish.call_args.args[1])
             # Desktop development keeps media available without a first-use installation.

@@ -1,8 +1,8 @@
-import "./media/part.css";
-import { Dimension, type IDimension } from "../../base/browser/dom.js";
-import { Emitter, type Event } from "../../base/common/event.js";
-import { toDisposable } from "../../base/common/lifecycle.js";
-import { h } from "../../base/browser/dom.js";
+import './media/part.css';
+import { Dimension, type IDimension } from '../../base/browser/dom.js';
+import { Emitter, type Event } from '../../base/common/event.js';
+import { toDisposable } from '../../base/common/lifecycle.js';
+import { h } from '../../base/browser/dom.js';
 import type { IThemeService } from '../../platform/theme/common/themeService.js';
 import type { IStorageService } from '../../platform/storage/common/storage.js';
 import { Component } from '../common/component.js';
@@ -41,15 +41,15 @@ export abstract class Part extends Component {
 	) {
 		super(id, themeService, storageService);
 		const ownerDocument = container.ownerDocument;
-		const domNode = h(ownerDocument, "section");
+		const domNode = h(ownerDocument, 'section');
 		this.domNode = domNode;
 		this._register(toDisposable(() => domNode.remove()));
 		domNode.className = `ash-workbench-part ash-workbench-${id}`;
 		domNode.dataset.part = id;
-		this.titleDomNode = h(ownerDocument, "div");
-		this.titleDomNode.className = "ash-workbench-part-title";
-		this.contentDomNode = h(ownerDocument, "div");
-		this.contentDomNode.className = "ash-workbench-part-content";
+		this.titleDomNode = h(ownerDocument, 'div');
+		this.titleDomNode.className = 'ash-workbench-part-title';
+		this.contentDomNode = h(ownerDocument, 'div');
+		this.contentDomNode.className = 'ash-workbench-part-content';
 		domNode.append(this.titleDomNode, this.contentDomNode);
 		container.append(domNode);
 	}

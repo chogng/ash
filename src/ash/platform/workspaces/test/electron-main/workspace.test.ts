@@ -1,14 +1,14 @@
 import type { WorkspaceTrustGrant } from '../../../workspace/common/workspaceTrust.js';
-import assert from "node:assert/strict";
-import { resolve } from "node:path";
-import { setup, teardown, test } from "mocha";
-import { InstantiationService } from "../../../instantiation/common/instantiationService.js";
-import { IAuxiliaryWindowsMainService } from "../../../auxiliaryWindow/electron-main/auxiliaryWindows.js";
-import { AuxiliaryWindowsMainService } from "../../../auxiliaryWindow/electron-main/auxiliaryWindowsMainService.js";
-import { IWindowsMainService } from "../../../windows/electron-main/windows.js";
+import assert from 'node:assert/strict';
+import { resolve } from 'node:path';
+import { setup, teardown, test } from 'mocha';
+import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
+import { IAuxiliaryWindowsMainService } from '../../../auxiliaryWindow/electron-main/auxiliaryWindows.js';
+import { AuxiliaryWindowsMainService } from '../../../auxiliaryWindow/electron-main/auxiliaryWindowsMainService.js';
+import { IWindowsMainService } from '../../../windows/electron-main/windows.js';
 
-import { URI } from "../../../../base/common/uri.js";
-import { toDisposable } from "../../../../base/common/lifecycle.js";
+import { URI } from '../../../../base/common/uri.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import {
 	isSingleFolderWorkspaceIdentifier,
 	isRemoteWorkspaceIdentifier,
@@ -21,14 +21,14 @@ import {
 	workbenchStateFromWorkspaceIdentifier,
 	workspaceFromIdentifier,
 	WorkbenchState,
-} from "../../../../platform/workspace/common/workspace.js";
-import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
+} from '../../../../platform/workspace/common/workspace.js';
+import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
 
 
 import { WorkspaceOpenTargetKind } from '../../../../platform/environment/common/argv.js';
-import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus } from "../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
-import { AppServerWorkspaceTransitionAdapter, type IAppServerWorkspaceTransitionHost } from "../../../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
-import { AppServerRemoteError } from "../../../agentHost/common/appServerError.js";
+import { WorkspaceTransitionFailureKind, WorkspaceTransitionFailureStage, WorkspaceTransitionMainService, WorkspaceTransitionPhase, WorkspaceTransitionRecovery, WorkspaceTransitionStatus } from '../../../../platform/workspaces/electron-main/workspaceTransitionMainService.js';
+import { AppServerWorkspaceTransitionAdapter, type IAppServerWorkspaceTransitionHost } from '../../../../platform/workspaces/electron-main/appServerWorkspaceTransition.js';
+import { AppServerRemoteError } from '../../../agentHost/common/appServerError.js';
 import { WorkspaceContextMainService } from '../../../../platform/window/electron-main/window.js';
 import { WindowsMainService, workspaceContextIpcRoutes } from '../../../../platform/windows/electron-main/windowsMainService.js';
 import { WorkspacesManagementMainService } from '../../../../platform/workspaces/electron-main/workspacesManagementMainService.js';
@@ -37,10 +37,10 @@ import {
 	getWorkspaceIdentifier,
 	type IWorkspacePathService,
 	WorkspacePathKind,
-} from "../../../../platform/workspaces/node/workspaces.js";
+} from '../../../../platform/workspaces/node/workspaces.js';
 import {
 	TestWorkspaceService,
-} from "../../../../workbench/services/configuration/test/common/testServices.js";
+} from '../../../../workbench/services/configuration/test/common/testServices.js';
 
 let windowServices: InstantiationService;
 setup(() => {
@@ -62,25 +62,25 @@ test('empty Remote workspaces retain their authority through persisted and rende
 	assert.throws(() => parseWorkspaceIdentifier({ ...workspace, remoteAuthority: 'ssh+user@host' }), /Remote SSH host/);
 });
 
-test("windows service resolves SSH folders without reading the local filesystem", async () => {
+test('windows service resolves SSH folders without reading the local filesystem', async () => {
 	let localReads = 0;
 	const workspace = await windowsForWorkspacePaths({
 		async resolvePath() {
 			localReads += 1;
-			throw new Error("Remote path must not be read locally");
+			throw new Error('Remote path must not be read locally');
 		},
 	}).resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.RemoteFolder, path: '/home/ash/project', sshHost: 'work-server' }, resolve('launch-root'));
 
 	assert.equal(localReads, 0);
 	assert.ok(isRemoteWorkspaceIdentifier(workspace));
-	assert.equal(workspace.uri.toString(), "ash-remote://ssh+work-server/home/ash/project");
+	assert.equal(workspace.uri.toString(), 'ash-remote://ssh+work-server/home/ash/project');
 	assert.equal(workspace.id.length, 64);
-	assert.equal(new TestWorkspaceService(workspace).getWorkspace().folders[0]?.name, "project");
+	assert.equal(new TestWorkspaceService(workspace).getWorkspace().folders[0]?.name, 'project');
 });
 
-test("windows service resolves a canonical single-folder identity", async () => {
-	const cwd = resolve("launch-root");
-	const canonicalPath = resolve("canonical", "project");
+test('windows service resolves a canonical single-folder identity', async () => {
+	const cwd = resolve('launch-root');
+	const canonicalPath = resolve('canonical', 'project');
 	let requestedPath: string | undefined;
 	const pathService: IWorkspacePathService = {
 		async resolvePath(path) {
@@ -95,7 +95,7 @@ test("windows service resolves a canonical single-folder identity", async () => 
 	const workspace = await windowsForWorkspacePaths(pathService)
 		.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.Automatic, path: 'project' }, cwd);
 
-	assert.equal(requestedPath, resolve(cwd, "project"));
+	assert.equal(requestedPath, resolve(cwd, 'project'));
 	assert.ok(isSingleFolderWorkspaceIdentifier(workspace));
 	assert.equal(workspace.id.length, 64);
 	assert.equal(workspace.uri.toString(), URI.file(canonicalPath).toString());
@@ -106,11 +106,11 @@ test("windows service resolves a canonical single-folder identity", async () => 
 
 	const context = new TestWorkspaceService(workspace);
 	assert.equal(context.getWorkbenchState(), WorkbenchState.FOLDER);
-	assert.equal(context.getWorkspace().folders[0]?.name, "project");
+	assert.equal(context.getWorkspace().folders[0]?.name, 'project');
 });
 
-test("windows service recognizes explicit workspace files", async () => {
-	const canonicalPath = resolve("canonical", "team.ash-workspace");
+test('windows service recognizes explicit workspace files', async () => {
+	const canonicalPath = resolve('canonical', 'team.ash-workspace');
 	const pathService: IWorkspacePathService = {
 		async resolvePath() {
 			return {
@@ -137,11 +137,11 @@ test("windows service recognizes explicit workspace files", async () => {
 	);
 	const context = new TestWorkspaceService(workspace);
 	assert.equal(context.getWorkbenchState(), WorkbenchState.WORKSPACE);
-	assert.equal(context.getWorkspace().name, "team");
+	assert.equal(context.getWorkspace().name, 'team');
 });
 
-test("workspaces service resolves ordered folders from VS Code workspace files", async () => {
-	const configPath = resolve("canonical", "team.code-workspace");
+test('workspaces service resolves ordered folders from VS Code workspace files', async () => {
+	const configPath = resolve('canonical', 'team.code-workspace');
 	const pathService: IWorkspacePathService = {
 		async resolvePath(path) {
 			return {
@@ -165,19 +165,19 @@ test("workspaces service resolves ordered folders from VS Code workspace files",
 	assert.ok(isWorkspaceIdentifier(identity));
 
 	const workspace = await service.resolveWorkspace(identity);
-	assert.equal(workspace.name, "team");
+	assert.equal(workspace.name, 'team');
 	assert.equal(workspace.configuration?.fsPath, URI.file(configPath).fsPath);
 	assert.deepEqual(workspace.folders.map(folder => ({ name: folder.name, index: folder.index, path: folder.uri.fsPath })), [
-		{ name: "Web Client", index: 0, path: URI.file(resolve("canonical", "apps", "web")).fsPath },
-		{ name: "api", index: 1, path: URI.file(resolve("api")).fsPath },
+		{ name: 'Web Client', index: 0, path: URI.file(resolve('canonical', 'apps', 'web')).fsPath },
+		{ name: 'api', index: 1, path: URI.file(resolve('api')).fsPath },
 	]);
 	assert.notEqual(workspace.folders[0]?.id, workspace.folders[1]?.id);
 	assert.equal(new TestWorkspaceService(workspace).getWorkbenchState(), WorkbenchState.WORKSPACE);
 });
 
-test("non-empty workspace identifiers are stable for canonical URIs", () => {
-	const folderUri = URI.file(resolve("canonical", "project"));
-	const configPath = URI.file(resolve("canonical", "team.ash-workspace"));
+test('non-empty workspace identifiers are stable for canonical URIs', () => {
+	const folderUri = URI.file(resolve('canonical', 'project'));
+	const configPath = URI.file(resolve('canonical', 'team.ash-workspace'));
 
 	assert.equal(
 		getSingleFolderWorkspaceIdentifier(folderUri).id,
@@ -189,8 +189,8 @@ test("non-empty workspace identifiers are stable for canonical URIs", () => {
 	);
 });
 
-test("loose files and launches without a target remain empty", async () => {
-	const filePath = resolve("canonical", "notes.txt");
+test('loose files and launches without a target remain empty', async () => {
+	const filePath = resolve('canonical', 'notes.txt');
 	const pathService: IWorkspacePathService = {
 		async resolvePath() {
 			return {
@@ -223,10 +223,10 @@ test("loose files and launches without a target remain empty", async () => {
 	);
 });
 
-test("workspace identifier IPC validation revives URIs", () => {
+test('workspace identifier IPC validation revives URIs', () => {
 	const serializedFolder = {
-		id: "folder-id",
-		uri: URI.file(resolve("project")).toString(),
+		id: 'folder-id',
+		uri: URI.file(resolve('project')).toString(),
 	};
 	const folder = parseWorkspaceIdentifier(serializedFolder);
 	assert.ok(isSingleFolderWorkspaceIdentifier(folder));
@@ -243,51 +243,51 @@ test("workspace identifier IPC validation revives URIs", () => {
 	assert.throws(
 		() =>
 			parseWorkspaceIdentifier({
-				id: "folder-id",
-				uri: "https://example.com/project",
+				id: 'folder-id',
+				uri: 'https://example.com/project',
 			}),
 		/file or ash-remote scheme/,
 	);
 	assert.throws(
 		() =>
 			parseWorkspaceIdentifier({
-				id: "folder-id",
+				id: 'folder-id',
 				uri: `${serializedFolder.uri}?revision=1`,
 			}),
 		/query or fragment/,
 	);
 	assert.throws(
-		() => parseWorkspaceIdentifier({ id: "" }),
+		() => parseWorkspaceIdentifier({ id: '' }),
 		/non-empty/,
 	);
 
-	const remoteFolder = { id: "remote-folder-id", uri: createSshRemoteWorkspaceUri("work-server", "/home/ash/project").toString() };
+	const remoteFolder = { id: 'remote-folder-id', uri: createSshRemoteWorkspaceUri('work-server', '/home/ash/project').toString() };
 	const parsedRemoteFolder = parseWorkspaceIdentifier(remoteFolder);
 	assert.ok(isRemoteWorkspaceIdentifier(parsedRemoteFolder));
 	assert.deepEqual(serializeWorkspaceIdentifier(parsedRemoteFolder), remoteFolder);
-	assert.throws(() => parseWorkspaceIdentifier({ id: "remote-folder-id", uri: "ash-remote://ssh+bad%3Bhost/home/ash/project" }), /Remote|SSH|authority|Invalid/);
-	assert.throws(() => parseWorkspaceIdentifier({ id: "remote-folder-id", uri: "ash-remote://ssh+work-server/home/ash%2Fproject" }), /canonical resource identity/);
-	assert.throws(() => parseWorkspaceIdentifier({ id: "remote-folder-id", uri: "ash-remote://ssh+work-server/home//ash/project" }), /canonical/);
-	assert.throws(() => parseWorkspaceIdentifier({ id: "remote-folder-id", uri: "ash-remote://ssh+work-server/home/ash/project/" }), /canonical/);
+	assert.throws(() => parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+bad%3Bhost/home/ash/project' }), /Remote|SSH|authority|Invalid/);
+	assert.throws(() => parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+work-server/home/ash%2Fproject' }), /canonical resource identity/);
+	assert.throws(() => parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+work-server/home//ash/project' }), /canonical/);
+	assert.throws(() => parseWorkspaceIdentifier({ id: 'remote-folder-id', uri: 'ash-remote://ssh+work-server/home/ash/project/' }), /canonical/);
 });
 
-test("resolved workspace IPC preserves ordered folder identities", () => {
+test('resolved workspace IPC preserves ordered folder identities', () => {
 	const serialized = {
-		id: "workspace-id",
+		id: 'workspace-id',
 		folders: [
-			{ id: "web-id", uri: URI.file(resolve("web")).toString(), name: "Web", index: 0 },
-			{ id: "api-id", uri: URI.file(resolve("api")).toString(), name: "API", index: 1 },
+			{ id: 'web-id', uri: URI.file(resolve('web')).toString(), name: 'Web', index: 0 },
+			{ id: 'api-id', uri: URI.file(resolve('api')).toString(), name: 'API', index: 1 },
 		],
-		configuration: URI.file(resolve("team.code-workspace")).toString(),
-		name: "team",
+		configuration: URI.file(resolve('team.code-workspace')).toString(),
+		name: 'team',
 	};
 	const workspace = parseWorkspace(serialized);
 	assert.deepEqual(serializeWorkspace(workspace), serialized);
-	assert.equal(workspace.folders[1]?.id, "api-id");
+	assert.equal(workspace.folders[1]?.id, 'api-id');
 	assert.throws(() => parseWorkspace({ ...serialized, folders: [serialized.folders[1], serialized.folders[0]] }), /indices/);
 });
 
-test("window workspace context exposes its identity through IPC", async () => {
+test('window workspace context exposes its identity through IPC', async () => {
 	const workspace = UNKNOWN_EMPTY_WINDOW_WORKSPACE;
 	const context = new WorkspaceContextMainService(workspace);
 	const [route] = workspaceContextIpcRoutes(context);
@@ -296,7 +296,7 @@ test("window workspace context exposes its identity through IPC", async () => {
 		changes.push(nextWorkspace.id);
 	});
 
-	assert.equal(route.channel, "ash:workspace:context:read");
+	assert.equal(route.channel, 'ash:workspace:context:read');
 	assert.equal(route.validate(undefined), undefined);
 	assert.throws(() => route.validate({}), /does not accept parameters/);
 	assert.deepEqual(
@@ -308,7 +308,7 @@ test("window workspace context exposes its identity through IPC", async () => {
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
 		},
-	}).resolveFolder(resolve("project"));
+	}).resolveFolder(resolve('project'));
 	context.updateWorkspace(folder);
 	context.updateWorkspace(folder);
 	assert.deepEqual(
@@ -320,7 +320,7 @@ test("window workspace context exposes its identity through IPC", async () => {
 	context.dispose();
 });
 
-test("workspace transition commits only after the runtime accepts the folder", async () => {
+test('workspace transition commits only after the runtime accepts the folder', async () => {
 	const workspaces = new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
@@ -338,15 +338,15 @@ test("workspace transition commits only after the runtime accepts the folder", a
 			async switchWorkspace({ workspace, grant }) {
 				runtimeSwitches.push(workspace.uri.fsPath);
 				grants.push(grant);
-				if (workspace.uri.fsPath.endsWith("rejected")) {
-					throw new Error("runtime rejected workspace");
+				if (workspace.uri.fsPath.endsWith('rejected')) {
+					throw new Error('runtime rejected workspace');
 				}
 			},
 		},
 		classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
 	});
-	const acceptedPath = resolve("project");
-	const acceptedGrant: WorkspaceTrustGrant = { type: "host", permissions: ["readFiles"] };
+	const acceptedPath = resolve('project');
+	const acceptedGrant: WorkspaceTrustGrant = { type: 'host', permissions: ['readFiles'] };
 	const accepted = await transitions.transitionToFolder(acceptedPath, acceptedGrant);
 
 	assert.equal(accepted.status, WorkspaceTransitionStatus.Applied);
@@ -359,16 +359,16 @@ test("workspace transition commits only after the runtime accepts the folder", a
 	assert.equal(unchanged.status, WorkspaceTransitionStatus.Unchanged);
 	assert.deepEqual(runtimeSwitches, [URI.file(acceptedPath).fsPath]);
 
-	const rejected = await transitions.transitionToFolder(resolve("rejected"));
+	const rejected = await transitions.transitionToFolder(resolve('rejected'));
 	assert.equal(rejected.status, WorkspaceTransitionStatus.Failed);
 	assert.equal(rejected.failure?.kind, WorkspaceTransitionFailureKind.RuntimeRejected);
 	assert.equal(context.getWorkspace().id, accepted.workspace.id);
 });
 
-test("workspace transition accepts a validated Remote identity without reading it as a local path", async () => {
+test('workspace transition accepts a validated Remote identity without reading it as a local path', async () => {
 	const workspaces = new WorkspacesManagementMainService();
-	const original = getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri("build-host", "/srv/one"));
-	const target = getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri("build-host", "/srv/two"));
+	const original = getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri('build-host', '/srv/one'));
+	const target = getSingleFolderWorkspaceIdentifier(createSshRemoteWorkspaceUri('build-host', '/srv/two'));
 	const context = new WorkspaceContextMainService(original);
 	const switchedRoots: string[] = [];
 	const transitions = new WorkspaceTransitionMainService({
@@ -382,14 +382,14 @@ test("workspace transition accepts a validated Remote identity without reading i
 		classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
 	});
 
-	const result = await transitions.transitionToWorkspace({ workspace: target, root: "/srv/two" });
+	const result = await transitions.transitionToWorkspace({ workspace: target, root: '/srv/two' });
 
 	assert.equal(result.status, WorkspaceTransitionStatus.Applied);
-	assert.deepEqual(switchedRoots, ["/srv/two"]);
+	assert.deepEqual(switchedRoots, ['/srv/two']);
 	assert.equal(context.getWorkspace().id, target.id);
 });
 
-test("workspace transition serializes concurrent folder requests", async () => {
+test('workspace transition serializes concurrent folder requests', async () => {
 	const workspaces = new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
@@ -414,8 +414,8 @@ test("workspace transition serializes concurrent folder requests", async () => {
 		},
 		classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
 	});
-	const firstPath = resolve("first");
-	const secondPath = resolve("second");
+	const firstPath = resolve('first');
+	const secondPath = resolve('second');
 	const first = transitions.transitionToFolder(firstPath);
 	const second = transitions.transitionToFolder(secondPath);
 	await new Promise<void>((resolveTurn) => setImmediate(resolveTurn));
@@ -431,7 +431,7 @@ test("workspace transition serializes concurrent folder requests", async () => {
 	assert.equal(current.uri.fsPath, URI.file(secondPath).fsPath);
 });
 
-test("workspace transition exposes phases and safely retries recovered runtime loss", async () => {
+test('workspace transition exposes phases and safely retries recovered runtime loss', async () => {
 	const workspaces = new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
@@ -446,7 +446,7 @@ test("workspace transition exposes phases and safely retries recovered runtime l
 		runtime: {
 			async switchWorkspace() {
 				runtimeAttempts += 1;
-				if (runtimeAttempts === 1) throw new Error("connection closed");
+				if (runtimeAttempts === 1) throw new Error('connection closed');
 			},
 		},
 		classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeUnavailable,
@@ -459,7 +459,7 @@ test("workspace transition exposes phases and safely retries recovered runtime l
 	});
 	transitions.onDidChangeState((state) => phases.push(state.phase));
 
-	const result = await transitions.transitionToFolder(resolve("recovered"));
+	const result = await transitions.transitionToFolder(resolve('recovered'));
 
 	assert.equal(result.status, WorkspaceTransitionStatus.Recovered);
 	assert.equal(runtimeAttempts, 2);
@@ -473,7 +473,7 @@ test("workspace transition exposes phases and safely retries recovered runtime l
 	]);
 });
 
-test("workspace transition routes Busy without committing and accepts a later backend transition", async () => {
+test('workspace transition routes Busy without committing and accepts a later backend transition', async () => {
 	const workspaces = new WorkspacesManagementMainService({
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
@@ -487,27 +487,27 @@ test("workspace transition routes Busy without committing and accepts a later ba
 		context,
 		runtime: {
 			async switchWorkspace() {
-				if (runtimeBusy) throw new Error("busy");
+				if (runtimeBusy) throw new Error('busy');
 			},
 		},
 		classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeBusy,
 	});
 
-	const blocked = await transitions.transitionToFolder(resolve("blocked"));
+	const blocked = await transitions.transitionToFolder(resolve('blocked'));
 	assert.equal(blocked.status, WorkspaceTransitionStatus.Blocked);
 	assert.equal(context.getWorkspace(), original);
 	assert.equal(transitions.state.phase, WorkspaceTransitionPhase.Idle);
 
 	runtimeBusy = false;
-	const applied = await transitions.transitionToFolder(resolve("accepted"));
+	const applied = await transitions.transitionToFolder(resolve('accepted'));
 	assert.equal(applied.status, WorkspaceTransitionStatus.Applied);
 	assert.equal(context.getWorkspace().id, applied.workspace?.id);
 	assert.deepEqual(transitions.state, { phase: WorkspaceTransitionPhase.Idle });
 });
 
-test("App Server workspace adapter routes only connection recovery into a retry", async () => {
-	let state: ReturnType<IAppServerWorkspaceTransitionHost["getState"]> = "ready";
-	const listeners = new Set<Parameters<IAppServerWorkspaceTransitionHost["onStateChange"]>[0]>();
+test('App Server workspace adapter routes only connection recovery into a retry', async () => {
+	let state: ReturnType<IAppServerWorkspaceTransitionHost['getState']> = 'ready';
+	const listeners = new Set<Parameters<IAppServerWorkspaceTransitionHost['onStateChange']>[0]>();
 	const switched: { root: string; workspaceId: string; previousWorkspaceId: string; }[] = [];
 	const host: IAppServerWorkspaceTransitionHost = {
 		getState: () => state,
@@ -522,16 +522,16 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 	const adapter = new AppServerWorkspaceTransitionAdapter(host);
 
 	assert.equal(
-		adapter.classifyRuntimeError(new AppServerRemoteError(-32071, "Workspace switch is busy", { kind: "EnvironmentBusy" })),
+		adapter.classifyRuntimeError(new AppServerRemoteError(-32071, 'Workspace switch is busy', { kind: 'EnvironmentBusy' })),
 		WorkspaceTransitionFailureKind.RuntimeBusy,
 	);
 	assert.equal(
-		adapter.classifyRuntimeError(new AppServerRemoteError(-32070, "Workspace switch is unavailable", { kind: "EnvironmentUnavailable" })),
+		adapter.classifyRuntimeError(new AppServerRemoteError(-32070, 'Workspace switch is unavailable', { kind: 'EnvironmentUnavailable' })),
 		WorkspaceTransitionFailureKind.RuntimeUnsupported,
 	);
-	state = "restarting";
+	state = 'restarting';
 	assert.equal(
-		adapter.classifyRuntimeError(new Error("connection closed")),
+		adapter.classifyRuntimeError(new Error('connection closed')),
 		WorkspaceTransitionFailureKind.RuntimeUnavailable,
 	);
 
@@ -539,7 +539,7 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 		async resolvePath(path) {
 			return { kind: WorkspacePathKind.Directory, path };
 		},
-	}).resolveFolder(resolve("recovered-by-supervisor"));
+	}).resolveFolder(resolve('recovered-by-supervisor'));
 	const recovery = adapter.recover({
 		transitionId: 1,
 		stage: WorkspaceTransitionFailureStage.Runtime,
@@ -547,10 +547,10 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 		requestedPath: workspace.uri.fsPath,
 		previous: UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 		workspace,
-		error: new Error("connection closed"),
+		error: new Error('connection closed'),
 	});
 	await new Promise<void>((resolveTurn) => setImmediate(resolveTurn));
-	state = "ready";
+	state = 'ready';
 	for (const listener of listeners) listener(state);
 
 	assert.equal(await recovery, WorkspaceTransitionRecovery.Retry);
@@ -559,7 +559,7 @@ test("App Server workspace adapter routes only connection recovery into a retry"
 		previous: UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 		workspace,
 		root: workspace.uri.fsPath,
-		grant: { type: "config" },
+		grant: { type: 'config' },
 	});
 	assert.deepEqual(switched, [{
 		root: workspace.uri.fsPath,

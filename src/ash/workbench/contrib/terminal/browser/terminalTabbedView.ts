@@ -1,3 +1,5 @@
+import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
+import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { TerminalStorageKeys } from '../common/terminalStorageKeys.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
@@ -6,9 +8,9 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { TerminalTabList, TerminalTabsListSizes } from './terminalTabsList.js';
 import { localize } from '../../../../nls.js';
 import { ITerminalService, ITerminalGroupService, TerminalDataTransfers } from './terminal.js';
-import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";
-import { h, addDisposableListener } from "../../../../base/browser/dom.js";
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { SplitView, type IView } from '../../../../base/browser/ui/splitview/splitview.js';
+import { h, addDisposableListener } from '../../../../base/browser/dom.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { TerminalInstanceHover } from './terminalTooltip.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
@@ -27,7 +29,6 @@ export class TerminalTabbedView extends Disposable {
 	readonly onDidFocusInstance: Event<void>;
 	readonly terminalContainer: HTMLDivElement;
 	private snapping = false;
-	private initialized = false;
 	private readonly tabsNarrow;
 
 	constructor(
@@ -71,24 +72,32 @@ export class TerminalTabbedView extends Disposable {
 			this.groups.moveInstance(source, target, before ? 'before' : 'after');
 		}));
 		const host = h(parentElement.ownerDocument, 'div');
-		this.splitView = this._register(new SplitView(host, "horizontal"));
+		this.splitView = this._register(new SplitView(host, { proportionalLayout: false, orientation: Orientation.HORIZONTAL }));
 		this.element = this.splitView.element;
-		this.element.classList.add("ash-terminal-tabs-layout");
-		this.splitView.addView(splitViewItem(this.terminalContainer, MIN_TERMINAL_WIDTH, Number.POSITIVE_INFINITY, "high"), { type: "distribute" });
-		this.splitView.addView(splitViewItem(this.tabList.element, TerminalTabsListSizes.NarrowViewWidth, TerminalTabsListSizes.MaximumWidth, "low"), this.savedTabsWidth());
-		this.splitView.getSash(TERMINAL_VIEW_INDEX)?.element.setAttribute("aria-label", localize('terminal.tabs.resize', 'Resize terminal instance list'));
+		this.element.classList.add('ash-terminal-tabs-layout');
+		this.splitView.addView(splitViewItem(this.terminalContainer, MIN_TERMINAL_WIDTH, Number.POSITIVE_INFINITY, LayoutPriority.High), { type: 'distribute' });
+		this.splitView.addView(splitViewItem(this.tabList.element, TerminalTabsListSizes.NarrowViewWidth, TerminalTabsListSizes.MaximumWidth, LayoutPriority.Low), this.savedTabsWidth());
+		this.splitView.getSash(TERMINAL_VIEW_INDEX)?.element.setAttribute('aria-label', localize('terminal.tabs.resize', 'Resize terminal instance list'));
 		this._register(this.splitView.onDidChangeViewSizes(() => this.updateTabsWidth()));
+		this._register(this.splitView.onDidSashChange(() => {
+			if (this.splitView.isViewVisible(TABS_VIEW_INDEX)) {
+				this.storage.store(TerminalStorageKeys.TabsListWidthHorizontal,
+					Math.round(this.splitView.getViewSize(TABS_VIEW_INDEX)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			}
+		}));
 		parentElement.append(this.element);
 		this._register(terminalService.onDidChangeInstances(() => this.updateVisibility()));
 		this.updateVisibility();
 		this.updateTabsWidth();
-		this.initialized = true;
 	}
 
 	layout(width: number, height: number): void {
 		// Hidden panels report zero bounds; do not shrink and persist the user's tab width.
 		if (width <= 0 || height <= 0) return;
 		this.splitView.layout(width, height);
+		if (this.splitView.isViewVisible(TABS_VIEW_INDEX)) {
+			this.splitView.resizeView(TABS_VIEW_INDEX, this.savedTabsWidth());
+		}
 		this.updateTabsWidth();
 	}
 
@@ -137,7 +146,6 @@ export class TerminalTabbedView extends Disposable {
 			this.snapping = false;
 		}
 		this.updateTabsPresentation(snappedWidth);
-		if (this.initialized) this.storage.store(TerminalStorageKeys.TabsListWidthHorizontal, Math.round(snappedWidth), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 
 	private savedTabsWidth(): number {
@@ -152,7 +160,7 @@ export class TerminalTabbedView extends Disposable {
 	}
 }
 
-function splitViewItem(element: HTMLElement, minimumSize: number, maximumSize: number, priority: "high" | "low"): ISplitViewView {
+function splitViewItem(element: HTMLElement, minimumSize: number, maximumSize: number, priority: LayoutPriority): IView {
 	return {
 		element,
 		minimumSize,

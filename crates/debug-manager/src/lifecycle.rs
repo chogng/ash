@@ -522,7 +522,14 @@ impl Lifecycle {
                 self.configured = true;
             }
         }
-        if !self.ended() && self.configured && self.launch_request.is_none() {
+        // A startup breakpoint can stop before launch/attach replies. Publish
+        // that usable pause so the client can inspect and resume it; some
+        // adapters cannot finish launching until execution continues.
+        if !self.ended()
+            && self.configured
+            && (self.launch_request.is_none()
+                || self.snapshot.state == DebugExecutionState::Stopped)
+        {
             self.phase(DebugInitializationPhase::Active);
             if self.snapshot.state == DebugExecutionState::Starting {
                 self.execution(DebugExecutionState::Running, None, None);

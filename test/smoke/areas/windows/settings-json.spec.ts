@@ -224,12 +224,14 @@ for (const locale of ['en', 'zh-CN']) {
 				const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
 				return {
 					inside: bounds.left >= field.left && bounds.right <= field.right && bounds.top >= field.top && bounds.bottom <= field.bottom,
-					afterText: bounds.left >= input.right,
+					// Fractional Windows scaling can round adjacent DOMRect edges differently.
+					inputGap: bounds.left - input.right,
 					iconFits: icon.left >= bounds.left && icon.right <= bounds.right && icon.top >= bounds.top && icon.bottom <= bounds.bottom,
 					size: { width: bounds.width, height: bounds.height },
 				};
 			});
-			expect(geometry).toEqual({ inside: true, afterText: true, iconFits: true, size: { width: 22, height: 22 } });
+			expect(geometry).toMatchObject({ inside: true, iconFits: true, size: { width: 22, height: 22 } });
+			expect(geometry.inputGap).toBeGreaterThanOrEqual(-0.001);
 			await settings.getByRole('searchbox').press('Tab');
 			await expect(filter).toBeFocused();
 			await filter.press('Enter');
@@ -1194,7 +1196,7 @@ test.describe('Settings configuration scopes', () => {
 			}, folderName) : JSON.parse(await readFile(join(testWorkspace.directory, '.vscode', 'settings.json'), 'utf8'));
 			await workbench.settingsEditor.openUserSettingsUI();
 			let settings = workbench.settingsEditor.element;
-			let search = settings.getByRole('searchbox');
+			let search = settings.locator('.ash-settings-search').getByRole('searchbox');
 			await expect(settings.locator('.ash-settings-target-folder')).toBeHidden();
 			const headerScreenshot = testInfo.outputPath('settings-target-header.png');
 			await settings.screenshot({ path: headerScreenshot });
@@ -1225,6 +1227,45 @@ test.describe('Settings configuration scopes', () => {
 				await expect(search).toBeFocused();
 				await expect(search).toHaveValue(query);
 			};
+			await workbench.settingsEditor.selectGroup('agents');
+			await workbench.settingsEditor.selectCategory('models');
+			const settingsTree = settings.locator('.ash-settings-content-tree');
+			await settingsTree.evaluate(element => {
+				const categories = new Set<string>();
+				const collect = (records: MutationRecord[]): void => {
+					for (const record of records) {
+						for (const node of record.addedNodes) {
+							if (!(node instanceof HTMLElement)) continue;
+							const roots = node.matches('.is-settings-root') ? [node] : [...node.querySelectorAll<HTMLElement>('.is-settings-root')];
+							for (const root of roots) categories.add(root.dataset.settingsTreeGroupId!);
+						}
+					}
+				};
+				const observer = new MutationObserver(collect);
+				observer.observe(element, { childList: true, subtree: true });
+				(element as HTMLElement & { finishCategoryObservation(): string[]; }).finishCategoryObservation = () => {
+					collect(observer.takeRecords());
+					observer.disconnect();
+					return [...categories].sort();
+				};
+			});
+			let insertedCategories: string[] = [];
+			try {
+				await switchTarget(chinese ? '工作区' : 'Workspace');
+				await expect(settings.locator('[data-active-settings-category="models"]')).toBeVisible();
+				await expect(settings.locator('[data-settings-item-id="chat.defaultModel"]')).toHaveCount(0);
+				await switchTarget(chinese ? '用户' : 'User');
+				await expect(settings.locator('[data-active-settings-category="models"]')).toBeVisible();
+				await expect(settings.locator('.ash-chat-models-catalog')).toBeVisible();
+			} finally {
+				insertedCategories = await settingsTree.evaluate(element => {
+					const observed = element as HTMLElement & { finishCategoryObservation?: () => string[]; };
+					const categories = observed.finishCategoryObservation!();
+					delete observed.finishCategoryObservation;
+					return categories;
+				});
+			}
+			expect(insertedCategories, 'target switches must not materialize unrelated settings categories').toEqual(['models']);
 			await search.fill('@lang:plaintext @id:editor.fontSize');
 			let size = settings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
 			await size.fill('23');

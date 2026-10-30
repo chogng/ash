@@ -1,10 +1,10 @@
-import { fragment as createFragment, h, text as createText } from "../../../../../base/browser/dom.js";
+import { fragment as createFragment, h, text as createText } from '../../../../../base/browser/dom.js';
 import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { type EditContextViewController } from '../editContext.js';
-import { projectStanzaSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
-import { type ScreenReaderContentState } from "./screenReaderUtils.js";
-import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
+import { projectStanzaSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../viewParts/viewLines/viewLine.js';
+import { type ScreenReaderContentState } from './screenReaderUtils.js';
+import { SimpleScreenReaderContent } from './screenReaderContentSimple.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { InlineDecoration, InlineDecorationType } from '../../../../common/viewModel/inlineDecorations.js';
 import { Range } from '../../../../common/core/range.js';
@@ -31,7 +31,7 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 		super(domNode, richContext, viewController);
 		const model = richContext.viewModel.model;
 		if (options.semanticTokenSource && options.semanticTokenSource.textModel !== model) {
-			throw new TypeError("Native rich screen-reader semantic tokens must share the text model");
+			throw new TypeError('Native rich screen-reader semantic tokens must share the text model');
 		}
 	}
 
@@ -69,13 +69,13 @@ function renderSegment(
 	context: ViewContext,
 ): void {
 	const ownerDocument = fragment.ownerDocument;
-	const lines = text.split("\n");
-	const lineCount = text.endsWith("\n") ? lines.length - 1 : lines.length;
+	const lines = text.split('\n');
+	const lineCount = text.endsWith('\n') ? lines.length - 1 : lines.length;
 	let lineIndex = startLineIndex;
 	let lineStartColumn = startColumn;
 	for (let index = 0; index < lineCount; index += 1) {
 		const lineText = lines[index]!;
-		const lineElement = h(ownerDocument, "span");
+		const lineElement = h(ownerDocument, 'span');
 		lineElement.dataset.lineIndex = String(lineIndex);
 		const lineEndColumn = lineStartColumn + lineText.length;
 		const decorations = context.configuration.options.get(EditorOption.bracketPairColorization).enabled
@@ -97,9 +97,9 @@ function renderSegment(
 			context.viewModel.model.getOptions().tabSize,
 			inlineDecorations,
 		);
-		if (!lineElement.firstChild) lineElement.append(createText(ownerDocument, ""));
+		if (!lineElement.firstChild) lineElement.append(createText(ownerDocument, ''));
 		fragment.append(lineElement);
-		if (index < lines.length - 1) fragment.append(createText(ownerDocument, "\n"));
+		if (index < lines.length - 1) fragment.append(createText(ownerDocument, '\n'));
 		lineIndex += 1;
 		lineStartColumn = 0;
 	}

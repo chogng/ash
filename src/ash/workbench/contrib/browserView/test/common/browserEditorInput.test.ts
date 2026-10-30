@@ -44,6 +44,22 @@ suite('Browser editor page model and restoration', () => {
 		assert.deepEqual([first === second, f.creations, input.label, input.serialize().url], [true, 1, 'Updated title', 'https://example.test/next']);
 	});
 
+	test('developer tools use the page owner and mirror real state changes without optimistic toggles', async () => {
+		using f = fixture();
+		const input = f.input(data);
+		const model = await input.resolve();
+		const calls: string[] = [];
+		f.service.toggleDevTools = async targetId => { calls.push(targetId); };
+		const changes: boolean[] = [];
+		using listener = model.onDidChangeDevToolsState(event => changes.push(event.isDevToolsOpen));
+		await model.toggleDevTools();
+		assert.deepEqual([calls, model.isDevToolsOpen, changes], [[id], false, []]);
+		f.events.fire({ type: 'stateChanged', state: { ...model.state, isDevToolsOpen: true } });
+		f.events.fire({ type: 'stateChanged', state: { ...model.state, title: 'Changed title' } });
+		f.events.fire({ type: 'stateChanged', state: { ...model.state, isDevToolsOpen: false } });
+		assert.deepEqual([model.isDevToolsOpen, changes], [false, [true, false]]);
+	});
+
 	test('a newer event wins over a snapshot response arriving later', async () => {
 		using f = fixture();
 		const snapshot = promiseWithResolvers<IBrowserViewInfo['state']>();
@@ -162,12 +178,12 @@ function fixture() {
 	const events = store.add(new Emitter<BrowserViewEvent>());
 	const f = {
 		[Symbol.dispose]: () => store.dispose(), events, creations: 0, closed: 0,
-		info: { id, host: { windowId: 1 }, owner: { type: 'user' }, session: data.session, state: { targetId: id, url: data.url, title: 'Live page', loading: false, visible: false, canGoBack: false, canGoForward: false } } as IBrowserViewInfo,
+		info: { id, host: { windowId: 1 }, owner: { type: 'user' }, session: data.session, state: { isDevToolsOpen: false, targetId: id, url: data.url, title: 'Live page', loading: false, visible: false, canGoBack: false, canGoForward: false } } as IBrowserViewInfo,
 	};
 	const service: BrowserService = {
 		setContentVisibility: async () => { }, respondToPasswordSave: async () => { }, respondToPasswordFill: async () => { }, respondToAuthentication: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
-		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', getAccessibilityTree: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getSharing: async () => [], setSharing: async () => { },

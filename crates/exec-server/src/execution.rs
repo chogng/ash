@@ -503,6 +503,10 @@ fn execution_environment() -> Vec<(String, String)> {
         "RUSTUP_HOME",
         "JAVA_HOME",
         "GOPATH",
+        // MSVC resolves its SDK and runtime libraries through the developer environment.
+        "INCLUDE",
+        "LIB",
+        "LIBPATH",
     ]
     .into_iter()
     .filter_map(|key| std::env::var(key).ok().map(|value| (key.to_owned(), value)))
@@ -511,6 +515,10 @@ fn execution_environment() -> Vec<(String, String)> {
     environment.push((AI_AGENT_ENV_VAR.to_owned(), AI_AGENT_ENV_VALUE.to_owned()));
     environment
 }
+
+#[cfg(all(test, windows))]
+#[path = "execution_tests.rs"]
+mod tests;
 
 fn check_cancellation_before_start(cancellation: &CancellationToken) -> Result<(), ExecutionError> {
     cancellation

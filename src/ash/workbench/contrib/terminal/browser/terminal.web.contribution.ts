@@ -18,4 +18,3 @@ registerWorkbenchServiceContribution({
 	dependencies: [ITerminalProfileService, ITerminalProcessService, IConfigurationService, IConfigurationResolverService, IWorkspaceContextService, IEnvironmentVariableService],
 	install: context => context.register(context.container.createInstance(BrowserTerminalProfileResolverService)),
 });
-

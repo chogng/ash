@@ -6,6 +6,7 @@ use super::registration_allows_operation;
 use super::sessions::InvocationSessionStore;
 use super::source::stable_extension_id;
 use ash_external_ext::ExtensionHostError;
+use ash_external_ext::HostErrorCode;
 use ash_external_ext::InvokeResult;
 use ash_external_ext::LanguageProviderOperation;
 use ash_external_ext::RegistrationKind;
@@ -364,6 +365,87 @@ fn pending_invocation_identity_is_connection_owned() {
     assert!(matches!(
         sessions.read(8, "one"),
         Err(ExtensionHostRuntimeError::InvocationNotFound)
+    ));
+}
+
+#[test]
+fn invocation_failures_preserve_extension_messages_and_categories() {
+    for (code, expected_code, message) in [
+        (
+            HostErrorCode::Internal,
+            ExtensionHostFailureKind::Internal,
+            "GitOperationFailed",
+        ),
+        (
+            HostErrorCode::InvalidRequest,
+            ExtensionHostFailureKind::InvalidProtocol,
+            "当前分支已更改，请重试。",
+        ),
+    ] {
+        let mut sessions = InvocationSessionStore::new(1, 1);
+        sessions
+            .reserve("sync".into(), 7, 3, "ash.git".into())
+            .unwrap();
+        sessions.complete(
+            "sync",
+            Err(ExtensionHostError::HostRejected {
+                code,
+                message: message.into(),
+            }),
+        );
+
+        let ExtensionHostInvocationRead::Failed(failure) = sessions.read(7, "sync").unwrap() else {
+            panic!("expected a failed invocation");
+        };
+        assert_eq!(failure.code, expected_code);
+        assert_eq!(failure.message, message);
+        assert_eq!(failure.incarnation, Some(3));
+        assert!(matches!(
+            sessions.read(7, "sync"),
+            Err(ExtensionHostRuntimeError::InvocationNotFound)
+        ));
+    }
+}
+
+#[test]
+fn invocation_failures_still_sanitize_process_errors() {
+    let mut sessions = InvocationSessionStore::new(1, 1);
+    sessions
+        .reserve("sync".into(), 7, 3, "ash.git".into())
+        .unwrap();
+    sessions.complete(
+        "sync",
+        Err(ExtensionHostError::InvalidProtocol(
+            "host leaked /secret/path".into(),
+        )),
+    );
+
+    let ExtensionHostInvocationRead::Failed(failure) = sessions.read(7, "sync").unwrap() else {
+        panic!("expected a failed invocation");
+    };
+    assert_eq!(failure.code, ExtensionHostFailureKind::InvalidProtocol);
+    assert_eq!(failure.message, "extension process violated Host RPC v1");
+}
+
+#[test]
+fn invocation_failures_keep_cancellation_as_a_cancelled_outcome() {
+    let mut sessions = InvocationSessionStore::new(1, 1);
+    sessions
+        .reserve("sync".into(), 7, 3, "ash.git".into())
+        .unwrap();
+    sessions.complete(
+        "sync",
+        Err(ExtensionHostError::HostRejected {
+            code: HostErrorCode::Cancelled,
+            message: "cancelled by the caller".into(),
+        }),
+    );
+
+    assert!(matches!(
+        sessions.read(7, "sync"),
+        Ok(ExtensionHostInvocationRead::Cancelled(
+            ash_external_ext::CancelReason::Caller
+        ))
     ));
 }
 
@@ -843,6 +925,19 @@ fn changing_git_enablement_preserves_unrelated_runtime_and_window_instances() {
         Default::default(),
     )
     .unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        ash_file_access::Dir::open_local(directory.path()).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::DiscoverPlugins]),
+    );
+    runtime
+        .bind_dir(
+            grant
+                .authorize(ash_file_access::Permission::DiscoverPlugins)
+                .unwrap(),
+        )
+        .unwrap();
     let (mut git_generation, shared_gate, window_gate) = {
         let mut state = runtime.inner.state.lock().unwrap();
         let git_generation = state.entries["ash.git"].fallback.activation_generation;

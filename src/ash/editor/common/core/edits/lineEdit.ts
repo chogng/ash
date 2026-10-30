@@ -1,10 +1,10 @@
-import { LineRange } from "../ranges/lineRange.js";
+import { LineRange } from '../ranges/lineRange.js';
 import { splitLines } from '../../../../base/common/strings.js';
-import { Position } from "../position.js";
-import { Range } from "../range.js";
-import { AbstractText } from "../text/abstractText.js";
-import { BaseStringEdit, StringEdit, StringReplacement } from "./stringEdit.js";
-import { TextEdit, TextReplacement } from "./textEdit.js";
+import { Position } from '../position.js';
+import { Range } from '../range.js';
+import { AbstractText } from '../text/abstractText.js';
+import { BaseStringEdit, StringEdit, StringReplacement } from './stringEdit.js';
+import { TextEdit, TextReplacement } from './textEdit.js';
 
 /** A line-oriented edit used by diff, folding, and line operations. */
 export class LineEdit {
@@ -28,7 +28,7 @@ export class LineEdit {
 	static createFromUnsorted(edits: readonly LineReplacement[]): LineEdit { return new LineEdit([...edits].sort((left, right) => left.lineRange.startLineNumber - right.lineRange.startLineNumber)); }
 
 	constructor(readonly replacements: readonly LineReplacement[]) {
-		for (let index = 1; index < replacements.length; index += 1) if (replacements[index - 1]!.lineRange.endLineNumberExclusive > replacements[index]!.lineRange.startLineNumber) throw new RangeError("Line edits must be sorted and disjoint");
+		for (let index = 1; index < replacements.length; index += 1) if (replacements[index - 1]!.lineRange.endLineNumberExclusive > replacements[index]!.lineRange.startLineNumber) throw new RangeError('Line edits must be sorted and disjoint');
 	}
 
 	isEmpty(): boolean { return this.replacements.length === 0; }
@@ -36,7 +36,7 @@ export class LineEdit {
 		const result: string[] = [];
 		let sourceLineIndex = 0;
 		for (const replacement of this.replacements) {
-			if (replacement.lineRange.endLineNumberExclusive > lines.length + 1) throw new RangeError("Line edit is outside the text source");
+			if (replacement.lineRange.endLineNumberExclusive > lines.length + 1) throw new RangeError('Line edit is outside the text source');
 			while (sourceLineIndex < replacement.lineRange.startLineNumber - 1) result.push(lines[sourceLineIndex++]!);
 			result.push(...replacement.newLines);
 			sourceLineIndex = replacement.lineRange.endLineNumberExclusive - 1;
@@ -77,7 +77,7 @@ export class LineEdit {
 		}
 		return result.join('\n');
 	}
-	toString(): string { return this.replacements.map(replacement => replacement.toString()).join(","); }
+	toString(): string { return this.replacements.map(replacement => replacement.toString()).join(','); }
 }
 
 export type SerializedLineEdit = SerializedLineReplacement[];
@@ -108,13 +108,13 @@ export class LineReplacement {
 
 	toSingleTextEdit(initialValue: AbstractText): TextReplacement {
 		const totalLines = initialValue.length.lineCount + 1;
-		if (this.lineRange.endLineNumberExclusive > totalLines + 1) throw new RangeError("Line replacement is outside the text source");
+		if (this.lineRange.endLineNumberExclusive > totalLines + 1) throw new RangeError('Line replacement is outside the text source');
 		if (this.lineRange.isEmpty) {
-			if (this.newLines.length === 0) return new TextReplacement(Range.fromPositions(new Position(this.lineRange.startLineNumber, 1)), "");
+			if (this.newLines.length === 0) return new TextReplacement(Range.fromPositions(new Position(this.lineRange.startLineNumber, 1)), '');
 			if (this.lineRange.startLineNumber === totalLines + 1) {
-				return new TextReplacement(Range.fromPositions(new Position(totalLines, initialValue.getLineLength(totalLines) + 1)), `\n${this.newLines.join("\n")}`);
+				return new TextReplacement(Range.fromPositions(new Position(totalLines, initialValue.getLineLength(totalLines) + 1)), `\n${this.newLines.join('\n')}`);
 			}
-			return new TextReplacement(Range.fromPositions(new Position(this.lineRange.startLineNumber, 1)), `${this.newLines.join("\n")}\n`);
+			return new TextReplacement(Range.fromPositions(new Position(this.lineRange.startLineNumber, 1)), `${this.newLines.join('\n')}\n`);
 		}
 		if (this.newLines.length === 0) {
 			if (this.lineRange.endLineNumberExclusive === totalLines + 1) {
@@ -122,12 +122,12 @@ export class LineReplacement {
 					? new Position(1, 1)
 					: new Position(this.lineRange.startLineNumber - 1, initialValue.getLineLength(this.lineRange.startLineNumber - 1) + 1);
 				const end = new Position(totalLines, initialValue.getLineLength(totalLines) + 1);
-				return new TextReplacement(Range.fromPositions(start, end), "");
+				return new TextReplacement(Range.fromPositions(start, end), '');
 			}
-			return new TextReplacement(new Range(this.lineRange.startLineNumber, 1, this.lineRange.endLineNumberExclusive, 1), "");
+			return new TextReplacement(new Range(this.lineRange.startLineNumber, 1, this.lineRange.endLineNumberExclusive, 1), '');
 		}
 		const endLineNumber = this.lineRange.endLineNumberExclusive - 1;
-		return new TextReplacement(new Range(this.lineRange.startLineNumber, 1, endLineNumber, initialValue.getLineLength(endLineNumber) + 1), this.newLines.join("\n"));
+		return new TextReplacement(new Range(this.lineRange.startLineNumber, 1, endLineNumber, initialValue.getLineLength(endLineNumber) + 1), this.newLines.join('\n'));
 	}
 
 	toSingleEdit(initialValue: AbstractText): StringReplacement {

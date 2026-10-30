@@ -1,7 +1,7 @@
 import './toggle.css';
-import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable, toDisposable } from "../../../common/lifecycle.js";
-import { addDisposableListener, h, text as createText } from "../../dom.js";
+import { Emitter, type Event } from '../../../common/event.js';
+import { Disposable, toDisposable } from '../../../common/lifecycle.js';
+import { addDisposableListener, h, text as createText } from '../../dom.js';
 import { appendIcon } from '../lxicons/lxicon.js';
 import { Lxicon } from '../../../common/lxicons.js';
 
@@ -23,7 +23,7 @@ export interface ToggleOptions extends Partial<IToggleStyles & ICheckboxStyles> 
 	readonly ariaLabel?: string;
 	readonly content?: Node;
 	readonly label?: string;
-	readonly contentPlacement?: "after-control" | "before-control";
+	readonly contentPlacement?: 'after-control' | 'before-control';
 	readonly onChange?: (checked: boolean) => void;
 }
 
@@ -40,10 +40,10 @@ export class Toggle extends Disposable {
 	constructor(container: HTMLElement, options: ToggleOptions) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "label");
+		const element = h(ownerDocument, 'label');
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = "ash-toggle";
+		element.className = 'ash-toggle';
 		{
 			const colors = {
 				'--ash-toggle-active-border': options.inputActiveOptionBorder,
@@ -58,20 +58,20 @@ export class Toggle extends Disposable {
 			}
 		}
 
-		const input = h(ownerDocument, "input");
+		const input = h(ownerDocument, 'input');
 		this.input = input;
-		input.type = "checkbox";
+		input.type = 'checkbox';
 		input.checked = options.checked ?? false;
 		this.enabledState = options.disabled !== true;
 		input.disabled = !this.enabledState;
-		if (options.ariaLabel) input.setAttribute("aria-label", options.ariaLabel);
+		if (options.ariaLabel) input.setAttribute('aria-label', options.ariaLabel);
 		element.append(input);
 		const content = options.content ?? (options.label ? createText(ownerDocument, options.label) : undefined);
 		if (content) {
-			if (options.contentPlacement === "before-control") {
-				const contentElement = h(ownerDocument, "span");
+			if (options.contentPlacement === 'before-control') {
+				const contentElement = h(ownerDocument, 'span');
 				this.contentElement = contentElement;
-				contentElement.className = "ash-toggle-content";
+				contentElement.className = 'ash-toggle-content';
 				contentElement.append(content);
 				element.append(contentElement);
 			} else {
@@ -81,10 +81,10 @@ export class Toggle extends Disposable {
 		} else {
 			this.contentElement = undefined;
 		}
-		if (options.contentPlacement === "before-control") element.classList.add("ash-toggle-content-before-control");
+		if (options.contentPlacement === 'before-control') element.classList.add('ash-toggle-content-before-control');
 		container.append(element);
 
-		this._register(addDisposableListener(input, "change", () => {
+		this._register(addDisposableListener(input, 'change', () => {
 			this.syncState();
 			this._onDidChange.fire(input.checked);
 			options.onChange?.(input.checked);
@@ -121,18 +121,18 @@ export class Toggle extends Disposable {
 	blur(): void { this.input.blur(); }
 
 	setAriaLabel(label: string): void {
-		this.input.setAttribute("aria-label", label);
+		this.input.setAttribute('aria-label', label);
 	}
 
 	protected syncState(): void {
 		this.input.disabled = !this.enabledState || this.busyState;
-		this.element.classList.toggle("checked", this.input.checked);
-		this.element.classList.toggle("disabled", !this.enabledState);
-		this.element.classList.toggle("busy", this.busyState);
-		if (this.busyState) this.input.setAttribute("aria-busy", "true");
-		else this.input.removeAttribute("aria-busy");
-		if (this.input.getAttribute("role") === "switch") {
-			this.input.setAttribute("aria-checked", String(this.input.checked));
+		this.element.classList.toggle('checked', this.input.checked);
+		this.element.classList.toggle('disabled', !this.enabledState);
+		this.element.classList.toggle('busy', this.busyState);
+		if (this.busyState) this.input.setAttribute('aria-busy', 'true');
+		else this.input.removeAttribute('aria-busy');
+		if (this.input.getAttribute('role') === 'switch') {
+			this.input.setAttribute('aria-checked', String(this.input.checked));
 		}
 	}
 }
@@ -141,7 +141,7 @@ export class Toggle extends Disposable {
 export class Checkbox extends Toggle {
 	constructor(container: HTMLElement, options: ToggleOptions) {
 		super(container, options);
-		this.element.classList.add("ash-checkbox");
+		this.element.classList.add('ash-checkbox');
 		const checkmark = appendIcon(Lxicon.check, this.element);
 		checkmark.classList.add('ash-checkbox-checkmark');
 		// CSS reads :checked from the input, including native form resets.
@@ -155,14 +155,14 @@ export class Switch extends Toggle {
 
 	constructor(container: HTMLElement, options: ToggleOptions) {
 		super(container, options);
-		this.element.classList.add("ash-switch");
-		this.input.setAttribute("role", "switch");
-		const track = h(this.element.ownerDocument, "span");
+		this.element.classList.add('ash-switch');
+		this.input.setAttribute('role', 'switch');
+		const track = h(this.element.ownerDocument, 'span');
 		this.track = track;
-		track.className = "ash-switch-track";
-		track.setAttribute("aria-hidden", "true");
+		track.className = 'ash-switch-track';
+		track.setAttribute('aria-hidden', 'true');
 		const contentPlacement = options.contentPlacement;
-		if (contentPlacement === "before-control" && this.contentElement) this.element.append(track);
+		if (contentPlacement === 'before-control' && this.contentElement) this.element.append(track);
 		else this.element.insertBefore(track, this.input.nextSibling);
 		this.syncState();
 	}

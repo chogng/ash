@@ -1,18 +1,18 @@
 import type { ColorIdentifier } from '../../../../platform/theme/common/colorRegistry.js';
-import { type Event } from "../../../../base/common/event.js";
-import type { Icon } from "../../../../base/common/icon.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { type Event } from '../../../../base/common/event.js';
+import type { Icon } from '../../../../base/common/icon.js';
+import { type IDisposable } from '../../../../base/common/lifecycle.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IStatusbarEntryContainer } from '../../../browser/parts/statusbar/statusbarPart.js';
 
 /** The side of the status bar that owns an entry. */
 export enum StatusbarAlignment {
-	Left = "left",
-	Right = "right",
+	Left = 'left',
+	Right = 'right',
 }
 
 /** Semantic presentation applied to a status bar entry. */
-export type StatusbarEntryKind = "standard" | "remote";
+export type StatusbarEntryKind = 'standard' | 'remote';
 
 /** One icon-and-text segment rendered inside a grouped status bar entry. */
 export interface IStatusbarEntrySegment {
@@ -90,4 +90,4 @@ export interface IStatusbarService {
 }
 
 export const IStatusbarService =
-	createServiceIdentifier<IStatusbarService>("statusbarService");
+	createServiceIdentifier<IStatusbarService>('statusbarService');

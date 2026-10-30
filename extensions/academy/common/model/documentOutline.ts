@@ -1,4 +1,4 @@
-import type { DocumentNode, DocumentNodeId } from "./document.js";
+import type { DocumentNode, DocumentNodeId } from './document.js';
 
 import type { DocumentOutlineEntry, DocumentOutline } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 export type { DocumentOutlineEntry, DocumentOutline } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
@@ -14,10 +14,10 @@ export interface DocumentOutlineOptions {
 
 /** Builds a stable, domain-neutral heading outline from a document tree. */
 export function buildDocumentOutline(document: DocumentNode, options: DocumentOutlineOptions = {}): DocumentOutline {
-	if (!document || typeof document !== "object") throw new TypeError("A document is required to build an outline");
+	if (!document || typeof document !== 'object') throw new TypeError('A document is required to build an outline');
 	const entries: DocumentOutlineEntry[] = [];
 	const headingStack: Array<{ readonly nodeId: DocumentNodeId; readonly level: number; }> = [];
-	const isHeading = options.isHeading ?? (node => node.type === "heading");
+	const isHeading = options.isHeading ?? (node => node.type === 'heading');
 	const getLevel = options.getLevel ?? defaultHeadingLevel;
 	const getTitle = options.getTitle ?? defaultHeadingTitle;
 
@@ -42,13 +42,13 @@ export function buildDocumentOutline(document: DocumentNode, options: DocumentOu
 }
 
 function defaultHeadingLevel(node: DocumentNode): number {
-	return typeof node.attrs.level === "number" ? node.attrs.level : 1;
+	return typeof node.attrs.level === 'number' ? node.attrs.level : 1;
 }
 
 function defaultHeadingTitle(node: DocumentNode): string {
 	const parts: string[] = [];
 	collectText(node, parts);
-	return parts.join("").replace(/\s+/g, " ").trim();
+	return parts.join('').replace(/\s+/g, ' ').trim();
 }
 
 function collectText(node: DocumentNode, parts: string[]): void {
@@ -56,13 +56,13 @@ function collectText(node: DocumentNode, parts: string[]): void {
 		parts.push(node.text);
 		return;
 	}
-	if (node.type === "hardBreak") {
-		parts.push(" ");
+	if (node.type === 'hardBreak') {
+		parts.push(' ');
 		return;
 	}
-	if (node.type === "image") {
+	if (node.type === 'image') {
 		const alt = node.attrs.alt;
-		if (typeof alt === "string") parts.push(alt);
+		if (typeof alt === 'string') parts.push(alt);
 		return;
 	}
 	for (const child of node.content) collectText(child, parts);

@@ -52,6 +52,22 @@ fn package(root: &Path, version: &str) -> PathBuf {
     package
 }
 
+#[test]
+fn staging_cleanup_requires_ownership_and_preserves_user_worktrees() {
+    let temporary = TempDir::new().unwrap();
+    for name in [".update-owned", ".update-notes", ".update-worktree"] {
+        fs::create_dir(temporary.path().join(name)).unwrap();
+        fs::write(temporary.path().join(name).join("data"), "keep").unwrap();
+    }
+    update::mark_staging(&temporary.path().join(".update-owned")).unwrap();
+    update::mark_staging(&temporary.path().join(".update-worktree")).unwrap();
+    fs::create_dir(temporary.path().join(".update-worktree/.git")).unwrap();
+    update::clean_staging(temporary.path()).unwrap();
+    assert!(!temporary.path().join(".update-owned").exists());
+    assert!(temporary.path().join(".update-notes/data").exists());
+    assert!(temporary.path().join(".update-worktree/data").exists());
+}
+
 fn options(root: &Path, package: PathBuf) -> Options {
     Options {
         package,
@@ -66,6 +82,30 @@ fn install(root: &Path, source: PathBuf, version: &str) -> Result<PathBuf, Strin
         &Version::parse(version).unwrap(),
         update::current_target().unwrap(),
     )
+}
+
+#[test]
+fn upgrades_reclaim_idle_versions_but_preserve_leases_and_user_files() {
+    let temp = TempDir::new().unwrap();
+    let root = temp.path();
+    let first = install(root, package(root, "1.0.0"), "1.0.0").unwrap();
+    let lease = ash_package_store::PackageLease::acquire(&first).unwrap();
+    let second = install(root, package(root, "2.0.0"), "2.0.0").unwrap();
+    fs::write(second.join("user-notes.txt"), "keep my work").unwrap();
+    let third = install(root, package(root, "3.0.0"), "3.0.0").unwrap();
+    let fourth = install(root, package(root, "4.0.0"), "4.0.0").unwrap();
+    assert!(first.exists(), "a running generation must remain intact");
+    assert_eq!(
+        fs::read_to_string(second.join("user-notes.txt")).unwrap(),
+        "keep my work"
+    );
+    assert!(third.exists(), "one rollback generation remains available");
+    drop(lease);
+    update::clean_versions(first.parent().unwrap().parent().unwrap(), &fourth).unwrap();
+    assert!(!first.exists());
+    assert!(second.exists());
+    assert!(third.exists());
+    assert!(fourth.exists());
 }
 
 #[test]

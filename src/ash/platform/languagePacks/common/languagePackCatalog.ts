@@ -1,21 +1,21 @@
-import { decodeBase64 as decodeBase64Buffer } from "../../../base/common/buffer.js";
-import { isRecord } from "../../../base/common/types.js";
-import type { LanguagePackCatalog } from "./languagePackContract.js";
-import { ASH_LOCALIZATION_CATALOG_VERSION } from "./languagePackContract.js";
-import type { ILanguagePackStore } from "./languagePackStore.js";
-import type { LanguagePackIndexEntry } from "./languagePackContract.js";
+import { decodeBase64 as decodeBase64Buffer } from '../../../base/common/buffer.js';
+import { isRecord } from '../../../base/common/types.js';
+import type { LanguagePackCatalog } from './languagePackContract.js';
+import { ASH_LOCALIZATION_CATALOG_VERSION } from './languagePackContract.js';
+import type { ILanguagePackStore } from './languagePackStore.js';
+import type { LanguagePackIndexEntry } from './languagePackContract.js';
 
 export function normalizeLocale(value: string): string {
-	const parts = value.trim().replaceAll("_", "-").split("-");
-	if (parts.length === 0 || !parts[0] || parts.some((part) => !/^[A-Za-z0-9]+$/u.test(part))) return "";
-	return parts.map((part, index) => index === 0 ? part.toLowerCase() : part.length === 2 || part.length === 3 ? part.toUpperCase() : part).join("-");
+	const parts = value.trim().replaceAll('_', '-').split('-');
+	if (parts.length === 0 || !parts[0] || parts.some((part) => !/^[A-Za-z0-9]+$/u.test(part))) return '';
+	return parts.map((part, index) => index === 0 ? part.toLowerCase() : part.length === 2 || part.length === 3 ? part.toUpperCase() : part).join('-');
 }
 
 /** Startup must remain usable when an optional language resource is missing or damaged. */
 export async function resolveLanguagePackCatalog(locale: string, startupCatalogs: readonly LanguagePackCatalog[], store: Pick<ILanguagePackStore, 'read'>, options: { readonly preferStartupCatalogs?: boolean; } = {}): Promise<LanguagePackCatalog> {
 	let candidate = normalizeLocale(locale);
 	while (candidate) {
-		if (candidate === "en") { break; }
+		if (candidate === 'en') { break; }
 		const packaged = startupCatalogs.find(catalog => catalog.locale.toLowerCase() === candidate.toLowerCase());
 		// Source catalogs must win during development so a reload can show edited
 		// translations even when the browser has saved an older installed pack.
@@ -27,11 +27,11 @@ export async function resolveLanguagePackCatalog(locale: string, startupCatalogs
 			// Keep the preference so reinstalling the pack can restore it on a later startup.
 		}
 		if (packaged) { return packaged; }
-		const separator = candidate.lastIndexOf("-");
-		candidate = separator > 0 ? candidate.slice(0, separator) : "";
+		const separator = candidate.lastIndexOf('-');
+		candidate = separator > 0 ? candidate.slice(0, separator) : '';
 	}
-	const english = startupCatalogs.find(catalog => catalog.locale === "en");
-	if (!english) { throw new Error("The built-in English catalog is required"); }
+	const english = startupCatalogs.find(catalog => catalog.locale === 'en');
+	if (!english) { throw new Error('The built-in English catalog is required'); }
 	return english;
 }
 
@@ -39,7 +39,7 @@ export async function resolveLanguagePackCatalog(locale: string, startupCatalogs
 export function parseLanguagePackCatalog(value: unknown): LanguagePackCatalog | undefined {
 	if (!isRecord(value)) return undefined;
 	const candidate = value;
-	if (candidate.schemaVersion !== 1 || typeof candidate.locale !== "string" || typeof candidate.languageName !== "string" || typeof candidate.localizedLanguageName !== "string" || candidate.catalogVersion !== ASH_LOCALIZATION_CATALOG_VERSION || !isRecord(candidate.bundles)) return undefined;
+	if (candidate.schemaVersion !== 1 || typeof candidate.locale !== 'string' || typeof candidate.languageName !== 'string' || typeof candidate.localizedLanguageName !== 'string' || candidate.catalogVersion !== ASH_LOCALIZATION_CATALOG_VERSION || !isRecord(candidate.bundles)) return undefined;
 	const locale = normalizeLocale(candidate.locale);
 	if (!locale || !candidate.languageName.trim() || !candidate.localizedLanguageName.trim() || candidate.languageName.length > 128 || candidate.localizedLanguageName.length > 128) return undefined;
 	const bundles: Record<string, Record<string, string>> = {};
@@ -51,7 +51,7 @@ export function parseLanguagePackCatalog(value: unknown): LanguagePackCatalog | 
 		const messageEntries = Object.entries(messages);
 		if (messageEntries.length === 0 || messageEntries.length > 10000) return undefined;
 		for (const [key, message] of messageEntries) {
-			if (!key.trim() || key.length > 512 || typeof message !== "string" || message.length > 64 * 1024) return undefined;
+			if (!key.trim() || key.length > 512 || typeof message !== 'string' || message.length > 64 * 1024) return undefined;
 			normalizedMessages[key] = message;
 		}
 		bundles[bundle] = normalizedMessages;
@@ -82,18 +82,18 @@ export function parseTranslationMessages(value: unknown): Readonly<Record<string
 	if (!isRecord(value) || Object.keys(value).length > 10000) { return undefined; }
 	const messages: Record<string, string> = Object.create(null);
 	for (const [key, message] of Object.entries(value)) {
-		if (!key || key.length > 1024 || typeof message !== "string" || message.length > 64 * 1024) { return undefined; }
+		if (!key || key.length > 1024 || typeof message !== 'string' || message.length > 64 * 1024) { return undefined; }
 		messages[key] = message;
 	}
 	return messages;
 }
 
 export function parseLanguagePackIndexEntry(value: unknown): LanguagePackIndexEntry | undefined {
-	if (!isRecord(value) || typeof value.extensionId !== "string" || !/^(?:[a-z0-9_-]+(?:\.[a-z0-9_-]+)*|[a-z0-9_-]+\/[a-z0-9_-]+)(?:@[a-z0-9_-]+)?$/iu.test(value.extensionId) || value.extensionId.length > 160
-		|| typeof value.version !== "string" || !value.version || value.version.length > 128
-		|| typeof value.digest !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(value.digest)) { return undefined; }
+	if (!isRecord(value) || typeof value.extensionId !== 'string' || !/^(?:[a-z0-9_-]+(?:\.[a-z0-9_-]+)*|[a-z0-9_-]+\/[a-z0-9_-]+)(?:@[a-z0-9_-]+)?$/iu.test(value.extensionId) || value.extensionId.length > 160
+		|| typeof value.version !== 'string' || !value.version || value.version.length > 128
+		|| typeof value.digest !== 'string' || !/^sha256:[a-f0-9]{64}$/u.test(value.digest)) { return undefined; }
 	const catalog = parseLanguagePackCatalog(value.catalog);
-	if (!catalog || value.locale !== catalog.locale || catalog.locale === "en") { return undefined; }
+	if (!catalog || value.locale !== catalog.locale || catalog.locale === 'en') { return undefined; }
 	return { locale: catalog.locale, extensionId: value.extensionId, version: value.version, digest: value.digest, catalog };
 }
 

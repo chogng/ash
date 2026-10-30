@@ -1,14 +1,14 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { createColorTheme, darkColorTheme, lightColorTheme } from "../../../../../platform/theme/common/colorTheme.js";
-import { terminalTheme } from "../../../../../workbench/contrib/terminal/browser/xterm/xtermTerminal.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { createColorTheme, darkColorTheme, lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
+import { terminalTheme } from '../../../../../workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 
-test("Terminal renderer follows its host background instead of a fixed canvas color", () => {
-	assert.equal(terminalTheme(lightColorTheme).background, "#f8f8f8");
-	assert.equal(terminalTheme(lightColorTheme).foreground, "#333333");
-	assert.equal(terminalTheme(darkColorTheme).background, "#252526");
-	assert.equal(terminalTheme(darkColorTheme).foreground, "#d4d4d4");
+test('Terminal renderer follows its host background instead of a fixed canvas color', () => {
+	assert.equal(terminalTheme(lightColorTheme).background, '#f8f8f8');
+	assert.equal(terminalTheme(lightColorTheme).foreground, '#333333');
+	assert.equal(terminalTheme(darkColorTheme).background, '#252526');
+	assert.equal(terminalTheme(darkColorTheme).foreground, '#d4d4d4');
 	assert.equal(terminalTheme(lightColorTheme, TerminalLocation.Editor).background, '#ffffff');
 	assert.equal(terminalTheme(darkColorTheme, TerminalLocation.Editor).background, '#1e1e1e');
 });

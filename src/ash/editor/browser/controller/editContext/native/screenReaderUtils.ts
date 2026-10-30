@@ -1,6 +1,6 @@
-import { SelectionDirection, type Selection } from "../../../../common/core/selection.js";
-import { Position } from "../../../../common/core/position.js";
-import { type TextModel } from "../../../../common/model/textModel.js";
+import { SelectionDirection, type Selection } from '../../../../common/core/selection.js';
+import { Position } from '../../../../common/core/position.js';
+import { type TextModel } from '../../../../common/model/textModel.js';
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
 import { type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { type IComputedEditorOptions } from '../../../../common/config/editorOptions.js';
@@ -72,7 +72,7 @@ export function createScreenReaderContentState(
 		: createScreenReaderPageWindows(model, selectionStart, selectionEnd, activeOffset, pageSize);
 	const snapshot = model.createVersionedSnapshot();
 	const safeModelSegments = modelSegments.map(segment => avoidSurrogateSplit(snapshot, model.length, segment));
-	let text = "";
+	let text = '';
 	let contentOffset = 0;
 	const segments: ScreenReaderContentSegment[] = [];
 	for (const [index, segment] of safeModelSegments.entries()) {
@@ -101,10 +101,10 @@ export function createScreenReaderContentState(
 		text,
 		segments: frozenSegments,
 	};
-	const orderedSelectionStart = contentOffsetAtModelOffset(stateWithoutOffsets, selectionStart, "start");
-	const orderedSelectionEnd = contentOffsetAtModelOffset(stateWithoutOffsets, selectionEnd, "end");
-	const anchorAffinity = selection.getDirection() === SelectionDirection.LTR ? "start" : "end";
-	const activeAffinity = selection.getDirection() === SelectionDirection.LTR ? "end" : "start";
+	const orderedSelectionStart = contentOffsetAtModelOffset(stateWithoutOffsets, selectionStart, 'start');
+	const orderedSelectionEnd = contentOffsetAtModelOffset(stateWithoutOffsets, selectionEnd, 'end');
+	const anchorAffinity = selection.getDirection() === SelectionDirection.LTR ? 'start' : 'end';
+	const activeAffinity = selection.getDirection() === SelectionDirection.LTR ? 'end' : 'start';
 	return Object.freeze({
 		...stateWithoutOffsets,
 		selectionStart: orderedSelectionStart,
@@ -131,9 +131,9 @@ export function createScreenReaderWindow(
 
 /** Maps a model offset to a projected UTF-16 offset, including page separators. */
 export function contentOffsetAtModelOffset(
-	state: Pick<ScreenReaderContentState, "segments" | "startOffset" | "endOffset">,
+	state: Pick<ScreenReaderContentState, 'segments' | 'startOffset' | 'endOffset'>,
 	modelOffset: number,
-	affinity: "start" | "end" = "start",
+	affinity: 'start' | 'end' = 'start',
 ): number {
 	const segments = state.segments;
 	if (segments.length === 0) return 0;
@@ -141,7 +141,7 @@ export function contentOffsetAtModelOffset(
 	let previous: ScreenReaderContentSegment | undefined;
 	for (const segment of segments) {
 		if (offset < segment.modelStartOffset) {
-			return affinity === "end"
+			return affinity === 'end'
 				? segment.contentStartOffset
 				: previous?.contentEndOffset ?? segment.contentStartOffset;
 		}
@@ -155,9 +155,9 @@ export function contentOffsetAtModelOffset(
 
 /** Maps a projected UTF-16 offset back to the nearest model offset. */
 export function modelOffsetAtContentOffset(
-	state: Pick<ScreenReaderContentState, "text" | "segments">,
+	state: Pick<ScreenReaderContentState, 'text' | 'segments'>,
 	contentOffset: number,
-	affinity: "start" | "end" = "start",
+	affinity: 'start' | 'end' = 'start',
 ): number {
 	const segments = state.segments;
 	if (segments.length === 0) return 0;
@@ -165,7 +165,7 @@ export function modelOffsetAtContentOffset(
 	let previous: ScreenReaderContentSegment | undefined;
 	for (const segment of segments) {
 		if (previous && offset >= previous.contentEndOffset && offset <= segment.contentStartOffset) {
-			return affinity === "end" ? segment.modelStartOffset : previous.modelEndOffset;
+			return affinity === 'end' ? segment.modelStartOffset : previous.modelEndOffset;
 		}
 		if (offset <= segment.contentEndOffset && offset >= segment.contentStartOffset) {
 			return segment.modelStartOffset + offset - segment.contentStartOffset;
@@ -177,13 +177,13 @@ export function modelOffsetAtContentOffset(
 
 /** Returns the uniform line offset used to scroll a mirror to one model position. */
 export function screenReaderLineOffsetAtModelOffset(
-	state: Pick<ScreenReaderContentState, "text" | "segments" | "startOffset" | "endOffset">,
+	state: Pick<ScreenReaderContentState, 'text' | 'segments' | 'startOffset' | 'endOffset'>,
 	modelOffset: number,
 ): number {
 	const contentOffset = contentOffsetAtModelOffset(
 		state,
 		modelOffset,
-		"start",
+		'start',
 	);
 	let result = 0;
 	for (let index = 0; index < contentOffset; index += 1) {
@@ -260,7 +260,7 @@ function clampOffset(offset: number, length: number): number {
 
 function normalizePageSize(pageSize: number): number {
 	if (!Number.isSafeInteger(pageSize) || pageSize < 1) {
-		throw new RangeError("Screen-reader page size must be a positive safe integer");
+		throw new RangeError('Screen-reader page size must be a positive safe integer');
 	}
 	return pageSize;
 }

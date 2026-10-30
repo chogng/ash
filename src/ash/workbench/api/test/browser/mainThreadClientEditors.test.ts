@@ -206,7 +206,15 @@ test('temporary client resource failures can retry within the same live capabili
 	let attempts = 0;
 	using bridge = new MainThreadClientEditors(30_000, async () => {
 		if (++attempts === 1) throw new Error('Temporary resource read failure');
-		return { packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({ ...generalProfile, id: 'academy', contentType: 'application/vnd.ash.academy-document+json' }) };
+		return {
+			packageId: owner.id,
+			packageVersion: owner.version,
+			getEditorProfile: () => ({
+				...generalProfile,
+				id: 'academy',
+				contentType: 'application/vnd.ash.academy-document+json'
+			})
+		};
 	}, { invoke: async () => declaration } as unknown as IExtensionHostApi, {
 		list: async () => ({ generation: 1, extensions: [owner], diagnostics: [] }),
 	} as unknown as IExtensionApi, emptyEditorDeclarations);
@@ -340,7 +348,15 @@ test('an installed document editor declares restore and creation routes before s
 	const extensions = { getExtensionPointContributions: () => [{ description: { id: installed.id }, value: [{ viewType: 'stanza.editor.document', displayName: 'Academy Document', priority: 'default', documentType: 'academy', selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academy-document+json' }] }] }] } as unknown as IExtensionService;
 	using bridge = new MainThreadClientEditors(30_000, async () => {
 		loads++;
-		return { packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({ ...generalProfile, id: 'academy', contentType: 'application/vnd.ash.academy-document+json' }) };
+		return {
+			packageId: owner.id,
+			packageVersion: owner.version,
+			getEditorProfile: () => ({
+				...generalProfile,
+				id: 'academy',
+				contentType: 'application/vnd.ash.academy-document+json'
+			})
+		};
 	}, api, packages, extensions);
 	await bridge.update({ generation: 1, extensions: [dormant] });
 	const input = { resource: URI.file('/restored.ash-paper') };

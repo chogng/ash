@@ -1,4 +1,7 @@
 import { ITerminalCompletionService, TerminalCompletionService } from '../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../src/ash/platform/workspace/common/workspaceTrust.js';
+import { TestWorkspaceTrustManagementService } from '../../../src/ash/workbench/test/common/workbenchTestServices.js';
+import { WorkspaceTrustRequestService } from '../../../src/ash/workbench/services/workspaces/common/workspaceTrust.js';
 import { ITerminalQuickFixService } from '../../../src/ash/workbench/contrib/terminalContrib/quickFix/browser/quickFix.js';
 import { TerminalQuickFixService } from '../../../src/ash/workbench/contrib/terminalContrib/quickFix/browser/terminalQuickFixService.js';
 import { ITerminalLinkProviderService } from '../../../src/ash/workbench/contrib/terminalContrib/links/browser/links.js';
@@ -148,14 +151,19 @@ function createTerminalFixtureLayout(root: HTMLElement, lifetime: DisposableStor
 }
 
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore, fallbackProcess = true, provideLayout = true): void {
+	if (!services.has(IWorkspaceTrustManagementService)) services.registerSingleton(IWorkspaceTrustManagementService, () => services.createInstance(TestWorkspaceTrustManagementService));
+	// The editor parent imports default registrations without a trust manager.
+	// Resolve requests here, alongside this terminal window's trust manager.
+	services.registerSingleton(IWorkspaceTrustRequestService, () => services.createInstance(WorkspaceTrustRequestService));
 	if (!services.has(IHostService)) services.registerInstance(IHostService, new TestHostService());
 	// Filename discovery is an explicit boundary of the terminal-only fixture.
 	if (!services.has(ISearchService)) services.registerInstance(ISearchService, {
+		registerSearchResultProvider: () => { throw new Error('Terminal fixture does not register search providers'); },
 		fileSearch: async () => ({ results: [], messages: [] }),
 		textSearch: async () => { throw new Error('Terminal fixture does not search file contents'); },
 	});
 	if (!services.has(IWorkbenchEnvironmentService)) services.registerInstance(IWorkbenchEnvironmentService, {
-		argvResource: URI.from({ scheme: 'vscode-userdata', path: '/user/argv.json' }),
+		isBuilt: true, argvResource: URI.from({ scheme: 'vscode-userdata', path: '/user/argv.json' }),
 		webviewExternalEndpoint: 'http://{{uuid}}.localhost',
 		expectsTerminalTransfer: new URLSearchParams(location.search).has('transfer'),
 	});
@@ -515,9 +523,6 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			},
 		};
 		services.registerSingleton(ITerminalService, () => new URLSearchParams(location.search).has('existing') || new URLSearchParams(location.search).has('incoming') ? legacyTerminals : services.createInstance(TerminalService));
-		let transcript!: (text: string, isFinal: boolean) => void;
-		let stops = 0;
-		services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(store, { getOptions: async () => ({ inputDevices: [], languages: [] }), start: async (_options, callback) => { transcript = callback; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; } }));
 		services.registerInstance(IContextKeyService, context);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
@@ -529,7 +534,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			onDidChangeWorkbenchState: Event.None,
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspace, getWorkbenchState: () => 2, getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null
 		});
-		services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService({ source: '{"dictation.backend":"cloud"}' })));
+		services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService()));
 		services.registerInstance(ITerminalProcessService, {
 			operatingSystem: new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Linux,
 			onConnectionState: Event.None, getConnectionState: async () => 'ready',
@@ -569,10 +574,6 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			close: async options => { closed.push(Number(options.terminalId.slice(5))); },
 		});
 		setupTerminalFixtureServices(services, lifetime, true, false);
-		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
-		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-		services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
-		registerTestDictationOnboarding(services);
 		const profileService = lifetime.add(services.createInstance(TerminalProfileService));
 		services.registerInstance(ITerminalProfileService, profileService);
 		const resolver = lifetime.add(services.createInstance(BrowserTerminalProfileResolverService));
@@ -693,8 +694,6 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			receive: async () => { await legacyTerminals.createTerminal(); },
 			command: (id: string, argument?: unknown) => commands.executeCommand(id, argument),
 			dispose: () => lifetime.dispose(),
-			transcript: (text, final) => transcript(text, final),
-			stops: () => stops,
 			panel: setPanel,
 			view: value => { selected = value; pane.setVisible(visible && selected); },
 			expand: value => pane.setExpanded(value),
@@ -749,8 +748,6 @@ declare global {
 			snapshot(): Promise<string | undefined>;
 			counts(): { profiles: number; creates: number; };
 			receive(): Promise<void>;
-			transcript(text: string, final: boolean): void;
-			stops(): number;
 			panel(visible: boolean): void;
 			view(visible: boolean): void;
 			expand(expanded: boolean): boolean;
@@ -945,6 +942,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const reportHistory = new URLSearchParams(location.search).has('history');
 	const reuseCommands = new URLSearchParams(location.search).has('reuseCommands');
 	const commandModel = new URLSearchParams(location.search).has('commandModel');
+	const taskPresentation = new URLSearchParams(location.search).has('task');
 	const reviveHistory = new URLSearchParams(location.search).has('reviveHistory');
 	let modelSequence = 0;
 	const modelOutput: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessOutputChunk[] = [];
@@ -983,7 +981,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 		operatingSystem: reviveHistory || new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : undefined,
 		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
 		setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
-		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }; },
+		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: new URLSearchParams(location.search).has('checkpoint') ? 'reconnectable' : 'connectionOwned' }; },
 		write: async options => {
 			if (typeof options.data === 'string') streamInputWrites.push(options.data);
 			if (commandModel && typeof options.data === 'string') queueModel(options.data);
@@ -994,6 +992,18 @@ if (new URLSearchParams(location.search).has('stream')) {
 		onConnectionState: Event.None,
 		read: async options => {
 			reads.push(options.afterSequence);
+			if (taskPresentation) {
+				const first = options.afterSequence === 0;
+				return {
+					terminalId: options.terminalId,
+					chunks: first ? [
+						{ sequence: 1, data: new Uint8Array(), shellIntegration: { type: 'processReady' as const, isWindowsPty: false } },
+						{ sequence: 2, data: bytes },
+					] : [],
+					nextSequence: 2, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false,
+					exited: !first, exitCode: !first ? launch > 1 ? 11 : 0 : undefined,
+				};
+			}
 			if (commandModel) {
 				const chunks = modelOutput.filter(chunk => chunk.sequence > options.afterSequence).slice(0, options.maxChunks);
 				return { terminalId: options.terminalId, chunks, nextSequence: chunks.at(-1)?.sequence ?? options.afterSequence, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined };
@@ -1055,12 +1065,13 @@ if (new URLSearchParams(location.search).has('stream')) {
 		store.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
 		store.add(instance.onDidExit(() => events.push('exit')));
 	}));
-	const terminal = reviveHistory ? (await terminals.whenConnected, terminals.instances[0]!) : await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	const taskConfig = taskPresentation ? { type: 'Task' as const, initialText: { text: '\r\n * Executing task: fixture\r\n', trailingNewLine: false } } : {};
+	const terminal = reviveHistory ? (await terminals.whenConnected, terminals.instances[0]!) : await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, ...taskConfig });
 	if (reviveHistory) terminal.start();
 	const streamInstances = terminals.instances;
 	window.ashTerminalStreamIntegration = {
 		status: () => ({ reads, events, closes, state: terminal.state, remaining: streamInstances.length, ...(reportCwd ? { cwd: terminal.cwd } : {}), ...(reportHistory ? { shellIntegration: terminal.shellIntegration } : {}) }),
-		reuse: async () => { await terminal.reuseTerminal({ executable: '/bin/sh', args: [], deferStart: true }); terminal.start(); },
+		reuse: async clear => { if (clear) terminal.clearBuffer(); await terminal.reuseTerminal({ executable: '/bin/sh', args: [], deferStart: true, ...taskConfig }); terminal.start(); },
 		start: async () => {
 			terminal.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
 			screen = terminal.xterm!;
@@ -1093,6 +1104,16 @@ if (new URLSearchParams(location.search).has('stream')) {
 			return { input: capability?.promptInputModel.getCombinedString(), state: capability?.promptInputModel.state, commands: capability?.commands.map(command => ({ id: command.id, text: command.command, output: command.getOutput(), timestamp: command.timestamp, duration: command.duration, trust: command.isTrusted, promptRows: command.getPromptRowCount(), commandRows: command.getCommandRowCount() })) };
 		},
 		observed: () => observed.join(''),
+		checkpoint: async (revive, startup = '') => {
+			const saved = await terminal.serializeState({ revive });
+			terminal.start();
+			const { Terminal } = await import('@xterm/xterm');
+			const restored = new Terminal({ cols: saved.cols, rows: saved.rows, allowProposedApi: true });
+			try {
+				await writeP(restored, saved.vt + startup);
+				return Array.from({ length: restored.buffer.active.length }, (_, row) => restored.buffer.active.getLine(row)!.translateToString(true)).join('\n').trimEnd();
+			} finally { restored.dispose(); }
+		},
 		snapshot: () => screen?.getBufferText(100_000, new AbortController().signal) ?? Promise.resolve(undefined),
 		close: async () => { await terminal.close(); store.dispose(); },
 	};
@@ -1101,7 +1122,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 declare global {
 	interface Window {
 		ashTerminalStreamIntegration: {
-			reuse(): Promise<void>;
+			reuse(clear?: boolean): Promise<void>;
 			status(): { reads: number[]; events: string[]; closes: number; state: string; remaining: number; cwd?: string; shellIntegration?: import('../../../src/ash/workbench/contrib/terminal/browser/terminal.js').ITerminalShellIntegration; };
 			feedModel(text: string): void;
 			environmentFrame(event: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent): void;
@@ -1122,6 +1143,7 @@ declare global {
 			};
 			model(): { input: string | undefined; state: number | undefined; commands: { id: string | undefined; text: string; output: string | undefined; timestamp: number; duration: number; trust: boolean; promptRows: number; commandRows: number; }[] | undefined; };
 			observed(): string;
+			checkpoint(revive: boolean, startup?: string): Promise<string>;
 			snapshot(): Promise<string | undefined>;
 			start(): Promise<void>;
 			close(): Promise<void>;
@@ -1536,6 +1558,7 @@ if (new URLSearchParams(location.search).has('input')) {
 				reject: () => { rejectRead!(); rejectRead = undefined; },
 				finish: async () => { try { await pasteOperation; return undefined; } catch (error) { return (error as Error).message; } },
 				disconnect: () => { connectionChanged.fire('crashed'); return terminal.state; },
+				reconnect: () => connectionChanged.fire('ready'),
 				switchAway: async () => {
 					screen.setVisible(false);
 					const other = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
@@ -1667,6 +1690,7 @@ declare global {
 			reject(): void;
 			finish(): Promise<string | undefined>;
 			disconnect(): string;
+			reconnect(): void;
 			switchAway(): Promise<void>;
 			switchBack(): void;
 			help(): Promise<string>;

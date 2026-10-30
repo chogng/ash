@@ -1,21 +1,21 @@
 import { localize2 } from '../../../../nls.js';
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
-import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
-import { IEditorPart } from "./editorPart.js";
-import type { ExtensionFileTemplateDefinition } from "../../../services/extensions/common/extensionFileTemplate.js";
-import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
-import { IUntitledTextEditorService } from "../../../services/untitled/common/untitledTextEditorService.js";
-import { UntitledTextEditorInput } from "../../../services/untitled/common/untitledTextEditorInput.js";
-import { ActiveEditorFirstInGroupContext, EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from "../../../common/contextkeys.js";
-import { IEditorPartsService } from "./editorParts.js";
-import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { IEditorPart } from './editorPart.js';
+import type { ExtensionFileTemplateDefinition } from '../../../services/extensions/common/extensionFileTemplate.js';
+import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
+import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
+import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
+import { ActiveEditorFirstInGroupContext, EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../common/contextkeys.js';
+import { IEditorPartsService } from './editorParts.js';
+import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from './editorQuickAccess.js';
 import { EditorEnablePreviewConfiguration } from './editorConfiguration.js';
-import { IBreadcrumbsService } from "./breadcrumbs.js";
+import { IBreadcrumbsService } from './breadcrumbs.js';
 import { GoFilter, IHistoryService } from '../../../services/history/common/history.js';
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
@@ -55,14 +55,14 @@ for (const down of [false, true]) {
 	});
 }
 
-export const FocusBreadcrumbsCommandId = "workbench.action.focusBreadcrumbs";
-export const ToggleEditorGroupLockCommandId = "workbench.action.toggleEditorGroupLock";
+export const FocusBreadcrumbsCommandId = 'workbench.action.focusBreadcrumbs';
+export const ToggleEditorGroupLockCommandId = 'workbench.action.toggleEditorGroupLock';
 
 registerAction2(class ToggleEditorGroupLockAction extends Action2 {
 	constructor() {
 		super({
 			id: ToggleEditorGroupLockCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.toggleEditorGroupLock" }, "Toggle Editor Group Lock"),
+			title: localize2({ bundle: 'ash', key: 'workbench.toggleEditorGroupLock' }, 'Toggle Editor Group Lock'),
 			f1: true,
 		});
 	}
@@ -113,7 +113,7 @@ registerAction2(class FocusBreadcrumbsAction extends Action2 {
 	constructor() {
 		super({
 			id: FocusBreadcrumbsCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.focusBreadcrumbs" }, "Focus Breadcrumbs"),
+			title: localize2({ bundle: 'ash', key: 'workbench.focusBreadcrumbs' }, 'Focus Breadcrumbs'),
 			f1: true,
 		});
 	}
@@ -125,7 +125,7 @@ registerAction2(class FocusBreadcrumbsAction extends Action2 {
 });
 
 export const SplitEditorHorizontalCommandId =
-	"workbench.action.splitEditorHorizontal";
+	'workbench.action.splitEditorHorizontal';
 
 registerAction2(class SplitEditorHorizontalAction extends Action2 {
 	constructor() {
@@ -143,7 +143,7 @@ registerAction2(class SplitEditorHorizontalAction extends Action2 {
 	}
 });
 
-export const SplitEditorVerticalCommandId = "workbench.action.splitEditorVertical";
+export const SplitEditorVerticalCommandId = 'workbench.action.splitEditorVertical';
 
 registerAction2(class SplitEditorVerticalAction extends Action2 {
 	constructor() {
@@ -222,20 +222,20 @@ registerAction2(class CloseLeftEditorsInGroupAction extends Action2 {
 	}
 });
 
-export const CloseAllEditorsCommandId = "workbench.action.closeAllEditors";
+export const CloseAllEditorsCommandId = 'workbench.action.closeAllEditors';
 
 registerAction2(class CloseAllEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: CloseAllEditorsCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.closeAllEditors" }, "Close All Tabs"),
+			title: localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All Tabs'),
 			f1: true,
 			precondition: ContextKeyExpr.or(EditorsVisibleContext.isEqualTo(true), MultipleEditorGroupsContext.isEqualTo(true), EditorPartMultipleEditorGroupsContext.isEqualTo(true)),
 			menu: [
-				{ id: MenuId.MenubarFileMenu, group: "6_close", order: 1 },
+				{ id: MenuId.MenubarFileMenu, group: '6_close', order: 1 },
 				{ id: MenuId.EditorTitleContext, group: '1_close', order: 60, when: EditorsVisibleContext.isEqualTo(true) },
 			],
-			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("w", { primaryKey: true })) },
+			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('w', { primaryKey: true })) },
 		});
 	}
 
@@ -244,19 +244,19 @@ registerAction2(class CloseAllEditorsAction extends Action2 {
 	}
 });
 
-export const ReopenClosedEditorCommandId = "workbench.action.reopenClosedEditor";
+export const ReopenClosedEditorCommandId = 'workbench.action.reopenClosedEditor';
 
 registerAction2(class ReopenClosedEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: ReopenClosedEditorCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.reopenClosedEditor" }, "Reopen Closed Tab"),
+			title: localize2({ bundle: 'ash', key: 'workbench.reopenClosedEditor' }, 'Reopen Closed Tab'),
 			f1: true,
 			menu: [
-				{ id: MenuId.MenubarFileMenu, group: "4_close", order: 3 },
+				{ id: MenuId.MenubarFileMenu, group: '4_close', order: 3 },
 				{ id: MenuId.EditorTitleContext, group: '1_open', order: 10 },
 			],
-			keybinding: { primary: Keybinding.single(logicalKey("t", { primaryKey: true, shiftKey: true })) },
+			keybinding: { primary: Keybinding.single(logicalKey('t', { primaryKey: true, shiftKey: true })) },
 		});
 	}
 
@@ -265,16 +265,16 @@ registerAction2(class ReopenClosedEditorAction extends Action2 {
 	}
 });
 
-export const NavigateEditorMruCommandId = "workbench.action.navigateEditorMru";
-export const NavigateEditorMruBackwardsCommandId = "workbench.action.navigateEditorMruBackwards";
-export const NavigateEditorBackCommandId = "workbench.action.navigateBack";
-export const NavigateEditorForwardCommandId = "workbench.action.navigateForward";
+export const NavigateEditorMruCommandId = 'workbench.action.navigateEditorMru';
+export const NavigateEditorMruBackwardsCommandId = 'workbench.action.navigateEditorMruBackwards';
+export const NavigateEditorBackCommandId = 'workbench.action.navigateBack';
+export const NavigateEditorForwardCommandId = 'workbench.action.navigateForward';
 
 registerAction2(class NavigateEditorBackAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorBackCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.navigateEditorBack" }, "Go Back"),
+			title: localize2({ bundle: 'ash', key: 'workbench.navigateEditorBack' }, 'Go Back'),
 			icon: Lxicon.arrowLeft,
 			precondition: ContextKeyExpr.has('canNavigateBack'),
 			f1: true,
@@ -300,7 +300,7 @@ registerAction2(class NavigateEditorForwardAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorForwardCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.navigateEditorForward" }, "Go Forward"),
+			title: localize2({ bundle: 'ash', key: 'workbench.navigateEditorForward' }, 'Go Forward'),
 			icon: Lxicon.arrowRight,
 			precondition: ContextKeyExpr.has('canNavigateForward'),
 			f1: true,
@@ -382,10 +382,10 @@ registerAction2(class NavigateEditorMruAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorMruCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.nextRecentlyUsedEditor" }, "Open Next Recently Used Editor"),
+			title: localize2({ bundle: 'ash', key: 'workbench.nextRecentlyUsedEditor' }, 'Open Next Recently Used Editor'),
 			f1: true,
-			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: "1_editor", order: 1 },
-			keybinding: { primary: Keybinding.single(logicalKey("tab", { primaryKey: true })) },
+			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: '1_editor', order: 1 },
+			keybinding: { primary: Keybinding.single(logicalKey('tab', { primaryKey: true })) },
 		});
 	}
 
@@ -398,10 +398,10 @@ registerAction2(class NavigateEditorMruBackwardsAction extends Action2 {
 	constructor() {
 		super({
 			id: NavigateEditorMruBackwardsCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.previousRecentlyUsedEditor" }, "Open Previous Recently Used Editor"),
+			title: localize2({ bundle: 'ash', key: 'workbench.previousRecentlyUsedEditor' }, 'Open Previous Recently Used Editor'),
 			f1: true,
-			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: "1_editor", order: 2 },
-			keybinding: { primary: Keybinding.single(logicalKey("tab", { primaryKey: true, shiftKey: true })) },
+			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: '1_editor', order: 2 },
+			keybinding: { primary: Keybinding.single(logicalKey('tab', { primaryKey: true, shiftKey: true })) },
 		});
 	}
 
@@ -410,16 +410,16 @@ registerAction2(class NavigateEditorMruBackwardsAction extends Action2 {
 	}
 });
 
-export const ShowAllEditorsCommandId = "workbench.action.showAllEditors";
+export const ShowAllEditorsCommandId = 'workbench.action.showAllEditors';
 
 registerAction2(class ShowAllEditorsAction extends Action2 {
 	constructor() {
 		super({
 			id: ShowAllEditorsCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.showAllEditors" }, "Show All Editors"),
+			title: localize2({ bundle: 'ash', key: 'workbench.showAllEditors' }, 'Show All Editors'),
 			f1: true,
-			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: "1_editor", order: 3 },
-			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("p", { primaryKey: true })) },
+			menu: { id: MenuId.MenubarGoMenu, when: EditorsVisibleContext.isEqualTo(true), group: '1_editor', order: 3 },
+			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('p', { primaryKey: true })) },
 		});
 	}
 
@@ -428,14 +428,14 @@ registerAction2(class ShowAllEditorsAction extends Action2 {
 	}
 });
 
-export const MoveEditorToNewWindowCommandId = "workbench.action.moveEditorToNewWindow";
-export const CopyEditorToNewWindowCommandId = "workbench.action.copyEditorToNewWindow";
+export const MoveEditorToNewWindowCommandId = 'workbench.action.moveEditorToNewWindow';
+export const CopyEditorToNewWindowCommandId = 'workbench.action.copyEditorToNewWindow';
 
 registerAction2(class MoveEditorToNewWindowAction extends Action2 {
 	constructor() {
 		super({
 			id: MoveEditorToNewWindowCommandId,
-			title: localize2({ bundle: 'ash.workbench', key: 'command.MoveEditorToNewWindowAction' }, "Move to New Window"),
+			title: localize2({ bundle: 'ash.workbench', key: 'command.MoveEditorToNewWindowAction' }, 'Move to New Window'),
 			f1: true,
 		});
 	}
@@ -449,7 +449,7 @@ registerAction2(class CopyEditorToNewWindowAction extends Action2 {
 	constructor() {
 		super({
 			id: CopyEditorToNewWindowCommandId,
-			title: localize2({ bundle: 'ash.workbench', key: 'command.CopyEditorToNewWindowAction' }, "Copy to New Window"),
+			title: localize2({ bundle: 'ash.workbench', key: 'command.CopyEditorToNewWindowAction' }, 'Copy to New Window'),
 			f1: true,
 		});
 	}
@@ -466,7 +466,7 @@ async function openEditorsInNewWindow(accessor: ServicesAccessor, args: readonly
 	await parts.openEditorsInNewWindow(editors, mode);
 }
 
-export const NewFileFromTemplateCommandId = "workbench.action.files.newFileFromTemplate";
+export const NewFileFromTemplateCommandId = 'workbench.action.files.newFileFromTemplate';
 
 interface FileTemplateQuickPickItem extends IQuickPickItem {
 	readonly template: ExtensionFileTemplateDefinition;
@@ -476,10 +476,10 @@ registerAction2(class NewFileFromTemplateAction extends Action2 {
 	constructor() {
 		super({
 			id: NewFileFromTemplateCommandId,
-			title: localize2({ bundle: "ash", key: "workbench.newFileFromTemplate" }, "New File from Template"),
-			tooltip: localize2({ bundle: "ash", key: "workbench.newFileFromTemplate" }, "New File from Template"),
+			title: localize2({ bundle: 'ash', key: 'workbench.newFileFromTemplate' }, 'New File from Template'),
+			tooltip: localize2({ bundle: 'ash', key: 'workbench.newFileFromTemplate' }, 'New File from Template'),
 			f1: true,
-			menu: { id: MenuId.MenubarFileMenu, group: "1_file", order: 0 },
+			menu: { id: MenuId.MenubarFileMenu, group: '1_file', order: 0 },
 		});
 	}
 
@@ -489,7 +489,7 @@ registerAction2(class NewFileFromTemplateAction extends Action2 {
 		const picker = accessor.get(IQuickInputService).createQuickPick<FileTemplateQuickPickItem>();
 		const disposables = new DisposableStore();
 		disposables.add(picker);
-		picker.placeholder = "Select a file template";
+		picker.placeholder = 'Select a file template';
 		picker.items = templates.map(template => ({
 			template,
 			label: template.label,
@@ -502,7 +502,7 @@ registerAction2(class NewFileFromTemplateAction extends Action2 {
 
 			picker.hide();
 			const untitled = accessor.get(IUntitledTextEditorService).create({ initialValue: item.template.body, languageId: item.template.languageId });
-			void accessor.get(IEditorPart).openEditor(new UntitledTextEditorInput(untitled)).catch(error => console.error("Could not create file from extension template", error));
+			void accessor.get(IEditorPart).openEditor(new UntitledTextEditorInput(untitled)).catch(error => console.error('Could not create file from extension template', error));
 
 		}));
 		disposables.add(picker.onDidHide(() => disposables.dispose()));

@@ -15,7 +15,7 @@ test('IconLabel updates name, description, suffix, and semantic icons in place',
 	const icon = registerLxicon('test-icon-label-inline', { fontCharacter: 'A' });
 	const hoverContents: unknown[] = [];
 	using delegate = setHoverDelegate({
-		setupDelayedHover() { throw new Error("Unexpected delayed hover registration"); },
+		setupDelayedHover() { throw new Error('Unexpected delayed hover registration'); },
 		setupHover(options) {
 			hoverContents.push(options.content);
 			return managedHover();
@@ -43,6 +43,27 @@ test('IconLabel updates name, description, suffix, and semantic icons in place',
 	assert.equal(label.element.querySelector<HTMLElement>('.ash-icon-label-description')?.hidden, true);
 
 	dom.window.close();
+});
+
+test('IconLabel targets its containing control for title hovers and releases it on disposal', () => {
+	const dom = new JSDOM('<!doctype html><body><button></button></body>');
+	try {
+		const target = dom.window.document.querySelector('button')!;
+		using label = new IconLabel(target, {
+			label: 'file.ts', title: 'src/file.ts', hoverTargetOverride: target,
+		});
+		assert.equal(target.title, 'src/file.ts');
+		assert.equal(label.element.hasAttribute('title'), false);
+		label.setLabel('renamed.ts', undefined, { title: 'src/renamed.ts' });
+		assert.equal(target.title, 'src/renamed.ts');
+		assert.equal(label.element.hasAttribute('title'), false);
+		label.dispose();
+		assert.equal(target.isConnected, true);
+		assert.equal(target.hasAttribute('title'), false);
+		assert.equal(target.childElementCount, 0);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('IconLabel escapes newlines, maps highlights, and exposes compatibility metadata', () => {

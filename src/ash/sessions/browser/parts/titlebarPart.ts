@@ -122,11 +122,14 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		const right = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
 		this.contentDomNode.append(right);
-		const layoutActions = this._register(new MenuWorkbenchToolBar(right, menuService, contextMenus, Menus.TitleBarRightLayout, {
-			ariaLabel: localize({ bundle: 'ash', key: 'windowMode.layout' }, 'Code layout'),
-			presentation: 'inherit-foreground',
-			contextKeyService: contextKeys,
-		}));
+		const layoutActions = this._register(
+			new MenuWorkbenchToolBar(right, menuService, contextMenus, Menus.TitleBarRightLayout, {
+				ariaLabel: localize({ bundle: 'ash', key: 'windowMode.layout' }, 'Code layout'),
+				presentation: 'inherit-foreground',
+				highlightToggledItems: true,
+				contextKeyService: contextKeys,
+			}),
+		);
 		layoutActions.element.classList.add('ash-sessions-titlebar-actions');
 		this.activityActions = this._register(new WorkbenchToolBar(right, contextMenus, {
 			ariaLabel: localize('workbench.accounts', 'Accounts'),

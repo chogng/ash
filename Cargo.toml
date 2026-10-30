@@ -182,6 +182,7 @@ members = [
     "crates/protocol",
     "crates/projects",
     "crates/product-update",
+    "crates/installation",
     "crates/remote",
     "crates/remote-connections",
     "crates/remote-profile-store",
@@ -558,6 +559,7 @@ ash-hooks = { path = "crates/hooks" }
 ash-http-client = { path = "crates/http-client" }
 ash-websocket-client = { path = "crates/websocket-client" }
 ash-install-context = { path = "crates/install-context" }
+ash-installation = { path = "crates/installation" }
 ash-instructions = { path = "crates/instructions" }
 ash-keyring-store = { path = "crates/keyring-store" }
 ash-kimi = { path = "crates/kimi" }

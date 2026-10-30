@@ -1,4 +1,4 @@
-import { Emitter, type Event } from "../../../base/common/event.js";
+import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { CursorCollection } from './cursorCollection.js';
 import { CursorContext } from './cursorContext.js';
@@ -9,7 +9,7 @@ import { getTextGraphemeBoundaries } from '../core/textSegmentation.js';
 import { TrackedRangeStickiness, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type ITextModel, type IValidEditOperation } from '../model.js';
 import { type TrackedRange } from '../model/trackedRange.js';
 import { normalizeTextLineEndings, TextModelChangeReason, type TextModelChange } from '../core/textChange.js';
-import { TextModel } from "../model/textModel.js";
+import { TextModel } from '../model/textModel.js';
 import { CursorChangeReason } from '../cursorEvents.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import { ScrollType, type ICommand, type ICursorState, type IEditOperationBuilder } from '../editorCommon.js';
@@ -822,7 +822,7 @@ export class CursorsController extends Disposable {
 
 	setSelections(selections: readonly Selection[], reason = CursorChangeReason.NotSet): void {
 		this.assertNotDisposed();
-		this.assertNoActiveComposition("set selections");
+		this.assertNoActiveComposition('set selections');
 		this.previousEditOperationType = EditOperationType.Other;
 		this.cursorHistory.length = 0;
 		this.cursorRedoHistory.length = 0;
@@ -832,7 +832,7 @@ export class CursorsController extends Disposable {
 	/** Records one cursor-only selection transition that `undoCursorOperation` may restore. */
 	setCursorSelections(selections: readonly Selection[]): void {
 		this.assertNotDisposed();
-		this.assertNoActiveComposition("set cursor selections");
+		this.assertNoActiveComposition('set cursor selections');
 		this.previousEditOperationType = EditOperationType.Other;
 		if (selectionsEqual(this.currentSelections, selections)) return;
 		this.rememberCursorSelections(this.currentSelections);
@@ -843,7 +843,7 @@ export class CursorsController extends Disposable {
 	/** Restores the preceding cursor-only selection state without changing document undo history. */
 	undoCursorOperation(): boolean {
 		this.assertNotDisposed();
-		this.assertNoActiveComposition("undo cursor operation");
+		this.assertNoActiveComposition('undo cursor operation');
 		const previous = this.cursorHistory.pop();
 		if (!previous) return false;
 		this.rememberCursorRedoSelections(this.currentSelections);
@@ -865,7 +865,7 @@ export class CursorsController extends Disposable {
 	/** Ends command coalescing without creating an empty history entry. */
 	pushUndoStop(): void {
 		this.assertNotDisposed();
-		this.assertNoActiveComposition("push an undo stop");
+		this.assertNoActiveComposition('push an undo stop');
 		this.model.pushStackElement();
 	}
 

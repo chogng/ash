@@ -1,12 +1,12 @@
 import { IActivityService } from '../../../services/activity/common/activity.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import "./media/auxiliaryBarPart.css";
-import { IStorageService } from "../../../../platform/storage/common/storage.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { ViewContainerLocation } from "../../../common/views.js";
-import { ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import { IViewDescriptorService } from "../../../common/views.js";
-import { PaneCompositePart } from "../paneCompositePart.js";
+import './media/auxiliaryBarPart.css';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ViewContainerLocation } from '../../../common/views.js';
+import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { IViewDescriptorService } from '../../../common/views.js';
+import { PaneCompositePart } from '../paneCompositePart.js';
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -58,16 +58,16 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 			viewDescriptorService,
 			contextKeyService,
 			localizationService,
-			id: "auxiliarybar",
+			id: 'auxiliarybar',
 			location: ViewContainerLocation.AuxiliaryBar,
-			ariaLabel: "Auxiliary sidebar",
-			ariaLabelKey: { bundle: "ash.regions", key: "auxiliarySidebar" },
-			viewsAriaLabel: "Auxiliary sidebar views",
-			viewsAriaLabelKey: { bundle: "ash.regions", key: "auxiliarySidebarViews" },
+			ariaLabel: 'Auxiliary sidebar',
+			ariaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebar' },
+			viewsAriaLabel: 'Auxiliary sidebar views',
+			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebarViews' },
 			compositeBarContextMenuProvider: contextMenuService,
 			titleActions: { menuService, contextMenuProvider: contextMenuService, menuId: MenuId.AuxiliaryBarTitle },
 		}, themeService, storageService, activityService);
-		this.contentDomNode.classList.add("ash-auxiliarybar-content");
+		this.contentDomNode.classList.add('ash-auxiliarybar-content');
 		this.selectorHost = h(container.ownerDocument, 'div');
 		this.selectorHost.className = 'ash-auxiliarybar-view-selector';
 		this.titleHost = h(container.ownerDocument, 'div');

@@ -149,6 +149,17 @@ export interface LogOutputChannel extends OutputChannel { readonly logLevel: Log
 export interface Webview { html: string; readonly options: Readonly<Record<string, unknown>>; asWebviewUri(uri: Uri): Uri; postMessage(message: unknown): Promise<boolean>; readonly onDidReceiveMessage: Event<unknown>; }
 export interface WebviewPanel extends Disposable { readonly webview: Webview; readonly onDidDispose: Event<void>; }
 export interface CustomTextEditorProvider { resolveCustomTextEditor(document: TextDocument, panel: WebviewPanel, token: CancellationToken): ProviderResult<void>; }
+
+/** Identities are supplied by the initiating conversation and cannot be selected by the extension registration. */
+export interface CanvasContext { readonly sessionId: string; readonly threadId: string; readonly instanceId: string; }
+export interface Canvas { readonly url: string; readonly title?: string; readonly status?: string; }
+export interface CanvasProvider {
+	openCanvas(context: CanvasContext, token: CancellationToken): ProviderResult<Canvas>;
+	/** undefined keeps membership while the source hydrates; null removes the live instance. */
+	resolveCanvas?(context: CanvasContext, token: CancellationToken): ProviderResult<Canvas>;
+	closeCanvas?(context: CanvasContext, token: CancellationToken): ProviderResult<void>;
+	readonly onDidChangeCanvases?: Event<void>;
+}
 /** A read-only selection snapshot. The client retains ownership of the editor and its live model. */
 export interface CodeImageSnapshot {
 	readonly title: string;
@@ -214,6 +225,8 @@ export interface ComparisonResource { resource: string; label?: string; initialT
 export type ComparisonInput = { kind: 'diff' | 'binaryDiff'; label?: string; original: ComparisonResource; modified: ComparisonResource } | { kind: 'multiDiff'; resource: string; label?: string; items: { label?: string; binary?: boolean; original?: ComparisonResource; modified?: ComparisonResource }[] };
 export interface EditorOpenOptions { preserveFocus?: boolean; pinned?: boolean; revealIfOpened?: boolean; }
 export namespace window {
+	/** Declare contributes.canvases and admit the dataChannel capability. Available in Desktop hosts. */
+	function registerCanvasProvider(id: string, provider: CanvasProvider): Disposable;
 	const activeTextEditor: TextEditor | undefined;
 	function showInformationMessage<T extends string | { title: string }>(text: string, ...items: T[]): Promise<T | undefined>;
 	function showWarningMessage<T extends string | { title: string }>(text: string, ...items: T[]): Promise<T | undefined>;

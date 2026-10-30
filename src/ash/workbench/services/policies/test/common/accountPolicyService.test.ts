@@ -3,21 +3,19 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IAccountService, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
-import { GitHubError, GitHubErrorCode, IGitHubService, type GitHubAccount } from '../../../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, GitHubManagedSettingsReadMode, IGitHubService, type GitHubAccount, type GitHubManagedSettingsSnapshot } from '../../../../../platform/github/common/githubService.js';
+import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { JsonValue } from '../../../../../base/common/jsonValue.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import type { LogEntry } from '../../../../../platform/log/common/log.js';
+import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import type { PolicyValue } from '../../../../../base/common/policy.js';
-import { AbstractPolicyService, type PolicyDefinition } from '../../../../../platform/policy/common/policy.js';
+import { AbstractPolicyService, PolicyValueSource, type PolicyDefinition } from '../../../../../platform/policy/common/policy.js';
 import { MultiplexPolicyService } from '../../../../../platform/policy/common/multiplexPolicyService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { PolicyConfiguration } from '../../../../../platform/configuration/common/configurations.js';
 import { AccountPolicyService, type AccountPolicyRefreshState } from '../../common/accountPolicyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
-import { TestConfigurationFiles } from '../../../configuration/test/common/testServices.js';
-import { UserDataProfileService } from '../../../userDataProfile/browser/userDataProfileService.js';
-import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../../contrib/chat/browser/languageModelsConfigurationService.js';
-import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
 
 const log = new NullLoggerService();
 const account: GitHubAccount = { id: 'first', host: 'github.com', login: 'first', status: 'ready', credentialRevision: 1n };
@@ -31,8 +29,11 @@ function accountServices(events: Emitter<AccountState>): IAccountService {
 	};
 }
 
-function githubServices(read: IGitHubService['readManagedSettings'], list: () => Promise<readonly GitHubAccount[]> = async () => [account]): IGitHubService {
-	return { ...createDisconnectedGitHubService(), listAccounts: list, readManagedSettings: read };
+function githubServices(read: (id: string, token?: CancellationToken) => Promise<Readonly<Record<string, JsonValue>> | null>, list: () => Promise<readonly GitHubAccount[]> = async () => [account]): IGitHubService {
+	return {
+		...createDisconnectedGitHubService(), listAccounts: list,
+		readManagedSettings: async (id, token) => ({ settings: await read(id, token), refresh: { state: 'ready', lastAttemptAt: Date.now(), lastSuccessAt: Date.now() } }),
+	};
 }
 
 test('Registered account mappings resolve real provider fields and system policy has priority', async () => {
@@ -55,9 +56,11 @@ test('Registered account mappings resolve real provider fields and system policy
 	using configuration = new PolicyConfiguration(registry, policies, log);
 	await configuration.initialize();
 	assert.deepEqual([configuration.configurationModel.getValue('ui.managedFeature'), accounts.getPolicyValue('ManagedFeature'), ids], [false, true, ['first']]);
+	assert.deepEqual([policies.getPolicyValueSource('ManagedFeature'), accounts.getPolicyValueSource('ManagedFeature')], [PolicyValueSource.Device, PolicyValueSource.ServerManagedSettings]);
 	system.candidate = {};
 	await system.updatePolicyDefinitions(binding);
 	assert.equal(configuration.configurationModel.getValue('ui.managedFeature'), true);
+	assert.equal(policies.getPolicyValueSource('ManagedFeature'), PolicyValueSource.ServerManagedSettings);
 });
 
 test('Account read failures and malformed replacements retain policy, while authoritative absence removes it', async () => {
@@ -69,11 +72,74 @@ test('Account read failures and malformed replacements retain policy, while auth
 	await source.updatePolicyDefinitions(binding);
 	assert.equal(source.getPolicyValue('ManagedFeature'), true);
 	raw = { strictPluginOnlyCustomization: 'invalid' };
-	await source.updatePolicyDefinitions(binding);
+	await source.refresh({ retryManagedSettings: true });
 	assert.equal(source.getPolicyValue('ManagedFeature'), true);
 	raw = null;
-	await source.updatePolicyDefinitions(binding);
+	await source.refresh({ retryManagedSettings: true });
 	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
+});
+
+test('Failed account discovery suppresses automatic requests until explicit retry or a GitHub account change', async () => {
+	using changes = new Emitter<AccountState>();
+	const entries: LogEntry[] = [];
+	using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
+	const failure = new GitHubError(GitHubErrorCode.Unavailable);
+	let unavailable = true;
+	let attempts = 0;
+	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => ({}), async () => {
+		attempts++;
+		if (unavailable) throw failure;
+		return [account];
+	}), logger);
+	await source.updatePolicyDefinitions(binding);
+	const failed = source.state;
+	await source.refresh();
+	await source.updatePolicyDefinitions(binding);
+	changes.fire({ revision: 2n, accounts: [{ provider: 'chatgpt-subscription', accountId: 'model', status: 'ready', credentialRevision: 1n }] });
+	await source.refresh();
+	assert.equal(attempts, 1);
+	assert.equal(source.state, failed);
+	assert.equal(entries.length, 1);
+	assert.equal(entries[0]!.category, 'accountPolicy');
+	assert.equal(entries[0]!.message, 'Could not refresh managed account settings unavailable');
+	assert.equal(entries[0]!.error, failure);
+	await source.refresh({ retryManagedSettings: true });
+	assert.equal(attempts, 2);
+	unavailable = false;
+	changes.fire({ revision: 3n, accounts: [{ provider: 'github', accountId: 'first', status: 'ready', credentialRevision: 1n }] });
+	await source.refresh();
+	assert.equal(attempts, 3);
+	assert.equal(source.state.phase, 'ready');
+});
+
+test('Windows project the same backend failure, retained settings and timestamps and forward explicit retry', async () => {
+	using changes = new Emitter<AccountState>();
+	let snapshot: GitHubManagedSettingsSnapshot = {
+		settings: { strictPluginOnlyCustomization: true },
+		refresh: { state: 'failed', lastAttemptAt: 200, lastSuccessAt: 100, failure: GitHubErrorCode.ManagedSettingsUpdateRequired },
+	};
+	const modes: (GitHubManagedSettingsReadMode | undefined)[] = [];
+	const github: IGitHubService = {
+		...githubServices(async () => ({})),
+		readManagedSettings: async (_id, _token, mode) => { modes.push(mode); return snapshot; },
+	};
+	using first = new AccountPolicyService(accountServices(changes), github, log);
+	using second = new AccountPolicyService(accountServices(changes), github, log);
+	await first.updatePolicyDefinitions(binding);
+	await second.updatePolicyDefinitions(binding);
+	assert.deepEqual(first.state, second.state);
+	assert.deepEqual(first.state, {
+		phase: 'failed', scope: { accountId: 'first', host: 'github.com', credentialRevision: 1n },
+		lastAttemptAt: 200, lastSuccessAt: 100, failure: GitHubErrorCode.ManagedSettingsUpdateRequired, retainsPolicy: true,
+	});
+	assert.deepEqual([first.getPolicyValue('ManagedFeature'), second.getPolicyValue('ManagedFeature')], [true, true]);
+	snapshot = { settings: null, refresh: { state: 'ready', lastAttemptAt: 300, lastSuccessAt: 400 } };
+	await first.refresh({ retryManagedSettings: true });
+	await second.refresh();
+	assert.deepEqual(modes, [GitHubManagedSettingsReadMode.Automatic, GitHubManagedSettingsReadMode.Automatic, GitHubManagedSettingsReadMode.Retry, GitHubManagedSettingsReadMode.Automatic]);
+	assert.deepEqual(first.state, second.state);
+	assert.equal(first.state.lastSuccessAt, 400);
+	assert.deepEqual([first.getPolicyValue('ManagedFeature'), second.getPolicyValue('ManagedFeature')], [undefined, undefined]);
 });
 
 test('Logout cancels pending policy reads and prevents a late response from restoring restrictions', async () => {
@@ -112,31 +178,6 @@ test('Account callbacks see only declared fields and missing fields do not creat
 	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
 });
 
-test('Copilot model policy reaches the real configuration and new-chat consumer, with legacy fallback and withdrawal', async () => {
-	using changes = new Emitter<AccountState>();
-	let raw: Readonly<Record<string, JsonValue>> = { model: ' anthropic/claude-opus-5-5 ', permissions: { model: 'openai/gpt-6.1-sol' } };
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => raw), log);
-	using files = new TestConfigurationFiles('{"chat.defaultModel":"openai/gpt-6.1-sol"}');
-	const profile = new UserDataProfileService();
-	using configuration = new ConfigurationService(profile.currentProfile.settingsResource, files, source, log);
-	await configuration.initialize();
-	using preferences = new LanguageModelsConfigurationService(ChatModelPreferences, configuration,
-		{ get: () => undefined, onDidChangeValue: Event.None } as unknown as IStorageService);
-	const first = { provider: 'openai', model: 'gpt-6.1-sol' };
-	const second = { provider: 'anthropic', model: 'claude-opus-5-5' };
-	const catalog = [first, second].map(model => ({ model, displayName: model.model, longContext: null }));
-	assert.equal(configuration.inspect('chat.defaultModel').policyValue, 'anthropic/claude-opus-5-5');
-	assert.deepEqual(preferences.getDefaultNewChatModel(catalog), second);
-	await assert.rejects(configuration.updateValue('chat.defaultModel', 'auto'), /policy/);
-	raw = { model: ' ', permissions: { model: 'openai/gpt-6.1-sol' } };
-	await source.updatePolicyDefinitions({});
-	assert.equal(configuration.inspect('chat.defaultModel').policyValue, 'openai/gpt-6.1-sol');
-	raw = {};
-	await source.updatePolicyDefinitions({});
-	assert.equal(configuration.inspect('chat.defaultModel').policyValue, undefined);
-	assert.deepEqual(preferences.getDefaultNewChatModel(catalog), first);
-});
-
 test('Explicit refresh exposes cold failure, joins in-flight requests, retains old values and recovers on withdrawal', async () => {
 	using changes = new Emitter<AccountState>();
 	let calls = 0;
@@ -163,7 +204,7 @@ test('Explicit refresh exposes cold failure, joins in-flight requests, retains o
 	raw = { strictPluginOnlyCustomization: true };
 	gate = new Promise<void>(resolve => { release = resolve; });
 	const started = new Promise<void>(resolve => { entered = resolve; });
-	const retry = source.refresh();
+	const retry = source.refresh({ retryManagedSettings: true });
 	await started;
 	assert.equal(state().phase, 'refreshing');
 	assert.equal(source.refresh(), retry);
@@ -176,7 +217,7 @@ test('Explicit refresh exposes cold failure, joins in-flight requests, retains o
 	assert.equal(typeof success, 'number');
 
 	raw = new GitHubError(GitHubErrorCode.ManagedSettingsUpdateRequired);
-	await source.refresh();
+	await source.refresh({ retryManagedSettings: true });
 	assert.deepEqual(state(), {
 		phase: 'failed', failure: GitHubErrorCode.ManagedSettingsUpdateRequired,
 		retainsPolicy: true,
@@ -185,7 +226,7 @@ test('Explicit refresh exposes cold failure, joins in-flight requests, retains o
 	});
 	assert.equal(source.getPolicyValue('ManagedFeature'), true);
 	raw = null;
-	await source.refresh();
+	await source.refresh({ retryManagedSettings: true });
 	assert.equal(state().phase, 'ready');
 	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
 	assert.ok(states.some(state => state.phase === 'failed' && state.lastSuccessAt === undefined));

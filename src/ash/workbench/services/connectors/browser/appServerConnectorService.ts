@@ -1,9 +1,9 @@
-import type { ConnectorConnectionStateDto, ConnectorDto } from "../../../../../../.build/protocol/typescript/index.js";
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { IConnectorApi } from "../../../../platform/connectors/common/connectorApi.js";
-import type { ConnectorCatalogView, ConnectorState, ConnectorView, IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
+import type { ConnectorConnectionStateDto, ConnectorDto } from '../../../../../../.build/protocol/typescript/index.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { IConnectorApi } from '../../../../platform/connectors/common/connectorApi.js';
+import type { ConnectorCatalogView, ConnectorState, ConnectorView, IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 
 export class AppServerConnectorService extends Disposable implements IConnectorService {
 	private readonly _onDidChange = this._register(new Emitter<number>());
@@ -12,7 +12,7 @@ export class AppServerConnectorService extends Disposable implements IConnectorS
 	constructor(private readonly api: IConnectorApi, events: IServerEventApi) {
 		super();
 		const subscription = events.subscribe(event => {
-			if (event.method === "connector/changed") this._onDidChange.fire(event.params.generation);
+			if (event.method === 'connector/changed') this._onDidChange.fire(event.params.generation);
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 	}
@@ -76,20 +76,20 @@ function connectorView(connector: ConnectorDto): ConnectorView {
 		enabled: connector.enabled,
 		state: connectorState(connector.state),
 		oauthMethods: connector.oauthMethods,
-		canConnectApiToken: connector.availableActions.includes("connectApiToken") || connector.availableActions.includes("reauthorizeApiToken"),
-		canConnectOAuth: connector.availableActions.includes("connectOAuth") || connector.availableActions.includes("reauthorizeOAuth"),
-		canDisconnect: connector.availableActions.includes("disconnect"),
-		canRefreshOAuth: connector.availableActions.includes("refreshOAuth"),
-		canRevokeOAuth: connector.availableActions.includes("revokeOAuth"),
+		canConnectApiToken: connector.availableActions.includes('connectApiToken') || connector.availableActions.includes('reauthorizeApiToken'),
+		canConnectOAuth: connector.availableActions.includes('connectOAuth') || connector.availableActions.includes('reauthorizeOAuth'),
+		canDisconnect: connector.availableActions.includes('disconnect'),
+		canRefreshOAuth: connector.availableActions.includes('refreshOAuth'),
+		canRevokeOAuth: connector.availableActions.includes('revokeOAuth'),
 	};
 }
 
 function connectorState(state: ConnectorConnectionStateDto): ConnectorState {
 	switch (state.status) {
-		case "disconnected": return { status: "disconnected" };
-		case "connecting": return { status: "connecting" };
-		case "connected": return { status: "connected", account: { ...state.account } };
-		case "unavailable": return { status: "unavailable", reason: state.reason };
-		case "reauthorizationRequired": return { status: "reauthorizationRequired", account: { ...state.account } };
+		case 'disconnected': return { status: 'disconnected' };
+		case 'connecting': return { status: 'connecting' };
+		case 'connected': return { status: 'connected', account: { ...state.account } };
+		case 'unavailable': return { status: 'unavailable', reason: state.reason };
+		case 'reauthorizationRequired': return { status: 'reauthorizationRequired', account: { ...state.account } };
 	}
 }

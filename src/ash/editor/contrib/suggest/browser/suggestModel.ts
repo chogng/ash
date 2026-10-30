@@ -1,34 +1,34 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { rot } from "../../../../base/common/numbers.js";
-import { type ICodeEditor } from "../../../browser/editorBrowser.js";
-import { EditorOption } from "../../../common/config/editorOptions.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { rot } from '../../../../base/common/numbers.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { type VersionedLanguageResult } from '../../../common/model/languageRequestCoordinator.js';
 import { type VersionedLanguageResultStore } from '../../../common/model/languageResultStore.js';
 import { assertLanguageCompletionCommitCharacter, normalizeLanguageCompletionItemDetails, LanguageCompletionInsertTextFormat, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from '../../../common/languages.js';
-import { parseSnippet, type Snippet, type SnippetVariableResolver } from "../../snippet/common/snippetParser.js";
+import { parseSnippet, type Snippet, type SnippetVariableResolver } from '../../snippet/common/snippetParser.js';
 import { SnippetController2 } from '../../snippet/browser/snippetController2.js';
-import { Position } from "../../../common/core/position.js";
-import { Selection } from "../../../common/core/selection.js";
-import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
-import { type ICommand, type ICursorStateComputerData, type IEditOperationBuilder } from "../../../common/editorCommon.js";
-import { type ITextModel } from "../../../common/model.js";
-import { type TextModel } from "../../../common/model/textModel.js";
+import { Position } from '../../../common/core/position.js';
+import { Selection } from '../../../common/core/selection.js';
+import { normalizeTextLineEndings } from '../../../common/core/textChange.js';
+import { type ICommand, type ICursorStateComputerData, type IEditOperationBuilder } from '../../../common/editorCommon.js';
+import { type ITextModel } from '../../../common/model.js';
+import { type TextModel } from '../../../common/model/textModel.js';
 
 export enum LanguageCompletionSessionChangeReason {
-	Store = "store",
-	Focus = "focus",
-	Selection = "selection",
-	Cancelled = "cancelled",
-	Accepted = "accepted",
-	Details = "details",
+	Store = 'store',
+	Focus = 'focus',
+	Selection = 'selection',
+	Cancelled = 'cancelled',
+	Accepted = 'accepted',
+	Details = 'details',
 }
 
 export enum LanguageCompletionDetailsStatus {
-	Complete = "complete",
-	Loading = "loading",
-	Failed = "failed",
-	Unavailable = "unavailable",
+	Complete = 'complete',
+	Loading = 'loading',
+	Failed = 'failed',
+	Unavailable = 'unavailable',
 }
 
 export interface LanguageCompletionSessionState {
@@ -81,17 +81,17 @@ export class SuggestModel extends Disposable {
 		super();
 		try {
 			if (store.textModel !== editor.getModel()) {
-				throw new TypeError("Language completion store and editor must share one text model");
+				throw new TypeError('Language completion store and editor must share one text model');
 			}
-			if (options.resolver !== undefined && typeof options.resolver.resolveCompletionItem !== "function") {
-				throw new TypeError("Language completion session resolver must implement resolveCompletionItem");
+			if (options.resolver !== undefined && typeof options.resolver.resolveCompletionItem !== 'function') {
+				throw new TypeError('Language completion session resolver must implement resolveCompletionItem');
 			}
-			if (options.onResolveError !== undefined && typeof options.onResolveError !== "function") {
-				throw new TypeError("Language completion resolve error handler must be a function");
+			if (options.onResolveError !== undefined && typeof options.onResolveError !== 'function') {
+				throw new TypeError('Language completion resolve error handler must be a function');
 			}
-			if (options.onDidAccept !== undefined && typeof options.onDidAccept !== "function") throw new TypeError("Language completion accept handler must be a function");
-			if (options.snippetVariables !== undefined && typeof options.snippetVariables.resolveVariable !== "function") {
-				throw new TypeError("Language completion snippet variables require a resolver");
+			if (options.onDidAccept !== undefined && typeof options.onDidAccept !== 'function') throw new TypeError('Language completion accept handler must be a function');
+			if (options.snippetVariables !== undefined && typeof options.snippetVariables.resolveVariable !== 'function') {
+				throw new TypeError('Language completion snippet variables require a resolver');
 			}
 			this.resolver = options.resolver;
 			this.onResolveError = options.onResolveError ?? reportResolveError;
@@ -111,7 +111,7 @@ export class SuggestModel extends Disposable {
 			}));
 			this._register(editor.onDidDispose(() => this.dispose()));
 			this._register(toDisposable(() => {
-				this.cancelResolution("sessionDisposed");
+				this.cancelResolution('sessionDisposed');
 				const hadState = this.currentState !== undefined;
 				this.currentState = undefined;
 				if (hadState) this.fire(LanguageCompletionSessionChangeReason.Cancelled);
@@ -154,7 +154,7 @@ export class SuggestModel extends Disposable {
 			throw new RangeError(`Completion selection index must be between 0 and ${state.items.length - 1}`);
 		}
 		if (index === state.selectedIndex) return true;
-		this.cancelResolution("selectionChanged");
+		this.cancelResolution('selectionChanged');
 		this.currentState = createStateSnapshot(state, index, this.resolver !== undefined);
 		this.fire(LanguageCompletionSessionChangeReason.Focus);
 		this.startResolution();
@@ -191,7 +191,7 @@ export class SuggestModel extends Disposable {
 		this.accepting = true;
 		try {
 			this.editor.pushUndoStop();
-			this.editor.executeCommand("suggest.accept", command);
+			this.editor.executeCommand('suggest.accept', command);
 			this.editor.pushUndoStop();
 			if (insertion.snippet && insertion.snippet.placeholderGroups.length > 0) {
 				const snippets = SnippetController2.get(this.editor);
@@ -224,7 +224,7 @@ export class SuggestModel extends Disposable {
 	private replaceState(result: VersionedLanguageResult<LanguageCompletionResult> | undefined, reason: LanguageCompletionSessionChangeReason): void {
 		const next = this.createState(result);
 		if (statesEqual(this.currentState, next)) return;
-		this.cancelResolution("completionResultChanged");
+		this.cancelResolution('completionResultChanged');
 		this.currentState = next;
 		this.fire(reason);
 		this.startResolution();
@@ -270,7 +270,7 @@ export class SuggestModel extends Disposable {
 
 	private close(reason: LanguageCompletionSessionChangeReason): boolean {
 		if (!this.currentState) return false;
-		this.cancelResolution("sessionClosed");
+		this.cancelResolution('sessionClosed');
 		this.currentState = undefined;
 		this.fire(reason);
 		return true;
@@ -310,7 +310,7 @@ export class SuggestModel extends Disposable {
 			try {
 				this.onResolveError(error);
 			} catch (reportingError) {
-				reportResolveError(new AggregateError([error, reportingError], "Completion resolution and error reporting both failed"));
+				reportResolveError(new AggregateError([error, reportingError], 'Completion resolution and error reporting both failed'));
 			}
 		});
 	}
@@ -323,20 +323,20 @@ export class SuggestModel extends Disposable {
 
 function createLanguageCompletionAcceptCommand(model: TextModel, editor: ICodeEditor, item: LanguageCompletionItem, commitCharacter?: string, snippetVariables?: SnippetVariableResolver): ICommand {
 	if (model !== editor.getModel()) {
-		throw new TypeError("Language completion command and editor must share one text model");
+		throw new TypeError('Language completion command and editor must share one text model');
 	}
 	const selections = editor.getSelections();
 	if (selections?.length !== 1 || !selections[0]!.isEmpty()) {
-		throw new Error("Language completion acceptance requires one collapsed selection");
+		throw new Error('Language completion acceptance requires one collapsed selection');
 	}
 	const position = selections[0]!.getPosition();
 	if (Position.compare(item.range.getStartPosition(), position) > 0 || Position.compare(item.range.getEndPosition(), position) < 0) {
-		throw new RangeError("Language completion item range must contain the active position");
+		throw new RangeError('Language completion item range must contain the active position');
 	}
 	if (commitCharacter !== undefined) {
 		assertLanguageCompletionCommitCharacter(commitCharacter);
 		if (!item.commitCharacters?.includes(commitCharacter)) {
-			throw new RangeError("Language completion item does not declare this commit character");
+			throw new RangeError('Language completion item does not declare this commit character');
 		}
 	}
 	const insertion = resolveLanguageCompletionInsertion(item, commitCharacter, model, snippetVariables);
@@ -344,10 +344,10 @@ function createLanguageCompletionAcceptCommand(model: TextModel, editor: ICodeEd
 }
 
 class LanguageCompletionAcceptCommand implements ICommand {
-	private readonly edits: readonly { readonly range: import("../../../common/core/range.js").Range; readonly text: string; }[];
+	private readonly edits: readonly { readonly range: import('../../../common/core/range.js').Range; readonly text: string; }[];
 	private readonly primaryEditIndex: number;
 
-	constructor(primaryRange: import("../../../common/core/range.js").Range, text: string, additionalEdits: readonly { readonly range: import("../../../common/core/range.js").Range; readonly text: string; }[]) {
+	constructor(primaryRange: import('../../../common/core/range.js').Range, text: string, additionalEdits: readonly { readonly range: import('../../../common/core/range.js').Range; readonly text: string; }[]) {
 		const primaryEdit = { range: primaryRange, text };
 		this.edits = [primaryEdit, ...additionalEdits].sort((left, right) => {
 			const start = Position.compare(left.range.getStartPosition(), right.range.getStartPosition());
@@ -362,7 +362,7 @@ class LanguageCompletionAcceptCommand implements ICommand {
 
 	computeCursorState(_model: ITextModel, helper: ICursorStateComputerData): Selection {
 		const primaryInverseEdit = helper.getInverseEditOperations()[this.primaryEditIndex];
-		if (!primaryInverseEdit) throw new Error("Language completion primary edit was not applied");
+		if (!primaryInverseEdit) throw new Error('Language completion primary edit was not applied');
 		return Selection.fromPositions(primaryInverseEdit.range.getEndPosition());
 	}
 }
@@ -377,7 +377,7 @@ function resolveLanguageCompletionInsertion(item: LanguageCompletionItem, commit
 	const snippet = item.insertTextFormat === LanguageCompletionInsertTextFormat.Snippet
 		? parseSnippet(normalizeTextLineEndings(item.insertText), { variables: snippetVariables })
 		: undefined;
-	const text = (snippet?.text ?? normalizeTextLineEndings(item.insertText)) + (commitCharacter ?? "");
+	const text = (snippet?.text ?? normalizeTextLineEndings(item.insertText)) + (commitCharacter ?? '');
 	const primaryStartOffset = model?.offsetAt(item.range.getStartPosition()) ?? 0;
 	const offsetDelta = model
 		? (item.additionalTextEdits ?? []).reduce((delta, edit) => Position.compare(edit.range.getEndPosition(), item.range.getStartPosition()) < 0
@@ -397,7 +397,7 @@ function createStateSnapshot(state: LanguageCompletionSessionState, selectedInde
 	});
 }
 
-function createDetailsState(item: LanguageCompletionItem | undefined, resolverAvailable: boolean): Pick<LanguageCompletionSessionState, "details" | "detailsStatus"> {
+function createDetailsState(item: LanguageCompletionItem | undefined, resolverAvailable: boolean): Pick<LanguageCompletionSessionState, 'details' | 'detailsStatus'> {
 	if (!item) return Object.freeze({ details: Object.freeze({}), detailsStatus: LanguageCompletionDetailsStatus.Unavailable });
 	return Object.freeze({
 		details: mergeDetails(item, undefined),
@@ -435,5 +435,5 @@ function statesEqual(left: LanguageCompletionSessionState | undefined, right: La
 }
 
 function reportResolveError(error: unknown): void {
-	console.error("Language completion item resolution failed", error);
+	console.error('Language completion item resolution failed', error);
 }

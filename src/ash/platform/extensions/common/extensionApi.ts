@@ -3,10 +3,10 @@ import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IExtensionResourceLoaderService } from '../../extensionResourceLoader/common/extensionResourceLoader.js';
 
-export type ExtensionCatalogReload = "cached" | "refresh";
+export type ExtensionCatalogReload = 'cached' | 'refresh';
 export const IExtensionApi = createServiceIdentifier<IExtensionApi>('extensionCatalogApi');
-export type ExtensionSourceKind = "builtIn" | "plugin" | "registry" | "user";
-export type ExtensionDiagnosticCode = "sourceUnavailable" | "invalidManifest" | "duplicateExtension" | "pathEscapesRoot" | "resourceNotFound" | "resourceTooLarge";
+export type ExtensionSourceKind = 'builtIn' | 'plugin' | 'registry' | 'user';
+export type ExtensionDiagnosticCode = 'sourceUnavailable' | 'invalidManifest' | 'duplicateExtension' | 'pathEscapesRoot' | 'resourceNotFound' | 'resourceTooLarge';
 
 /** Backend admission for an exact, verified first-party client package. Manifest text cannot grant this. */
 export interface ExtensionRendererClient {
@@ -66,16 +66,16 @@ export interface IExtensionApi {
 }
 
 export function normalizeExtensionCatalog(value: unknown): ExtensionCatalog {
-	const catalog = record(value, "extension catalog");
+	const catalog = record(value, 'extension catalog');
 	return Object.freeze({
-		generation: nonNegativeSafeInteger(catalog.generation, "extension catalog generation"),
-		extensions: Object.freeze(array(catalog.extensions, "extensions").map(normalizeExtension)),
-		diagnostics: Object.freeze(array(catalog.diagnostics, "diagnostics").map(normalizeDiagnostic)),
+		generation: nonNegativeSafeInteger(catalog.generation, 'extension catalog generation'),
+		extensions: Object.freeze(array(catalog.extensions, 'extensions').map(normalizeExtension)),
+		diagnostics: Object.freeze(array(catalog.diagnostics, 'diagnostics').map(normalizeDiagnostic)),
 	});
 }
 
 function normalizeExtension(value: unknown): ExtensionDescriptor {
-	const extension = record(value, "extension");
+	const extension = record(value, 'extension');
 	const extensionLocation = extension.extensionLocation === undefined ? undefined : boundedText(extension.extensionLocation, 'extension location', 32768);
 	if (extensionLocation !== undefined) {
 		const location = URI.parse(extensionLocation);
@@ -83,7 +83,7 @@ function normalizeExtension(value: unknown): ExtensionDescriptor {
 	}
 	const targetPlatform = extension.targetPlatform === undefined ? undefined : boundedText(extension.targetPlatform, 'extension target platform', 128);
 	if (targetPlatform !== undefined && !/^[a-z0-9]+-[a-z0-9_]+$/.test(targetPlatform)) throw new TypeError('extension target platform is invalid');
-	const sourceKind = stringEnum(extension.sourceKind, "extension source kind", ["builtIn", "plugin", "registry", "user"] as const);
+	const sourceKind = stringEnum(extension.sourceKind, 'extension source kind', ['builtIn', 'plugin', 'registry', 'user'] as const);
 	let runtimeBinding: ExtensionDescriptor['runtimeBinding'];
 	if (extension.runtimeBinding !== undefined) {
 		if (sourceKind !== 'plugin') throw new TypeError('extension runtime binding requires a Plugin source');
@@ -94,18 +94,18 @@ function normalizeExtension(value: unknown): ExtensionDescriptor {
 		runtimeBinding = Object.freeze({ runtimeId, packageDigest: sha256Digest(binding.packageDigest, 'extension runtime package digest') });
 	}
 	return Object.freeze({
-		id: boundedText(extension.id, "extension id", 160),
-		name: boundedText(extension.name, "extension name", 256),
-		publisher: boundedText(extension.publisher, "extension publisher", 256),
-		version: boundedText(extension.version, "extension version", 256),
-		displayName: boundedText(extension.displayName, "extension display name", 256),
+		id: boundedText(extension.id, 'extension id', 160),
+		name: boundedText(extension.name, 'extension name', 256),
+		publisher: boundedText(extension.publisher, 'extension publisher', 256),
+		version: boundedText(extension.version, 'extension version', 256),
+		displayName: boundedText(extension.displayName, 'extension display name', 256),
 		sourceKind,
 		...(runtimeBinding === undefined ? {} : { runtimeBinding }),
 		...(extensionLocation === undefined ? {} : { extensionLocation }),
 		...(targetPlatform === undefined ? {} : { targetPlatform }),
-		manifestJson: boundedText(extension.manifestJson, "extension manifest", 4 * 1024 * 1024),
-		manifestSha256: sha256Digest(extension.manifestSha256, "extension manifest digest"),
-		packageSha256: sha256Digest(extension.packageSha256, "extension package digest"),
+		manifestJson: boundedText(extension.manifestJson, 'extension manifest', 4 * 1024 * 1024),
+		manifestSha256: sha256Digest(extension.manifestSha256, 'extension manifest digest'),
+		packageSha256: sha256Digest(extension.packageSha256, 'extension package digest'),
 		...(extension.rendererClient === undefined || extension.rendererClient === null ? {} : { rendererClient: normalizeRendererClient(extension.rendererClient) }),
 	});
 }
@@ -130,17 +130,17 @@ function normalizeRendererClient(value: unknown): ExtensionRendererClient {
 }
 
 function normalizeDiagnostic(value: unknown): ExtensionDiagnostic {
-	const diagnostic = record(value, "extension diagnostic");
+	const diagnostic = record(value, 'extension diagnostic');
 	return Object.freeze({
-		source: boundedText(diagnostic.source, "extension diagnostic source", 64),
-		subject: diagnostic.subject === null ? undefined : boundedText(diagnostic.subject, "extension diagnostic subject", 256),
-		code: stringEnum(diagnostic.code, "extension diagnostic code", ["sourceUnavailable", "invalidManifest", "duplicateExtension", "pathEscapesRoot", "resourceNotFound", "resourceTooLarge"] as const),
-		message: boundedText(diagnostic.message, "extension diagnostic message", 512),
+		source: boundedText(diagnostic.source, 'extension diagnostic source', 64),
+		subject: diagnostic.subject === null ? undefined : boundedText(diagnostic.subject, 'extension diagnostic subject', 256),
+		code: stringEnum(diagnostic.code, 'extension diagnostic code', ['sourceUnavailable', 'invalidManifest', 'duplicateExtension', 'pathEscapesRoot', 'resourceNotFound', 'resourceTooLarge'] as const),
+		message: boundedText(diagnostic.message, 'extension diagnostic message', 512),
 	});
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, unknown>;
 }
 
@@ -150,7 +150,7 @@ function array(value: unknown, owner: string): readonly unknown[] {
 }
 
 function boundedText(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== "string" || value.length === 0 || value.length > maximum) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || value.length === 0 || value.length > maximum) throw new TypeError(`${owner} is invalid`);
 	return value;
 }
 
@@ -161,7 +161,7 @@ function sha256Digest(value: unknown, owner: string): string {
 }
 
 function stringEnum<const T extends readonly string[]>(value: unknown, owner: string, values: T): T[number] {
-	if (typeof value !== "string" || !values.includes(value)) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || !values.includes(value)) throw new TypeError(`${owner} is invalid`);
 	return value as T[number];
 }
 

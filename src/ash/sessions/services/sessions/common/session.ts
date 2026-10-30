@@ -73,13 +73,13 @@ export function createSessionFileChange(summary: TurnChangeSetSummary, file: Tur
 export type { ApprovalMode, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
 
 export type ThreadOrigin =
-	| { readonly type: "root"; }
-	| { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
-	| { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string; }
-	| { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string; };
-export type ChatStatus = "active" | "archived";
-export type AgentThreadExecutionStatus = "idle" | "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled";
-export type AgentWaitingReason = "approval" | "userInput" | "capability";
+	| { readonly type: 'root'; }
+	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
+	| { readonly type: 'rewind'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string; }
+	| { readonly type: 'agentSpawn'; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string; };
+export type ChatStatus = 'active' | 'archived';
+export type AgentThreadExecutionStatus = 'idle' | 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+export type AgentWaitingReason = 'approval' | 'userInput' | 'capability';
 
 export interface AgentTreeNode {
 	readonly threadId: ThreadId;
@@ -93,7 +93,7 @@ export interface AgentTreeNode {
 	readonly goal?: {
 		readonly goalId: string;
 		readonly objective: string;
-		readonly status: "active" | "paused" | "blocked" | "usageLimited" | "budgetLimited" | "complete";
+		readonly status: 'active' | 'paused' | 'blocked' | 'usageLimited' | 'budgetLimited' | 'complete';
 		readonly tokenBudget?: number | null;
 		readonly tokensUsed: number;
 	};
@@ -103,13 +103,13 @@ export interface AgentTreeNode {
 	};
 	readonly role?: {
 		readonly name: string;
-		readonly selectionReason: "explicit" | "automatic";
+		readonly selectionReason: 'explicit' | 'automatic';
 	};
 	readonly result?: {
 		readonly status: string;
 		readonly summary: string;
 	};
-	readonly joins: readonly { readonly status: "waiting" | "satisfied"; }[];
+	readonly joins: readonly { readonly status: 'waiting' | 'satisfied'; }[];
 	readonly children: readonly AgentTreeNode[];
 }
 
@@ -124,7 +124,7 @@ export interface IChat {
 	readonly management?: SessionManagementInfo;
 }
 
-export type SessionStatus = "active" | "archived";
+export type SessionStatus = 'active' | 'archived';
 export type SessionWorkspaceSelection =
 	| { readonly type: 'current'; }
 	| { readonly type: 'local'; readonly root: string; }
@@ -184,3 +184,6 @@ export interface IUntitledChatSession {
 	readonly agent: ChatAgent | undefined;
 	readonly workspace: SessionWorkspaceSelection;
 }
+
+/** Repository-backed resources remain independent of Session execution directories. */
+export const GITHUB_REMOTE_FILE_SCHEME = 'github-remote-file';

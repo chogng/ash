@@ -1,16 +1,16 @@
 import type { ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
-import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction, TurnChangeSetSummary } from "../../../../../services/chat/common/chatService.js";
-import type { SkillReference } from "../../../../../../platform/agentHost/common/appServerApi.js";
-import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
-import type { ModelReasoningEffort } from "../../../../../services/chat/common/modelCatalog.js";
-import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
+import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction, TurnChangeSetSummary } from '../../../../../services/chat/common/chatService.js';
+import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
+import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
+import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
+import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 
 /** Line totals can be partial when the Git provider cannot read some workspace files. */
 export type ChatChangesStatistics = TurnChangeSetSummary['statistics'] & { readonly partial?: boolean; };
 
-export type ChatInputPhase = "loading" | "ready" | "submitting" | "error";
+export type ChatInputPhase = 'loading' | 'ready' | 'submitting' | 'error';
 
 export interface ChatInputCommandInvocation {
 	readonly commandId: string;
@@ -24,6 +24,7 @@ export interface ChatInputServerCommandInvocation {
 
 /** State required to render the input area for the selected Thread. */
 export interface ChatInputState {
+	readonly conversation?: { readonly sessionId: string; readonly threadId: string; };
 	/** Generation changes on navigation, but stays stable when first send materializes a draft. */
 	readonly draftIdentity?: { readonly id: string; readonly generation: number; };
 	readonly mode: ChatMode;

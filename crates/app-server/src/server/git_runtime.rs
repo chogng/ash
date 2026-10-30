@@ -226,6 +226,7 @@ struct IgnoreCache {
 enum StatusNotification {
     OnChange,
     Always,
+    BackgroundFetch,
 }
 
 enum StatusRefresh {
@@ -669,6 +670,7 @@ impl GitRuntime {
             )?;
             result.revision = status.revision;
             result.history_revision = status.history_revision;
+            result.history_change_silent = status.history_change_silent;
             return Ok(result);
         }
         Err(GitRuntimeError::Service(GitServiceError::ConflictChanged))
@@ -1189,6 +1191,7 @@ impl GitRuntime {
     ) -> Result<GitStatusResult, GitRuntimeError> {
         self.repository(repository_id)?.mutate_remote(
             |service, cancellation| service.remote_with_options(operation, options, cancellation),
+            StatusNotification::Always,
             cancellation,
         )
     }
@@ -1580,8 +1583,7 @@ impl GitRepositoryRuntime {
     fn history_refs(&self) -> Result<GitHistoryRefsResult, GitRuntimeError> {
         let _operation = lock_current_operation(&self.operation)
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
-        let (repository, snapshot) = self.service.snapshot().map_err(GitRuntimeError::Service)?;
-        let status = self.accept(repository, snapshot)?;
+        let status = self.accept_history()?;
         let branches = self.local_branches_locked()?;
         let state = self
             .state
@@ -1611,9 +1613,7 @@ impl GitRepositoryRuntime {
             // A new traversal observes current refs and remotes. Accept that state
             // before saving its cursor so a delayed watcher cannot invalidate it
             // merely for reporting changes this traversal has already observed.
-            let (repository, snapshot) =
-                self.service.snapshot().map_err(GitRuntimeError::Service)?;
-            self.accept(repository, snapshot)?;
+            self.accept_history()?;
         }
         let mut sessions = self
             .graph_sessions
@@ -2014,14 +2014,18 @@ impl GitRepositoryRuntime {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::fetch, cancellation)
+        self.mutate_remote(GitService::fetch, StatusNotification::Always, cancellation)
     }
 
     pub(super) fn fetch_default(
         &self,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::fetch_default, cancellation)
+        self.mutate_remote(
+            GitService::fetch_default,
+            StatusNotification::Always,
+            cancellation,
+        )
     }
 
     pub(super) fn fetch_remote(
@@ -2031,6 +2035,7 @@ impl GitRepositoryRuntime {
     ) -> Result<GitStatusResult, GitRuntimeError> {
         self.mutate_remote(
             |service, cancellation| service.fetch_remote(name, cancellation),
+            StatusNotification::Always,
             cancellation,
         )
     }
@@ -2042,6 +2047,7 @@ impl GitRepositoryRuntime {
     ) -> Result<GitStatusResult, GitRuntimeError> {
         self.mutate_remote(
             |service, cancellation| service.pull(mode, cancellation),
+            StatusNotification::Always,
             cancellation,
         )
     }
@@ -2050,7 +2056,7 @@ impl GitRepositoryRuntime {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
-        self.mutate_remote(GitService::push, cancellation)
+        self.mutate_remote(GitService::push, StatusNotification::Always, cancellation)
     }
 
     pub(super) fn start_watching(
@@ -2125,6 +2131,7 @@ impl GitRepositoryRuntime {
             &CancellationToken,
         )
             -> Result<(GitRepository, GitRepositorySnapshot), GitServiceError>,
+        notification: StatusNotification,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
         let _operation = lock_operation_for_request(&self.operation, cancellation)
@@ -2140,7 +2147,7 @@ impl GitRepositoryRuntime {
                         let _ = self.accept_status_for_request(
                             repository,
                             snapshot,
-                            StatusNotification::Always,
+                            notification,
                             cancellation,
                         );
                     }
@@ -2151,12 +2158,7 @@ impl GitRepositoryRuntime {
                 return Err(GitRuntimeError::Service(error));
             }
         };
-        self.accept_status_for_request(
-            repository,
-            snapshot,
-            StatusNotification::Always,
-            cancellation,
-        )
+        self.accept_status_for_request(repository, snapshot, notification, cancellation)
     }
 
     fn accept(
@@ -2250,6 +2252,78 @@ impl GitRepositoryRuntime {
                 .reference_state_for_request(&repository, cancellation)
                 .map_err(GitRuntimeError::Service)?,
         };
+        self.accept_state(
+            repository,
+            projected,
+            references,
+            notification,
+            cancellation,
+        )
+    }
+
+    /// History reads advance metadata on the existing owner while retaining its
+    /// last working-tree snapshot. File watchers and explicit status reads own paths.
+    fn accept_history(&self) -> Result<GitStatusResult, GitRuntimeError> {
+        let cancellation = CancellationSource::new().token();
+        let previous = self
+            .state
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?
+            .status
+            .clone();
+        let Some(mut projected) = previous else {
+            // Initialize the shared repository once; an unknown worktree is not clean.
+            let (repository, snapshot) =
+                self.service.snapshot().map_err(GitRuntimeError::Service)?;
+            return self.accept(repository, snapshot);
+        };
+        let repository = self
+            .service
+            .repository_for_request(&cancellation)
+            .map_err(GitRuntimeError::Service)?;
+        projected.head = head(
+            &self
+                .service
+                .head_for_request(&repository, &cancellation)
+                .map_err(GitRuntimeError::Service)?,
+        );
+        let references = self
+            .service
+            .reference_state_for_request(&repository, &cancellation)
+            .map_err(GitRuntimeError::Service)?;
+        self.accept_state(
+            repository,
+            projected,
+            references,
+            StatusNotification::OnChange,
+            &cancellation,
+        )
+    }
+
+    fn accept_state(
+        &self,
+        repository: GitRepository,
+        mut projected: GitStatusResult,
+        references: ash_git::GitReferenceState,
+        notification: StatusNotification,
+        cancellation: &CancellationToken,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        if let GitHeadDto::Branch {
+            upstream: Some(upstream),
+            ..
+        } = &mut projected.head
+        {
+            // This publication already owns the ref snapshot. Carry its captured tip
+            // so history consumers need no second catalog read to resolve the upstream.
+            upstream.object_id = references
+                .references
+                .iter()
+                .find(|reference| {
+                    reference.kind() == GitReferenceKind::RemoteBranch
+                        && reference.name() == upstream.name
+                })
+                .map(|reference| reference.object_id().to_owned());
+        }
         let mut state = self
             .state
             .lock()
@@ -2296,6 +2370,10 @@ impl GitRepositoryRuntime {
         if unchanged && matches!(notification, StatusNotification::OnChange) {
             projected.revision = state.revision;
             projected.history_revision = state.history_revision;
+            projected.history_change_silent = state
+                .status
+                .as_ref()
+                .is_some_and(|status| status.history_change_silent);
             return Ok(projected);
         }
         state.revision = state
@@ -2309,6 +2387,14 @@ impl GitRepositoryRuntime {
                 .checked_add(1)
                 .expect("Git history revision overflowed");
         }
+        projected.history_change_silent = if history_changed {
+            matches!(notification, StatusNotification::BackgroundFetch)
+        } else {
+            state
+                .status
+                .as_ref()
+                .is_some_and(|status| status.history_change_silent)
+        };
         projected.history_revision = state.history_revision;
         if graph_changed {
             state.graph_revision = state
@@ -2808,8 +2894,16 @@ fn run_autofetch(
                 return;
             };
             let result = match policy.autofetch {
-                GitAutoFetchMode::Default => repository.fetch_default(&cancellation),
-                GitAutoFetchMode::All => repository.fetch(&cancellation),
+                GitAutoFetchMode::Default => repository.mutate_remote(
+                    GitService::fetch_default,
+                    StatusNotification::BackgroundFetch,
+                    &cancellation,
+                ),
+                GitAutoFetchMode::All => repository.mutate_remote(
+                    GitService::fetch,
+                    StatusNotification::BackgroundFetch,
+                    &cancellation,
+                ),
                 GitAutoFetchMode::Off => unreachable!(),
             };
             if cancellation.is_cancelled() {
@@ -3425,6 +3519,7 @@ fn project_status(
         stream_instance_id,
         revision: 0,
         history_revision: 0,
+        history_change_silent: false,
         path: wire_path(dir_prefix)?,
         head: head(snapshot.head()),
         changes,
@@ -3499,6 +3594,7 @@ pub(super) fn head(head: &GitHead) -> GitHeadDto {
             object_id: object_id.clone(),
             upstream: upstream.as_ref().map(|upstream| GitUpstreamDto {
                 name: upstream.name().into(),
+                object_id: None,
                 ahead: upstream.ahead(),
                 behind: upstream.behind(),
             }),

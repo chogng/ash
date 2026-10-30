@@ -1171,6 +1171,14 @@ impl App {
             && self.dictation_request == DictationRequest::Stopping
     }
 
+    pub(super) fn prepare_suspend(&mut self) -> Option<String> {
+        // Enter may already be waiting on a stop response. Suspending must retain
+        // the draft rather than submit it when that response arrives.
+        self.dictation_send_after_stop = false;
+        self.dictation_submission_ready = false;
+        self.dictation_resource_id.clone()
+    }
+
     pub(crate) fn dictation_ended(&mut self, resource_id: &str, error: Option<String>) {
         if self.dictation_resource_id.as_deref() != Some(resource_id) {
             return;
@@ -3643,7 +3651,10 @@ impl App {
                 self.interrupt_turn()
             }
             AppKeymapAction::CopyLastResponse => Some(HostCommand::CopyLastResponse.into()),
-            AppKeymapAction::Suspend => Some(AppCommand::Suspend),
+            AppKeymapAction::Suspend => {
+                self.prepare_suspend();
+                Some(AppCommand::Suspend)
+            }
         }
     }
 

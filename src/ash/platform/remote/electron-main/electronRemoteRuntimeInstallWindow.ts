@@ -1,13 +1,13 @@
-import { BrowserWindow } from "electron/main";
-import type { WebPreferences } from "electron/main";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { DisposableStore } from "../../../base/common/lifecycle.js";
-import { normalizeEntryUrl } from "../../ipc/electron-main/trustedIpcRouter.js";
-import type { TrustedIpcRouter } from "../../ipc/electron-main/trustedIpcRouter.js";
-import { REMOTE_RUNTIME_INSTALL_PROGRESS_CHANGED_CHANNEL } from "../common/remoteRuntimeInstallProgress.js";
-import type { RemoteRuntimeInstallProgressState } from "../common/remoteRuntimeInstallProgress.js";
-import { remoteRuntimeInstallProgressIpcRoutes } from "./remoteRuntimeInstallProgressIpc.js";
-import type { RemoteRuntimeInstallProgressMainService } from "./remoteRuntimeInstallProgressMainService.js";
+import { BrowserWindow } from 'electron/main';
+import type { WebPreferences } from 'electron/main';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { normalizeEntryUrl } from '../../ipc/electron-main/trustedIpcRouter.js';
+import type { TrustedIpcRouter } from '../../ipc/electron-main/trustedIpcRouter.js';
+import { REMOTE_RUNTIME_INSTALL_PROGRESS_CHANGED_CHANNEL } from '../common/remoteRuntimeInstallProgress.js';
+import type { RemoteRuntimeInstallProgressState } from '../common/remoteRuntimeInstallProgress.js';
+import { remoteRuntimeInstallProgressIpcRoutes } from './remoteRuntimeInstallProgressIpc.js';
+import type { RemoteRuntimeInstallProgressMainService } from './remoteRuntimeInstallProgressMainService.js';
 
 export interface RemoteRuntimeInstallRendererEntry {
 	readonly file: string;
@@ -53,9 +53,9 @@ export class ElectronRemoteRuntimeInstallWindow extends Disposable {
 			window.webContents.send(REMOTE_RUNTIME_INSTALL_PROGRESS_CHANGED_CHANNEL, state);
 			return;
 		}
-		if (state.status === "cancelling") return;
+		if (state.status === 'cancelling') return;
 		void this.open().catch(error => {
-			console.error("Failed to open Remote runtime installation progress", error);
+			console.error('Failed to open Remote runtime installation progress', error);
 			this.options.progress.cancel();
 		});
 	}
@@ -63,7 +63,7 @@ export class ElectronRemoteRuntimeInstallWindow extends Disposable {
 	private async open(): Promise<void> {
 		if (this.window && !this.window.isDestroyed()) return;
 		const state = this.options.progress.getState();
-		if (!state || state.status === "cancelling") return;
+		if (!state || state.status === 'cancelling') return;
 		const window = new BrowserWindow({
 			icon: this.options.icon,
 			width: 540,
@@ -79,7 +79,7 @@ export class ElectronRemoteRuntimeInstallWindow extends Disposable {
 		});
 		this.window = window;
 		updateWindow(window, state, this.options.productName);
-		window.once("ready-to-show", () => {
+		window.once('ready-to-show', () => {
 			if (!window.isDestroyed() && this.options.progress.getState()) window.show();
 		});
 		const windowResources = this._register(new DisposableStore());
@@ -90,7 +90,7 @@ export class ElectronRemoteRuntimeInstallWindow extends Disposable {
 			},
 			remoteRuntimeInstallProgressIpcRoutes(this.options.progress),
 		));
-		window.once("closed", () => {
+		window.once('closed', () => {
 			windowResources.dispose();
 			if (this.window === window) this.window = undefined;
 			if (this.options.progress.getState()) this.options.progress.cancel();
@@ -112,12 +112,12 @@ export class ElectronRemoteRuntimeInstallWindow extends Disposable {
 
 function updateWindow(window: BrowserWindow, state: RemoteRuntimeInstallProgressState, productName: string): void {
 	window.setTitle(`${productName} — Preparing ${state.host}`);
-	window.setClosable(state.phase !== "complete");
-	if (state.phase === "complete") {
+	window.setClosable(state.phase !== 'complete');
+	if (state.phase === 'complete') {
 		window.setProgressBar(1);
 		return;
 	}
-	if (state.phase === "uploading") {
+	if (state.phase === 'uploading') {
 		window.setProgressBar(Math.min(1, state.transferredBytes / state.totalBytes));
 		return;
 	}

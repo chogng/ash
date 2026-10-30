@@ -1,8 +1,8 @@
-import { Color, RGBA } from "../../../base/common/color.js";
-import { Emitter } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import { localize } from "../../../nls.js";
-import { ColorScheme } from "./theme.js";
+import { Color, RGBA } from '../../../base/common/color.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { localize } from '../../../nls.js';
+import { ColorScheme } from './theme.js';
 
 export type ColorIdentifier = string;
 
@@ -14,11 +14,11 @@ export interface ColorDefaults {
 }
 
 export type ColorTransform =
-	| { readonly op: "transparent"; readonly value: ColorValue; readonly factor: number; }
-	| { readonly op: "lighten"; readonly value: ColorValue; readonly factor: number; }
-	| { readonly op: "darken"; readonly value: ColorValue; readonly factor: number; }
-	| { readonly op: "mix"; readonly value: ColorValue; readonly other: ColorValue; readonly factor: number; }
-	| { readonly op: "opaque"; readonly value: ColorValue; readonly background: ColorValue; };
+	| { readonly op: 'transparent'; readonly value: ColorValue; readonly factor: number; }
+	| { readonly op: 'lighten'; readonly value: ColorValue; readonly factor: number; }
+	| { readonly op: 'darken'; readonly value: ColorValue; readonly factor: number; }
+	| { readonly op: 'mix'; readonly value: ColorValue; readonly other: ColorValue; readonly factor: number; }
+	| { readonly op: 'opaque'; readonly value: ColorValue; readonly background: ColorValue; };
 
 export type ColorValue = Color | string | ColorTransform | null;
 
@@ -51,7 +51,7 @@ export class ColorRegistry extends Disposable {
 
 	registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
 		this.assertNotDisposed();
-		validateTokenId(id, "color");
+		validateTokenId(id, 'color');
 		if (this.colors.has(id)) throw new Error(`Color token is already registered: ${id}`);
 		const contribution = Object.freeze({ id, defaults: Object.freeze({ ...defaults }), ...metadata });
 		this.colors.set(id, contribution);
@@ -99,7 +99,7 @@ export class ColorRegistry extends Disposable {
 		const resolveIdentifier = (id: string): Color | null => {
 			if (cache.has(id)) return cache.get(id) ?? null;
 			const cycleStart = resolving.indexOf(id);
-			if (cycleStart >= 0) throw new Error(`Color token cycle: ${[...resolving.slice(cycleStart), id].join(" -> ")}`);
+			if (cycleStart >= 0) throw new Error(`Color token cycle: ${[...resolving.slice(cycleStart), id].join(' -> ')}`);
 			const contribution = this.colors.get(id);
 			if (!contribution) throw new Error(`Unknown color token reference: ${id}`);
 			resolving.push(id);
@@ -122,18 +122,18 @@ export class ColorRegistry extends Disposable {
 function resolveColorValue(value: ColorValue, resolveIdentifier: (id: string) => Color | null): Color | null {
 	if (value === null) return null;
 	if (value instanceof Color) return value;
-	if (typeof value === "string") return value.startsWith("#") ? Color.fromHex(value) : resolveIdentifier(value);
+	if (typeof value === 'string') return value.startsWith('#') ? Color.fromHex(value) : resolveIdentifier(value);
 	const source = resolveColorValue(value.value, resolveIdentifier);
 	if (!source) return null;
 	switch (value.op) {
-		case "transparent": return source.transparent(value.factor);
-		case "lighten": return source.lighten(value.factor);
-		case "darken": return source.darken(value.factor);
-		case "mix": {
+		case 'transparent': return source.transparent(value.factor);
+		case 'lighten': return source.lighten(value.factor);
+		case 'darken': return source.darken(value.factor);
+		case 'mix': {
 			const other = resolveColorValue(value.other, resolveIdentifier);
 			return other ? mixColor(source, other, value.factor) : null;
 		}
-		case "opaque": {
+		case 'opaque': {
 			const background = resolveColorValue(value.background, resolveIdentifier);
 			return background ? source.makeOpaque(background) : null;
 		}

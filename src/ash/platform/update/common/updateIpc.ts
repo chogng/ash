@@ -1,8 +1,10 @@
 import type { Event } from '../../../base/common/event.js';
 import type { IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
-import { validateInstallRequest, validateUpdateRequest, type UpdateCheckResult, type UpdateReadyResult } from './updateService.js';
+import { validateInstallRequest, validateUpdateRequest, type UpdateCheckResult, type UpdateReadyResult, type UpdateState } from './updateService.js';
 
 interface UpdateHost {
+	readonly state: UpdateState;
+	readonly onDidChangeState: Event<UpdateState>;
 	checkForUpdates(policy: 'latest' | 'stable'): Promise<UpdateCheckResult>;
 	checkAutomatically(policy: 'latest' | 'stable'): Promise<UpdateCheckResult | undefined>;
 	downloadUpdate(policy: 'latest' | 'stable'): Promise<UpdateReadyResult>;
@@ -15,6 +17,7 @@ export class UpdateChannel implements IServerChannel {
 
 	public async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
 		switch (command) {
+			case 'state': return this.service.state as T;
 			case 'checkForUpdates': return await this.service.checkForUpdates(validateUpdateRequest(arg)) as T;
 			case 'checkAutomatically': return await this.service.checkAutomatically(validateUpdateRequest(arg)) as T;
 			case 'downloadUpdate': return await this.service.downloadUpdate(validateUpdateRequest(arg)) as T;
@@ -24,6 +27,7 @@ export class UpdateChannel implements IServerChannel {
 	}
 
 	public listen<T>(_context: string, event: string): Event<T> {
+		if (event === 'onDidChangeState') return this.service.onDidChangeState as Event<T>;
 		throw new Error(`Unknown update event: ${event}`);
 	}
 }

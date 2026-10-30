@@ -1,20 +1,20 @@
 import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academy/common/model/documentCodec.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { isCancellationError } from "../../../../../base/common/errors.js";
-import { createDefaultDocumentSchema } from "../../../../../../../extensions/academy/common/model/documentSchema.js";
-import { DialogResult, IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
-import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { createDefaultDocumentSchema } from '../../../../../../../extensions/academy/common/model/documentSchema.js';
+import { DialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { DocumentCollaborationOpenInput, IDocumentCollaborationService } from '../../common/documentCollaborationService.js';
-import { DialogService } from "../../../../services/dialogs/common/dialogService.js";
-import { DocumentCollaborationService } from "../../browser/documentCollaborationService.js";
+import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
+import { DocumentCollaborationService } from '../../browser/documentCollaborationService.js';
 
-test("Workbench collaboration routes an empty endpoint to its App Server service", async () => {
+test('Workbench collaboration routes an empty endpoint to its App Server service', async () => {
 	using dialogs = new DialogService();
 	using subscription = dialogs.model.onWillShowDialog(item => item.close({ button: DialogResult.Primary, values: [''] }));
 	using services = new InstantiationService();
 	services.registerInstance(IDialogService, dialogs);
-	const expected = new Error("opened by App Server service");
+	const expected = new Error('opened by App Server service');
 	let received: DocumentCollaborationOpenInput | undefined;
 	const appServer: IDocumentCollaborationService = {
 		dispose: () => undefined,
@@ -30,9 +30,9 @@ test("Workbench collaboration routes an empty endpoint to its App Server service
 	assert.equal(received, input);
 });
 
-test("Workbench collaboration owns remote service configuration", async () => {
+test('Workbench collaboration owns remote service configuration', async () => {
 	using dialogs = new DialogService();
-	const prompts = ["https://collaboration.ash.example", "too-short"];
+	const prompts = ['https://collaboration.ash.example', 'too-short'];
 	using subscription = dialogs.model.onWillShowDialog(item => item.close({ button: DialogResult.Primary, values: [prompts.shift()!] }));
 	using services = new InstantiationService();
 	services.registerInstance(IDialogService, dialogs);
@@ -40,7 +40,7 @@ test("Workbench collaboration owns remote service configuration", async () => {
 	await assert.rejects(service.open(createOpenInput(), new AbortController().signal), /bearer token must contain at least 32/);
 });
 
-test("Workbench collaboration reports service selection cancellation", async () => {
+test('Workbench collaboration reports service selection cancellation', async () => {
 	using dialogs = new DialogService();
 	using subscription = dialogs.model.onWillShowDialog(item => item.close({ button: DialogResult.Cancel }));
 	using services = new InstantiationService();
@@ -53,10 +53,10 @@ function createOpenInput(): DocumentCollaborationOpenInput {
 	const schema = createDefaultDocumentSchema();
 	return {
 		codec: bindDocumentCodec(schema),
-		clientId: "client-a",
-		schemaId: "stanza-document-v1",
+		clientId: 'client-a',
+		schemaId: 'stanza-document-v1',
 
-		document: schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1"),
+		document: schema.createDocument([schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hello', { id: 'text-1' })] })], 'document-1'),
 	};
 }
 

@@ -78,7 +78,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	private async readInitialViews(): Promise<void> {
 		const views = await this.service.getBrowserViews();
 		this.assertNotDisposed();
-		for (const info of views) { this.acceptInfo(info); }
+		for (const info of views) { if (!info.canvas) { this.acceptInfo(info); } }
 		// Subscribe before the snapshot and replay everything received while it was in flight.
 		this.initialized = true;
 		for (const event of this.initialEvents.splice(0)) { this.acceptEvent(event); }
@@ -158,6 +158,8 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 	private async defaultStorage(owner: IBrowserViewCreateOptions['owner']): Promise<IBrowserViewCreateOptions['session']> {
 		if (owner.type === 'agent') { throw new Error('Agent browser storage requires an explicit Thread'); }
 		// Offline hosts cannot resolve backend capabilities; keep new pages isolated until trust is known.
+		await this.trust.workspaceTrustInitialized;
+		await this.trust.resolveWorkspaceTrust().catch(() => undefined);
 		const trust = await this.trust.getWorkspaceTrustInfo().catch(() => undefined);
 		if (!trust?.isTrusted) { return { scope: BrowserViewStorageScope.Ephemeral }; }
 		const configured = this.configuration.getValue<string>('workbench.browser.dataStorage');
@@ -273,6 +275,7 @@ export class BrowserViewWorkbenchService extends Disposable implements IBrowserV
 			this.permissionDialogs.delete(event.requestId);
 			handle?.item.cancel();
 		} else if (event.type === 'created') {
+			if (event.info.canvas) { return; }
 			const known = this.inputs.has(event.info.id);
 			const input = this.acceptInfo(event.info);
 			if (!known) {

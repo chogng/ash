@@ -5,31 +5,31 @@ import {
 	logicalKey,
 	MAX_KEYBINDING_CHORDS,
 	physicalKey,
-} from "./keybindings.js";
-import { KeyCode, KeyCodeUtils, ScanCode, ScanCodeUtils } from "./keyCodes.js";
+} from './keybindings.js';
+import { KeyCode, KeyCodeUtils, ScanCode, ScanCodeUtils } from './keyCodes.js';
 
 const modifierNames = new Map<string, ModifierName>([
-	["ctrl", "ctrlKey"],
-	["control", "ctrlKey"],
-	["shift", "shiftKey"],
-	["alt", "altKey"],
-	["option", "altKey"],
-	["meta", "metaKey"],
-	["cmd", "metaKey"],
-	["command", "metaKey"],
-	["win", "metaKey"],
-	["windows", "metaKey"],
-	["super", "metaKey"],
-	["primary", "primaryKey"],
-	["cmdorctrl", "primaryKey"],
+	['ctrl', 'ctrlKey'],
+	['control', 'ctrlKey'],
+	['shift', 'shiftKey'],
+	['alt', 'altKey'],
+	['option', 'altKey'],
+	['meta', 'metaKey'],
+	['cmd', 'metaKey'],
+	['command', 'metaKey'],
+	['win', 'metaKey'],
+	['windows', 'metaKey'],
+	['super', 'metaKey'],
+	['primary', 'primaryKey'],
+	['cmdorctrl', 'primaryKey'],
 ]);
 
 type ModifierName =
-	| "primaryKey"
-	| "ctrlKey"
-	| "shiftKey"
-	| "altKey"
-	| "metaKey";
+	| 'primaryKey'
+	| 'ctrlKey'
+	| 'shiftKey'
+	| 'altKey'
+	| 'metaKey';
 
 /**
  * Parses a user keybinding such as `ctrl+k ctrl+c` or `shift+[KeyP]`.
@@ -55,22 +55,22 @@ export function parseKeybinding(value: string): Keybinding | undefined {
 export function serializeKeybinding(keybinding: Keybinding): string {
 	return keybinding.chords.map((chord) => {
 		const parts: string[] = [];
-		if (chord.modifiers.primaryKey) parts.push("primary");
-		if (chord.modifiers.ctrlKey) parts.push("ctrl");
-		if (chord.modifiers.metaKey) parts.push("meta");
-		if (chord.modifiers.altKey) parts.push("alt");
-		if (chord.modifiers.shiftKey) parts.push("shift");
+		if (chord.modifiers.primaryKey) parts.push('primary');
+		if (chord.modifiers.ctrlKey) parts.push('ctrl');
+		if (chord.modifiers.metaKey) parts.push('meta');
+		if (chord.modifiers.altKey) parts.push('alt');
+		if (chord.modifiers.shiftKey) parts.push('shift');
 		if (chord.kind === KeybindingChordKind.Physical) {
 			parts.push(`[${chord.code}]`);
 		} else {
-			parts.push(chord.key === " " ? "space" : chord.key);
+			parts.push(chord.key === ' ' ? 'space' : chord.key);
 		}
-		return parts.join("+");
-	}).join(" ");
+		return parts.join('+');
+	}).join(' ');
 }
 
 function parseChord(value: string): KeybindingChord | undefined {
-	const tokens = value.split("+").map((token) => token.trim());
+	const tokens = value.split('+').map((token) => token.trim());
 	if (tokens.some((token) => token.length === 0)) return undefined;
 	if (tokens.length === 1) {
 		const singleModifier = singleModifierKey(tokens[0]);
@@ -87,7 +87,7 @@ function parseChord(value: string): KeybindingChord | undefined {
 	let key: string | undefined;
 
 	for (const token of tokens) {
-		const modifier = modifierNames.get(token.toLocaleLowerCase("en-US"));
+		const modifier = modifierNames.get(token.toLocaleLowerCase('en-US'));
 		if (modifier) {
 			if (modifiers[modifier]) return undefined;
 			modifiers[modifier] = true;
@@ -127,21 +127,21 @@ function parseChord(value: string): KeybindingChord | undefined {
 }
 
 function singleModifierKey(value: string): string | undefined {
-	switch (value.toLocaleLowerCase("en-US")) {
-		case "ctrl":
-		case "control":
-			return "ctrl";
-		case "shift":
-			return "shift";
-		case "alt":
-		case "option":
-			return "alt";
-		case "meta":
-		case "cmd":
-		case "command":
-		case "win":
-		case "windows":
-			return "meta";
+	switch (value.toLocaleLowerCase('en-US')) {
+		case 'ctrl':
+		case 'control':
+			return 'ctrl';
+		case 'shift':
+			return 'shift';
+		case 'alt':
+		case 'option':
+			return 'alt';
+		case 'meta':
+		case 'cmd':
+		case 'command':
+		case 'win':
+		case 'windows':
+			return 'meta';
 		default:
 			return undefined;
 	}

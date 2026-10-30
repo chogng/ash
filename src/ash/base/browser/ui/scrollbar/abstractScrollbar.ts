@@ -1,21 +1,21 @@
-import { addDisposableListener, h } from "../../dom.js";
-import { FastDomNode } from "../../fastDomNode.js";
-import { StandardPointerEvent } from "../../mouseEvent.js";
+import { addDisposableListener, h } from '../../dom.js';
+import { FastDomNode } from '../../fastDomNode.js';
+import { StandardPointerEvent } from '../../mouseEvent.js';
 import {
 	Disposable,
 	DisposableStore,
 
 	toDisposable,
-} from "../../../common/lifecycle.js";
-import type { ScrollbarAxisMetrics } from "./scrollbarState.js";
+} from '../../../common/lifecycle.js';
+import type { ScrollbarAxisMetrics } from './scrollbarState.js';
 import { ScrollbarVisibility } from '../../../common/scrollable.js';
 import { ScrollbarVisibilityController } from './scrollbarVisibilityController.js';
 
-export type ScrollbarAxis = "horizontal" | "vertical";
+export type ScrollbarAxis = 'horizontal' | 'vertical';
 
 export interface AbstractScrollbarOptions {
 	readonly viewport: HTMLElement;
-	readonly trackClickBehavior: "jump" | "page";
+	readonly trackClickBehavior: 'jump' | 'page';
 	readonly getMetrics: () => ScrollbarAxisMetrics;
 	readonly setPosition: (position: number) => void;
 }
@@ -41,8 +41,8 @@ export abstract class AbstractScrollbar extends Disposable {
 		this.options = options;
 		this.getMetrics = options.getMetrics;
 		this.setPosition = options.setPosition;
-		const track = h(container.ownerDocument, "div");
-		const thumb = h(container.ownerDocument, "div");
+		const track = h(container.ownerDocument, 'div');
+		const thumb = h(container.ownerDocument, 'div');
 		this.track = track;
 		this.thumb = thumb;
 		this.trackNode = new FastDomNode(track);
@@ -54,25 +54,25 @@ export abstract class AbstractScrollbar extends Disposable {
 			`ash-scrollbar-track ash-scrollbar-track-${axis}`,
 		);
 		this.visibility.setDomNode(this.trackNode);
-		track.setAttribute("role", "scrollbar");
-		track.setAttribute("aria-label", `${capitalize(axis)} scrollbar`);
-		track.setAttribute("aria-orientation", axis);
-		track.setAttribute("aria-controls", options.viewport.id);
-		track.setAttribute("aria-valuemin", "0");
-		this.thumbNode.setClassName("ash-scrollbar-thumb");
+		track.setAttribute('role', 'scrollbar');
+		track.setAttribute('aria-label', `${capitalize(axis)} scrollbar`);
+		track.setAttribute('aria-orientation', axis);
+		track.setAttribute('aria-controls', options.viewport.id);
+		track.setAttribute('aria-valuemin', '0');
+		this.thumbNode.setClassName('ash-scrollbar-thumb');
 		track.append(thumb);
 		container.append(track);
 
 		this._register(addDisposableListener(
 			track,
-			"pointerdown",
+			'pointerdown',
 			(event: PointerEvent) => {
 				this.delegatePointerDown(event);
 			},
 		));
 		this._register(addDisposableListener(
 			track,
-			"keydown",
+			'keydown',
 			(event: KeyboardEvent) => this.handleKeydown(event),
 		));
 	}
@@ -100,11 +100,11 @@ export abstract class AbstractScrollbar extends Disposable {
 	): void;
 
 	protected abstract pointerCoordinate(
-		event: Pick<PointerEvent, "clientX" | "clientY">,
+		event: Pick<PointerEvent, 'clientX' | 'clientY'>,
 	): number;
 
 	protected abstract trackPointerCoordinate(
-		event: Pick<PointerEvent, "clientX" | "clientY">,
+		event: Pick<PointerEvent, 'clientX' | 'clientY'>,
 		bounds: DOMRect,
 	): number;
 
@@ -118,18 +118,18 @@ export abstract class AbstractScrollbar extends Disposable {
 		const tabIndex = rendered && metrics.maximumPosition > 0 ? 0 : -1;
 		if (this.track.tabIndex !== tabIndex) this.track.tabIndex = tabIndex;
 		this.track.setAttribute(
-			"aria-valuemax",
+			'aria-valuemax',
 			String(Math.round(metrics.maximumPosition)),
 		);
 		this.track.setAttribute(
-			"aria-valuenow",
+			'aria-valuenow',
 			String(Math.round(metrics.position)),
 		);
 		this.track.setAttribute(
-			"aria-disabled",
+			'aria-disabled',
 			String(metrics.maximumPosition === 0),
 		);
-		this.trackNode.toggleClassName("disabled", metrics.maximumPosition === 0);
+		this.trackNode.toggleClassName('disabled', metrics.maximumPosition === 0);
 		this.applyThumbMetrics(metrics);
 	}
 
@@ -142,16 +142,16 @@ export abstract class AbstractScrollbar extends Disposable {
 			next += delta;
 		} else {
 			switch (event.key) {
-				case "PageUp":
+				case 'PageUp':
 					next = metrics.position - metrics.viewportSize;
 					break;
-				case "PageDown":
+				case 'PageDown':
 					next = metrics.position + metrics.viewportSize;
 					break;
-				case "Home":
+				case 'Home':
 					next = 0;
 					break;
-				case "End":
+				case 'End':
 					next = metrics.maximumPosition;
 					break;
 				default:
@@ -172,16 +172,16 @@ export abstract class AbstractScrollbar extends Disposable {
 		const thumbTravel = startMetrics.trackSize - startMetrics.thumbSize;
 		if (thumbTravel <= 0 || startMetrics.maximumPosition <= 0) return;
 		this.dragListeners.clear();
-		this.trackNode.toggleClassName("active", true);
+		this.trackNode.toggleClassName('active', true);
 		if (
-			typeof this.track.setPointerCapture === "function" &&
+			typeof this.track.setPointerCapture === 'function' &&
 			browserEvent.pointerId !== undefined
 		) {
 			this.track.setPointerCapture(event.pointerId);
 		}
 		const targetWindow = this.track.ownerDocument.defaultView;
 		if (!targetWindow) {
-			throw new Error("Scrollbar drag requires a browser window");
+			throw new Error('Scrollbar drag requires a browser window');
 		}
 		const move = (nextBrowserEvent: PointerEvent) => {
 			const next = new StandardPointerEvent(nextBrowserEvent);
@@ -199,34 +199,34 @@ export abstract class AbstractScrollbar extends Disposable {
 		};
 		const stop = () => {
 			if (
-				typeof this.track.hasPointerCapture === "function" &&
+				typeof this.track.hasPointerCapture === 'function' &&
 				this.track.hasPointerCapture(event.pointerId)
 			) {
 				this.track.releasePointerCapture(event.pointerId);
 			}
-			this.trackNode.toggleClassName("active", false);
+			this.trackNode.toggleClassName('active', false);
 			this.dragListeners.clear();
 		};
 		this.dragListeners.add(addDisposableListener(
 			targetWindow,
-			"pointermove",
+			'pointermove',
 			move,
 		));
 		this.dragListeners.add(addDisposableListener(
 			targetWindow,
-			"pointerup",
+			'pointerup',
 			stop,
 			{ once: true },
 		));
 		this.dragListeners.add(addDisposableListener(
 			targetWindow,
-			"pointercancel",
+			'pointercancel',
 			stop,
 			{ once: true },
 		));
 		this.dragListeners.add(addDisposableListener(
 			targetWindow,
-			"blur",
+			'blur',
 			stop,
 			{ once: true },
 		));
@@ -240,7 +240,7 @@ export abstract class AbstractScrollbar extends Disposable {
 		const coordinate = this.trackPointerCoordinate(event, bounds);
 		const metrics = this.getMetrics();
 		let next: number;
-		if (this.options.trackClickBehavior === "page") {
+		if (this.options.trackClickBehavior === 'page') {
 			next = coordinate < metrics.thumbPosition
 				? metrics.position - metrics.viewportSize
 				: metrics.position + metrics.viewportSize;

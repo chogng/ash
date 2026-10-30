@@ -206,6 +206,20 @@ const signal = () => new AbortController().signal;
 suite('Browser view ownership and operations', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('developer tools publish Chromium open and manual close state and release their listeners', async () => {
+		using f = fixture();
+		const page = await f.create();
+		assert.equal(page.getState().isDevToolsOpen, false);
+		const channel = browserViewChannel(f.manager, { call: async () => null, listen: () => Event.None } as unknown as import('../../../../base/parts/ipc/common/ipc.js').IChannel);
+		await channel.call('window:1', 'toggleDevTools', [id]);
+		assert.equal(page.getState().isDevToolsOpen, true);
+		page.webContents.closeDevTools();
+		assert.deepEqual(f.events.filter(event => event.type === 'stateChanged').map(event => event.state.isDevToolsOpen), [true, false]);
+		await f.manager.destroyBrowserView(id);
+		assert.equal(page.webContents.listenerCount('devtools-opened'), 0);
+		assert.equal(page.webContents.listenerCount('devtools-closed'), 0);
+	});
+
 	test('rendering rules cross validated IPC, reach only the main frame and survive document replacement', async () => {
 		using f = fixture(); await f.create();
 		const sent: unknown[] = [];
@@ -304,6 +318,37 @@ suite('Browser view ownership and operations', () => {
 	test('construction requires the host page manager', () => {
 		using instantiation = new InstantiationService();
 		assert.throws(() => instantiation.createInstance(AppServerBrowserHost), /browserViewMainService/);
+	});
+
+	test('Canvas opens retain one page per Thread and instance and publish only successful explicit opens', async () => {
+		using f = fixture();
+		using host = f.createHost();
+		const canvas = { sessionId: 'session-one', instanceId: 'preview', title: 'Preview' };
+		const first = await host.create({ threadId: 'thread-one', url: 'https://example.test/first', canvas }, { signal: signal() });
+		const updated = await host.create({ threadId: 'thread-one', url: 'https://example.test/second', canvas: { ...canvas, title: 'Updated' } }, { signal: signal() });
+		const other = await host.create({ threadId: 'thread-two', url: 'https://example.test/other', canvas }, { signal: signal() });
+		assert.equal(updated.targetId, first.targetId);
+		assert.notEqual(other.targetId, first.targetId);
+		const pages = await f.manager.getBrowserViews();
+		assert.equal(pages.length, 2);
+		assert.deepEqual(pages.find(page => page.id === first.targetId)!.canvas, { sessionId: 'session-one', instanceId: 'preview', title: 'Updated' });
+		assert.equal(f.events.filter(event => event.type === 'canvasOpened').length, 3);
+		f.load = async () => { throw new Error('navigation failed'); };
+		await assert.rejects(host.create({ threadId: 'thread-one', url: 'https://example.test/failure', canvas }, { signal: signal() }), /navigation failed/);
+		assert.equal((await f.manager.getBrowserViews()).length, 2);
+		assert.equal(f.events.filter(event => event.type === 'canvasOpened').length, 3);
+	});
+
+	test('window accessibility inspection reads an unshared user page without granting Agent access', async () => {
+		using f = fixture();
+		await f.manager.getOrCreateBrowserView(id, { initialUrl: 'https://example.test/', owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Ephemeral } });
+		f.command = async method => { assert.equal(method, 'Accessibility.getFullAXTree'); return { nodes: [{ role: { value: 'button' }, name: { value: 'User control' } }] }; };
+		const channel = browserViewChannel(f.manager, { call: async <T>() => null as T, listen: () => Event.None });
+		assert.match(await channel.call('window:1', 'getAccessibilityTree', [id]) as string, /User control/);
+		assert.throws(() => f.manager.validateAgentAccess(id, 'thread-one'), /BrowserTargetAccessDenied/);
+		assert.equal(f.attached, false);
+		f.command = async () => ({ nodes: [{ name: { value: 'x'.repeat(512 * 1024) } }] });
+		await assert.rejects(channel.call('window:1', 'getAccessibilityTree', [id]), /BrowserAccessibilityTooLarge/);
 	});
 
 	test('the renderer channel validates requests, enforces Thread access and returns Main page state', async () => {
@@ -722,8 +767,12 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 			const pageContents = children.size === 0 ? contents : new EventEmitter();
 			let destroyed = false;
 			let zoomFactor = 1;
+			let devToolsOpen = false;
 			let bounds = { x: 0, y: 0, width: 0, height: 0 };
 			Object.assign(pageContents, {
+				isDevToolsOpened: () => devToolsOpen,
+				openDevTools: () => { devToolsOpen = true; pageContents.emit('devtools-opened'); },
+				closeDevTools: () => { devToolsOpen = false; pageContents.emit('devtools-closed'); },
 				getZoomFactor: () => zoomFactor, setZoomFactor: (value: number) => { zoomFactor = value; },
 				id: children.size + 1,
 				setWebRTCIPHandlingPolicy: () => { },

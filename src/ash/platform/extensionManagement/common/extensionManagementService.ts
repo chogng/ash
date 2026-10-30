@@ -1,7 +1,7 @@
-import type { Event } from "../../../base/common/event.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import type { Event } from '../../../base/common/event.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type ExtensionsCapabilityKind = "skill" | "mcp" | "connector" | "theme" | "language" | "localization" | "executable" | "editorExtension" | "asset";
+export type ExtensionsCapabilityKind = 'skill' | 'mcp' | 'connector' | 'theme' | 'language' | 'localization' | 'executable' | 'editorExtension' | 'asset';
 
 /** Product windows declared by a package manifest, separate from execution platforms. */
 export enum ExtensionUiTarget { IDE = 'ide', Agents = 'agents' }
@@ -24,14 +24,14 @@ export interface ExtensionsSearchPage {
 	readonly nextCursor?: string;
 }
 
-export interface ExtensionsOpenOptions extends Pick<ExtensionsSearchOptions, "capabilityKind" | "languageId"> {
-	readonly mode?: "browse" | "installed" | "builtIn";
-	readonly view?: "extensions" | "plugins" | "skills" | "mcp" | "recommended";
+export interface ExtensionsOpenOptions extends Pick<ExtensionsSearchOptions, 'capabilityKind' | 'languageId'> {
+	readonly mode?: 'browse' | 'installed' | 'builtIn';
+	readonly view?: 'extensions' | 'plugins' | 'skills' | 'mcp' | 'recommended';
 	readonly query?: string;
 }
 
-export const OPEN_EXTENSIONS_COMMAND_ID = "ash.extensions.open";
-export const OPEN_INSTALLED_EXTENSIONS_COMMAND_ID = "ash.extensions.installed";
+export const OPEN_EXTENSIONS_COMMAND_ID = 'ash.extensions.open';
+export const OPEN_INSTALLED_EXTENSIONS_COMMAND_ID = 'ash.extensions.installed';
 
 export interface ExtensionsPackageRef {
 	readonly id: string;
@@ -71,9 +71,9 @@ export interface ExtensionsPackageDetails {
 	readonly displayName: string;
 	readonly description: string;
 	readonly license: string;
-	readonly source: "official" | "thirdParty";
+	readonly source: 'official' | 'thirdParty';
 	readonly upstream: {
-		readonly registry: "officialMcp";
+		readonly registry: 'officialMcp';
 		readonly name: string;
 		readonly version: string;
 		readonly recordUrl: string;
@@ -86,7 +86,7 @@ export interface ExtensionsPackageDetails {
 export interface ExtensionsInstalledPackage {
 	readonly installationId: string;
 	readonly package: ExtensionsPackageRef;
-	readonly state: "installed" | "pendingRemoval";
+	readonly state: 'installed' | 'pendingRemoval';
 	readonly capabilities: readonly ExtensionsCapabilityDescriptor[];
 }
 
@@ -132,13 +132,13 @@ export interface ExtensionsBrowseSnapshot {
 }
 
 export type ExtensionsActivationSpec =
-	| { readonly kind: "skill"; readonly contractVersion: string; readonly resource: { readonly id: string; }; }
-	| { readonly kind: "mcp"; readonly contractVersion: string; readonly transport: { readonly type: "stdio"; readonly executable: { readonly id: string; }; readonly args: readonly string[]; } | { readonly type: "streamableHttp"; readonly url: string; }; readonly networkHosts: readonly string[]; }
-	| { readonly kind: "connector"; readonly contractVersion: string; readonly authenticationProvider: string | null; readonly mcp: { readonly id: string; } | null; }
-	| { readonly kind: "theme"; readonly contractVersion: string; readonly manifest: { readonly id: string; }; }
-	| { readonly kind: "language"; readonly contractVersion: string; readonly manifest: { readonly id: string; }; }
-	| { readonly kind: "localization"; readonly contractVersion: string; readonly catalog: { readonly id: string; }; }
-	| { readonly kind: "executable"; readonly contractVersion: string; readonly runtime: "direct" | "node"; readonly entrypoint: { readonly id: string; }; };
+	| { readonly kind: 'skill'; readonly contractVersion: string; readonly resource: { readonly id: string; }; }
+	| { readonly kind: 'mcp'; readonly contractVersion: string; readonly transport: { readonly type: 'stdio'; readonly executable: { readonly id: string; }; readonly args: readonly string[]; } | { readonly type: 'streamableHttp'; readonly url: string; }; readonly networkHosts: readonly string[]; }
+	| { readonly kind: 'connector'; readonly contractVersion: string; readonly authenticationProvider: string | null; readonly mcp: { readonly id: string; } | null; }
+	| { readonly kind: 'theme'; readonly contractVersion: string; readonly manifest: { readonly id: string; }; }
+	| { readonly kind: 'language'; readonly contractVersion: string; readonly manifest: { readonly id: string; }; }
+	| { readonly kind: 'localization'; readonly contractVersion: string; readonly catalog: { readonly id: string; }; }
+	| { readonly kind: 'executable'; readonly contractVersion: string; readonly runtime: 'direct' | 'node'; readonly entrypoint: { readonly id: string; }; };
 
 export interface ExtensionsAcquiredCapability {
 	readonly lease: { readonly id: string; readonly capability: { readonly id: string; }; readonly installationId: string; };
@@ -180,7 +180,7 @@ export interface IExtensionManagementService {
 	download(packageId: string, version?: string): Promise<{ readonly id: string; readonly package: ExtensionsPackageRef; }>;
 	install(packageId: string, version?: string): Promise<ExtensionsInstalledPackage>;
 	update(installationId: string, version?: string): Promise<ExtensionsInstalledPackage>;
-	uninstall(installationId: string, mode?: "ifUnused" | "whenUnused"): Promise<void>;
+	uninstall(installationId: string, mode?: 'ifUnused' | 'whenUnused'): Promise<void>;
 	listInstalled(): Promise<readonly ExtensionsInstalledPackage[]>;
 	listEditorExtensions(): Promise<ExtensionsEditorExtensions>;
 	listBuiltInProviders(): Promise<ExtensionsBuiltInProviders>;
@@ -191,4 +191,4 @@ export interface IExtensionManagementService {
 	openResource(leaseId: string, resourceId: string): Promise<{ readonly mediaType: string; readonly dataBase64: string; }>;
 }
 
-export const IExtensionManagementService = createServiceIdentifier<IExtensionManagementService>("extensionManagementService");
+export const IExtensionManagementService = createServiceIdentifier<IExtensionManagementService>('extensionManagementService');

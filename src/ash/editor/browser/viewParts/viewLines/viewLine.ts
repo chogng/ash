@@ -1,5 +1,5 @@
-import { h, isHTMLElement, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
-import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
+import { h, isHTMLElement, reset, fragment as createFragment } from '../../../../base/browser/dom.js';
+import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
 import { type ViewLineOptions } from './viewLineOptions.js';
@@ -26,11 +26,11 @@ export class ViewLine {
 
 	constructor(host: HTMLElement, lineIndex: number, private _options: ViewLineOptions, tabSize: number, viewGpuContext?: ViewGpuContext) {
 		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('View line tab size must be a positive safe integer');
-		const domNode = new FastDomNode(h(host.ownerDocument, "div"));
-		const textElement = h(host.ownerDocument, "span");
+		const domNode = new FastDomNode(h(host.ownerDocument, 'div'));
+		const textElement = h(host.ownerDocument, 'span');
 		domNode.setClassName(ViewLine.CLASS_NAME);
 		domNode.domNode.dataset.lineIndex = String(lineIndex);
-		textElement.className = "stanza-editor-line-text";
+		textElement.className = 'stanza-editor-line-text';
 		domNode.domNode.append(textElement);
 		this._viewGpuContext = viewGpuContext;
 		this._renderedViewLine = new RenderedViewLine(domNode, textElement, tabSize);
@@ -322,8 +322,8 @@ export function projectStanzaSemanticTokenLine(
 		}
 		const token = tokens.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
 		const decorations = lineDecorations.filter(decoration => decoration.type !== InlineDecorationType.WidthOnly && decoration.range.startColumn - 1 <= startColumn && decoration.range.endColumn - 1 >= endColumn);
-		const tokenElement = h(ownerDocument, "span");
-		if (token || decorations.length > 0) tokenElement.className = "stanza-editor-token";
+		const tokenElement = h(ownerDocument, 'span');
+		if (token || decorations.length > 0) tokenElement.className = 'stanza-editor-token';
 		if (token?.presentation) tokenElement.classList.add(token.presentation);
 		for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
 		if (token?.semanticType) {
@@ -348,7 +348,7 @@ export function projectStanzaSemanticTokenLine(
 		fragment.append(tokenElement);
 	}
 	if (fragment.textContent !== visibleText) {
-		throw new Error("Stanza semantic token projection changed line text");
+		throw new Error('Stanza semantic token projection changed line text');
 	}
 	if (visibleText.length < lineText.length) {
 		const marker = h(ownerDocument, 'span');
@@ -366,7 +366,7 @@ export function snapshotStanzaSemanticTokenLines(source: SemanticTokenSource): R
 	const result = new Map<number, readonly ResolvedSemanticToken[]>();
 	for (const line of source.lines) {
 		if (!Number.isSafeInteger(line.lineIndex) || line.lineIndex < 0) {
-			throw new RangeError("Stanza semantic token line index must be a non-negative safe integer");
+			throw new RangeError('Stanza semantic token line index must be a non-negative safe integer');
 		}
 		if (result.has(line.lineIndex)) {
 			throw new RangeError(`Duplicate Stanza semantic token line ${line.lineIndex}`);
@@ -391,13 +391,13 @@ function validateLineTokens(lineText: string, tokens: readonly ResolvedSemanticT
 		if (token.presentation !== undefined) validatePresentation(token.presentation);
 		validateModifiers(token.modifiers);
 		if (!Number.isSafeInteger(token.startColumn) || !Number.isSafeInteger(token.endColumn)) {
-			throw new RangeError("Stanza semantic token columns must be safe integers");
+			throw new RangeError('Stanza semantic token columns must be safe integers');
 		}
 		if (token.startColumn < previousEnd || token.endColumn <= token.startColumn) {
-			throw new RangeError("Stanza semantic tokens must be sorted, non-overlapping, and non-empty");
+			throw new RangeError('Stanza semantic tokens must be sorted, non-overlapping, and non-empty');
 		}
 		if (token.endColumn > lineText.length) {
-			throw new RangeError("Stanza semantic token exceeds its line text");
+			throw new RangeError('Stanza semantic token exceeds its line text');
 		}
 		previousEnd = token.endColumn;
 	}
@@ -412,19 +412,19 @@ function validatePresentation(presentation: SemanticTokenPresentation): void {
 function validateModifiers(modifiers: readonly SemanticTokenModifier[] | undefined): void {
 	if (modifiers === undefined) return;
 	if (new Set(modifiers).size !== modifiers.length || modifiers.some(modifier => !Object.values(SemanticTokenModifier).includes(modifier))) {
-		throw new TypeError("Unknown or duplicate Stanza semantic token modifier");
+		throw new TypeError('Unknown or duplicate Stanza semantic token modifier');
 	}
 }
 
-function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable<LanguageToken["presentation"]>): void {
+function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable<LanguageToken['presentation']>): void {
 	if (presentation.foreground !== undefined) {
 		element.style.setProperty('--ash-editor-token-foreground', presentation.foreground);
 	}
 	if (presentation.background !== undefined) element.style.backgroundColor = presentation.background;
 	if (presentation.fontStyle !== undefined) {
-		element.style.fontStyle = presentation.fontStyle.includes("italic") ? "italic" : "normal";
-		element.style.fontWeight = presentation.fontStyle.includes("bold") ? "bold" : "normal";
+		element.style.fontStyle = presentation.fontStyle.includes('italic') ? 'italic' : 'normal';
+		element.style.fontWeight = presentation.fontStyle.includes('bold') ? 'bold' : 'normal';
 	}
-	const decorations = presentation.fontStyle?.filter(style => style === "underline" || style === "strikethrough").map(style => style === "strikethrough" ? "line-through" : style) ?? [];
-	if (presentation.fontStyle !== undefined) element.style.textDecorationLine = decorations.length ? decorations.join(" ") : "none";
+	const decorations = presentation.fontStyle?.filter(style => style === 'underline' || style === 'strikethrough').map(style => style === 'strikethrough' ? 'line-through' : style) ?? [];
+	if (presentation.fontStyle !== undefined) element.style.textDecorationLine = decorations.length ? decorations.join(' ') : 'none';
 }

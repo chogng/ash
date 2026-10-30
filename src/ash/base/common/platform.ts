@@ -2,19 +2,19 @@ import {
 	type IRuntimeEnvironment,
 	operatingSystemFromNodePlatform,
 	operatingSystemFromUserAgent,
-} from "./environment.js";
+} from './environment.js';
 
 export type {
 	HostOperatingSystem,
 	IRuntimeEnvironment,
 	RuntimeKind,
-} from "./environment.js";
+} from './environment.js';
 
 /** Host operating systems that affect keybinding resolution and labels. */
 export enum OperatingSystem {
-	Windows = "windows",
-	Macintosh = "mac",
-	Linux = "linux",
+	Windows = 'windows',
+	Macintosh = 'mac',
+	Linux = 'linux',
 }
 
 /** Process launch environments use undefined to remove an inherited variable. */
@@ -58,18 +58,18 @@ function detectEnvironment(): IRuntimeEnvironment {
 	const sandboxProcess = runtimeGlobal.ash?.process;
 	if (sandboxProcess) {
 		return {
-			runtime: "electron",
+			runtime: 'electron',
 			os: operatingSystemFromNodePlatform(sandboxProcess.platform),
 			arch: sandboxProcess.arch,
 		};
 	}
 
 	const nodeProcess = runtimeGlobal.process;
-	if (typeof nodeProcess?.versions?.node === "string") {
+	if (typeof nodeProcess?.versions?.node === 'string') {
 		return {
-			runtime: typeof nodeProcess.versions.electron === "string"
-				? "electron"
-				: "node",
+			runtime: typeof nodeProcess.versions.electron === 'string'
+				? 'electron'
+				: 'node',
 			os: operatingSystemFromNodePlatform(nodeProcess.platform),
 			arch: nodeProcess.arch,
 		};
@@ -77,14 +77,14 @@ function detectEnvironment(): IRuntimeEnvironment {
 
 	if (runtimeGlobal.navigator) {
 		return {
-			runtime: "web",
+			runtime: 'web',
 			os: operatingSystemFromUserAgent(runtimeGlobal.navigator.userAgent),
 		};
 	}
 
 	return {
-		runtime: "unknown",
-		os: "unknown",
+		runtime: 'unknown',
+		os: 'unknown',
 	};
 }
 
@@ -93,12 +93,12 @@ export const environment: Readonly<IRuntimeEnvironment> = Object.freeze(
 	detectEnvironment(),
 );
 
-export const isWindows = environment.os === "windows";
-export const isMacintosh = environment.os === "mac";
-export const isLinux = environment.os === "linux";
+export const isWindows = environment.os === 'windows';
+export const isMacintosh = environment.os === 'mac';
+export const isLinux = environment.os === 'linux';
 export const isNative =
-	environment.runtime === "electron" || environment.runtime === "node";
-export const isWeb = environment.runtime === "web";
+	environment.runtime === 'electron' || environment.runtime === 'node';
+export const isWeb = environment.runtime === 'web';
 
 /**
  * The host OS used for keyboard shortcut resolution and labels.

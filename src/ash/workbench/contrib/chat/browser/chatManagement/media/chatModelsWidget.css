@@ -3,10 +3,6 @@
 	min-width: 0;
 }
 
-.ash-chat-models-catalog.is-sized {
-	overflow: auto;
-}
-
 .ash-chat-models-catalog [hidden] {
 	display: none;
 }
@@ -49,7 +45,7 @@
 	padding: var(--ash-spacing-size80) var(--ash-spacing-size160);
 }
 
-.ash-chat-models-provider > .ash-button {
+.ash-chat-models-provider > .ash-button:first-child {
 	flex: 1;
 	min-width: 0;
 	justify-content: flex-start;
@@ -63,6 +59,10 @@
 .ash-chat-models-catalog .ash-models-settings-model-row {
 	min-width: 0;
 	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-chat-models-catalog.is-grouped .ash-models-settings-model-row {
+	padding-inline-start: var(--ash-spacing-size320);
 }
 
 .ash-chat-models-catalog .ash-switch {
@@ -98,4 +98,68 @@
 
 .ash-chat-models-catalog .ash-models-settings-expand .ash-button {
 	width: 100%;
+}
+
+.ash-chat-models-selection-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+	margin-bottom: var(--ash-spacing-size80);
+}
+
+.ash-chat-models-catalog .ash-models-settings-model-row {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-models-settings-model-row > .ash-models-settings-model-content {
+	flex: 1;
+	min-width: 0;
+	width: auto;
+}
+
+.ash-models-settings-model-content > .ash-switch {
+	width: 100%;
+}
+
+.ash-chat-models-provider > .ash-button:not(:first-child) {
+	flex: 0 0 auto;
+}
+
+.ash-chat-models-catalog .ash-models-catalog-connection-status {
+	margin: 0 var(--ash-spacing-size160) var(--ash-spacing-size80)
+		var(--ash-spacing-size320);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-models-settings-model-row > .ash-checkbox,
+.ash-models-settings-model-row > .ash-button {
+	flex: 0 0 auto;
+}
+
+.ash-models-settings-model-copy .ash-icon-label {
+	min-width: 0;
+}
+
+.ash-model-search-completions {
+	max-height: calc(4 * var(--ash-spacing-size400));
+	overflow-y: auto;
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	background: var(--ash-editor-background);
+	margin-bottom: var(--ash-spacing-size80);
+}
+
+.ash-model-search-completions > div {
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	cursor: pointer;
+}
+
+.ash-model-search-completions > .active {
+	background: var(--ash-list-activeSelectionBackground);
+	color: var(--ash-list-activeSelectionForeground);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
 }

@@ -540,6 +540,7 @@ export namespace SymbolKinds {
 		switch (name) {
 			case 'file': return Lxicon.file;
 			case 'module': case 'namespace': case 'package': return Lxicon.folders;
+			case 'method': case 'function': case 'constructor': return Lxicon.symbolMethod;
 			case 'string': case 'number': case 'boolean': case 'null': return Lxicon.text;
 			case 'property': case 'field': case 'key': case 'variable': case 'constant': case 'enumMember': return Lxicon.tag;
 			default: return Lxicon.code;
@@ -583,7 +584,7 @@ export interface LanguageDocumentSymbolProvider {
 	provideDocumentSymbols(request: LanguageDocumentSymbolRequest, signal: AbortSignal): readonly LanguageDocumentSymbol[] | Promise<readonly LanguageDocumentSymbol[]>;
 }
 
-export type LanguageFoldingRangeKind = "comment" | "imports" | "region";
+export type LanguageFoldingRangeKind = 'comment' | 'imports' | 'region';
 
 export interface LanguageFoldingRange {
 	readonly startLineIndex: number;
@@ -647,7 +648,7 @@ export interface LanguageHoverProvider {
 	provideHover(request: LanguageHoverRequest, signal: AbortSignal): LanguageHover | undefined | Promise<LanguageHover | undefined>;
 }
 
-export type LanguageInlayHintKind = "type" | "parameter" | "other";
+export type LanguageInlayHintKind = 'type' | 'parameter' | 'other';
 
 export type LanguageInlayHintLabel = string | readonly { readonly value: string; readonly location?: Range; }[];
 
@@ -681,7 +682,7 @@ export interface LanguageInlineCompletionItem {
 
 export interface LanguageInlineCompletionsRequest extends LanguageFeatureRequest {
 	readonly position: Position;
-	readonly triggerKind: "automatic" | "explicit";
+	readonly triggerKind: 'automatic' | 'explicit';
 }
 
 export interface LanguageInlineCompletionsProvider {
@@ -784,7 +785,7 @@ export function isLanguageFeatureRequestCurrent(request: LanguageFeatureRequest)
 
 /** Text replacements for one exact resource snapshot. */
 export interface LanguageTextDocumentEdit {
-	readonly kind: "textDocument";
+	readonly kind: 'textDocument';
 	readonly resource: URI;
 	/** Optional model version used to reject stale edits for an open document. */
 	readonly version?: number;
@@ -793,26 +794,26 @@ export interface LanguageTextDocumentEdit {
 	readonly edits: readonly TextEdit[];
 }
 
-export type LanguageExistingTargetBehavior = "error" | "overwrite" | "ignore";
-export type LanguageMissingTargetBehavior = "error" | "ignore";
-export type LanguageDeleteMode = "fileOrEmptyDirectory" | "recursive";
+export type LanguageExistingTargetBehavior = 'error' | 'overwrite' | 'ignore';
+export type LanguageMissingTargetBehavior = 'error' | 'ignore';
+export type LanguageDeleteMode = 'fileOrEmptyDirectory' | 'recursive';
 
 export interface LanguageCreateFileEdit {
 	readonly contents?: string;
-	readonly kind: "create";
+	readonly kind: 'create';
 	readonly resource: URI;
 	readonly existing: LanguageExistingTargetBehavior;
 }
 
 export interface LanguageRenameFileEdit {
-	readonly kind: "rename";
+	readonly kind: 'rename';
 	readonly source: URI;
 	readonly target: URI;
 	readonly existing: LanguageExistingTargetBehavior;
 }
 
 export interface LanguageDeleteFileEdit {
-	readonly kind: "delete";
+	readonly kind: 'delete';
 	readonly resource: URI;
 	readonly missing: LanguageMissingTargetBehavior;
 	readonly mode: LanguageDeleteMode;
@@ -826,45 +827,45 @@ export interface LanguageWorkspaceEdit {
 }
 
 export function normalizeLanguageWorkspaceEdit(edit: LanguageWorkspaceEdit): LanguageWorkspaceEdit {
-	if (!edit || typeof edit !== "object" || !Array.isArray(edit.entries)) throw new TypeError("Language workspace edit must contain ordered entries");
+	if (!edit || typeof edit !== 'object' || !Array.isArray(edit.entries)) throw new TypeError('Language workspace edit must contain ordered entries');
 	const entries = edit.entries.map(entry => {
-		if (!entry || typeof entry !== "object") throw new TypeError("Language workspace edit entry must be an object");
+		if (!entry || typeof entry !== 'object') throw new TypeError('Language workspace edit entry must be an object');
 		switch (entry.kind) {
-			case "textDocument":
-				if (!entry.resource || !Array.isArray(entry.edits)) throw new TypeError("Language document edit requires a resource and text edits");
-				if (entry.version !== undefined && (!Number.isSafeInteger(entry.version) || entry.version < 1)) throw new RangeError("Language document edit version must be a positive safe integer");
-				if (entry.expectedText !== undefined && typeof entry.expectedText !== "string") throw new TypeError("Language document edit expected text must be text");
+			case 'textDocument':
+				if (!entry.resource || !Array.isArray(entry.edits)) throw new TypeError('Language document edit requires a resource and text edits');
+				if (entry.version !== undefined && (!Number.isSafeInteger(entry.version) || entry.version < 1)) throw new RangeError('Language document edit version must be a positive safe integer');
+				if (entry.expectedText !== undefined && typeof entry.expectedText !== 'string') throw new TypeError('Language document edit expected text must be text');
 				return Object.freeze({ kind: entry.kind, resource: entry.resource, ...(entry.version !== undefined ? { version: entry.version } : {}), ...(entry.expectedText !== undefined ? { expectedText: entry.expectedText } : {}), edits: Object.freeze([...entry.edits]) });
-			case "create":
-				if (entry.contents !== undefined && typeof entry.contents !== "string") throw new TypeError("Workspace create contents must be text");
-				return Object.freeze({ kind: entry.kind, resource: requireResource(entry.resource, "create target"), existing: existingBehavior(entry.existing), ...(entry.contents !== undefined ? { contents: entry.contents } : {}) });
-			case "rename":
-				return Object.freeze({ kind: entry.kind, source: requireResource(entry.source, "rename source"), target: requireResource(entry.target, "rename target"), existing: existingBehavior(entry.existing) });
-			case "delete":
-				if (entry.missing !== "error" && entry.missing !== "ignore") throw new TypeError("Language delete missing-target behavior is invalid");
-				if (entry.mode !== "fileOrEmptyDirectory" && entry.mode !== "recursive") throw new TypeError("Language delete mode is invalid");
-				return Object.freeze({ kind: entry.kind, resource: requireResource(entry.resource, "delete target"), missing: entry.missing, mode: entry.mode });
+			case 'create':
+				if (entry.contents !== undefined && typeof entry.contents !== 'string') throw new TypeError('Workspace create contents must be text');
+				return Object.freeze({ kind: entry.kind, resource: requireResource(entry.resource, 'create target'), existing: existingBehavior(entry.existing), ...(entry.contents !== undefined ? { contents: entry.contents } : {}) });
+			case 'rename':
+				return Object.freeze({ kind: entry.kind, source: requireResource(entry.source, 'rename source'), target: requireResource(entry.target, 'rename target'), existing: existingBehavior(entry.existing) });
+			case 'delete':
+				if (entry.missing !== 'error' && entry.missing !== 'ignore') throw new TypeError('Language delete missing-target behavior is invalid');
+				if (entry.mode !== 'fileOrEmptyDirectory' && entry.mode !== 'recursive') throw new TypeError('Language delete mode is invalid');
+				return Object.freeze({ kind: entry.kind, resource: requireResource(entry.resource, 'delete target'), missing: entry.missing, mode: entry.mode });
 			default:
-				throw new TypeError("Language workspace edit entry kind is invalid");
+				throw new TypeError('Language workspace edit entry kind is invalid');
 		}
 	});
 	return Object.freeze({ entries: Object.freeze(entries) });
 }
 
 function requireResource(resource: URI, name: string): URI {
-	if (!resource || typeof resource.toString !== "function") throw new TypeError(`Language workspace ${name} requires a resource`);
+	if (!resource || typeof resource.toString !== 'function') throw new TypeError(`Language workspace ${name} requires a resource`);
 	return resource;
 }
 
 function existingBehavior(value: LanguageExistingTargetBehavior): LanguageExistingTargetBehavior {
-	if (value !== "error" && value !== "overwrite" && value !== "ignore") throw new TypeError("Language workspace existing-target behavior is invalid");
+	if (value !== 'error' && value !== 'overwrite' && value !== 'ignore') throw new TypeError('Language workspace existing-target behavior is invalid');
 	return value;
 }
 
 export enum LanguageCompletionTriggerKind {
-	Invoke = "invoke",
-	TriggerCharacter = "triggerCharacter",
-	IncompleteRefresh = "incompleteRefresh",
+	Invoke = 'invoke',
+	TriggerCharacter = 'triggerCharacter',
+	IncompleteRefresh = 'incompleteRefresh',
 }
 
 export interface LanguageCompletionInvokeContext {
@@ -894,7 +895,7 @@ export interface LanguageCompletionProviderRequest extends LanguageCompletionReq
 	readonly snapshot: TextSnapshot;
 }
 
-export type LanguageCompletionProviderItem = Omit<LanguageCompletionItem, "providerId" | "hasDeferredDetails"> & {
+export type LanguageCompletionProviderItem = Omit<LanguageCompletionItem, 'providerId' | 'hasDeferredDetails'> & {
 	readonly resolveData?: unknown;
 };
 
@@ -971,11 +972,11 @@ export function createLanguageCompletionIncompleteRefreshContext(): LanguageComp
 }
 
 export function assertLanguageCompletionRequest(request: LanguageCompletionRequest): void {
-	if (typeof request !== "object" || request === null) {
-		throw new TypeError("Language completion request must be an object");
+	if (typeof request !== 'object' || request === null) {
+		throw new TypeError('Language completion request must be an object');
 	}
 	assertLanguageId(request.languageId);
-	if (request.resource !== undefined && typeof request.resource.toString !== "function") throw new TypeError("Language completion resource must be a URI");
+	if (request.resource !== undefined && typeof request.resource.toString !== 'function') throw new TypeError('Language completion resource must be a URI');
 	assertLanguageCompletionContext(request.context);
 }
 
@@ -984,7 +985,7 @@ export function languageCompletionProviderMatches(provider: LanguageCompletionPr
 	assertLanguageId(languageId);
 	assertLanguageCompletionContext(context);
 	return (
-		provider.languageIds.includes("*") ||
+		provider.languageIds.includes('*') ||
 		provider.languageIds.includes(languageId)
 	) && (
 			context.kind !== LanguageCompletionTriggerKind.TriggerCharacter ||
@@ -1001,32 +1002,32 @@ const INCOMPLETE_REFRESH_CONTEXT = Object.freeze({
 });
 
 export function normalizeCompletionProvider(provider: LanguageCompletionProvider): RegisteredLanguageCompletionProvider {
-	if (typeof provider !== "object" || provider === null) {
-		throw new TypeError("Language completion provider must be an object");
+	if (typeof provider !== 'object' || provider === null) {
+		throw new TypeError('Language completion provider must be an object');
 	}
-	assertLanguageProviderId(provider.id, "Language completion provider ID");
+	assertLanguageProviderId(provider.id, 'Language completion provider ID');
 	if (!isNonEmptyArray(provider.languageIds)) {
-		throw new TypeError("Language completion provider must declare language IDs");
+		throw new TypeError('Language completion provider must declare language IDs');
 	}
 	const languageIds = provider.languageIds.map(languageId => {
 		assertLanguageSelector(languageId);
 		return languageId;
 	});
 	if (new Set(languageIds).size !== languageIds.length) {
-		throw new RangeError("Language completion provider language IDs must be unique");
+		throw new RangeError('Language completion provider language IDs must be unique');
 	}
 	const triggerCharacters = [...(provider.triggerCharacters ?? [])];
 	for (const character of triggerCharacters) assertTriggerCharacter(character);
 	if (new Set(triggerCharacters).size !== triggerCharacters.length) {
-		throw new RangeError("Language completion provider trigger characters must be unique");
+		throw new RangeError('Language completion provider trigger characters must be unique');
 	}
-	if (typeof provider.provideCompletions !== "function") {
-		throw new TypeError("Language completion provider must implement provideCompletions");
+	if (typeof provider.provideCompletions !== 'function') {
+		throw new TypeError('Language completion provider must implement provideCompletions');
 	}
-	if (provider.resolveCompletionItem !== undefined && typeof provider.resolveCompletionItem !== "function") {
-		throw new TypeError("Language completion provider resolveCompletionItem must be a function");
+	if (provider.resolveCompletionItem !== undefined && typeof provider.resolveCompletionItem !== 'function') {
+		throw new TypeError('Language completion provider resolveCompletionItem must be a function');
 	}
-	if (provider.executeCompletionCommand !== undefined && typeof provider.executeCompletionCommand !== "function") throw new TypeError("Language completion provider executeCompletionCommand must be a function");
+	if (provider.executeCompletionCommand !== undefined && typeof provider.executeCompletionCommand !== 'function') throw new TypeError('Language completion provider executeCompletionCommand must be a function');
 	return Object.freeze({
 		id: provider.id,
 		languageIds: Object.freeze(languageIds),
@@ -1038,23 +1039,23 @@ export function normalizeCompletionProvider(provider: LanguageCompletionProvider
 }
 
 function assertProviderMetadata(provider: LanguageCompletionProviderMetadata): void {
-	if (typeof provider !== "object" || provider === null) {
-		throw new TypeError("Language completion provider metadata must be an object");
+	if (typeof provider !== 'object' || provider === null) {
+		throw new TypeError('Language completion provider metadata must be an object');
 	}
-	assertLanguageProviderId(provider.id, "Language completion provider ID");
+	assertLanguageProviderId(provider.id, 'Language completion provider ID');
 	if (!isNonEmptyArray(provider.languageIds)) {
-		throw new TypeError("Language completion provider metadata must declare language IDs");
+		throw new TypeError('Language completion provider metadata must declare language IDs');
 	}
 	for (const languageId of provider.languageIds) assertLanguageSelector(languageId);
 	if (!Array.isArray(provider.triggerCharacters)) {
-		throw new TypeError("Language completion provider metadata trigger characters must be an array");
+		throw new TypeError('Language completion provider metadata trigger characters must be an array');
 	}
 	for (const character of provider.triggerCharacters) assertTriggerCharacter(character);
 }
 
 export function assertLanguageCompletionContext(context: LanguageCompletionContext): void {
-	if (typeof context !== "object" || context === null) {
-		throw new TypeError("Language completion context must be an object");
+	if (typeof context !== 'object' || context === null) {
+		throw new TypeError('Language completion context must be an object');
 	}
 	if (context.kind === LanguageCompletionTriggerKind.TriggerCharacter) {
 		assertTriggerCharacter(context.triggerCharacter);
@@ -1070,7 +1071,7 @@ export function assertLanguageCompletionContext(context: LanguageCompletionConte
 
 export function assertLanguageProviderId(value: unknown, owner: string): asserts value is string {
 	if (
-		typeof value !== "string" ||
+		typeof value !== 'string' ||
 		!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)
 	) {
 		throw new TypeError(`${owner} must contain only letters, digits, dot, underscore, or hyphen`);
@@ -1078,8 +1079,8 @@ export function assertLanguageProviderId(value: unknown, owner: string): asserts
 }
 
 function assertTriggerCharacter(value: unknown): asserts value is string {
-	if (typeof value !== "string" || [...value].length !== 1) {
-		throw new TypeError("Language completion trigger character must contain one Unicode code point");
+	if (typeof value !== 'string' || [...value].length !== 1) {
+		throw new TypeError('Language completion trigger character must contain one Unicode code point');
 	}
 }
 
@@ -1096,7 +1097,7 @@ export interface SyntaxProviderRequest extends SyntaxRequest {
 }
 
 export interface SyntaxTokenizationRequest extends SyntaxProviderRequest {
-	readonly tokenize: NonNullable<SyntaxRequest["tokenize"]>;
+	readonly tokenize: NonNullable<SyntaxRequest['tokenize']>;
 }
 
 export interface SyntaxProvider {
@@ -1116,61 +1117,61 @@ export interface RegisteredSyntaxProvider {
 	readonly languageIds: readonly string[];
 	readonly tokenPriority: number;
 	readonly diagnosticPriority: number;
-	readonly provideTokens?: NonNullable<SyntaxProvider["provideTokens"]>;
-	readonly provideTokensForLines?: NonNullable<SyntaxProvider["provideTokensForLines"]>;
-	readonly provideDiagnostics?: NonNullable<SyntaxProvider["provideDiagnostics"]>;
-	readonly synchronizeDocument?: NonNullable<SyntaxProvider["synchronizeDocument"]>;
+	readonly provideTokens?: NonNullable<SyntaxProvider['provideTokens']>;
+	readonly provideTokensForLines?: NonNullable<SyntaxProvider['provideTokensForLines']>;
+	readonly provideDiagnostics?: NonNullable<SyntaxProvider['provideDiagnostics']>;
+	readonly synchronizeDocument?: NonNullable<SyntaxProvider['synchronizeDocument']>;
 }
 
 export function assertSyntaxRequest(request: SyntaxRequest): void {
-	if (typeof request !== "object" || request === null) {
-		throw new TypeError("Syntax request must be an object");
+	if (typeof request !== 'object' || request === null) {
+		throw new TypeError('Syntax request must be an object');
 	}
 	assertLanguageId(request.languageId);
 	if (request.tokenize !== undefined) {
 		const { lineNumber, lines } = request.tokenize;
-		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1) throw new RangeError("Tokenization start line must be positive");
-		if (!Array.isArray(lines) || lines.length === 0 || lines.some(line => typeof line !== "string" || /[\r\n]/.test(line))) {
-			throw new TypeError("Tokenization requires non-empty lines without line endings");
+		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1) throw new RangeError('Tokenization start line must be positive');
+		if (!Array.isArray(lines) || lines.length === 0 || lines.some(line => typeof line !== 'string' || /[\r\n]/.test(line))) {
+			throw new TypeError('Tokenization requires non-empty lines without line endings');
 		}
 	}
 }
 
 export function normalizeSyntaxProvider(provider: SyntaxProvider): RegisteredSyntaxProvider {
-	if (typeof provider !== "object" || provider === null) {
-		throw new TypeError("Syntax provider must be an object");
+	if (typeof provider !== 'object' || provider === null) {
+		throw new TypeError('Syntax provider must be an object');
 	}
-	assertLanguageProviderId(provider.id, "Syntax provider ID");
+	assertLanguageProviderId(provider.id, 'Syntax provider ID');
 	if (!isNonEmptyArray(provider.languageIds)) {
-		throw new TypeError("Syntax provider must declare language IDs");
+		throw new TypeError('Syntax provider must declare language IDs');
 	}
 	const languageIds = provider.languageIds.map(languageId => {
 		assertLanguageSelector(languageId);
 		return languageId;
 	});
 	if (new Set(languageIds).size !== languageIds.length) {
-		throw new RangeError("Syntax provider language IDs must be unique");
+		throw new RangeError('Syntax provider language IDs must be unique');
 	}
-	if (provider.provideTokens !== undefined && typeof provider.provideTokens !== "function") {
-		throw new TypeError("Syntax provider provideTokens must be a function");
+	if (provider.provideTokens !== undefined && typeof provider.provideTokens !== 'function') {
+		throw new TypeError('Syntax provider provideTokens must be a function');
 	}
-	if (provider.provideTokensForLines !== undefined && (typeof provider.provideTokensForLines !== "function" || !provider.provideTokens)) {
-		throw new TypeError("Syntax provider provideTokensForLines requires a token provider and must be a function");
+	if (provider.provideTokensForLines !== undefined && (typeof provider.provideTokensForLines !== 'function' || !provider.provideTokens)) {
+		throw new TypeError('Syntax provider provideTokensForLines requires a token provider and must be a function');
 	}
 	if (provider.tokenPriority !== undefined && (!Number.isSafeInteger(provider.tokenPriority) || !provider.provideTokens)) {
-		throw new TypeError("Syntax provider token priority requires a token provider and must be a safe integer");
+		throw new TypeError('Syntax provider token priority requires a token provider and must be a safe integer');
 	}
-	if (provider.provideDiagnostics !== undefined && typeof provider.provideDiagnostics !== "function") {
-		throw new TypeError("Syntax provider provideDiagnostics must be a function");
+	if (provider.provideDiagnostics !== undefined && typeof provider.provideDiagnostics !== 'function') {
+		throw new TypeError('Syntax provider provideDiagnostics must be a function');
 	}
 	if (provider.diagnosticPriority !== undefined && (!Number.isSafeInteger(provider.diagnosticPriority) || !provider.provideDiagnostics)) {
-		throw new TypeError("Syntax provider diagnostic priority requires a diagnostic provider and must be a safe integer");
+		throw new TypeError('Syntax provider diagnostic priority requires a diagnostic provider and must be a safe integer');
 	}
-	if (provider.synchronizeDocument !== undefined && typeof provider.synchronizeDocument !== "function") {
-		throw new TypeError("Syntax provider synchronizeDocument must be a function");
+	if (provider.synchronizeDocument !== undefined && typeof provider.synchronizeDocument !== 'function') {
+		throw new TypeError('Syntax provider synchronizeDocument must be a function');
 	}
 	if (!provider.provideTokens && !provider.provideDiagnostics) {
-		throw new TypeError("Syntax provider must implement tokens or diagnostics");
+		throw new TypeError('Syntax provider must implement tokens or diagnostics');
 	}
 	return Object.freeze({
 		id: provider.id,
@@ -1185,31 +1186,31 @@ export function normalizeSyntaxProvider(provider: SyntaxProvider): RegisteredSyn
 }
 
 export enum LanguageCompletionItemKind {
-	Text = "text",
-	Method = "method",
-	Function = "function",
-	Constructor = "constructor",
-	Field = "field",
-	Variable = "variable",
-	Class = "class",
-	Interface = "interface",
-	Module = "module",
-	Property = "property",
-	Unit = "unit",
-	Value = "value",
-	Enum = "enum",
-	Keyword = "keyword",
-	Snippet = "snippet",
-	File = "file",
-	Folder = "folder",
-	Reference = "reference",
-	TypeParameter = "typeParameter",
+	Text = 'text',
+	Method = 'method',
+	Function = 'function',
+	Constructor = 'constructor',
+	Field = 'field',
+	Variable = 'variable',
+	Class = 'class',
+	Interface = 'interface',
+	Module = 'module',
+	Property = 'property',
+	Unit = 'unit',
+	Value = 'value',
+	Enum = 'enum',
+	Keyword = 'keyword',
+	Snippet = 'snippet',
+	File = 'file',
+	Folder = 'folder',
+	Reference = 'reference',
+	TypeParameter = 'typeParameter',
 }
 
 /** Selects whether completion insertion text is literal text or snippet syntax. */
 export enum LanguageCompletionInsertTextFormat {
-	PlainText = "plainText",
-	Snippet = "snippet",
+	PlainText = 'plainText',
+	Snippet = 'snippet',
 }
 
 export interface LanguageCompletionItem {
@@ -1273,7 +1274,7 @@ export interface LanguageCompletionItemResolver {
 
 export type LanguageCompletionResultNormalizer = (value: LanguageCompletionResult) => LanguageCompletionResult;
 
-export const LANGUAGE_COMPLETION_LANE = "completion";
+export const LANGUAGE_COMPLETION_LANE = 'completion';
 
 export type LanguageCompletionLane = typeof LANGUAGE_COMPLETION_LANE;
 
@@ -1288,7 +1289,7 @@ export function normalizeLanguageCompletionSnapshotResult(value: LanguageComplet
 
 /** Builds one reusable normalizer so all providers in a request share the same snapshot line index. */
 export function createLanguageCompletionSnapshotNormalizer(snapshot: TextSnapshot): LanguageCompletionResultNormalizer {
-	const lines = snapshot.getText().split("\n");
+	const lines = snapshot.getText().split('\n');
 	return value => normalizeLanguageCompletionResult(
 		value,
 		position => assertSnapshotPosition(lines, position),
@@ -1299,17 +1300,17 @@ export function createLanguageCompletionSnapshotNormalizer(snapshot: TextSnapsho
 
 export function normalizeLanguageCompletionItemDetails(value: unknown): LanguageCompletionItemDetails {
 	if (value === undefined) return EMPTY_DETAILS;
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
-		throw new TypeError("Language completion item details must be an object");
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+		throw new TypeError('Language completion item details must be an object');
 	}
 	const details = value as Record<string, unknown>;
 	for (const key of Object.keys(details)) {
-		if (key !== "detail" && key !== "documentation") {
+		if (key !== 'detail' && key !== 'documentation') {
 			throw new TypeError(`Language completion item details contain unsupported field '${key}'`);
 		}
 	}
-	assertOptionalText(details.detail as string | undefined, "Language completion item detail");
-	assertOptionalText(details.documentation as string | undefined, "Language completion item documentation");
+	assertOptionalText(details.detail as string | undefined, 'Language completion item detail');
+	assertOptionalText(details.documentation as string | undefined, 'Language completion item documentation');
 	return Object.freeze({
 		...(details.detail === undefined ? {} : { detail: details.detail as string }),
 		...(details.documentation === undefined ? {} : { documentation: details.documentation as string }),
@@ -1317,13 +1318,13 @@ export function normalizeLanguageCompletionItemDetails(value: unknown): Language
 }
 
 export function normalizeLanguageCompletionResolveRequest(value: LanguageCompletionResolveRequest): LanguageCompletionResolveRequest {
-	if (typeof value !== "object" || value === null) {
-		throw new TypeError("Language completion resolve request must be an object");
+	if (typeof value !== 'object' || value === null) {
+		throw new TypeError('Language completion resolve request must be an object');
 	}
-	assertPositiveSafeInteger(value.completionRequestId, "Language completion request ID");
-	assertPositiveSafeInteger(value.modelVersion, "Language completion model version");
-	assertIdentifier(value.providerId, "Language completion provider ID");
-	assertIdentifier(value.itemId, "Language completion item ID");
+	assertPositiveSafeInteger(value.completionRequestId, 'Language completion request ID');
+	assertPositiveSafeInteger(value.modelVersion, 'Language completion model version');
+	assertIdentifier(value.providerId, 'Language completion provider ID');
+	assertIdentifier(value.itemId, 'Language completion item ID');
 	return Object.freeze({
 		completionRequestId: value.completionRequestId,
 		modelVersion: value.modelVersion,
@@ -1338,48 +1339,48 @@ export function normalizeLanguageCompletionResult(
 	validateRange: (position: Position, range: Range) => void,
 	validateAdditionalRange: (range: Range) => void,
 ): LanguageCompletionResult {
-	if (typeof value !== "object" || value === null || !Array.isArray(value.items)) {
-		throw new TypeError("Language completion result must contain an items array");
+	if (typeof value !== 'object' || value === null || !Array.isArray(value.items)) {
+		throw new TypeError('Language completion result must contain an items array');
 	}
 	if (!(value.position instanceof Position)) {
-		throw new TypeError("Language completion position must be a Position");
+		throw new TypeError('Language completion position must be a Position');
 	}
 	validatePosition(value.position);
-	if (typeof value.isIncomplete !== "boolean") {
-		throw new TypeError("Language completion isIncomplete must be a boolean");
+	if (typeof value.isIncomplete !== 'boolean') {
+		throw new TypeError('Language completion isIncomplete must be a boolean');
 	}
 	const identities = new Set<string>();
 	let preselectSeen = false;
 	const items = value.items.map(item => {
-		if (typeof item !== "object" || item === null) {
-			throw new TypeError("Language completion item must be an object");
+		if (typeof item !== 'object' || item === null) {
+			throw new TypeError('Language completion item must be an object');
 		}
-		assertIdentifier(item.providerId, "Language completion provider ID");
-		assertIdentifier(item.id, "Language completion item ID");
+		assertIdentifier(item.providerId, 'Language completion provider ID');
+		assertIdentifier(item.id, 'Language completion item ID');
 		const identity = `${item.providerId}\0${item.id}`;
 		if (identities.has(identity)) {
 			throw new RangeError(`Duplicate language completion item identity '${item.providerId}/${item.id}'`);
 		}
 		identities.add(identity);
-		assertNonEmptyText(item.label, "Language completion item label");
-		const labelMatchIndices = normalizeCompletionMatchIndices(item.labelMatchIndices, item.label, "label");
-		const detailMatchIndices = normalizeCompletionMatchIndices(item.detailMatchIndices, item.detail ?? "", "detail");
+		assertNonEmptyText(item.label, 'Language completion item label');
+		const labelMatchIndices = normalizeCompletionMatchIndices(item.labelMatchIndices, item.label, 'label');
+		const detailMatchIndices = normalizeCompletionMatchIndices(item.detailMatchIndices, item.detail ?? '', 'detail');
 		if (!Object.values(LanguageCompletionItemKind).includes(item.kind)) {
 			throw new TypeError(`Unknown language completion item kind '${item.kind}'`);
 		}
 		validateRange(value.position, item.range);
-		if (typeof item.insertText !== "string") {
-			throw new TypeError("Language completion insertText must be a string");
+		if (typeof item.insertText !== 'string') {
+			throw new TypeError('Language completion insertText must be a string');
 		}
 		if (item.insertTextFormat !== undefined && !Object.values(LanguageCompletionInsertTextFormat).includes(item.insertTextFormat)) {
 			throw new TypeError(`Unknown language completion insert text format '${item.insertTextFormat}'`);
 		}
-		assertOptionalText(item.detail, "Language completion item detail");
-		assertOptionalText(item.documentation, "Language completion item documentation");
-		assertOptionalText(item.filterText, "Language completion item filterText");
-		assertOptionalText(item.sortText, "Language completion item sortText");
-		if (item.preselect !== undefined && typeof item.preselect !== "boolean") {
-			throw new TypeError("Language completion item preselect must be a boolean");
+		assertOptionalText(item.detail, 'Language completion item detail');
+		assertOptionalText(item.documentation, 'Language completion item documentation');
+		assertOptionalText(item.filterText, 'Language completion item filterText');
+		assertOptionalText(item.sortText, 'Language completion item sortText');
+		if (item.preselect !== undefined && typeof item.preselect !== 'boolean') {
+			throw new TypeError('Language completion item preselect must be a boolean');
 		}
 		const commitCharacters = normalizeCommitCharacters(item.commitCharacters);
 		const additionalTextEdits = normalizeAdditionalTextEdits(
@@ -1388,12 +1389,12 @@ export function normalizeLanguageCompletionResult(
 			validateAdditionalRange,
 		);
 		const command = normalizeCompletionCommand(item.command);
-		if (item.hasDeferredDetails !== undefined && typeof item.hasDeferredDetails !== "boolean") {
-			throw new TypeError("Language completion item hasDeferredDetails must be a boolean");
+		if (item.hasDeferredDetails !== undefined && typeof item.hasDeferredDetails !== 'boolean') {
+			throw new TypeError('Language completion item hasDeferredDetails must be a boolean');
 		}
 		if (item.preselect) {
 			if (preselectSeen) {
-				throw new RangeError("Language completion result must not preselect multiple items");
+				throw new RangeError('Language completion result must not preselect multiple items');
 			}
 			preselectSeen = true;
 		}
@@ -1441,12 +1442,12 @@ function normalizeCompletionMatchIndices(indices: readonly number[] | undefined,
 
 function normalizeCompletionCommand(value: unknown): LanguageCompletionCommand | undefined {
 	if (value === undefined) return undefined;
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("Language completion command must be an object");
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError('Language completion command must be an object');
 	const command = value as Record<string, unknown>;
-	if (Object.keys(command).some(key => key !== "id" && key !== "title" && key !== "arguments")) throw new TypeError("Language completion command contains unsupported fields");
-	assertIdentifier(command.id, "Language completion command ID");
-	assertNonEmptyText(command.title, "Language completion command title");
-	if (!Array.isArray(command.arguments)) throw new TypeError("Language completion command arguments must be an array");
+	if (Object.keys(command).some(key => key !== 'id' && key !== 'title' && key !== 'arguments')) throw new TypeError('Language completion command contains unsupported fields');
+	assertIdentifier(command.id, 'Language completion command ID');
+	assertNonEmptyText(command.title, 'Language completion command title');
+	if (!Array.isArray(command.arguments)) throw new TypeError('Language completion command arguments must be an array');
 	return Object.freeze({ id: command.id, title: command.title, arguments: Object.freeze(structuredClone(command.arguments)) });
 }
 
@@ -1454,7 +1455,7 @@ const EMPTY_DETAILS: LanguageCompletionItemDetails = Object.freeze({});
 
 function assertSnapshotCompletionRange(lines: readonly string[], position: Position, range: Range): void {
 	if (!(range instanceof Range)) {
-		throw new TypeError("Language completion item range must be a Range");
+		throw new TypeError('Language completion item range must be a Range');
 	}
 	assertSnapshotPosition(lines, range.getStartPosition());
 	assertSnapshotPosition(lines, range.getEndPosition());
@@ -1462,16 +1463,16 @@ function assertSnapshotCompletionRange(lines: readonly string[], position: Posit
 		range.getStartPosition().lineNumber !== position.lineNumber ||
 		range.getEndPosition().lineNumber !== position.lineNumber
 	) {
-		throw new RangeError("Language completion item range must stay on the trigger line");
+		throw new RangeError('Language completion item range must stay on the trigger line');
 	}
 	if (Position.compare(range.getStartPosition(), position) > 0 || Position.compare(range.getEndPosition(), position) < 0) {
-		throw new RangeError("Language completion item range must contain the trigger position");
+		throw new RangeError('Language completion item range must contain the trigger position');
 	}
 }
 
 function assertSnapshotTextEditRange(lines: readonly string[], range: Range): void {
 	if (!(range instanceof Range)) {
-		throw new TypeError("Language completion additional edit range must be a Range");
+		throw new TypeError('Language completion additional edit range must be a Range');
 	}
 	assertSnapshotPosition(lines, range.getStartPosition());
 	assertSnapshotPosition(lines, range.getEndPosition());
@@ -1479,7 +1480,7 @@ function assertSnapshotTextEditRange(lines: readonly string[], range: Range): vo
 
 function assertSnapshotPosition(lines: readonly string[], position: Position): void {
 	if (!(position instanceof Position)) {
-		throw new TypeError("Language completion position must be a Position");
+		throw new TypeError('Language completion position must be a Position');
 	}
 	if (
 		position.lineNumber < 1 ||
@@ -1487,7 +1488,7 @@ function assertSnapshotPosition(lines: readonly string[], position: Position): v
 		position.column < 1 ||
 		position.column > lines[position.lineNumber - 1]!.length + 1
 	) {
-		throw new RangeError("Language completion position is outside its snapshot");
+		throw new RangeError('Language completion position is outside its snapshot');
 	}
 }
 
@@ -1497,41 +1498,41 @@ function assertOptionalText(value: string | undefined, owner: string): void {
 
 /** Validates one completion commit character using the same grapheme contract as browser input. */
 export function assertLanguageCompletionCommitCharacter(value: unknown): asserts value is string {
-	if (typeof value !== "string" || value === "\n" || value === "\r" || [...value].length !== 1) {
-		throw new TypeError("Language completion commit character must be one non-line-break grapheme");
+	if (typeof value !== 'string' || value === '\n' || value === '\r' || [...value].length !== 1) {
+		throw new TypeError('Language completion commit character must be one non-line-break grapheme');
 	}
 }
 
 function normalizeCommitCharacters(value: unknown): readonly string[] | undefined {
 	if (value === undefined) return undefined;
-	if (!Array.isArray(value)) throw new TypeError("Language completion commit characters must be an array");
+	if (!Array.isArray(value)) throw new TypeError('Language completion commit characters must be an array');
 	const characters = value.map(character => {
 		assertLanguageCompletionCommitCharacter(character);
 		return character;
 	});
 	if (new Set(characters).size !== characters.length) {
-		throw new RangeError("Language completion commit characters must be unique");
+		throw new RangeError('Language completion commit characters must be unique');
 	}
 	return Object.freeze(characters);
 }
 
 function normalizeAdditionalTextEdits(value: unknown, primaryRange: Range, validateRange: (range: Range) => void): readonly LanguageCompletionTextEdit[] | undefined {
 	if (value === undefined) return undefined;
-	if (!Array.isArray(value)) throw new TypeError("Language completion additional text edits must be an array");
+	if (!Array.isArray(value)) throw new TypeError('Language completion additional text edits must be an array');
 	const edits = value.map(edit => {
-		if (typeof edit !== "object" || edit === null || Array.isArray(edit)) {
-			throw new TypeError("Language completion additional text edit must be an object");
+		if (typeof edit !== 'object' || edit === null || Array.isArray(edit)) {
+			throw new TypeError('Language completion additional text edit must be an object');
 		}
 		const record = edit as Record<string, unknown>;
-		if (Object.keys(record).some(key => key !== "range" && key !== "text")) {
-			throw new TypeError("Language completion additional text edit contains unsupported fields");
+		if (Object.keys(record).some(key => key !== 'range' && key !== 'text')) {
+			throw new TypeError('Language completion additional text edit contains unsupported fields');
 		}
 		if (!(record.range instanceof Range)) {
-			throw new TypeError("Language completion additional edit range must be a Range");
+			throw new TypeError('Language completion additional edit range must be a Range');
 		}
 		validateRange(record.range);
-		if (typeof record.text !== "string") {
-			throw new TypeError("Language completion additional edit text must be a string");
+		if (typeof record.text !== 'string') {
+			throw new TypeError('Language completion additional edit text must be a string');
 		}
 		return Object.freeze({ range: record.range, text: normalizeTextLineEndings(record.text) });
 	});
@@ -1547,7 +1548,7 @@ function assertNonOverlappingCompletionEditRanges(primaryRange: Range, edits: re
 		const previous = ranges[index - 1]!;
 		const current = ranges[index]!;
 		if (Position.compare(current.getStartPosition(), previous.getEndPosition()) <= 0) {
-			throw new RangeError("Language completion primary and additional edit ranges must not overlap or touch");
+			throw new RangeError('Language completion primary and additional edit ranges must not overlap or touch');
 		}
 	}
 }
@@ -1560,7 +1561,7 @@ function assertIdentifier(value: unknown, owner: string): asserts value is strin
 }
 
 function assertNonEmptyText(value: unknown, owner: string): asserts value is string {
-	if (typeof value !== "string" || value.trim().length === 0) {
+	if (typeof value !== 'string' || value.trim().length === 0) {
 		throw new TypeError(`${owner} must not be empty`);
 	}
 }
@@ -1588,10 +1589,10 @@ export interface LanguageWorkspaceSymbolProvider {
 }
 
 export enum LanguageDiagnosticSeverity {
-	Error = "error",
-	Warning = "warning",
-	Information = "information",
-	Hint = "hint",
+	Error = 'error',
+	Warning = 'warning',
+	Information = 'information',
+	Hint = 'hint',
 }
 
 export type LanguageDiagnosticCode = string | number;
@@ -1609,27 +1610,27 @@ export interface LanguageDiagnosticResult {
 }
 
 export function createLanguageDiagnosticSnapshotNormalizer(snapshot: TextSnapshot): (value: LanguageDiagnosticResult) => LanguageDiagnosticResult {
-	const lines = snapshot.getText().split("\n");
-	return value => normalizeLanguageDiagnosticResult(value, range => assertDiagnosticSnapshotRange(lines, range, "Language diagnostic"));
+	const lines = snapshot.getText().split('\n');
+	return value => normalizeLanguageDiagnosticResult(value, range => assertDiagnosticSnapshotRange(lines, range, 'Language diagnostic'));
 }
 
 export function normalizeLanguageDiagnosticResult(value: LanguageDiagnosticResult, validateRange: (range: Range) => void): LanguageDiagnosticResult {
-	if (typeof value !== "object" || value === null || !Array.isArray(value.diagnostics)) {
-		throw new TypeError("Language diagnostic result must contain a diagnostics array");
+	if (typeof value !== 'object' || value === null || !Array.isArray(value.diagnostics)) {
+		throw new TypeError('Language diagnostic result must contain a diagnostics array');
 	}
 	const diagnostics = value.diagnostics.map(diagnostic => {
-		if (typeof diagnostic !== "object" || diagnostic === null) {
-			throw new TypeError("Language diagnostic must be an object");
+		if (typeof diagnostic !== 'object' || diagnostic === null) {
+			throw new TypeError('Language diagnostic must be an object');
 		}
 		validateRange(diagnostic.range);
 		if (!Object.values(LanguageDiagnosticSeverity).includes(diagnostic.severity)) {
-			throw new TypeError("Unknown language diagnostic severity");
+			throw new TypeError('Unknown language diagnostic severity');
 		}
-		if (typeof diagnostic.message !== "string" || diagnostic.message.trim().length === 0) {
-			throw new TypeError("Language diagnostic message must not be empty");
+		if (typeof diagnostic.message !== 'string' || diagnostic.message.trim().length === 0) {
+			throw new TypeError('Language diagnostic message must not be empty');
 		}
 		if (diagnostic.code !== undefined) assertDiagnosticCode(diagnostic.code);
-		if (diagnostic.source !== undefined) assertDiagnosticIdentifier(diagnostic.source, "Language diagnostic source");
+		if (diagnostic.source !== undefined) assertDiagnosticIdentifier(diagnostic.source, 'Language diagnostic source');
 		return Object.freeze({
 			range: diagnostic.range,
 			severity: diagnostic.severity,
@@ -1654,18 +1655,18 @@ function assertDiagnosticSnapshotPosition(lines: readonly string[], position: Po
 }
 
 function assertDiagnosticIdentifier(value: unknown, owner: string): asserts value is string {
-	if (typeof value !== "string" || value.length === 0 || value.trim() !== value) {
+	if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
 		throw new TypeError(`${owner} must be a non-empty trimmed string`);
 	}
 }
 
 function assertDiagnosticCode(code: LanguageDiagnosticCode): void {
-	if (typeof code === "string") {
-		assertDiagnosticIdentifier(code, "Language diagnostic code");
+	if (typeof code === 'string') {
+		assertDiagnosticIdentifier(code, 'Language diagnostic code');
 		return;
 	}
-	if (typeof code !== "number" || !Number.isFinite(code)) {
-		throw new TypeError("Language diagnostic code must be a finite number or non-empty string");
+	if (typeof code !== 'number' || !Number.isFinite(code)) {
+		throw new TypeError('Language diagnostic code must be a finite number or non-empty string');
 	}
 }
 
@@ -1693,13 +1694,13 @@ export interface LanguageDiagnosticsHost extends LanguageDiagnosticsSource {
 	createPublisher(resource: URI): LanguageDiagnosticsPublisher;
 }
 
-export const SYNTAX_TOKEN_LANE = "tokens";
+export const SYNTAX_TOKEN_LANE = 'tokens';
 
-export const SYNTAX_TOKENIZE_LANE = "tokenize";
+export const SYNTAX_TOKENIZE_LANE = 'tokenize';
 
-export const SYNTAX_DIAGNOSTIC_LANE = "diagnostics";
+export const SYNTAX_DIAGNOSTIC_LANE = 'diagnostics';
 
-export const SYNTAX_SYNCHRONIZATION = "synchronization";
+export const SYNTAX_SYNCHRONIZATION = 'synchronization';
 
 export type SyntaxLane = typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE | typeof SYNTAX_TOKENIZE_LANE;
 

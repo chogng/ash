@@ -1,9 +1,9 @@
-import { CharCode } from "../../../base/common/charCode.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
-import { escapeRegExpCharacters } from "../../../base/common/strings.js";
+import { CharCode } from '../../../base/common/charCode.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { escapeRegExpCharacters } from '../../../base/common/strings.js';
 import { assertLanguageId, type ILanguageIcon, type ILanguageNameIdPair } from '../languages/language.js';
-import type { TextResourceLanguageInput } from "../../../platform/language/common/textResourceLanguage.js";
+import type { TextResourceLanguageInput } from '../../../platform/language/common/textResourceLanguage.js';
 import { type URI } from '../../../base/common/uri.js';
 
 /** Declarative identity and file-association metadata for one editor language. */
@@ -75,7 +75,7 @@ export class LanguagesRegistry extends Disposable {
 			this.removeOwner(owner);
 		}) as LanguageDescriptionRegistration;
 		registration.replace = replacement => {
-			if (disposed) throw new ReferenceError("Language description registration is already disposed");
+			if (disposed) throw new ReferenceError('Language description registration is already disposed');
 			this.assertNotDisposed();
 			this.replace(owner, replacement);
 		};
@@ -121,11 +121,11 @@ export class LanguagesRegistry extends Disposable {
 
 	resolveLanguageId(input: TextResourceLanguageInput): string | undefined {
 		this.assertNotDisposed();
-		if (!input || typeof input !== "object") throw new TypeError("Language resolution input is required");
+		if (!input || typeof input !== 'object') throw new TypeError('Language resolution input is required');
 		const path = normalizePath(input.resource.path);
 		// Windows separators delimit filenames; an escaped forward slash remains part of a URI segment.
-		const encodedPath = input.resource.toEncodedComponents().path.replace(/%5c/gi, "/");
-		const fileName = normalizePath(decodeURIComponent(encodedPath.slice(encodedPath.lastIndexOf("/") + 1)));
+		const encodedPath = input.resource.toEncodedComponents().path.replace(/%5c/gi, '/');
+		const fileName = normalizePath(decodeURIComponent(encodedPath.slice(encodedPath.lastIndexOf('/') + 1)));
 		const contentType = input.contentType?.toLowerCase();
 		const firstLine = normalizeFirstLineText(input.firstLine);
 		let best: LanguageMatch | undefined;
@@ -140,9 +140,9 @@ export class LanguagesRegistry extends Disposable {
 
 
 	private replace(owner: object, contributions: readonly LanguageDescriptionContribution[]): void {
-		if (!Array.isArray(contributions)) throw new TypeError("Language description contributions must be an array");
+		if (!Array.isArray(contributions)) throw new TypeError('Language description contributions must be an array');
 		const entries = contributions.map(contribution => {
-			if (typeof contribution !== "object" || contribution === null) throw new TypeError("Language description contribution must be an object");
+			if (typeof contribution !== 'object' || contribution === null) throw new TypeError('Language description contribution must be an object');
 			const description = normalizeDescription(contribution.description);
 			return Object.freeze({ owner, description, ...(description.firstLine === undefined ? {} : { firstLinePattern: new RegExp(description.firstLine) }), priority: normalizePriority(contribution.options ?? {}), order: this.nextOrder++ });
 		});
@@ -187,15 +187,15 @@ interface LanguageMatch {
 }
 
 function normalizeDescription(description: LanguageDescription): LanguageDescription {
-	if (typeof description !== "object" || description === null) throw new TypeError("Language description must be an object");
+	if (typeof description !== 'object' || description === null) throw new TypeError('Language description must be an object');
 	assertLanguageId(description.id);
 	return Object.freeze({
 		id: description.id,
-		aliases: normalizeTextList(description.aliases, "language aliases"),
+		aliases: normalizeTextList(description.aliases, 'language aliases'),
 		extensions: normalizeExtensions(description.extensions),
-		filenames: normalizeTextList(description.filenames, "language filenames", true),
-		filenamePatterns: normalizeTextList(description.filenamePatterns, "language filename patterns", true),
-		mimetypes: normalizeTextList(description.mimetypes, "language MIME types", true),
+		filenames: normalizeTextList(description.filenames, 'language filenames', true),
+		filenamePatterns: normalizeTextList(description.filenamePatterns, 'language filename patterns', true),
+		mimetypes: normalizeTextList(description.mimetypes, 'language MIME types', true),
 		...(description.firstLine === undefined ? {} : { firstLine: normalizeFirstLinePattern(description.firstLine) }),
 		...(description.configuration === undefined ? {} : { configuration: description.configuration }),
 		...(description.icon === undefined ? {} : { icon: Object.freeze({ light: description.icon.light, dark: description.icon.dark }) }),
@@ -203,15 +203,15 @@ function normalizeDescription(description: LanguageDescription): LanguageDescrip
 }
 
 function normalizePriority(options: LanguageRegistrationOptions): number {
-	if (typeof options !== "object" || options === null) throw new TypeError("Language registration options must be an object");
+	if (typeof options !== 'object' || options === null) throw new TypeError('Language registration options must be an object');
 	const priority = options.priority ?? 0;
-	if (!Number.isSafeInteger(priority)) throw new RangeError("Language registration priority must be a safe integer");
+	if (!Number.isSafeInteger(priority)) throw new RangeError('Language registration priority must be a safe integer');
 	return priority;
 }
 
 function normalizeExtensions(values: readonly string[] | undefined): readonly string[] {
-	const normalized = normalizeTextList(values, "language extensions", true).map(value => value.toLowerCase());
-	if (normalized.some(value => !value.startsWith("."))) throw new TypeError("Language extensions must start with a dot");
+	const normalized = normalizeTextList(values, 'language extensions', true).map(value => value.toLowerCase());
+	if (normalized.some(value => !value.startsWith('.'))) throw new TypeError('Language extensions must start with a dot');
 	return Object.freeze(normalized);
 }
 
@@ -219,7 +219,7 @@ function normalizeTextList(values: readonly string[] | undefined, owner: string,
 	if (values === undefined) return Object.freeze([]);
 	if (!Array.isArray(values)) throw new TypeError(`${owner} must be an array`);
 	const normalized = values.map(value => {
-		if (typeof value !== "string" || value.length === 0 || value.length > 256 || /[\r\n]/u.test(value)) {
+		if (typeof value !== 'string' || value.length === 0 || value.length > 256 || /[\r\n]/u.test(value)) {
 			throw new TypeError(`${owner} must contain bounded single-line strings`);
 		}
 		return caseInsensitive ? value.toLowerCase() : value;
@@ -229,7 +229,7 @@ function normalizeTextList(values: readonly string[] | undefined, owner: string,
 }
 
 function normalizePath(path: string): string {
-	return path.replace(/\\/gu, "/").toLowerCase();
+	return path.replace(/\\/gu, '/').toLowerCase();
 }
 
 function matchDescription(entry: RegisteredLanguageDescription, path: string, fileName: string, contentType: string | undefined, firstLine: string | undefined): LanguageMatch | undefined {
@@ -249,12 +249,12 @@ function matchDescription(entry: RegisteredLanguageDescription, path: string, fi
 }
 
 function normalizeFirstLinePattern(value: string): string {
-	if (typeof value !== "string" || value.length === 0 || value.length > 1024 || /[\r\n]/u.test(value)) throw new TypeError("Language first-line pattern must be a bounded single-line regular expression");
-	const source = value.startsWith("^") ? value : `^(?:${value})`;
+	if (typeof value !== 'string' || value.length === 0 || value.length > 1024 || /[\r\n]/u.test(value)) throw new TypeError('Language first-line pattern must be a bounded single-line regular expression');
+	const source = value.startsWith('^') ? value : `^(?:${value})`;
 	let pattern: RegExp;
 	try { pattern = new RegExp(source); }
-	catch { throw new TypeError("Language first-line pattern must be a valid regular expression"); }
-	if (pattern.test("")) throw new TypeError("Language first-line pattern must not match an empty line");
+	catch { throw new TypeError('Language first-line pattern must be a valid regular expression'); }
+	if (pattern.test('')) throw new TypeError('Language first-line pattern must not match an empty line');
 	return source;
 }
 
@@ -277,28 +277,28 @@ function selectDescription(entries: readonly RegisteredLanguageDescription[] | u
 }
 
 function matchesGlob(pattern: string, value: string): boolean {
-	let expression = "^";
+	let expression = '^';
 	for (let index = 0; index < pattern.length; index += 1) {
 		const character = pattern[index]!;
-		if (character === "*") {
-			if (pattern[index + 1] === "*") {
+		if (character === '*') {
+			if (pattern[index + 1] === '*') {
 				index += 1;
 				// A directory glob also matches paths rooted directly at the next segment.
-				if (pattern[index + 1] === "/") {
+				if (pattern[index + 1] === '/') {
 					index += 1;
-					expression += "(?:.*/)?";
-				} else expression += ".*";
+					expression += '(?:.*/)?';
+				} else expression += '.*';
 			} else {
-				expression += "[^/]*";
+				expression += '[^/]*';
 			}
-		} else if (character === "?") {
-			expression += "[^/]";
+		} else if (character === '?') {
+			expression += '[^/]';
 		} else {
 			expression += escapeRegExpCharacters(character);
 		}
 	}
 	try {
-		return new RegExp(`${expression}$`, "u").test(value);
+		return new RegExp(`${expression}$`, 'u').test(value);
 	} catch {
 		return false;
 	}

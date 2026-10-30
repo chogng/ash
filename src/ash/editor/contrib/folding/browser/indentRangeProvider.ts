@@ -1,5 +1,5 @@
-import { EditorFoldingRangeSource, type EditorFoldingRange } from "./foldingRanges.js";
-import { type TextModel } from "../../../common/model/textModel.js";
+import { EditorFoldingRangeSource, type EditorFoldingRange } from './foldingRanges.js';
+import { type TextModel } from '../../../common/model/textModel.js';
 
 export interface EditorIndentFoldingOptions {
 	readonly tabSize?: number;
@@ -53,9 +53,9 @@ function isBlank(text: string): boolean {
 function leadingIndentation(text: string, tabSize: number): number {
 	let indentation = 0;
 	for (const character of text) {
-		if (character === " ") {
+		if (character === ' ') {
 			indentation += 1;
-		} else if (character === "\t") {
+		} else if (character === '\t') {
 			indentation += tabSize - indentation % tabSize;
 		} else {
 			break;
@@ -67,7 +67,7 @@ function leadingIndentation(text: string, tabSize: number): number {
 function readTabSize(value: number | undefined): number {
 	const tabSize = value ?? 4;
 	if (!Number.isSafeInteger(tabSize) || tabSize < 1 || tabSize > 64) {
-		throw new RangeError("Indent folding tab size must be an integer from 1 through 64");
+		throw new RangeError('Indent folding tab size must be an integer from 1 through 64');
 	}
 	return tabSize;
 }

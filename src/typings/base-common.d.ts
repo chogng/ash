@@ -17,6 +17,10 @@ interface AbortSignal {
 	removeEventListener(type: 'abort', listener: () => void): void;
 }
 
+declare const AbortSignal: {
+	any(signals: AbortSignal[]): AbortSignal;
+};
+
 declare class AbortController {
 	readonly signal: AbortSignal;
 	abort(reason?: unknown): void;

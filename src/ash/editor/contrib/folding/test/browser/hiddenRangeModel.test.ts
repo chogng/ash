@@ -1,13 +1,13 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { EditorFoldingModel } from "../../browser/foldingModel.js";
-import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
-import { EditorHiddenRangeModel } from "../../browser/hiddenRangeModel.js";
-import { Range } from "../../../../common/core/range.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { EditorFoldingModel } from '../../browser/foldingModel.js';
+import { EditorFoldingRangeSource } from '../../browser/foldingRanges.js';
+import { EditorHiddenRangeModel } from '../../browser/hiddenRangeModel.js';
+import { Range } from '../../../../common/core/range.js';
+import { TextModel } from '../../../../common/model/textModel.js';
 
-test("Hidden range model derives visible lines from collapsed folding regions", () => {
-	using model = new TextModel("outer\ninner\nbody\nend\nlast");
+test('Hidden range model derives visible lines from collapsed folding regions', () => {
+	using model = new TextModel('outer\ninner\nbody\nend\nlast');
 	using folding = new EditorFoldingModel(model);
 	using hidden = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([

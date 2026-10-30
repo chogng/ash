@@ -1,4 +1,4 @@
-import type { ExtensionsAcquireCapabilityParams, ExtensionsAcquiredCapabilityDto, ExtensionsArtifactHandleDto, ExtensionsDownloadParams, ExtensionsGetParams, ExtensionsInstallParams, ExtensionsInstalledPackageDto, ExtensionsListInstalledResult, ExtensionsOpenResourceParams, ExtensionsPackageDetailsDto, ExtensionsReleaseCapabilityParams, ExtensionsResourceContentDto, ExtensionsSearchParams, ExtensionsSearchResult, ExtensionsUninstallParams, ExtensionsUpdateParams } from "../../../../../.build/protocol/typescript/index.js";
+import type { ExtensionsAcquireCapabilityParams, ExtensionsAcquiredCapabilityDto, ExtensionsArtifactHandleDto, ExtensionsDownloadParams, ExtensionsGetParams, ExtensionsInstallParams, ExtensionsInstalledPackageDto, ExtensionsListInstalledResult, ExtensionsOpenResourceParams, ExtensionsPackageDetailsDto, ExtensionsReleaseCapabilityParams, ExtensionsResourceContentDto, ExtensionsSearchParams, ExtensionsSearchResult, ExtensionsUninstallParams, ExtensionsUpdateParams } from '../../../../../.build/protocol/typescript/index.js';
 
 /** Transport API mirroring the generic App Server Extensions contract. */
 export interface IExtensionManagementApi {

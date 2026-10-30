@@ -1,4 +1,4 @@
-import { type IDimension } from "./dimension.js";
+import { type IDimension } from './dimension.js';
 
 export class Size2D {
 	static equals(left: Size2D, right: Size2D): boolean {

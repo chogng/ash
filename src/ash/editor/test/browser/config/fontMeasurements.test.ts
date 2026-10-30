@@ -75,7 +75,7 @@ test('page teardown preserves saved font metrics after releasing restored readin
 	assert.equal(measurements.serializeFontInfo(target), undefined);
 });
 
-test('failed fresh font measurements do not preserve another window\'s restored state', () => {
+test("failed fresh font measurements do not preserve another window's restored state", () => {
 	const first = new JSDOM('<body></body>');
 	const second = new JSDOM('<body></body>');
 	using cleanup = toDisposable(() => { first.window.close(); second.window.close(); });

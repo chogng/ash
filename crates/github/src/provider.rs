@@ -1,7 +1,6 @@
 //! Versioned GitHub capability contract; implementations run outside the shared backend.
 use crate::*;
 use ash_async_utils::CancellationToken;
-use serde_json::Value;
 /// Product consumers bind one immutable grant to every provider invocation.
 pub trait GitHubProvider: Send + Sync {
     /// Rejects cache access when a dynamically selected capability has been disabled.
@@ -260,6 +259,14 @@ pub enum GitHubRequest {
         commit: String,
         page: u32,
     },
+    RepositoryTree {
+        repository: Repository,
+        reference: String,
+    },
+    RepositoryBlob {
+        repository: Repository,
+        sha: String,
+    },
     FileContent {
         repository: Repository,
         commit: String,
@@ -300,7 +307,9 @@ pub enum GitHubRequest {
         thread_id: String,
     },
     MarkNotificationsRead,
-    ManagedSettings,
+    ManagedSettings {
+        mode: ManagedSettingsReadMode,
+    },
     ReporterSearch {
         target: String,
         title: String,
@@ -370,11 +379,13 @@ impl GitHubRequest {
             | Self::PullRequest { .. }
             | Self::RequestedReviewers { .. }
             | Self::ReviewDiff { .. }
+            | Self::RepositoryTree { .. }
+            | Self::RepositoryBlob { .. }
             | Self::FileContent { .. }
             | Self::ReviewThreads { .. }
             | Self::ThreadComments { .. }
             | Self::Notifications { .. }
-            | Self::ManagedSettings
+            | Self::ManagedSettings { .. }
             | Self::ReporterSearch { .. } => false,
         }
     }
@@ -436,6 +447,8 @@ pub enum GitHubResponse {
     UpdateReviewComment(ReviewComment),
     DeleteReviewComment(()),
     ReviewDiff(ReviewDiff),
+    RepositoryTree(RepositoryTree),
+    RepositoryBlob(RepositoryBlob),
     FileContent(FileContent),
     ReviewThreads(ReviewThreadPage),
     ThreadComments(ThreadComments),
@@ -445,7 +458,7 @@ pub enum GitHubResponse {
     Notifications(NotificationPage),
     MarkNotificationRead(()),
     MarkNotificationsRead(()),
-    ManagedSettings(Option<Value>),
+    ManagedSettings(ManagedSettingsSnapshot),
     ReporterSearch(std::result::Result<Vec<ReporterIssue>, ReporterError>),
     ReporterSubmit(std::result::Result<ReporterIssue, ReporterError>),
 }

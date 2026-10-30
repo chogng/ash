@@ -9,6 +9,7 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IAccountPolicyService } from '../../../services/policies/common/accountPolicyService.js';
+import { IManagedSettingsUpdateService } from '../../../services/policies/common/managedSettingsUpdate.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
 import { IGitHubReviewModel } from './githubReviewModel.js';
@@ -18,7 +19,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 	public readonly categoryId = 'github';
 	public get title(): string { return localize('github.settings.title', 'Codex review'); }
 	public get description(): string { return localize('github.settings.description', 'Use your existing accounts to request and read PR reviews. Confirm official Connector authorization and automatic review settings in Codex.'); }
-	public get help(): string { return localize('github.settings.help', 'GitHub and Codex review settings\nUse Tab to choose a GitHub account, enter owner/name, and check repository access. Browse pull requests opens the shared review editor. Ash reuses an existing Codex login for model access. GitHub repository access and official Connector authorization are separate. Manage official Connector opens GitHub; Manage automatic reviews opens Codex settings in your browser. Authorization and automatic review settings must be confirmed there. In the review editor, Request Codex review posts @codex review as your GitHub account. Refresh to read the resulting PR comments and review discussions. Escape closes accessibility help and returns focus.') + '\n' + localize('github.settings.managedHelp', 'Refresh managed settings retrieves policy for the primary GitHub account, independently of the account selected for repository access. The status includes the last attempt, last successful refresh, and recovery guidance. While a refresh is running, the button is unavailable.'); }
+	public get help(): string { return localize('github.settings.help', 'GitHub and Codex review settings\nUse Tab to choose a GitHub account, enter owner/name, and check repository access. Browse pull requests opens the shared review editor. Ash reuses an existing Codex login for model access. GitHub repository access and official Connector authorization are separate. Manage official Connector opens GitHub; Manage automatic reviews opens Codex settings in your browser. Authorization and automatic review settings must be confirmed there. In the review editor, Request Codex review posts @codex review as your GitHub account. Refresh to read the resulting PR comments and review discussions. Escape closes accessibility help and returns focus.') + '\n' + localize('github.settings.managedHelp', 'Refresh managed settings retrieves policy for the primary GitHub account, independently of the account selected for repository access. The status includes the last attempt, last successful refresh, and recovery guidance. While a refresh is running, the button is unavailable. After failure, automatic requests for the same account, host and credentials stop. Use Refresh managed settings to retry explicitly; changing the account or credentials allows a new refresh.'); }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly readOperation: MutableDisposable<CancellationTokenSource>;
@@ -40,6 +41,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 		@IOpenerService private readonly opener: IOpenerService,
 		@IAppServerRemoteAgentService remote: IAppServerRemoteAgentService,
 		@IAccountPolicyService private readonly policies: IAccountPolicyService,
+		@IManagedSettingsUpdateService private readonly managedSettingsUpdate: IManagedSettingsUpdateService,
 	) {
 		super();
 		this.readOperation = this._register(new MutableDisposable<CancellationTokenSource>());
@@ -72,7 +74,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 				id: 'refreshManagedSettings', kind: 'action',
 				label: localize('github.settings.refreshManaged', 'Refresh managed settings'),
 				enabled: this.policies.state.phase !== 'refreshing' && this.accountState?.accounts.some(account => account.provider === 'github' && account.status === 'ready') === true,
-				run: () => this.policies.refresh(),
+				run: () => this.policies.refresh({ retryManagedSettings: true }),
 			},
 			{ id: 'connect', kind: 'action', label: localize('github.settings.connect', 'Connect GitHub'), enabled: !this.isBusy && !this.connection.isConnecting, run: () => this.perform(async () => { await this.connection.connect(); await this.refresh(); }) },
 			{ id: 'check', kind: 'action', label: localize('github.settings.check', 'Check repository access'), enabled: !this.isBusy && this.review.selectedAccount?.status === 'ready' && !!this.accountState, run: () => this.checkRepository() },
@@ -117,7 +119,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 						message = localize('github.settings.managedRateLimited', 'GitHub limited managed settings requests. Wait before retrying.');
 						break;
 					case GitHubErrorCode.ManagedSettingsUpdateRequired:
-						message = localize('github.settings.managedCompatibility', 'GitHub rejected this client’s compatibility for managed settings. Contact your administrator.');
+						message = this.managedSettingsUpdate.updateInfo.get()!.message;
 						break;
 					case 'invalidResponse':
 						message = localize('github.settings.managedInvalid', 'GitHub returned invalid managed settings. Retry or contact your administrator.');

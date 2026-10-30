@@ -1,7 +1,7 @@
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type CodebaseSymbolsState = "empty" | "indexing" | "ready" | "stale" | "failed";
-export type CodebaseSymbolsSymbolKind = "constant" | "enum" | "field" | "function" | "macro" | "method" | "module" | "static" | "struct" | "trait" | "type" | "variable";
+export type CodebaseSymbolsState = 'empty' | 'indexing' | 'ready' | 'stale' | 'failed';
+export type CodebaseSymbolsSymbolKind = 'constant' | 'enum' | 'field' | 'function' | 'macro' | 'method' | 'module' | 'static' | 'struct' | 'trait' | 'type' | 'variable';
 
 export interface CodebaseSymbolsPosition {
 	readonly lineIndex: number;
@@ -48,4 +48,4 @@ export interface ICodebaseSymbolsService {
 	search(query: string, maxResults: number, signal?: AbortSignal): Promise<CodebaseSymbolsSearchResult>;
 }
 
-export const ICodebaseSymbolsService = createServiceIdentifier<ICodebaseSymbolsService>("codebaseSymbolsService");
+export const ICodebaseSymbolsService = createServiceIdentifier<ICodebaseSymbolsService>('codebaseSymbolsService');

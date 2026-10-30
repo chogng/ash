@@ -8,24 +8,24 @@ import { BrowserPathService } from '../../../../../services/path/browser/pathSer
 import { createDisconnectedRendererApi } from '../../../../rendererApi.js';
 import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import type { IEditorGroup, IEditorGroupsContainer } from '../../../../../services/editor/common/editorGroupsService.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
 import type {
 	IContextMenuService,
-} from "../../../../../../platform/contextview/browser/contextView.js";
+} from '../../../../../../platform/contextview/browser/contextView.js';
 import type {
 	IMenubarControl,
-} from "../../../../../../workbench/browser/parts/titlebar/menubarControl.js";
-import type { ILocalizationService } from "../../../../../../workbench/services/localization/common/localizationService.js";
-import { h } from "../../../../../../base/browser/dom.js";
-import { Emitter, Event } from "../../../../../../base/common/event.js";
-import { Lxicon } from "../../../../../../base/common/lxicons.js";
+} from '../../../../../../workbench/browser/parts/titlebar/menubarControl.js';
+import type { ILocalizationService } from '../../../../../../workbench/services/localization/common/localizationService.js';
+import { h } from '../../../../../../base/browser/dom.js';
+import { Emitter, Event } from '../../../../../../base/common/event.js';
+import { Lxicon } from '../../../../../../base/common/lxicons.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -43,32 +43,32 @@ for (const [name, value] of Object.entries({
 }
 
 const { DisposableStore } = await import(
-	"../../../../../../base/common/lifecycle.js"
+	'../../../../../../base/common/lifecycle.js'
 );
 const { MenuId, MenusRegistry, IMenuService } = await import(
-	"../../../../../../platform/actions/common/actions.js"
+	'../../../../../../platform/actions/common/actions.js'
 );
 const { IContextMenuService: ContextMenuServiceId } = await import('../../../../../../platform/contextview/browser/contextView.js');
 const { MenuService } = await import(
-	"../../../../../../platform/actions/common/menuService.js"
+	'../../../../../../platform/actions/common/menuService.js'
 );
 const { CommandsRegistry, ICommandService } = await import(
-	"../../../../../../platform/commands/common/commands.js"
+	'../../../../../../platform/commands/common/commands.js'
 );
 const { ContextKeyService } = await import(
-	"../../../../../../platform/contextkey/browser/contextKeyService.js"
+	'../../../../../../platform/contextkey/browser/contextKeyService.js'
 );
 const { InstantiationService } = await import(
 	'../../../../../../platform/instantiation/common/instantiationService.js'
 );
 const { CommandService } = await import(
-	"../../../../../../workbench/services/commands/common/commandService.js"
+	'../../../../../../workbench/services/commands/common/commandService.js'
 );
 const { IQuickInputService } = await import(
-	"../../../../../../platform/quickinput/common/quickInput.js"
+	'../../../../../../platform/quickinput/common/quickInput.js'
 );
 const { BrowserTitlebarPart } = await import(
-	"../../../../../../workbench/browser/parts/titlebar/titlebarPart.js"
+	'../../../../../../workbench/browser/parts/titlebar/titlebarPart.js'
 );
 const { BrowserTitleService, createBrowserTitlebarPart } = await import('../../titlebarPart.js');
 const { ITitleService } = await import('../../../../../services/title/browser/titleService.js');
@@ -88,7 +88,7 @@ const { IDebugService } = await import('../../../../../contrib/debug/common/debu
 const { IHostService } = await import('../../../../../services/host/browser/host.js');
 const { URI } = await import('../../../../../../base/common/uri.js');
 const { BrowserMenubarControl } = await import(
-	"../../../../../../workbench/browser/parts/titlebar/menubarControl.js"
+	'../../../../../../workbench/browser/parts/titlebar/menubarControl.js'
 );
 
 const contextMenuService: IContextMenuService = {
@@ -171,7 +171,7 @@ test('title service shares the resolved title with its registered part and relea
 	services.registerInstance(ICommandService, commandService);
 	services.registerInstance(IMenuService, new MenuService(commandService, contextKeys));
 	services.registerInstance(ContextMenuServiceId, contextMenuService);
-	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import("../../../../../../platform/quickinput/common/quickInput.js").IQuickInputService);
+	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import('../../../../../../platform/quickinput/common/quickInput.js').IQuickInputService);
 	services.registerInstance(LocalizationServiceId, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
 	services.registerInstance(IEditorService, editors);
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -211,9 +211,10 @@ test('title service shares the resolved title with its registered part and relea
 	const popup = new JSDOM('<!doctype html><body></body>');
 	const popupChanged = resources.add(new Emitter<void>());
 	let popupInput = { resource: URI.file('/detached.ts') };
+	let popupTitleControl: HTMLElement | undefined;
 	const popupGroups: IEditorGroupsContainer = {
 		activeGroup: {
-			createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
+			createEditorActions: () => ({ get titleControl() { return popupTitleControl; }, actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
 			get activeInput() { return popupInput; },
 			onDidChangeEditors: (listener: Parameters<IEditorGroup['onDidChangeEditors']>[0]) => popupChanged.event(() => listener({ kind: 'activeEditorChanged', editor: undefined })),
 		} as unknown as IEditorGroup,
@@ -245,7 +246,15 @@ test('title service shares the resolved title with its registered part and relea
 	assert.equal(compactTitle.textContent, '🔴 feature — renamed.ts — Ash Code');
 	assert.equal(compactTitle.title, popup.window.document.title);
 	assert.equal(shared.windowTitle.value, '🔴 feature — draft.ts — Ash Code');
+	popupTitleControl = popup.window.document.createElement('button');
+	popupTitleControl.textContent = 'Pane-owned theme picker';
+	popupChanged.fire();
+	assert.equal(auxiliary.container.querySelector('.ash-titlebar-editor-control')?.firstElementChild, popupTitleControl);
+	assert.equal(auxiliary.container.querySelector('.ash-titlebar-center')?.classList.contains('ash-titlebar-center-custom'), true);
+	popupChanged.fire();
+	assert.equal(popupTitleControl.isConnected, true);
 	auxiliary.updateOptions({ compact: false });
+	assert.equal(popupTitleControl.parentElement, null, 'Leaving compact mode detaches the borrowed pane control');
 	assert.deepEqual(visibility, [false, true]);
 	auxiliary.dispose();
 	assert.equal(auxiliary.container.isConnected, false);
@@ -257,7 +266,8 @@ test('title service shares the resolved title with its registered part and relea
 	let focused = false;
 	const focusChanged = resources.add(new Emitter<boolean>());
 	services.registerInstance(IHostService, {
-		reload: async () => { throw new Error("Unexpected reload in this fixture"); },
+		getWindows: async () => [],
+		reload: async () => { throw new Error('Unexpected reload in this fixture'); },
 		get hasFocus() { return focused; },
 		onDidChangeFocus: focusChanged.event,
 		async restart() { }, async openWindow() { },
@@ -297,32 +307,32 @@ test('title service rejects assembly without its required workspace service', ()
 	assert.throws(() => services.createInstance(BrowserTitleService, browserEnvironment.window.document.body, 'Ash Code', createBrowserTitlebarPart, {} as unknown as IEditorGroupsContainer), /Unknown service: workspaceContextService/);
 });
 
-test("titlebar owns a menu-driven actions container", async () => {
+test('titlebar owns a menu-driven actions container', async () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
 	const services = disposables.add(new InstantiationService());
 	const commandService = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commandService);
-	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import("../../../../../../platform/quickinput/common/quickInput.js").IQuickInputService);
+	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import('../../../../../../platform/quickinput/common/quickInput.js').IQuickInputService);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	services.registerInstance(IContextKeyService, contextKeyService);
 	const menuService = new MenuService(commandService, contextKeyService);
 	services.registerInstance(IMenuService, menuService);
 	services.registerInstance(ContextMenuServiceId, contextMenuService);
 	let runs = 0;
-	const commandId = "test.titlebar.action";
+	const commandId = 'test.titlebar.action';
 	disposables.add(CommandsRegistry.register(commandId, () => {
 		runs += 1;
 	}));
 	disposables.add(MenusRegistry.appendMenuItem(MenuId.TitleBar, {
 		command: {
 			id: commandId,
-			title: "Title action",
+			title: 'Title action',
 		},
-		group: "navigation",
+		group: 'navigation',
 	}));
-	const menubarElement = h(ownerDocument, "nav");
+	const menubarElement = h(ownerDocument, 'nav');
 	let menubarDisposed = false;
 	const menubar: IMenubarControl = {
 		domNode: menubarElement,
@@ -343,29 +353,29 @@ test("titlebar owns a menu-driven actions container", async () => {
 	}, () => menubar));
 
 	const actionsContainer = titlebar.domNode.querySelector(
-		".ash-workbench-part-content > .ash-titlebar-actions",
+		'.ash-workbench-part-content > .ash-titlebar-actions',
 	);
 	assert.ok(actionsContainer);
-	assert.equal(actionsContainer.classList.contains("ash-titlebar-interactive-region"), true);
+	assert.equal(actionsContainer.classList.contains('ash-titlebar-interactive-region'), true);
 	assert.equal(
-		actionsContainer.querySelector(".ash-action-bar")
-			?.getAttribute("role"),
-		"toolbar",
+		actionsContainer.querySelector('.ash-action-bar')
+			?.getAttribute('role'),
+		'toolbar',
 	);
 	assert.equal(
-		actionsContainer.querySelector(".ash-toolbar")
-			?.classList.contains("ash-toolbar-inherit-foreground"),
+		actionsContainer.querySelector('.ash-toolbar')
+			?.classList.contains('ash-toolbar-inherit-foreground'),
 		true,
 	);
 	assert.equal(
-		actionsContainer.querySelector(".ash-action-bar")
-			?.classList.contains("highlight-toggled"),
+		actionsContainer.querySelector('.ash-action-bar')
+			?.classList.contains('highlight-toggled'),
 		false,
 	);
-	assert.equal(menubarElement.classList.contains("ash-titlebar-interactive-region"), true);
+	assert.equal(menubarElement.classList.contains('ash-titlebar-interactive-region'), true);
 
 	const button = actionsContainer.querySelector<HTMLButtonElement>('[data-action-id="test.titlebar.action"] button');
-	assert.equal(button?.textContent, "Title action");
+	assert.equal(button?.textContent, 'Title action');
 	button?.click();
 	await Promise.resolve();
 	assert.equal(runs, 1);
@@ -374,16 +384,16 @@ test("titlebar owns a menu-driven actions container", async () => {
 		MenusRegistry.appendMenuItem(MenuId.TitleBar, {
 			command: {
 				id: commandId,
-				title: "Second title action",
+				title: 'Second title action',
 			},
-			group: "navigation",
+			group: 'navigation',
 			order: 20,
 		}),
 	);
 	assert.deepEqual(
 		[...actionsContainer.querySelectorAll('[data-action-id="test.titlebar.action"] button')]
 			.map((element) => element.textContent),
-		["Title action", "Second title action"],
+		['Title action', 'Second title action'],
 	);
 
 	secondMenuRegistration.dispose();
@@ -403,31 +413,31 @@ test("titlebar owns a menu-driven actions container", async () => {
 	assert.equal(menubarDisposed, true);
 });
 
-test("titlebar renders its product icon, command center, and application menu", () => {
+test('titlebar renders its product icon, command center, and application menu', () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
 	const services = disposables.add(new InstantiationService());
 	const commandService = disposables.add(new CommandService(services));
 	services.registerInstance(ICommandService, commandService);
-	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import("../../../../../../platform/quickinput/common/quickInput.js").IQuickInputService);
+	services.registerInstance(IQuickInputService, { quickAccess: { onDidChangeVisibility: Event.None, show() { } } } as import('../../../../../../platform/quickinput/common/quickInput.js').IQuickInputService);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	services.registerInstance(IContextKeyService, contextKeyService);
 	const menuService = new MenuService(commandService, contextKeyService);
 	services.registerInstance(IMenuService, menuService);
 	services.registerInstance(ContextMenuServiceId, contextMenuService);
 	const localeChanged = disposables.add(new Emitter<void>());
-	let commandCenterLabel = "Search commands";
+	let commandCenterLabel = 'Search commands';
 	const localizationService: ILocalizationService = {
 		whenReady: Promise.resolve(),
-		translate: (_bundle, key, fallback) => key === "searchCommands" ? commandCenterLabel : fallback,
+		translate: (_bundle, key, fallback) => key === 'searchCommands' ? commandCenterLabel : fallback,
 	};
 	disposables.add(MenusRegistry.appendMenuItem(MenuId.TitleBarLeft, {
 		command: {
-			id: "test.titlebar.leftAction",
-			title: "Left title action",
+			id: 'test.titlebar.leftAction',
+			title: 'Left title action',
 		},
-		group: "navigation",
+		group: 'navigation',
 	}));
 	disposables.add(MenusRegistry.appendMenuItem(MenuId.CommandCenter, {
 		command: { id: 'test.titlebar.back', title: 'Go Back' },
@@ -448,50 +458,50 @@ test("titlebar renders its product icon, command center, and application menu", 
 	}, () => menubar));
 
 	const titleChildren = [...titlebar.domNode.querySelector(
-		".ash-workbench-part-title",
+		'.ash-workbench-part-title',
 	)?.children ?? []];
 	assert.equal(
-		titleChildren[0]?.classList.contains("ash-titlebar-app-icon"),
+		titleChildren[0]?.classList.contains('ash-titlebar-app-icon'),
 		true,
 	);
-	assert.equal(titleChildren[0]?.getAttribute("aria-hidden"), "true");
+	assert.equal(titleChildren[0]?.getAttribute('aria-hidden'), 'true');
 	assert.equal(titleChildren[1], menubar.domNode);
 	assert.equal(
-		titleChildren[1]?.classList.contains("ash-titlebar-left-actions"),
+		titleChildren[1]?.classList.contains('ash-titlebar-left-actions'),
 		true,
 	);
 	assert.equal(
 		titleChildren[1]?.querySelector('[data-action-id="test.titlebar.leftAction"] button')?.textContent,
-		"Left title action",
+		'Left title action',
 	);
 	assert.equal(titleChildren.length, 2);
-	assert.equal(titlebar.domNode.querySelector(".ash-titlebar-label"), null);
-	const commandCenter = titlebar.domNode.querySelector<HTMLButtonElement>(".ash-titlebar-command-center-button");
+	assert.equal(titlebar.domNode.querySelector('.ash-titlebar-label'), null);
+	const commandCenter = titlebar.domNode.querySelector<HTMLButtonElement>('.ash-titlebar-command-center-button');
 	const navigation = titlebar.domNode.querySelector('.ash-titlebar-command-center-navigation');
 	assert.deepEqual([...navigation?.querySelectorAll('button') ?? []].map(button => button.textContent), ['Go Back', 'Go Forward']);
 	assert.equal(navigation?.nextElementSibling, commandCenter);
-	assert.equal(commandCenter?.textContent, "Search commands");
-	assert.equal(commandCenter?.getAttribute("aria-label"), "Search commands");
+	assert.equal(commandCenter?.textContent, 'Search commands');
+	assert.equal(commandCenter?.getAttribute('aria-label'), 'Search commands');
 	assert.equal(commandCenter?.title, windowTitle.value);
 	assert.equal(commandCenter?.getAttribute('aria-description'), windowTitle.value);
 	windowTitle.value = '● 草稿.ts — 研究项目 — Ash Code';
 	titleChanged.fire();
 	assert.equal(commandCenter?.title, windowTitle.value);
 	assert.equal(commandCenter?.getAttribute('aria-description'), windowTitle.value);
-	assert.equal(commandCenter?.type, "button");
+	assert.equal(commandCenter?.type, 'button');
 	assert.equal(commandCenter?.getAttribute('aria-haspopup'), 'dialog');
 	assert.equal(commandCenter?.getAttribute('aria-expanded'), 'false');
-	assert.equal(commandCenter?.closest(".ash-titlebar-center")?.previousElementSibling?.className, "ash-workbench-part-title");
-	assert.equal(commandCenter?.closest(".ash-titlebar-center")?.nextElementSibling?.className, "ash-workbench-part-content");
-	commandCenterLabel = "搜索命令";
+	assert.equal(commandCenter?.closest('.ash-titlebar-center')?.previousElementSibling?.className, 'ash-workbench-part-title');
+	assert.equal(commandCenter?.closest('.ash-titlebar-center')?.nextElementSibling?.className, 'ash-workbench-part-content');
+	commandCenterLabel = '搜索命令';
 	localeChanged.fire();
-	assert.equal(commandCenter?.textContent, "Search commands");
-	assert.equal(commandCenter?.getAttribute("aria-label"), "Search commands");
+	assert.equal(commandCenter?.textContent, 'Search commands');
+	assert.equal(commandCenter?.getAttribute('aria-label'), 'Search commands');
 	titlebar.dispose();
 	assert.equal(titleChanged.hasListeners(), false);
 });
 
-test("browser titlebar hosts the application menu in an ActionBar", () => {
+test('browser titlebar hosts the application menu in an ActionBar', () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
@@ -500,30 +510,30 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
-	const fileMenu = new MenuId("test.titlebar.file");
-	const emptyEditMenu = new MenuId("test.titlebar.edit");
+	const fileMenu = new MenuId('test.titlebar.file');
+	const emptyEditMenu = new MenuId('test.titlebar.edit');
 	disposables.add(MenusRegistry.appendMenuItem(fileMenu, {
-		command: { id: "test.titlebar.newFile", title: "New File" },
+		command: { id: 'test.titlebar.newFile', title: 'New File' },
 	}));
 	disposables.add(MenusRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
-		title: "File",
+		title: 'File',
 		submenu: fileMenu,
-		group: "navigation",
+		group: 'navigation',
 		order: 1,
 	}));
 	disposables.add(MenusRegistry.appendMenuItem(MenuId.MenubarMainMenu, {
-		title: "Edit",
+		title: 'Edit',
 		submenu: emptyEditMenu,
-		group: "navigation",
+		group: 'navigation',
 		order: 2,
 	}));
 	disposables.add(MenusRegistry.appendMenuItem(MenuId.TitleBarLeft, {
 		command: {
-			id: "test.titlebar.toggleSidebar",
-			title: "Toggle sidebar",
+			id: 'test.titlebar.toggleSidebar',
+			title: 'Toggle sidebar',
 			icon: Lxicon.layoutSidebarLeft1,
 		},
-		group: "navigation",
+		group: 'navigation',
 	}));
 
 	let menuLabels: readonly string[] = [];
@@ -538,10 +548,10 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 		},
 		hideContextMenu() { },
 	};
-	const applicationMenuLabel = "Application menu";
+	const applicationMenuLabel = 'Application menu';
 	const localizationService: ILocalizationService = {
 		whenReady: Promise.resolve(),
-		translate: (_bundle, key, fallback) => key === "applicationMenu" ? applicationMenuLabel : fallback,
+		translate: (_bundle, key, fallback) => key === 'applicationMenu' ? applicationMenuLabel : fallback,
 	};
 	const menubar = disposables.add(new BrowserMenubarControl(
 		ownerDocument.body,
@@ -554,53 +564,53 @@ test("browser titlebar hosts the application menu in an ActionBar", () => {
 	const sidebarButton = menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="test.titlebar.toggleSidebar"] button');
 	assert.ok(button);
 	assert.ok(sidebarButton);
-	assert.equal(menubar.domNode.classList.contains("ash-action-bar"), true);
-	assert.equal(menubar.domNode.classList.contains("ash-toolbar"), true);
-	assert.equal(button.closest(".ash-action-view-item")?.classList.contains("icon"), true);
-	assert.equal(menubar.domNode.getAttribute("role"), "toolbar");
-	assert.equal(menubar.domNode.getAttribute("aria-label"), "Title bar left actions");
-	assert.equal(button.closest(".ash-action-view-item")?.parentElement, menubar.domNode);
-	assert.equal(sidebarButton.closest(".ash-action-view-item")?.parentElement, menubar.domNode);
+	assert.equal(menubar.domNode.classList.contains('ash-action-bar'), true);
+	assert.equal(menubar.domNode.classList.contains('ash-toolbar'), true);
+	assert.equal(button.closest('.ash-action-view-item')?.classList.contains('icon'), true);
+	assert.equal(menubar.domNode.getAttribute('role'), 'toolbar');
+	assert.equal(menubar.domNode.getAttribute('aria-label'), 'Title bar left actions');
+	assert.equal(button.closest('.ash-action-view-item')?.parentElement, menubar.domNode);
+	assert.equal(sidebarButton.closest('.ash-action-view-item')?.parentElement, menubar.domNode);
 	assert.equal(button.tabIndex, 0);
-	assert.equal(button.title, "Application menu");
-	assert.ok(button.querySelector(".ash-icon"));
-	assert.equal(sidebarButton.getAttribute("aria-label"), "Toggle sidebar");
-	assert.ok(sidebarButton.querySelector(".ash-icon"));
-	assert.equal(sidebarButton.closest(".ash-action-view-item")?.classList.contains("icon"), true);
-	assert.equal(menubar.domNode.querySelectorAll("button").length, 2);
+	assert.equal(button.title, 'Application menu');
+	assert.ok(button.querySelector('.ash-icon'));
+	assert.equal(sidebarButton.getAttribute('aria-label'), 'Toggle sidebar');
+	assert.ok(sidebarButton.querySelector('.ash-icon'));
+	assert.equal(sidebarButton.closest('.ash-action-view-item')?.classList.contains('icon'), true);
+	assert.equal(menubar.domNode.querySelectorAll('button').length, 2);
 
 	button.focus();
-	button.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {
-		key: "ArrowRight",
+	button.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
+		key: 'ArrowRight',
 		bubbles: true,
 		cancelable: true,
 	}));
 	assert.equal(ownerDocument.activeElement, sidebarButton);
-	sidebarButton.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {
-		key: "ArrowLeft",
+	sidebarButton.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
+		key: 'ArrowLeft',
 		bubbles: true,
 		cancelable: true,
 	}));
 	assert.equal(ownerDocument.activeElement, button);
-	assert.equal(button.getAttribute("aria-label"), "Application menu");
+	assert.equal(button.getAttribute('aria-label'), 'Application menu');
 	const extraAction = disposables.add(MenusRegistry.appendMenuItem(MenuId.TitleBarLeft, {
-		command: { id: "test.titlebar.extra", title: "Extra action" },
-		group: "navigation",
+		command: { id: 'test.titlebar.extra', title: 'Extra action' },
+		group: 'navigation',
 		order: 20,
 	}));
 	const updatedButton = menubar.domNode.querySelector<HTMLButtonElement>('[data-action-id="ash.applicationMenu"] button');
 	assert.ok(updatedButton);
 	assert.equal(updatedButton, button);
 	assert.equal(ownerDocument.activeElement, updatedButton);
-	assert.equal(updatedButton.getAttribute("aria-label"), applicationMenuLabel);
-	updatedButton.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {
-		key: "ArrowDown",
+	assert.equal(updatedButton.getAttribute('aria-label'), applicationMenuLabel);
+	updatedButton.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
+		key: 'ArrowDown',
 		bubbles: true,
 		cancelable: true,
 	}));
-	assert.deepEqual(menuLabels, ["File"]);
+	assert.deepEqual(menuLabels, ['File']);
 	assert.equal(openSubmenusImmediatelyOnHover, true);
-	assert.equal(updatedButton.getAttribute("aria-expanded"), "true");
+	assert.equal(updatedButton.getAttribute('aria-expanded'), 'true');
 	extraAction.dispose();
 	menubar.setTrailingActions([{ id: 'test.titlebar.back', label: 'Back', tooltip: 'Back', icon: Lxicon.arrowLeft, enabled: true, run() { } }]);
 	assert.deepEqual(

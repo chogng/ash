@@ -1,6 +1,6 @@
 import { IAccessibleViewService, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';

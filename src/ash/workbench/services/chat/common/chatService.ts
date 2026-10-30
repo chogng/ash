@@ -44,16 +44,16 @@ export type {
 } from '../../../../platform/agentHost/common/agent.js';
 import type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
 export type { ModelRef, AdvisorConfig, AdvisorSelection, ModelProviderCredentialStatus } from '../../../../platform/agentHost/common/agentModels.js';
-import type { Event } from "../../../../base/common/event.js";
-import { PRODUCT_SLASH_COMMANDS } from "../../../../../../.build/protocol/typescript/index.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { SkillReference } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { ModelReasoningEffort } from "./modelCatalog.js";
-import type { ResolvedChatContext } from "./chatContextService.js";
+import type { Event } from '../../../../base/common/event.js';
+import { PRODUCT_SLASH_COMMANDS } from '../../../../../../.build/protocol/typescript/index.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { SkillReference } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { ModelReasoningEffort } from './modelCatalog.js';
+import type { ResolvedChatContext } from './chatContextService.js';
 
 import type { ApprovalMode } from '../../../../platform/agentHost/common/approvalModes.js';
 
-export type { ModelCatalogEntry } from "./modelCatalog.js";
+export type { ModelCatalogEntry } from './modelCatalog.js';
 
 import type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint, AgentThreadHistoryState } from '../../../../platform/agentHost/common/agent.js';
 export type { SessionId, ThreadId, IMessageCheckpoint as ChatCheckpoint } from '../../../../platform/agentHost/common/agent.js';
@@ -87,7 +87,7 @@ export type { ApprovalMode } from '../../../../platform/agentHost/common/approva
 export interface SlashCommandDefinition {
 	readonly name: string;
 	readonly description: string;
-	readonly argumentMode: "none" | "optional";
+	readonly argumentMode: 'none' | 'optional';
 	readonly argumentHint?: string;
 }
 
@@ -158,9 +158,9 @@ export interface SteerTurnOptions extends ChatSubmissionOptions { readonly sessi
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse; }
 
-export type TurnChangeCaptureState = "open" | "sealed" | "incomplete" | "discarded";
-export type TurnChangeMessageState = "unconfigured" | "queued" | "generating" | "ready" | "failed";
-export type TurnChangeCommitState = "idle" | "queued" | "committing" | "committed" | "partiallyCommitted" | "conflict" | "failed";
+export type TurnChangeCaptureState = 'open' | 'sealed' | 'incomplete' | 'discarded';
+export type TurnChangeMessageState = 'unconfigured' | 'queued' | 'generating' | 'ready' | 'failed';
+export type TurnChangeCommitState = 'idle' | 'queued' | 'committing' | 'committed' | 'partiallyCommitted' | 'conflict' | 'failed';
 
 export interface TurnChangeSetSummary {
 	readonly changeSetId: string;
@@ -174,7 +174,7 @@ export interface TurnChangeSetSummary {
 	readonly messageState: TurnChangeMessageState;
 	readonly commitState: TurnChangeCommitState;
 	readonly committedPaths: readonly string[];
-	readonly terminalState?: "completed" | "failed" | "interrupted";
+	readonly terminalState?: 'completed' | 'failed' | 'interrupted';
 	readonly dependencies: readonly string[];
 	readonly externalDependencyPaths: readonly string[];
 	readonly warnings: readonly string[];
@@ -187,7 +187,7 @@ export interface TurnChangeSetSummary {
 export interface TurnChangeFile {
 	readonly path: string;
 	readonly previousPath?: string;
-	readonly kind: "added" | "modified" | "deleted" | "renamed" | "typeChanged";
+	readonly kind: 'added' | 'modified' | 'deleted' | 'renamed' | 'typeChanged';
 	readonly beforeMode?: string;
 	readonly afterMode?: string;
 	readonly binary: boolean;
@@ -317,4 +317,4 @@ export interface IChatService {
 	discardThreadChanges(sessionId: SessionId, threadId: ThreadId, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
 }
 
-export const IChatService = createServiceIdentifier<IChatService>("chatService");
+export const IChatService = createServiceIdentifier<IChatService>('chatService');

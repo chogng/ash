@@ -195,7 +195,7 @@ suite('Desktop terminal exit revival', () => {
 		}, { 'terminal.integrated.persistentSessionReviveProcess': policy, 'terminal.integrated.enablePersistentSessions': enabled });
 		scope.services.get(INativeHostService).listWindows = async () => [{ id: 1, title: 'Only window', current: true, focused: true }];
 		const instance = await scope.create();
-		instance.serializeState = async () => { effects.push('serialize'); return exitSnapshot(instance); };
+		instance.serializeState = async options => { assert.deepEqual(options, { revive: true }); effects.push('serialize'); return exitSnapshot(instance); };
 		const storage = scope.services.get(IStorageService);
 		await storage.flush();
 		const flush = storage.flush.bind(storage);

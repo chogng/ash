@@ -1,7 +1,7 @@
-import ts from "typescript";
+import ts from 'typescript';
 
 const conventionalUiClassPattern = /(?:Part|ViewPane|Widget)$/u;
-const explicitPrototypePatchMarker = "@ash-hot-reload patch-prototype";
+const explicitPrototypePatchMarker = '@ash-hot-reload patch-prototype';
 
 export interface HotReloadClassAnalysis {
 	readonly name: string;
@@ -19,7 +19,7 @@ export interface HotReloadModuleAnalysis {
 }
 
 /** Extracts the runtime-stable and initialization-sensitive surfaces of one Renderer module. */
-export function analyzeHotReloadModule(code: string, file = "module.ts"): HotReloadModuleAnalysis {
+export function analyzeHotReloadModule(code: string, file = 'module.ts'): HotReloadModuleAnalysis {
 	const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 	const explicitOptIn = code.includes(explicitPrototypePatchMarker);
 	const classes: HotReloadClassAnalysis[] = [];
@@ -85,9 +85,9 @@ function collectBindingNames(name: ts.BindingName, names: Set<string>): void {
 
 /** Explains why a change must rebuild the module rather than patch existing prototypes. */
 export function unsafeHotReloadChangeReason(previous: HotReloadModuleAnalysis, next: HotReloadModuleAnalysis): string | undefined {
-	if (previous.classNames.join("\0") !== next.classNames.join("\0")) return "persistent UI class set changed";
+	if (previous.classNames.join('\0') !== next.classNames.join('\0')) return 'persistent UI class set changed';
 	if (previous.widgetClassNames.length > 0 && previous.widgetClassNames.length !== previous.classNames.length) return 'module mixes recreated widgets and persistent UI classes';
-	if (JSON.stringify(previous.moduleBoundary) !== JSON.stringify(next.moduleBoundary)) return "module imports, exports, declarations, or side effects changed";
+	if (JSON.stringify(previous.moduleBoundary) !== JSON.stringify(next.moduleBoundary)) return 'module imports, exports, declarations, or side effects changed';
 	for (let index = 0; index < previous.classes.length; index += 1) {
 		const before = previous.classes[index];
 		const after = next.classes[index];

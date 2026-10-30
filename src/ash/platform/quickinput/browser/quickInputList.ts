@@ -1,13 +1,13 @@
 import { defaultCheckboxStyles, defaultKeybindingLabelStyles, defaultListStyles } from '../../theme/browser/defaultStyles.js';
 import { scoreFuzzy } from '../../../base/common/fuzzyScorer.js';
-import { List } from "../../../base/browser/ui/list/listWidget.js";
-import { KeybindingLabel } from "../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
-import { setRole } from "../../../base/browser/ui/aria/aria.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
-import type { IKeyMods, IQuickPickItem, IQuickPickItemButton, IQuickPickSeparator } from "../common/quickInput.js";
+import { List } from '../../../base/browser/ui/list/listWidget.js';
+import { KeybindingLabel } from '../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
+import { setRole } from '../../../base/browser/ui/aria/aria.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import type { IKeyMods, IQuickPickItem, IQuickPickItemButton, IQuickPickSeparator } from '../common/quickInput.js';
 import { QuickPickFocus } from '../common/quickInput.js';
-import { addDisposableListener, h, isElement, stopEvent } from "../../../base/browser/dom.js";
+import { addDisposableListener, h, isElement, stopEvent } from '../../../base/browser/dom.js';
 import { localize } from '../../../nls.js';
 import { appendIcon, getRegisteredIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
@@ -38,9 +38,10 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly headings = new Map<TItem, IQuickPickSeparator>();
 	public keyMods: IKeyMods = { ctrlCmd: false, alt: false, shift: false };
 	private _visibleItems: readonly TItem[] = [];
-	private singleLineRows: boolean;
+	private detailRowHeight = 44;
+	private measureDetails = false;
 	private maxHeight = Number.POSITIVE_INFINITY;
-	private query = "";
+	private query = '';
 	private _sortByLabel = true;
 	private multiple = false;
 	// Checked references survive filtering; List selection contains only visible rows.
@@ -77,25 +78,23 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
 	constructor(container: HTMLElement, private readonly presentation: 'quickPick' | 'menu' | 'compactMenu' = 'quickPick') {
 		super();
-		this.singleLineRows = presentation === 'quickPick';
 		const ownerDocument = container.ownerDocument;
-		this.element = h(ownerDocument, "div");
+		this.element = h(ownerDocument, 'div');
 		this.element.className = 'ash-quick-pick-list';
 		if (presentation !== 'quickPick') this.element.classList.add('ash-quick-pick-list-menu');
 		if (presentation === 'compactMenu') this.element.classList.add('ash-quick-pick-list-compact-menu');
 		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
 
-		const owner = this;
-		const singleLineHeight = () => 22;
+		const getRowHeight = (item: TItem): number => item.detail ? this.detailRowHeight : 22;
 		this.list = this._register(new List<TItem>(this.element, {
 			styles: defaultListStyles,
 			ariaLabel: localize('quickInput.results', 'Quick Pick results'),
 			domFocusable: true,
 			scrolling: 'managed',
-			// Details and menus retain their content-sized geometry. Ordinary results
-			// share the standard row height, so only the viewport needs DOM rows.
-			get getHeight() { return owner.singleLineRows ? singleLineHeight : undefined; },
+			// A detail line changes that row's height, not the virtualization of every result.
+			// Menus keep their content-sized geometry.
+			getHeight: presentation === 'quickPick' ? getRowHeight : undefined,
 			accessibilityProvider: {
 				getAriaSetSize: () => this._visibleItems.length,
 				getAriaPosInSet: item => this._visibleItems.indexOf(item) + 1,
@@ -107,7 +106,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 				this.rowCheckboxes.deleteAndDispose(row);
 			},
 		}));
-		this.list.element.classList.add("ash-quick-pick-list-items");
+		this.list.element.classList.add('ash-quick-pick-list-items');
 		if (presentation === 'quickPick') {
 			// Pointer focus still determines acceptance; only its visual treatment differs from keyboard focus.
 			this._register(addDisposableListener(this.list.element, 'mousemove', event => {
@@ -121,9 +120,9 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		}
 		this.list.domNode.classList.add('ash-quick-pick-list-scrollable');
 		this.list.domNode.hidden = true;
-		this.empty = h(ownerDocument, "div");
-		this.empty.className = "ash-quick-pick-empty";
-		setRole(this.empty, "status");
+		this.empty = h(ownerDocument, 'div');
+		this.empty.className = 'ash-quick-pick-empty';
+		setRole(this.empty, 'status');
 		this.empty.textContent = localize('quickInput.empty', 'No matching results');
 		this.empty.hidden = true;
 		this.element.append(this.empty);
@@ -223,6 +222,31 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	layout(maxHeight = this.maxHeight): void {
 		this.maxHeight = maxHeight;
 		if (this.list.domNode.hidden) return;
+		if (this.measureDetails && this.element.isConnected) {
+			const item = this._visibleItems.find(item => !!item.detail)!;
+			// Read the actual font metrics once for this result set. Measuring one natural
+			// row also works when the first detailed result is outside the viewport.
+			const sample = h(this.element.ownerDocument, 'div');
+			sample.className = 'ash-quick-pick-row-content';
+			sample.style.position = 'absolute';
+			sample.style.visibility = 'hidden';
+			const text = h(this.element.ownerDocument, 'span');
+			text.className = 'ash-quick-pick-row-text';
+			appendOptionalText(text, item.label, 'ash-quick-pick-row-label', this.element.ownerDocument);
+			appendOptionalText(text, item.description, 'ash-quick-pick-row-description', this.element.ownerDocument);
+			appendOptionalText(text, item.detail, 'ash-quick-pick-row-detail', this.element.ownerDocument);
+			sample.append(text);
+			this.list.element.append(sample);
+			const height = sample.getBoundingClientRect().height;
+			sample.remove();
+			if (height > 0) {
+				this.measureDetails = false;
+				if (height !== this.detailRowHeight) {
+					this.detailRowHeight = height;
+					this.list.items = this._visibleItems;
+				}
+			}
+		}
 		const contentHeight = this.list.element.scrollHeight;
 		this.element.classList.toggle('scrolling', contentHeight > maxHeight);
 		let height = Math.min(contentHeight, maxHeight);
@@ -260,8 +284,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			this._visibleItems = candidates.filter(item => matches.has(item));
 		}
 		const active = this.list.activeItem;
-		this.singleLineRows = this.presentation === 'quickPick' && !this._visibleItems.some(item => !!item.detail);
-		this.element.classList.toggle('ash-quick-pick-list-virtualized', this.singleLineRows);
+		this.measureDetails = this.presentation === 'quickPick' && this._visibleItems.some(item => !!item.detail);
+		this.element.classList.toggle('ash-quick-pick-list-virtualized', this.presentation === 'quickPick');
 		this.list.items = this._visibleItems;
 		// Item actions already provide Tab targets; otherwise the list needs its own.
 		this.list.element.tabIndex = this._visibleItems.some(item => item.buttons?.length) ? -1 : 0;
@@ -278,8 +302,8 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this.rowActions.deleteAndDispose(row);
 		this.rowCheckboxes.deleteAndDispose(row);
 		const ownerDocument = this.element.ownerDocument;
-		const content = h(ownerDocument, "div");
-		content.className = "ash-quick-pick-row-content";
+		const content = h(ownerDocument, 'div');
+		content.className = 'ash-quick-pick-row-content';
 		const index = this._visibleItems.indexOf(item);
 		const heading = this.headings.get(item);
 		if (heading && (index === 0 || this.headings.get(this._visibleItems[index - 1]) !== heading)) {
@@ -320,7 +344,12 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		} else {
 			row.removeAttribute('aria-checked');
 		}
-		if (item.iconClass) {
+		if (item.iconClasses?.length) {
+			const icon = h(ownerDocument, 'span');
+			icon.classList.add('ash-themed-file-icon', ...item.iconClasses);
+			icon.setAttribute('aria-hidden', 'true');
+			content.append(icon);
+		} else if (item.iconClass) {
 			const classes = item.iconClass.split(/\s+/).filter(Boolean);
 			const iconId = classes.find(name => name.startsWith('ash-icon-'))?.slice('ash-icon-'.length);
 			const registeredIcon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
@@ -329,23 +358,23 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			icon.setAttribute('aria-hidden', 'true');
 			content.append(icon);
 		}
-		const text = h(ownerDocument, "span");
-		text.className = "ash-quick-pick-row-text";
-		const label = h(ownerDocument, "span");
-		label.className = "ash-quick-pick-row-label";
+		const text = h(ownerDocument, 'span');
+		text.className = 'ash-quick-pick-row-text';
+		const label = h(ownerDocument, 'span');
+		label.className = 'ash-quick-pick-row-label';
 		label.textContent = item.label;
 		label.title = item.label;
 		text.append(label);
 		appendOptionalText(
 			text,
 			item.description,
-			"ash-quick-pick-row-description",
+			'ash-quick-pick-row-description',
 			ownerDocument,
 		);
 		appendOptionalText(
 			text,
 			item.detail,
-			"ash-quick-pick-row-detail",
+			'ash-quick-pick-row-detail',
 			ownerDocument,
 		);
 		content.append(text);
@@ -357,14 +386,15 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			appendIcon(Lxicon.check, check);
 			content.append(check);
 		}
-		if (item.keybinding) {
-			const keybinding = new KeybindingLabel(content, {
+		const keybinding = item.keybinding;
+		if (keybinding) {
+			const keybindingLabel = new KeybindingLabel(content, {
 				...defaultKeybindingLabelStyles,
-				keybinding: item.keybinding,
+				keybinding,
 				presentation: 'keycap',
 			});
-			keybinding.element.classList.add("ash-quick-pick-row-keybinding");
-			this.keybindingLabels.set(row, keybinding);
+			keybindingLabel.element.classList.add('ash-quick-pick-row-keybinding');
+			this.keybindingLabels.set(row, keybindingLabel);
 		}
 		if (item.buttons?.length) {
 			const buttons = item.buttons;
@@ -464,7 +494,7 @@ function scoreItem(
 ): number {
 	const label = normalize(item.label);
 	const searchable = normalize(
-		[item.label, item.description, item.detail].filter(Boolean).join(" "),
+		[item.label, item.description, item.detail].filter(Boolean).join(' '),
 	);
 	let score = 0;
 	for (const token of tokens) {
@@ -488,7 +518,7 @@ function appendOptionalText(
 	ownerDocument: Document,
 ): void {
 	if (!value) return;
-	const element = h(ownerDocument, "span");
+	const element = h(ownerDocument, 'span');
 	element.className = className;
 	element.textContent = value;
 	element.title = value;
@@ -496,5 +526,5 @@ function appendOptionalText(
 }
 
 function normalize(value: string): string {
-	return value.trim().toLocaleLowerCase("en-US");
+	return value.trim().toLocaleLowerCase('en-US');
 }

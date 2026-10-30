@@ -1,8 +1,8 @@
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { IPluginManagementApi } from "../../../../platform/extensionManagement/common/pluginManagementApi.js";
-import type { IPluginManagementService, PluginCatalogView, PluginInstallation, PluginPackageView } from "../../../../platform/extensionManagement/common/pluginManagementService.js";
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { IPluginManagementApi } from '../../../../platform/extensionManagement/common/pluginManagementApi.js';
+import type { IPluginManagementService, PluginCatalogView, PluginInstallation, PluginPackageView } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { ILocalGitService } from '../../../../platform/git/common/localGitService.js';
 import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -27,7 +27,7 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 	) {
 		super();
 		const subscription = events.subscribe(event => {
-			if (event.method === "plugin/changed") this._onDidChange.fire(event.params.revision);
+			if (event.method === 'plugin/changed') this._onDidChange.fire(event.params.revision);
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 	}
@@ -140,23 +140,23 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 	}
 
 	async enable(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.enable(command("enable", plugin, revision));
+		await this.api.enable(command('enable', plugin, revision));
 	}
 
 	async disable(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.disable(command("disable", plugin, revision));
+		await this.api.disable(command('disable', plugin, revision));
 	}
 
 	async grant(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.grant(command("grant", plugin, revision));
+		await this.api.grant(command('grant', plugin, revision));
 	}
 
 	async revokeGrant(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.revokeGrant(command("revoke", plugin, revision));
+		await this.api.revokeGrant(command('revoke', plugin, revision));
 	}
 
 	async uninstall(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.uninstall(command("uninstall", plugin, revision));
+		await this.api.uninstall(command('uninstall', plugin, revision));
 	}
 }
 

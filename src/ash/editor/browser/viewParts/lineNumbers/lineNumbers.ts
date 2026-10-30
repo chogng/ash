@@ -1,9 +1,9 @@
-import "./lineNumbers.css";
+import './lineNumbers.css';
 import { htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 import { EditorOption, type InternalEditorRenderLineNumbersOptions, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
-import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
+import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type IViewModel } from '../../../common/viewModel.js';
-import { type RenderingContext } from "../../view/renderingContext.js";
+import { type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import * as viewEvents from '../../../common/viewEvents.js';

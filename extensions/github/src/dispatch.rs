@@ -347,6 +347,17 @@ pub(crate) async fn dispatch(client: &GitHub, request: GitHubRequest) -> Result<
             .review_diff(&repository, number, &commit, page)
             .await
             .map(GitHubResponse::ReviewDiff),
+        GitHubRequest::RepositoryTree {
+            repository,
+            reference,
+        } => client
+            .repository_tree(&repository, &reference)
+            .await
+            .map(GitHubResponse::RepositoryTree),
+        GitHubRequest::RepositoryBlob { repository, sha } => client
+            .repository_blob(&repository, &sha)
+            .await
+            .map(GitHubResponse::RepositoryBlob),
         GitHubRequest::FileContent {
             repository,
             commit,
@@ -406,10 +417,9 @@ pub(crate) async fn dispatch(client: &GitHub, request: GitHubRequest) -> Result<
             .mark_notifications_read()
             .await
             .map(GitHubResponse::MarkNotificationsRead),
-        GitHubRequest::ManagedSettings => client
-            .managed_settings()
-            .await
-            .map(GitHubResponse::ManagedSettings),
+        GitHubRequest::ManagedSettings { .. } => Err(Error::InvalidInput(
+            "Managed settings require the provider-owned refresh store".into(),
+        )),
         GitHubRequest::ReporterSearch { .. } | GitHubRequest::ReporterSubmit { .. } => Err(
             Error::InvalidInput("reporter requires its product target".into()),
         ),

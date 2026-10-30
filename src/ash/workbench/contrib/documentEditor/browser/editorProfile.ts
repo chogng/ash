@@ -3,13 +3,13 @@ import { DocumentEditorPane } from './documentEditorPane.js';
 import type { EditorPaneCreationOptions } from '../../../browser/parts/editor/editorPane.js';
 import { AppServerDocumentCollaborationService } from '../../../services/documentCollaboration/browser/appServerDocumentCollaborationService.js';
 import { DocumentCollaborationService } from '../../../services/documentCollaboration/browser/documentCollaborationService.js';
-import type { EditorPaneOptions } from "./documentEditorPane.js";
+import type { EditorPaneOptions } from './documentEditorPane.js';
 
 export interface EditorRuntimeOptions {
 	readonly providerSignal?: AbortSignal;
 	readonly modelCompatibility?: string;
 	readonly onSave?: () => Promise<void | boolean>;
-	readonly createDocumentCollaborationService?: EditorPaneOptions["createDocumentCollaborationService"];
+	readonly createDocumentCollaborationService?: EditorPaneOptions['createDocumentCollaborationService'];
 }
 
 /** Materializes one profile into pane options while keeping Workbench services at the composition root. */

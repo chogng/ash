@@ -31,6 +31,9 @@ import { IWorkspaceTrustApi } from '../../../../platform/workspace/common/worksp
 import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { ConfigurationTarget, IConfigurationService, type IConfigurationOverrides } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../platform/contextview/browser/contextViewService.js';
+import { BrowserContextMenuService } from '../../../../platform/contextview/browser/contextMenuService.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacks.js';
 import type { IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -97,6 +100,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private searchWidget: SettingsSearchWidget | undefined;
 	private visible = false;
 	private sectionToReveal: string | undefined;
+	private sectionSearch: SettingsPageRenderer['sectionSearch'];
 	private target = ConfigurationTarget.USER_LOCAL;
 	private folderUri: URI | undefined;
 	private targetControls!: HTMLDivElement;
@@ -247,6 +251,10 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		container.append(rootDomNode);
 		super.create(rootDomNode);
 		this.rootDomNode = rootDomNode;
+		// Model menus and their submenus share the Settings pane's overlay lifetime and layer.
+		const modelViews = this._register(new BrowserContextViewService(rootDomNode));
+		const modelServices = this._register(this.instantiationService.createChild(new ServiceCollection([IContextViewService, modelViews])));
+		modelServices.registerInstance(IContextMenuService, this._register(modelServices.createInstance(BrowserContextMenuService)));
 
 		const initialCategory = SettingsCategories[0];
 		if (!initialCategory) throw new Error('Settings requires at least one category');
@@ -263,7 +271,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this._register(this.instantiationService.createInstance(NetworkSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(SearchSettingsModel)), AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings)),
 			this._register(this.instantiationService.createInstance(AdvisorSettingsRenderer, settingsContent)),
-			this._register(this.instantiationService.createInstance(ModelSettingsRenderer, settingsContent)),
+			this._register(modelServices.createInstance(ModelSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(DictationSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, {
 				categoryId: 'hooks',
@@ -288,6 +296,13 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this.rebuildContent();
 		for (const content of this.contents) {
 			this._register(content.onDidChange(() => this.rebuildContent()));
+			if (content.onDidRequestReveal) {
+				this._register(content.onDidRequestReveal(() => {
+					this.searchWidget!.value = '';
+					this.search('');
+					this.treeModel.setNavigationTarget(content.categoryId);
+				}));
+			}
 		}
 		this.treeModel.setNavigationTarget(initialCategory.id);
 		this.settingsTree = this._register(new SettingsTree(settingsContent, {
@@ -449,6 +464,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	}
 
 	public setOptions(options: IOpenSettingsOptions): void {
+		this.sectionSearch = undefined;
 		const target = options.target === ConfigurationTarget.USER ? ConfigurationTarget.USER_LOCAL : options.target ?? this.target;
 		const folderUri = target === ConfigurationTarget.WORKSPACE_FOLDER ? options.folderUri ?? this.folderUri : undefined;
 		if (target !== this.target || folderUri?.toString() !== this.folderUri?.toString()) {
@@ -464,6 +480,10 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			let root = target;
 			while (root.parent?.element) root = root.parent;
 			const category = this.settingsLayout.find(candidate => candidate.id === root.element.id)!.descriptor;
+			if (options.sectionQuery !== undefined) {
+				this.sectionSearch = this.contents.find(content => content.categoryId === category.id)?.sectionSearch;
+				if (!this.sectionSearch) { throw new RangeError(localize({ bundle: 'ash.settings', key: 'open.unsupportedSectionSearch' }, 'This Settings section does not provide its own search.')); }
+			}
 			this.searchWidget!.value = '';
 			this.search('');
 			this.renderCategory(category);
@@ -474,6 +494,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this.searchWidget!.value = options.query;
 			if (!options.preserveFocus && options.focusSearch !== false) this.focus();
 		}
+		if (options.sectionQuery !== undefined) { this.sectionSearch!.search(options.sectionQuery); }
 		if (!options.preserveFocus && options.focusSearch === true) this.focus();
 	}
 
@@ -496,7 +517,8 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 
 	public override focus(): void {
 		if (!this.visible) return;
-		this.searchWidget?.focus();
+		if (this.sectionSearch) { this.sectionSearch.focus(); }
+		else { this.searchWidget?.focus(); }
 	}
 
 	private revealSection(): void {
@@ -510,6 +532,10 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 
 	private search(text: string): void {
 		const query = new SettingsSearchQuery(text);
+		if (query.isEmpty) {
+			// Keep browsing scoped while replacing target-bound controls; hidden categories need no widgets.
+			this.settingsTree.setNavigationTarget(this.treeModel.has(this.activeCategory.id) ? this.activeCategory.id : undefined);
+		}
 		const overrides = { resource: this.folderUri, overrideIdentifier: query.languageFilter };
 		if (this.widgetOptions.configurationTarget !== this.target
 			|| this.widgetOptions.configurationOverrides.resource?.toString() !== overrides.resource?.toString()
@@ -531,9 +557,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this.folderTargetButton.setTitle(this.folderTargetButton.label);
 		this.targetLanguage.textContent = query.languageFilter ? this.languageService.getLanguageName(query.languageFilter) ?? query.languageFilter : '';
 		this.targetLanguage.hidden = !query.languageFilter;
-		// Search is global: release the browsing scope before deriving results or empty state.
-		this.settingsTree.setNavigationTarget(undefined);
 		this.treeModel.setQuery(query);
+		// Apply the global query before releasing the browsing scope to avoid an unfiltered render.
+		if (!query.isEmpty) this.settingsTree.setNavigationTarget(undefined);
 		this.rebuildContent();
 		this.settingsTree.setNavigationTarget(query.isEmpty && this.treeModel.has(this.activeCategory.id) ? this.activeCategory.id : undefined);
 		this.updateSearchPresentation();

@@ -1,7 +1,7 @@
-import { commonPrefixLength, commonSuffixLength } from "../../../../base/common/strings.js";
-import { OffsetRange } from "../ranges/offsetRange.js";
-import { StringText } from "../text/abstractText.js";
-import { BaseEdit, BaseReplacement } from "./edit.js";
+import { commonPrefixLength, commonSuffixLength } from '../../../../base/common/strings.js';
+import { OffsetRange } from '../ranges/offsetRange.js';
+import { StringText } from '../text/abstractText.js';
+import { BaseEdit, BaseReplacement } from './edit.js';
 
 /** String-specialized edit operations, including inverse and rebase helpers. */
 export abstract class BaseStringEdit<T extends BaseStringReplacement<T> = BaseStringReplacement<any>, TEdit extends BaseStringEdit<T, TEdit> = BaseStringEdit<any, any>> extends BaseEdit<T, TEdit> {
@@ -10,7 +10,7 @@ export abstract class BaseStringEdit<T extends BaseStringReplacement<T> = BaseSt
 	}
 
 	static trySwap(first: BaseStringEdit, second: BaseStringEdit): { e1: StringEdit; e2: StringEdit; } | undefined {
-		const firstInverse = first.inverseOnSlice((start, endEx) => " ".repeat(endEx - start));
+		const firstInverse = first.inverseOnSlice((start, endEx) => ' '.repeat(endEx - start));
 		const rebasedFirst = second.tryRebase(firstInverse);
 		if (!rebasedFirst) return undefined;
 		const rebasedSecond = first.tryRebase(rebasedFirst);
@@ -25,7 +25,7 @@ export abstract class BaseStringEdit<T extends BaseStringReplacement<T> = BaseSt
 			sourceOffset = replacement.replaceRange.endExclusive;
 		}
 		result.push(base.slice(sourceOffset));
-		return result.join("");
+		return result.join('');
 	}
 
 	applyOnText(text: StringText): StringText { return new StringText(this.apply(text.value)); }
@@ -127,7 +127,7 @@ export class StringEdit extends BaseStringEdit<StringReplacement, StringEdit> {
 	static single(replacement: StringReplacement): StringEdit { return new StringEdit([replacement]); }
 	static replace(range: OffsetRange, text: string): StringEdit { return new StringEdit([new StringReplacement(range, text)]); }
 	static insert(offset: number, text: string): StringEdit { return StringEdit.replace(OffsetRange.emptyAt(offset), text); }
-	static delete(range: OffsetRange): StringEdit { return StringEdit.replace(range, ""); }
+	static delete(range: OffsetRange): StringEdit { return StringEdit.replace(range, ''); }
 	static parse(value: string): StringEdit {
 		const replacements: StringReplacement[] = [];
 		const matcher = /\[(\d+),\s*(\d+)\)\s*->\s*"((?:\\.|[^"\\])*)"/g;
@@ -160,7 +160,7 @@ export interface ISerializedStringReplacement { readonly txt: string; readonly p
 export class StringReplacement extends BaseStringReplacement<StringReplacement> {
 	static insert(offset: number, text: string): StringReplacement { return new StringReplacement(OffsetRange.emptyAt(offset), text); }
 	static replace(range: OffsetRange, text: string): StringReplacement { return new StringReplacement(range, text); }
-	static delete(range: OffsetRange): StringReplacement { return new StringReplacement(range, ""); }
+	static delete(range: OffsetRange): StringReplacement { return new StringReplacement(range, ''); }
 	static fromJson(value: ISerializedStringReplacement): StringReplacement { return new StringReplacement(OffsetRange.ofStartAndLength(value.pos, value.len), value.txt); }
 
 	equals(other: StringReplacement): boolean { return this.replaceRange.equals(other.replaceRange) && this.newText === other.newText; }
@@ -201,7 +201,7 @@ export class AnnotatedStringEdit<T extends IEditData<T>> extends BaseStringEdit<
 	static single<T extends IEditData<T>>(replacement: AnnotatedStringReplacement<T>): AnnotatedStringEdit<T> { return new AnnotatedStringEdit([replacement]); }
 	static replace<T extends IEditData<T>>(range: OffsetRange, text: string, data: T): AnnotatedStringEdit<T> { return new AnnotatedStringEdit([new AnnotatedStringReplacement(range, text, data)]); }
 	static insert<T extends IEditData<T>>(offset: number, text: string, data: T): AnnotatedStringEdit<T> { return AnnotatedStringEdit.replace(OffsetRange.emptyAt(offset), text, data); }
-	static delete<T extends IEditData<T>>(range: OffsetRange, data: T): AnnotatedStringEdit<T> { return AnnotatedStringEdit.replace(range, "", data); }
+	static delete<T extends IEditData<T>>(range: OffsetRange, data: T): AnnotatedStringEdit<T> { return AnnotatedStringEdit.replace(range, '', data); }
 	static compose<T extends IEditData<T>>(edits: readonly AnnotatedStringEdit<T>[]): AnnotatedStringEdit<T> { return edits.reduce((result, edit) => result.compose(edit), AnnotatedStringEdit.empty as AnnotatedStringEdit<T>); }
 	constructor(replacements: readonly AnnotatedStringReplacement<T>[]) { super(replacements); }
 	protected _createNew(replacements: readonly AnnotatedStringReplacement<T>[]): AnnotatedStringEdit<T> { return new AnnotatedStringEdit(replacements); }

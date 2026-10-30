@@ -1,13 +1,13 @@
 import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
 import type { IURLCallbackProvider } from '../services/url/browser/urlService.js';
 import type { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
-import type { IDisposable } from "../../base/common/lifecycle.js";
-import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
-import type { ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
+import type { IDisposable } from '../../base/common/lifecycle.js';
+import type { IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import type { ShutdownReason } from '../services/lifecycle/common/lifecycle.js';
 import type {
 	IAnyWorkspaceIdentifier,
-} from "../../platform/workspace/common/workspace.js";
-import type { WorkbenchDefaultLayout } from "./layout.js";
+} from '../../platform/workspace/common/workspace.js';
+import type { WorkbenchDefaultLayout } from './layout.js';
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 import type { IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';

@@ -44,4 +44,14 @@ Supply an executable for each additional supported target with another `target=p
 
 The opt-in Desktop publisher corpus installs and authorizes this optional package through a test-owned signed HTTPS registry before opening PDFs in the Agents Window. The synthetic annotation scenario also verifies that the same installation exposes neither a PDF reader nor its setting in the IDE. Set `ASH_PDF_VIEWER_DISTRIBUTION` to a signed distribution directory and `ASH_PDF_VIEWER_TRUSTED_ROOT` to its pinned public root, then run `pnpm test:app:pdf-corpus`. Supply a native executable for the current test host; the runner does not reuse an installed user profile or substitute a built-in viewer. This network/Electron corpus remains a separate platform acceptance scenario.
 
-The local acceptance covers a real SDK process, Chromium rendering and canvas pixels, source-byte preservation, saved sidecar reload, read-only/retired panes, localized labels, integrity rejection and stylesheet release. Signed-package installation separately exercises search, download, admission, exact consent, revocation and uninstall through the product launcher. Real Electron multi-window, remote files, physical screen readers and other OS targets remain part of the extension/document-host acceptance scope in the root TODO.
+The local acceptance covers a real SDK process, Chromium rendering and canvas pixels, source-byte preservation, saved sidecar reload, read-only/retired panes, localized labels, integrity rejection and stylesheet release. Signed-package installation separately exercises search, download, admission, exact consent, revocation and uninstall through the product launcher.
+
+On 2026-10-30, all 13 PDF pane/annotation unit cases and the real SDK process test passed on
+Windows x64. The process fixture now uses a finite 60-second invocation deadline instead of
+`u64::MAX`, matching the SDK contract. `just verify ash-pdf-viewer` passed check, tests and
+all-target warnings; logs are `.build/todo-code-audit-pdf-host.log` and
+`.build/todo-code-audit-pdf-runtime-verify.log`.
+Shared-host code acceptance is recorded in
+[extension validation](../../docs/editor-extensions.md#10-实现证据与验证).
+This run did not exercise signed distribution installation, real Electron multi-window/remote
+use, physical screen readers or other OS targets; these remain coverage limits.

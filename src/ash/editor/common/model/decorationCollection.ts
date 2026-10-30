@@ -1,14 +1,14 @@
-import { Position } from "../core/position.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { Range } from "../core/range.js";
-import { TextModel } from "./textModel.js";
+import { Position } from '../core/position.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Range } from '../core/range.js';
+import { TextModel } from './textModel.js';
 import { type IModelDecorationOptions, TrackedRangeStickiness } from '../model.js';
 
 declare const textDecorationIdBrand: unique symbol;
 
 export type TextDecorationId = number & {
-	readonly [textDecorationIdBrand]: "TextDecorationId";
+	readonly [textDecorationIdBrand]: 'TextDecorationId';
 };
 
 export interface TextDecorationSpec<TMetadata> {
@@ -25,8 +25,8 @@ export interface TextDecorationSnapshot<TMetadata> {
 }
 
 export enum TextDecorationChangeReason {
-	Content = "content",
-	Range = "range",
+	Content = 'content',
+	Range = 'range',
 }
 
 export interface TextDecorationChange<TMetadata> {
@@ -150,7 +150,7 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 			if (!entry) throw new RangeError(`Unknown text decoration ${id}`);
 			return entry;
 		});
-		if (new Set(previousIds).size !== previousIds.length) throw new RangeError("Text decoration delta contains duplicate IDs");
+		if (new Set(previousIds).size !== previousIds.length) throw new RangeError('Text decoration delta contains duplicate IDs');
 		if (previousIds.length === 0 && specs.length === 0) return Object.freeze([]);
 
 		const modelDecorationIds = this.model.deltaDecorations(

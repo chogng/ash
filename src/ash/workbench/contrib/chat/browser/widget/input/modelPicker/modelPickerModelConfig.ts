@@ -1,12 +1,53 @@
 import { localize } from '../../../../../../../nls.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 
-/** The toolbar shows thinking level when available and otherwise signals model options. */
+/** The toolbar shows thinking level and an explicitly selected acceleration mode. */
 export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
+	const values: string[] = [];
 	if (entry.supportedReasoningEfforts?.length) {
-		return modelPickerEffortLabel(selectedEffort ?? entry.defaultReasoningEffort);
+		values.push(modelPickerEffortLabel(selectedEffort ?? entry.defaultReasoningEffort));
 	}
-	return entry.longContext !== null ? localize('chat.modelPicker.configuration', 'Model options') : '';
+	if (entry.selectedAcceleration) {
+		const acceleration = modelPickerAccelerationOptions(entry).find(option => option.value === entry.selectedAcceleration);
+		if (acceleration) { values.push(acceleration.label); }
+	}
+	if (values.length) { return values.join(' · '); }
+	return entry.longContext !== null || entry.accelerationOptions?.length ? localize('chat.modelPicker.configuration', 'Model options') : '';
+}
+
+/** The catalog already reflects connection availability; preserve each provider's exact option ID. */
+export function modelPickerAccelerationOptions(entry: ModelCatalogEntry): readonly {
+	value: string | null;
+	label: string;
+	description?: string;
+	checked: boolean;
+}[] {
+	if (!entry.accelerationOptions?.length) { return []; }
+	return [
+		{ value: null, label: localize('chat.modelPicker.defaultAcceleration', 'Default'), checked: entry.selectedAcceleration === null || entry.selectedAcceleration === undefined },
+		...entry.accelerationOptions.map(option => ({
+			value: option.id,
+			label: accelerationLabel(option.name),
+			description: accelerationDescription(option.description),
+			checked: option.id === entry.selectedAcceleration,
+		})),
+	];
+}
+
+function accelerationLabel(name: string): string {
+	switch (name) {
+		case 'Fast': return localize('chat.modelPicker.fast', 'Fast');
+		case 'Ultra Fast': return localize('chat.modelPicker.ultraFast', 'Ultra Fast');
+		default: return name;
+	}
+}
+
+function accelerationDescription(description: string): string {
+	switch (description) {
+		case 'Faster responses, increased usage': return localize('chat.modelPicker.fastDescription', 'Faster responses, increased usage');
+		case 'Priority processing, increased usage': return localize('chat.modelPicker.priorityDescription', 'Priority processing, increased usage');
+		default: return description;
+	}
 }
 
 export function getModelConfigValueLabel(tokens: number): string {

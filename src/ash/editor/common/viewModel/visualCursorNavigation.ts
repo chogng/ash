@@ -1,9 +1,9 @@
-import { clamp } from "../../../base/common/numbers.js";
-import { Selection } from "../core/selection.js";
-import { Position } from "../core/position.js";
-import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
-import { type TextModel } from "../model/textModel.js";
-import { type EditorVisualLineProjection } from "./modelLineProjection.js";
+import { clamp } from '../../../base/common/numbers.js';
+import { Selection } from '../core/selection.js';
+import { Position } from '../core/position.js';
+import { getTextGraphemeBoundaries } from '../core/textSegmentation.js';
+import { type TextModel } from '../model/textModel.js';
+import { type EditorVisualLineProjection } from './modelLineProjection.js';
 
 export enum EditorCursorNavigationCommand {
 	CharacterLeft = 'characterLeft',
@@ -172,27 +172,27 @@ function primaryFirst(selections: readonly Selection[], primaryIndex: number): r
 
 function validateRequest(model: TextModel, projection: EditorVisualLineProjection, selections: readonly Selection[], request: VisualCursorNavigationRequest, measureTextWidth: (text: string) => number): void {
 	if (projection.modelVersion !== model.version) {
-		throw new Error("Visual cursor navigation requires the current text model projection");
+		throw new Error('Visual cursor navigation requires the current text model projection');
 	}
 	if (!isVisualVerticalCommand(request.command)) {
-		throw new TypeError("Visual cursor navigation requires a vertical command");
+		throw new TypeError('Visual cursor navigation requires a vertical command');
 	}
 	if (!Object.values(EditorCursorNavigationMode).includes(request.mode)) {
-		throw new TypeError("Unknown editor cursor navigation mode");
+		throw new TypeError('Unknown editor cursor navigation mode');
 	}
 	if (!Number.isSafeInteger(request.pageLineCount) || request.pageLineCount < 1) {
-		throw new RangeError("Visual cursor navigation page line count must be a positive safe integer");
+		throw new RangeError('Visual cursor navigation page line count must be a positive safe integer');
 	}
-	if (typeof measureTextWidth !== "function") {
-		throw new TypeError("Visual cursor navigation requires a text measurement function");
+	if (typeof measureTextWidth !== 'function') {
+		throw new TypeError('Visual cursor navigation requires a text measurement function');
 	}
 	if (request.preferredHorizontalOffsets && (request.preferredHorizontalOffsets.length !== selections.length || request.preferredHorizontalOffsets.some(offset => !Number.isFinite(offset) || offset < 0))) {
-		throw new RangeError("Visual cursor navigation preferred horizontal offsets must match selections");
+		throw new RangeError('Visual cursor navigation preferred horizontal offsets must match selections');
 	}
 	for (const selection of selections) model.offsetAt(selection.getPosition());
 }
 
-function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is VisualCursorNavigationRequest["command"] {
+function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is VisualCursorNavigationRequest['command'] {
 	return command === EditorCursorNavigationCommand.LineUp ||
 		command === EditorCursorNavigationCommand.LineDown ||
 		command === EditorCursorNavigationCommand.PageUp ||

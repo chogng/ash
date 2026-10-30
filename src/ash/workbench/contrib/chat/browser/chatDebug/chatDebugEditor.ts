@@ -1,3 +1,4 @@
+import { Orientation } from '../../../../../base/browser/ui/sash/sash.js';
 import {
 	defaultButtonStyles,
 	defaultCountBadgeStyles,
@@ -347,10 +348,10 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 	}
 
 	private configureSplit(narrow: boolean): void {
-		if (this.split.value?.orientation === (narrow ? 'vertical' : 'horizontal')) { return; }
+		if (this.split.value?.orientation === (narrow ? Orientation.VERTICAL : Orientation.HORIZONTAL)) { return; }
 		// Pane roots and widget owners survive orientation changes; only the Sash layout is replaced.
 		this.navigationDomNode.remove(); this.inspectorDomNode.remove();
-		this.split.value = new SplitView(this.bodyDomNode, narrow ? 'vertical' : 'horizontal', { styles: { separatorBorder: 'var(--ash-widget-border)' } });
+		this.split.value = new SplitView(this.bodyDomNode, { proportionalLayout: false, orientation: narrow ? Orientation.VERTICAL : Orientation.HORIZONTAL, styles: { separatorBorder: 'var(--ash-widget-border)' } });
 		this.split.value.addView({ element: this.navigationDomNode, minimumSize: narrow ? 120 : 200, maximumSize: Number.POSITIVE_INFINITY, layout: (size, _offset, other) => this.layoutNavigation(narrow ? other : size, narrow ? size : other) }, (narrow ? this.dimension.height : this.dimension.width) * 0.35);
 		this.split.value.addView({ element: this.inspectorDomNode, minimumSize: narrow ? 160 : 240, maximumSize: Number.POSITIVE_INFINITY, layout: (size, _offset, other) => this.layoutInspector(narrow ? other : size, narrow ? size : other) }, (narrow ? this.dimension.height : this.dimension.width) * 0.65);
 	}
@@ -508,7 +509,9 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			this.statusDomNode.textContent = localize('agentTrace.imported', 'Imported · {0}', file.name);
 			this.render();
 		} catch (error) {
-			if (revision === this.revision && selection === this.importSelection && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); }
+			if (revision === this.revision && selection === this.importSelection && !this.isDisposed) {
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
+			}
 		}
 	}
 
@@ -803,7 +806,11 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 			const blob = new Blob([serialized], { type: 'application/json' });
 			if (blob.size > 64 * 1024 * 1024) { throw new Error(localize('agentTrace.fileSize', 'Trace files must be smaller than 64 MiB.')); }
 			triggerDownload(blob, 'session.agent-trace.json', this.domNode.ownerDocument);
-		} catch (error) { if (revision === this.revision && !this.isDisposed) { this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error)); } }
+		} catch (error) {
+			if (revision === this.revision && !this.isDisposed) {
+				this.statusDomNode.textContent = localize('agentTrace.failed', 'Could not load trace: {0}', String(error));
+			}
+		}
 		finally {
 			// An older export must not unlock a replacement input's operation.
 			if (this.exportOperation === operation) {

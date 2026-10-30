@@ -1,12 +1,12 @@
 import './testEditorDom.js';
 import { h } from '../../../base/browser/dom.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from "../../common/viewModel/pointerHitTest.js";
-import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
-import { Position } from "../../common/core/position.js";
-import { TextModel } from "../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../../common/viewModel/pointerHitTest.js';
+import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
+import { Position } from '../../common/core/position.js';
+import { TextModel } from '../../common/model/textModel.js';
 import { ContentWidgetPositionPreference, type IContentWidget, type IEditorMouseEvent, type IViewZoneChangeAccessor, MouseTargetType } from '../../browser/editorBrowser.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
@@ -21,7 +21,7 @@ class FixedTextMeasurer implements TextMeasurer {
 	measureLineWidth(text: string): number {
 		let width = 0;
 		for (const character of text) {
-			if (character === "\t") {
+			if (character === '\t') {
 				width = (Math.floor(width / 40) + 1) * 40;
 			} else {
 				width += 10;
@@ -31,8 +31,8 @@ class FixedTextMeasurer implements TextMeasurer {
 	}
 }
 
-test("Pointer hit testing distinguishes gutter, text, empty content, and lines", () => {
-	using model = new TextModel("a\tb\n😀a\n");
+test('Pointer hit testing distinguishes gutter, text, empty content, and lines', () => {
+	using model = new TextModel('a\tb\n😀a\n');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, Array.from({ length: model.lineCount }, (_, index) => [model.getLineContent(index + 1).length]));
 	const measurer = new FixedTextMeasurer();
 	const layout = {
@@ -118,8 +118,8 @@ test("Pointer hit testing distinguishes gutter, text, empty content, and lines",
 	});
 });
 
-test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
-	using model = new TextModel("first\n😀a\nthird");
+test('Pointer hit testing applies sticky gutter and viewport scrolling', () => {
+	using model = new TextModel('first\n😀a\nthird');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, Array.from({ length: model.lineCount }, (_, index) => [model.getLineContent(index + 1).length]));
 	const layout = {
 		lineHeight: 20,
@@ -155,7 +155,7 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 });
 
 const { TestView: View } = await import(
-	"./viewModel/testViewModel.js"
+	'./viewModel/testViewModel.js'
 );
 test('View zones expose one accessor lifetime and stable pointer identity', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -213,12 +213,12 @@ test('Content widget pointer identity comes from the registered widget owner', (
 	dom.window.close();
 });
 
-test("Viewport maps client coordinates through its bounds and scroll state", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = dom.window.document.querySelector("main");
+test('Viewport maps client coordinates through its bounds and scroll state', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = dom.window.document.querySelector('main');
 	assert.ok(container);
 	using model = new TextModel(
-		Array.from({ length: 20 }, () => "abcdefghij".repeat(3)).join("\n"),
+		Array.from({ length: 20 }, () => 'abcdefghij'.repeat(3)).join('\n'),
 	);
 	using viewport = new View({
 		container,

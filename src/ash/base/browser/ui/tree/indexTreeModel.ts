@@ -1,8 +1,8 @@
-import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable } from "../../../common/lifecycle.js";
-import { TreeVisibility, type AbstractTreeNode, type IndexTreeLocation, type TreeElement, type TreeFilter, type TreeFilterResult, type TreeVisibleSplice } from "./tree.js";
+import { Emitter, type Event } from '../../../common/event.js';
+import { Disposable } from '../../../common/lifecycle.js';
+import { TreeVisibility, type AbstractTreeNode, type IndexTreeLocation, type TreeElement, type TreeFilter, type TreeFilterResult, type TreeVisibleSplice } from './tree.js';
 
-export type IndexTreeModelChangeKind = "structure" | "collapse" | "filter" | "rerender";
+export type IndexTreeModelChangeKind = 'structure' | 'collapse' | 'filter' | 'rerender';
 
 export interface IndexTreeNode<T> extends AbstractTreeNode<T> {
 	readonly parent: IndexTreeNode<T> | undefined;
@@ -15,7 +15,7 @@ export interface IndexTreeIdentityProvider<T> {
 }
 
 export interface IndexTreeModelOptions<T> {
-	readonly defaultCollapseState?: "collapsed" | "expanded";
+	readonly defaultCollapseState?: 'collapsed' | 'expanded';
 	readonly filter?: TreeFilter<T>;
 	readonly identityProvider?: IndexTreeIdentityProvider<T>;
 	readonly preserveCollapseStateByIdentity?: boolean;
@@ -57,7 +57,7 @@ export class IndexTreeModel<T> extends Disposable {
 	private readonly _onDidChange = this._register(new Emitter<IndexTreeModelChangeEvent<T>>());
 	private readonly _onDidChangeCollapseState = this._register(new Emitter<IndexTreeModelCollapseStateChangeEvent<T>>());
 	private readonly root: MutableIndexTreeNode<T>;
-	private readonly defaultCollapseState: "collapsed" | "expanded";
+	private readonly defaultCollapseState: 'collapsed' | 'expanded';
 	private readonly identityProvider: IndexTreeIdentityProvider<T> | undefined;
 	private readonly preserveCollapseStateByIdentity: boolean;
 	private filter: TreeFilter<T> | undefined;
@@ -70,12 +70,12 @@ export class IndexTreeModel<T> extends Disposable {
 
 	constructor(rootElement: T, options: IndexTreeModelOptions<T> = {}) {
 		super();
-		this.defaultCollapseState = options.defaultCollapseState ?? "expanded";
+		this.defaultCollapseState = options.defaultCollapseState ?? 'expanded';
 		this.filter = options.filter;
 		this.identityProvider = options.identityProvider;
 		this.preserveCollapseStateByIdentity = options.preserveCollapseStateByIdentity ?? false;
 		this.root = {
-			id: "__ash_index_tree_root__",
+			id: '__ash_index_tree_root__',
 			element: rootElement,
 			parent: undefined,
 			children: [],
@@ -126,12 +126,12 @@ export class IndexTreeModel<T> extends Disposable {
 	}
 
 	splice(location: IndexTreeLocation, deleteCount: number, toInsert: readonly TreeElement<T>[] = []): void {
-		if (location.length === 0) throw new RangeError("IndexTree splice location must address a child position");
-		if (!Number.isInteger(deleteCount) || deleteCount < 0) throw new RangeError("IndexTree deleteCount must be a non-negative integer");
+		if (location.length === 0) throw new RangeError('IndexTree splice location must address a child position');
+		if (!Number.isInteger(deleteCount) || deleteCount < 0) throw new RangeError('IndexTree deleteCount must be a non-negative integer');
 		const parentLocation = location.slice(0, -1);
 		const parent = this.requireMutableNode(parentLocation);
 		const start = location[location.length - 1]!;
-		if (!Number.isInteger(start) || start < 0 || start > parent.children.length) throw new RangeError(`Invalid IndexTree splice position: ${location.join("/")}`);
+		if (!Number.isInteger(start) || start < 0 || start > parent.children.length) throw new RangeError(`Invalid IndexTree splice position: ${location.join('/')}`);
 		const boundedDeleteCount = Math.min(deleteCount, parent.children.length - start);
 		const deleted = parent.children.slice(start, start + boundedDeleteCount);
 		const oldVisibleRange = this.visibleDescendantRange(parent);
@@ -140,7 +140,7 @@ export class IndexTreeModel<T> extends Disposable {
 		const insertedIds = new Set<string>();
 		const prepare = (element: TreeElement<T>): PreparedTreeElement<T> => {
 			const id = this.identityProvider?.getId(element.element) ?? `index-tree-node-${++this.generatedId}`;
-			if (!id.trim()) throw new TypeError("Tree node IDs must not be empty");
+			if (!id.trim()) throw new TypeError('Tree node IDs must not be empty');
 			if (insertedIds.has(id) || this.nodesById.has(id) && !deletedById.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
 			insertedIds.add(id);
 			return { ...element, id, children: (element.children ?? []).map(prepare) };
@@ -163,7 +163,7 @@ export class IndexTreeModel<T> extends Disposable {
 			for (const node of inserted) this.markSubtreeVisible(node);
 			visibleSplice = this.refreshVisibleBranch(parent, oldVisibleRange);
 		}
-		this._onDidChange.fire({ kind: "structure", node: parent === this.root ? undefined : parent, visibleSplice });
+		this._onDidChange.fire({ kind: 'structure', node: parent === this.root ? undefined : parent, visibleSplice });
 	}
 
 	collapse(location: IndexTreeLocation): boolean { return this.updateCollapsed(location, true); }
@@ -189,7 +189,7 @@ export class IndexTreeModel<T> extends Disposable {
 		}
 		if (changed.length === 0) return false;
 		const visibleSplice = this.refreshVisibleBranch(changed[changed.length - 1]!);
-		this._onDidChange.fire({ kind: "collapse", node: this.requireNode(location), visibleSplice });
+		this._onDidChange.fire({ kind: 'collapse', node: this.requireNode(location), visibleSplice });
 		for (const changedNode of changed) this._onDidChangeCollapseState.fire({ node: changedNode, collapsed: false });
 		return true;
 	}
@@ -202,11 +202,11 @@ export class IndexTreeModel<T> extends Disposable {
 
 	refilter(): void {
 		this.recomputeVisibleNodes();
-		this._onDidChange.fire({ kind: "filter", node: undefined });
+		this._onDidChange.fire({ kind: 'filter', node: undefined });
 	}
 
 	rerender(location?: IndexTreeLocation): void {
-		this._onDidChange.fire({ kind: "rerender", node: location === undefined ? undefined : this.requireNode(location) });
+		this._onDidChange.fire({ kind: 'rerender', node: location === undefined ? undefined : this.requireNode(location) });
 	}
 
 	private buildNodes(elements: readonly PreparedTreeElement<T>[], parent: MutableIndexTreeNode<T>, previous: ReadonlyMap<string, MutableIndexTreeNode<T>>): MutableIndexTreeNode<T>[] {
@@ -234,7 +234,7 @@ export class IndexTreeModel<T> extends Disposable {
 			node.declaredCollapsible = treeElement.collapsible;
 			node.children = this.buildNodes(treeElement.children, node, previous);
 			node.collapsible = treeElement.collapsible ?? node.children.length > 0;
-			node.collapsed = node.collapsible ? oldNode?.collapsed ?? treeElement.collapsed ?? this.defaultCollapseState === "collapsed" : false;
+			node.collapsed = node.collapsible ? oldNode?.collapsed ?? treeElement.collapsed ?? this.defaultCollapseState === 'collapsed' : false;
 			return node;
 		});
 	}
@@ -244,7 +244,7 @@ export class IndexTreeModel<T> extends Disposable {
 		if (node === this.root || !node.collapsible || node.collapsed === collapsed) return false;
 		node.collapsed = collapsed;
 		const visibleSplice = this.refreshVisibleBranch(node);
-		this._onDidChange.fire({ kind: "collapse", node, visibleSplice });
+		this._onDidChange.fire({ kind: 'collapse', node, visibleSplice });
 		this._onDidChangeCollapseState.fire({ node, collapsed });
 		return true;
 	}
@@ -262,7 +262,7 @@ export class IndexTreeModel<T> extends Disposable {
 		visit(root);
 		if (changed.length === 0) return false;
 		const visibleSplice = this.refreshVisibleBranch(root);
-		this._onDidChange.fire({ kind: "collapse", node: root === this.root ? undefined : root, visibleSplice });
+		this._onDidChange.fire({ kind: 'collapse', node: root === this.root ? undefined : root, visibleSplice });
 		for (const node of changed) this._onDidChangeCollapseState.fire({ node, collapsed });
 		return true;
 	}
@@ -389,7 +389,7 @@ export class IndexTreeModel<T> extends Disposable {
 
 	private requireMutableNode(location: IndexTreeLocation): MutableIndexTreeNode<T> {
 		const node = this.findNode(location);
-		if (!node) throw new RangeError(`Unknown IndexTree location: ${location.join("/")}`);
+		if (!node) throw new RangeError(`Unknown IndexTree location: ${location.join('/')}`);
 		return node;
 	}
 }

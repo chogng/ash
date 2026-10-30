@@ -97,22 +97,22 @@ export interface EditorToolbarAction {
 }
 
 const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: string; }[] = [
-	{ id: "paragraph", label: "Paragraph" },
-	{ id: "heading", label: "Heading" },
-	{ id: "blockquote", label: "Blockquote" },
-	{ id: "bulletList", label: "Bullet list" },
-	{ id: "orderedList", label: "Ordered list" },
-	{ id: "horizontalRule", label: "Rule" },
-	{ id: "link", label: "Link" },
-	{ id: "unlink", label: "Unlink" },
-	{ id: "table", label: "Table" },
-	{ id: "insertTableRow", label: "Add row" },
-	{ id: "insertTableColumn", label: "Add column" },
-	{ id: "deleteTableRow", label: "Delete row" },
-	{ id: "deleteTableColumn", label: "Delete column" },
+	{ id: 'paragraph', label: 'Paragraph' },
+	{ id: 'heading', label: 'Heading' },
+	{ id: 'blockquote', label: 'Blockquote' },
+	{ id: 'bulletList', label: 'Bullet list' },
+	{ id: 'orderedList', label: 'Ordered list' },
+	{ id: 'horizontalRule', label: 'Rule' },
+	{ id: 'link', label: 'Link' },
+	{ id: 'unlink', label: 'Unlink' },
+	{ id: 'table', label: 'Table' },
+	{ id: 'insertTableRow', label: 'Add row' },
+	{ id: 'insertTableColumn', label: 'Add column' },
+	{ id: 'deleteTableRow', label: 'Delete row' },
+	{ id: 'deleteTableColumn', label: 'Delete column' },
 ];
 
-type CommandFocusBehavior = "focus-editor" | "preserve-focus";
+type CommandFocusBehavior = 'focus-editor' | 'preserve-focus';
 
 interface RichTextEditorInput {
 	readonly resource: URI;
@@ -153,10 +153,10 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	create(parent: HTMLElement): void {
-		if (this.container) throw new ReferenceError("Document editor has already been created");
+		if (this.container) throw new ReferenceError('Document editor has already been created');
 		for (const install of this.options.contributions ?? []) {
 			install({
-				kind: "document",
+				kind: 'document',
 				container: parent,
 				documentActions: [...DEFAULT_DOCUMENT_ACTIONS, ...(this.options.toolbarActions?.map(action => ({ id: action.id, label: action.label })) ?? [])],
 				onToggleMark: markType => this.handleTextMarkAction(markType),
@@ -189,8 +189,8 @@ export class RichTextEditorWidget extends Disposable {
 			for (const contribution of this.formattingContributions) contribution.handleKeydown?.(event);
 		}));
 		const editorDom = this._register(new EditorDom({
-			rootClassName: "ash-text-editor-widget-layout",
-			contentClassName: "ash-text-editor-widget-pane",
+			rootClassName: 'ash-text-editor-widget-layout',
+			contentClassName: 'ash-text-editor-widget-pane',
 		}));
 		parent.append(...this.formattingContributions.map(contribution => contribution.element));
 		editorDom.attach(parent);
@@ -204,9 +204,9 @@ export class RichTextEditorWidget extends Disposable {
 		this.pageView = this._register(new DocumentPageView(container, () => this.relayoutPages()));
 		this.outlineNavigator = outlineNavigator;
 		const onSelectionChange = () => this.syncDocumentSelection();
-		parent.ownerDocument.addEventListener("selectionchange", onSelectionChange);
+		parent.ownerDocument.addEventListener('selectionchange', onSelectionChange);
 		this._register(toDisposable(() => {
-			parent.ownerDocument.removeEventListener("selectionchange", onSelectionChange);
+			parent.ownerDocument.removeEventListener('selectionchange', onSelectionChange);
 			outlineNavigator?.dispose();
 			for (const contribution of this.formattingContributions) contribution.element.remove();
 			this.formattingContributions.length = 0;
@@ -272,7 +272,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	focus(): void {
-		this.container?.querySelector<HTMLElement>("textarea, .stanza-document-rich-text-input")?.focus();
+		this.container?.querySelector<HTMLElement>('textarea, .stanza-document-rich-text-input')?.focus();
 	}
 
 	exportArtifact(format: string, signal: AbortSignal): Promise<Uint8Array> {
@@ -305,7 +305,9 @@ export class RichTextEditorWidget extends Disposable {
 				if (this.isReadOnly() || this.composition) throw new Error(localize('document.api.readOnly', 'The document is read-only or input is still being composed.'));
 				const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 				if (!blockId) throw new Error(localize('document.api.selection', 'Choose an editable document position first.'));
-				const selection = model.selection?.kind === 'all' || model.selection?.kind === 'node' ? model.selection : this.readActiveDocumentTextSelection(model, blockId) ?? model.selection;
+				const selection = model.selection?.kind === 'all' || model.selection?.kind === 'node'
+					? model.selection
+					: this.readActiveDocumentTextSelection(model, blockId) ?? model.selection;
 				const result = handler({ model, blockId, selection }, payload);
 				signal.throwIfAborted();
 				if (result.command) this.dispatchCommand(model, result.command, undefined, 'preserve-focus');
@@ -327,12 +329,12 @@ export class RichTextEditorWidget extends Disposable {
 		const model = this.model;
 		const container = this.container;
 		if (!model || !container) return;
-		const target = Array.from(container.querySelectorAll<HTMLElement>("[data-node-id]")).find(element => element.dataset.nodeId === nodeId);
+		const target = Array.from(container.querySelectorAll<HTMLElement>('[data-node-id]')).find(element => element.dataset.nodeId === nodeId);
 		if (!target) return;
-		target.scrollIntoView?.({ block: "nearest" });
+		target.scrollIntoView?.({ block: 'nearest' });
 		const node = findNode(model.document, nodeId);
-		if (node?.type === "paragraph" || node?.type === "heading") {
-			this.focusBlockAtBoundary(model, nodeId, "forward");
+		if (node?.type === 'paragraph' || node?.type === 'heading') {
+			this.focusBlockAtBoundary(model, nodeId, 'forward');
 			return;
 		}
 		target.focus();
@@ -343,7 +345,7 @@ export class RichTextEditorWidget extends Disposable {
 		const model = this.model;
 		if (!model || this.composition) return;
 		const previousElements = new Map<string, HTMLElement>();
-		for (const element of container.querySelectorAll<HTMLElement>("[data-node-id]")) {
+		for (const element of container.querySelectorAll<HTMLElement>('[data-node-id]')) {
 			if (element.dataset.nodeId) previousElements.set(element.dataset.nodeId, element);
 		}
 		const activeNodeIds = new Set<string>();
@@ -407,7 +409,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private renderNode(node: DocumentNode, model: DocumentTextModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): HTMLElement {
 		const document = this.requireContainer().ownerDocument;
-		const nodeKind = model.schema.getNodeSpec(node.type)?.kind ?? "block";
+		const nodeKind = model.schema.getNodeSpec(node.type)?.kind ?? 'block';
 		activeNodeIds.add(node.id);
 		const nodeView = this.options.nodeViews?.[node.type];
 		if (nodeView) {
@@ -434,63 +436,63 @@ export class RichTextEditorWidget extends Disposable {
 			created.element.dataset.nodeKind = nodeKind;
 			return created.element;
 		}
-		if (node.type === "horizontalRule") {
-			const rule = this.reuseElement(node, previousElements, document, "hr");
+		if (node.type === 'horizontalRule') {
+			const rule = this.reuseElement(node, previousElements, document, 'hr');
 			rule.dataset.nodeId = node.id;
-			rule.className = "stanza-document-horizontal-rule";
+			rule.className = 'stanza-document-horizontal-rule';
 			return rule;
 		}
 		const element = this.reuseElement(node, previousElements, document, nodeElementTagName(node));
 		element.dataset.nodeId = node.id;
 		element.dataset.nodeKind = nodeKind;
 		switch (node.type) {
-			case "paragraph":
-				element.className = "stanza-document-paragraph";
+			case 'paragraph':
+				element.className = 'stanza-document-paragraph';
 				this.appendEditableText(element, node, model, decorations);
 				break;
-			case "heading":
-				element.className = "stanza-document-heading";
+			case 'heading':
+				element.className = 'stanza-document-heading';
 				element.dataset.level = String(node.attrs.level ?? 1);
 				element.setAttribute('aria-level', String(node.attrs.level ?? 1));
 				this.appendEditableText(element, node, model, decorations);
 				break;
-			case "codeBlock":
-				element.className = "stanza-document-code-block";
-				element.dataset.editorKind = "code-block";
+			case 'codeBlock':
+				element.className = 'stanza-document-code-block';
+				element.dataset.editorKind = 'code-block';
 				this.appendEditableText(element, node, model, decorations);
 				break;
-			case "blockquote":
-				element.className = "stanza-document-blockquote";
+			case 'blockquote':
+				element.className = 'stanza-document-blockquote';
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
-			case "bulletList":
-			case "orderedList":
-				element.className = node.type === "bulletList" ? "stanza-document-list stanza-document-list-bullet" : "stanza-document-list stanza-document-list-ordered";
+			case 'bulletList':
+			case 'orderedList':
+				element.className = node.type === 'bulletList' ? 'stanza-document-list stanza-document-list-bullet' : 'stanza-document-list stanza-document-list-ordered';
 				if (node.type === 'orderedList') {
 					(element as HTMLOListElement).start = Number(node.attrs.order ?? 1);
 					element.style.listStyleType = String(node.attrs.numbering ?? 'decimal');
 				}
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
-			case "listItem":
-				element.className = "stanza-document-list-item";
+			case 'listItem':
+				element.className = 'stanza-document-list-item';
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
-			case "table":
-				element.className = "stanza-document-table";
+			case 'table':
+				element.className = 'stanza-document-table';
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
-			case "tableRow":
-				element.className = "stanza-document-table-row";
+			case 'tableRow':
+				element.className = 'stanza-document-table-row';
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
-			case "tableCell":
-				element.className = "stanza-document-table-cell";
+			case 'tableCell':
+				element.className = 'stanza-document-table-cell';
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 			default:
 				element.className = documentNodeKindClassName(nodeKind);
-				if (nodeKind === "line") this.appendEditableText(element, node, model, decorations);
+				if (nodeKind === 'line') this.appendEditableText(element, node, model, decorations);
 				else this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 		}
@@ -530,20 +532,20 @@ export class RichTextEditorWidget extends Disposable {
 			return;
 		}
 		const textNode = node.content.find(child => child.text !== undefined);
-		let textarea = element.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
+		let textarea = element.querySelector<HTMLTextAreaElement>('textarea.stanza-document-text-input');
 		if (!textarea && element.childElementCount > 0) element.replaceChildren();
 		const isNew = !textarea;
-		textarea ??= h(element.ownerDocument, "textarea");
-		textarea.className = "stanza-document-text-input";
+		textarea ??= h(element.ownerDocument, 'textarea');
+		textarea.className = 'stanza-document-text-input';
 		textarea.dataset.blockId = node.id;
 		textarea.readOnly = this.isReadOnly();
-		textarea.setAttribute("aria-label", editableBlockAriaLabel(node));
-		textarea.setAttribute("aria-readonly", String(textarea.readOnly));
-		const nextValue = textNode?.text ?? "";
+		textarea.setAttribute('aria-label', editableBlockAriaLabel(node));
+		textarea.setAttribute('aria-readonly', String(textarea.readOnly));
+		const nextValue = textNode?.text ?? '';
 		if (textarea.value !== nextValue) textarea.value = nextValue;
-		textarea.rows = Math.max(1, textarea.value.split("\n").length);
+		textarea.rows = Math.max(1, textarea.value.split('\n').length);
 		if (!isNew) return;
-		textarea.addEventListener("focus", () => {
+		textarea.addEventListener('focus', () => {
 			this.activeBlockId = node.id;
 			this.updateToolbar();
 		});
@@ -551,27 +553,27 @@ export class RichTextEditorWidget extends Disposable {
 			if (this.model !== model) return;
 			const start = textarea.selectionStart ?? 0;
 			const end = textarea.selectionEnd ?? start;
-			if (model.selection?.kind === "all" && start === 0 && end === textarea.value.length) return;
+			if (model.selection?.kind === 'all' && start === 0 && end === textarea.value.length) return;
 			const selection = createTextareaDocumentTextSelection(model.document, node.id, textarea);
 			if (selection) model.setSelection(selection);
 		};
-		textarea.addEventListener("select", syncTextareaSelection);
-		textarea.addEventListener("mouseup", syncTextareaSelection);
-		textarea.addEventListener("keydown", event => this.handleTextKeydown(event, node, model, textarea));
-		textarea.addEventListener("paste", event => this.handleTextPaste(event, model, node.id, textarea));
-		textarea.addEventListener("copy", event => this.handleTextClipboard(event, model, node.id, textarea, false));
-		textarea.addEventListener("cut", event => this.handleTextClipboard(event, model, node.id, textarea, true));
-		textarea.addEventListener("compositionstart", () => this.beginComposition(model, node.id, textarea, createTextareaDocumentTextSelection(model.document, node.id, textarea)));
-		textarea.addEventListener("compositionend", event => this.endComposition(event, textarea));
-		textarea.addEventListener("compositioncancel", () => this.cancelComposition(textarea));
-		textarea.addEventListener("input", () => {
+		textarea.addEventListener('select', syncTextareaSelection);
+		textarea.addEventListener('mouseup', syncTextareaSelection);
+		textarea.addEventListener('keydown', event => this.handleTextKeydown(event, node, model, textarea));
+		textarea.addEventListener('paste', event => this.handleTextPaste(event, model, node.id, textarea));
+		textarea.addEventListener('copy', event => this.handleTextClipboard(event, model, node.id, textarea, false));
+		textarea.addEventListener('cut', event => this.handleTextClipboard(event, model, node.id, textarea, true));
+		textarea.addEventListener('compositionstart', () => this.beginComposition(model, node.id, textarea, createTextareaDocumentTextSelection(model.document, node.id, textarea)));
+		textarea.addEventListener('compositionend', event => this.endComposition(event, textarea));
+		textarea.addEventListener('compositioncancel', () => this.cancelComposition(textarea));
+		textarea.addEventListener('input', () => {
 			const currentModel = this.model;
 			if (currentModel !== model) return;
 			if (this.isReadOnly()) return;
 			if (this.composition?.element === textarea) return;
-			if (currentModel.selection?.kind === "all") {
+			if (currentModel.selection?.kind === 'all') {
 				const command = createReplaceTextCommand(currentModel.schema, currentModel.document, node.id, currentModel.selection, textarea.value, documentInsertionMarks(currentModel, currentModel.selection));
-				if (command) this.dispatchCommand(currentModel, command, "typing");
+				if (command) this.dispatchCommand(currentModel, command, 'typing');
 				return;
 			}
 			const currentNode = findNode(currentModel.document, node.id);
@@ -585,11 +587,11 @@ export class RichTextEditorWidget extends Disposable {
 				currentModel.dispatch(new DocumentTransaction()
 					.insertNode(node.id, 0, inserted)
 					.withSelection(textSelection({ nodeId: inserted.id, offset: selectionEnd }))
-					.withHistoryGroup("typing"));
+					.withHistoryGroup('typing'));
 			} else {
 				let transaction = new DocumentTransaction().replaceText(currentText.id, 0, currentText.text?.length ?? 0, textarea.value, documentInsertionMarks(currentModel, currentModel.selection));
 				if (textarea.value.length > 0) transaction = transaction.withSelection(textSelection({ nodeId: currentText.id, offset: selectionEnd }));
-				currentModel.dispatch(transaction.withHistoryGroup("typing").withMeta('review.author', this.reviewAuthor));
+				currentModel.dispatch(transaction.withHistoryGroup('typing').withMeta('review.author', this.reviewAuthor));
 			}
 			const nextTextarea = findTextArea(this.requireContainer(), node.id);
 			if (!nextTextarea) this.restoreModelFocus(currentModel, currentModel.selection);
@@ -602,35 +604,35 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private appendRichText(element: HTMLElement, node: DocumentNode, model: DocumentTextModel, decorations: readonly ViewDecoration[]): void {
-		let editor = element.querySelector<HTMLDivElement>("div.stanza-document-rich-text-input");
+		let editor = element.querySelector<HTMLDivElement>('div.stanza-document-rich-text-input');
 		if (!editor) {
-			const createdEditor = h(element.ownerDocument, "div");
+			const createdEditor = h(element.ownerDocument, 'div');
 			editor = createdEditor;
-			createdEditor.className = "stanza-document-rich-text-input";
+			createdEditor.className = 'stanza-document-rich-text-input';
 			createdEditor.dataset.blockId = node.id;
-			createdEditor.contentEditable = this.isReadOnly() ? "false" : "true";
-			createdEditor.setAttribute("aria-label", editableBlockAriaLabel(node));
-			createdEditor.setAttribute("aria-multiline", "true");
-			createdEditor.setAttribute("aria-readonly", String(this.isReadOnly()));
-			createdEditor.setAttribute("role", "textbox");
-			createdEditor.addEventListener("beforeinput", event => this.handleRichTextBeforeInput(event as InputEvent, model, createdEditor));
-			createdEditor.addEventListener("paste", event => this.handleRichTextPaste(event, model, createdEditor));
-			createdEditor.addEventListener("copy", event => this.handleRichTextClipboard(event, model, false));
-			createdEditor.addEventListener("cut", event => this.handleRichTextClipboard(event, model, true));
-			createdEditor.addEventListener("keydown", event => this.handleRichTextKeydown(event, node, model, createdEditor));
-			createdEditor.addEventListener("input", () => this.handleRichEditContext(createdEditor, model));
-			createdEditor.addEventListener("focus", () => this.syncRichDocumentTextSelection(createdEditor, model));
-			createdEditor.addEventListener("keyup", () => this.syncRichDocumentTextSelection(createdEditor, model));
-			createdEditor.addEventListener("mouseup", () => this.syncRichDocumentTextSelection(createdEditor, model, true));
-			createdEditor.addEventListener("compositionstart", () => this.beginComposition(model, node.id, createdEditor, readDocumentTextSelection(this.requireContainer(), true)?.selection ?? (model.selection?.kind === "text" ? model.selection : undefined)));
-			createdEditor.addEventListener("compositionend", event => this.endComposition(event, createdEditor));
-			createdEditor.addEventListener("compositioncancel", () => this.cancelComposition(createdEditor));
+			createdEditor.contentEditable = this.isReadOnly() ? 'false' : 'true';
+			createdEditor.setAttribute('aria-label', editableBlockAriaLabel(node));
+			createdEditor.setAttribute('aria-multiline', 'true');
+			createdEditor.setAttribute('aria-readonly', String(this.isReadOnly()));
+			createdEditor.setAttribute('role', 'textbox');
+			createdEditor.addEventListener('beforeinput', event => this.handleRichTextBeforeInput(event as InputEvent, model, createdEditor));
+			createdEditor.addEventListener('paste', event => this.handleRichTextPaste(event, model, createdEditor));
+			createdEditor.addEventListener('copy', event => this.handleRichTextClipboard(event, model, false));
+			createdEditor.addEventListener('cut', event => this.handleRichTextClipboard(event, model, true));
+			createdEditor.addEventListener('keydown', event => this.handleRichTextKeydown(event, node, model, createdEditor));
+			createdEditor.addEventListener('input', () => this.handleRichEditContext(createdEditor, model));
+			createdEditor.addEventListener('focus', () => this.syncRichDocumentTextSelection(createdEditor, model));
+			createdEditor.addEventListener('keyup', () => this.syncRichDocumentTextSelection(createdEditor, model));
+			createdEditor.addEventListener('mouseup', () => this.syncRichDocumentTextSelection(createdEditor, model, true));
+			createdEditor.addEventListener('compositionstart', () => this.beginComposition(model, node.id, createdEditor, readDocumentTextSelection(this.requireContainer(), true)?.selection ?? (model.selection?.kind === 'text' ? model.selection : undefined)));
+			createdEditor.addEventListener('compositionend', event => this.endComposition(event, createdEditor));
+			createdEditor.addEventListener('compositioncancel', () => this.cancelComposition(createdEditor));
 			element.replaceChildren(createdEditor);
 		}
 		editor.dataset.blockId = node.id;
-		editor.contentEditable = this.isReadOnly() ? "false" : "true";
-		editor.setAttribute("aria-readonly", String(this.isReadOnly()));
-		editor.setAttribute("aria-label", editableBlockAriaLabel(node));
+		editor.contentEditable = this.isReadOnly() ? 'false' : 'true';
+		editor.setAttribute('aria-readonly', String(this.isReadOnly()));
+		editor.setAttribute('aria-label', editableBlockAriaLabel(node));
 		this.renderInlineContent(editor, node, model, decorations);
 	}
 
@@ -638,8 +640,8 @@ export class RichTextEditorWidget extends Disposable {
 		const fragment = createFragment(editor.ownerDocument);
 		for (const child of node.content) {
 			if (child.text !== undefined) {
-				const linkMark = child.marks.find(mark => mark.type === "link");
-				const textStyleMark = child.marks.find(mark => mark.type === "textStyle");
+				const linkMark = child.marks.find(mark => mark.type === 'link');
+				const textStyleMark = child.marks.find(mark => mark.type === 'textStyle');
 				const start = documentPointToPosition(model.document, model.schema, { nodeId: child.id, offset: 0 });
 				const end = documentPointToPosition(model.document, model.schema, { nodeId: child.id, offset: child.text.length });
 				const localDecorations = decorations.filter(decoration => decoration.to > start && decoration.from < end);
@@ -654,17 +656,17 @@ export class RichTextEditorWidget extends Disposable {
 					const to = offsets[index + 1] ?? child.text.length;
 					if (to < from) continue;
 					const activeDecorations = localDecorations.filter(decoration => decoration.from < start + to && decoration.to > start + from).map(decoration => decoration.decoration);
-					const run = h(editor.ownerDocument, linkMark ? "a" : "span");
-					run.className = "stanza-document-inline-run";
+					const run = h(editor.ownerDocument, linkMark ? 'a' : 'span');
+					run.className = 'stanza-document-inline-run';
 					run.dataset.textNodeId = child.id;
 					for (const mark of child.marks) run.classList.add(`stanza-document-mark-${mark.type}`);
 					applyTextStyleMark(run, textStyleMark);
 					if (linkMark) {
 						const anchor = run as HTMLAnchorElement;
-						run.setAttribute("href", typeof linkMark.attrs.href === "string" ? linkMark.attrs.href : "");
+						run.setAttribute('href', typeof linkMark.attrs.href === 'string' ? linkMark.attrs.href : '');
 						run.tabIndex = 0;
 						run.title = localize('document.link.openHint', '{0}+click or {0}+Enter opens this link. You can also focus the link and press Enter.', isMacintosh ? '⌘' : 'Ctrl');
-						anchor.addEventListener("click", event => {
+						anchor.addEventListener('click', event => {
 							event.preventDefault();
 							if (event.metaKey || event.ctrlKey) { this.openLink(run.getAttribute('href')!); }
 						});
@@ -682,18 +684,18 @@ export class RichTextEditorWidget extends Disposable {
 				}
 				continue;
 			}
-			if (child.type === "hardBreak") {
-				fragment.append(h(editor.ownerDocument, "br"));
+			if (child.type === 'hardBreak') {
+				fragment.append(h(editor.ownerDocument, 'br'));
 				continue;
 			}
-			if (child.type === "image") {
-				const image = h(editor.ownerDocument, "img");
-				image.className = "stanza-document-inline-image";
+			if (child.type === 'image') {
+				const image = h(editor.ownerDocument, 'img');
+				image.className = 'stanza-document-inline-image';
 				image.dataset.inlineNodeId = child.id;
 				image.draggable = false;
-				image.alt = typeof child.attrs.alt === "string" ? child.attrs.alt : "";
-				image.src = typeof child.attrs.src === "string" ? child.attrs.src : "";
-				image.addEventListener("click", event => {
+				image.alt = typeof child.attrs.alt === 'string' ? child.attrs.alt : '';
+				image.src = typeof child.attrs.src === 'string' ? child.attrs.src : '';
+				image.addEventListener('click', event => {
 					event.preventDefault();
 					this.selectInlineNode(model, node.id, child.id, editor);
 				});
@@ -707,7 +709,7 @@ export class RichTextEditorWidget extends Disposable {
 			if (!inlineElement || inlineElement.nodeType !== 1) throw new TypeError(`Inline node view '${child.type}' must return an HTMLElement`);
 			inlineElement.dataset.inlineNodeId = child.id;
 			inlineElement.dataset.inlineNodeType = child.type;
-			inlineElement.addEventListener("click", event => {
+			inlineElement.addEventListener('click', event => {
 				event.preventDefault();
 				this.selectInlineNode(model, node.id, child.id, editor);
 			});
@@ -724,7 +726,7 @@ export class RichTextEditorWidget extends Disposable {
 		const node = findNode(model.document, blockId);
 		if (!node) return;
 		const textNodes = node.content.filter(child => child.text !== undefined);
-		const runs = Array.from(editor.querySelectorAll<HTMLElement>("[data-text-node-id]"));
+		const runs = Array.from(editor.querySelectorAll<HTMLElement>('[data-text-node-id]'));
 		const runsById = new Map<string, HTMLElement[]>();
 		for (const run of runs) {
 			const nodeId = run.dataset.textNodeId;
@@ -736,24 +738,24 @@ export class RichTextEditorWidget extends Disposable {
 		if (textNodes.every(textNode => runsById.has(textNode.id)) && runsById.size === textNodes.length) {
 			let transaction = new DocumentTransaction();
 			for (const textNode of textNodes) {
-				const nextText = (runsById.get(textNode.id) ?? []).map(run => run.textContent ?? "").join("");
+				const nextText = (runsById.get(textNode.id) ?? []).map(run => run.textContent ?? '').join('');
 				if (nextText !== textNode.text) transaction = transaction.replaceText(textNode.id, 0, textNode.text!.length, nextText);
 			}
-			if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup("typing").withMeta('review.author', this.reviewAuthor));
+			if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup('typing').withMeta('review.author', this.reviewAuthor));
 			return;
 		}
-		const text = editor.textContent ?? "";
+		const text = editor.textContent ?? '';
 		let transaction = new DocumentTransaction();
 		for (const textNode of textNodes) transaction = transaction.deleteNode(textNode.id);
 		if (text.length > 0) transaction = transaction.insertNode(node.id, 0, model.schema.createText(text, textNodes[0] ? { id: textNodes[0].id } : {}));
-		if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup("typing").withMeta('review.author', this.reviewAuthor));
+		if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup('typing').withMeta('review.author', this.reviewAuthor));
 	}
 
 	private beginComposition(model: DocumentTextModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: DocumentTextSelection | undefined): void {
-		if (this.isReadOnly() || this.model !== model || !selection || selection.kind !== "text") return;
+		if (this.isReadOnly() || this.model !== model || !selection || selection.kind !== 'text') return;
 		if (findTextBearingBlockId(model.document, selection.anchor.nodeId) !== blockId) return;
 		this.composition = { model, blockId, element, selection, baseText: readCompositionText(element), version: model.version };
-		if (model.selection?.kind !== "text" || model.selection.anchor.nodeId !== selection.anchor.nodeId || model.selection.anchor.offset !== selection.anchor.offset || model.selection.head.nodeId !== selection.head.nodeId || model.selection.head.offset !== selection.head.offset) model.setSelection(selection);
+		if (model.selection?.kind !== 'text' || model.selection.anchor.nodeId !== selection.anchor.nodeId || model.selection.anchor.offset !== selection.anchor.offset || model.selection.head.nodeId !== selection.head.nodeId || model.selection.head.offset !== selection.head.offset) model.setSelection(selection);
 	}
 
 	private endComposition(event: CompositionEvent, element: HTMLTextAreaElement | HTMLDivElement): void {
@@ -767,7 +769,7 @@ export class RichTextEditorWidget extends Disposable {
 		}
 		const currentText = readCompositionText(element);
 		let selection = composition.selection;
-		let replacement = event.data ?? "";
+		let replacement = event.data ?? '';
 		if (replacement.length === 0 && currentText !== composition.baseText) {
 			const diff = findCompositionDiff(composition.baseText, currentText);
 			const textNode = findSingleTextNodeInBlock(model.document, composition.blockId);
@@ -785,7 +787,7 @@ export class RichTextEditorWidget extends Disposable {
 			this.render();
 			return;
 		}
-		this.dispatchCommand(model, { ...command, transaction: command.transaction.withMeta("inputType", "insertCompositionText") }, "composition");
+		this.dispatchCommand(model, { ...command, transaction: command.transaction.withMeta('inputType', 'insertCompositionText') }, 'composition');
 	}
 
 	private cancelComposition(element: HTMLTextAreaElement | HTMLDivElement): void {
@@ -810,7 +812,7 @@ export class RichTextEditorWidget extends Disposable {
 			void this.insertPastedImage(model, blockId, image, createTextareaDocumentTextSelection(model.document, blockId, textarea));
 			return;
 		}
-		const selection = model.selection?.kind === "all" ? model.selection : createTextareaDocumentTextSelection(model.document, blockId, textarea);
+		const selection = model.selection?.kind === 'all' ? model.selection : createTextareaDocumentTextSelection(model.document, blockId, textarea);
 		const encodedFragment = event.clipboardData?.getData(DOCUMENT_FRAGMENT_CLIPBOARD_MIME);
 		if (encodedFragment && selection) {
 			let fragment;
@@ -826,7 +828,7 @@ export class RichTextEditorWidget extends Disposable {
 				return;
 			}
 		}
-		const externalHtml = event.clipboardData?.getData("text/html");
+		const externalHtml = event.clipboardData?.getData('text/html');
 		if (externalHtml && selection) {
 			const fragment = createDocumentFragmentFromHtml(this.requireContainer().ownerDocument, model.schema, externalHtml);
 			const command = fragment ? createInsertFragmentCommand(model.schema, model.document, blockId, selection, fragment) : undefined;
@@ -836,8 +838,8 @@ export class RichTextEditorWidget extends Disposable {
 				return;
 			}
 		}
-		if (model.selection?.kind !== "all") return;
-		const text = event.clipboardData?.getData("text/plain") ?? "";
+		if (model.selection?.kind !== 'all') return;
+		const text = event.clipboardData?.getData('text/plain') ?? '';
 		const command = createPasteTextCommand(model.schema, model.document, blockId, model.selection, text);
 		if (!command) return;
 		event.preventDefault();
@@ -858,7 +860,7 @@ export class RichTextEditorWidget extends Disposable {
 			return;
 		}
 		if (!blockId) return;
-		const selection = model.selection?.kind === "all" ? model.selection : readDocumentTextSelection(this.requireContainer(), true)?.selection;
+		const selection = model.selection?.kind === 'all' ? model.selection : readDocumentTextSelection(this.requireContainer(), true)?.selection;
 		const encodedFragment = event.clipboardData?.getData(DOCUMENT_FRAGMENT_CLIPBOARD_MIME);
 		let fragment;
 		if (encodedFragment) {
@@ -869,7 +871,7 @@ export class RichTextEditorWidget extends Disposable {
 			}
 		}
 		if (!fragment) {
-			const externalHtml = event.clipboardData?.getData("text/html");
+			const externalHtml = event.clipboardData?.getData('text/html');
 			if (externalHtml) fragment = createDocumentFragmentFromHtml(this.requireContainer().ownerDocument, model.schema, externalHtml);
 		}
 		const command = selection && fragment ? createInsertFragmentCommand(model.schema, model.document, blockId, selection, fragment) : undefined;
@@ -878,7 +880,7 @@ export class RichTextEditorWidget extends Disposable {
 			this.dispatchCommand(model, command);
 			return;
 		}
-		const text = event.clipboardData?.getData("text/plain") ?? "";
+		const text = event.clipboardData?.getData('text/plain') ?? '';
 		const textCommand = selection ? createPasteTextCommand(model.schema, model.document, blockId, selection, text, documentInsertionMarks(model, selection)) : undefined;
 		if (!textCommand) return;
 		event.preventDefault();
@@ -891,25 +893,25 @@ export class RichTextEditorWidget extends Disposable {
 			event.preventDefault();
 			return;
 		}
-		if (model.selection?.kind !== "all") {
+		if (model.selection?.kind !== 'all') {
 			const domSelection = readDocumentTextSelection(this.requireContainer(), true);
 			if (domSelection) model.setSelection(domSelection.selection);
 		}
 		const selection = model.selection;
-		if (!selection || (selection.kind === "text" && isCollapsedDocumentTextSelection(selection)) || selection.kind === "node") return;
+		if (!selection || (selection.kind === 'text' && isCollapsedDocumentTextSelection(selection)) || selection.kind === 'node') return;
 		const text = documentSelectionToText(model.document, selection);
 		if (text === undefined) return;
 		const fragment = extractDocumentFragment(model.schema, model.document, selection);
 		const encodedFragment = fragment ? serializeDocumentFragment(fragment, model.schema) : undefined;
 		let command: DocumentCommand | undefined;
 		if (cut) {
-			const blockId = selection.kind === "all" ? findFirstEditableBlock(model.document)?.id : findTextBearingBlockId(model.document, selection.anchor.nodeId);
+			const blockId = selection.kind === 'all' ? findFirstEditableBlock(model.document)?.id : findTextBearingBlockId(model.document, selection.anchor.nodeId);
 			if (!blockId) return;
-			command = createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, "");
+			command = createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, '');
 			if (!command) return;
 		}
 		event.preventDefault();
-		event.clipboardData?.setData("text/plain", text);
+		event.clipboardData?.setData('text/plain', text);
 		if (encodedFragment) event.clipboardData?.setData(DOCUMENT_FRAGMENT_CLIPBOARD_MIME, encodedFragment);
 		if (command) this.dispatchCommand(model, command);
 	}
@@ -920,23 +922,23 @@ export class RichTextEditorWidget extends Disposable {
 			event.preventDefault();
 			return;
 		}
-		if (model.selection?.kind !== "all") {
+		if (model.selection?.kind !== 'all') {
 			const selection = createTextareaDocumentTextSelection(model.document, blockId, textarea);
 			if (selection) model.setSelection(selection);
 		}
 		const selection = model.selection;
-		if (!selection || (selection.kind === "text" && isCollapsedDocumentTextSelection(selection)) || selection.kind === "node") return;
+		if (!selection || (selection.kind === 'text' && isCollapsedDocumentTextSelection(selection)) || selection.kind === 'node') return;
 		const text = documentSelectionToText(model.document, selection);
 		if (text === undefined) return;
 		const fragment = extractDocumentFragment(model.schema, model.document, selection);
 		const encodedFragment = fragment ? serializeDocumentFragment(fragment, model.schema) : undefined;
 		let command: DocumentCommand | undefined;
 		if (cut) {
-			command = createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, "");
+			command = createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, '');
 			if (!command) return;
 		}
 		event.preventDefault();
-		event.clipboardData?.setData("text/plain", text);
+		event.clipboardData?.setData('text/plain', text);
 		if (encodedFragment) event.clipboardData?.setData(DOCUMENT_FRAGMENT_CLIPBOARD_MIME, encodedFragment);
 		if (command) this.dispatchCommand(model, command);
 	}
@@ -960,25 +962,25 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private handleRichTextBeforeInput(event: InputEvent, model: DocumentTextModel, editor: HTMLDivElement): void {
-		if (this.isReadOnly() || this.model !== model || event.isComposing || event.inputType === "insertCompositionText" || event.inputType === "deleteCompositionText") return;
+		if (this.isReadOnly() || this.model !== model || event.isComposing || event.inputType === 'insertCompositionText' || event.inputType === 'deleteCompositionText') return;
 		const blockId = editor.dataset.blockId;
 		if (!blockId) return;
-		if (model.selection?.kind === "all") {
+		if (model.selection?.kind === 'all') {
 			let command: DocumentCommand | undefined;
-			if (event.inputType === "insertText" || event.inputType === "insertFromPaste" || event.inputType === "insertFromDrop") {
-				const text = event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
+			if (event.inputType === 'insertText' || event.inputType === 'insertFromPaste' || event.inputType === 'insertFromDrop') {
+				const text = event.data ?? event.dataTransfer?.getData('text/plain') ?? '';
 				const marks = documentInsertionMarks(model, model.selection);
-				command = event.inputType === "insertFromPaste" ? createPasteTextCommand(model.schema, model.document, blockId, model.selection, text, marks) : createReplaceTextCommand(model.schema, model.document, blockId, model.selection, text, marks);
-			} else if (event.inputType === "deleteContentBackward" || event.inputType === "deleteContentForward") {
+				command = event.inputType === 'insertFromPaste' ? createPasteTextCommand(model.schema, model.document, blockId, model.selection, text, marks) : createReplaceTextCommand(model.schema, model.document, blockId, model.selection, text, marks);
+			} else if (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward') {
 				command = createDeleteInlineSelectionCommand(model.schema, model.document, blockId, model.selection);
 			}
 			if (command) {
 				event.preventDefault();
-				this.dispatchCommand(model, command, event.inputType === "insertText" ? "typing" : undefined);
+				this.dispatchCommand(model, command, event.inputType === 'insertText' ? 'typing' : undefined);
 			}
 			return;
 		}
-		if (model.selection?.kind === "node" && isInlineNodeInBlock(model.document, blockId, model.selection.nodeId) && (event.inputType === "deleteContentBackward" || event.inputType === "deleteContentForward")) {
+		if (model.selection?.kind === 'node' && isInlineNodeInBlock(model.document, blockId, model.selection.nodeId) && (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward')) {
 			const command = createDeleteNodeSelectionCommand(model.document, model.selection);
 			if (command) {
 				event.preventDefault();
@@ -986,7 +988,7 @@ export class RichTextEditorWidget extends Disposable {
 			}
 			return;
 		}
-		if (event.inputType === "insertFromPaste") {
+		if (event.inputType === 'insertFromPaste') {
 			const image = findImageClipboardFile(event.dataTransfer);
 			if (image) {
 				event.preventDefault();
@@ -998,24 +1000,24 @@ export class RichTextEditorWidget extends Disposable {
 		if (!inlineSelection) return;
 		const selection = inlineSelection.selection;
 		let command: DocumentCommand | undefined;
-		if (event.inputType === "insertText" || event.inputType === "insertCompositionText" || event.inputType === "insertFromPaste" || event.inputType === "insertFromDrop") {
-			const text = event.data ?? event.dataTransfer?.getData("text/plain") ?? "";
+		if (event.inputType === 'insertText' || event.inputType === 'insertCompositionText' || event.inputType === 'insertFromPaste' || event.inputType === 'insertFromDrop') {
+			const text = event.data ?? event.dataTransfer?.getData('text/plain') ?? '';
 			const marks = documentInsertionMarks(model, selection);
-			if (text.length > 0) command = event.inputType === "insertFromPaste" && text.includes("\n")
+			if (text.length > 0) command = event.inputType === 'insertFromPaste' && text.includes('\n')
 				? createPasteTextCommand(model.schema, model.document, blockId, selection, text, marks)
 				: createReplaceTextCommand(model.schema, model.document, blockId, selection, text, marks);
-		} else if (event.inputType === "deleteContentBackward") {
-			command = createDeleteBoundaryCommand(model, blockId, selection, "backward");
-		} else if (event.inputType === "deleteContentForward") {
-			command = createDeleteBoundaryCommand(model, blockId, selection, "forward");
-		} else if (event.inputType === "insertLineBreak") {
+		} else if (event.inputType === 'deleteContentBackward') {
+			command = createDeleteBoundaryCommand(model, blockId, selection, 'backward');
+		} else if (event.inputType === 'deleteContentForward') {
+			command = createDeleteBoundaryCommand(model, blockId, selection, 'forward');
+		} else if (event.inputType === 'insertLineBreak') {
 			command = createInsertHardBreakCommand(model.schema, model.document, blockId, selection);
-		} else if (event.inputType === "insertParagraph" && isCollapsedDocumentTextSelection(selection)) {
+		} else if (event.inputType === 'insertParagraph' && isCollapsedDocumentTextSelection(selection)) {
 			command = createParagraphSplitCommand(model.schema, model.document, blockId, selection.anchor.nodeId, selection.anchor.offset);
 		}
 		if (!command) return;
 		event.preventDefault();
-		const historyGroup = event.inputType === "insertText" ? "typing" : event.inputType === "deleteContentBackward" ? "delete-backward" : event.inputType === "deleteContentForward" ? "delete-forward" : undefined;
+		const historyGroup = event.inputType === 'insertText' ? 'typing' : event.inputType === 'deleteContentBackward' ? 'delete-backward' : event.inputType === 'deleteContentForward' ? 'delete-forward' : undefined;
 		this.dispatchCommand(model, command, historyGroup);
 	}
 
@@ -1024,7 +1026,7 @@ export class RichTextEditorWidget extends Disposable {
 		const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
 		if (inlineSelection && !isDocumentTextSelectionInDocument(model.document, inlineSelection.selection)) return;
 		this.activeBlockId = inlineSelection?.blockId ?? editor.dataset.blockId;
-		if (inlineSelection && !(model.selection?.kind === "all" && isCollapsedDocumentTextSelection(inlineSelection.selection) && !force)) model.setSelection(inlineSelection.selection);
+		if (inlineSelection && !(model.selection?.kind === 'all' && isCollapsedDocumentTextSelection(inlineSelection.selection) && !force)) model.setSelection(inlineSelection.selection);
 		this.updateToolbar();
 		this.updateInlineNodeSelection();
 	}
@@ -1040,7 +1042,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (!inlineSelection) return;
 		if (!isDocumentTextSelectionInDocument(model.document, inlineSelection.selection)) return;
 		this.activeBlockId = inlineSelection.blockId;
-		if (!(model.selection?.kind === "all" && isCollapsedDocumentTextSelection(inlineSelection.selection))) model.setSelection(inlineSelection.selection);
+		if (!(model.selection?.kind === 'all' && isCollapsedDocumentTextSelection(inlineSelection.selection))) model.setSelection(inlineSelection.selection);
 		this.updateToolbar();
 		this.updateInlineNodeSelection();
 	}
@@ -1061,7 +1063,7 @@ export class RichTextEditorWidget extends Disposable {
 		}
 		if (this.isReadOnly() || event.isComposing) return;
 		if (this.handleHistoryShortcut(event, model)) return;
-		if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "a") {
+		if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
 			event.preventDefault();
 			model.setSelection(allSelection());
 			this.activeBlockId = node.id;
@@ -1069,17 +1071,17 @@ export class RichTextEditorWidget extends Disposable {
 			this.updateInlineNodeSelection();
 			return;
 		}
-		if (model.selection?.kind === "all" && !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "Backspace" || event.key === "Delete")) {
+		if (model.selection?.kind === 'all' && !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === 'Backspace' || event.key === 'Delete')) {
 			const command = createDeleteInlineSelectionCommand(model.schema, model.document, node.id, model.selection);
 			if (command) {
 				event.preventDefault();
-				this.dispatchCommand(model, command, event.key === "Backspace" ? "delete-backward" : "delete-forward");
+				this.dispatchCommand(model, command, event.key === 'Backspace' ? 'delete-backward' : 'delete-forward');
 			}
 			return;
 		}
-		const selectedNode = model.selection?.kind === "node" ? model.selection : undefined;
+		const selectedNode = model.selection?.kind === 'node' ? model.selection : undefined;
 		if (selectedNode && node.content.some(child => child.id === selectedNode.nodeId)) {
-			if (!event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "Backspace" || event.key === "Delete")) {
+			if (!event.metaKey && !event.ctrlKey && !event.altKey && (event.key === 'Backspace' || event.key === 'Delete')) {
 				const command = createDeleteNodeSelectionCommand(model.document, selectedNode);
 				if (command) {
 					event.preventDefault();
@@ -1095,29 +1097,29 @@ export class RichTextEditorWidget extends Disposable {
 		if (!textNode || textNode.text === undefined) return;
 		const collapsed = isCollapsedDocumentTextSelection(selection);
 		let command: DocumentCommand | undefined;
-		if (event.key === "Tab" && !event.metaKey && !event.ctrlKey && !event.altKey && collapsed) {
+		if (event.key === 'Tab' && !event.metaKey && !event.ctrlKey && !event.altKey && collapsed) {
 			if (this.handleTableCellTab(event, model, node.id)) return;
-			command = createListItemIndentationForBlock(model.schema, model.document, node.id, event.shiftKey ? "out" : "in");
-		} else if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && (event.key === "b" || event.key === "B" || event.key === "i" || event.key === "I")) {
-			command = createToggleMarkCommand(model.schema, model.document, node.id, inlineSelection.nodeId, selection, event.key.toLowerCase() === "b" ? "strong" : "em", {}, model.storedMarks);
-		} else if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && (event.key === "k" || event.key === "K") && !collapsed) {
+			command = createListItemIndentationForBlock(model.schema, model.document, node.id, event.shiftKey ? 'out' : 'in');
+		} else if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && (event.key === 'b' || event.key === 'B' || event.key === 'i' || event.key === 'I')) {
+			command = createToggleMarkCommand(model.schema, model.document, node.id, inlineSelection.nodeId, selection, event.key.toLowerCase() === 'b' ? 'strong' : 'em', {}, model.storedMarks);
+		} else if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && (event.key === 'k' || event.key === 'K') && !collapsed) {
 			event.preventDefault();
 			void this.requestLink(model, node.id, inlineSelection.nodeId, selection);
 			return;
-		} else if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === "Enter" && event.shiftKey) {
+		} else if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === 'Enter' && event.shiftKey) {
 			command = createInsertHardBreakCommand(model.schema, model.document, node.id, selection);
-		} else if (!event.metaKey && !event.ctrlKey && event.key === "Enter" && !event.shiftKey && collapsed) {
+		} else if (!event.metaKey && !event.ctrlKey && event.key === 'Enter' && !event.shiftKey && collapsed) {
 			command = createParagraphSplitCommand(model.schema, model.document, node.id, inlineSelection.nodeId, selection.anchor.offset);
-		} else if (!event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "Backspace" || event.key === "Delete") && !collapsed) {
-			command = createDeleteInlineSelectionCommand(model.schema, model.document, node.id, selection) ?? createReplaceTextCommand(model.schema, model.document, node.id, selection, "");
-		} else if (!event.metaKey && !event.ctrlKey && event.key === "Backspace" && collapsed && selection.anchor.offset === 0) {
-			command = createInlineBoundaryCommand(model.document, node.id, inlineSelection.nodeId, "backward");
-		} else if (!event.metaKey && !event.ctrlKey && event.key === "Delete" && collapsed && selection.anchor.offset === textNode.text.length) {
-			command = createInlineBoundaryCommand(model.document, node.id, inlineSelection.nodeId, "forward");
+		} else if (!event.metaKey && !event.ctrlKey && !event.altKey && (event.key === 'Backspace' || event.key === 'Delete') && !collapsed) {
+			command = createDeleteInlineSelectionCommand(model.schema, model.document, node.id, selection) ?? createReplaceTextCommand(model.schema, model.document, node.id, selection, '');
+		} else if (!event.metaKey && !event.ctrlKey && event.key === 'Backspace' && collapsed && selection.anchor.offset === 0) {
+			command = createInlineBoundaryCommand(model.document, node.id, inlineSelection.nodeId, 'backward');
+		} else if (!event.metaKey && !event.ctrlKey && event.key === 'Delete' && collapsed && selection.anchor.offset === textNode.text.length) {
+			command = createInlineBoundaryCommand(model.document, node.id, inlineSelection.nodeId, 'forward');
 		}
 		if (!command) return;
 		event.preventDefault();
-		const historyGroup = event.key === "Backspace" ? "delete-backward" : event.key === "Delete" ? "delete-forward" : undefined;
+		const historyGroup = event.key === 'Backspace' ? 'delete-backward' : event.key === 'Delete' ? 'delete-forward' : undefined;
 		this.dispatchCommand(model, command, historyGroup);
 	}
 
@@ -1125,7 +1127,7 @@ export class RichTextEditorWidget extends Disposable {
 		const currentModel = this.model;
 		if (this.isReadOnly() || currentModel !== model || event.isComposing) return;
 		if (this.handleHistoryShortcut(event, model)) return;
-		if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "a") {
+		if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
 			event.preventDefault();
 			model.setSelection(allSelection());
 			textarea.select();
@@ -1133,45 +1135,45 @@ export class RichTextEditorWidget extends Disposable {
 			this.updateToolbar();
 			return;
 		}
-		if (model.selection?.kind === "all" && !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "Backspace" || event.key === "Delete")) {
+		if (model.selection?.kind === 'all' && !event.metaKey && !event.ctrlKey && !event.altKey && (event.key === 'Backspace' || event.key === 'Delete')) {
 			const command = createDeleteInlineSelectionCommand(model.schema, model.document, node.id, model.selection);
 			if (command) {
 				event.preventDefault();
-				this.dispatchCommand(model, command, event.key === "Backspace" ? "delete-backward" : "delete-forward");
+				this.dispatchCommand(model, command, event.key === 'Backspace' ? 'delete-backward' : 'delete-forward');
 			}
 			return;
 		}
 		const currentNode = findNode(model.document, node.id);
-		if (!currentNode || (currentNode.type !== "paragraph" && currentNode.type !== "heading")) return;
+		if (!currentNode || (currentNode.type !== 'paragraph' && currentNode.type !== 'heading')) return;
 		const textNode = currentNode.content.length === 1 && currentNode.content[0]?.text !== undefined ? currentNode.content[0] : undefined;
 		const start = textarea.selectionStart ?? 0;
 		const end = textarea.selectionEnd ?? start;
 		let command: DocumentCommand | undefined;
-		if (event.key === "Tab" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+		if (event.key === 'Tab' && !event.metaKey && !event.ctrlKey && !event.altKey) {
 			if (this.handleTableCellTab(event, model, node.id)) return;
-			command = createListItemIndentationForBlock(model.schema, model.document, node.id, event.shiftKey ? "out" : "in");
-		} else if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+			command = createListItemIndentationForBlock(model.schema, model.document, node.id, event.shiftKey ? 'out' : 'in');
+		} else if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
 			command = createInsertParagraphAfterCommand(model.schema, model.document, node.id);
-		} else if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && textNode && (event.key === "b" || event.key === "B" || event.key === "i" || event.key === "I")) {
-			command = createToggleMarkCommand(model.schema, model.document, node.id, textNode.id, textSelection({ nodeId: textNode.id, offset: start }, { nodeId: textNode.id, offset: end }), event.key.toLowerCase() === "b" ? "strong" : "em", {}, model.storedMarks);
-		} else if (event.altKey && !event.metaKey && !event.ctrlKey && event.key === "ArrowUp") {
-			command = createMoveBlockCommand(model.document, node.id, "up");
-		} else if (event.altKey && !event.metaKey && !event.ctrlKey && event.key === "ArrowDown") {
-			command = createMoveBlockCommand(model.document, node.id, "down");
-		} else if (event.key === "Enter" && event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
+		} else if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && textNode && (event.key === 'b' || event.key === 'B' || event.key === 'i' || event.key === 'I')) {
+			command = createToggleMarkCommand(model.schema, model.document, node.id, textNode.id, textSelection({ nodeId: textNode.id, offset: start }, { nodeId: textNode.id, offset: end }), event.key.toLowerCase() === 'b' ? 'strong' : 'em', {}, model.storedMarks);
+		} else if (event.altKey && !event.metaKey && !event.ctrlKey && event.key === 'ArrowUp') {
+			command = createMoveBlockCommand(model.document, node.id, 'up');
+		} else if (event.altKey && !event.metaKey && !event.ctrlKey && event.key === 'ArrowDown') {
+			command = createMoveBlockCommand(model.document, node.id, 'down');
+		} else if (event.key === 'Enter' && event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
 			command = createInsertHardBreakCommand(model.schema, model.document, node.id, createTextareaDocumentTextSelection(model.document, node.id, textarea));
-		} else if (event.key === "Enter" && !event.shiftKey && start === end) {
+		} else if (event.key === 'Enter' && !event.shiftKey && start === end) {
 			command = textNode
 				? createParagraphSplitCommand(model.schema, model.document, node.id, textNode.id, start)
-				: createParagraphSplitCommand(model.schema, model.document, node.id, "", 0) ?? createInsertParagraphAfterCommand(model.schema, model.document, node.id);
-		} else if (event.key === "Backspace" && start === 0 && end === 0) {
-			command = createJoinAdjacentBlockCommand(model.document, node.id, textNode?.id ?? "", "backward");
-		} else if (event.key === "Delete" && textNode && start === textNode.text!.length && end === start) {
-			command = createJoinAdjacentBlockCommand(model.document, node.id, textNode.id, "forward");
+				: createParagraphSplitCommand(model.schema, model.document, node.id, '', 0) ?? createInsertParagraphAfterCommand(model.schema, model.document, node.id);
+		} else if (event.key === 'Backspace' && start === 0 && end === 0) {
+			command = createJoinAdjacentBlockCommand(model.document, node.id, textNode?.id ?? '', 'backward');
+		} else if (event.key === 'Delete' && textNode && start === textNode.text!.length && end === start) {
+			command = createJoinAdjacentBlockCommand(model.document, node.id, textNode.id, 'forward');
 		}
 		if (!command) return;
 		event.preventDefault();
-		const historyGroup = event.key === "Backspace" ? "delete-backward" : event.key === "Delete" ? "delete-forward" : undefined;
+		const historyGroup = event.key === 'Backspace' ? 'delete-backward' : event.key === 'Delete' ? 'delete-forward' : undefined;
 		this.dispatchCommand(model, command, historyGroup);
 	}
 
@@ -1179,7 +1181,7 @@ export class RichTextEditorWidget extends Disposable {
 		const action = historyShortcut(event);
 		if (!action) return false;
 		event.preventDefault();
-		const change = action === "undo" ? model.undoBlocks() : model.redoBlocks();
+		const change = action === 'undo' ? model.undoBlocks() : model.redoBlocks();
 		if (change) this.restoreModelFocus(model, change.selectionAfter);
 		return true;
 	}
@@ -1193,8 +1195,8 @@ export class RichTextEditorWidget extends Disposable {
 
 	private restoreModelFocus(model: DocumentTextModel, selection: DocumentSelection | undefined): void {
 		let blockId: string | undefined;
-		if (selection?.kind === "text") blockId = findTextBearingBlockId(model.document, selection.anchor.nodeId);
-		if (selection?.kind === "node") blockId = findTextBearingBlockContainingNode(model.document, selection.nodeId);
+		if (selection?.kind === 'text') blockId = findTextBearingBlockId(model.document, selection.anchor.nodeId);
+		if (selection?.kind === 'node') blockId = findTextBearingBlockContainingNode(model.document, selection.nodeId);
 		if (!blockId && this.activeBlockId) {
 			const active = findNode(model.document, this.activeBlockId);
 			if (active) blockId = findFirstEditableBlock(active)?.id;
@@ -1209,16 +1211,16 @@ export class RichTextEditorWidget extends Disposable {
 			return;
 		}
 		this.focusEditorElement(editor);
-		if (selection?.kind === "text" && editor.tagName === "TEXTAREA") {
+		if (selection?.kind === 'text' && editor.tagName === 'TEXTAREA') {
 			const textarea = editor as HTMLTextAreaElement;
 			const block = findNode(model.document, blockId);
 			const textNode = block?.content.length === 1 && block.content[0]?.text !== undefined ? block.content[0] : undefined;
 			if (textNode) {
 				const anchor = Math.min(textNode.text!.length, selection.anchor.offset);
 				const head = Math.min(textNode.text!.length, selection.head.offset);
-				textarea.setSelectionRange(Math.min(anchor, head), Math.max(anchor, head), anchor <= head ? "forward" : "backward");
+				textarea.setSelectionRange(Math.min(anchor, head), Math.max(anchor, head), anchor <= head ? 'forward' : 'backward');
 			}
-		} else if (selection?.kind === "text" && editor.classList.contains("stanza-document-rich-text-input")) {
+		} else if (selection?.kind === 'text' && editor.classList.contains('stanza-document-rich-text-input')) {
 			setInlineDocumentTextSelection(this.requireContainer(), selection);
 			this.revealTextSelection();
 		}
@@ -1239,11 +1241,11 @@ export class RichTextEditorWidget extends Disposable {
 		const container = this.container;
 		const model = this.model;
 		if (!container || !model) return;
-		const selectedNodeId = model.selection?.kind === "node" ? model.selection.nodeId : undefined;
-		for (const element of container.querySelectorAll<HTMLElement>("[data-inline-node-id]")) {
+		const selectedNodeId = model.selection?.kind === 'node' ? model.selection.nodeId : undefined;
+		for (const element of container.querySelectorAll<HTMLElement>('[data-inline-node-id]')) {
 			const selected = element.dataset.inlineNodeId === selectedNodeId;
-			element.classList.toggle("stanza-document-inline-node-selected", selected);
-			element.setAttribute("aria-selected", String(selected));
+			element.classList.toggle('stanza-document-inline-node-selected', selected);
+			element.setAttribute('aria-selected', String(selected));
 		}
 	}
 
@@ -1251,7 +1253,7 @@ export class RichTextEditorWidget extends Disposable {
 		const context = findTableCellContext(model.document, blockId);
 		if (!context) return false;
 		event.preventDefault();
-		const direction = event.shiftKey ? "backward" : "forward";
+		const direction = event.shiftKey ? 'backward' : 'forward';
 		const targetCellId = findAdjacentTableCell(model.document, context.cell.id, direction);
 		if (targetCellId) {
 			const targetCell = findNode(model.document, targetCellId);
@@ -1259,26 +1261,26 @@ export class RichTextEditorWidget extends Disposable {
 			if (targetBlock) this.focusBlockAtBoundary(model, targetBlock.id, direction);
 			return true;
 		}
-		if (direction === "forward") {
+		if (direction === 'forward') {
 			const command = createInsertTableRowCommand(model.schema, model.document, context.table.id, context.table.content.length);
 			if (command) this.dispatchCommand(model, command);
 		}
 		return true;
 	}
 
-	private focusBlockAtBoundary(model: DocumentTextModel, blockId: string, direction: "backward" | "forward"): void {
+	private focusBlockAtBoundary(model: DocumentTextModel, blockId: string, direction: 'backward' | 'forward'): void {
 		const editor = findBlockEditor(this.requireContainer(), blockId);
 		if (!editor) return;
 		this.activeBlockId = blockId;
 		this.focusEditorElement(editor);
 		const node = findNode(model.document, blockId);
 		const textNode = node ? findFirstTextNode(node) : undefined;
-		if (editor.tagName === "TEXTAREA") {
+		if (editor.tagName === 'TEXTAREA') {
 			const textarea = editor as HTMLTextAreaElement;
-			const offset = direction === "backward" ? textarea.value.length : 0;
+			const offset = direction === 'backward' ? textarea.value.length : 0;
 			textarea.setSelectionRange(offset, offset);
 		} else if (textNode) {
-			const offset = direction === "backward" ? textNode.text!.length : 0;
+			const offset = direction === 'backward' ? textNode.text!.length : 0;
 			const selection = textSelection({ nodeId: textNode.id, offset });
 			model.setSelection(selection);
 			setInlineDocumentTextSelection(editor as HTMLDivElement, selection);
@@ -1286,11 +1288,11 @@ export class RichTextEditorWidget extends Disposable {
 		this.updateToolbar();
 	}
 
-	private dispatchCommand(model: DocumentTextModel, command: DocumentCommand, historyGroup?: string, focusBehavior: CommandFocusBehavior = "focus-editor"): void {
+	private dispatchCommand(model: DocumentTextModel, command: DocumentCommand, historyGroup?: string, focusBehavior: CommandFocusBehavior = 'focus-editor'): void {
 		if (this.isReadOnly() || this.model !== model) return;
 		this.activeBlockId = command.focus.blockId;
 		model.dispatch((historyGroup ? command.transaction.withHistoryGroup(historyGroup) : command.transaction).withMeta('review.author', this.reviewAuthor));
-		if (focusBehavior === "preserve-focus") {
+		if (focusBehavior === 'preserve-focus') {
 			this.updateToolbar();
 			this.updateInlineNodeSelection();
 			return;
@@ -1298,11 +1300,11 @@ export class RichTextEditorWidget extends Disposable {
 		const editor = findBlockEditor(this.requireContainer(), command.focus.blockId);
 		if (!editor) return;
 		this.focusEditorElement(editor);
-		if (editor.tagName === "TEXTAREA") {
+		if (editor.tagName === 'TEXTAREA') {
 			const textarea = editor as HTMLTextAreaElement;
 			const offset = command.focus.point?.offset ?? 0;
 			textarea.setSelectionRange(Math.min(offset, textarea.value.length), Math.min(offset, textarea.value.length));
-		} else if (editor.classList.contains("stanza-document-rich-text-input") && model.selection?.kind === "text") {
+		} else if (editor.classList.contains('stanza-document-rich-text-input') && model.selection?.kind === 'text') {
 			setInlineDocumentTextSelection(this.requireContainer(), model.selection);
 			this.revealTextSelection();
 		}
@@ -1314,53 +1316,53 @@ export class RichTextEditorWidget extends Disposable {
 		const model = this.model;
 		if (!model) return;
 		const document = model.document;
-		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (!blockId) return;
 		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		const selectionBlockId = selection ? findTextBearingBlockId(model.document, selection.anchor.nodeId) : undefined;
 		let command: DocumentCommand | undefined;
 		switch (action) {
-			case "paragraph":
-			case "heading":
+			case 'paragraph':
+			case 'heading':
 				command = createSetBlockTypeCommand(model.document, blockId, action);
 				break;
-			case "blockquote":
+			case 'blockquote':
 				command = createToggleBlockquoteCommand(model.schema, model.document, blockId);
 				break;
-			case "bulletList":
-			case "orderedList":
+			case 'bulletList':
+			case 'orderedList':
 				command = createToggleListCommand(model.schema, model.document, blockId, action);
 				break;
-			case "horizontalRule":
+			case 'horizontalRule':
 				command = createInsertHorizontalRuleCommand(model.schema, model.document, blockId);
 				break;
-			case "link": {
+			case 'link': {
 				if (!selection || !selectionBlockId) break;
 				await this.requestLink(model, selectionBlockId, selection.anchor.nodeId, selection);
 				return;
 			}
-			case "unlink":
-				if (selection && selectionBlockId) command = createRemoveMarkCommand(model.schema, model.document, selectionBlockId, selection.anchor.nodeId, selection, "link", model.storedMarks);
+			case 'unlink':
+				if (selection && selectionBlockId) command = createRemoveMarkCommand(model.schema, model.document, selectionBlockId, selection.anchor.nodeId, selection, 'link', model.storedMarks);
 				break;
-			case "table":
+			case 'table':
 				command = createInsertTableCommand(model.schema, model.document, blockId);
 				break;
-			case "insertTableRow": {
+			case 'insertTableRow': {
 				const context = findTableCellContext(model.document, blockId);
 				if (context) command = createInsertTableRowCommand(model.schema, model.document, context.table.id, context.rowIndex + 1);
 				break;
 			}
-			case "insertTableColumn": {
+			case 'insertTableColumn': {
 				const context = findTableCellContext(model.document, blockId);
 				if (context) command = createInsertTableColumnCommand(model.schema, model.document, context.table.id, context.columnIndex + 1);
 				break;
 			}
-			case "deleteTableRow": {
+			case 'deleteTableRow': {
 				const context = findTableCellContext(model.document, blockId);
 				if (context) command = createDeleteTableRowCommand(model.document, context.table.id, context.row.id);
 				break;
 			}
-			case "deleteTableColumn": {
+			case 'deleteTableColumn': {
 				const context = findTableCellContext(model.document, blockId);
 				if (context) command = createDeleteTableColumnCommand(model.document, context.table.id, context.columnIndex);
 				break;
@@ -1384,59 +1386,59 @@ export class RichTextEditorWidget extends Disposable {
 		if (command) this.dispatchCommand(model, command);
 	}
 
-	private handleTextMarkAction(markType: "strong" | "em"): void {
+	private handleTextMarkAction(markType: 'strong' | 'em'): void {
 		if (this.isReadOnly()) return;
 		const model = this.model;
 		if (!model) return;
-		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined);
 		if (!blockId) return;
 		const block = findNode(model.document, blockId);
 		if (!isTypographyBlock(block)) return;
 		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		if (!selection) return;
 		const command = createToggleMarkCommand(model.schema, model.document, blockId, selection.anchor.nodeId, selection, markType, {}, model.storedMarks);
-		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
+		if (command) this.dispatchCommand(model, command, undefined, 'preserve-focus');
 	}
 
 	private handleTextStyleAction(attrs: DocumentTextStyleAttributes): void {
 		if (this.isReadOnly()) return;
 		const model = this.model;
 		if (!model) return;
-		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined);
 		if (!blockId) return;
 		const block = findNode(model.document, blockId);
 		if (!isTypographyBlock(block)) return;
 		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		if (!selection) return;
 		const command = createSetTextStyleCommand(model.schema, model.document, blockId, selection.anchor.nodeId, selection, attrs, model.storedMarks);
-		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
+		if (command) this.dispatchCommand(model, command, undefined, 'preserve-focus');
 	}
 
 	private handleClearTextStyleAction(): void {
 		if (this.isReadOnly()) return;
 		const model = this.model;
 		if (!model) return;
-		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined);
 		if (!blockId) return;
 		const block = findNode(model.document, blockId);
 		if (!isTypographyBlock(block)) return;
 		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		if (!selection) return;
-		const command = createRemoveMarkCommand(model.schema, model.document, blockId, selection.anchor.nodeId, selection, "textStyle", model.storedMarks);
-		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
+		const command = createRemoveMarkCommand(model.schema, model.document, blockId, selection.anchor.nodeId, selection, 'textStyle', model.storedMarks);
+		if (command) this.dispatchCommand(model, command, undefined, 'preserve-focus');
 	}
 
 	private readActiveDocumentTextSelection(model: DocumentTextModel, blockId: string): DocumentTextSelection | undefined {
 		const modelSelection = model.selection;
-		if (modelSelection?.kind === "text" && findTextBearingBlockId(model.document, modelSelection.anchor.nodeId) === blockId && isDocumentTextSelectionInDocument(model.document, modelSelection)) {
+		if (modelSelection?.kind === 'text' && findTextBearingBlockId(model.document, modelSelection.anchor.nodeId) === blockId && isDocumentTextSelectionInDocument(model.document, modelSelection)) {
 			return modelSelection;
 		}
 		const editor = findBlockEditor(this.requireContainer(), blockId);
-		if (editor?.tagName === "TEXTAREA") {
+		if (editor?.tagName === 'TEXTAREA') {
 			const selection = createTextareaDocumentTextSelection(model.document, blockId, editor as HTMLTextAreaElement);
 			return selection;
 		}
-		if (editor?.classList.contains("stanza-document-rich-text-input")) {
+		if (editor?.classList.contains('stanza-document-rich-text-input')) {
 			const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
 			if (inlineSelection?.blockId === blockId && isDocumentTextSelectionInDocument(model.document, inlineSelection.selection)) {
 				return inlineSelection.selection;
@@ -1448,19 +1450,19 @@ export class RichTextEditorWidget extends Disposable {
 	private updateToolbar(): void {
 		const model = this.model;
 		if (!model) return;
-		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (blockId && !this.activeBlockId) this.activeBlockId = blockId;
 		const block = blockId ? findNode(model.document, blockId) : undefined;
 		const list = block ? findListForBlock(model.document, block.id) : undefined;
-		const selection = model.selection?.kind === "text" ? model.selection : undefined;
-		const selectionBlock = selection ? findNode(model.document, findTextBearingBlockId(model.document, selection.anchor.nodeId) ?? "") : undefined;
+		const selection = model.selection?.kind === 'text' ? model.selection : undefined;
+		const selectionBlock = selection ? findNode(model.document, findTextBearingBlockId(model.document, selection.anchor.nodeId) ?? '') : undefined;
 		const readOnly = this.isReadOnly();
 		const checkedDocumentActionIds = new Set<string>();
 		for (const { id: type } of DEFAULT_DOCUMENT_ACTIONS) {
 			let checked = false;
-			if (type === "paragraph" || type === "heading") checked = block?.type === type;
-			else if (type === "blockquote") checked = block !== undefined && findBlockquoteForBlock(model.document, block.id) !== undefined;
-			else if (type === "link") checked = selection !== undefined && (selectionBlock?.type === "paragraph" || selectionBlock?.type === "heading") && isDocumentTextSelectionMarked(selectionBlock, selection, "link", model.storedMarks);
+			if (type === 'paragraph' || type === 'heading') checked = block?.type === type;
+			else if (type === 'blockquote') checked = block !== undefined && findBlockquoteForBlock(model.document, block.id) !== undefined;
+			else if (type === 'link') checked = selection !== undefined && (selectionBlock?.type === 'paragraph' || selectionBlock?.type === 'heading') && isDocumentTextSelectionMarked(selectionBlock, selection, 'link', model.storedMarks);
 			else checked = list?.type === type;
 			if (checked) checkedDocumentActionIds.add(type);
 		}
@@ -1469,10 +1471,10 @@ export class RichTextEditorWidget extends Disposable {
 		for (const toolbar of this.formattingContributions) toolbar.setState({
 			document: model.document, pageZoom: this.pageZoom, blockId, selection: model.selection,
 			paragraphs: blockId ? getSelectedDocumentParagraphs(model.document, blockId, model.selection) : [],
-			context: block?.type === "codeBlock" ? "code" : textContext ? "text" : "none",
+			context: block?.type === 'codeBlock' ? 'code' : textContext ? 'text' : 'none',
 			readOnly,
-			bold: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, "strong", model.storedMarks) : false,
-			italic: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, "em", model.storedMarks) : false,
+			bold: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, 'strong', model.storedMarks) : false,
+			italic: textContext && activeSelection ? isDocumentTextSelectionMarked(block!, activeSelection, 'em', model.storedMarks) : false,
 			fontFamily: textContext && activeSelection ? selectedTextStyleFontFamily(block!, activeSelection, model.storedMarks) : undefined,
 			fontSize: textContext && activeSelection ? selectedTextStyleFontSize(block!, activeSelection, model.storedMarks) : undefined,
 			checkedDocumentActionIds,
@@ -1512,13 +1514,13 @@ export class RichTextEditorWidget extends Disposable {
 
 	private requireContainer(): HTMLDivElement {
 		const container = this.container;
-		assertDefined(container, new ReferenceError("Document editor has not been created"));
+		assertDefined(container, new ReferenceError('Document editor has not been created'));
 		return container;
 	}
 
 	private requireModel(): DocumentTextModel {
 		const model = this.model;
-		assertDefined(model, new ReferenceError("Document editor has no active model"));
+		assertDefined(model, new ReferenceError('Document editor has no active model'));
 		return model;
 	}
 
@@ -1548,7 +1550,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private requireInput(): RichTextEditorInput {
 		const input = this.input;
-		assertDefined(input, new ReferenceError("Document editor has no active input"));
+		assertDefined(input, new ReferenceError('Document editor has no active input'));
 		return input;
 	}
 
@@ -1558,25 +1560,25 @@ export class RichTextEditorWidget extends Disposable {
 }
 
 function createFallbackInlineNode(ownerDocument: Document, node: DocumentNode): HTMLElement {
-	const element = h(ownerDocument, "span");
-	element.className = "stanza-document-inline-node";
+	const element = h(ownerDocument, 'span');
+	element.className = 'stanza-document-inline-node';
 	const label = node.attrs.label;
-	element.textContent = typeof label === "string" && label.length > 0 ? label : `[${node.type}]`;
+	element.textContent = typeof label === 'string' && label.length > 0 ? label : `[${node.type}]`;
 	return element;
 }
 
 
 function editableBlockAriaLabel(node: DocumentNode): string {
 	switch (node.type) {
-		case "heading": {
+		case 'heading': {
 			const level = node.attrs.level;
-			return typeof level === "number" && Number.isInteger(level) && level > 0 ? `Heading level ${level}` : "Heading";
+			return typeof level === 'number' && Number.isInteger(level) && level > 0 ? `Heading level ${level}` : 'Heading';
 		}
-		case "codeBlock": {
+		case 'codeBlock': {
 			const language = node.attrs.language;
-			return typeof language === "string" && language.length > 0 ? `${language} code block` : "Code block";
+			return typeof language === 'string' && language.length > 0 ? `${language} code block` : 'Code block';
 		}
-		case "paragraph": return "Paragraph";
+		case 'paragraph': return 'Paragraph';
 		default: return `${node.type} text`;
 	}
 }
@@ -1590,7 +1592,7 @@ function applyTextStyleMark(element: HTMLElement, mark: DocumentMark | undefined
 }
 
 function isTypographyBlock(node: DocumentNode | undefined): node is DocumentNode {
-	return node?.type === "paragraph" || node?.type === "heading";
+	return node?.type === 'paragraph' || node?.type === 'heading';
 }
 
 function isDocumentTextSelectionInDocument(document: DocumentNode, selection: DocumentTextSelection): boolean {
@@ -1602,8 +1604,8 @@ function isDocumentTextSelectionInDocument(document: DocumentNode, selection: Do
 		&& selection.head.offset <= head.text.length;
 }
 
-function isTextStyleFontFamily(value: unknown): value is "sans" | "serif" | "monospace" {
-	return value === "sans" || value === "serif" || value === "monospace";
+function isTextStyleFontFamily(value: unknown): value is 'sans' | 'serif' | 'monospace' {
+	return value === 'sans' || value === 'serif' || value === 'monospace';
 }
 
 function isTextStyleFontSize(value: unknown): value is number {
@@ -1620,25 +1622,25 @@ function findNode(document: DocumentNode, id: string): DocumentNode | undefined 
 }
 
 function normalizeNodeView(value: HTMLElement | NodeView, nodeType: string): NodeView {
-	if (!value || typeof value !== "object") throw new TypeError(`Node view '${nodeType}' must return an HTMLElement or node view handle`);
-	if ("nodeType" in value) {
+	if (!value || typeof value !== 'object') throw new TypeError(`Node view '${nodeType}' must return an HTMLElement or node view handle`);
+	if ('nodeType' in value) {
 		if (value.nodeType !== 1) throw new TypeError(`Node view '${nodeType}' must return an HTMLElement`);
 		return { element: value as HTMLElement };
 	}
-	if (!("element" in value) || !value.element || value.element.nodeType !== 1) throw new TypeError(`Node view '${nodeType}' must return an HTMLElement or node view handle`);
+	if (!('element' in value) || !value.element || value.element.nodeType !== 1) throw new TypeError(`Node view '${nodeType}' must return an HTMLElement or node view handle`);
 	const handle = value as NodeView;
-	if (handle.update !== undefined && typeof handle.update !== "function") throw new TypeError(`Node view '${nodeType}' update must be a function`);
-	if (handle.dispose !== undefined && typeof handle.dispose !== "function") throw new TypeError(`Node view '${nodeType}' dispose must be a function`);
+	if (handle.update !== undefined && typeof handle.update !== 'function') throw new TypeError(`Node view '${nodeType}' update must be a function`);
+	if (handle.dispose !== undefined && typeof handle.dispose !== 'function') throw new TypeError(`Node view '${nodeType}' dispose must be a function`);
 	return handle;
 }
 
 function isInlineNodeInBlock(document: DocumentNode, blockId: string, nodeId: string): boolean {
 	const block = findNode(document, blockId);
-	return (block?.type === "paragraph" || block?.type === "heading") && block.content.some(child => child.id === nodeId && child.text === undefined);
+	return (block?.type === 'paragraph' || block?.type === 'heading') && block.content.some(child => child.id === nodeId && child.text === undefined);
 }
 
 function findTextArea(container: HTMLDivElement, blockId: string): HTMLTextAreaElement | undefined {
-	for (const textarea of container.querySelectorAll<HTMLTextAreaElement>("textarea")) {
+	for (const textarea of container.querySelectorAll<HTMLTextAreaElement>('textarea')) {
 		if (textarea.dataset.blockId === blockId) return textarea;
 	}
 	return undefined;
@@ -1654,14 +1656,14 @@ function createTextareaDocumentTextSelection(document: DocumentNode, blockId: st
 }
 
 function findBlockEditor(container: HTMLDivElement, blockId: string): HTMLElement | undefined {
-	for (const editor of container.querySelectorAll<HTMLElement>("textarea, div.stanza-document-rich-text-input")) {
+	for (const editor of container.querySelectorAll<HTMLElement>('textarea, div.stanza-document-rich-text-input')) {
 		if (editor.dataset.blockId === blockId) return editor;
 	}
 	return undefined;
 }
 
 function findFirstEditableBlock(node: DocumentNode): DocumentNode | undefined {
-	if (node.type === "paragraph" || node.type === "heading" || node.type === "codeBlock") return node;
+	if (node.type === 'paragraph' || node.type === 'heading' || node.type === 'codeBlock') return node;
 	for (const child of node.content) {
 		const block = findFirstEditableBlock(child);
 		if (block) return block;
@@ -1680,10 +1682,10 @@ function findFirstTextNode(node: DocumentNode): DocumentNode | undefined {
 
 function findImageClipboardFile(dataTransfer: DataTransfer | null | undefined): File | undefined {
 	for (const file of Array.from(dataTransfer?.files ?? [])) {
-		if (file.type.startsWith("image/")) return file;
+		if (file.type.startsWith('image/')) return file;
 	}
 	for (const item of Array.from(dataTransfer?.items ?? [])) {
-		if (item.kind !== "file" || !item.type.startsWith("image/")) continue;
+		if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
 		const file = item.getAsFile();
 		if (file) return file;
 	}
@@ -1692,23 +1694,23 @@ function findImageClipboardFile(dataTransfer: DataTransfer | null | undefined): 
 
 function readBlobAsDataUrl(blob: Blob, ownerDocument: Document): Promise<string> {
 	const FileReaderConstructor = ownerDocument.defaultView?.FileReader;
-	if (!FileReaderConstructor) return Promise.reject(new Error("FileReader is not available"));
+	if (!FileReaderConstructor) return Promise.reject(new Error('FileReader is not available'));
 	return new Promise((resolve, reject) => {
 		const reader = new FileReaderConstructor();
-		reader.addEventListener("load", () => {
-			if (typeof reader.result === "string") resolve(reader.result);
-			else reject(new Error("Image clipboard data did not produce a data URL"));
+		reader.addEventListener('load', () => {
+			if (typeof reader.result === 'string') resolve(reader.result);
+			else reject(new Error('Image clipboard data did not produce a data URL'));
 		});
-		reader.addEventListener("error", () => reject(reader.error ?? new Error("Unable to read image clipboard data")));
+		reader.addEventListener('error', () => reject(reader.error ?? new Error('Unable to read image clipboard data')));
 		reader.readAsDataURL(blob);
 	});
 }
 
-function historyShortcut(event: KeyboardEvent): "undo" | "redo" | undefined {
+function historyShortcut(event: KeyboardEvent): 'undo' | 'redo' | undefined {
 	if ((!event.metaKey && !event.ctrlKey) || event.altKey) return undefined;
 	const key = event.key.toLowerCase();
-	if (key === "z") return event.shiftKey ? "redo" : "undo";
-	if (key === "y" && !event.shiftKey) return "redo";
+	if (key === 'z') return event.shiftKey ? 'redo' : 'undo';
+	if (key === 'y' && !event.shiftKey) return 'redo';
 	return undefined;
 }
 
@@ -1733,7 +1735,7 @@ interface DocumentComposition {
 }
 
 function readCompositionText(element: HTMLTextAreaElement | HTMLDivElement): string {
-	return element.tagName === "TEXTAREA" ? (element as HTMLTextAreaElement).value : element.textContent ?? "";
+	return element.tagName === 'TEXTAREA' ? (element as HTMLTextAreaElement).value : element.textContent ?? '';
 }
 
 function findCompositionDiff(before: string, after: string): { readonly from: number; readonly to: number; readonly text: string; } | undefined {
@@ -1775,7 +1777,7 @@ function resolveViewDecorations(model: DocumentTextModel, externalDecorations: r
 function remotePresenceDecorations(document: DocumentNode, presences: readonly DocumentCollaborationPresence[]): readonly DocumentDecoration[] {
 	const decorations: DocumentDecoration[] = [];
 	for (const presence of presences) {
-		if (presence.selection.kind !== "text") continue;
+		if (presence.selection.kind !== 'text') continue;
 		let from = presence.selection.anchor;
 		let to = presence.selection.head;
 		if (from.nodeId === to.nodeId && from.offset === to.offset) {
@@ -1790,7 +1792,7 @@ function remotePresenceDecorations(document: DocumentNode, presences: readonly D
 			from,
 			to,
 			className: `stanza-document-remote-selection stanza-document-remote-selection-${presenceColorIndex(presence.clientId)}`,
-			attrs: { "data-collaboration-client": presence.clientId },
+			attrs: { 'data-collaboration-client': presence.clientId },
 		}));
 	}
 	return Object.freeze(decorations);
@@ -1814,14 +1816,14 @@ function hasRenderableDecoration(model: DocumentTextModel, node: DocumentNode, d
 
 function applyViewDecorations(element: HTMLElement, decorations: readonly DocumentDecoration[]): void {
 	if (decorations.length === 0) return;
-	element.classList.add("stanza-document-decoration");
-	element.dataset.decorationIds = decorations.map(decoration => decoration.id).join(" ");
+	element.classList.add('stanza-document-decoration');
+	element.dataset.decorationIds = decorations.map(decoration => decoration.id).join(' ');
 	for (const decoration of decorations) {
 		for (const className of decoration.className?.split(/\s+/) ?? []) {
 			if (/^-?[A-Za-z_][A-Za-z0-9_-]*$/.test(className)) element.classList.add(className);
 		}
 		for (const [key, value] of Object.entries(decoration.attrs)) {
-			if (!/^data-[a-z0-9_-]+$/i.test(key) || (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean")) continue;
+			if (!/^data-[a-z0-9_-]+$/i.test(key) || (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean')) continue;
 			element.setAttribute(key, String(value));
 		}
 	}
@@ -1829,15 +1831,15 @@ function applyViewDecorations(element: HTMLElement, decorations: readonly Docume
 
 function nodeElementTagName(node: DocumentNode): string {
 	switch (node.type) {
-		case "heading": return "h2";
-		case "blockquote": return "blockquote";
-		case "bulletList": return "ul";
-		case "orderedList": return "ol";
-		case "listItem": return "li";
-		case "table": return "table";
-		case "tableRow": return "tr";
-		case "tableCell": return "td";
-		default: return "div";
+		case 'heading': return 'h2';
+		case 'blockquote': return 'blockquote';
+		case 'bulletList': return 'ul';
+		case 'orderedList': return 'ol';
+		case 'listItem': return 'li';
+		case 'table': return 'table';
+		case 'tableRow': return 'tr';
+		case 'tableCell': return 'td';
+		default: return 'div';
 	}
 }
 
@@ -1847,7 +1849,7 @@ function documentNodeKindClassName(kind: DocumentNodeKind): string {
 
 function findTextBearingBlockId(root: DocumentNode, textNodeId: string | undefined): string | undefined {
 	if (!textNodeId) return undefined;
-	if ((root.type === "paragraph" || root.type === "heading" || root.type === "codeBlock") && root.content.some(child => child.id === textNodeId)) return root.id;
+	if ((root.type === 'paragraph' || root.type === 'heading' || root.type === 'codeBlock') && root.content.some(child => child.id === textNodeId)) return root.id;
 	for (const child of root.content) {
 		const blockId = findTextBearingBlockId(child, textNodeId);
 		if (blockId) return blockId;
@@ -1856,7 +1858,7 @@ function findTextBearingBlockId(root: DocumentNode, textNodeId: string | undefin
 }
 
 function findTextBearingBlockContainingNode(root: DocumentNode, nodeId: string): string | undefined {
-	if ((root.type === "paragraph" || root.type === "heading" || root.type === "codeBlock") && containsDocumentNode(root, nodeId)) return root.id;
+	if ((root.type === 'paragraph' || root.type === 'heading' || root.type === 'codeBlock') && containsDocumentNode(root, nodeId)) return root.id;
 	for (const child of root.content) {
 		const blockId = findTextBearingBlockContainingNode(child, nodeId);
 		if (blockId) return blockId;
@@ -1866,7 +1868,7 @@ function findTextBearingBlockContainingNode(root: DocumentNode, nodeId: string):
 
 function findListForBlock(root: DocumentNode, blockId: string): DocumentNode | undefined {
 	for (const child of root.content) {
-		if ((child.type === "bulletList" || child.type === "orderedList") && containsDocumentNode(child, blockId)) return child;
+		if ((child.type === 'bulletList' || child.type === 'orderedList') && containsDocumentNode(child, blockId)) return child;
 		const list = findListForBlock(child, blockId);
 		if (list) return list;
 	}
@@ -1875,7 +1877,7 @@ function findListForBlock(root: DocumentNode, blockId: string): DocumentNode | u
 
 function findBlockquoteForBlock(root: DocumentNode, blockId: string): DocumentNode | undefined {
 	for (const child of root.content) {
-		if (child.type === "blockquote" && containsDocumentNode(child, blockId)) return child;
+		if (child.type === 'blockquote' && containsDocumentNode(child, blockId)) return child;
 		const blockquote = findBlockquoteForBlock(child, blockId);
 		if (blockquote) return blockquote;
 	}
@@ -1910,15 +1912,15 @@ function isDocumentTextSelectionMarked(block: DocumentNode, selection: DocumentT
 	return selectedText;
 }
 
-function selectedTextStyleFontFamily(block: DocumentNode, selection: DocumentTextSelection, storedMarks?: readonly DocumentMark[]): "sans" | "serif" | "monospace" | undefined {
-	return selectedTextStyleAttribute(block, selection, "fontFamily", isTextStyleFontFamily, storedMarks);
+function selectedTextStyleFontFamily(block: DocumentNode, selection: DocumentTextSelection, storedMarks?: readonly DocumentMark[]): 'sans' | 'serif' | 'monospace' | undefined {
+	return selectedTextStyleAttribute(block, selection, 'fontFamily', isTextStyleFontFamily, storedMarks);
 }
 
 function selectedTextStyleFontSize(block: DocumentNode, selection: DocumentTextSelection, storedMarks?: readonly DocumentMark[]): number | undefined {
-	return selectedTextStyleAttribute(block, selection, "fontSize", isTextStyleFontSize, storedMarks);
+	return selectedTextStyleAttribute(block, selection, 'fontSize', isTextStyleFontSize, storedMarks);
 }
 
-function selectedTextStyleAttribute<T extends string | number>(block: DocumentNode, selection: DocumentTextSelection, attribute: "fontFamily" | "fontSize", isValid: (value: unknown) => value is T, storedMarks?: readonly DocumentMark[]): T | undefined {
+function selectedTextStyleAttribute<T extends string | number>(block: DocumentNode, selection: DocumentTextSelection, attribute: 'fontFamily' | 'fontSize', isValid: (value: unknown) => value is T, storedMarks?: readonly DocumentMark[]): T | undefined {
 	const anchorIndex = block.content.findIndex(child => child.id === selection.anchor.nodeId && child.text !== undefined);
 	const headIndex = block.content.findIndex(child => child.id === selection.head.nodeId && child.text !== undefined);
 	if (anchorIndex < 0 || headIndex < 0) return undefined;
@@ -1949,8 +1951,8 @@ function selectedTextStyleAttribute<T extends string | number>(block: DocumentNo
 	return hasValue ? value : undefined;
 }
 
-function readTextStyleAttribute<T extends string | number>(marks: readonly DocumentMark[], attribute: "fontFamily" | "fontSize", isValid: (value: unknown) => value is T): T | undefined {
-	const value = marks.find(mark => mark.type === "textStyle")?.attrs[attribute];
+function readTextStyleAttribute<T extends string | number>(marks: readonly DocumentMark[], attribute: 'fontFamily' | 'fontSize', isValid: (value: unknown) => value is T): T | undefined {
+	const value = marks.find(mark => mark.type === 'textStyle')?.attrs[attribute];
 	return isValid(value) ? value : undefined;
 }
 
@@ -2000,12 +2002,12 @@ function findRichTextEditor(container: HTMLDivElement, node: Node): HTMLDivEleme
 	while (current) {
 		if (current.nodeType === 1) {
 			const element = current as HTMLElement;
-			if (element.classList.contains("stanza-document-rich-text-input")) return element as HTMLDivElement;
+			if (element.classList.contains('stanza-document-rich-text-input')) return element as HTMLDivElement;
 		}
 		if (current === container) break;
 		current = current.parentNode;
 	}
-	return container.classList.contains("stanza-document-rich-text-input") ? container : undefined;
+	return container.classList.contains('stanza-document-rich-text-input') ? container : undefined;
 }
 
 function offsetWithinInlineRun(editor: HTMLDivElement, run: HTMLElement, node: Node | null, offset: number): number {
@@ -2013,7 +2015,7 @@ function offsetWithinInlineRun(editor: HTMLDivElement, run: HTMLElement, node: N
 	const nodeId = run.dataset.textNodeId;
 	let offsetBefore = 0;
 	if (nodeId) {
-		for (const candidate of editor.querySelectorAll<HTMLElement>("[data-text-node-id]")) {
+		for (const candidate of editor.querySelectorAll<HTMLElement>('[data-text-node-id]')) {
 			if (candidate.dataset.textNodeId !== nodeId) continue;
 			if (candidate === run) break;
 			offsetBefore += candidate.textContent?.length ?? 0;
@@ -2057,7 +2059,7 @@ function setInlineDocumentTextSelection(editor: HTMLDivElement, selection: Docum
 }
 
 function findInlineRunAtOffset(editor: HTMLDivElement, nodeId: string, offset: number): { readonly node: Node; readonly offset: number; } | undefined {
-	const runs = [...editor.querySelectorAll<HTMLElement>("[data-text-node-id]")].filter(run => run.dataset.textNodeId === nodeId);
+	const runs = [...editor.querySelectorAll<HTMLElement>('[data-text-node-id]')].filter(run => run.dataset.textNodeId === nodeId);
 	if (runs.length === 0) return undefined;
 	let remaining = Math.max(0, offset);
 	for (let index = 0; index < runs.length; index += 1) {
@@ -2080,26 +2082,26 @@ function findInlineRunAtOffset(editor: HTMLDivElement, nodeId: string, offset: n
 	return undefined;
 }
 
-function createInlineBoundaryCommand(document: DocumentNode, blockId: string, textNodeId: string, direction: "backward" | "forward"): DocumentCommand | undefined {
+function createInlineBoundaryCommand(document: DocumentNode, blockId: string, textNodeId: string, direction: 'backward' | 'forward'): DocumentCommand | undefined {
 	const block = findNode(document, blockId);
 	if (!block) return undefined;
 	const index = block.content.findIndex(child => child.id === textNodeId);
-	const adjacent = block.content[index + (direction === "backward" ? -1 : 1)];
+	const adjacent = block.content[index + (direction === 'backward' ? -1 : 1)];
 	if (index >= 0 && adjacent?.text !== undefined) return createJoinAdjacentTextRunCommand(document, blockId, textNodeId, direction);
 	if (index >= 0 && adjacent && adjacent.text === undefined) return createDeleteAdjacentInlineNodeCommand(document, blockId, textNodeId, direction);
 	const blockCommand = createJoinAdjacentBlockCommand(document, blockId, textNodeId, direction);
 	if (blockCommand) return blockCommand;
 	const location = findDocumentNode(document, blockId);
 	const parent = location?.parent;
-	if (parent?.type !== "listItem") return undefined;
+	if (parent?.type !== 'listItem') return undefined;
 	const blockIndex = parent.content.findIndex(child => child.id === blockId);
-	const atBoundary = direction === "backward" ? blockIndex === 0 : blockIndex === parent.content.length - 1;
+	const atBoundary = direction === 'backward' ? blockIndex === 0 : blockIndex === parent.content.length - 1;
 	return atBoundary ? createJoinAdjacentListItemCommand(document, parent.id, blockId, direction) : undefined;
 }
 
 function createParagraphSplitCommand(schema: DocumentSchema, document: DocumentNode, paragraphId: string, textNodeId: string, offset: number): DocumentCommand | undefined {
 	const location = findDocumentNode(document, paragraphId);
-	if (location?.parent?.type === "listItem") {
+	if (location?.parent?.type === 'listItem') {
 		if (!textNodeId) return createExitEmptyListItemCommand(schema, document, location.parent.id, paragraphId);
 		return createSplitListItemCommand(schema, document, location.parent.id, paragraphId, textNodeId, offset);
 	}
@@ -2107,22 +2109,22 @@ function createParagraphSplitCommand(schema: DocumentSchema, document: DocumentN
 	return createSplitBlockCommand(schema, document, paragraphId, textNodeId, offset);
 }
 
-function createListItemIndentationForBlock(schema: DocumentSchema, document: DocumentNode, paragraphId: string, direction: "in" | "out"): DocumentCommand | undefined {
+function createListItemIndentationForBlock(schema: DocumentSchema, document: DocumentNode, paragraphId: string, direction: 'in' | 'out'): DocumentCommand | undefined {
 	const location = findDocumentNode(document, paragraphId);
-	if (location?.parent?.type !== "listItem") return undefined;
+	if (location?.parent?.type !== 'listItem') return undefined;
 	return createListItemIndentationCommand(schema, document, location.parent.id, paragraphId, direction);
 }
 
-function createDeleteBoundaryCommand(model: DocumentTextModel, blockId: string, selection: DocumentTextSelection, direction: "backward" | "forward"): DocumentCommand | undefined {
-	if (!isCollapsedDocumentTextSelection(selection)) return createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, "");
+function createDeleteBoundaryCommand(model: DocumentTextModel, blockId: string, selection: DocumentTextSelection, direction: 'backward' | 'forward'): DocumentCommand | undefined {
+	if (!isCollapsedDocumentTextSelection(selection)) return createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, '');
 	const point = selection.anchor;
 	const textNode = findNode(model.document, point.nodeId);
 	if (!textNode || textNode.text === undefined) return undefined;
-	if (direction === "backward" && point.offset > 0) {
-		return createReplaceTextCommand(model.schema, model.document, blockId, textSelection({ nodeId: point.nodeId, offset: point.offset - 1 }, point), "");
+	if (direction === 'backward' && point.offset > 0) {
+		return createReplaceTextCommand(model.schema, model.document, blockId, textSelection({ nodeId: point.nodeId, offset: point.offset - 1 }, point), '');
 	}
-	if (direction === "forward" && point.offset < textNode.text.length) {
-		return createReplaceTextCommand(model.schema, model.document, blockId, textSelection(point, { nodeId: point.nodeId, offset: point.offset + 1 }), "");
+	if (direction === 'forward' && point.offset < textNode.text.length) {
+		return createReplaceTextCommand(model.schema, model.document, blockId, textSelection(point, { nodeId: point.nodeId, offset: point.offset + 1 }), '');
 	}
 	return createInlineBoundaryCommand(model.document, blockId, point.nodeId, direction);
 }
@@ -2133,7 +2135,7 @@ function isCollapsedDocumentTextSelection(selection: DocumentTextSelection): boo
 
 function documentInsertionMarks(model: DocumentTextModel, selection: DocumentSelection | undefined): readonly DocumentMark[] | undefined {
 	if (model.storedMarks !== undefined) return model.storedMarks;
-	if (!selection || selection.kind !== "text" || !isCollapsedDocumentTextSelection(selection)) return undefined;
+	if (!selection || selection.kind !== 'text' || !isCollapsedDocumentTextSelection(selection)) return undefined;
 	const node = findNode(model.document, selection.anchor.nodeId);
 	return node?.text === undefined ? undefined : node.marks;
 }

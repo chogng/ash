@@ -28,28 +28,28 @@ import { errorHandler } from '../../../base/common/errors.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { observableValue } from '../../../base/common/observable.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
 
-import { JSDOM } from "jsdom";
+import { JSDOM } from 'jsdom';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { Emitter, Event } from "../../../base/common/event.js";
-import { toDisposable } from "../../../base/common/lifecycle.js";
-import { type IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
-import { IContextViewService, IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
-import type { IChatService, ModelCatalogEntry, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
-import { Position, type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
-import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
-import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
+import { Emitter, Event } from '../../../base/common/event.js';
+import { toDisposable } from '../../../base/common/lifecycle.js';
+import { type IMenu, IMenuService } from '../../../platform/actions/common/actions.js';
+import { IContextViewService, IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
+import type { IChatService, ModelCatalogEntry, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../../workbench/services/chat/common/chatService.js';
+import { Position, type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from '../../../workbench/services/layout/browser/layoutService.js';
+import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../services/sessions/common/session.js';
+import type { ISessionsManagementService, SessionsManagementState } from '../../services/sessions/common/sessionsManagement.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -63,14 +63,14 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { ChatViewPane } = await import("../../browser/chatViewPane.js");
+const { ChatViewPane } = await import('../../browser/chatViewPane.js');
 await import('../../browser/actions/chatLayoutActions.js');
-const { BrowserContextViewService } = await import("../../../platform/contextview/browser/contextViewService.js");
-const { BrowserLayoutService } = await import("../../../platform/layout/browser/layoutService.js");
+const { BrowserContextViewService } = await import('../../../platform/contextview/browser/contextViewService.js');
+const { BrowserLayoutService } = await import('../../../platform/layout/browser/layoutService.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
 
-test("opens a local Chat conversation before the backend session request settles", () => {
+test('opens a local Chat conversation before the backend session request settles', () => {
 	const document = browserEnvironment.window.document;
 	const escaped: unknown[] = [];
 	using errors = toDisposable(errorHandler.addListener(error => escaped.push(error)));
@@ -115,7 +115,7 @@ test("opens a local Chat conversation before the backend session request settles
 	});
 	services.registerInstance(ILanguageModelsService, chat);
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
-	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: () => new Promise(() => { }), read: () => new Promise(() => { }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: () => new Promise(() => { }) });
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error('No Skill body in this test fixture'); }, list: () => new Promise(() => { }), read: () => new Promise(() => { }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: () => new Promise(() => { }) });
 	services.registerInstance(IContextViewService, contextViewService);
 	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 	services.registerInstance(IMenuService, emptyMenuService());
@@ -124,7 +124,7 @@ test("opens a local Chat conversation before the backend session request settles
 	registerCodeEditorServices(services);
 	using view = new ChatViewPane(
 		document.body,
-		{ id: "workbench.chat", title: "Chat" },
+		{ id: 'workbench.chat', title: 'Chat' },
 		chat,
 		sessionService,
 		emptyMenuService(),
@@ -144,8 +144,8 @@ test("opens a local Chat conversation before the backend session request settles
 
 	assert.deepEqual(escaped, []);
 	assert.equal(sessionService.untitledSessions.length, 1);
-	assert.equal(view.element.querySelectorAll(".ash-chat[data-untitled-session-id]").length, 1);
-	assert.equal(view.element.querySelector<HTMLElement>(".ash-chat-view-empty")?.hidden, true);
+	assert.equal(view.element.querySelectorAll('.ash-chat[data-untitled-session-id]').length, 1);
+	assert.equal(view.element.querySelector<HTMLElement>('.ash-chat-view-empty')?.hidden, true);
 });
 
 class PendingSessionService implements ISessionsManagementService {
@@ -159,7 +159,7 @@ class PendingSessionService implements ISessionsManagementService {
 	readonly materializedSessions = observableValue<ReadonlyMap<string, { readonly sessionId: SessionId; readonly threadId: ThreadId; }>>(this, new Map());
 	readonly sessions: readonly ISession[] = [];
 	readonly active: IActiveSessionThread | undefined = undefined;
-	readonly state: SessionsManagementState = "loading";
+	readonly state: SessionsManagementState = 'loading';
 	readonly error: string | undefined = undefined;
 
 	get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
@@ -171,12 +171,12 @@ class PendingSessionService implements ISessionsManagementService {
 
 	initialize(): Promise<void> { return this.pendingInitialization; }
 	listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return Promise.resolve([]); }
-	openThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
+	openThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
 
 	selectThread(_sessionId: SessionId, _threadId: ThreadId): void { }
-	interruptThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
+	interruptThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
 
-	createUntitledSession(title = "New Chat"): IUntitledChatSession {
+	createUntitledSession(title = 'New Chat'): IUntitledChatSession {
 		const session = { untitledSessionId: `untitled-${this._untitledSessions.length + 1}`, title, model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		this._activeUntitledSessionId = session.untitledSessionId;
@@ -190,17 +190,17 @@ class PendingSessionService implements ISessionsManagementService {
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
 	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void { }
-	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
+	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
 	promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void { }
-	ensureActiveThread(): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
-	startNewSession(_title?: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
-	stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
-	archiveSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
+	ensureActiveThread(): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
+	startNewSession(_title?: string): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
+	stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
+	archiveSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
 	renameSession(): Promise<never> { return Promise.reject(new Error('Backend is unavailable')); }
 	deleteSession(): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
-	restoreSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
-	setModel(_model: ModelRef): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
-	setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
+	restoreSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
+	setModel(_model: ModelRef): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
+	setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
 }
 
 class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements IWorkbenchLayoutService {
@@ -209,7 +209,7 @@ class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements I
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	setLayoutStyle(): void { }
 
-	isPartVisible(partId: WorkbenchPartId): boolean { return partId === "auxiliarybar"; }
+	isPartVisible(partId: WorkbenchPartId): boolean { return partId === 'auxiliarybar'; }
 	hasFocus(): boolean { return false; }
 	getVisibleNeighborPart(): undefined { return undefined; }
 	readonly onDidChangeAuxiliaryBarMaximized = Event.None;
@@ -245,11 +245,11 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		onDidChangeSession: neverEvent<{ sessionId: string; agentTreeChanged: boolean; }>(),
 		getInteractionOffer: () => undefined, onDidChangeInteractionOffer: Event.None, onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
 		onDidUpdateThreadTranscript: neverEvent<ThreadTranscriptUpdateEnvelope>(),
-		onDidUpdateGoal: neverEvent<import("../../../workbench/services/chat/common/chatService.js").ThreadGoalUpdate>(),
+		onDidUpdateGoal: neverEvent<import('../../../workbench/services/chat/common/chatService.js').ThreadGoalUpdate>(),
 		onDidBecomeReady: neverEvent<void>(),
 		onDidChangeModels: neverEvent<void>(),
 		onDidChangeQueue: neverEvent<void>(),
-		onDidUpdateTurnChanges: neverEvent<import("../../../workbench/services/chat/common/chatService.js").TurnChangesUpdate>(),
+		onDidUpdateTurnChanges: neverEvent<import('../../../workbench/services/chat/common/chatService.js').TurnChangesUpdate>(),
 		discoverProviderModels: () => pending,
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		getDefaultNewChatModel: () => undefined,
@@ -262,6 +262,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
 		setApprovalReviewModel: async () => { },
 		listCustomModelProviders: async () => [],
+		removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		setModelProviderApiKey: () => pending as Promise<void>,

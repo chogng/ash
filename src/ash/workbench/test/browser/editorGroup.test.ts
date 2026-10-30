@@ -6,15 +6,15 @@ import { EditorPane } from '../../browser/parts/editor/editorPane.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createBinaryDiffEditorInput } from '../../common/editor/diffEditorInput.js';
 import { DiffEditorAssociationsConfiguration, EditorAssociationsConfiguration } from '../../browser/parts/editor/editorConfiguration.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { URI } from "../../../base/common/uri.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { URI } from '../../../base/common/uri.js';
 import { Event } from '../../../base/common/event.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import type { IWorkingCopy } from '../../services/workingCopy/common/workingCopyService.js';
 
-import type { IEditorGroupsService } from "../../services/editor/common/editorGroupsService.js";
+import type { IEditorGroupsService } from '../../services/editor/common/editorGroupsService.js';
 
 test('EditorGroupView retains its dirty pane when a disabled editor fails to reopen and still confirms close', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -95,31 +95,31 @@ test('EditorGroupView keeps the caller language when resource detection has no l
 	}
 });
 
-test("EditorGroupView reorders tabs and moves them between groups", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-	Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
+test('EditorGroupView reorders tabs and moves them between groups', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
 	try {
-		const { EditorGroupView } = await import("../../browser/parts/editor/editorGroupView.js");
-		const { EditorPaneMatch } = await import("../../browser/parts/editor/editorPane.js");
-		const { EditorPaneRegistry } = await import("../../browser/editor.js");
+		const { EditorGroupView } = await import('../../browser/parts/editor/editorGroupView.js');
+		const { EditorPaneMatch } = await import('../../browser/parts/editor/editorPane.js');
+		const { EditorPaneRegistry } = await import('../../browser/editor.js');
 		const registry = new EditorPaneRegistry();
 		registry.registerEditorPane({
-			id: "test.editor",
-			name: "Test Editor",
+			id: 'test.editor',
+			name: 'Test Editor',
 			canOpen: () => EditorPaneMatch.Default,
 			create: () => new TestEditorPane(),
 		});
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
 		const source = services.createInstance(EditorGroupView, dom.window.document.body, { registry });
 		const target = services.createInstance(EditorGroupView, dom.window.document.body, { registry });
-		const first = input("first");
-		const second = input("second");
+		const first = input('first');
+		const second = input('second');
 		await source.openEditor(first);
 		await source.openEditor(second);
 		const secondInstanceId = source.editors.find(editor => editor.input === second)?.instanceId;
 
-		source.moveEditor(first, source.getEditorInsertionIndex(second, "after"));
+		source.moveEditor(first, source.getEditorInsertionIndex(second, 'after'));
 		assert.deepEqual(source.inputs, [second, first]);
 
 		await source.moveEditorTo(second, target, 0);
@@ -145,63 +145,68 @@ test("EditorGroupView reorders tabs and moves them between groups", async () => 
 		source.dispose();
 		target.dispose();
 	} finally {
-		if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
-		else Reflect.deleteProperty(globalThis, "window");
+		if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+		else Reflect.deleteProperty(globalThis, 'window');
 		dom.window.close();
 	}
 });
 
-test("EditorGroupView selects a range of tabs and resolves close-command targets", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-	Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
+test('EditorGroupView selects a range of tabs and resolves close-command targets', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
 	try {
-		const { EditorGroupView } = await import("../../browser/parts/editor/editorGroupView.js");
-		const { EditorPaneMatch } = await import("../../browser/parts/editor/editorPane.js");
-		const { EditorPaneRegistry } = await import("../../browser/editor.js");
-		const { resolveCommandsContext } = await import("../../browser/parts/editor/editorCommandsContext.js");
+		const { EditorGroupView } = await import('../../browser/parts/editor/editorGroupView.js');
+		const { EditorPaneMatch } = await import('../../browser/parts/editor/editorPane.js');
+		const { EditorPaneRegistry } = await import('../../browser/editor.js');
+		const { resolveCommandsContext } = await import('../../browser/parts/editor/editorCommandsContext.js');
 		const registry = new EditorPaneRegistry();
-		registry.registerEditorPane({ id: "test.editor", name: "Test Editor", canOpen: () => EditorPaneMatch.Default, create: () => new TestEditorPane() });
+		registry.registerEditorPane({
+			id: 'test.editor',
+			name: 'Test Editor',
+			canOpen: () => EditorPaneMatch.Default,
+			create: () => new TestEditorPane()
+		});
 		using services = createTestEditorServices(undefined, undefined, dom.window.document);
 		const group = services.createInstance(EditorGroupView, dom.window.document.body, { registry });
 		try {
-			const first = input("first");
-			const second = input("second");
-			const third = input("third");
+			const first = input('first');
+			const second = input('second');
+			const third = input('third');
 			for (const editor of [first, second, third]) await group.openEditor(editor);
 			const tab = (name: string) => {
 				const element = group.domNode.querySelector<HTMLButtonElement>(`.ash-tab-label[aria-label="${name}"]`);
 				assert.ok(element);
 				return element;
 			};
-			tab("first").dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, ctrlKey: true }));
+			tab('first').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, ctrlKey: true }));
 			assert.deepEqual(group.selectedInputs, [first, third]);
 			assert.equal(group.activeInput, third);
-			tab("second").dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, shiftKey: true }));
+			tab('second').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, shiftKey: true }));
 			assert.deepEqual(group.selectedInputs, [first, second]);
-			assert.equal(tab("first").getAttribute("aria-selected"), "true");
-			assert.equal(tab("second").getAttribute("aria-selected"), "true");
-			assert.equal(tab("third").getAttribute("aria-selected"), "false");
+			assert.equal(tab('first').getAttribute('aria-selected'), 'true');
+			assert.equal(tab('second').getAttribute('aria-selected'), 'true');
+			assert.equal(tab('third').getAttribute('aria-selected'), 'false');
 			const context = resolveCommandsContext([{ groupId: group.id, editorIndex: 0 }], { groups: [group], getGroup: (id: number) => id === group.id ? group : undefined } as unknown as IEditorGroupsService);
 			assert.deepEqual(context.groupedEditors[0]?.editors, [first, second]);
 			for (const editor of context.groupedEditors[0]!.editors) await group.closeEditor(editor);
 			assert.deepEqual(group.inputs, [third]);
 			assert.deepEqual(group.selectedInputs, [third]);
-			const fourth = input("fourth");
+			const fourth = input('fourth');
 			await group.openEditor(fourth);
-			tab("third").focus();
-			tab("third").dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: " ", ctrlKey: true }));
+			tab('third').focus();
+			tab('third').dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: ' ', ctrlKey: true }));
 			assert.deepEqual(group.selectedInputs, [third, fourth]);
-			assert.equal(dom.window.document.activeElement, tab("third"));
-			tab("third").click();
+			assert.equal(dom.window.document.activeElement, tab('third'));
+			tab('third').click();
 			assert.deepEqual(group.selectedInputs, [third]);
 			assert.equal(group.activeInput, third);
 		} finally {
 			group.dispose();
 		}
 	} finally {
-		if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
-		else Reflect.deleteProperty(globalThis, "window");
+		if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+		else Reflect.deleteProperty(globalThis, 'window');
 		dom.window.close();
 	}
 });
@@ -233,7 +238,7 @@ test('binary comparisons select the diff association using the modified file pat
 });
 
 class TestEditorPane extends EditorPane {
-	constructor(readonly id: string = "test.editor") {
+	constructor(readonly id: string = 'test.editor') {
 		const services = createTestComponentServices(undefined, undefined, globalThis.window.document);
 		super(id, services.get(IThemeService), services.get(IStorageService));
 		this._register(services);

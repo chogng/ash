@@ -69,6 +69,7 @@ impl StartupCheck {
             crate::ConnectionRole::Execution { .. } => Self::Initialize,
             crate::ConnectionRole::Workbench
             | crate::ConnectionRole::Agents
+            | crate::ConnectionRole::Credentials
             | crate::ConnectionRole::Remote => Self::ClientInitialize,
         }
     }
@@ -171,7 +172,10 @@ fn connection_result(
     options: &ConnectionOptions,
 ) -> Result<(), LifecycleError> {
     if result == Err(LifecycleError::ServerShuttingDown)
-        && !matches!(options.role(), crate::ConnectionRole::Execution { .. })
+        && !matches!(
+            options.role(),
+            crate::ConnectionRole::Execution { .. } | crate::ConnectionRole::Credentials
+        )
     {
         // The carrier is also the initialization peer. Reply with the caller's ID
         // before closing stdout so clients receive the cause rather than an unexplained EOF.

@@ -1,4 +1,5 @@
 import '../../../services/language/common/languageServerLifecycleService.js';
+import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
@@ -68,7 +69,18 @@ export const SettingsNavigation = [
 						id: 'interaction',
 						label: 'Interaction',
 						description: 'Tune hover feedback and resize handles.',
-						settings: ['workbench.hover.*', 'workbench.sash.*', 'workbench.commandPalette.history', 'onboarding.enabled', 'output.smartScroll.enabled', 'chat.disableAIFeatures', 'sessions.automations.notifyOnSuccess', 'task.allowAutomaticTasks', 'extensions.ignoreRecommendations', 'extensions.showRecommendationsOnlyOnDemand'],
+						settings: [
+							'workbench.hover.*',
+							'workbench.sash.*',
+							'workbench.commandPalette.history',
+							'onboarding.enabled',
+							'output.smartScroll.enabled',
+							'chat.disableAIFeatures',
+							'sessions.automations.notifyOnSuccess',
+							'task.allowAutomaticTasks',
+							'extensions.ignoreRecommendations',
+							'extensions.showRecommendationsOnlyOnDemand',
+						],
 					},
 				],
 			},
@@ -78,12 +90,14 @@ export const SettingsNavigation = [
 				description: localize({ bundle: 'ash.settings', key: 'categories.github.description' }, 'Connect accounts and manage Codex pull request reviews.'),
 				keywords: ['Codex', 'PR', 'review', 'Connector'],
 				presentation: 'general',
-				groups: [{
-					id: 'repository',
-					label: localize({ bundle: 'ash.settings', key: 'github.repository.label' }, 'Repositories'),
-					description: localize({ bundle: 'ash.settings', key: 'github.repository.description' }, 'Choose the Git protocol and protected branch behavior.'),
-					settings: ['github.gitProtocol', 'github.branchProtection'],
-				}],
+				groups: [
+					{
+						id: 'repository',
+						label: localize({ bundle: 'ash.settings', key: 'github.repository.label' }, 'Repositories'),
+						description: localize({ bundle: 'ash.settings', key: 'github.repository.description' }, 'Choose the Git protocol and protected branch behavior.'),
+						settings: ['github.gitProtocol', 'github.branchProtection'],
+					},
+				],
 			},
 			{
 				id: 'network',
@@ -105,83 +119,125 @@ export const SettingsNavigation = [
 				label: localize({ bundle: 'ash.settings', key: 'categories.appearance.label' }, 'Appearance'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.appearance.description' }, 'Customize the visual appearance of Ash.'),
 				presentation: 'general',
-				groups: [{
-					id: 'theme',
-					label: 'Color theme',
-					description: 'Choose the colors used by the Workbench.',
-					settings: [
-						'workbench.colorTheme',
-						'workbench.colorCustomizations',
-						'editor.tokenColorCustomizations',
-						'editor.semanticTokenColorCustomizations',
-						'window.autoDetectColorScheme',
-						'window.autoDetectHighContrast',
-						'workbench.preferredDarkColorTheme',
-						'workbench.preferredLightColorTheme',
-						'workbench.preferredHighContrastColorTheme',
-						'workbench.preferredHighContrastLightColorTheme',
-						'workbench.iconTheme',
-						'workbench.productIconTheme',
-					],
-				}, {
-					id: 'editor-tips',
-					label: localize('settings.workbench.editorTips.label', 'Editor tips'),
-					description: localize('workbench.tips.enabled.description', 'Show command shortcuts when no editor is open.'),
-					settings: ['workbench.tips.enabled'],
-				}],
+				groups: [
+					{
+						id: 'theme',
+						label: 'Color theme',
+						description: 'Choose the colors used by the Workbench.',
+						settings: [
+							'workbench.colorTheme',
+							'workbench.colorCustomizations',
+							'editor.tokenColorCustomizations',
+							'editor.semanticTokenColorCustomizations',
+							'window.autoDetectColorScheme',
+							'window.autoDetectHighContrast',
+							'workbench.preferredDarkColorTheme',
+							'workbench.preferredLightColorTheme',
+							'workbench.preferredHighContrastColorTheme',
+							'workbench.preferredHighContrastLightColorTheme',
+							'workbench.iconTheme',
+							'workbench.productIconTheme',
+						],
+					},
+					{
+						id: 'editor-tips',
+						label: localize('settings.workbench.editorTips.label', 'Editor tips'),
+						description: localize('workbench.tips.enabled.description', 'Show command shortcuts when no editor is open.'),
+						settings: ['workbench.tips.enabled'],
+					},
+				],
 			},
 			{
 				id: 'layout',
 				label: localize({ bundle: 'ash.settings', key: 'categories.layout.label' }, 'Layout'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.layout.description' }, 'Choose the arrangement of Workbench areas and window zoom.'),
 				presentation: 'general',
-				groups: [{
-					id: 'layout',
-					label: localize('settings.workbench.layout.group.label', 'Workbench layout'),
-					description: localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'),
-					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.autoHide', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'security.workspace.trust.banner', 'workbench.panel.defaultLocation', 'workbench.statusBar.visible', 'workbench.notifications.position', 'workbench.notifications.showInTitleBar', 'workbench.view.alwaysShowHeaderActions', 'chat.viewSessions.orientation', 'chat.experimental.sessionArchiveActionWording', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'window.zoomPerWindow', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
-				}],
+				groups: [
+					{
+						id: 'layout',
+						label: localize('settings.workbench.layout.group.label', 'Workbench layout'),
+						description: localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'),
+						settings: [
+							'workbench.layoutStyle',
+							'workbench.activityBar.location',
+							'workbench.activityBar.autoHide',
+							'workbench.activityBar.badges',
+							'workbench.activityBar.compact',
+							'workbench.sideBar.location',
+							'security.workspace.trust.banner',
+							'workbench.panel.defaultLocation',
+							'workbench.statusBar.visible',
+							'workbench.notifications.position',
+							'workbench.notifications.showInTitleBar',
+							'workbench.view.alwaysShowHeaderActions',
+							'chat.viewSessions.orientation',
+							'chat.experimental.sessionArchiveActionWording',
+							'window.title',
+							'window.titleSeparator',
+							'window.titleBarStyle',
+							'window.menuStyle',
+							'window.zoomLevel',
+							'window.zoomPerWindow',
+							'workbench.tree.*',
+							'workbench.list.smoothScrolling',
+						],
+					},
+				],
 			},
 			{
 				id: 'debugging',
 				label: localize('settings.debugging.label', 'Debugging'),
 				description: localize('settings.debugging.description', 'Configure breakpoints, inline values and confirmation when closing a debug session.'),
 				presentation: 'general',
-				groups: [{
-					id: 'debugging',
-					label: localize('settings.debugging.label', 'Debugging'),
-					description: localize('settings.debugging.description', 'Configure breakpoints, inline values and confirmation when closing a debug session.'),
-					settings: ['debug.allowBreakpointsEverywhere', 'debug.confirmOnExit', 'debug.inlineValues'],
-				}],
+				groups: [
+					{
+						id: 'debugging',
+						label: localize('settings.debugging.label', 'Debugging'),
+						description: localize('settings.debugging.description', 'Configure breakpoints, inline values and confirmation when closing a debug session.'),
+						settings: ['debug.allowBreakpointsEverywhere', 'debug.confirmOnExit', 'debug.inlineValues'],
+					},
+				],
 			},
 			{
 				id: 'settings-editor',
 				label: localize({ bundle: 'ash.settings', key: 'categories.settings-editor.label' }, 'Settings Editor'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.settings-editor.description' }, 'Configure how Ash opens and edits settings.'),
 				presentation: 'general',
-				groups: [{
-					id: 'settings-editor',
-					label: localize({ bundle: 'ash.settings', key: 'categories.settings-editor.label' }, 'Settings Editor'),
-					description: '',
-					settings: ['workbench.settings.*'],
-				}],
+				groups: [
+					{
+						id: 'settings-editor',
+						label: localize({ bundle: 'ash.settings', key: 'categories.settings-editor.label' }, 'Settings Editor'),
+						description: '',
+						settings: ['workbench.settings.*'],
+					},
+				],
 			},
 			{
 				id: 'startup',
 				label: localize({ bundle: 'ash.settings', key: 'categories.startup.label' }, 'Startup'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.startup.description' }, 'Choose what Ash shows when a window opens.'),
 				presentation: 'general',
-				groups: [{
-					id: 'startup-windows',
-					label: localize('settings.workbench.startup.windows.label', 'Startup windows'),
-					description: localize('settings.workbench.startup.windows.description', 'Choose which windows Ash reopens.'),
-					settings: ['window.startupWindow', 'window.restoreWindows', 'window.newWindowDimensions', 'window.restoreFullscreen'],
-				}, {
-					id: 'startup-editor',
-					label: localize('settings.workbench.startup.group.label', 'Startup editor'),
-					description: localize('settings.workbench.startup.group.description', 'Choose what appears when no editor is restored.'),
-					settings: ['workbench.startupEditor', 'workbench.editor.restoreEditors', 'workbench.secondarySideBar.defaultVisibility', 'workbench.secondarySideBar.forceMaximized', 'workbench.panel.opensMaximized'],
-				}],
+				groups: [
+					{
+						id: 'startup-windows',
+						label: localize('settings.workbench.startup.windows.label', 'Startup windows'),
+						description: localize('settings.workbench.startup.windows.description', 'Choose which windows Ash reopens.'),
+						settings: ['window.startupWindow', 'window.restoreWindows', 'window.newWindowDimensions', 'window.restoreFullscreen'],
+					},
+					{
+						id: 'startup-editor',
+						label: localize('settings.workbench.startup.group.label', 'Startup editor'),
+						description: localize('settings.workbench.startup.group.description', 'Choose what appears when no editor is restored.'),
+						settings: [
+							'workbench.startupEditor',
+							'chat.welcomePage.agentsWindowGraphic',
+							'workbench.editor.restoreEditors',
+							'workbench.secondarySideBar.defaultVisibility',
+							'workbench.secondarySideBar.forceMaximized',
+							'workbench.panel.opensMaximized',
+						],
+					},
+				],
 			},
 			{
 				id: 'browser',
@@ -199,7 +255,15 @@ export const SettingsNavigation = [
 						id: 'browser-controls',
 						label: localize({ bundle: 'ash.settings', key: 'categories.browser.label' }, 'Browser'),
 						description: localize({ bundle: 'ash.settings', key: 'browser.controls.description' }, 'Control page zoom, address bar search and reload on local file changes.'),
-						settings: ['workbench.browser.searchEngine', 'workbench.browser.pageZoom', 'workbench.browser.autoReloadOnFileChange', 'workbench.browser.dataStorage', 'workbench.browser.openLocalhostLinks', 'workbench.browser.savePasswords', 'workbench.browser.autofillPasswords'],
+						settings: [
+							'workbench.browser.searchEngine',
+							'workbench.browser.pageZoom',
+							'workbench.browser.autoReloadOnFileChange',
+							'workbench.browser.dataStorage',
+							'workbench.browser.openLocalhostLinks',
+							'workbench.browser.savePasswords',
+							'workbench.browser.autofillPasswords',
+						],
 					},
 					{
 						id: 'browser-agent',
@@ -246,7 +310,27 @@ export const SettingsNavigation = [
 						id: 'display',
 						label: localize('settings.editor.display.label', 'Text display'),
 						description: localize('settings.editor.display.description', 'Configure line wrapping, guides, highlighting, and navigation aids.'),
-						settings: ['breadcrumbs.*', 'editor.wordWrap', 'editor.wordWrapColumn', 'editor.wrappingIndent', 'editor.renderWhitespace', 'editor.renderControlCharacters', 'editor.lineNumbers', 'editor.cursorStyle', 'editor.cursorBlinking', 'editor.cursorSmoothCaretAnimation', 'editor.cursorWidth', 'editor.cursorHeight', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.renderLineHighlight', 'editor.renderLineHighlightOnlyWhenFocus', 'editor.unicodeHighlights'],
+						settings: [
+							'breadcrumbs.*',
+							'editor.wordWrap',
+							'editor.wordWrapColumn',
+							'editor.wrappingIndent',
+							'editor.renderWhitespace',
+							'editor.renderControlCharacters',
+							'editor.lineNumbers',
+							'editor.cursorStyle',
+							'editor.cursorBlinking',
+							'editor.cursorSmoothCaretAnimation',
+							'editor.cursorWidth',
+							'editor.cursorHeight',
+							'editor.guides.*',
+							'editor.matchBrackets',
+							'editor.bracketPairColorization.*',
+							'editor.stickyScroll.*',
+							'editor.renderLineHighlight',
+							'editor.renderLineHighlightOnlyWhenFocus',
+							'editor.unicodeHighlights',
+						],
 					},
 					{
 						id: 'minimap',
@@ -286,7 +370,17 @@ export const SettingsNavigation = [
 						id: 'code-intelligence',
 						label: localize('settings.editor.code-intelligence.label', 'Code assistance'),
 						description: localize('settings.editor.code-intelligence.description', 'Configure completions, hints, and provider annotations.'),
-						settings: ['editor.suggest.*', 'editor.inlineSuggest.*', 'editor.parameterHints.*', 'editor.inlayHints.*', 'editor.codeLens', 'editor.colorDecorators', 'editor.colorDecoratorsActivatedOn', 'editor.colorDecoratorsLimit', 'editor.defaultColorDecorators'],
+						settings: [
+							'editor.suggest.*',
+							'editor.inlineSuggest.*',
+							'editor.parameterHints.*',
+							'editor.inlayHints.*',
+							'editor.codeLens',
+							'editor.colorDecorators',
+							'editor.colorDecoratorsActivatedOn',
+							'editor.colorDecoratorsLimit',
+							'editor.defaultColorDecorators',
+						],
 					},
 				],
 			},
@@ -295,12 +389,17 @@ export const SettingsNavigation = [
 				label: localize({ bundle: 'ash.settings', key: 'categories.editor-language.label' }, 'Language servers'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.editor-language.description' }, 'Configure language servers and inspect their logs.'),
 				presentation: 'editor',
-				groups: [{
-					id: 'language-server-lifecycle',
-					label: localize({ bundle: 'ash.settings', key: 'lsp.idle.groupTitle' }, 'Analysis cache and memory'),
-					description: localize({ bundle: 'ash.settings', key: 'lsp.idle.groupDescription' }, 'Started servers stay running by default to reuse their in-memory analysis. Rust computes analysis on demand by default. Its analysis cache is lost when the server stops; Cargo build artifacts on disk do not restore this cache.'),
-					settings: ['languageServers.autoSuspend', 'languageServers.idleTimeoutMinutes'],
-				}],
+				groups: [
+					{
+						id: 'language-server-lifecycle',
+						label: localize({ bundle: 'ash.settings', key: 'lsp.idle.groupTitle' }, 'Analysis cache and memory'),
+						description: localize(
+							{ bundle: 'ash.settings', key: 'lsp.idle.groupDescription' },
+							'Started servers stay running by default to reuse their in-memory analysis. Rust computes analysis on demand by default. Its analysis cache is lost when the server stops; Cargo build artifacts on disk do not restore this cache.',
+						),
+						settings: ['languageServers.autoSuspend', 'languageServers.idleTimeoutMinutes'],
+					},
+				],
 			},
 			{
 				id: 'editor-search',
@@ -377,25 +476,35 @@ export const SettingsNavigation = [
 				label: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.label' }, 'Accessibility Signals'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.description' }, 'Configure sounds and announcements for Workbench events.'),
 				presentation: 'general',
-				groups: [{
-					id: 'accessibilitySignals',
-					label: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.label' }, 'Accessibility Signals'),
-					description: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.description' }, 'Configure sounds and announcements for Workbench events.'),
-					// Claim signals and signalOptions before the broader accessibility category.
-					settings: ['accessibility.signal*'],
-				}],
+				groups: [
+					{
+						id: 'accessibilitySignals',
+						label: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.label' }, 'Accessibility Signals'),
+						description: localize({ bundle: 'ash.settings', key: 'categories.accessibilitySignals.description' }, 'Configure sounds and announcements for Workbench events.'),
+						// Claim signals and signalOptions before the broader accessibility category.
+						settings: ['accessibility.signal*'],
+					},
+				],
 			},
 			{
 				id: 'accessibility',
 				label: localize({ bundle: 'ash.settings', key: 'categories.accessibility.label' }, 'Accessibility'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.accessibility.description' }, 'Configure screen-reader support, accessibility help, motion, transparency, and link visibility.'),
+				description: localize(
+					{ bundle: 'ash.settings', key: 'categories.accessibility.description' },
+					'Configure screen-reader support, accessibility help, motion, transparency, and link visibility.',
+				),
 				presentation: 'general',
-				groups: [{
-					id: 'accessibility',
-					label: localize({ bundle: 'ash.settings', key: 'categories.accessibility.label' }, 'Accessibility'),
-					description: localize({ bundle: 'ash.settings', key: 'categories.accessibility.description' }, 'Configure screen-reader support, accessibility help, motion, transparency, and link visibility.'),
-					settings: ['accessibility.*', 'editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency'],
-				}],
+				groups: [
+					{
+						id: 'accessibility',
+						label: localize({ bundle: 'ash.settings', key: 'categories.accessibility.label' }, 'Accessibility'),
+						description: localize(
+							{ bundle: 'ash.settings', key: 'categories.accessibility.description' },
+							'Configure screen-reader support, accessibility help, motion, transparency, and link visibility.',
+						),
+						settings: ['accessibility.*', 'editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency'],
+					},
+				],
 			},
 			{
 				id: 'explorer',
@@ -435,7 +544,14 @@ export const SettingsNavigation = [
 						id: 'source-control',
 						label: localize('scm.settings.group', 'Source Control'),
 						description: localize('scm.settings.groupDescription', 'Configure source control providers and diff decorations.'),
-						settings: ['scm.diffDecorationsIgnoreTrimWhitespace', 'scm.graph.pageSize', 'scm.graph.pageOnScroll', 'scm.graph.badges', 'scm.graph.showIncomingChanges', 'scm.graph.showOutgoingChanges'],
+						settings: [
+							'scm.diffDecorationsIgnoreTrimWhitespace',
+							'scm.graph.pageSize',
+							'scm.graph.pageOnScroll',
+							'scm.graph.badges',
+							'scm.graph.showIncomingChanges',
+							'scm.graph.showOutgoingChanges',
+						],
 					},
 				],
 			},
@@ -444,12 +560,14 @@ export const SettingsNavigation = [
 				label: localize({ bundle: 'ash.settings', key: 'categories.terminal.label' }, 'Terminal'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.terminal.description' }, 'Configure terminal fonts, cursor appearance, contrast, and scrollback.'),
 				presentation: 'general',
-				groups: [{
-					id: 'terminal',
-					label: localize({ bundle: 'ash.settings', key: 'categories.terminal.label' }, 'Terminal'),
-					description: localize({ bundle: 'ash.settings', key: 'categories.terminal.description' }, 'Configure terminal fonts, cursor appearance, contrast, and scrollback.'),
-					settings: ['terminal.integrated.*'],
-				}],
+				groups: [
+					{
+						id: 'terminal',
+						label: localize({ bundle: 'ash.settings', key: 'categories.terminal.label' }, 'Terminal'),
+						description: localize({ bundle: 'ash.settings', key: 'categories.terminal.description' }, 'Configure terminal fonts, cursor appearance, contrast, and scrollback.'),
+						settings: ['terminal.integrated.*'],
+					},
+				],
 			},
 			{
 				id: 'voice-input',
@@ -479,12 +597,14 @@ export const SettingsNavigation = [
 				description: localize({ bundle: 'ash.settings', key: 'categories.chat-input.description' }, 'Set the font and spacing for messages you type.'),
 				keywords: ['chat input', 'prompt', 'font', 'typography'],
 				presentation: 'general',
-				groups: [{
-					id: 'chat-input-typography',
-					label: localize('settings.chatInput.label', 'Message input'),
-					description: localize('settings.chatInput.description', 'Choose a font, text size, and line spacing for the message input.'),
-					settings: ['chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight'],
-				}],
+				groups: [
+					{
+						id: 'chat-input-typography',
+						label: localize('settings.chatInput.label', 'Message input'),
+						description: localize('settings.chatInput.description', 'Choose a font, text size, and line spacing for the message input.'),
+						settings: ['chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight'],
+					},
+				],
 			},
 			{
 				id: 'chat-code-blocks',
@@ -492,12 +612,14 @@ export const SettingsNavigation = [
 				description: localize({ bundle: 'ash.settings', key: 'categories.chat-code-blocks.description' }, 'Set the font, spacing, and word wrap for code blocks in replies.'),
 				keywords: ['chat code', 'font', 'typography', 'word wrap'],
 				presentation: 'general',
-				groups: [{
-					id: 'chat-code-blocks',
-					label: localize('settings.chatCodeBlocks.label', 'Code blocks'),
-					description: localize('settings.chatCodeBlocks.description', 'Choose how code blocks in replies are displayed.'),
-					settings: ['chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap'],
-				}],
+				groups: [
+					{
+						id: 'chat-code-blocks',
+						label: localize('settings.chatCodeBlocks.label', 'Code blocks'),
+						description: localize('settings.chatCodeBlocks.description', 'Choose how code blocks in replies are displayed.'),
+						settings: ['chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap'],
+					},
+				],
 			},
 			{
 				id: 'agents',
@@ -521,17 +643,23 @@ export const SettingsNavigation = [
 				description: localize({ bundle: 'ash.settings', key: 'categories.agent-defaults.description' }, 'Choose the default agent and shared execution behavior.'),
 				keywords: ['default agent', 'default team', 'execution'],
 				presentation: 'general',
-				groups: [{
-					id: 'chat-editing',
-					label: localize('settings.chatEditing.label', 'Editing'),
-					description: localize('settings.chatEditing.description', 'Choose how Agent edits are reviewed.'),
-					settings: ['chat.editing.autoAcceptDelay'],
-				}, {
-					id: 'customization-discovery',
-					label: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledTitle' }, 'Discover skills and connections'),
-					description: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledDescription' }, 'Show catalog results in Skills and Connections within Extensions. Installed resources remain available.'),
-					settings: ['chat.customizations.marketplace.enabled'],
-				}],
+				groups: [
+					{
+						id: 'chat-editing',
+						label: localize('settings.chatEditing.label', 'Editing'),
+						description: localize('settings.chatEditing.description', 'Choose how Agent edits are reviewed.'),
+						settings: ['chat.editing.autoAcceptDelay', 'chat.canvases.enabled'],
+					},
+					{
+						id: 'customization-discovery',
+						label: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledTitle' }, 'Discover skills and connections'),
+						description: localize(
+							{ bundle: 'ash.extensions', key: 'marketplaceEnabledDescription' },
+							'Show catalog results in Skills and Connections within Extensions. Installed resources remain available.',
+						),
+						settings: ['chat.customizations.marketplace.enabled'],
+					},
+				],
 			},
 			{
 				id: 'models',
@@ -539,12 +667,14 @@ export const SettingsNavigation = [
 				description: localize({ bundle: 'ash.settings', key: 'categories.models.description' }, 'Choose models and configure model-specific behavior.'),
 				keywords: ['model providers', 'inference'],
 				presentation: 'general',
-				groups: [{
-					id: 'chat-default',
-					label: localize('settings.models.chatDefault.label', 'Chat'),
-					description: localize('settings.models.chatDefault.description', 'Choose the model used for new chats.'),
-					settings: ['chat.defaultModel', 'cowork.defaultmodel'],
-				}],
+				groups: [
+					{
+						id: 'chat-default',
+						label: localize('settings.models.chatDefault.label', 'Chat'),
+						description: localize('settings.models.chatDefault.description', 'Choose the model used for new chats.'),
+						settings: ['cowork.defaultmodel'],
+					},
+				],
 			},
 			{
 				id: 'rules',
@@ -582,8 +712,7 @@ export const SettingsNavigation = [
 	},
 ] as const satisfies readonly SettingsNavigationDescriptor[];
 
-export const SettingsCategories: readonly SettingsCategoryDescriptor[] = SettingsNavigation
-	.flatMap<SettingsCategoryDescriptor>(entry => 'categories' in entry ? entry.categories : [entry]);
+export const SettingsCategories: readonly SettingsCategoryDescriptor[] = SettingsNavigation.flatMap<SettingsCategoryDescriptor>(entry => ('categories' in entry ? entry.categories : [entry]));
 
 /** Projects registered configuration settings through the canonical layout. */
 export function createSettingsLayout(settings: readonly ISetting[]): readonly SettingsLayoutCategory[] {
@@ -591,16 +720,20 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 	const categories: SettingsLayoutCategory[] = SettingsCategories.map(category => ({
 		descriptor: category,
 		id: category.id,
-		groups: category.groups.map(group => {
-			const matches = [...remaining.values()].filter(setting => group.settings.some(pattern => matchesSettingId(setting.id, pattern)));
-			for (const setting of matches) remaining.delete(setting.id);
-			return {
-				id: group.id,
-				title: group.label,
-				description: group.description,
-				settings: matches.map(setting => ({ ...setting, presentation: category.presentation })),
-			};
-		}).filter(group => group.settings.length > 0),
+		groups: category.groups
+			.map(group => {
+				// Each group applies the same rules to every remaining setting.
+				const patterns = group.settings.map(settingIdPattern);
+				const matches = [...remaining.values()].filter(setting => patterns.some(pattern => pattern.test(setting.id)));
+				for (const setting of matches) remaining.delete(setting.id);
+				return {
+					id: group.id,
+					title: group.label,
+					description: group.description,
+					settings: matches.map(setting => ({ ...setting, presentation: category.presentation })),
+				};
+			})
+			.filter(group => group.settings.length > 0),
 	}));
 
 	if (remaining.size > 0) {
@@ -629,7 +762,14 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 		categories.push({
 			id: descriptor.id,
 			descriptor,
-			groups: [{ id: 'settings', title: label, description: '', settings: entries.map(setting => ({ ...setting, presentation: descriptor.presentation })) }],
+			groups: [
+				{
+					id: 'settings',
+					title: label,
+					description: '',
+					settings: entries.map(setting => ({ ...setting, presentation: descriptor.presentation })),
+				},
+			],
 		});
 	}
 	return categories;
@@ -691,9 +831,12 @@ function assertSettingsLayoutText(label: string, value: string): void {
 	if (!value.trim()) throw new TypeError(`Settings layout ${label} must not be empty`);
 }
 
-function matchesSettingId(settingId: string, pattern: string): boolean {
-	const source = pattern.split('*').map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('.*');
-	return new RegExp(`^${source}$`, 'u').test(settingId);
+function settingIdPattern(pattern: string): RegExp {
+	const source = pattern
+		.split('*')
+		.map(escapeRegExpCharacters)
+		.join('.*');
+	return new RegExp(`^${source}$`, 'u');
 }
 
 function assertSettingsLayoutId(label: string, value: string): void {

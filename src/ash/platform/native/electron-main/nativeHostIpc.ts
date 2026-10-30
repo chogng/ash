@@ -7,7 +7,7 @@ import type { IThemeMainService } from '../../theme/electron-main/themeMainServi
 import { WINDOW_SPLASH_READ_CHANNEL, WINDOW_SPLASH_SAVE_CHANNEL, validatePartsSplash, type IPartsSplash } from '../../theme/common/themeService.js';
 import type {
 	IpcRoute,
-} from "../../ipc/electron-main/trustedIpcRouter.js";
+} from '../../ipc/electron-main/trustedIpcRouter.js';
 import {
 	NATIVE_HOST_IS_ADMIN_CHANNEL,
 	NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL,
@@ -45,7 +45,7 @@ import {
 	validateSystemWideKeybindings,
 	validateNativeDialogOperation,
 	validateRevealFilePath,
-} from "../common/nativeHost.js";
+} from '../common/nativeHost.js';
 
 import { validateOpenEmptyWindowOptions, type IOpenEmptyWindowOptions, type TitleBarStyleConfiguration, type IWindowClientSize } from '../../window/common/window.js';
 import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';

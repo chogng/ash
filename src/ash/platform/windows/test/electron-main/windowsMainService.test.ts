@@ -15,7 +15,7 @@ import type { IAnyWorkspaceIdentifier } from '../../../workspace/common/workspac
 import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } from '../../../workspaces/node/workspaces.js';
 import { WindowsMainService, windowOperationIpcRoute, workspaceRecoveryIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 import type { IOpenConfiguration } from '../../electron-main/windows.js';
-import { WINDOW_OPEN_FILES_CHANNEL, validateWindowFilesRequest, validateWindowFilesResponse, validateAgentsWindowHandoffComplete } from '../../../window/common/window.js';
+import { WINDOW_OPEN_FILES_CHANNEL, validateWorkbenchWindowInfo, validateWindowFilesRequest, validateWindowFilesResponse, validateAgentsWindowHandoffComplete } from '../../../window/common/window.js';
 import { WindowsStateHandler } from '../../electron-main/windowsStateHandler.js';
 import { Event } from '../../../../base/common/event.js';
 import { DialogMainService, IDialogMainService } from '../../../dialogs/electron-main/dialogMainService.js';
@@ -98,7 +98,7 @@ test('window restoration selection respects the setting, explicit target, and up
 	assert.deepEqual(service.selectWindowsToRestore(session, 'none', true, true), { windows: [folder, empty], active: empty });
 });
 
-type RendererEvent = 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'did-start-navigation' | 'will-prevent-unload' | 'did-fail-load';
+type RendererEvent = 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'did-start-navigation' | 'did-navigate' | 'will-prevent-unload' | 'did-fail-load';
 type RendererListener = (() => void)
 	| ((event: unknown, details: Electron.RenderProcessGoneDetails) => void)
 	| ((event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void)
@@ -326,8 +326,8 @@ test('WindowsMainService lists, focuses, and closes only live Workbench windows'
 	using service = createWindowsService(() => [first, second], async () => undefined, 'win32');
 
 	assert.deepEqual(service.perform(first, { kind: 'list' }), [
-		{ id: 1, title: 'First', focused: false, current: true },
-		{ id: 2, title: 'Second', focused: false, current: false },
+		{ id: 1, title: 'First', focused: false, current: true, kind: 'editor' },
+		{ id: 2, title: 'Second', focused: false, current: false, kind: 'editor' },
 	]);
 	first.minimized = true;
 	service.perform(first, { kind: 'focusSelf' });
@@ -340,7 +340,7 @@ test('WindowsMainService lists, focuses, and closes only live Workbench windows'
 		first: ['restore', 'focus'],
 		second: ['restore', 'focus', 'close'],
 	});
-	assert.deepEqual(service.perform(first, { kind: 'list' }), [{ id: 1, title: 'First', focused: true, current: true }]);
+	assert.deepEqual(service.perform(first, { kind: 'list' }), [{ id: 1, title: 'First', focused: true, current: true, kind: 'editor' }]);
 	assert.throws(() => service.perform(second, { kind: 'getZoom' }), /Workbench window is closed/);
 	service.perform(first, { kind: 'close' });
 	assert.deepEqual(first.calls, ['restore', 'focus', 'close']);
@@ -377,14 +377,14 @@ test('WindowsMainService tracks auxiliary windows and releases them with their p
 	using service = createWindowsService(() => [parent], async () => undefined);
 	const registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
 	assert.deepEqual(service.perform(parent, { kind: 'list' }), [
-		{ id: 1, title: 'Workbench', focused: false, current: true },
-		{ id: 2, title: 'Editor', focused: false, current: false },
+		{ id: 1, title: 'Workbench', focused: false, current: true, kind: 'editor' },
+		{ id: 2, title: 'Editor', focused: false, current: false, kind: 'auxiliary' },
 	]);
 	service.perform(parent, { kind: 'focus', windowId: child.id });
 	assert.deepEqual(child.calls, ['focus']);
 	registration.dispose();
 	assert.equal(child.isDestroyed(), true);
-	assert.deepEqual(service.perform(parent, { kind: 'list' }), [{ id: 1, title: 'Workbench', focused: false, current: true }]);
+	assert.deepEqual(service.perform(parent, { kind: 'list' }), [{ id: 1, title: 'Workbench', focused: false, current: true, kind: 'editor' }]);
 
 	const next = new TestWindow(3, 'Editor');
 	using nextRegistration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(next.webContents as unknown as WebContents, parent.id);
@@ -497,7 +497,7 @@ test('an auxiliary renderer crash closes its window and removes it from window o
 	assert.deepEqual({ destroyed: child.isDestroyed(), auxiliary: auxiliary.getWindows(), windows: service.perform(parent, { kind: 'list' }) }, {
 		destroyed: true,
 		auxiliary: [],
-		windows: [{ id: 1, title: 'Workbench', focused: false, current: true }],
+		windows: [{ id: 1, title: 'Workbench', focused: false, current: true, kind: 'editor' }],
 	});
 });
 
@@ -521,11 +521,11 @@ test('WindowsMainService owns an independent Sessions window after the Workbench
 	await service.openManagedWindow('workspace', create, options, () => { closed++; });
 	assert.deepEqual({ created, shown: sessions.shown, focused: sessions.focused }, { created: 1, shown: 1, focused: true });
 	assert.deepEqual(service.perform(workbench, { kind: 'list' }), [
-		{ id: 1, title: 'Workbench', focused: false, current: true },
-		{ id: 2, title: 'Agents', focused: true, current: false },
+		{ id: 1, title: 'Workbench', focused: false, current: true, kind: 'editor' },
+		{ id: 2, title: 'Agents', focused: true, current: false, kind: 'managed' },
 	]);
 	service.perform(workbench, { kind: 'close' });
-	assert.deepEqual(service.perform(sessions, { kind: 'list' }), [{ id: 2, title: 'Agents', focused: true, current: true }]);
+	assert.deepEqual(service.perform(sessions, { kind: 'list' }), [{ id: 2, title: 'Agents', focused: true, current: true, kind: 'managed' }]);
 	service.perform(sessions, { kind: 'focusSelf' });
 	await service.closeManagedWindow('workspace');
 	assert.deepEqual({ current: service.managedWindow('workspace'), released, closed }, { current: undefined, released: 1, closed: 1 });
@@ -910,7 +910,13 @@ test('managed windows share activation, sizing and last-closed placement without
 	const display = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1040 } };
 	const handler = new WindowsStateHandler({
 		workspace: createEmptyWorkspaceIdentifier(),
-		stateService: { getItem: () => undefined, setItem: () => { }, removeItem: () => { }, flush: async () => { }, close: async () => { } },
+		stateService: {
+			getItem: () => undefined,
+			setItem: () => { },
+			removeItem: () => { },
+			flush: async () => { },
+			close: async () => { }
+		},
 		displayService: { onDidChangeDisplays: Event.None, getAllDisplays: () => [display], getPrimaryDisplay: () => display, getCursorDisplay: () => display, getDisplayMatching: () => display },
 	});
 	assert.deepEqual(service.getNewWindowState(handler, { 'window.newWindowDimensions': 'offset' }, false), {
@@ -1068,18 +1074,27 @@ test('window lists retain caller identity when another window owns OS focus and 
 	using service = createWindowsService(() => [parent, other], async () => undefined);
 	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
 	assert.deepEqual(service.perform(parent, { kind: 'list' }), [
-		{ id: 1, title: 'Workbench', focused: false, current: true },
-		{ id: 2, title: 'Other', focused: true, current: false },
-		{ id: 3, title: 'Editor', focused: false, current: false },
+		{ id: 1, title: 'Workbench', focused: false, current: true, kind: 'editor' },
+		{ id: 2, title: 'Other', focused: true, current: false, kind: 'editor' },
+		{ id: 3, title: 'Editor', focused: false, current: false, kind: 'auxiliary' },
 	]);
 	const route = windowOperationIpcRoute(service, parent);
 	const operation = route.validate({ kind: 'list', windowName: name });
 	assert.deepEqual(route.invoke(operation), [
-		{ id: 1, title: 'Workbench', focused: false, current: false },
-		{ id: 2, title: 'Other', focused: true, current: false },
-		{ id: 3, title: 'Editor', focused: false, current: true },
+		{ id: 1, title: 'Workbench', focused: false, current: false, kind: 'editor' },
+		{ id: 2, title: 'Other', focused: true, current: false, kind: 'editor' },
+		{ id: 3, title: 'Editor', focused: false, current: true, kind: 'auxiliary' },
 	]);
 	assert.throws(() => windowOperationIpcRoute(service, other).invoke(operation), /belongs to another workbench/);
 	assert.throws(() => route.validate({ kind: 'list', windowId: parent.id }), /Invalid window operation/);
 	assert.throws(() => route.validate({ kind: 'list', windowName: 'foreign' }), /Invalid window operation/);
+});
+
+
+test('native window snapshots reject malformed roles and IDs at the renderer boundary', () => {
+	const window = { id: 1, title: 'Editor', focused: false, current: true, kind: 'editor' };
+	assert.deepEqual(validateWorkbenchWindowInfo(window), window);
+	for (const invalid of [{ ...window, kind: 'unknown' }, { ...window, id: 0 }, { ...window, current: 'true' }, { ...window, extra: true }]) {
+		assert.throws(() => validateWorkbenchWindowInfo(invalid), /Invalid native window information/);
+	}
 });

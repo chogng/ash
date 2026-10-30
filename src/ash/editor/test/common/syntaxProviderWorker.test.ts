@@ -95,20 +95,20 @@ function statefulSupport(calls: string[]): ITokenizationSupport {
 	};
 }
 
-test("Syntax worker selects one token provider and merges diagnostic providers", async () => {
-	using model = new TextModel("value");
+test('Syntax worker selects one token provider and merges diagnostic providers', async () => {
+	using model = new TextModel('value');
 	using registry = new SyntaxProviderRegistry();
 	let ignoredTokenCalls = 0;
-	using first = registry.register(provider("first", {
-		tokens: () => tokenResult("variable"),
-		diagnostics: () => diagnosticResult("first"),
+	using first = registry.register(provider('first', {
+		tokens: () => tokenResult('variable'),
+		diagnostics: () => diagnosticResult('first'),
 	}));
-	using second = registry.register(provider("second", {
+	using second = registry.register(provider('second', {
 		tokens: () => {
 			ignoredTokenCalls += 1;
-			return tokenResult("keyword");
+			return tokenResult('keyword');
 		},
-		diagnostics: () => diagnosticResult("second"),
+		diagnostics: () => diagnosticResult('second'),
 	}));
 	using worker = new SyntaxProviderWorker(registry);
 
@@ -116,8 +116,8 @@ test("Syntax worker selects one token provider and merges diagnostic providers",
 	const diagnostics = await runLane(worker, model, SYNTAX_DIAGNOSTIC_LANE);
 
 	assert.equal(ignoredTokenCalls, 0);
-	assert.deepEqual(tokens.value.tokens.map(token => token.tokenType), ["variable"]);
-	assert.deepEqual(diagnostics.value.diagnostics.map(diagnostic => diagnostic.message), ["first", "second"]);
+	assert.deepEqual(tokens.value.tokens.map(token => token.tokenType), ['variable']);
+	assert.deepEqual(diagnostics.value.diagnostics.map(diagnostic => diagnostic.message), ['first', 'second']);
 });
 
 test('Syntax worker merges a large diagnostic batch without exceeding the argument limit', async () => {
@@ -135,20 +135,20 @@ test('Syntax worker merges a large diagnostic batch without exceeding the argume
 	assert.deepEqual(result.value.diagnostics, [...diagnostics, ...final.diagnostics]);
 });
 
-test("Syntax provider failures are isolated by lane and provider", async () => {
-	using model = new TextModel("value");
+test('Syntax provider failures are isolated by lane and provider', async () => {
+	using model = new TextModel('value');
 	using registry = new SyntaxProviderRegistry();
 	const errors: Array<{ readonly providerId: string; readonly lane: string; readonly error: unknown; }> = [];
-	using broken = registry.register(provider("broken", {
+	using broken = registry.register(provider('broken', {
 		tokens: () => {
-			throw new Error("token failed");
+			throw new Error('token failed');
 		},
 		diagnostics: () => {
-			throw new Error("diagnostic failed");
+			throw new Error('diagnostic failed');
 		},
 	}));
-	using healthy = registry.register(provider("healthy", {
-		diagnostics: () => diagnosticResult("healthy diagnostic"),
+	using healthy = registry.register(provider('healthy', {
+		diagnostics: () => diagnosticResult('healthy diagnostic'),
 	}));
 	using worker = new SyntaxProviderWorker(registry, (providerId, lane, error) => errors.push({ providerId, lane, error }));
 
@@ -156,53 +156,53 @@ test("Syntax provider failures are isolated by lane and provider", async () => {
 	const diagnostics = await runLane(worker, model, SYNTAX_DIAGNOSTIC_LANE);
 
 	assert.deepEqual(tokens.value.tokens, []);
-	assert.deepEqual(diagnostics.value.diagnostics.map(diagnostic => diagnostic.message), ["healthy diagnostic"]);
+	assert.deepEqual(diagnostics.value.diagnostics.map(diagnostic => diagnostic.message), ['healthy diagnostic']);
 	assert.deepEqual(errors.map(error => [error.providerId, error.lane]), [
-		["broken", SYNTAX_TOKEN_LANE],
-		["broken", SYNTAX_DIAGNOSTIC_LANE],
+		['broken', SYNTAX_TOKEN_LANE],
+		['broken', SYNTAX_DIAGNOSTIC_LANE],
 	]);
 });
 
-test("Syntax provider synchronization failures do not block healthy request lanes", async () => {
-	using model = new TextModel("value");
+test('Syntax provider synchronization failures do not block healthy request lanes', async () => {
+	using model = new TextModel('value');
 	using registry = new SyntaxProviderRegistry();
 	const errors: Array<{ readonly providerId: string; readonly operation: string; }> = [];
 	using registration = registry.register({
-		id: "sync-failure",
-		languageIds: ["typescript"],
-		provideDiagnostics: () => diagnosticResult("healthy after sync"),
+		id: 'sync-failure',
+		languageIds: ['typescript'],
+		provideDiagnostics: () => diagnosticResult('healthy after sync'),
 		synchronizeDocument: () => {
-			throw new Error("sync failed");
+			throw new Error('sync failed');
 		},
 	});
 	using worker = new SyntaxProviderWorker(registry, (providerId, operation) => errors.push({ providerId, operation }));
 	const previousVersion = model.version;
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
-		text: "!",
+		text: '!',
 	}]);
 	worker.synchronizeDocument({
 		previousVersion,
 		modelVersion: model.version,
 		eol: model.getEOL() as '\n' | '\r\n',
-		changes: [{ rangeOffset: 5, rangeLength: 0, text: "!" }],
+		changes: [{ rangeOffset: 5, rangeLength: 0, text: '!' }],
 		snapshot: model.createVersionedSnapshot(),
 	});
 
 	const result = await worker.run({
 		requestId: 1,
 		lane: SYNTAX_DIAGNOSTIC_LANE,
-		payload: { languageId: "typescript" },
+		payload: { languageId: 'typescript' },
 		snapshot: model.createVersionedSnapshot(),
 	}, new AbortController().signal);
 
-	assert.deepEqual(errors, [{ providerId: "sync-failure", operation: SYNTAX_SYNCHRONIZATION }]);
+	assert.deepEqual(errors, [{ providerId: 'sync-failure', operation: SYNTAX_SYNCHRONIZATION }]);
 	assert.equal(result.lane, SYNTAX_DIAGNOSTIC_LANE);
-	assert.deepEqual(result.value.diagnostics.map(diagnostic => diagnostic.message), ["healthy after sync"]);
+	assert.deepEqual(result.value.diagnostics.map(diagnostic => diagnostic.message), ['healthy after sync']);
 });
 
-test("An unconfigured syntax worker does not invent tokens or diagnostics", async () => {
-	using model = new TextModel("const value = 1 + 2;\nif (value] {");
+test('An unconfigured syntax worker does not invent tokens or diagnostics', async () => {
+	using model = new TextModel('const value = 1 + 2;\nif (value] {');
 	using registry = new SyntaxProviderRegistry();
 	using worker = new SyntaxProviderWorker(registry);
 	const tokens = await runLane(worker, model, SYNTAX_TOKEN_LANE);
@@ -211,68 +211,68 @@ test("An unconfigured syntax worker does not invent tokens or diagnostics", asyn
 	assert.deepEqual(diagnostics.value.diagnostics, []);
 });
 
-test("Syntax registry validates batches and releases providers independently", () => {
+test('Syntax registry validates batches and releases providers independently', () => {
 	using registry = new SyntaxProviderRegistry();
-	const registration = registry.register(provider("one", {
-		tokens: () => tokenResult("variable"),
+	const registration = registry.register(provider('one', {
+		tokens: () => tokenResult('variable'),
 	}));
-	assert.throws(() => registry.register(provider("one", {
-		diagnostics: () => diagnosticResult("duplicate"),
+	assert.throws(() => registry.register(provider('one', {
+		diagnostics: () => diagnosticResult('duplicate'),
 	})), /already registered/);
 	assert.throws(() => registry.register({
-		id: "empty",
-		languageIds: ["typescript"],
+		id: 'empty',
+		languageIds: ['typescript'],
 	}), /must implement/);
 	assert.throws(() => registry.registerMany([
-		provider("same", { tokens: () => tokenResult("variable") }),
-		provider("same", { diagnostics: () => diagnosticResult("same") }),
+		provider('same', { tokens: () => tokenResult('variable') }),
+		provider('same', { diagnostics: () => diagnosticResult('same') }),
 	]), /already registered/);
 
 	registration.dispose();
-	assert.equal(registry.getTokenProvider("typescript"), undefined);
+	assert.equal(registry.getTokenProvider('typescript'), undefined);
 });
 
-test("Syntax registry selects the highest token priority and keeps stable ties", () => {
+test('Syntax registry selects the highest token priority and keeps stable ties', () => {
 	using registry = new SyntaxProviderRegistry();
 	using registrations = new DisposableStore();
-	registrations.add(registry.register({ ...provider("baseline", { tokens: () => tokenResult("variable") }), tokenPriority: -10 }));
-	registrations.add(registry.register({ ...provider("preferred", { tokens: () => tokenResult("type") }), tokenPriority: 100 }));
-	registrations.add(registry.register({ ...provider("same-priority", { tokens: () => tokenResult("keyword") }), tokenPriority: 100 }));
+	registrations.add(registry.register({ ...provider('baseline', { tokens: () => tokenResult('variable') }), tokenPriority: -10 }));
+	registrations.add(registry.register({ ...provider('preferred', { tokens: () => tokenResult('type') }), tokenPriority: 100 }));
+	registrations.add(registry.register({ ...provider('same-priority', { tokens: () => tokenResult('keyword') }), tokenPriority: 100 }));
 
-	assert.equal(registry.getTokenProvider("typescript")?.id, "preferred");
-	assert.throws(() => registry.register({ ...provider("unsafe", { diagnostics: () => diagnosticResult("invalid") }), tokenPriority: 1 }), /token priority/);
-	assert.throws(() => registry.register({ ...provider("fractional", { tokens: () => tokenResult("variable") }), tokenPriority: 0.5 }), /token priority/);
+	assert.equal(registry.getTokenProvider('typescript')?.id, 'preferred');
+	assert.throws(() => registry.register({ ...provider('unsafe', { diagnostics: () => diagnosticResult('invalid') }), tokenPriority: 1 }), /token priority/);
+	assert.throws(() => registry.register({ ...provider('fractional', { tokens: () => tokenResult('variable') }), tokenPriority: 0.5 }), /token priority/);
 });
 
-test("Token providers fall through undefined and isolated failures by priority", async () => {
-	using model = new TextModel("value");
+test('Token providers fall through undefined and isolated failures by priority', async () => {
+	using model = new TextModel('value');
 	using registry = new SyntaxProviderRegistry();
 	const calls: string[] = [];
 	const errors: string[] = [];
 	using registrations = new DisposableStore();
 	registrations.add(registry.register({
-		...provider("baseline", {
+		...provider('baseline', {
 			tokens: () => {
-				calls.push("baseline");
-				return tokenResult("variable");
+				calls.push('baseline');
+				return tokenResult('variable');
 			}
 		}),
 		tokenPriority: 0,
 	}));
 	registrations.add(registry.register({
-		...provider("missing", {
+		...provider('missing', {
 			tokens: () => {
-				calls.push("missing");
+				calls.push('missing');
 				return undefined;
 			}
 		}),
 		tokenPriority: 100,
 	}));
 	registrations.add(registry.register({
-		...provider("broken", {
+		...provider('broken', {
 			tokens: () => {
-				calls.push("broken");
-				throw new Error("broken tokens");
+				calls.push('broken');
+				throw new Error('broken tokens');
 			}
 		}),
 		tokenPriority: 50,
@@ -280,21 +280,21 @@ test("Token providers fall through undefined and isolated failures by priority",
 	using worker = new SyntaxProviderWorker(registry, providerId => errors.push(providerId));
 
 	const tokens = await runLane(worker, model, SYNTAX_TOKEN_LANE);
-	assert.deepEqual(calls, ["missing", "broken", "baseline"]);
-	assert.deepEqual(errors, ["broken"]);
-	assert.equal(tokens.value.tokens[0]!.tokenType, "variable");
+	assert.deepEqual(calls, ['missing', 'broken', 'baseline']);
+	assert.deepEqual(errors, ['broken']);
+	assert.equal(tokens.value.tokens[0]!.tokenType, 'variable');
 });
 
 function provider(
 	id: string,
 	capabilities: {
-		readonly tokens?: NonNullable<SyntaxProvider["provideTokens"]>;
-		readonly diagnostics?: NonNullable<SyntaxProvider["provideDiagnostics"]>;
+		readonly tokens?: NonNullable<SyntaxProvider['provideTokens']>;
+		readonly diagnostics?: NonNullable<SyntaxProvider['provideDiagnostics']>;
 	},
 ): SyntaxProvider {
 	return {
 		id,
-		languageIds: ["typescript"],
+		languageIds: ['typescript'],
 		...(capabilities.tokens === undefined ? {} : { provideTokens: capabilities.tokens }),
 		...(capabilities.diagnostics === undefined ? {} : { provideDiagnostics: capabilities.diagnostics }),
 	};
@@ -316,7 +316,7 @@ function diagnosticResult(message: string): LanguageDiagnosticResult {
 			range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
 			severity: LanguageDiagnosticSeverity.Warning,
 			message,
-			source: "test",
+			source: 'test',
 		}],
 	};
 }

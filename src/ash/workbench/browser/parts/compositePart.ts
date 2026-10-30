@@ -1,9 +1,9 @@
 import './media/compositepart.css';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
-import { Emitter, Event } from "../../../base/common/event.js";
-import { DisposableMap, MutableDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { Part } from "../part.js";
+import { Emitter, Event } from '../../../base/common/event.js';
+import { DisposableMap, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Part } from '../part.js';
 import type { IComposite } from '../../common/composite.js';
 import type { Composite } from '../composite.js';
 import { WorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
@@ -49,7 +49,7 @@ export abstract class CompositePart<T extends Composite> extends Part {
 		@IStorageService storageService: IStorageService,
 	) {
 		super(container, id, themeService, storageService);
-		this.contentDomNode.classList.add("ash-composite-content");
+		this.contentDomNode.classList.add('ash-composite-content');
 	}
 
 	addComposite(composite: T): void {

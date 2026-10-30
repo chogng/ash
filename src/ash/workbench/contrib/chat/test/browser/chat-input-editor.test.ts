@@ -1,25 +1,25 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { ChatInputEditorRegistry, type ChatInputEditorOptions, type IChatInputEditor } from "../../browser/widget/input/chatInputEditorRegistry.js";
-import { SlashCommandCatalog } from "../../../../../workbench/contrib/chat/common/slashCommands.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { Emitter, type Event } from '../../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { ChatInputEditorRegistry, type ChatInputEditorOptions, type IChatInputEditor } from '../../browser/widget/input/chatInputEditorRegistry.js';
+import { SlashCommandCatalog } from '../../../../../workbench/contrib/chat/common/slashCommands.js';
 import { SkillSelectorCatalog } from '../../../../../workbench/contrib/chat/common/skillSelectors.js';
-import { h } from "../../../../../base/browser/dom.js";
+import { h } from '../../../../../base/browser/dom.js';
 
 const slashCommands = new SlashCommandCatalog([], []);
 const skills = new SkillSelectorCatalog();
 
-test("Chat input editor fallback owns multiline change and submit gestures", () => {
+test('Chat input editor fallback owns multiline change and submit gestures', () => {
 	const dom = new JSDOM("<!doctype html><body><div id='host'></div></body>");
-	const container = dom.window.document.querySelector<HTMLElement>("#host");
+	const container = dom.window.document.querySelector<HTMLElement>('#host');
 	assert.ok(container);
 	const registry = new ChatInputEditorRegistry();
 	using editor = registry.create({
 		container,
-		placeholder: "Ask Ash",
-		ariaLabel: "Chat message",
+		placeholder: 'Ask Ash',
+		ariaLabel: 'Chat message',
 		slashCommands,
 		skills,
 	});
@@ -29,23 +29,23 @@ test("Chat input editor fallback owns multiline change and submit gestures", () 
 	using submitListener = editor.onDidSubmit(() => submissions++);
 	const textarea = editor.element;
 	assert.ok(textarea instanceof dom.window.HTMLTextAreaElement);
-	assert.equal(registry.activeProviderId, "textarea");
-	assert.equal(textarea.getAttribute("aria-label"), "Chat message");
-	assert.equal(textarea.getAttribute("placeholder"), "Ask Ash");
+	assert.equal(registry.activeProviderId, 'textarea');
+	assert.equal(textarea.getAttribute('aria-label'), 'Chat message');
+	assert.equal(textarea.getAttribute('placeholder'), 'Ask Ash');
 
-	editor.value = "First draft";
-	assert.deepEqual(changes, ["First draft"]);
-	textarea.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+	editor.value = 'First draft';
+	assert.deepEqual(changes, ['First draft']);
+	textarea.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
-		key: "Enter",
+		key: 'Enter',
 		shiftKey: true,
 	}));
 	assert.equal(submissions, 0);
-	const submitEvent = new dom.window.KeyboardEvent("keydown", {
+	const submitEvent = new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
-		key: "Enter",
+		key: 'Enter',
 	});
 	textarea.dispatchEvent(submitEvent);
 	assert.equal(submitEvent.defaultPrevented, true);
@@ -59,27 +59,27 @@ test("Chat input editor fallback owns multiline change and submit gestures", () 
 	dom.window.close();
 });
 
-test("Chat input editor registry selects and releases a product provider", () => {
+test('Chat input editor registry selects and releases a product provider', () => {
 	const dom = new JSDOM("<!doctype html><body><div id='host'></div></body>");
-	const container = dom.window.document.querySelector<HTMLElement>("#host");
+	const container = dom.window.document.querySelector<HTMLElement>('#host');
 	assert.ok(container);
 	const registry = new ChatInputEditorRegistry();
 	const created: ChatInputEditorOptions[] = [];
 	const provider = {
-		id: "rich-editor",
+		id: 'rich-editor',
 		create: (options: ChatInputEditorOptions) => {
 			created.push(options);
 			return new FakeChatInputEditor(options);
 		},
 	};
 	using registration = registry.register(provider);
-	assert.equal(registry.activeProviderId, "rich-editor");
+	assert.equal(registry.activeProviderId, 'rich-editor');
 	assert.throws(() => registry.register(provider), /already registered/);
 
 	using editor = registry.create({
 		container,
-		placeholder: "Prompt",
-		ariaLabel: "Prompt editor",
+		placeholder: 'Prompt',
+		ariaLabel: 'Prompt editor',
 		slashCommands,
 		skills,
 	});
@@ -88,7 +88,7 @@ test("Chat input editor registry selects and releases a product provider", () =>
 	assert.equal(editor.element.parentElement, container);
 
 	registration.dispose();
-	assert.equal(registry.activeProviderId, "textarea");
+	assert.equal(registry.activeProviderId, 'textarea');
 	dom.window.close();
 });
 
@@ -101,11 +101,11 @@ class FakeChatInputEditor extends Disposable implements IChatInputEditor {
 	private readonly _onDidSubmit = this._register(new Emitter<void>());
 	readonly onDidChange: Event<string> = this._onDidChange.event;
 	readonly onDidSubmit: Event<void> = this._onDidSubmit.event;
-	value = "";
+	value = '';
 
 	constructor(options: ChatInputEditorOptions) {
 		super();
-		this.element = h(options.container.ownerDocument, "div");
+		this.element = h(options.container.ownerDocument, 'div');
 		options.container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 	}

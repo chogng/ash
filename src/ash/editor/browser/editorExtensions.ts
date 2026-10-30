@@ -14,8 +14,8 @@ import { IModelService } from '../common/services/model.js';
 import { ITextModelService } from '../common/services/resolverService.js';
 import { MenuId, MenusRegistry, Action2 } from '../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandMetadata } from '../../platform/commands/common/commands.js';
-import { ContextKeyExpr, ContextKeyExpression } from "../../platform/contextkey/common/contextkey.js";
-import { IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
+import { ContextKeyExpr, ContextKeyExpression } from '../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { ServicesAccessor as InstantiationServicesAccessor, IInstantiationService, type ServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../platform/keybinding/common/keybindingsRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
@@ -887,17 +887,17 @@ export const UndoCommand = registerCommand(new MultiCommand({
 	menuOpts: [{
 		menuId: MenuId.MenubarEditMenu,
 		group: '1_do',
-		title: nls.localize('miUndo', "Undo"),
+		title: nls.localize('miUndo', 'Undo'),
 		order: 1
 	}, {
 		menuId: MenuId.CommandPalette,
 		group: '',
-		title: nls.localize('undo', "Undo"),
+		title: nls.localize('undo', 'Undo'),
 		order: 1
 	}, {
 		menuId: MenuId.for('SimpleEditorContext'),
 		group: '1_do',
-		title: nls.localize('undo', "Undo"),
+		title: nls.localize('undo', 'Undo'),
 		order: 1
 	}]
 }));
@@ -916,17 +916,17 @@ export const RedoCommand = registerCommand(new MultiCommand({
 	menuOpts: [{
 		menuId: MenuId.MenubarEditMenu,
 		group: '1_do',
-		title: nls.localize('miRedo', "Redo"),
+		title: nls.localize('miRedo', 'Redo'),
 		order: 2
 	}, {
 		menuId: MenuId.CommandPalette,
 		group: '',
-		title: nls.localize('redo', "Redo"),
+		title: nls.localize('redo', 'Redo'),
 		order: 1
 	}, {
 		menuId: MenuId.for('SimpleEditorContext'),
 		group: '1_do',
-		title: nls.localize('redo', "Redo"),
+		title: nls.localize('redo', 'Redo'),
 		order: 2
 	}]
 }));
@@ -944,17 +944,17 @@ export const SelectAllCommand = registerCommand(new MultiCommand({
 	menuOpts: [{
 		menuId: MenuId.MenubarSelectionMenu,
 		group: '1_basic',
-		title: nls.localize('miSelectAll', "Select All"),
+		title: nls.localize('miSelectAll', 'Select All'),
 		order: 1
 	}, {
 		menuId: MenuId.CommandPalette,
 		group: '',
-		title: nls.localize('selectAll', "Select All"),
+		title: nls.localize('selectAll', 'Select All'),
 		order: 1
 	}, {
 		menuId: MenuId.for('SimpleEditorContext'),
 		group: '9_select',
-		title: nls.localize('selectAll', "Select All"),
+		title: nls.localize('selectAll', 'Select All'),
 		order: 1
 	}]
 }));

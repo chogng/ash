@@ -1,7 +1,7 @@
-import { type Event } from "../../../../base/common/event.js";
-import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type TextResourceSaveResult, type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
-import { type ITextFileService } from "../../../services/textfile/common/textfiles.js";
-import { TextFileSaveConflictError } from "../../../services/textfile/common/textFileService.js";
+import { type Event } from '../../../../base/common/event.js';
+import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type TextResourceSaveResult, type ITextResourceStore } from '../../../services/textmodelResolver/common/textResourceStore.js';
+import { type ITextFileService } from '../../../services/textfile/common/textfiles.js';
+import { TextFileSaveConflictError } from '../../../services/textfile/common/textFileService.js';
 
 /** Adapts the Workbench text-file service to the editor resource contract. */
 export class BrowserTextResourceStore implements ITextResourceStore {
@@ -40,7 +40,7 @@ export function getBrowserTextResourceStore(textFiles: ITextFileService): Browse
 }
 
 function validateTextFileService(textFiles: ITextFileService): void {
-	if (!textFiles || typeof textFiles.resolve !== "function" || typeof textFiles.save !== "function" || typeof textFiles.onDidChangeFiles !== "function") {
-		throw new TypeError("Browser resource store requires a Workbench text file service");
+	if (!textFiles || typeof textFiles.resolve !== 'function' || typeof textFiles.save !== 'function' || typeof textFiles.onDidChangeFiles !== 'function') {
+		throw new TypeError('Browser resource store requires a Workbench text file service');
 	}
 }

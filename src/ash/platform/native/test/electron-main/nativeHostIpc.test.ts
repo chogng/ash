@@ -156,7 +156,7 @@ test('the Renderer Host transports shared dialog options, complete results, and 
 			},
 		},
 		ipcMessagePort: { acquire: () => { throw new Error('Unexpected port request'); } },
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 	Object.defineProperty(globalThis, 'ash', { configurable: true, value: globals });

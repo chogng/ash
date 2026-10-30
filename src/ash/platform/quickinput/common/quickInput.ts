@@ -1,11 +1,11 @@
-import type { Event } from "../../../base/common/event.js";
+import type { Event } from '../../../base/common/event.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
-import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { ResolvedKeybinding } from "../../../base/common/keybindings.js";
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
 import type { IQuickAccessController } from './quickAccess.js';
 import {
 	createServiceIdentifier,
-} from "../../instantiation/common/instantiation.js";
+} from '../../instantiation/common/instantiation.js';
 
 /** Presentation shared by searchable Quick Pick providers. */
 export interface IQuickPickItem {
@@ -18,6 +18,8 @@ export interface IQuickPickItem {
 	readonly className?: string;
 	readonly buttons?: readonly IQuickPickItemButton[];
 	readonly iconClass?: string;
+	/** Resource icon classes resolved by the active file icon theme. */
+	readonly iconClasses?: readonly string[];
 	readonly alwaysShow?: boolean;
 }
 
@@ -141,4 +143,4 @@ export interface IQuickInputService {
 }
 
 export const IQuickInputService =
-	createServiceIdentifier<IQuickInputService>("quickInputService");
+	createServiceIdentifier<IQuickInputService>('quickInputService');

@@ -1,10 +1,10 @@
-import assert from "node:assert/strict";
-import { readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { test } from "mocha";
-import { findDesktopRoot } from "./testPaths.js";
+import assert from 'node:assert/strict';
+import { readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { test } from 'mocha';
+import { findDesktopRoot } from './testPaths.js';
 
-const editorRoot = resolve(findDesktopRoot(import.meta.dirname), "src/ash/editor");
+const editorRoot = resolve(findDesktopRoot(import.meta.dirname), 'src/ash/editor');
 
 function exists(file: string): boolean {
 	try {

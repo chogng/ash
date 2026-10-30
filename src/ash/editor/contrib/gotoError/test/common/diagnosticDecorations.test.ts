@@ -1,16 +1,16 @@
 import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { TextDecorationChangeReason } from "../../../../common/model/decorationCollection.js";
-import { LanguageDiagnosticDecorationBridge } from "../../common/diagnosticDecorations.js";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { TextDecorationChangeReason } from '../../../../common/model/decorationCollection.js';
+import { LanguageDiagnosticDecorationBridge } from '../../common/diagnosticDecorations.js';
 import { LanguageResultAcceptance, createLanguageDiagnosticStore } from '../../../../common/model/languageResultStore.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from '../../../../common/languages.js';
-import { Position } from "../../../../common/core/position.js";
-import { Range } from "../../../../common/core/range.js";
-import { TextModel } from "../../../../common/model/textModel.js";
-import { Emitter } from "../../../../../base/common/event.js";
-import { URI } from "../../../../../base/common/uri.js";
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
+import { TextModel } from '../../../../common/model/textModel.js';
+import { Emitter } from '../../../../../base/common/event.js';
+import { URI } from '../../../../../base/common/uri.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
 const range = (lineIndex: number, startColumn: number, endColumn: number): Range => Range.fromPositions(
@@ -18,12 +18,12 @@ const range = (lineIndex: number, startColumn: number, endColumn: number): Range
 	position(lineIndex, endColumn),
 );
 
-test("Diagnostic bridge projects existing results, replacements, and clear", () => {
-	using model = new TextModel("abc\ndef");
+test('Diagnostic bridge projects existing results, replacements, and clear', () => {
+	using model = new TextModel('abc\ndef');
 	using store = createLanguageDiagnosticStore(model);
 	acceptDiagnostics(store, model, 1, [
-		diagnostic(range(0, 0, 2), LanguageDiagnosticSeverity.Error, "error"),
-		diagnostic(range(1, 1, 3), LanguageDiagnosticSeverity.Warning, "warning"),
+		diagnostic(range(0, 0, 2), LanguageDiagnosticSeverity.Error, 'error'),
+		diagnostic(range(1, 1, 3), LanguageDiagnosticSeverity.Warning, 'warning'),
 	]);
 	using bridge = new LanguageDiagnosticDecorationBridge(store);
 	const first = bridge.decorations.decorations;
@@ -39,11 +39,11 @@ test("Diagnostic bridge projects existing results, replacements, and clear", () 
 	const events: unknown[] = [];
 	using listener = bridge.decorations.onDidChange(event => events.push(event));
 	acceptDiagnostics(store, model, 2, [
-		diagnostic(range(1, 0, 1), LanguageDiagnosticSeverity.Information, "info"),
+		diagnostic(range(1, 0, 1), LanguageDiagnosticSeverity.Information, 'info'),
 	]);
 	const second = bridge.decorations.decorations;
 	assert.equal(second.length, 1);
-	assert.equal(second[0]!.metadata.message, "info");
+	assert.equal(second[0]!.metadata.message, 'info');
 	assert.equal(first.some(entry => entry.id === second[0]!.id), true);
 
 	store.clear();
@@ -56,19 +56,19 @@ test("Diagnostic bridge projects existing results, replacements, and clear", () 
 	]);
 });
 
-test("Model edits clear diagnostics before decoration ranges can drift", () => {
-	using model = new TextModel("abc");
+test('Model edits clear diagnostics before decoration ranges can drift', () => {
+	using model = new TextModel('abc');
 	using store = createLanguageDiagnosticStore(model);
 	using bridge = new LanguageDiagnosticDecorationBridge(store);
 	acceptDiagnostics(store, model, 1, [
-		diagnostic(range(0, 1, 3), LanguageDiagnosticSeverity.Error, "error"),
+		diagnostic(range(0, 1, 3), LanguageDiagnosticSeverity.Error, 'error'),
 	]);
 	const events: unknown[] = [];
 	using listener = bridge.decorations.onDidChange(event => events.push(event));
 
 	model.applyEdits([{
 		range: Range.fromPositions(position(0, 0)),
-		text: "X",
+		text: 'X',
 	}]);
 
 	assert.equal(store.result, undefined);
@@ -80,33 +80,33 @@ test("Model edits clear diagnostics before decoration ranges can drift", () => {
 	}]);
 });
 
-test("Diagnostic bridge merges only current external diagnostics and removes duplicates", () => {
-	using model = new TextModel("abc");
+test('Diagnostic bridge merges only current external diagnostics and removes duplicates', () => {
+	using model = new TextModel('abc');
 	using store = createLanguageDiagnosticStore(model);
-	const resource = URI.file("C:\\project\\main.rs");
+	const resource = URI.file('C:\\project\\main.rs');
 	using changes = new Emitter<URI>();
-	let external = { resource, revision: model.version, diagnostics: [diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Error, "shared")] };
+	let external = { resource, revision: model.version, diagnostics: [diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Error, 'shared')] };
 	using bridge = new LanguageDiagnosticDecorationBridge(store, {
 		onDidChangeDiagnostics: changes.event,
 		getDiagnostics: () => external,
 	}, resource);
-	acceptDiagnostics(store, model, 1, [diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Error, "shared")]);
+	acceptDiagnostics(store, model, 1, [diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Error, 'shared')]);
 
 	assert.equal(bridge.decorations.decorations.length, 1);
-	model.applyEdits([{ range: Range.fromPositions(position(0, 3)), text: "d" }]);
+	model.applyEdits([{ range: Range.fromPositions(position(0, 3)), text: 'd' }]);
 	assert.equal(bridge.decorations.decorations.length, 0);
 
-	external = { resource, revision: model.version, diagnostics: [diagnostic(range(0, 1, 2), LanguageDiagnosticSeverity.Warning, "fresh")] };
+	external = { resource, revision: model.version, diagnostics: [diagnostic(range(0, 1, 2), LanguageDiagnosticSeverity.Warning, 'fresh')] };
 	changes.fire(resource);
-	assert.equal(bridge.decorations.decorations[0]!.metadata.message, "fresh");
+	assert.equal(bridge.decorations.decorations[0]!.metadata.message, 'fresh');
 });
 
-test("Diagnostic bridge disposal owns only its projected collection", () => {
-	using model = new TextModel("abc");
+test('Diagnostic bridge disposal owns only its projected collection', () => {
+	using model = new TextModel('abc');
 	using store = createLanguageDiagnosticStore(model);
 	const bridge = new LanguageDiagnosticDecorationBridge(store);
 	acceptDiagnostics(store, model, 1, [
-		diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Hint, "hint"),
+		diagnostic(range(0, 0, 1), LanguageDiagnosticSeverity.Hint, 'hint'),
 	]);
 	bridge.dispose();
 
@@ -114,9 +114,9 @@ test("Diagnostic bridge disposal owns only its projected collection", () => {
 	assert.equal(store.result!.value.diagnostics.length, 1);
 	model.applyEdits([{
 		range: range(0, 0, 1),
-		text: "A",
+		text: 'A',
 	}]);
-	assert.equal(model.getText(), "Abc");
+	assert.equal(model.getText(), 'Abc');
 });
 
 function acceptDiagnostics(

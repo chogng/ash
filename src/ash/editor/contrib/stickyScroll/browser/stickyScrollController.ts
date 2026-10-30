@@ -1,18 +1,18 @@
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Position } from "../../../common/core/position.js";
-import { type ICodeEditor } from "../../../browser/editorBrowser.js";
-import { EditorOption } from "../../../common/config/editorOptions.js";
-import { type View } from "../../../browser/view.js";
-import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
-import { addDisposableListener, isNode, stopEvent } from "../../../../base/browser/dom.js";
-import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
-import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { EditorContextKeys } from "../../../common/editorContextKeys.js";
-import { StickyLineCandidateProvider, type IStickyLineCandidateProvider } from "./stickyScrollProvider.js";
-import { StickyScrollWidget, StickyScrollWidgetState } from "./stickyScrollWidget.js";
-import { StickyRange } from "./stickyScrollElement.js";
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Position } from '../../../common/core/position.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { type View } from '../../../browser/view.js';
+import { type EditorFoldingModel } from '../../folding/browser/foldingModel.js';
+import { addDisposableListener, isNode, stopEvent } from '../../../../base/browser/dom.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { EditorContextKeys } from '../../../common/editorContextKeys.js';
+import { StickyLineCandidateProvider, type IStickyLineCandidateProvider } from './stickyScrollProvider.js';
+import { StickyScrollWidget, StickyScrollWidgetState } from './stickyScrollWidget.js';
+import { StickyRange } from './stickyScrollElement.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import type { ReferencesController } from '../../gotoSymbol/browser/peek/referencesController.js';
 import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
@@ -23,7 +23,7 @@ import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '.
 
 /** Coordinates scope headers with the editor's existing layout and selection. */
 export class StickyScrollController extends Disposable {
-	public static readonly ID = "store.contrib.stickyScrollController";
+	public static readonly ID = 'store.contrib.stickyScrollController';
 	private readonly widget: StickyScrollWidget;
 	private readonly candidateProvider: StickyLineCandidateProvider;
 	private readonly visible: IContextKey<boolean>;
@@ -47,7 +47,7 @@ export class StickyScrollController extends Disposable {
 	) {
 		super();
 		if (folding.model !== viewport.textModel) {
-			throw new TypeError("Stanza sticky scroll dependencies must share a text model");
+			throw new TypeError('Stanza sticky scroll dependencies must share a text model');
 		}
 		this.candidateProvider = this._register(instantiationService.createInstance(StickyLineCandidateProvider, editor, folding, onError));
 		this.widget = this._register(new StickyScrollWidget(editor, viewport.textModel));
@@ -65,19 +65,19 @@ export class StickyScrollController extends Disposable {
 				this.contextMenuService.hideContextMenu();
 			}
 		}));
-		this._register(addDisposableListener(element, "focusin", () => focused.set(true)));
-		this._register(addDisposableListener(element, "focusout", () => focused.set(this.isFocused())));
-		this._register(addDisposableListener(element, "pointerdown", event => {
+		this._register(addDisposableListener(element, 'focusin', () => focused.set(true)));
+		this._register(addDisposableListener(element, 'focusout', () => focused.set(this.isFocused())));
+		this._register(addDisposableListener(element, 'pointerdown', event => {
 			if (event.button === 0) {
 				stopEvent(event);
 			}
 		}));
-		this._register(addDisposableListener(element, "mousedown", event => {
+		this._register(addDisposableListener(element, 'mousedown', event => {
 			if (event.button === 0) {
 				stopEvent(event);
 			}
 		}));
-		this._register(addDisposableListener(element, "keydown", event => {
+		this._register(addDisposableListener(element, 'keydown', event => {
 			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
 				stopEvent(event);
 				const target = element.ownerDocument.activeElement as HTMLElement;
@@ -89,20 +89,20 @@ export class StickyScrollController extends Disposable {
 			}
 			let command: string;
 			switch (event.key) {
-				case "ArrowDown":
-					command = "editor.action.selectNextStickyScrollLine";
+				case 'ArrowDown':
+					command = 'editor.action.selectNextStickyScrollLine';
 					break;
-				case "ArrowUp":
-					command = "editor.action.selectPreviousStickyScrollLine";
+				case 'ArrowUp':
+					command = 'editor.action.selectPreviousStickyScrollLine';
 					break;
-				case "Enter":
+				case 'Enter':
 					if (this.widget.isInFoldingIconDomNode(event.target as HTMLElement)) {
 						return;
 					}
-					command = "editor.action.goToFocusedStickyScrollLine";
+					command = 'editor.action.goToFocusedStickyScrollLine';
 					break;
-				case "Escape":
-					command = "editor.action.selectEditor";
+				case 'Escape':
+					command = 'editor.action.selectEditor';
 					break;
 				default:
 					return;
@@ -136,39 +136,39 @@ export class StickyScrollController extends Disposable {
 			this.showContextMenu({ x: event.clientX, y: event.clientY, targetWindow: element.ownerDocument.defaultView! },
 				this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement));
 		}));
-		this._register(addDisposableListener(element, "pointermove", event => {
+		this._register(addDisposableListener(element, 'pointermove', event => {
 			this.pointer = { x: event.clientX, y: event.clientY };
 			const index = this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement);
 			this.hoveredLine = index === null ? null : this.widget.getCurrentLines()[index]!;
 			this.preview(event.shiftKey);
 			this.updateDefinitionLink(this.isDefinitionTrigger(event) && event.buttons === 0);
 		}));
-		this._register(addDisposableListener(element, "pointerleave", () => {
+		this._register(addDisposableListener(element, 'pointerleave', () => {
 			this.pointer = undefined;
 			this.clearDefinitionLink();
 			this.hoveredLine = null;
 			this.preview(false);
 		}));
 		const window = element.ownerDocument.defaultView!;
-		this._register(addDisposableListener(window, "keydown", event => {
-			if (event.key === "Shift") {
+		this._register(addDisposableListener(window, 'keydown', event => {
+			if (event.key === 'Shift') {
 				this.preview(true);
 			}
 			this.updateDefinitionLink(this.isDefinitionTrigger(event) && !event.isComposing);
 		}));
-		this._register(addDisposableListener(window, "keyup", event => {
-			if (event.key === "Shift") {
+		this._register(addDisposableListener(window, 'keyup', event => {
+			if (event.key === 'Shift') {
 				this.preview(false);
 			}
 			this.updateDefinitionLink(this.isDefinitionTrigger(event));
 		}));
-		this._register(addDisposableListener(window, "blur", () => {
+		this._register(addDisposableListener(window, 'blur', () => {
 			this.pointer = undefined;
 			this.clearDefinitionLink();
 			this.hoveredLine = null;
 			this.preview(false);
 		}));
-		this._register(addDisposableListener(element, "click", event => {
+		this._register(addDisposableListener(element, 'click', event => {
 			if (event.button !== 0) {
 				return;
 			}
@@ -388,7 +388,7 @@ export class StickyScrollController extends Disposable {
 
 	private revealLine(lineNumber: number): void {
 		const position = new Position(lineNumber, 1);
-		this.editor.setPosition(position, "stickyScroll");
+		this.editor.setPosition(position, 'stickyScroll');
 		this.viewport.revealPosition(position);
 		this.editor.focus();
 	}

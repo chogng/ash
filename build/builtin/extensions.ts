@@ -168,11 +168,17 @@ async function preparePackages(): Promise<boolean> {
 			const cached = await readJsonCache(cachePath);
 			const bundle = cached?.bundle as { module?: unknown; sources?: unknown; files?: unknown; } | undefined;
 			let module: Buffer;
-			if (cached?.input === input && bundle && typeof bundle.module === 'string'
-				&& Array.isArray(bundle.sources) && bundle.sources.every(source => typeof source === 'string')
-				&& Array.isArray(bundle.files) && bundle.files.every(file => typeof file === 'string')
-				&& cached.digest === digest(JSON.stringify(bundle))
-				&& cached.dependencies === await fingerprintPaths(bundle.files)) {
+			if (
+				cached?.input === input &&
+				bundle &&
+				typeof bundle.module === 'string' &&
+				Array.isArray(bundle.sources) &&
+				bundle.sources.every(source => typeof source === 'string') &&
+				Array.isArray(bundle.files) &&
+				bundle.files.every(file => typeof file === 'string') &&
+				cached.digest === digest(JSON.stringify(bundle)) &&
+				cached.dependencies === (await fingerprintPaths(bundle.files))
+			) {
 				module = Buffer.from(bundle.module, 'base64');
 				for (const source of bundle.sources) { compiledSources.add(source); }
 			} else {
@@ -239,7 +245,8 @@ async function preparePackages(): Promise<boolean> {
 					}
 				};
 				const result = await build({
-					configFile: false, logLevel: 'error',
+					configFile: false,
+					logLevel: 'error',
 					plugins: [sourcePlugin, {
 						name: 'ash-extension-webview',
 						// Bind the SDK before Vite resolves an author's installed SDK package.
@@ -285,8 +292,13 @@ async function preparePackages(): Promise<boolean> {
 						},
 					}],
 					// Browser language libraries operate on URI paths without a Node runtime.
-					resolve: { alias: { 'node:path': createRequire(import.meta.url).resolve('path-browserify'), 'path': createRequire(import.meta.url).resolve('path-browserify') } },
-					build: { write: false, minify: false, target: 'es2015', lib: { entry: resolve(packageRoot, '__ash_browser_entry__.js'), formats: ['es'], fileName: 'extension' } }
+					resolve: {
+						alias: {
+							'node:path': createRequire(import.meta.url).resolve('path-browserify'),
+							path: createRequire(import.meta.url).resolve('path-browserify'),
+						},
+					},
+					build: { write: false, minify: false, target: 'es2015', lib: { entry: resolve(packageRoot, '__ash_browser_entry__.js'), formats: ['es'], fileName: 'extension' } },
 				});
 				const outputs = Array.isArray(result) ? result.flatMap(output => output.output) : 'output' in result ? result.output : [];
 				const chunks = outputs.filter(output => output.type === 'chunk');

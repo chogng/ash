@@ -3,16 +3,16 @@ import { after as afterCodeFeatures } from 'mocha';
 import './testEditorDom.js';
 import { browserEnvironment } from './testEditorDom.js';
 import { editorCursorForeground } from '../../common/core/editorColorRegistry.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
-import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { TextDecorationCollection } from '../../common/model/decorationCollection.js';
+import { LanguageDiagnosticDecorationBridge } from '../../contrib/gotoError/common/diagnosticDecorations.js';
 import { LanguageResultAcceptance, createLanguageDiagnosticStore } from '../../common/model/languageResultStore.js';
 import { LanguageDiagnosticSeverity } from '../../common/languages.js';
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
 import { GlyphMarginLane, MinimapPosition, OverviewRulerLane, TrackedRangeStickiness } from '../../common/model.js';
 import { themeColorFromId } from '../../../base/common/themables.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
@@ -21,11 +21,11 @@ import { diffInsertedLineMarker } from '../../../platform/theme/common/colors/ed
 import { type TextMeasurer } from '../../common/viewModel.js';
 
 const { EditorTextDirection } = await import(
-	"../../browser/view.js"
+	'../../browser/view.js'
 );
-const { TestView: View } = await import("./viewModel/testViewModel.js");
+const { TestView: View } = await import('./viewModel/testViewModel.js');
 const { EditorLineWrapping } = await import(
-	"../../common/config/editorOptions.js"
+	'../../common/config/editorOptions.js'
 );
 
 test('Viewport decoration queries are shared across line rendering data', () => {
@@ -142,18 +142,18 @@ test('Viewport decoration data refreshes when variable font support changes', ()
 	}
 });
 
-test("Model decorations project, update, and follow tracked ranges", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('Model decorations project, update, and follow tracked ranges', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	recordCanvasPaint(dom);
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("abcd\nefgh\nij");
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('abcd\nefgh\nij');
 	using matches = new TextDecorationCollection<string>(model);
-	using diagnostics = new TextDecorationCollection<"error" | "warning">(model);
+	using diagnostics = new TextDecorationCollection<'error' | 'warning'>(model);
 	matches.add({
 		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 		options: { description: 'find match', className: 'findMatch' },
-		metadata: "match",
+		metadata: 'match',
 	});
 	const diagnosticId = diagnostics.add({
 		range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
@@ -164,7 +164,7 @@ test("Model decorations project, update, and follow tracked ranges", async () =>
 			overviewRuler: { color: themeColorFromId(errorForeground), position: OverviewRulerLane.Right },
 			minimap: { color: themeColorFromId(errorForeground), position: MinimapPosition.Inline },
 		},
-		metadata: "error",
+		metadata: 'error',
 	});
 	const viewport = new View({
 		container,
@@ -182,13 +182,13 @@ test("Model decorations project, update, and follow tracked ranges", async () =>
 		lineIndex: element.parentElement?.dataset.lineIndex,
 	})), [{
 		className: 'findMatch',
-		lineIndex: "0",
+		lineIndex: '0',
 	}, {
 		className: 'findMatch',
-		lineIndex: "1",
+		lineIndex: '1',
 	}, {
 		className: 'squiggly-error',
-		lineIndex: "2",
+		lineIndex: '2',
 	}]);
 
 	diagnostics.update(diagnosticId, {
@@ -200,15 +200,15 @@ test("Model decorations project, update, and follow tracked ranges", async () =>
 			overviewRuler: { color: themeColorFromId(warningForeground), position: OverviewRulerLane.Right },
 			minimap: { color: themeColorFromId(warningForeground), position: MinimapPosition.Inline },
 		},
-		metadata: "warning",
+		metadata: 'warning',
 	});
 	viewport.render(true, false);
 	const warning = requiredElement<HTMLElement>(viewport.domNode.domNode, '.cdr.squiggly-warning');
-	assert.equal(warning.parentElement?.dataset.lineIndex, "1");
+	assert.equal(warning.parentElement?.dataset.lineIndex, '1');
 
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		text: "X\n",
+		text: 'X\n',
 	}]);
 	viewport.render(true, false);
 
@@ -217,7 +217,7 @@ test("Model decorations project, update, and follow tracked ranges", async () =>
 		trackedMatch.map(
 			element => element.parentElement?.dataset.lineIndex,
 		),
-		["1", "2"],
+		['1', '2'],
 	);
 	assert.deepEqual(matches.decorations.map(decoration => [decoration.range.startLineNumber, decoration.range.endLineNumber]), [[2, 3]]);
 	viewport.dispose();
@@ -253,11 +253,11 @@ test('Model glyph margin decorations use standard lanes and z-index ownership', 
 	dom.window.close();
 });
 
-test("Line and block decoration parts project standard model options", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("first\nsecond\nthird");
-	using decorations = new TextDecorationCollection<"lines" | "block">(model);
+test('Line and block decoration parts project standard model options', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('first\nsecond\nthird');
+	using decorations = new TextDecorationCollection<'lines' | 'block'>(model);
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)),
 		stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
@@ -267,7 +267,7 @@ test("Line and block decoration parts project standard model options", () => {
 			firstLineDecorationClassName: 'stanza-test-first-line-marker',
 			linesDecorationsTooltip: 'line marker',
 		},
-		metadata: "lines",
+		metadata: 'lines',
 	});
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (1) + 1)),
@@ -277,7 +277,7 @@ test("Line and block decoration parts project standard model options", () => {
 			blockClassName: 'stanza-test-block',
 			blockPadding: [1, 2, 3, 4],
 		},
-		metadata: "block",
+		metadata: 'block',
 	});
 	using viewport = new View({
 		container,
@@ -292,41 +292,41 @@ test("Line and block decoration parts project standard model options", () => {
 	const firstLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="0"]');
 	const secondLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="1"]');
 	const thirdLine = requiredElement<HTMLElement>(viewport.domNode.domNode, '.margin-view-overlays .view-overlay-line[data-line-index="2"]');
-	const lineMarker = requiredElement<HTMLElement>(firstLine, ".stanza-test-line-marker");
-	const firstLineMarker = requiredElement<HTMLElement>(firstLine, ".stanza-test-first-line-marker");
-	const secondMarker = requiredElement<HTMLElement>(secondLine, ".stanza-editor-line-decoration");
-	assert.equal(lineMarker.title, "line marker");
-	assert.equal(firstLineMarker.title, "line marker");
+	const lineMarker = requiredElement<HTMLElement>(firstLine, '.stanza-test-line-marker');
+	const firstLineMarker = requiredElement<HTMLElement>(firstLine, '.stanza-test-first-line-marker');
+	const secondMarker = requiredElement<HTMLElement>(secondLine, '.stanza-editor-line-decoration');
+	assert.equal(lineMarker.title, 'line marker');
+	assert.equal(firstLineMarker.title, 'line marker');
 	assert.equal(lineMarker.style.width.length > 0, true);
-	assert.equal(secondMarker.classList.contains("stanza-test-line-marker"), true);
-	assert.equal(secondMarker.classList.contains("stanza-test-first-line-marker"), false);
+	assert.equal(secondMarker.classList.contains('stanza-test-line-marker'), true);
+	assert.equal(secondMarker.classList.contains('stanza-test-first-line-marker'), false);
 	assert.equal(requiredElement<HTMLElement>(thirdLine, '.stanza-test-line-marker').title, 'line marker');
 
-	const block = requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-block-decoration");
-	const blockContainer = requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-block-decorations");
-	assert.equal(blockContainer.getAttribute("role"), "presentation");
-	assert.equal(blockContainer.getAttribute("aria-hidden"), "true");
-	assert.equal(block.classList.contains("stanza-test-block"), true);
+	const block = requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-block-decoration');
+	const blockContainer = requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-block-decorations');
+	assert.equal(blockContainer.getAttribute('role'), 'presentation');
+	assert.equal(blockContainer.getAttribute('aria-hidden'), 'true');
+	assert.equal(block.classList.contains('stanza-test-block'), true);
 	const layoutInfo = viewport.getLayoutInfo();
 	assert.equal(block.style.left, `${layoutInfo.contentLeft - 4}px`);
 	assert.equal(block.style.width, `${layoutInfo.contentWidth - layoutInfo.verticalScrollbarWidth + 6}px`);
-	assert.equal(block.style.top, "-1px");
-	assert.equal(block.style.height, "64px");
+	assert.equal(block.style.top, '-1px');
+	assert.equal(block.style.height, '64px');
 
 	viewport.layout({ width: 240, height: 60 });
 	viewport.render(true, false);
-	const resizedBlock = requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-block-decoration");
+	const resizedBlock = requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-block-decoration');
 	assert.strictEqual(resizedBlock, block);
 	const resizedLayoutInfo = viewport.getLayoutInfo();
 	assert.equal(resizedBlock.style.width, `${resizedLayoutInfo.contentWidth - resizedLayoutInfo.verticalScrollbarWidth + 6}px`);
 	dom.window.close();
 });
 
-test("Quick Diff decorations project into the overview ruler and minimap gutter", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('Quick Diff decorations project into the overview ruler and minimap gutter', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const minimapPaint = recordCanvasPaint(dom);
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("same\nadded\nmodified\nafter delete");
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('same\nadded\nmodified\nafter delete');
 	using decorations = new TextDecorationCollection<'added' | 'modified' | 'deleted'>(model);
 	decorations.replaceAll([
 		{
@@ -390,22 +390,22 @@ test('Overview ruler omits cursor markers when hideCursorInOverviewRuler is enab
 	dom.window.close();
 });
 
-test("Decoration overlays use browser range rectangles for RTL text", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = requiredElement(dom.window.document, "main");
+test('Decoration overlays use browser range rectangles for RTL text', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
 	const createRange = dom.window.document.createRange.bind(dom.window.document);
-	Object.defineProperty(dom.window.document, "createRange", {
+	Object.defineProperty(dom.window.document, 'createRange', {
 		configurable: true,
 		value: () => {
 			const range = createRange();
-			Object.defineProperty(range, "getClientRects", {
+			Object.defineProperty(range, 'getClientRects', {
 				configurable: true,
 				value: () => [testRectangle(150, 0, 20), testRectangle(120, 0, 15)],
 			});
 			return range;
 		},
 	});
-	using model = new TextModel("abc אבג");
+	using model = new TextModel('abc אבג');
 	using decorations = new TextDecorationCollection<void>(model);
 	const id = decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)),
@@ -422,8 +422,8 @@ test("Decoration overlays use browser range rectangles for RTL text", async () =
 	});
 	viewport.layout({ width: 200, height: 40 });
 	viewport.render(true, false);
-	const line = requiredElement<HTMLElement>(viewport.domNode.domNode, ".view-line");
-	Object.defineProperty(line, "getBoundingClientRect", {
+	const line = requiredElement<HTMLElement>(viewport.domNode.domNode, '.view-line');
+	Object.defineProperty(line, 'getBoundingClientRect', {
 		configurable: true,
 		value: () => testRectangle(100, 0, 200),
 	});
@@ -437,17 +437,17 @@ test("Decoration overlays use browser range rectangles for RTL text", async () =
 
 	const textLeft = viewport.getLayoutInfo().contentLeft + 12;
 	assert.deepEqual(decorationElements(viewport.domNode.domNode).map(element => ({ left: element.style.left, width: element.style.width })), [
-		{ left: `${textLeft + 20}px`, width: "15px" },
-		{ left: `${textLeft + 50}px`, width: "20px" },
+		{ left: `${textLeft + 20}px`, width: '15px' },
+		{ left: `${textLeft + 50}px`, width: '20px' },
 	]);
 	viewport.dispose();
 	dom.window.close();
 });
 
-test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("abcdef");
+test('Decoration overlays split at soft-wrapped visual line boundaries', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('abcdef');
 	using decorations = new TextDecorationCollection<void>(model);
 	decorations.add({
 		range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (5) + 1)),
@@ -472,26 +472,26 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 		left: element.style.left,
 		width: element.style.width,
 	})), [{
-		lineIndex: "0",
+		lineIndex: '0',
 		left: `${textLeft + 8}px`,
-		width: "8px",
+		width: '8px',
 	}, {
-		lineIndex: "1",
+		lineIndex: '1',
 		left: `${textLeft}px`,
-		width: "16px",
+		width: '16px',
 	}, {
-		lineIndex: "2",
+		lineIndex: '2',
 		left: `${textLeft}px`,
-		width: "8px",
+		width: '8px',
 	}]);
 
 	dom.window.close();
 });
 
-test("Versioned diagnostics project named severity underlines and invalidate", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("abcd\nefgh\nijkl\nmnop");
+test('Versioned diagnostics project named severity underlines and invalidate', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('abcd\nefgh\nijkl\nmnop');
 	using store = createLanguageDiagnosticStore(model);
 	using bridge = new LanguageDiagnosticDecorationBridge(store);
 	const viewport = new View({
@@ -511,24 +511,24 @@ test("Versioned diagnostics project named severity underlines and invalidate", a
 				{
 					range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (3) + 1)),
 					severity: LanguageDiagnosticSeverity.Error,
-					message: "error",
-					source: "language.lexical",
-					code: "E100",
+					message: 'error',
+					source: 'language.lexical',
+					code: 'E100',
 				},
 				{
 					range: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (2) + 1)),
 					severity: LanguageDiagnosticSeverity.Warning,
-					message: "warning",
+					message: 'warning',
 				},
 				{
 					range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((2) + 1, (2) + 1)),
 					severity: LanguageDiagnosticSeverity.Information,
-					message: "information",
+					message: 'information',
 				},
 				{
 					range: Range.fromPositions(new Position((3) + 1, (1) + 1)),
 					severity: LanguageDiagnosticSeverity.Hint,
-					message: "hint",
+					message: 'hint',
 				},
 			],
 		},
@@ -540,16 +540,16 @@ test("Versioned diagnostics project named severity underlines and invalidate", a
 		lineIndex: element.parentElement?.dataset.lineIndex,
 	})), [{
 		className: 'squiggly-error',
-		lineIndex: "0",
+		lineIndex: '0',
 	}, {
 		className: 'squiggly-warning',
-		lineIndex: "1",
+		lineIndex: '1',
 	}, {
 		className: 'squiggly-info',
-		lineIndex: "2",
+		lineIndex: '2',
 	}, {
 		className: 'squiggly-hint',
-		lineIndex: "3",
+		lineIndex: '3',
 	}]);
 	assert.deepEqual(model.getAllDecorations().map(decoration => hoverMessageValue(decoration.options.hoverMessage)), [
 		'language.lexical E100: error',
@@ -560,7 +560,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", a
 
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		text: "X",
+		text: 'X',
 	}]);
 	viewport.render(true, false);
 	assert.deepEqual(decorationElements(viewport.domNode.domNode), []);
@@ -575,7 +575,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", a
 			diagnostics: [{
 				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
 				severity: LanguageDiagnosticSeverity.Error,
-				message: "after viewport",
+				message: 'after viewport',
 			}],
 		},
 	}), LanguageResultAcceptance.Applied);
@@ -594,7 +594,7 @@ function requiredElement<T extends Element = HTMLElement>(
 
 function decorationElements(container: ParentNode): HTMLElement[] {
 	return [...container.querySelectorAll<HTMLElement>(
-		".view-overlays .cdr",
+		'.view-overlays .cdr',
 	)];
 }
 

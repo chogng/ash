@@ -1,6 +1,6 @@
-import { AbstractDisposable, DisposableMap, Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
-import { Position } from "../core/position.js";
-import { Range } from "../core/range.js";
+import { AbstractDisposable, DisposableMap, Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
 import { TrackedRangeStickiness, type IInternalModelContentChange } from '../model.js';
 
 export interface TrackedRange extends IDisposable {
@@ -35,7 +35,7 @@ export class TrackedRangeCollection extends Disposable {
 	): TrackedRange {
 		this.assertNotDisposed();
 		if (!isTrackedRangeStickiness(stickiness)) {
-			throw new TypeError("Unknown tracked range stickiness");
+			throw new TypeError('Unknown tracked range stickiness');
 		}
 		const record: TrackedRangeRecord = {
 			startOffset,

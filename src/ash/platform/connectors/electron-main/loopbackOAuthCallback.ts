@@ -1,5 +1,5 @@
 import { localize } from '../../../nls.js';
-import { createServer } from "node:http";
+import { createServer } from 'node:http';
 
 export class LoopbackOAuthCallback {
 	private settled = false;
@@ -14,26 +14,26 @@ export class LoopbackOAuthCallback {
 			this.reject = reject;
 		});
 		void this.completion.catch(() => undefined);
-		this.timeout = setTimeout(() => this.finishError(new Error("Connector OAuth callback timed out")), 10 * 60 * 1000);
+		this.timeout = setTimeout(() => this.finishError(new Error('Connector OAuth callback timed out')), 10 * 60 * 1000);
 	}
 
 	static async listen(callbackPath: string): Promise<LoopbackOAuthCallback> {
 		const server = createServer();
 		await new Promise<void>((resolve, reject) => {
-			server.once("error", reject);
-			server.listen(0, "127.0.0.1", () => {
-				server.removeListener("error", reject);
+			server.once('error', reject);
+			server.listen(0, '127.0.0.1', () => {
+				server.removeListener('error', reject);
 				resolve();
 			});
 		});
 		const address = server.address();
-		if (!address || typeof address === "string") {
+		if (!address || typeof address === 'string') {
 			server.close();
-			throw new Error("Connector OAuth callback address is unavailable");
+			throw new Error('Connector OAuth callback address is unavailable');
 		}
 		const callback = new LoopbackOAuthCallback(server, `http://127.0.0.1:${address.port}${callbackPath}`, callbackPath);
-		server.on("request", (request, response) => callback.handle(request.method, request.url, response));
-		server.on("error", () => callback.finishError(new Error("Connector OAuth callback host failed")));
+		server.on('request', (request, response) => callback.handle(request.method, request.url, response));
+		server.on('error', () => callback.finishError(new Error('Connector OAuth callback host failed')));
 		return callback;
 	}
 
@@ -42,13 +42,13 @@ export class LoopbackOAuthCallback {
 	}
 
 	close(): void {
-		this.finishError(new Error("Connector OAuth callback closed"));
+		this.finishError(new Error('Connector OAuth callback closed'));
 		clearTimeout(this.timeout);
 		this.server.close();
 	}
 
-	private handle(method: string | undefined, rawUrl: string | undefined, response: import("node:http").ServerResponse): void {
-		if (method !== "GET" || !rawUrl?.startsWith("/") || rawUrl.startsWith("//") || this.settled) {
+	private handle(method: string | undefined, rawUrl: string | undefined, response: import('node:http').ServerResponse): void {
+		if (method !== 'GET' || !rawUrl?.startsWith('/') || rawUrl.startsWith('//') || this.settled) {
 			response.writeHead(404).end();
 			return;
 		}
@@ -59,14 +59,14 @@ export class LoopbackOAuthCallback {
 			response.writeHead(404).end();
 			return;
 		}
-		const states = url.searchParams.getAll("state");
-		const codes = url.searchParams.getAll("code");
-		const errors = url.searchParams.getAll("error");
-		const issuers = url.searchParams.getAll("iss");
-		response.setHeader("Content-Type", "text/plain; charset=utf-8");
+		const states = url.searchParams.getAll('state');
+		const codes = url.searchParams.getAll('code');
+		const errors = url.searchParams.getAll('error');
+		const issuers = url.searchParams.getAll('iss');
+		response.setHeader('Content-Type', 'text/plain; charset=utf-8');
 		if (states.length !== 1 || codes.length !== 1 || errors.length !== 0 || issuers.length > 1 || !states[0] || !codes[0]) {
 			response.writeHead(400).end(localize({ bundle: 'ash.extensions', key: 'oauthCallbackInvalid' }, 'Authorization was not completed. You may close this window.'));
-			this.finishError(new Error("Connector OAuth provider did not return a valid callback"));
+			this.finishError(new Error('Connector OAuth provider did not return a valid callback'));
 			return;
 		}
 		response.writeHead(200).end(localize({ bundle: 'ash.extensions', key: 'oauthCallbackReceived' }, 'Authorization callback received. You may close this window and return to Ash.'));

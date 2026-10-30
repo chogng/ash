@@ -1,8 +1,8 @@
 import { ScrollbarVisibility as ScrollbarVisibilityOption } from '../../../common/scrollable.js';
-import { isFiniteNumber } from "../../../common/numbers.js";
+import { isFiniteNumber } from '../../../common/numbers.js';
 
-export type ScrollbarVisibility = "auto" | "visible" | "hidden";
-export type ScrollDirection = "horizontal" | "vertical" | "both";
+export type ScrollbarVisibility = 'auto' | 'visible' | 'hidden';
+export type ScrollDirection = 'horizontal' | 'vertical' | 'both';
 
 export interface ScrollbarWheelOptions {
 	/** Multiplier applied after wheel deltas are normalized to CSS pixels. */
@@ -10,11 +10,11 @@ export interface ScrollbarWheelOptions {
 	/** Multiplier used while Alt is pressed. */
 	readonly fastSensitivity?: number;
 	/** Whether diagonal input preserves both axes or only its predominant axis. */
-	readonly axis?: "both" | "predominant";
+	readonly axis?: 'both' | 'predominant';
 	/** Whether Shift converts a vertical-only wheel gesture to horizontal. */
-	readonly shift?: "preserve" | "horizontal";
+	readonly shift?: 'preserve' | 'horizontal';
 	/** Whether wheel events may propagate when this container cannot move. */
-	readonly consume?: "when-scrolling" | "always";
+	readonly consume?: 'when-scrolling' | 'always';
 }
 
 interface ScrollableElementBaseOptions {
@@ -23,7 +23,7 @@ interface ScrollableElementBaseOptions {
 	readonly tabIndex?: number;
 	readonly scrollbarSize?: number;
 	readonly minimumThumbSize?: number;
-	readonly trackClickBehavior?: "jump" | "page";
+	readonly trackClickBehavior?: 'jump' | 'page';
 	readonly wheel?: ScrollbarWheelOptions;
 	readonly mouseWheelSmoothScroll?: boolean;
 	readonly onScroll?: (
@@ -34,19 +34,19 @@ interface ScrollableElementBaseOptions {
 export type ScrollableElementOptions = ScrollableElementBaseOptions & (
 	| {
 		/** Only horizontal user and programmatic scrolling is allowed. */
-		readonly direction: "horizontal";
+		readonly direction: 'horizontal';
 		readonly horizontal?: ScrollbarVisibility;
 		readonly vertical?: never;
 	}
 	| {
 		/** Only vertical user and programmatic scrolling is allowed. */
-		readonly direction: "vertical";
+		readonly direction: 'vertical';
 		readonly horizontal?: never;
 		readonly vertical?: ScrollbarVisibility;
 	}
 	| {
 		/** Both scroll axes are allowed. This is the compatibility default. */
-		readonly direction?: "both";
+		readonly direction?: 'both';
 		readonly horizontal?: ScrollbarVisibility;
 		readonly vertical?: ScrollbarVisibility;
 	}
@@ -59,13 +59,13 @@ export interface ResolvedScrollableElementOptions {
 	readonly vertical: ScrollbarVisibility;
 	readonly scrollbarSize: number;
 	readonly minimumThumbSize: number;
-	readonly trackClickBehavior: "jump" | "page";
+	readonly trackClickBehavior: 'jump' | 'page';
 	readonly wheel: {
 		readonly sensitivity: number;
 		readonly fastSensitivity: number;
-		readonly axis: "both" | "predominant";
-		readonly shift: "preserve" | "horizontal";
-		readonly consume: "when-scrolling" | "always";
+		readonly axis: 'both' | 'predominant';
+		readonly shift: 'preserve' | 'horizontal';
+		readonly consume: 'when-scrolling' | 'always';
 	};
 }
 
@@ -80,28 +80,28 @@ export interface ScrollableElementUpdateOptions {
 export function resolveScrollableElementOptions(
 	options: ScrollableElementOptions,
 ): ResolvedScrollableElementOptions {
-	const direction = options.direction ?? "both";
+	const direction = options.direction ?? 'both';
 	return {
 		mouseWheelSmoothScroll: options.mouseWheelSmoothScroll ?? false,
 		direction,
-		horizontal: direction === "vertical"
-			? "hidden"
-			: options.horizontal ?? "auto",
-		vertical: direction === "horizontal"
-			? "hidden"
-			: options.vertical ?? "auto",
+		horizontal: direction === 'vertical'
+			? 'hidden'
+			: options.horizontal ?? 'auto',
+		vertical: direction === 'horizontal'
+			? 'hidden'
+			: options.vertical ?? 'auto',
 		scrollbarSize: positiveFinite(options.scrollbarSize, 10),
 		minimumThumbSize: positiveFinite(options.minimumThumbSize, 20),
-		trackClickBehavior: options.trackClickBehavior ?? "jump",
+		trackClickBehavior: options.trackClickBehavior ?? 'jump',
 		wheel: {
 			sensitivity: nonNegativeFinite(options.wheel?.sensitivity, 1),
 			fastSensitivity: nonNegativeFinite(
 				options.wheel?.fastSensitivity,
 				5,
 			),
-			axis: options.wheel?.axis ?? "predominant",
-			shift: options.wheel?.shift ?? "horizontal",
-			consume: options.wheel?.consume ?? "when-scrolling",
+			axis: options.wheel?.axis ?? 'predominant',
+			shift: options.wheel?.shift ?? 'horizontal',
+			consume: options.wheel?.consume ?? 'when-scrolling',
 		},
 	};
 }

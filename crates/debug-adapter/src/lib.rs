@@ -8,6 +8,8 @@ mod framing;
 mod service;
 
 pub use framing::MAX_MESSAGE_BYTES;
+pub use framing::encode_message;
+pub use framing::read_message;
 
 pub use service::DebugAdapterCommand;
 pub use service::DebugAdapterConnection;
@@ -16,6 +18,7 @@ pub use service::DebugAdapterMessage;
 pub use service::DebugAdapterRead;
 pub use service::DebugAdapterService;
 pub use service::DebugAdapterSessionId;
+pub use service::MAX_BUFFERED_MESSAGES;
 
 #[cfg(test)]
 #[path = "framing_tests.rs"]

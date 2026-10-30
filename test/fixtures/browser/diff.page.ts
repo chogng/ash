@@ -1,3 +1,4 @@
+import { Orientation } from '../../../src/ash/base/browser/ui/sash/sash.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import { LanguageCompletionItemKind } from '../../../src/ash/editor/common/languages.js';
@@ -22,7 +23,7 @@ import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/t
 import '../../../src/ash/workbench/contrib/scm/browser/quickDiff.contribution.js';
 import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
 import { GridView } from '../../../src/ash/base/browser/ui/grid/gridview.js';
-import '../../../src/ash/base/browser/ui/grid/grid.css';
+import '../../../src/ash/base/browser/ui/grid/gridview.css';
 import { CancellationToken, CancellationTokenSource } from '../../../src/ash/base/common/cancellation.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
@@ -373,7 +374,7 @@ resources.add(registerAction2(ChangeEOLAction));
 resources.add(registerAction2(ChangeEncodingAction));
 
 const harness = {
-	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' | 'markdown' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8', singleGitFile = false): Promise<void> {
+	async openTitleComparison(kind: 'diff' | 'history' | 'git' | 'writable' | 'binary' | 'encoding' | 'markdown' | 'paths' = 'diff', gitComparison: 'staged' | 'unstaged' = 'unstaged', encoding: 'utf8' | 'utf8bom' = 'utf8', singleGitFile = false): Promise<void> {
 		titleGitEncoding = encoding;
 		registerDiffEditorCommands();
 		const host = document.createElement('div');
@@ -385,6 +386,9 @@ const harness = {
 		resources.add(toDisposable(() => host.remove()));
 		titleConfiguration = resources.add(new InMemoryConfigurationService());
 		const parentServices = resources.add(createTestEditorServices(titleConfiguration));
+		if (kind === 'paths' || kind === 'git') {
+			(parentServices.get(IWorkspaceContextService) as TestWorkspaceService).updateWorkspace({ id: 'paths', uri: URI.file('/workspace') });
+		}
 		const services = resources.add(parentServices.createChild());
 		titleServices = services;
 		if (kind === 'markdown') {
@@ -586,6 +590,22 @@ const harness = {
 			} else {
 				await titleEditor.openEditor(input, { pinned: true });
 			}
+			return;
+		}
+		if (kind === 'paths') {
+			const path = 'extensions/language-pack-zh-cn/translations/chat.json';
+			await titleEditor.openEditor(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/paths'), [
+				{
+					label: path, binary: true,
+					original: { resource: URI.parse(`snapshot:/${path}?revision=1`), preferredResource: URI.file(`/workspace/${path}`), label: path },
+					modified: { resource: URI.parse(`snapshot:/${path}?revision=2`), preferredResource: URI.file(`/workspace/${path}`), label: path },
+				},
+				{
+					label: 'src/renamed folder/包含空格的目录/second.ts', binary: true,
+					original: { resource: URI.parse('snapshot:/old?revision=1'), preferredResource: URI.file('/workspace/src/previous folder/包含空格的目录/second.ts') },
+					modified: { resource: URI.parse('snapshot:/new?revision=2'), preferredResource: URI.file('/workspace/src/renamed folder/包含空格的目录/second.ts') },
+				},
+			], 'Path review'), { pinned: true });
 			return;
 		}
 		if (kind === 'writable' || kind === 'binary') {
@@ -824,6 +844,10 @@ const harness = {
 		await sessionServices!.get(ICommandService).executeCommand('changeset.review', { resource });
 	},
 	sessionReviewState(): readonly string[] { return [...sessionServices!.get(IChangesViewService).reviewedFilesObs.get()]; },
+	readSessionComparisonState(): { hasControl: boolean; accessibleContent: string; } {
+		const pane = sessionPane.value!;
+		return { hasControl: pane.getControl() !== undefined, accessibleContent: pane.getAccessibleContent() };
+	},
 	sessionTheme(name: 'dark' | 'light' | 'contrast'): void { sessionTheme!.setColorTheme(name === 'light' ? lightColorTheme : name === 'contrast' ? highContrastDarkColorTheme : darkColorTheme); },
 	advanceSessionRevision(): void { sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
 	changeSessionCaptureDuringRead(): void { changeSessionRevisionOnRead = true; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
@@ -1083,7 +1107,7 @@ const harness = {
 			},
 		}));
 		resizeGrid = resources.add(new GridView(container, {
-			type: 'branch', orientation: 'horizontal', size: 900,
+			type: 'branch', orientation: Orientation.HORIZONTAL, size: 900,
 			children: views.map((view, index) => ({ type: 'leaf', view, size: [180, 440, 280][index]! })),
 		}));
 		resizeGrid.element.style.width = '900px';

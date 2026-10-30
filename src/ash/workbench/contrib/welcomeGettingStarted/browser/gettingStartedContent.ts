@@ -8,6 +8,8 @@ import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
+import type { AgentsWindowGraphicDesign } from '../../chat/browser/agentSessions/agentsWindowGraphic.js';
+import { createAgentsBanner, type IAgentsBannerResult } from '../../chat/browser/agentSessions/agentSessionsBanner.js';
 
 /** A host callback invoked by one welcome-page action. */
 type GettingStartedAction = () => void | Promise<void>;
@@ -27,6 +29,8 @@ interface GettingStartedOptions {
 		readonly cloneRepository?: GettingStartedAction;
 		readonly connectViaSsh?: GettingStartedAction;
 		readonly connectGitHub?: GettingStartedAction;
+		readonly openAgentsWindow?: GettingStartedAction;
+		readonly openEditorWindow?: GettingStartedAction;
 	};
 	readonly recentProjects?: readonly IGettingStartedProject[];
 }
@@ -44,6 +48,7 @@ export class GettingStarted extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly recentDisposables = this._register(new DisposableStore());
 	private readonly recentSection: HTMLElement;
+	private readonly agentsBanner: IAgentsBannerResult;
 	private cloneAction: GettingStartedAction | undefined;
 	private cloneCard: HTMLButtonElement | undefined;
 	private recentProjects: readonly IGettingStartedProject[];
@@ -74,6 +79,13 @@ export class GettingStarted extends Disposable {
 		content.append(this.createCards(ownerDocument, options.actions));
 		this.recentSection = this.createRecentProjects(ownerDocument);
 		content.append(this.recentSection);
+		this.agentsBanner = createAgentsBanner(ownerDocument, {
+			onButtonClick: options.actions?.openAgentsWindow,
+			onEditorClick: options.actions?.openEditorWindow,
+		});
+		this._register(this.agentsBanner.disposables);
+		this.agentsBanner.element.classList.add('ash-getting-started-agents');
+		content.append(this.agentsBanner.element);
 	}
 
 	public setRecentProjects(projects: readonly IGettingStartedProject[]): void {
@@ -95,6 +107,17 @@ export class GettingStarted extends Disposable {
 			const fallback = this.domNode.querySelector<HTMLButtonElement>('.ash-getting-started-card:not(:disabled)');
 			(target ?? fallback ?? this.domNode).focus();
 		}
+	}
+
+	public setAgentsWindowAction(action: GettingStartedAction | undefined): void {
+		if (!action && this.agentsBanner.element.contains(this.domNode.ownerDocument.activeElement)) {
+			this.domNode.focus();
+		}
+		this.agentsBanner.setAction(action);
+	}
+
+	public setAgentsWindowGraphic(design: AgentsWindowGraphicDesign | undefined): void {
+		this.agentsBanner.setDesign(design);
 	}
 
 	private createBrand(ownerDocument: Document): HTMLElement {

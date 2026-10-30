@@ -1,5 +1,5 @@
-import { DisposableStore, type IDisposable, toDisposable } from "../common/lifecycle.js";
-import { Dimension } from "./dom.js";
+import { DisposableStore, type IDisposable, toDisposable } from '../common/lifecycle.js';
+import { Dimension } from './dom.js';
 
 type ObserverWindow = Window & typeof globalThis;
 
@@ -42,14 +42,14 @@ export function observeResize(
 export function observeElementSize(
 	target: HTMLElement,
 	listener: (size: Dimension) => void,
-	options: ResizeObservationOptions = { box: "border-box" },
+	options: ResizeObservationOptions = { box: 'border-box' },
 ): IDisposable {
 	return observeResize(target, ([entry]) => {
 		if (!entry) return;
-		const box = options.box ?? "border-box";
-		const size = box === "content-box"
+		const box = options.box ?? 'border-box';
+		const size = box === 'content-box'
 			? entry.contentBoxSize?.[0]
-			: box === "device-pixel-content-box"
+			: box === 'device-pixel-content-box'
 				? entry.devicePixelContentBoxSize?.[0]
 				: entry.borderBoxSize?.[0];
 		listener(new Dimension(

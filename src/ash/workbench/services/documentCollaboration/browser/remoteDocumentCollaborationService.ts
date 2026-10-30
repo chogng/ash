@@ -1,8 +1,8 @@
 import type { DocumentCodec } from '../../documentEditor/common/documentCodec.js';
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { isRecord } from "../../../../base/common/types.js";
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { isRecord } from '../../../../base/common/types.js';
 import type { DocumentSelection } from '../../documentEditor/common/documentCodec.js';
 import type { DocumentNode } from '../../documentEditor/common/documentCodec.js';
 import type { DocumentCollaborationRoom } from '../common/documentCollaborationService.js';
@@ -16,7 +16,7 @@ import type { DocumentCollaborationSubmitOutcome } from '../common/documentColla
 import type { DocumentCollaborationEnvelope } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationRemoteEnvelope } from '../common/documentCollaborationService.js';
 
-const API_ROOT = "/v1/document-collaboration";
+const API_ROOT = '/v1/document-collaboration';
 const INITIAL_POLL_RETRY_DELAY_MS = 250;
 const MAXIMUM_POLL_RETRY_DELAY_MS = 5_000;
 
@@ -43,20 +43,20 @@ export class RemoteDocumentCollaborationService extends Disposable {
 	}
 
 	async open(input: DocumentCollaborationOpenInput, options: RemoteDocumentCollaborationOptions, signal: AbortSignal): Promise<DocumentCollaborationRoom> {
-		throwIfCancelled(signal, "Opening a remote Stanza collaboration room was cancelled");
+		throwIfCancelled(signal, 'Opening a remote Stanza collaboration room was cancelled');
 		const target = normalizeTarget(options.endpoint, options.bearerToken);
-		const opened = await this.request(target, "rooms/open", {
+		const opened = await this.request(target, 'rooms/open', {
 			...(input.roomId === undefined ? {} : { roomId: input.roomId }),
 			clientId: input.clientId,
 			schemaId: input.schemaId,
 			document: input.codec.serialize(input.document),
 		}, signal);
-		throwIfCancelled(signal, "Opening a remote Stanza collaboration room was cancelled");
-		const response = expectRecord(opened, "remote collaboration open response");
+		throwIfCancelled(signal, 'Opening a remote Stanza collaboration room was cancelled');
+		const response = expectRecord(opened, 'remote collaboration open response');
 		const snapshot = decodeSnapshot(response.snapshot, input.codec);
-		const clientId = expectString(response.clientId, "remote collaboration clientId");
-		const principalId = response.principalId === undefined ? undefined : expectString(response.principalId, "remote collaboration principalId");
-		const connection = new RemoteDocumentCollaborationConnection(this, target, input.codec, clientId, principalId, snapshot, expectBooleanOrDefault(response.canEdit, "remote collaboration canEdit", true), expectBooleanOrDefault(response.canManageMembers, "remote collaboration canManageMembers", false));
+		const clientId = expectString(response.clientId, 'remote collaboration clientId');
+		const principalId = response.principalId === undefined ? undefined : expectString(response.principalId, 'remote collaboration principalId');
+		const connection = new RemoteDocumentCollaborationConnection(this, target, input.codec, clientId, principalId, snapshot, expectBooleanOrDefault(response.canEdit, 'remote collaboration canEdit', true), expectBooleanOrDefault(response.canManageMembers, 'remote collaboration canManageMembers', false));
 		this.connections.add(connection);
 		return connection;
 	}
@@ -66,88 +66,88 @@ export class RemoteDocumentCollaborationService extends Disposable {
 	}
 
 	async submit(connection: RemoteDocumentCollaborationConnection, envelope: DocumentCollaborationEnvelope, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
-		throwIfCancelled(signal, "Submitting a remote Stanza collaboration update was cancelled");
-		const response = expectRecord(await this.request(connection.target, "rooms/submit", {
+		throwIfCancelled(signal, 'Submitting a remote Stanza collaboration update was cancelled');
+		const response = expectRecord(await this.request(connection.target, 'rooms/submit', {
 			roomId: connection.roomId,
 			clientId: connection.clientId,
-			sequence: validateProtocolInteger(envelope.sequence, "sequence", 1),
-			baseVersion: validateProtocolInteger(envelope.baseVersion, "baseVersion", 0),
+			sequence: validateProtocolInteger(envelope.sequence, 'sequence', 1),
+			baseVersion: validateProtocolInteger(envelope.baseVersion, 'baseVersion', 0),
 			transaction: connection.codec.serializeTransaction(envelope.transaction),
 			document: connection.codec.serialize(document),
-		}, signal), "remote collaboration submit response");
-		throwIfCancelled(signal, "Submitting a remote Stanza collaboration update was cancelled");
-		switch (expectString(response.status, "remote collaboration submit status")) {
-			case "accepted": return { kind: "accepted", update: decodeUpdate(response.update, connection.codec) };
-			case "conflict": return { kind: "conflict", updates: Object.freeze(expectArray(response.updates, "remote collaboration conflict updates").map(update => decodeUpdate(update, connection.codec))) };
-			case "resync": return { kind: "resync", snapshot: decodeSnapshot(response.snapshot, connection.codec) };
-			default: throw new TypeError("Remote Stanza collaboration returned an unknown submit status");
+		}, signal), 'remote collaboration submit response');
+		throwIfCancelled(signal, 'Submitting a remote Stanza collaboration update was cancelled');
+		switch (expectString(response.status, 'remote collaboration submit status')) {
+			case 'accepted': return { kind: 'accepted', update: decodeUpdate(response.update, connection.codec) };
+			case 'conflict': return { kind: 'conflict', updates: Object.freeze(expectArray(response.updates, 'remote collaboration conflict updates').map(update => decodeUpdate(update, connection.codec))) };
+			case 'resync': return { kind: 'resync', snapshot: decodeSnapshot(response.snapshot, connection.codec) };
+			default: throw new TypeError('Remote Stanza collaboration returned an unknown submit status');
 		}
 	}
 
 	async poll(connection: RemoteDocumentCollaborationConnection, signal: AbortSignal): Promise<RemoteReplay> {
 		const path = `rooms/${encodeURIComponent(connection.roomId)}/updates?afterVersion=${connection.version}`;
-		const response = expectRecord(await this.request(connection.target, path, undefined, signal), "remote collaboration updates response");
-		switch (expectString(response.status, "remote collaboration updates status")) {
-			case "updates": return { kind: "updates", updates: Object.freeze(expectArray(response.updates, "remote collaboration updates").map(update => decodeUpdate(update, connection.codec))) };
-			case "resync": return { kind: "resync", snapshot: decodeSnapshot(response.snapshot, connection.codec) };
-			default: throw new TypeError("Remote Stanza collaboration returned an unknown updates status");
+		const response = expectRecord(await this.request(connection.target, path, undefined, signal), 'remote collaboration updates response');
+		switch (expectString(response.status, 'remote collaboration updates status')) {
+			case 'updates': return { kind: 'updates', updates: Object.freeze(expectArray(response.updates, 'remote collaboration updates').map(update => decodeUpdate(update, connection.codec))) };
+			case 'resync': return { kind: 'resync', snapshot: decodeSnapshot(response.snapshot, connection.codec) };
+			default: throw new TypeError('Remote Stanza collaboration returned an unknown updates status');
 		}
 	}
 
 	async updatePresence(connection: RemoteDocumentCollaborationConnection, selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void> {
-		throwIfCancelled(signal, "Publishing remote Stanza collaboration presence was cancelled");
-		await this.request(connection.target, "rooms/presence", {
+		throwIfCancelled(signal, 'Publishing remote Stanza collaboration presence was cancelled');
+		await this.request(connection.target, 'rooms/presence', {
 			roomId: connection.roomId,
 			clientId: connection.clientId,
 			...(selection === undefined ? {} : { selection: JSON.stringify(selection) }),
 		}, signal);
-		throwIfCancelled(signal, "Publishing remote Stanza collaboration presence was cancelled");
+		throwIfCancelled(signal, 'Publishing remote Stanza collaboration presence was cancelled');
 	}
 
 	async createInvite(connection: RemoteDocumentCollaborationConnection, displayName: string, role: DocumentCollaborationRoomRole, signal: AbortSignal): Promise<DocumentCollaborationInvite> {
-		throwIfCancelled(signal, "Creating a remote Stanza collaboration invitation was cancelled");
-		const response = expectRecord(await this.request(connection.target, "rooms/invites", {
+		throwIfCancelled(signal, 'Creating a remote Stanza collaboration invitation was cancelled');
+		const response = expectRecord(await this.request(connection.target, 'rooms/invites', {
 			roomId: connection.roomId,
 			displayName: validateDisplayName(displayName),
 			role: validateRoomRole(role),
-		}, signal), "remote collaboration invitation response");
-		throwIfCancelled(signal, "Creating a remote Stanza collaboration invitation was cancelled");
+		}, signal), 'remote collaboration invitation response');
+		throwIfCancelled(signal, 'Creating a remote Stanza collaboration invitation was cancelled');
 		return decodeInvite(response, connection.roomId);
 	}
 
 	async listMembers(connection: RemoteDocumentCollaborationConnection, signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]> {
-		throwIfCancelled(signal, "Reading remote Stanza collaboration members was cancelled");
+		throwIfCancelled(signal, 'Reading remote Stanza collaboration members was cancelled');
 		const path = `rooms/${encodeURIComponent(connection.roomId)}/members`;
-		const response = expectRecord(await this.request(connection.target, path, undefined, signal), "remote collaboration members response");
-		throwIfCancelled(signal, "Reading remote Stanza collaboration members was cancelled");
-		return Object.freeze(expectArray(response.members, "remote collaboration members").map(decodeMember));
+		const response = expectRecord(await this.request(connection.target, path, undefined, signal), 'remote collaboration members response');
+		throwIfCancelled(signal, 'Reading remote Stanza collaboration members was cancelled');
+		return Object.freeze(expectArray(response.members, 'remote collaboration members').map(decodeMember));
 	}
 
 	async rotateMemberAccessToken(connection: RemoteDocumentCollaborationConnection, principalId: string, signal: AbortSignal): Promise<DocumentCollaborationInvite> {
-		throwIfCancelled(signal, "Rotating a remote Stanza collaboration credential was cancelled");
-		const response = expectRecord(await this.request(connection.target, "rooms/members/rotate-token", {
+		throwIfCancelled(signal, 'Rotating a remote Stanza collaboration credential was cancelled');
+		const response = expectRecord(await this.request(connection.target, 'rooms/members/rotate-token', {
 			roomId: connection.roomId,
 			principalId: validatePrincipalId(principalId),
-		}, signal), "remote collaboration credential rotation response");
-		throwIfCancelled(signal, "Rotating a remote Stanza collaboration credential was cancelled");
+		}, signal), 'remote collaboration credential rotation response');
+		throwIfCancelled(signal, 'Rotating a remote Stanza collaboration credential was cancelled');
 		return decodeInvite(response, connection.roomId);
 	}
 
 	async revokeMember(connection: RemoteDocumentCollaborationConnection, principalId: string, signal: AbortSignal): Promise<void> {
-		throwIfCancelled(signal, "Revoking a remote Stanza collaboration member was cancelled");
-		await this.request(connection.target, "rooms/members/revoke", {
+		throwIfCancelled(signal, 'Revoking a remote Stanza collaboration member was cancelled');
+		await this.request(connection.target, 'rooms/members/revoke', {
 			roomId: connection.roomId,
 			principalId: validatePrincipalId(principalId),
 		}, signal);
-		throwIfCancelled(signal, "Revoking a remote Stanza collaboration member was cancelled");
+		throwIfCancelled(signal, 'Revoking a remote Stanza collaboration member was cancelled');
 	}
 
 	async pollPresence(connection: RemoteDocumentCollaborationConnection, signal: AbortSignal): Promise<RemotePresenceReplay> {
 		const path = `rooms/${encodeURIComponent(connection.roomId)}/presence?afterGeneration=${connection.presenceGeneration}`;
-		const response = expectRecord(await this.request(connection.target, path, undefined, signal), "remote collaboration presence response");
+		const response = expectRecord(await this.request(connection.target, path, undefined, signal), 'remote collaboration presence response');
 		return Object.freeze({
-			generation: validateProtocolInteger(response.generation, "presence generation", 0),
-			presences: Object.freeze(expectArray(response.presences, "remote collaboration presences").map(value => decodePresence(value))),
+			generation: validateProtocolInteger(response.generation, 'presence generation', 0),
+			presences: Object.freeze(expectArray(response.presences, 'remote collaboration presences').map(value => decodePresence(value))),
 		});
 	}
 
@@ -155,22 +155,22 @@ export class RemoteDocumentCollaborationService extends Disposable {
 		let response: Response;
 		try {
 			response = await fetch(new URL(`${API_ROOT}/${path}`, target.endpoint), {
-				method: body === undefined ? "GET" : "POST",
+				method: body === undefined ? 'GET' : 'POST',
 				headers: {
 					Authorization: `Bearer ${target.bearerToken}`,
-					...(body === undefined ? {} : { "Content-Type": "application/json" }),
+					...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
 				},
-				credentials: "omit",
+				credentials: 'omit',
 				signal,
 				...(body === undefined ? {} : { body: JSON.stringify(body) }),
 			});
 		} catch (error) {
-			throwIfCancelled(signal, "Remote Stanza collaboration request was cancelled");
-			throw new RemoteCollaborationRequestError(`Remote Stanza collaboration is unavailable: ${error instanceof Error ? error.message : "network request failed"}`, undefined);
+			throwIfCancelled(signal, 'Remote Stanza collaboration request was cancelled');
+			throw new RemoteCollaborationRequestError(`Remote Stanza collaboration is unavailable: ${error instanceof Error ? error.message : 'network request failed'}`, undefined);
 		}
 		const payload: unknown = await response.json().catch(() => undefined);
 		if (!response.ok) {
-			const message = payload !== undefined && isRecord(payload) && typeof payload.error === "string" ? payload.error : `HTTP ${response.status}`;
+			const message = payload !== undefined && isRecord(payload) && typeof payload.error === 'string' ? payload.error : `HTTP ${response.status}`;
 			throw new RemoteCollaborationRequestError(`Remote Stanza collaboration request failed: ${message}`, response.status);
 		}
 		return payload;
@@ -226,37 +226,37 @@ class RemoteDocumentCollaborationConnection extends Disposable implements Docume
 	}
 
 	submit(envelope: DocumentCollaborationEnvelope, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
-		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError('Remote Stanza collaboration connection is disposed'));
 		return this.service.submit(this, envelope, document, signal);
 	}
 
 	async updatePresence(selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void> {
-		if (this.isDisposed) throw new ReferenceError("Remote Stanza collaboration connection is disposed");
+		if (this.isDisposed) throw new ReferenceError('Remote Stanza collaboration connection is disposed');
 		await this.service.updatePresence(this, selection, signal);
 		this.presence = selection;
 	}
 
 	createInvite(displayName: string, role: DocumentCollaborationRoomRole, signal: AbortSignal): Promise<DocumentCollaborationInvite> {
-		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
-		if (!this.canManageMembers) return Promise.reject(new Error("This collaboration member cannot create room invitations"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError('Remote Stanza collaboration connection is disposed'));
+		if (!this.canManageMembers) return Promise.reject(new Error('This collaboration member cannot create room invitations'));
 		return this.service.createInvite(this, displayName, role, signal);
 	}
 
 	listMembers(signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]> {
-		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
-		if (!this.canManageMembers) return Promise.reject(new Error("This collaboration member cannot inspect room members"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError('Remote Stanza collaboration connection is disposed'));
+		if (!this.canManageMembers) return Promise.reject(new Error('This collaboration member cannot inspect room members'));
 		return this.service.listMembers(this, signal);
 	}
 
 	rotateMemberAccessToken(principalId: string, signal: AbortSignal): Promise<DocumentCollaborationInvite> {
-		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
-		if (!this.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError('Remote Stanza collaboration connection is disposed'));
+		if (!this.canManageMembers) return Promise.reject(new Error('This collaboration member cannot manage room credentials'));
 		return this.service.rotateMemberAccessToken(this, principalId, signal);
 	}
 
 	revokeMember(principalId: string, signal: AbortSignal): Promise<void> {
-		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
-		if (!this.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError('Remote Stanza collaboration connection is disposed'));
+		if (!this.canManageMembers) return Promise.reject(new Error('This collaboration member cannot manage room credentials'));
 		return this.service.revokeMember(this, principalId, signal);
 	}
 
@@ -269,7 +269,7 @@ class RemoteDocumentCollaborationConnection extends Disposable implements Docume
 				const replay = await this.service.poll(this, polling.signal);
 				retryDelay = INITIAL_POLL_RETRY_DELAY_MS;
 				if (this.isDisposed || polling.signal.aborted) return;
-				if (replay.kind === "resync") {
+				if (replay.kind === 'resync') {
 					this._version = replay.snapshot.version;
 					this.snapshotEmitter.fire(replay.snapshot);
 					continue;
@@ -281,7 +281,7 @@ class RemoteDocumentCollaborationConnection extends Disposable implements Docume
 				}
 			} catch (error) {
 				if (this.isDisposed || polling.signal.aborted) return;
-				const failure = error instanceof Error ? error : new Error("Remote Stanza collaboration updates failed");
+				const failure = error instanceof Error ? error : new Error('Remote Stanza collaboration updates failed');
 				if (!isRetryablePollFailure(failure)) {
 					this.failureEmitter.fire(failure);
 					return;
@@ -308,7 +308,7 @@ class RemoteDocumentCollaborationConnection extends Disposable implements Docume
 				this.presenceEmitter.fire(this._currentPresence);
 			} catch (error) {
 				if (this.isDisposed || polling.signal.aborted) return;
-				const failure = error instanceof Error ? error : new Error("Remote Stanza collaboration presence updates failed");
+				const failure = error instanceof Error ? error : new Error('Remote Stanza collaboration presence updates failed');
 				if (!isRetryablePollFailure(failure)) {
 					this.failureEmitter.fire(failure);
 					return;
@@ -324,7 +324,7 @@ class RemoteDocumentCollaborationConnection extends Disposable implements Docume
 	private heartbeatPresence(): void {
 		if (this.isDisposed || this.presence === undefined) return;
 		void this.updatePresence(this.presence, new AbortController().signal).catch(error => {
-			if (!this.isDisposed) this.failureEmitter.fire(error instanceof Error ? error : new Error("Remote Stanza collaboration presence heartbeat failed"));
+			if (!this.isDisposed) this.failureEmitter.fire(error instanceof Error ? error : new Error('Remote Stanza collaboration presence heartbeat failed'));
 		});
 	}
 }
@@ -334,7 +334,7 @@ interface RemoteTarget {
 	readonly bearerToken: string;
 }
 
-type RemoteReplay = { readonly kind: "updates"; readonly updates: readonly DocumentCollaborationRemoteEnvelope[]; } | { readonly kind: "resync"; readonly snapshot: DocumentCollaborationSnapshot; };
+type RemoteReplay = { readonly kind: 'updates'; readonly updates: readonly DocumentCollaborationRemoteEnvelope[]; } | { readonly kind: 'resync'; readonly snapshot: DocumentCollaborationSnapshot; };
 
 interface RemotePresenceReplay {
 	readonly generation: number;
@@ -346,54 +346,54 @@ function normalizeTarget(endpoint: string, bearerToken: string): RemoteTarget {
 	try {
 		parsed = new URL(endpoint);
 	} catch {
-		throw new TypeError("Remote Stanza collaboration endpoint must be an absolute HTTP(S) URL");
+		throw new TypeError('Remote Stanza collaboration endpoint must be an absolute HTTP(S) URL');
 	}
-	if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || parsed.username || parsed.password || parsed.search || parsed.hash || parsed.pathname !== "/") throw new TypeError("Remote Stanza collaboration endpoint must be an HTTP(S) origin without a path, credentials, query, or fragment");
-	if (bearerToken.length < 32 || !/^[\x21-\x7e]+$/.test(bearerToken)) throw new TypeError("Remote Stanza collaboration bearer token must contain at least 32 visible ASCII characters");
+	if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || parsed.username || parsed.password || parsed.search || parsed.hash || parsed.pathname !== '/') throw new TypeError('Remote Stanza collaboration endpoint must be an HTTP(S) origin without a path, credentials, query, or fragment');
+	if (bearerToken.length < 32 || !/^[\x21-\x7e]+$/.test(bearerToken)) throw new TypeError('Remote Stanza collaboration bearer token must contain at least 32 visible ASCII characters');
 	return Object.freeze({ endpoint: parsed, bearerToken });
 }
 
 function decodeSnapshot(value: unknown, codec: DocumentCodec): DocumentCollaborationSnapshot {
-	const record = expectRecord(value, "remote collaboration snapshot");
-	return Object.freeze({ roomId: expectString(record.roomId, "remote collaboration roomId"), version: validateProtocolInteger(record.version, "version", 0), document: codec.deserialize(expectString(record.document, "remote collaboration document")) });
+	const record = expectRecord(value, 'remote collaboration snapshot');
+	return Object.freeze({ roomId: expectString(record.roomId, 'remote collaboration roomId'), version: validateProtocolInteger(record.version, 'version', 0), document: codec.deserialize(expectString(record.document, 'remote collaboration document')) });
 }
 
 function decodeUpdate(value: unknown, codec: DocumentCodec): DocumentCollaborationRemoteEnvelope {
-	const record = expectRecord(value, "remote collaboration update");
+	const record = expectRecord(value, 'remote collaboration update');
 	return Object.freeze({
-		clientId: expectString(record.clientId, "remote collaboration clientId"),
-		sequence: validateProtocolInteger(record.sequence, "sequence", 1),
-		baseVersion: validateProtocolInteger(record.baseVersion, "baseVersion", 0),
-		version: validateProtocolInteger(record.version, "version", 1),
-		transaction: codec.deserializeTransaction(expectString(record.transaction, "remote collaboration transaction")),
+		clientId: expectString(record.clientId, 'remote collaboration clientId'),
+		sequence: validateProtocolInteger(record.sequence, 'sequence', 1),
+		baseVersion: validateProtocolInteger(record.baseVersion, 'baseVersion', 0),
+		version: validateProtocolInteger(record.version, 'version', 1),
+		transaction: codec.deserializeTransaction(expectString(record.transaction, 'remote collaboration transaction')),
 	});
 }
 
 function decodePresence(value: unknown): DocumentCollaborationPresence {
-	const record = expectRecord(value, "remote collaboration presence");
+	const record = expectRecord(value, 'remote collaboration presence');
 	return Object.freeze({
-		clientId: expectString(record.clientId, "remote collaboration presence clientId"),
-		selection: decodeSelection(expectString(record.selection, "remote collaboration presence selection")),
+		clientId: expectString(record.clientId, 'remote collaboration presence clientId'),
+		selection: decodeSelection(expectString(record.selection, 'remote collaboration presence selection')),
 	});
 }
 
 function decodeInvite(value: Readonly<Record<string, unknown>>, expectedRoomId: string): DocumentCollaborationInvite {
-	const roomId = expectString(value.roomId, "remote collaboration invitation roomId");
-	if (roomId !== expectedRoomId) throw new TypeError("Remote Stanza collaboration invitation belongs to a different room");
+	const roomId = expectString(value.roomId, 'remote collaboration invitation roomId');
+	if (roomId !== expectedRoomId) throw new TypeError('Remote Stanza collaboration invitation belongs to a different room');
 	return Object.freeze({
 		roomId,
-		principalId: expectString(value.principalId, "remote collaboration invitation principalId"),
-		displayName: expectString(value.displayName, "remote collaboration invitation displayName"),
+		principalId: expectString(value.principalId, 'remote collaboration invitation principalId'),
+		displayName: expectString(value.displayName, 'remote collaboration invitation displayName'),
 		role: validateRoomRole(value.role),
-		accessToken: expectString(value.accessToken, "remote collaboration invitation accessToken"),
+		accessToken: expectString(value.accessToken, 'remote collaboration invitation accessToken'),
 	});
 }
 
 function decodeMember(value: unknown): DocumentCollaborationMember {
-	const record = expectRecord(value, "remote collaboration member");
+	const record = expectRecord(value, 'remote collaboration member');
 	return Object.freeze({
-		principalId: validatePrincipalId(expectString(record.principalId, "remote collaboration member principalId")),
-		displayName: expectString(record.displayName, "remote collaboration member displayName"),
+		principalId: validatePrincipalId(expectString(record.principalId, 'remote collaboration member principalId')),
+		displayName: expectString(record.displayName, 'remote collaboration member displayName'),
 		role: validateRoomRole(record.role),
 	});
 }
@@ -403,14 +403,14 @@ function decodeSelection(value: string): DocumentSelection {
 	try {
 		parsed = JSON.parse(value);
 	} catch {
-		throw new TypeError("Remote Stanza collaboration presence selection must contain JSON");
+		throw new TypeError('Remote Stanza collaboration presence selection must contain JSON');
 	}
-	const selection = expectRecord(parsed, "remote collaboration presence selection");
+	const selection = expectRecord(parsed, 'remote collaboration presence selection');
 	switch (selection.kind) {
-		case "all": return Object.freeze({ kind: "all" });
-		case "node": return Object.freeze({ kind: "node", nodeId: expectString(selection.nodeId, "remote collaboration node selection nodeId") });
-		case "text": return Object.freeze({ kind: "text", anchor: decodePoint(selection.anchor, "remote collaboration text selection anchor"), head: decodePoint(selection.head, "remote collaboration text selection head") });
-		default: throw new TypeError("Remote Stanza collaboration presence selection has an unknown kind");
+		case 'all': return Object.freeze({ kind: 'all' });
+		case 'node': return Object.freeze({ kind: 'node', nodeId: expectString(selection.nodeId, 'remote collaboration node selection nodeId') });
+		case 'text': return Object.freeze({ kind: 'text', anchor: decodePoint(selection.anchor, 'remote collaboration text selection anchor'), head: decodePoint(selection.head, 'remote collaboration text selection head') });
+		default: throw new TypeError('Remote Stanza collaboration presence selection has an unknown kind');
 	}
 }
 
@@ -430,18 +430,18 @@ function expectArray(value: unknown, name: string): readonly unknown[] {
 }
 
 function expectString(value: unknown, name: string): string {
-	if (typeof value !== "string" || value.length === 0) throw new TypeError(`${name} must be a non-empty string`);
+	if (typeof value !== 'string' || value.length === 0) throw new TypeError(`${name} must be a non-empty string`);
 	return value;
 }
 
 function expectBooleanOrDefault(value: unknown, name: string, defaultValue: boolean): boolean {
 	if (value === undefined) return defaultValue;
-	if (typeof value !== "boolean") throw new TypeError(`${name} must be a boolean`);
+	if (typeof value !== 'boolean') throw new TypeError(`${name} must be a boolean`);
 	return value;
 }
 
 function validateDisplayName(value: string): string {
-	if (typeof value !== "string" || value.trim().length === 0) throw new TypeError("Remote Stanza collaboration invitation display name must be non-empty");
+	if (typeof value !== 'string' || value.trim().length === 0) throw new TypeError('Remote Stanza collaboration invitation display name must be non-empty');
 	return value.trim();
 }
 
@@ -451,12 +451,12 @@ function validatePrincipalId(value: string): string {
 }
 
 function validateRoomRole(value: unknown): DocumentCollaborationRoomRole {
-	if (value === "owner" || value === "editor" || value === "viewer") return value;
-	throw new TypeError("Remote Stanza collaboration invitation role must be owner, editor, or viewer");
+	if (value === 'owner' || value === 'editor' || value === 'viewer') return value;
+	throw new TypeError('Remote Stanza collaboration invitation role must be owner, editor, or viewer');
 }
 
 function validateProtocolInteger(value: unknown, name: string, minimum: number): number {
-	if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum) throw new TypeError(`Stanza collaboration ${name} must be a safe integer greater than or equal to ${minimum}`);
+	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) throw new TypeError(`Stanza collaboration ${name} must be a safe integer greater than or equal to ${minimum}`);
 	return value;
 }
 
@@ -473,10 +473,10 @@ function waitForRetry(signal: AbortSignal, delay: number): Promise<void> {
 		}
 		const complete = () => {
 			clearTimeout(timeout);
-			signal.removeEventListener("abort", complete);
+			signal.removeEventListener('abort', complete);
 			resolve();
 		};
 		const timeout = setTimeout(complete, delay);
-		signal.addEventListener("abort", complete, { once: true });
+		signal.addEventListener('abort', complete, { once: true });
 	});
 }

@@ -24,9 +24,9 @@ interface ValidationState {
 }
 
 const unsafeObjectKeys = new Set([
-	"__proto__",
-	"constructor",
-	"prototype",
+	'__proto__',
+	'constructor',
+	'prototype',
 ]);
 
 /**
@@ -38,7 +38,7 @@ export function validateJsonValue(
 ): JsonValue {
 	return validateValue(
 		value,
-		options.path ?? "value",
+		options.path ?? 'value',
 		0,
 		{
 			nodes: 0,
@@ -63,16 +63,16 @@ function validateValue(
 	if (depth > state.maxDepth) {
 		throw new Error(`${path} is too deeply nested`);
 	}
-	if (value === null || typeof value === "boolean") {
+	if (value === null || typeof value === 'boolean') {
 		return value;
 	}
-	if (typeof value === "number") {
+	if (typeof value === 'number') {
 		if (!Number.isFinite(value)) {
 			throw new Error(`${path} must contain a finite number`);
 		}
 		return value;
 	}
-	if (typeof value === "string") {
+	if (typeof value === 'string') {
 		if (value.length > state.maxStringLength) {
 			throw new Error(`${path} contains a string that is too long`);
 		}
@@ -115,7 +115,7 @@ function asRecord(
 	value: unknown,
 	path: string,
 ): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 		throw new Error(`${path} must be an object`);
 	}
 	return value as Record<string, unknown>;

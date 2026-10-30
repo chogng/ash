@@ -1,5 +1,5 @@
-import { toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import { type TextAreaEditContext } from "./textAreaEditContext.js";
+import { toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { type TextAreaEditContext } from './textAreaEditContext.js';
 
 /** Tracks textarea edit contexts for host integrations and diagnostics. */
 class TextAreaEditContextRegistryImpl {

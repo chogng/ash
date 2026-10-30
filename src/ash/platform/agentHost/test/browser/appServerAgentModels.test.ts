@@ -116,7 +116,10 @@ test('Profile model defaults preserve an unset model and clear effort without cl
 	assert.notEqual(snapshot.model, configured.model);
 	await api.configureDefaults({ reasoningEffort: null }, snapshot.revision);
 	await api.configureDefaults({ model: null, reasoningEffort: null }, snapshot.revision);
-	assert.deepEqual(writes.map(({ commandId, ...write }) => { assert.ok(commandId); return write; }), [
+	assert.deepEqual(writes.map(({ commandId, ...write }) => {
+		assert.ok(commandId);
+		return write;
+	}), [
 		{ expectedRevision: 12, modelReasoningEffort: null },
 		{ expectedRevision: 12, model: null, modelReasoningEffort: null },
 	]);
@@ -128,4 +131,35 @@ test('Profile selection failures propagate and do not report a successful save',
 	} as unknown as AppServerProtocolClient);
 	await assert.rejects(api.configureDefaults({ model: null }, 3), /revision conflict/);
 	await assert.rejects(api.readDefaults(), /revision conflict/);
+});
+
+
+test('Removing a configured custom provider uses the latest config revision and rejects built-in identities', async () => {
+	const writes: unknown[] = [];
+	const api = createAppServerAgentModelsService({
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			if (definition.method === 'config/read') { return { revision: 42, connections: { 'custom-test': { custom: true }, openai: { custom: false } } }; }
+			assert.equal(definition.method, 'provider/remove');
+			writes.push(params);
+			return {};
+		},
+	} as unknown as AppServerProtocolClient);
+	await assert.rejects(api.removeCustomProvider('openai'), /Only a configured custom provider/);
+	await assert.rejects(api.removeCustomProvider('custom-missing'), /Only a configured custom provider/);
+	assert.deepEqual(writes, []);
+	await api.removeCustomProvider('custom-test');
+	assert.match((writes[0] as { commandId: string; }).commandId, /^[0-9a-f-]{36}$/);
+	assert.deepEqual(writes[0], { commandId: (writes[0] as { commandId: string; }).commandId, expectedRevision: 42, connection: 'custom-test' });
+});
+
+test('Catalog statuses preserve connection identity and immutable discovery categories', async () => {
+	const issues = ['refreshFailed'];
+	const api = createAppServerAgentModelsService({
+		request: async () => ({ models: [], catalog_statuses: [{ provider: 'custom-one', connection: 'custom-one', freshness: 'staleUsable', issues }] }),
+	} as unknown as AppServerProtocolClient);
+	const result = await api.listModels();
+	issues.push('authenticationRequired');
+	assert.deepEqual(result.statuses, [{ provider: 'custom-one', connection: 'custom-one', freshness: 'staleUsable', issues: ['refreshFailed'] }]);
+	assert.ok(Object.isFrozen(result.statuses));
+	assert.ok(Object.isFrozen(result.statuses![0].issues));
 });

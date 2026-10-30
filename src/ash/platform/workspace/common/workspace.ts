@@ -1,13 +1,13 @@
 import { Schemas } from '../../../base/common/network.js';
-import { URI } from "../../../base/common/uri.js";
-import { basename } from "../../../base/common/resources.js";
-import { isMacintosh } from "../../../base/common/platform.js";
-import type { Event } from "../../../base/common/event.js";
-import { isNonEmptyString } from "../../../base/common/types.js";
+import { URI } from '../../../base/common/uri.js';
+import { basename } from '../../../base/common/resources.js';
+import { isMacintosh } from '../../../base/common/platform.js';
+import type { Event } from '../../../base/common/event.js';
+import { isNonEmptyString } from '../../../base/common/types.js';
 import {
 	createServiceIdentifier,
-} from "../../instantiation/common/instantiation.js";
-import { createSshRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
+} from '../../instantiation/common/instantiation.js';
+import { createSshRemoteAuthority, getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import { getRemoteAuthority } from '../../remote/common/remoteHosts.js';
 
 /** Describes whether a workbench contains no project, one folder, or a workspace. */
@@ -165,12 +165,12 @@ export function hasWorkspaceFileExtension(path: string | URI): boolean {
 
 export const IWorkspaceContextService =
 	createServiceIdentifier<IWorkspaceContextService>(
-		"workspaceContextService",
+		'workspaceContextService',
 	);
 
 /** Fallback identity for a window whose durable empty-workspace ID is unknown. */
 export const UNKNOWN_EMPTY_WINDOW_WORKSPACE: IEmptyWorkspaceIdentifier =
-	Object.freeze({ id: "empty-window" });
+	Object.freeze({ id: 'empty-window' });
 
 /** Returns whether a value identifies one folder. */
 export function isSingleFolderWorkspaceIdentifier(
@@ -253,23 +253,23 @@ export function parseWorkspaceIdentifier(
 	value: unknown,
 ): IAnyWorkspaceIdentifier {
 	const record = exactRecord(value);
-	const id = nonEmptyString(record.id, "workspace id");
-	if ("configPath" in record) {
-		requireExactKeys(record, record.remoteAuthority === undefined ? ["configPath", "id"] : ["configPath", "id", "remoteAuthority"]);
+	const id = nonEmptyString(record.id, 'workspace id');
+	if ('configPath' in record) {
+		requireExactKeys(record, record.remoteAuthority === undefined ? ['configPath', 'id'] : ['configPath', 'id', 'remoteAuthority']);
 		return Object.freeze({
 			id,
-			configPath: workspaceConfigUri(record.configPath, "workspace config path"),
+			configPath: workspaceConfigUri(record.configPath, 'workspace config path'),
 			...(record.remoteAuthority === undefined ? {} : { remoteAuthority: parseRemoteAuthority(record.remoteAuthority) }),
 		});
 	}
-	if ("uri" in record) {
-		requireExactKeys(record, ["id", "uri"]);
+	if ('uri' in record) {
+		requireExactKeys(record, ['id', 'uri']);
 		return Object.freeze({
 			id,
-			uri: workspaceResourceUri(record.uri, "workspace folder uri"),
+			uri: workspaceResourceUri(record.uri, 'workspace folder uri'),
 		});
 	}
-	requireExactKeys(record, record.remoteAuthority === undefined ? ["id"] : ["id", "remoteAuthority"]);
+	requireExactKeys(record, record.remoteAuthority === undefined ? ['id'] : ['id', 'remoteAuthority']);
 	const remoteAuthority = record.remoteAuthority === undefined ? undefined : parseRemoteAuthority(record.remoteAuthority);
 	return id === UNKNOWN_EMPTY_WINDOW_WORKSPACE.id && remoteAuthority === undefined
 		? UNKNOWN_EMPTY_WINDOW_WORKSPACE
@@ -326,8 +326,8 @@ export function parseWorkspace(value: unknown): IWorkspace {
 }
 
 function exactRecord(value: unknown): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
-		throw new Error("workspace identifier must be an object");
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+		throw new Error('workspace identifier must be an object');
 	}
 	return value as Record<string, unknown>;
 }
@@ -342,20 +342,20 @@ function requireExactKeys(
 		actual.some((key, index) => key !== expected[index])
 	) {
 		throw new Error(
-			`workspace identifier must contain exactly: ${expected.join(", ")}`,
+			`workspace identifier must contain exactly: ${expected.join(', ')}`,
 		);
 	}
 }
 
 function workspaceResourceUri(value: unknown, field: string): URI {
-	if (typeof value !== "string") {
+	if (typeof value !== 'string') {
 		throw new Error(`${field} must be a string`);
 	}
 	const uri = URI.parse(value);
 	if (uri.query || uri.fragment) {
 		throw new Error(`${field} must not contain a query or fragment`);
 	}
-	if (uri.scheme === "file") return uri;
+	if (uri.scheme === 'file') return uri;
 	if (isRemoteResource(uri)) {
 		getRemoteWorkspacePath(uri);
 		return uri;
@@ -369,7 +369,7 @@ function workspaceConfigUri(value: unknown, field: string): URI {
 		if (resource.scheme === Schemas.vscodeUserData && resource.path.startsWith('/workspaces/') && hasWorkspaceFileExtension(resource) && !resource.path.split('/').some(segment => segment === '.' || segment === '..') && !resource.authority && !resource.query && !resource.fragment) return resource;
 	}
 	const uri = workspaceResourceUri(value, field);
-	if (uri.scheme !== "file") throw new Error(`${field} must use the file scheme`);
+	if (uri.scheme !== 'file') throw new Error(`${field} must use the file scheme`);
 	return uri;
 }
 
@@ -419,10 +419,10 @@ function parseRemoteAuthority(value: unknown): string {
 
 /** Resolves one slash-separated protocol path beneath a workspace root. */
 export function workspaceResourceFromPath(root: URI, path: string): URI | undefined {
-	if (root.scheme !== "file" && !isRemoteResource(root)) return undefined;
-	const normalizedPath = usesWindowsPathSeparators(root) ? path.replaceAll("\\", "/") : path;
-	const segments = normalizedPath.split("/");
-	if (segments.length === 0 || segments.some(segment => segment.length === 0 || segment === "." || segment === "..")) return undefined;
+	if (root.scheme !== 'file' && !isRemoteResource(root)) return undefined;
+	const normalizedPath = usesWindowsPathSeparators(root) ? path.replaceAll('\\', '/') : path;
+	const segments = normalizedPath.split('/');
+	if (segments.length === 0 || segments.some(segment => segment.length === 0 || segment === '.' || segment === '..')) return undefined;
 	return segments.reduce((resource, segment) => resource.joinPathSegment(segment), root);
 }
 

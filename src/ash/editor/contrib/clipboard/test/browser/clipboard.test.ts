@@ -8,7 +8,7 @@ import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { IClipboardService, type IClipboardService as IClipboardServiceContract } from '../../../../../platform/clipboard/common/clipboardService.js';
-import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ICodeEditorService } from '../../../../browser/services/codeEditorService.js';

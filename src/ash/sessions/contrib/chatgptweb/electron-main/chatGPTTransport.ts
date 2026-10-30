@@ -1,11 +1,14 @@
-import { open } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { VSBuffer, decodeBase64, encodeBase64 } from '../../../../base/common/buffer.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { Event } from '../../../../base/common/event.js';
 import { isRecord } from '../../../../base/common/types.js';
 import type { IServerChannel } from '../../../../base/parts/ipc/common/ipc.js';
-import type { ChatGPTRequest, ChatGPTResponse, IChatGPTTransport } from '../common/chatGPTTransport.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { ChatGPTAuthenticationError, type ChatGPTRequest, type ChatGPTResponse } from '../common/chatGPTTransport.js';
 import type { IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
+import type { IChatGPTAuthentication, IChatGPTAuthorization } from './chatGPTAuthentication.js';
 
 const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', '/backend-api/pins', '/backend-api/gizmos/snorlax/sidebar']);
 const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', '/realtime/vp']);
@@ -18,54 +21,70 @@ const proofHeaders = ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentine
 const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', 'x-ms-blob-type', ...proofHeaders.map(name => name.toLowerCase())]);
 interface PendingRequest {
 	readonly controller: AbortController;
+	authorization?: IChatGPTAuthorization;
 	bytesRead?: number;
 	reader?: ReadableStreamDefaultReader<Uint8Array>;
 	reading?: boolean;
 }
 
 export interface ChatGPTTransportOptions {
-	readonly credentialFile: string;
+	readonly authentication: IChatGPTAuthentication;
 	readonly readVerificationScript: (signal: AbortSignal) => Promise<string>;
 	readonly createRuntime: (authorize: (url: URL) => Promise<Headers>) => IChatGPTVerificationRuntime;
 }
 
 /** A window-owned HTTP/credential adapter. It has no conversation model, drafts or UI messages. */
-export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
+export class ChatGPTTransport extends Disposable {
 	private readonly requests = new Map<string, PendingRequest>();
 	private runtime: IChatGPTVerificationRuntime | undefined;
+	private runtimeContext: string | undefined;
 
-	constructor(private readonly options: ChatGPTTransportOptions) {
+	constructor(private readonly options: ChatGPTTransportOptions, @ILogService private readonly logService: ILogService) {
 		super();
 		this._register(toDisposable(() => {
 			for (const id of this.requests.keys()) { void this.cancel(id); }
 			this.runtime?.dispose();
 			this.runtime = undefined;
 		}));
+		this._register(options.authentication.onDidChangeContext(() => {
+			for (const id of this.requests.keys()) { void this.cancel(id); }
+			this.runtime?.dispose(); this.runtime = undefined; this.runtimeContext = undefined;
+		}));
 	}
 
 	getChannel(): IServerChannel<string> {
 		return {
 			call: async <T>(_context: string, command: string, args: unknown): Promise<T> => {
+				if (command === 'authenticationContext' && args === undefined) { return await this.options.authentication.getContext() as T; }
 				if (!Array.isArray(args) || typeof args[0] !== 'string' || !/^[a-f0-9-]{36}$/u.test(args[0])) { throw new TypeError('Invalid ChatGPT request ID'); }
-				if (command === 'request' && args.length === 2) { return await this.request(args[0], readRequest(args[1])) as T; }
+				if (command === 'request' && args.length === 3 && typeof args[2] === 'string' && /^[a-f0-9]{32}$/u.test(args[2])) { return await this.request(args[0], readRequest(args[1]), args[2]) as T; }
 				if (command === 'read' && args.length === 1) { return await this.read(args[0]) as T; }
 				if (command === 'cancel' && args.length === 1) { return await this.cancel(args[0]) as T; }
 				throw new TypeError('Invalid ChatGPT transport operation');
 			},
-			listen: () => { throw new Error('ChatGPT transport has no events'); },
+			listen: <T>(_context: string, event: string): Event<T> => {
+				if (event !== 'authenticationChanged') { throw new Error('Invalid ChatGPT transport event'); }
+				return this.options.authentication.onDidChangeContext as Event<T>;
+			},
 		};
 	}
 
-	async request(id: string, request: ChatGPTRequest): Promise<ChatGPTResponse> {
+	async request(id: string, request: ChatGPTRequest, context: string): Promise<ChatGPTResponse> {
 		if (this.isDisposed || this.requests.has(id) || this.requests.size >= 16) { throw new Error('ChatGPT transport is unavailable'); }
 		const pending: PendingRequest = { controller: new AbortController() };
 		this.requests.set(id, pending);
 		try {
-			const response = await this.fetch(request, pending.controller.signal);
+			const authorization = pending.authorization = await this.options.authentication.authorize(id, context, pending.controller.signal);
+			const response = await this.fetch(request, authorization.signal, context, authorization);
 			pending.controller.signal.throwIfAborted();
+			authorization.signal.throwIfAborted();
 			pending.reader = response.body?.getReader();
 			return { status: response.status, headers: Object.fromEntries(response.headers) };
-		} catch (error) { await this.cancel(id); throw error; }
+		} catch (error) {
+			await this.cancel(id);
+			if (error instanceof ChatGPTAuthenticationError) { this.logService.warn('chatgpt', 'Authentication owner could not authorize a request'); }
+			throw error;
+		}
 	}
 
 	async read(id: string): Promise<VSBuffer | null> {
@@ -77,7 +96,7 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 		try {
 			const chunk = await pending.reader.read();
 			pending.controller.signal.throwIfAborted();
-			if (chunk.done) { this.requests.delete(id); pending.reader.releaseLock(); return null; }
+			if (chunk.done) { this.requests.delete(id); pending.reader.releaseLock(); pending.authorization?.dispose(); return null; }
 			if (chunk.value.byteLength > 1024 * 1024) { throw new Error('ChatGPT response chunk exceeds the limit'); }
 			pending.bytesRead = (pending.bytesRead ?? 0) + chunk.value.byteLength;
 			if (pending.bytesRead > 64 * 1024 * 1024) { throw new Error('ChatGPT response exceeds the limit'); }
@@ -91,14 +110,15 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 		if (!pending) { return; }
 		this.requests.delete(id);
 		pending.controller.abort();
+		pending.authorization?.dispose();
 		await pending.reader?.cancel().catch(() => { });
 	}
 
-	private async fetch(request: ChatGPTRequest, signal: AbortSignal): Promise<Response> {
+	private async fetch(request: ChatGPTRequest, signal: AbortSignal, context: string, authorization: IChatGPTAuthorization): Promise<Response> {
 		if (request.path.startsWith('/service/.upload?')) {
 			const url = readUploadUrl(new URL(request.path, 'https://chatgpt.com').searchParams.get('url')!);
 			// Signed storage receives only the file bytes and upload headers, never the login.
-			const response = await this.getRuntime().session.fetch(url.href, {
+			const response = await this.getRuntime(context).session.fetch(url.href, {
 				method: 'PUT', headers: request.headers, body: (request.body as VSBuffer).buffer,
 				credentials: 'omit', redirect: 'error', signal,
 			});
@@ -106,15 +126,12 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 			return new Response(null, { status: response.status });
 		}
 		if (request.path.startsWith('/service/.resource?')) {
-			return this.fetchResource(new URL(request.path, 'https://chatgpt.com').searchParams.get('url')!, signal);
+			return this.fetchResource(new URL(request.path, 'https://chatgpt.com').searchParams.get('url')!, signal, context, authorization);
 		}
-		let authorization: Headers;
-		try { authorization = await this.readCredentialHeaders(); }
-		catch { return new Response(null, { status: 401 }); }
 		signal.throwIfAborted();
 		const headersOnly = request.path.startsWith('/service/.headers/');
 		const url = new URL(request.path.replace(headersOnly ? '/service/.headers' : '/service', ''), 'https://chatgpt.com');
-		const runtime = this.getRuntime();
+		const runtime = this.getRuntime(context);
 		if (headersOnly) {
 			try {
 				const script = await this.options.readVerificationScript(signal);
@@ -137,11 +154,16 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 				return new Response(null, { status: 428 });
 			}
 		}
-		const headers = new Headers(request.headers);
-		for (const [name, value] of authorization) { headers.set(name, value); }
 		signal.throwIfAborted();
 		try {
-			const response = await runtime.session.fetch(url.href, { method: request.method, headers, body: request.body instanceof VSBuffer ? request.body.buffer : request.body, credentials: 'include', redirect: 'error', signal });
+			const response = await this.fetchAuthorized(runtime, url, { method: request.method, headers: request.headers, body: request.body instanceof VSBuffer ? request.body.buffer : request.body, credentials: 'include', redirect: 'error', signal }, authorization);
+			if (!response.ok) {
+				this.logService.warn('chatgpt', 'ChatGPT rejected an HTTP request', {
+					status: response.status, method: request.method,
+					// Keep conversation and file identifiers out of diagnostic logs.
+					path: readPaths.has(url.pathname) ? url.pathname : undefined,
+				});
+			}
 			const contentType = response.headers.get('content-type') ?? '';
 			const sdp = url.pathname === '/realtime/vp' && /^text\/plain(?:;|$)/iu.test(contentType);
 			if (response.status !== 204 && !sdp && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
@@ -153,17 +175,18 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 					'Content-Type': contentType,
 				}
 			});
-		} catch { signal.throwIfAborted(); return new Response(null, { status: 502 }); }
+		} catch (error) { signal.throwIfAborted(); if (error instanceof ChatGPTAuthenticationError) { throw error; } return new Response(null, { status: 502 }); }
 	}
 
 	/** Only the ChatGPT web asset origin receives login headers. Signed CDN requests carry no credentials. */
-	private async fetchResource(source: string, signal: AbortSignal): Promise<Response> {
+	private async fetchResource(source: string, signal: AbortSignal, context: string, authorization: IChatGPTAuthorization): Promise<Response> {
 		let url = readResourceUrl(source);
-		const runtime = this.getRuntime();
+		const runtime = this.getRuntime(context);
 		for (let redirects = 0; redirects < 5; redirects++) {
-			const headers = url.origin === 'https://chatgpt.com' ? await this.readCredentialHeaders() : new Headers();
 			signal.throwIfAborted();
-			const response = await runtime.session.fetch(url.href, { headers, credentials: 'omit', redirect: 'manual', signal });
+			const response = url.origin === 'https://chatgpt.com'
+				? await this.fetchAuthorized(runtime, url, { credentials: 'omit', redirect: 'manual', signal }, authorization)
+				: await runtime.session.fetch(url.href, { credentials: 'omit', redirect: 'manual', signal });
 			if ([301, 302, 303, 307, 308].includes(response.status)) {
 				await response.body?.cancel();
 				url = readResourceUrl(new URL(response.headers.get('location') ?? '', url).href);
@@ -175,38 +198,36 @@ export class ChatGPTTransport extends Disposable implements IChatGPTTransport {
 		throw new Error('ChatGPT resource redirected too many times');
 	}
 
-	private getRuntime(): IChatGPTVerificationRuntime {
-		// Reuse the web verification session; the login owner supplies credentials for
-		// each request. No account identity or credential-change state is retained here.
-		return this.runtime ??= this.options.createRuntime(async url => {
-			const headers = new Headers({ Authorization: '', 'ChatGPT-Account-Id': '' });
-			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(url.pathname) || !(readPaths.has(url.pathname) || writePaths.has(url.pathname) || uploadedPath(url.pathname) || conversationPath(url.pathname) || renamePath(url.pathname) || deletePath(url.pathname) || filePath(url.pathname) || url.pathname.startsWith('/backend-api/sentinel/'))) { return headers; }
-			for (const [name, value] of await this.readCredentialHeaders()) { headers.set(name, value); }
-			return headers;
-		});
+	private async fetchAuthorized(runtime: IChatGPTVerificationRuntime, url: URL, init: RequestInit, authorization: IChatGPTAuthorization): Promise<Response> {
+		const send = (credentials: Headers): Promise<Response> => {
+			const headers = new Headers(init.headers);
+			for (const [name, value] of credentials) { headers.set(name, value); }
+			return runtime.session.fetch(url.href, { ...init, headers });
+		};
+		let response = await send(authorization.headers);
+		if (response.status === 401) {
+			await response.body?.cancel();
+			const recovered = await raceCancellationError(authorization.recoverUnauthorized(), authorization.signal);
+			authorization.signal.throwIfAborted();
+			if (recovered) {
+				response = await send(recovered);
+			} else { return new Response(null, { status: response.status, headers: response.headers }); }
+		}
+		return response;
 	}
 
-	private async readCredentialHeaders(): Promise<Headers> {
-		const file = await open(this.options.credentialFile, 'r');
-		const bytes = Buffer.alloc(1024 * 1024 + 1);
-		try {
-			let length = 0;
-			while (length < bytes.length) {
-				const next = await file.read(bytes, length, bytes.length - length, null);
-				if (!next.bytesRead) { break; }
-				length += next.bytesRead;
-			}
-			if (length === bytes.length) { throw new Error('ChatGPT credential document exceeds the limit'); }
-			const value: unknown = JSON.parse(bytes.subarray(0, length).toString('utf8'));
-			if (!isRecord(value) || (value.auth_mode !== undefined && value.auth_mode !== 'chatgpt') || !isRecord(value.tokens)) { throw new Error('ChatGPT login is unavailable'); }
-			const token = value.tokens.access_token;
-			const accountId = value.tokens.account_id;
-			if (typeof token !== 'string' || !token.trim() || token.length > 16384 || /[\r\n\0]/u.test(token)
-				|| (accountId != null && (typeof accountId !== 'string' || !accountId.trim() || accountId.length > 16384 || /[\r\n\0]/u.test(accountId)))) { throw new Error('ChatGPT credential field is unavailable'); }
-			const headers = new Headers({ Authorization: `Bearer ${token}` });
-			if (typeof accountId === 'string') { headers.set('ChatGPT-Account-Id', accountId); }
+	private getRuntime(context: string): IChatGPTVerificationRuntime {
+		if (this.runtime && this.runtimeContext !== context) { this.runtime.dispose(); this.runtime = undefined; }
+		this.runtimeContext = context;
+		return this.runtime ??= this.options.createRuntime(async url => {
+			// Empty values remove stale account routing and credentials from Chromium
+			// subrequests before the current owner's headers are applied.
+			const headers = new Headers({ Authorization: '', 'ChatGPT-Account-Id': '', 'X-OpenAI-Fedramp': '' });
+			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(url.pathname) || !(readPaths.has(url.pathname) || writePaths.has(url.pathname) || uploadedPath(url.pathname) || conversationPath(url.pathname) || renamePath(url.pathname) || deletePath(url.pathname) || filePath(url.pathname) || url.pathname.startsWith('/backend-api/sentinel/'))) { return headers; }
+			using authorization = await this.options.authentication.authorize(randomUUID(), context, new AbortController().signal);
+			for (const [name, value] of authorization.headers) { headers.set(name, value); }
 			return headers;
-		} finally { bytes.fill(0); await file.close(); }
+		});
 	}
 }
 

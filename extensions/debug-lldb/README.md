@@ -46,6 +46,22 @@ for another artifact or a C/C++ executable. Remove `sourceLanguages: ["rust"]`
 for a non-Rust target. Launch/attach properties pass through to the selected
 adapter; CodeLLDB's `sourceLanguages` also configures adapter startup settings.
 
+On Windows, the executable descriptor uses this provider's internal
+`--stdio-adapter` mode. It starts CodeLLDB with `--connect` on an ephemeral
+loopback port, forwards framed DAP messages, and publishes process stdout and
+stderr as standard DAP output events. This keeps inherited debuggee output off
+the protocol stream, including Rust tests using `terminal: "console"`. The
+shared process handle owns the adapter and its descendants; closing the input
+or terminating the bridge releases the tree. Transport flags (`--connect`,
+`--port`, `--multi-session`) are reserved by the bridge. Other platforms and
+`lldb-dap` retain their existing executable transport.
+
+Rust sessions also install a bounded aggregate-summary wrapper in
+`preRunCommands`, after CodeLLDB loads the toolchain formatters. It detects
+self-referential CodeView fields and large DWARF graphs, and bounds traversal to 8 levels, 64 aggregates
+and 8 fields per summary,
+preserving ordinary summaries and user commands across resolution and restart.
+
 ```json
 {
   "version": "0.2.0",
@@ -103,6 +119,8 @@ windows. `tests/host.rs` starts the real Rust
 program and covers all configuration phases, per-client descriptor settings,
 Chinese messages, malformed requests, concurrency, cancellation, capability
 denial, crash recovery, localized status values, installation retry and shutdown.
+Windows `tests/adapter.rs` exercises output isolation, unchanged protocol
+messages, input EOF and forced bridge termination against a real child process.
 
 LLDB configuration reference: <https://lldb.llvm.org/use/lldbdap.html>.
 CodeLLDB configuration reference: <https://github.com/vadimcn/codelldb/blob/master/MANUAL.md>.

@@ -36,7 +36,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Digit1: ['&', '1', '|', '', 0, 'VK_1'],
 		Digit2: ['é', '2', '@', '', 0, 'VK_2'],
 		Digit3: ['"', '3', '#', '', 0, 'VK_3'],
-		Digit4: ['\'', '4', '{', '', 0, 'VK_4'],
+		Digit4: ["'", '4', '{', '', 0, 'VK_4'],
 		Digit5: ['(', '5', '[', '', 0, 'VK_5'],
 		Digit6: ['§', '6', '^', '', 0, 'VK_6'],
 		Digit7: ['è', '7', '', '', 0, 'VK_7'],
@@ -162,4 +162,3 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BrowserFavorites: []
 	}
 });
-

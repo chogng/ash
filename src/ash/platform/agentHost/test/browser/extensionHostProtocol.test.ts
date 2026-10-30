@@ -1,6 +1,6 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { CancellationError } from "../../../../base/common/errors.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { CancellationError } from '../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
@@ -8,30 +8,30 @@ import { ExtensionHostInvocationError } from '../../common/extensionHostApi.js';
 import { invokeExtensionHost, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot } from '../../browser/extensionHostProtocol.js';
 import { type ExtensionHostInvocationRequest, type JsonValue } from '../../common/extensionHostApi.js';
 
-const DIGEST = `sha256:${"a".repeat(64)}`;
+const DIGEST = `sha256:${'a'.repeat(64)}`;
 ensureNoDisposablesAreLeakedInTestSuite();
 
-test("normalizes one exact isolated Extension Host fleet snapshot", () => {
+test('normalizes one exact isolated Extension Host fleet snapshot', () => {
 	const snapshot = normalizeExtensionHostSnapshot({
 		generation: 7,
 		extensions: [{
-			id: "acme.demo",
-			version: "1.0.0",
+			id: 'acme.demo',
+			version: '1.0.0',
 			packageDigest: DIGEST,
 			runtimeApiVersion: 1,
 			activationGeneration: 3,
 			incarnation: 2,
-			lifecycle: "ready",
+			lifecycle: 'ready',
 			failure: null,
-			stderr: "extension diagnostic\n",
+			stderr: 'extension diagnostic\n',
 			outputEvents: [
-				{ sequence: 4, incarnation: 2, activationGeneration: 3, operation: "create", channelId: "review", label: "Review", kind: "log" },
-				{ sequence: 5, incarnation: 2, activationGeneration: 3, operation: "append", channelId: "review", text: "ready\n", severity: "information", category: "lifecycle" },
+				{ sequence: 4, incarnation: 2, activationGeneration: 3, operation: 'create', channelId: 'review', label: 'Review', kind: 'log' },
+				{ sequence: 5, incarnation: 2, activationGeneration: 3, operation: 'append', channelId: 'review', text: 'ready\n', severity: 'information', category: 'lifecycle' },
 			],
 			registrations: [
-				{ registrationId: "commands", kind: "command", command: "acme.run", title: "Run" },
-				{ registrationId: "language", kind: "languageProvider", languageIds: ["typescript"], operations: ["completion", "hover"], completionTriggerCharacters: ['.', '😀'] },
-				{ registrationId: "tests", kind: "testProfileProvider", providerId: "acme.tests", label: "Acme Tests" },
+				{ registrationId: 'commands', kind: 'command', command: 'acme.run', title: 'Run' },
+				{ registrationId: 'language', kind: 'languageProvider', languageIds: ['typescript'], operations: ['completion', 'hover'], completionTriggerCharacters: ['.', '😀'] },
+				{ registrationId: 'tests', kind: 'testProfileProvider', providerId: 'acme.tests', label: 'Acme Tests' },
 				{ registrationId: 'documents', kind: 'textDocumentEvents' },
 				{ registrationId: 'debugConfigurations', kind: 'debugConfigurationProvider', debuggerType: 'example', triggerKind: 2 },
 				{ registrationId: 'window', kind: 'workspaceEvents' },
@@ -44,9 +44,9 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 
 	assert.equal(snapshot.generation, 7);
 	assert.equal(snapshot.extensions[0]?.activationGeneration, 3);
-	assert.equal(snapshot.extensions[0]?.registrations[2]?.kind, "testProfileProvider");
-	assert.equal(snapshot.extensions[0]?.stderr, "extension diagnostic\n");
-	assert.equal(snapshot.extensions[0]?.outputEvents[1]?.operation.operation, "append");
+	assert.equal(snapshot.extensions[0]?.registrations[2]?.kind, 'testProfileProvider');
+	assert.equal(snapshot.extensions[0]?.stderr, 'extension diagnostic\n');
+	assert.equal(snapshot.extensions[0]?.outputEvents[1]?.operation.operation, 'append');
 	assert.equal(Object.isFrozen(snapshot.extensions[0]?.registrations), true);
 	assert.deepEqual(snapshot.extensions[0]?.registrations[3], { registrationId: 'documents', kind: 'textDocumentEvents' });
 	assert.deepEqual(snapshot.extensions[0]?.registrations[4], { registrationId: 'debugConfigurations', kind: 'debugConfigurationProvider', debuggerType: 'example', triggerKind: 2 });
@@ -64,12 +64,12 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 	assert.equal(Object.isFrozen(language.completionTriggerCharacters), true);
 });
 
-test("rejects malformed fleet authority and oversized JSON payloads", () => {
-	assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: "bad", version: "1", packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 0, incarnation: 1, lifecycle: "ready", failure: null, stderr: "", outputEvents: [], registrations: [] }] }), /activation generation/);
-	assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: "bad", version: "1", packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 1, incarnation: null, lifecycle: "ready", failure: null, stderr: "", outputEvents: [], registrations: [] }] }), /must have an incarnation/);
-	const maximum = normalizeExtensionHostPayload("x".repeat(64 * 1024 * 1024 - 2));
-	assert.equal(typeof maximum === "string" ? maximum.length : -1, 64 * 1024 * 1024 - 2);
-	assert.throws(() => normalizeExtensionHostPayload("x".repeat(64 * 1024 * 1024 - 1)), /too large/);
+test('rejects malformed fleet authority and oversized JSON payloads', () => {
+	assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: 'bad', version: '1', packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 0, incarnation: 1, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: [] }] }), /activation generation/);
+	assert.throws(() => normalizeExtensionHostSnapshot({ generation: 1, extensions: [{ id: 'bad', version: '1', packageDigest: DIGEST, runtimeApiVersion: 1, activationGeneration: 1, incarnation: null, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: [] }] }), /must have an incarnation/);
+	const maximum = normalizeExtensionHostPayload('x'.repeat(64 * 1024 * 1024 - 2));
+	assert.equal(typeof maximum === 'string' ? maximum.length : -1, 64 * 1024 * 1024 - 2);
+	assert.throws(() => normalizeExtensionHostPayload('x'.repeat(64 * 1024 * 1024 - 1)), /too large/);
 });
 
 test('large document envelopes retain bounded wide/deep trees, Unicode and JSON validation', () => {
@@ -91,7 +91,7 @@ test('large document envelopes retain bounded wide/deep trees, Unicode and JSON 
 	assert.throws(() => normalizeExtensionHostPayload(cycle), /cycles/);
 });
 
-test("completion during a pending read wakes a fenced invocation without polling", async () => {
+test('completion during a pending read wakes a fenced invocation without polling', async () => {
 	using completed = new Emitter<string>();
 	const requests: ExtensionHostInvocationRequest[] = [];
 	let reads = 0;
@@ -99,37 +99,37 @@ test("completion during a pending read wakes a fenced invocation without polling
 	const result = await invokeExtensionHost({
 		onDidComplete: completed.event,
 		onDidDisconnect: Event.None,
-		start: async request => { completed.fire('another-call'); requests.push(request); return { invocationId: "invoke-1" }; },
+		start: async request => { completed.fire('another-call'); requests.push(request); return { invocationId: 'invoke-1' }; },
 		read: async invocationId => {
-			assert.equal(invocationId, "invoke-1");
-			if (++reads === 1) { completed.fire(invocationId); return { state: "pending" }; }
-			return { state: "succeeded", payload: { ok: true } };
+			assert.equal(invocationId, 'invoke-1');
+			if (++reads === 1) { completed.fire(invocationId); return { state: 'pending' }; }
+			return { state: 'succeeded', payload: { ok: true } };
 		},
-		cancel: async () => { cancels += 1; return { disposition: "alreadyTerminal" }; },
+		cancel: async () => { cancels += 1; return { disposition: 'alreadyTerminal' }; },
 	}, invocation(), new AbortController().signal, { now: () => 100 });
 
-	assert.equal(typeof result === "object" && result !== null && !Array.isArray(result) ? (result as { readonly ok?: JsonValue; }).ok : undefined, true);
+	assert.equal(typeof result === 'object' && result !== null && !Array.isArray(result) ? (result as { readonly ok?: JsonValue; }).ok : undefined, true);
 	assert.equal(requests[0]?.activationGeneration, 4);
 	assert.equal(requests[0]?.incarnation, 5);
 	assert.equal(reads, 2);
 	assert.equal(cancels, 0);
 });
 
-test("cancels a pending connection-owned invocation when the caller aborts", async () => {
+test('cancels a pending connection-owned invocation when the caller aborts', async () => {
 	const controller = new AbortController();
 	const cancelled: string[] = [];
 	const started = new DeferredPromise<void>();
 	const pending = invokeExtensionHost({
 		onDidComplete: Event.None,
 		onDidDisconnect: Event.None,
-		start: async () => { void started.complete(); return { invocationId: "invoke-2" }; },
+		start: async () => { void started.complete(); return { invocationId: 'invoke-2' }; },
 		read: async () => assert.fail('Pending notification waits need no read'),
-		cancel: async invocationId => { cancelled.push(invocationId); return { disposition: "requested" }; },
+		cancel: async invocationId => { cancelled.push(invocationId); return { disposition: 'requested' }; },
 	}, invocation(), controller.signal, { now: () => 100 });
 	await started.p;
 	controller.abort('test');
 	await assert.rejects(pending, CancellationError);
-	assert.deepEqual(cancelled, ["invoke-2"]);
+	assert.deepEqual(cancelled, ['invoke-2']);
 });
 
 test('completion before the start response is covered by the initial read', async () => {
@@ -330,11 +330,11 @@ test('abort and deadline interrupt a stalled read and discard its backend sessio
 
 function invocation(): ExtensionHostInvocationRequest {
 	return {
-		extensionId: "acme.demo",
-		registrationId: "command",
+		extensionId: 'acme.demo',
+		registrationId: 'command',
 		activationGeneration: 4,
 		incarnation: 5,
-		operation: "execute",
+		operation: 'execute',
 		payload: Object.freeze({ arguments: Object.freeze([]) }),
 		deadlineUnixMillis: 1_000,
 	};

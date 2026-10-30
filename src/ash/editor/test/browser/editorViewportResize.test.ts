@@ -1,11 +1,11 @@
 import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
 import './testEditorDom.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { EditorZoom } from "../../common/config/editorZoom.js";
-import { TextModel } from "../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { EditorZoom } from '../../common/config/editorZoom.js';
+import { TextModel } from '../../common/model/textModel.js';
 import { installEditorTestGlobals } from './editorTestGlobals.js';
 import { scheduleAtNextAnimationFrame } from '../../../base/browser/scheduler.js';
 import { EditorLineWrapping } from '../../common/config/editorOptions.js';
@@ -17,7 +17,7 @@ import { GlyphMarginLane } from '../../common/model.js';
 import { Emitter } from '../../../base/common/event.js';
 import { type IModelTokensChangedEvent } from '../../common/textModelEvents.js';
 
-const { TestView: View } = await import("./viewModel/testViewModel.js");
+const { TestView: View } = await import('./viewModel/testViewModel.js');
 
 test('resizing publishes geometry immediately and renders the final size in one frame', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>', { pretendToBeVisual: true });
@@ -462,8 +462,8 @@ test('one window frame renders all queued editors and later window frames do not
 });
 
 
-test("Stanza viewport automatic layout uses the observed content box", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('Stanza viewport automatic layout uses the observed content box', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	let resizeListener: ResizeObserverCallback | undefined;
 	class TestResizeObserver {
@@ -475,9 +475,9 @@ test("Stanza viewport automatic layout uses the observed content box", () => {
 		unobserve(): void { }
 		disconnect(): void { }
 	}
-	Object.defineProperty(dom.window, "ResizeObserver", { configurable: true, value: TestResizeObserver });
+	Object.defineProperty(dom.window, 'ResizeObserver', { configurable: true, value: TestResizeObserver });
 	using installedObserver = installEditorTestGlobals({ ResizeObserver: TestResizeObserver });
-	const container = requiredElement(dom.window.document, "main");
+	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel();
 	using viewport = new View({ container, model, lineHeight: 20, automaticLayout: true });
 	Object.defineProperties(viewport.domNode.domNode, {
@@ -489,55 +489,55 @@ test("Stanza viewport automatic layout uses the observed content box", () => {
 	viewport.render(true, false);
 
 	assert.deepEqual(viewport.viewportLayout.viewportSize, { width: 383, height: 46 });
-	assert.equal(viewport.domNode.domNode.style.width, "383px");
-	assert.equal(viewport.domNode.domNode.style.height, "46px");
-	assert.equal(viewport.domNode.domNode.classList.contains("horizontally-scrollable"), false);
-	assert.equal(viewport.domNode.domNode.classList.contains("vertically-scrollable"), false);
+	assert.equal(viewport.domNode.domNode.style.width, '383px');
+	assert.equal(viewport.domNode.domNode.style.height, '46px');
+	assert.equal(viewport.domNode.domNode.classList.contains('horizontally-scrollable'), false);
+	assert.equal(viewport.domNode.domNode.classList.contains('vertically-scrollable'), false);
 	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="horizontal"]').hidden, true);
 	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="vertical"]').hidden, true);
-	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-content").style.width, "383px");
-	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-content").style.height, "46px");
+	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-content').style.width, '383px');
+	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-content').style.height, '46px');
 	dom.window.close();
 });
 
-test("Stanza viewport enables scrollbars only for model-backed overflow", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('Stanza viewport enables scrollbars only for model-backed overflow', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel(`${"x".repeat(100)}\nsecond line`);
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel(`${'x'.repeat(100)}\nsecond line`);
 	using viewport = new View({ container, model, lineHeight: 20 });
 
 	viewport.layout({ width: 50, height: 20 });
 	viewport.render(true, false);
 
-	assert.equal(viewport.domNode.domNode.style.width, "50px");
-	assert.equal(viewport.domNode.domNode.style.height, "20px");
-	assert.equal(viewport.domNode.domNode.classList.contains("horizontally-scrollable"), true);
-	assert.equal(viewport.domNode.domNode.classList.contains("vertically-scrollable"), true);
+	assert.equal(viewport.domNode.domNode.style.width, '50px');
+	assert.equal(viewport.domNode.domNode.style.height, '20px');
+	assert.equal(viewport.domNode.domNode.classList.contains('horizontally-scrollable'), true);
+	assert.equal(viewport.domNode.domNode.classList.contains('vertically-scrollable'), true);
 	const horizontalScrollbar = requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="horizontal"]');
 	const verticalScrollbar = requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="vertical"]');
 	assert.equal(horizontalScrollbar.hidden, false);
 	assert.equal(verticalScrollbar.hidden, false);
-	assert.equal(horizontalScrollbar.getAttribute("role"), "scrollbar");
-	assert.equal(verticalScrollbar.getAttribute("aria-controls"), requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-content").id);
-	assert.equal(horizontalScrollbar.style.height, "12px");
-	assert.equal(verticalScrollbar.style.width, "14px");
-	assert.equal(horizontalScrollbar.style.right, "14px");
-	assert.equal(verticalScrollbar.style.bottom, "12px");
+	assert.equal(horizontalScrollbar.getAttribute('role'), 'scrollbar');
+	assert.equal(verticalScrollbar.getAttribute('aria-controls'), requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-content').id);
+	assert.equal(horizontalScrollbar.style.height, '12px');
+	assert.equal(verticalScrollbar.style.width, '14px');
+	assert.equal(horizontalScrollbar.style.right, '14px');
+	assert.equal(verticalScrollbar.style.bottom, '12px');
 	dom.window.close();
 });
 
-test("Stanza viewport applies recomputed font configuration", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('Stanza viewport applies recomputed font configuration', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("text");
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('text');
 	const viewport = new View({ container, model, lineHeight: 20, minimap: { enabled: false } });
 	try {
 		EditorZoom.setZoomLevel(1);
 		assert.equal(viewport.fontInfo.lineHeight, 22);
 		assert.equal(viewport.currentLayout.lineHeight, 22);
-		assert.equal(viewport.domNode.domNode.style.lineHeight, "22px");
+		assert.equal(viewport.domNode.domNode.style.lineHeight, '22px');
 	} finally {
 		viewport.dispose();
 		EditorZoom.setZoomLevel(0);

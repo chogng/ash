@@ -26,10 +26,11 @@ use crate::framing::MAX_MESSAGE_BYTES;
 use crate::framing::encode_message;
 use crate::framing::read_message;
 
-const MAX_ACTIVE_SESSIONS: usize = 8;
+const MAX_ACTIVE_SESSIONS: usize = 16;
 const MAX_ARGUMENTS: usize = 128;
 const MAX_ARGUMENT_BYTES: usize = 32 * 1024;
-const MAX_BUFFERED_MESSAGES: usize = 512;
+/// Retained small-message bursts, still bounded by the framing byte budget.
+pub const MAX_BUFFERED_MESSAGES: usize = 8192;
 const MAX_BUFFERED_STDERR_BYTES: usize = 256 * 1024;
 
 /// Validated command used to start one directory-bound debug adapter.

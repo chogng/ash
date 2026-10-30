@@ -1,8 +1,8 @@
 import { structuralEquals } from '../../../../base/common/equals.js';
 import { EditorInputSerializers } from '../../../services/editor/common/editorInputSerializer.js';
-import { ICommandService } from "../../../../platform/commands/common/commands.js";
-import { Icon } from "../../../../base/common/icon.js";
-import { IMultiDiffSourceResolverService } from "./multiDiffSourceResolverService.js";
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { Icon } from '../../../../base/common/icon.js';
+import { IMultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, ISaveOptions } from '../../../common/editor.js';
@@ -15,7 +15,6 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import './media/multiDiffEditorPane.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { type IDimension } from '../../../../base/browser/dom.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -33,7 +32,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { type ITextModelResourceService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { MenuId, type IMenuService } from '../../../../platform/actions/common/actions.js';
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { type IEditorPaneWithViewState } from '../../../browser/parts/editor/editorWithViewState.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
@@ -55,7 +54,7 @@ import {
 } from '../../../common/contextkeys.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
-import { IResourceIconRenderer } from '../../../browser/labels.js';
+import { IResourceLabelService } from '../../../browser/labels.js';
 
 export const MultiDiffEditorAllCollapsed = new RawContextKey<boolean>('multiDiffEditorAllCollapsed', false);
 export const MultiDiffEditorHideUnchangedRegions = new RawContextKey<boolean>('multiDiffEditorHideUnchangedRegions', true);
@@ -298,7 +297,7 @@ class MultiDiffEditorSession extends Disposable {
 		@ICommandService private readonly commandService: ICommandService,
 		@IMultiDiffSourceResolverService private readonly sourceResolvers: IMultiDiffSourceResolverService,
 		@IWorkingCopyService private readonly workingCopyService: IWorkingCopyService,
-		@IResourceIconRenderer private readonly resourceIcons: IResourceIconRenderer,
+		@IResourceLabelService private readonly resourceLabels: IResourceLabelService,
 	) {
 		super();
 		try {
@@ -343,6 +342,7 @@ class MultiDiffEditorSession extends Disposable {
 				}
 			}));
 			const fileActions = options.fileActions;
+			const labels = this._register(this.resourceLabels.createGroup());
 			this._register(toDisposable(() => this.abortController.abort()));
 			this.emptyDomNode = h(container.ownerDocument, 'div');
 			this.emptyDomNode.className = 'stanza-multi-diff-editor-empty';
@@ -357,15 +357,24 @@ class MultiDiffEditorSession extends Disposable {
 						createResourceLabel: (container: HTMLElement, item: IDocumentDiffItem) => {
 							const input = this.inputsById.get(item.id);
 							if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
-							const resource = (input.goToFile ?? input.modified).resource;
+							const resource = input.modified.preferredResource ?? input.goToFile?.resource ?? input.modified.resource;
+							const originalResource = input.original.preferredResource ?? input.original.resource;
 							const resources = new DisposableStore();
-							const label = resources.add(new IconLabel(container, { label: item.label, title: item.label }));
-							const render = (): void => {
-								const hasFileIcons = this.resourceIcons.getFileIconTheme().hasFileIcons;
-								label.setIcon(undefined, hasFileIcons ? target => this.resourceIcons.renderFileIcon(resource, target) : undefined, hasFileIcons);
-							};
-							render();
-							resources.add(this.resourceIcons.onDidChangeResourceIcons(render));
+							const currentDomNode = h(container.ownerDocument, 'span');
+							currentDomNode.className = 'ash-multi-diff-resource';
+							container.append(currentDomNode);
+							resources.add(labels.create(currentDomNode)).setFile(resource);
+							// Snapshot identities may differ while still referring to the same file.
+							const modifiedResource = input.modified.preferredResource ?? input.modified.resource;
+							if (originalResource.path !== modifiedResource.path) {
+								const statusDomNode = h(container.ownerDocument, 'span');
+								statusDomNode.className = 'ash-multi-diff-rename-status';
+								statusDomNode.textContent = 'R';
+								const originalDomNode = h(container.ownerDocument, 'span');
+								originalDomNode.className = 'ash-multi-diff-resource original';
+								container.append(statusDomNode, originalDomNode);
+								resources.add(labels.create(originalDomNode)).setFile(originalResource, { strikethrough: true });
+							}
 							return resources;
 						},
 						createItemActions: (container: HTMLElement, item: IDocumentDiffItem) => {

@@ -5,42 +5,42 @@ import {
 	type IDisposable,
 
 	toDisposable,
-} from "../../../common/lifecycle.js";
-import { scheduleAtNextAnimationFrame } from "../../scheduler.js";
-import { h } from "../../dom.js";
+} from '../../../common/lifecycle.js';
+import { scheduleAtNextAnimationFrame } from '../../scheduler.js';
+import { h } from '../../dom.js';
 
 export type AriaRole =
-	| "alert"
-	| "button"
-	| "combobox"
-	| "dialog"
-	| "listbox"
-	| "menu"
-	| "menuitem"
-	| "option"
-	| "status"
-	| "textbox"
+	| 'alert'
+	| 'button'
+	| 'combobox'
+	| 'dialog'
+	| 'listbox'
+	| 'menu'
+	| 'menuitem'
+	| 'option'
+	| 'status'
+	| 'textbox'
 	| (string & {});
 
-export type AriaAutoComplete = "none" | "inline" | "list" | "both";
-export type AriaLivePriority = "polite" | "assertive";
+export type AriaAutoComplete = 'none' | 'inline' | 'list' | 'both';
+export type AriaLivePriority = 'polite' | 'assertive';
 export type AriaAttribute =
-	| "activedescendant"
-	| "atomic"
-	| "autocomplete"
-	| "checked"
-	| "controls"
-	| "describedby"
-	| "disabled"
-	| "expanded"
-	| "haspopup"
-	| "hidden"
-	| "invalid"
-	| "label"
-	| "labelledby"
-	| "live"
-	| "pressed"
-	| "selected";
+	| 'activedescendant'
+	| 'atomic'
+	| 'autocomplete'
+	| 'checked'
+	| 'controls'
+	| 'describedby'
+	| 'disabled'
+	| 'expanded'
+	| 'haspopup'
+	| 'hidden'
+	| 'invalid'
+	| 'label'
+	| 'labelledby'
+	| 'live'
+	| 'pressed'
+	| 'selected';
 export type AriaAttributeValue =
 	| string
 	| number
@@ -55,6 +55,8 @@ export function setAriaAttribute(
 	value: AriaAttributeValue,
 ): void {
 	const name = `aria-${attribute}`;
+	const next = value === undefined || value === null ? null : String(value);
+	if (element.getAttribute(name) === next) return;
 	if (value === undefined || value === null) {
 		element.removeAttribute(name);
 	} else {
@@ -75,10 +77,11 @@ export function setRole(
 	element: Element,
 	role: AriaRole | undefined,
 ): void {
+	if (element.getAttribute('role') === (role ?? null)) return;
 	if (role === undefined) {
-		element.removeAttribute("role");
+		element.removeAttribute('role');
 	} else {
-		element.setAttribute("role", role);
+		element.setAttribute('role', role);
 	}
 }
 
@@ -97,15 +100,15 @@ export class AriaLiveRegion extends Disposable {
 
 	constructor(ownerDocument: Document, container: HTMLElement = ownerDocument.body) {
 		super();
-		this.root = h(ownerDocument, "div");
-		this.root.className = "ash-aria-live";
+		this.root = h(ownerDocument, 'div');
+		this.root.className = 'ash-aria-live';
 		this.polite = [
-			this.createRegion(ownerDocument, "polite"),
-			this.createRegion(ownerDocument, "polite"),
+			this.createRegion(ownerDocument, 'polite'),
+			this.createRegion(ownerDocument, 'polite'),
 		];
 		this.assertive = [
-			this.createRegion(ownerDocument, "assertive"),
-			this.createRegion(ownerDocument, "assertive"),
+			this.createRegion(ownerDocument, 'assertive'),
+			this.createRegion(ownerDocument, 'assertive'),
 		];
 		this.root.append(...this.polite, ...this.assertive);
 		container.append(this.root);
@@ -113,33 +116,33 @@ export class AriaLiveRegion extends Disposable {
 	}
 
 	status(message: string): void {
-		this.announce(message, "polite");
+		this.announce(message, 'polite');
 	}
 
 	alert(message: string): void {
-		this.announce(message, "assertive");
+		this.announce(message, 'assertive');
 	}
 
 	announce(
 		message: string,
-		priority: AriaLivePriority = "polite",
+		priority: AriaLivePriority = 'polite',
 	): void {
-		const regions = priority === "assertive"
+		const regions = priority === 'assertive'
 			? this.assertive
 			: this.polite;
-		const index = priority === "assertive"
+		const index = priority === 'assertive'
 			? this.assertiveIndex
 			: this.politeIndex;
 		const target = regions[index];
 		const alternate = regions[index === 0 ? 1 : 0];
-		if (priority === "assertive") {
+		if (priority === 'assertive') {
 			this.assertiveIndex = index === 0 ? 1 : 0;
 		} else {
 			this.politeIndex = index === 0 ? 1 : 0;
 		}
 		this.pending.clear();
-		target.textContent = "";
-		alternate.textContent = "";
+		target.textContent = '';
+		alternate.textContent = '';
 		const targetWindow = target.ownerDocument.defaultView;
 		if (!targetWindow) return;
 		this.pending.value = scheduleAtNextAnimationFrame(
@@ -154,7 +157,7 @@ export class AriaLiveRegion extends Disposable {
 	clear(): void {
 		this.pending.clear();
 		for (const region of [...this.polite, ...this.assertive]) {
-			region.textContent = "";
+			region.textContent = '';
 		}
 	}
 
@@ -162,16 +165,16 @@ export class AriaLiveRegion extends Disposable {
 		ownerDocument: Document,
 		priority: AriaLivePriority,
 	): HTMLDivElement {
-		const region = h(ownerDocument, "div");
-		region.className = priority === "assertive"
-			? "ash-aria-alert"
-			: "ash-aria-status";
-		if (priority === "assertive") {
-			setRole(region, "alert");
+		const region = h(ownerDocument, 'div');
+		region.className = priority === 'assertive'
+			? 'ash-aria-alert'
+			: 'ash-aria-status';
+		if (priority === 'assertive') {
+			setRole(region, 'alert');
 		} else {
-			setAriaAttribute(region, "live", "polite");
+			setAriaAttribute(region, 'live', 'polite');
 		}
-		setAriaAttribute(region, "atomic", true);
+		setAriaAttribute(region, 'atomic', true);
 		return region;
 	}
 }
@@ -195,6 +198,6 @@ export function status(message: string): void {
 }
 
 function getARIAContainer(): AriaLiveRegion {
-	if (!ariaLiveRegion) throw new Error("ARIA container has not been initialized");
+	if (!ariaLiveRegion) throw new Error('ARIA container has not been initialized');
 	return ariaLiveRegion;
 }

@@ -1,11 +1,11 @@
 import { createTestLanguagePackStore } from '../../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { ILanguagePackStore } from '../../common/languagePackStore.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { Emitter } from "../../../../base/common/event.js";
+import { Emitter } from '../../../../base/common/event.js';
 import { Event } from '../../../../base/common/event.js';
 import { IMeteredConnectionService } from '../../../meteredConnection/common/meteredConnection.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -13,67 +13,67 @@ import { MeteredConnectionService } from '../../../meteredConnection/browser/met
 import { IConfigurationService } from '../../../configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../configuration/common/inMemoryConfigurationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { IExtensionManagementService } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
-import { WebLanguagePacksService } from "../../browser/languagePacks.js";
-import { parseLanguagePackCatalog, parseLanguagePackIndexEntry, resolveLanguagePackCatalog } from "../../common/languagePackCatalog.js";
-import type { LanguagePackCatalog } from "../../common/languagePackContract.js";
-import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from "../../../../workbench/services/localization/common/localizationCatalogs.js";
+import { IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { WebLanguagePacksService } from '../../browser/languagePacks.js';
+import { parseLanguagePackCatalog, parseLanguagePackIndexEntry, resolveLanguagePackCatalog } from '../../common/languagePackCatalog.js';
+import type { LanguagePackCatalog } from '../../common/languagePackContract.js';
+import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-test("English and preinstalled language packs remain available without Extensions", async () => {
+test('English and preinstalled language packs remain available without Extensions', async () => {
 	const extensionManagement = createExtensions([]);
 	extensionManagement.listInstalled = async () => { throw new Error('Extensions is offline'); };
 	using service = createService(extensionManagement);
 
 	assert.deepEqual(await service.getInstalledLanguages(), [
-		{ id: "en", label: "English", description: "English" },
-		{ id: "zh-CN", label: "简体中文", description: "Chinese (Simplified)", extensionId: "ash/language-pack-zh-cn" },
+		{ id: 'en', label: 'English', description: 'English' },
+		{ id: 'zh-CN', label: '简体中文', description: 'Chinese (Simplified)', extensionId: 'ash/language-pack-zh-cn' },
 	]);
 });
 
-test("language pack catalogs are validated before projection", () => {
+test('language pack catalogs are validated before projection', () => {
 	const valid = {
 		schemaVersion: 1,
-		locale: "fr-CA",
-		languageName: "French",
-		localizedLanguageName: "Français",
-		catalogVersion: "ash-1",
-		bundles: { "ash.test": { greeting: "Bonjour" } },
+		locale: 'fr-CA',
+		languageName: 'French',
+		localizedLanguageName: 'Français',
+		catalogVersion: 'ash-1',
+		bundles: { 'ash.test': { greeting: 'Bonjour' } },
 	};
-	assert.equal(parseLanguagePackCatalog(valid)?.locale, "fr-CA");
-	assert.equal(parseLanguagePackCatalog({ ...valid, catalogVersion: "other-product-1" }), undefined);
+	assert.equal(parseLanguagePackCatalog(valid)?.locale, 'fr-CA');
+	assert.equal(parseLanguagePackCatalog({ ...valid, catalogVersion: 'other-product-1' }), undefined);
 	assert.equal(parseLanguagePackCatalog({ ...valid, bundles: {} }), undefined);
 });
 
-test("Extensions localization capability resources become installed language packs", async () => {
+test('Extensions localization capability resources become installed language packs', async () => {
 	const catalog: LanguagePackCatalog = {
 		schemaVersion: 1,
-		locale: "fr",
-		languageName: "French",
-		localizedLanguageName: "Français",
-		catalogVersion: "ash-1",
-		bundles: { "ash.test": { greeting: "Bonjour" } },
+		locale: 'fr',
+		languageName: 'French',
+		localizedLanguageName: 'Français',
+		catalogVersion: 'ash-1',
+		bundles: { 'ash.test': { greeting: 'Bonjour' } },
 	};
 	const extensionManagement = createExtensions([catalog]);
 	using service = createService(extensionManagement);
 
 	await service.whenReady;
-	assert.deepEqual((await service.getInstalledLanguages()).find(locale => locale.id === "fr"), {
-		id: "fr", label: "Français", description: "French", extensionId: "example/localization-fr-0",
+	assert.deepEqual((await service.getInstalledLanguages()).find(locale => locale.id === 'fr'), {
+		id: 'fr', label: 'Français', description: 'French', extensionId: 'example/localization-fr-0',
 	});
 });
 
 function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionManagementService {
 	const installed = catalogs.map((catalog, index) => ({
 		installationId: `installation.localization.${index}`,
-		package: { id: `example/localization-${catalog.locale.toLowerCase()}-${index}`, version: "1.0.0", digest: `sha256:${"a".repeat(64)}` },
-		state: "installed" as const,
+		package: { id: `example/localization-${catalog.locale.toLowerCase()}-${index}`, version: '1.0.0', digest: `sha256:${'a'.repeat(64)}` },
+		state: 'installed' as const,
 		capabilities: [{
 			reference: { id: `capability.localization.${index}` },
-			kind: "localization" as const,
-			id: "localization.fr",
-			contractVersion: "ash-localization-1",
+			kind: 'localization' as const,
+			id: 'localization.fr',
+			contractVersion: 'ash-localization-1',
 			permissions: [],
 			authenticationProvider: null,
 		}],
@@ -83,17 +83,17 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 		recommendationEnvironment: async () => ({ platform: 'other', executables: [] }),
 		searchPage: async () => { throw new Error('Language packs do not use customization paging'); },
 		sources: async () => ({ revision: 0, sources: [] }),
-		addSource: async () => { throw new Error("unused"); },
-		setSourceEnabled: async () => { throw new Error("unused"); },
+		addSource: async () => { throw new Error('unused'); },
+		setSourceEnabled: async () => { throw new Error('unused'); },
 		cachedBrowse: () => undefined,
-		browse: () => Promise.reject(new Error("unused")),
-		refreshBrowse: () => Promise.reject(new Error("unused")),
-		search: async () => [{ id: "example/localization-fr-0", version: "1.0.0", packageType: "localization", displayName: "Français", description: "French" }],
-		get: () => Promise.reject(new Error("unused")),
-		download: () => Promise.reject(new Error("unused")),
+		browse: () => Promise.reject(new Error('unused')),
+		refreshBrowse: () => Promise.reject(new Error('unused')),
+		search: async () => [{ id: 'example/localization-fr-0', version: '1.0.0', packageType: 'localization', displayName: 'Français', description: 'French' }],
+		get: () => Promise.reject(new Error('unused')),
+		download: () => Promise.reject(new Error('unused')),
 		install: async () => installed[0]!,
-		update: () => Promise.reject(new Error("unused")),
-		uninstall: () => Promise.reject(new Error("unused")),
+		update: () => Promise.reject(new Error('unused')),
+		uninstall: () => Promise.reject(new Error('unused')),
 		listInstalled: async () => installed,
 		listBuiltInProviders: async () => ({ revision: 1, canChangeEnablement: false, providers: [] }),
 		setBuiltInProviderEnabled: () => Promise.reject(new Error('unused')),
@@ -101,10 +101,10 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 		setEditorExtensionPolicy: () => Promise.reject(new Error('Execution policy is outside this language-pack fixture')),
 		acquireCapability: async id => ({
 			lease: { id, capability: { id }, installationId: id.replace('capability', 'installation') },
-			spec: { kind: "localization" as const, contractVersion: "1", catalog: { id: "catalog.json" } },
+			spec: { kind: 'localization' as const, contractVersion: '1', catalog: { id: 'catalog.json' } },
 		}),
 		releaseCapability: async () => { },
-		openResource: async lease => ({ mediaType: "application/json", dataBase64: Buffer.from(JSON.stringify(catalogs[Number(lease.split('.').at(-1))]), "utf8").toString("base64") }),
+		openResource: async lease => ({ mediaType: 'application/json', dataBase64: Buffer.from(JSON.stringify(catalogs[Number(lease.split('.').at(-1))]), 'utf8').toString('base64') }),
 	};
 }
 
@@ -153,7 +153,11 @@ test('metered startup retains cached language resources and resumes one catalog 
 test('explicit language listing and refresh bypass metered startup deferral', async () => {
 	using changes = new Emitter<boolean>();
 	let isMetered = true;
-	const policy: IMeteredConnectionService = { _serviceBrand: undefined, get isConnectionMetered() { return isMetered; }, onDidChangeIsConnectionMetered: changes.event };
+	const policy: IMeteredConnectionService = {
+		_serviceBrand: undefined,
+		get isConnectionMetered() { return isMetered; },
+		onDidChangeIsConnectionMetered: changes.event
+	};
 	const catalog: LanguagePackCatalog = { schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } } };
 	const extensionManagement = createExtensions([catalog]);
 	const listInstalled = extensionManagement.listInstalled.bind(extensionManagement);

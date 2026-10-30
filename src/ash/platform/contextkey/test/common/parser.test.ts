@@ -19,7 +19,7 @@ const cases: readonly [string, boolean][] = [
 	['language == typescript', true], ["language === 'typescript'", true],
 	['count == 12', true], ['count != 12', false], ['count !== 13', true],
 	['enabled == true', true], ['enabled != false', true], ['missing == false', true],
-	["enabled == 'true'", false], ["nil == null", true], ['empty == ', true],
+	["enabled == 'true'", false], ['nil == null', true], ['empty == ', true],
 	['count > 10', true], ['count >= 12', true], ['count < 12', false], ['count <= 12', true],
 	['count > invalid', false], ['missing < 1', false], ['locked >= 0', false],
 	['language in languages', true], ['language not in languages', false],

@@ -19,6 +19,7 @@ export class AppServerBrowserHost extends Disposable {
 	private readonly operations = new Map<string, AbortController>();
 	private cancellation = new AbortController();
 	private readonly sessions = new Set<string>();
+	private readonly canvasOperations = new Map<string, Promise<unknown>>();
 	private enabled = true;
 	private cdpEnabled = false;
 	private readonly cdp: BrowserViewCDPService;
@@ -73,17 +74,37 @@ export class AppServerBrowserHost extends Disposable {
 	async create(params: BrowserCreateParams, context: { signal: AbortSignal; }) {
 		this.assertEnabled();
 		const signal = AbortSignal.any([context.signal, this.cancellation.signal]);
-		const view = await this.views.createTarget('about:blank', params.threadId, signal);
+		if (!params.canvas) { return this.createPage(params, signal); }
+		const key = JSON.stringify([params.canvas.sessionId, params.threadId, params.canvas.instanceId]);
+		const pending = this.canvasOperations.get(key) ?? Promise.resolve();
+		const opening = pending.catch(() => undefined).then(() => this.createPage(params, signal));
+		this.canvasOperations.set(key, opening);
+		try { return await opening; }
+		finally { if (this.canvasOperations.get(key) === opening) { this.canvasOperations.delete(key); } }
+	}
+
+	private async createPage(params: BrowserCreateParams, signal: AbortSignal): Promise<{ targetId: string; }> {
+		signal.throwIfAborted();
+		const canvas = params.canvas && {
+			sessionId: params.canvas.sessionId, instanceId: params.canvas.instanceId, title: params.canvas.title,
+			...(params.canvas.definition ? { extensionId: params.canvas.definition.extensionId, canvasId: params.canvas.definition.canvasId } : {})
+		};
+		const existing = params.canvas && (await this.views.getBrowserViews()).find(info => info.canvas?.instanceId === params.canvas!.instanceId && info.canvas?.sessionId === params.canvas!.sessionId
+			&& (info.owner.type === 'agent' ? info.owner.sessionId : info.canvas.threadId) === params.threadId);
+		if (existing && (existing.owner.type !== 'agent' || existing.canvas?.extensionId !== canvas?.extensionId || existing.canvas?.canvasId !== canvas?.canvasId)) { throw new Error('CanvasInstanceAlreadyOwned'); }
+		const retained = existing ? this.views.tryGetBrowserView(existing.id) : undefined;
+		const view = retained ?? await this.views.createTarget('about:blank', params.threadId, signal, undefined, canvas);
 		if (signal.aborted) {
-			view.dispose();
+			if (!retained) { view.dispose(); }
 			signal.throwIfAborted();
 		}
 		try {
 			await view.waitForLoad(signal);
 			await view.loadURL(params.url, signal, params.networkToken ?? null);
+			if (canvas) { view.canvasOpened(canvas); }
 			return { targetId: view.id };
 		}
-		catch (error) { view.dispose(); throw error; }
+		catch (error) { if (!retained) { view.dispose(); } throw error; }
 	}
 	observe(params: BrowserObserveParams, context: { signal: AbortSignal; }) {
 		const { view, signal } = this.target(params.targetId, params.threadId, context.signal);

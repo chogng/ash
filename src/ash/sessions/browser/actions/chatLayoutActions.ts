@@ -4,20 +4,20 @@ import { Schemas } from '../../../base/common/network.js';
 import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
-import { Lxicon } from "../../../base/common/lxicons.js";
-import { DisposableStore } from "../../../base/common/lifecycle.js";
-import { localize, localize2 } from "../../../nls.js";
-import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../platform/actions/common/actions.js";
-import { ContextKeyExpr } from "../../../platform/contextkey/common/contextkey.js";
+import { Lxicon } from '../../../base/common/lxicons.js';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { localize, localize2 } from '../../../nls.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { DialogSeverity, IDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
+import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
-import { IChatService } from "../../../workbench/services/chat/common/chatService.js";
+import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import type { ModelProviderCredentialStatus } from '../../../workbench/services/chat/common/chatService.js';
-import { IPreferencesService } from "../../../workbench/services/preferences/common/preferences.js";
-import { IViewsService } from "../../../workbench/services/views/common/viewsService.js";
-import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, AgentSessionsOrientationContext, AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
-import { ChatViewPane } from "../chatViewPane.js";
+import { IPreferencesService } from '../../../workbench/services/preferences/common/preferences.js';
+import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
+import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, AgentSessionsOrientationContext, AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { ChatViewPane } from '../chatViewPane.js';
 import { Menus } from '../menus.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
@@ -75,7 +75,7 @@ for (const [orientation, title, id] of [
 	});
 }
 
-const ChatBrowserAvailable = ContextKeyExpr.equals("chatBrowserAvailable", true);
+const ChatBrowserAvailable = ContextKeyExpr.equals('chatBrowserAvailable', true);
 
 
 registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
@@ -94,7 +94,7 @@ registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 			menu: [
 				{
 					id: MenuId.ChatTitleLayout,
-					group: "navigation",
+					group: 'navigation',
 					order: 1,
 				},
 			],
@@ -112,19 +112,19 @@ registerAction2(class OpenChatBrowserAction extends Action2 {
 	constructor() {
 		super({
 			id: OPEN_CHAT_BROWSER_COMMAND_ID,
-			title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatBrowserAction' }, "Open Browser"),
+			title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatBrowserAction' }, 'Open Browser'),
 			icon: Lxicon.browserWeb,
 			precondition: ChatBrowserAvailable,
 			menu: {
 				id: MenuId.ChatTitle,
-				group: "chatActions",
+				group: 'chatActions',
 				order: 1,
 			},
 		});
 	}
 
 	override run(): never {
-		throw new Error("Open Browser is not available in this build.");
+		throw new Error('Open Browser is not available in this build.');
 	}
 });
 
@@ -132,13 +132,13 @@ registerAction2(class MoveChatToEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
-			title: localize2({ bundle: 'ash.sessions', key: 'command.MoveChatToEditorAction' }, "Move Chat to Editor Area"),
+			title: localize2({ bundle: 'ash.sessions', key: 'command.MoveChatToEditorAction' }, 'Move Chat to Editor Area'),
 			icon: Lxicon.layoutPanel1,
 			precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ContextKeyExpr.not('chatInEditor')),
 			f1: true,
 			menu: {
 				id: MenuId.ChatTitle,
-				group: "chatActions",
+				group: 'chatActions',
 				order: 2,
 			},
 		});
@@ -180,12 +180,12 @@ registerAction2(class MoveChatToNewWindowAction extends Action2 {
 	constructor() {
 		super({
 			id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
-			title: localize2({ bundle: 'ash.sessions', key: 'command.MoveChatToNewWindowAction' }, "Move Chat to New Window"),
+			title: localize2({ bundle: 'ash.sessions', key: 'command.MoveChatToNewWindowAction' }, 'Move Chat to New Window'),
 			icon: Lxicon.linkExternal,
 			precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), IsNativeContext.isEqualTo(true)),
 			menu: {
 				id: MenuId.ChatTitle,
-				group: "chatActions",
+				group: 'chatActions',
 				order: 3,
 			},
 		});
@@ -201,11 +201,11 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 	constructor() {
 		super({
 			id: OPEN_CHAT_SETTINGS_COMMAND_ID,
-			title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatSettingsAction' }, "Chat Settings"),
+			title: localize2({ bundle: 'ash.sessions', key: 'command.OpenChatSettingsAction' }, 'Chat Settings'),
 			icon: Lxicon.settings,
 			menu: {
 				id: MenuId.ChatTitle,
-				group: "chatActions",
+				group: 'chatActions',
 				order: 4,
 			},
 		});

@@ -1,9 +1,9 @@
-import { type TextModel } from "../../../common/model/textModel.js";
+import { type TextModel } from '../../../common/model/textModel.js';
 
 /** Identifies whether a folding range was manually created or supplied by a language provider. */
 export enum EditorFoldingRangeSource {
-	Manual = "manual",
-	Provider = "provider",
+	Manual = 'manual',
+	Provider = 'provider',
 }
 
 /** One inclusive physical-line range that can be collapsed without changing document text. */
@@ -27,14 +27,14 @@ export type ResolvedEditorFoldingRange = Required<EditorFoldingRange>;
 
 /** Normalizes range data before it is attached to tracked text ranges. */
 export function normalizeEditorFoldingRanges(model: TextModel, ranges: readonly EditorFoldingRange[]): readonly ResolvedEditorFoldingRange[] {
-	if (!Array.isArray(ranges)) throw new TypeError("Folding ranges must be an array");
+	if (!Array.isArray(ranges)) throw new TypeError('Folding ranges must be an array');
 	const normalized = ranges.map(range => {
-		if (!range || typeof range !== "object") throw new TypeError("Folding range must be an object");
+		if (!range || typeof range !== 'object') throw new TypeError('Folding range must be an object');
 		validateEditorFoldingLineIndex(model, range.startLineIndex);
 		validateEditorFoldingLineIndex(model, range.endLineIndex);
-		if (range.endLineIndex <= range.startLineIndex) throw new RangeError("Folding ranges must span at least two lines");
-		if (range.collapsed !== undefined && typeof range.collapsed !== "boolean") throw new TypeError("Folding range collapse state must be boolean");
-		if (range.source !== undefined && !Object.values(EditorFoldingRangeSource).includes(range.source)) throw new TypeError("Unknown folding range source");
+		if (range.endLineIndex <= range.startLineIndex) throw new RangeError('Folding ranges must span at least two lines');
+		if (range.collapsed !== undefined && typeof range.collapsed !== 'boolean') throw new TypeError('Folding range collapse state must be boolean');
+		if (range.source !== undefined && !Object.values(EditorFoldingRangeSource).includes(range.source)) throw new TypeError('Unknown folding range source');
 		return Object.freeze({
 			startLineIndex: range.startLineIndex,
 			endLineIndex: range.endLineIndex,
@@ -50,7 +50,7 @@ export function normalizeEditorFoldingRanges(model: TextModel, ranges: readonly 
 		}
 		const parent = ancestors.at(-1);
 		if (parent && current.endLineIndex > parent.endLineIndex) {
-			throw new RangeError("Folding ranges must be nested or disjoint");
+			throw new RangeError('Folding ranges must be nested or disjoint');
 		}
 		ancestors.push(current);
 	}
@@ -58,12 +58,12 @@ export function normalizeEditorFoldingRanges(model: TextModel, ranges: readonly 
 }
 
 /** Returns a stable physical-line identity used to retain provider collapse state. */
-export function editorFoldingRangeKey(range: Pick<EditorFoldingRange, "startLineIndex" | "endLineIndex">): string {
+export function editorFoldingRangeKey(range: Pick<EditorFoldingRange, 'startLineIndex' | 'endLineIndex'>): string {
 	return `${range.startLineIndex}:${range.endLineIndex}`;
 }
 
 export function validateEditorFoldingLineIndex(model: TextModel, lineIndex: number): void {
-	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= model.lineCount) throw new RangeError("Folding line index is outside the text model");
+	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= model.lineCount) throw new RangeError('Folding line index is outside the text model');
 }
 
 function deduplicateEditorFoldingRanges(ranges: readonly ResolvedEditorFoldingRange[]): readonly ResolvedEditorFoldingRange[] {

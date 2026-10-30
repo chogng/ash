@@ -75,11 +75,12 @@ export const enum TerminalCommandId {
 	FocusPreviousPane = 'workbench.action.terminal.focusPreviousPane',
 }
 
-export const TERMINAL_VIEW_ID = "ash.terminal";
+export const TERMINAL_VIEW_ID = 'ash.terminal';
 
 export interface ITerminalStatus {
 	readonly id: string;
 	readonly severity: Severity;
+	readonly icon?: ThemeIcon;
 	readonly tooltip: string;
 	readonly detailedTooltip?: string;
 	readonly hoverActions?: readonly ITerminalStatusHoverAction[];

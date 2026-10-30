@@ -1,9 +1,9 @@
-import { h } from "../../base/browser/dom.js";
-import { Dimension } from "../../base/browser/dom.js";
-import { type IPositionedRectangle } from "../../base/browser/geometry.js";
-import type { Event } from "../../base/common/event.js";
-import type { WorkbenchPartId } from "../services/layout/browser/layoutService.js";
-import type { Part } from "./part.js";
+import { h } from '../../base/browser/dom.js';
+import { Dimension } from '../../base/browser/dom.js';
+import { type IPositionedRectangle } from '../../base/browser/geometry.js';
+import type { Event } from '../../base/common/event.js';
+import type { WorkbenchPartId } from '../services/layout/browser/layoutService.js';
+import type { Part } from './part.js';
 import type { IBoundarySashes } from '../../base/browser/ui/sash/sash.js';
 
 export interface WorkbenchPartFrameInsets {
@@ -36,9 +36,9 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 		readonly part: Part,
 		options: WorkbenchPartViewOptions = {},
 	) {
-		const frame = h(part.domNode.ownerDocument, "div");
+		const frame = h(part.domNode.ownerDocument, 'div');
 		this.frame = frame;
-		frame.className = "ash-workbench-part-frame";
+		frame.className = 'ash-workbench-part-frame';
 		frame.append(part.domNode);
 		this.snap = options.snap === true;
 	}

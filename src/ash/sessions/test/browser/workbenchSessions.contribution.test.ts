@@ -263,7 +263,9 @@ test('Chat opens the current checkpoint when composer counts arrive before its f
 	services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, active: { session, threadId: 'B' }, sessions: [session] } as unknown as ISessionsManagementService);
 	services.registerInstance(IChatService, chat);
 	const opened: MultiDiffEditorInput[] = [];
-	services.registerInstance(IEditorService, { openEditor: async (input: MultiDiffEditorInput) => { opened.push(input); } } as unknown as IEditorService);
+	services.registerInstance(IEditorService, {
+		openEditor: async (input: MultiDiffEditorInput) => { opened.push(input); }
+	} as unknown as IEditorService);
 	const open = CommandsRegistry.getCommand(OPEN_CHAT_CHANGES_COMMAND_ID)!;
 	await open(services, 'session', 'B', 'capturing');
 	assert.equal(summaryReads, 3);

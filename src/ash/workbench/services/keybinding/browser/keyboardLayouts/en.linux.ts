@@ -57,7 +57,7 @@ export const EN_US_LINUX_LAYOUT: IKeymapInfo = {
 		BracketRight: [']', '}', ']', '}', 0],
 		Backslash: ['\\', '|', '\\', '|', 0],
 		Semicolon: [';', ':', ';', ':', 0],
-		Quote: ['\'', '"', '\'', '"', 0],
+		Quote: ["'", '"', "'", '"', 0],
 		Backquote: ['`', '~', '`', '~', 0],
 		Comma: [',', '<', ',', '<', 0],
 		Period: ['.', '>', '.', '>', 0],
@@ -186,4 +186,3 @@ export const EN_US_LINUX_LAYOUT: IKeymapInfo = {
 };
 
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout(EN_US_LINUX_LAYOUT);
-

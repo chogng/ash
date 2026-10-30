@@ -1,8 +1,8 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import { URI } from "../../../../base/common/uri.js";
-import type { IEditorGroup, IEditorGroupsService } from "../../../services/editor/common/editorGroupsService.js";
-import { getActiveDocument } from "../../../../base/browser/dom.js";
-import { extUri } from "../../../../base/common/resources.js";
+import { URI } from '../../../../base/common/uri.js';
+import type { IEditorGroup, IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
+import { getActiveDocument } from '../../../../base/browser/dom.js';
+import { extUri } from '../../../../base/common/resources.js';
 
 export interface IEditorCommandsContext {
 	readonly groupId: number;
@@ -72,11 +72,11 @@ function resolveTarget(argument: unknown, editorGroups: IEditorGroupsService): {
 }
 
 function isEditorCommandsContext(value: unknown): value is IEditorCommandsContext {
-	if (typeof value !== "object" || value === null) {
+	if (typeof value !== 'object' || value === null) {
 		return false;
 	}
 	const context = value as Partial<IEditorCommandsContext>;
-	return typeof context.groupId === "number" && Number.isSafeInteger(context.groupId) && context.groupId >= 0
+	return typeof context.groupId === 'number' && Number.isSafeInteger(context.groupId) && context.groupId >= 0
 		&& (context.editorIndex === undefined || Number.isInteger(context.editorIndex) && context.editorIndex >= 0)
-		&& (context.preserveFocus === undefined || typeof context.preserveFocus === "boolean");
+		&& (context.preserveFocus === undefined || typeof context.preserveFocus === 'boolean');
 }

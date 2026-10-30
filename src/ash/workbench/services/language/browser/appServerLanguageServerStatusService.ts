@@ -304,7 +304,14 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 		const starting = active.some(server => server.state?.type === 'starting' || server.state?.type === 'backingOff');
 		const text = localize('languageServer.services', 'Language Services');
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.LanguageServers);
-		const entry = { text, icon: issues ? Lxicon.warning : starting ? Lxicon.sync : Lxicon.code, showProgress: starting && !issues, ariaLabel: `${text}${hint ? `. ${hint}` : ''}`, tooltip: issues ? localize('languageServer.issues', 'Language Services: {0} servers need attention', issues) : text, run: () => this.open() };
+		const entry = {
+			text: '',
+			icon: issues ? Lxicon.warning : starting ? Lxicon.sync : Lxicon.languageServer,
+			showProgress: starting && !issues,
+			ariaLabel: `${text}${hint ? `. ${hint}` : ''}`,
+			tooltip: issues ? localize('languageServer.issues', 'Language Services: {0} servers need attention', issues) : text,
+			run: () => this.open(),
+		};
 		if (this.statusEntry.value) this.statusEntry.value.update(entry);
 		else this.statusEntry.value = this.statusbar.addEntry(entry, { id: entryId, alignment: StatusbarAlignment.Left, priority: -100 });
 	}

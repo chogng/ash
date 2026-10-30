@@ -1,25 +1,25 @@
-import { VSBuffer } from "../../../../base/common/buffer.js";
-import { type CancellationToken } from "../../../../base/common/cancellation.js";
-import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import { URI } from "../../../../base/common/uri.js";
-import { Position } from "../../../../editor/common/core/position.js";
-import { Range, type IRange } from "../../../../editor/common/core/range.js";
-import { type ITextModel } from "../../../../editor/common/model.js";
+import { VSBuffer } from '../../../../base/common/buffer.js';
+import { type CancellationToken } from '../../../../base/common/cancellation.js';
+import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range, type IRange } from '../../../../editor/common/core/range.js';
+import { type ITextModel } from '../../../../editor/common/model.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { type LanguageFeatureRegistry } from '../../../../editor/common/languageFeatureRegistry.js';
 import * as languages from '../../../../editor/common/languages.js';
 import { type LanguageServerFeatureDto, type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto, type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from '../../../../../../.build/protocol/typescript/index.js';
-import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
-import { workspaceResourceFromPath } from "../../../../platform/workspace/common/workspace.js";
-import { workspaceRelativePath, IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
+import { type ILanguageApi } from '../../../../platform/language/common/languageApi.js';
+import { workspaceResourceFromPath } from '../../../../platform/workspace/common/workspace.js';
+import { workspaceRelativePath, IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { ILanguageServerLifecycleService } from '../common/languageServerLifecycleService.js';
-import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
-import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
+import { AppServerLanguageSupport } from './appServerLanguageSupport.js';
+import { resolveAppServerLanguageDirAccess } from './appServerLanguageWorkspace.js';
 
-type LocationKind = "declaration" | "definition" | "implementation" | "typeDefinition" | "references";
+type LocationKind = 'declaration' | 'definition' | 'implementation' | 'typeDefinition' | 'references';
 const APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 interface LanguageWorkspaceRoot {
@@ -89,13 +89,23 @@ export class AppServerLanguageProviders extends Disposable {
 			// State transitions retire metadata only for sessions that actually stopped. A profile
 			// update may concern another feature and leave these negotiated capabilities intact.
 			if (event.method === 'extensions/changed') this.clearCapabilities();
-			if (event.method === "extensions/changed" || event.method === "config/changed") this.queueRefresh();
+			if (event.method === 'extensions/changed' || event.method === 'config/changed') this.queueRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('rust-analyzer')) this.queueRefresh();
 		}));
-		if (options.checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queueRefresh()));
+		if (options.checkWorkspaceTrust) {
+			this._register(workspaceTrust.onDidChangeTrustedFolders(() => this.queueRefresh()));
+			this._register(workspaceTrust.addWorkspaceTrustTransitionParticipant({
+				participate: async () => {
+					this.queueRefresh();
+					// queueRefresh coalesces requests in a microtask before replacing the owned queue.
+					await Promise.resolve();
+					await this.refreshQueue;
+				}
+			}));
+		}
 		this._register(workspace.onDidChangeWorkspace(() => { this.clearCapabilities(); this.queueRefresh(); }));
 		this._register(toDisposable(() => { this.alive = false; this.clearCapabilities(); }));
 	}
@@ -180,7 +190,7 @@ export class AppServerLanguageProviders extends Disposable {
 			const generation = this.refreshGeneration;
 			this.refreshQueue = this.refreshQueue.catch(() => undefined).then(() => this.refresh(generation)).catch(error => {
 				this.clearRegistrations();
-				console.error("Directory access refresh for App Server language providers failed", error);
+				console.error('Directory access refresh for App Server language providers failed', error);
 			});
 		});
 	}
@@ -211,7 +221,7 @@ export interface AppServerLanguageProvidersOptions {
 class AppServerLanguageProvider implements languages.LanguageCompletionProvider, languages.LanguageHoverProvider, languages.LanguageDeclarationProvider, languages.LanguageDefinitionProvider, languages.LanguageImplementationProvider, languages.LanguageTypeDefinitionProvider, languages.LanguageReferenceProvider, languages.LanguageCallHierarchyProvider, languages.LanguageTypeHierarchyProvider, languages.LanguageRenameProvider, languages.LanguageCodeActionProvider, languages.DocumentFormattingEditProvider, languages.DocumentRangeFormattingEditProvider, languages.LanguageParameterHintsProvider, languages.LanguageInlayHintsProvider, languages.LinkedEditingRangeProvider, languages.LanguageSemanticTokensProvider, languages.LanguageDocumentSymbolProvider, languages.CodeLensProvider, languages.LanguageLinkProvider, languages.LanguageColorProvider, languages.LanguageFoldingRangeProvider {
 	readonly signatureHelpTriggerCharacters: readonly string[];
 	readonly signatureHelpRetriggerCharacters: readonly string[];
-	readonly id = "ash.appServer.completions";
+	readonly id = 'ash.appServer.completions';
 	readonly triggerCharacters: readonly string[];
 
 	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, readonly languageIds: readonly string[], private readonly capabilities: ReadonlyMap<string, ServerCapabilities>, private readonly lifecycle: ILanguageServerLifecycleService) {
@@ -238,7 +248,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		const result = await this.requestFeature('completion', document, signal, signal => this.api.completions({
 			document,
 			position: dtoPosition(request.position),
-			triggerKind: request.context.kind === languages.LanguageCompletionTriggerKind.Invoke ? "invoke" : request.context.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter ? "triggerCharacter" : "incompleteRefresh",
+			triggerKind: request.context.kind === languages.LanguageCompletionTriggerKind.Invoke ? 'invoke' : request.context.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter ? 'triggerCharacter' : 'incompleteRefresh',
 			triggerCharacter: request.context.kind === languages.LanguageCompletionTriggerKind.TriggerCharacter ? request.context.triggerCharacter : null,
 		}, { signal }));
 		if (!result || result.revision !== request.snapshot.version) return undefined;
@@ -250,7 +260,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 				kind: completionKind(item.kind),
 				range: range(item.range),
 				insertText: item.insertText,
-				...(item.insertTextFormat === "snippet" ? { insertTextFormat: languages.LanguageCompletionInsertTextFormat.Snippet } : {}),
+				...(item.insertTextFormat === 'snippet' ? { insertTextFormat: languages.LanguageCompletionInsertTextFormat.Snippet } : {}),
 				...(item.detail ? { detail: item.detail } : {}),
 				...(item.documentation ? { documentation: item.documentation } : {}),
 				...(item.filterText ? { filterText: item.filterText } : {}),
@@ -277,17 +287,17 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		await this.requestFeature('executeCommand', document, undefined, () => this.api.executeCommand({ document, command: { id: request.command.id, title: request.command.title, arguments: [...request.command.arguments] } }));
 	}
 
-	provideDeclaration(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request("declaration", request, true, signal); }
-	provideDefinition(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request("definition", request, true, signal); }
-	provideImplementation(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request("implementation", request, true, signal); }
-	provideTypeDefinition(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request("typeDefinition", request, true, signal); }
-	provideReferences(request: languages.LanguageReferenceRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request("references", request, request.includeDeclaration, signal); }
-	prepareCallHierarchy(request: languages.LanguageHierarchyRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.prepareHierarchy("prepareCall", request, signal); }
-	prepareTypeHierarchy(request: languages.LanguageHierarchyRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.prepareHierarchy("prepareType", request, signal); }
-	provideIncomingCalls(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageCallHierarchyEntry[]> { return this.followCallHierarchy("incomingCalls", request, signal); }
-	provideOutgoingCalls(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageCallHierarchyEntry[]> { return this.followCallHierarchy("outgoingCalls", request, signal); }
-	provideSupertypes(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.followTypeHierarchy("supertypes", request, signal); }
-	provideSubtypes(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.followTypeHierarchy("subtypes", request, signal); }
+	provideDeclaration(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request('declaration', request, true, signal); }
+	provideDefinition(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request('definition', request, true, signal); }
+	provideImplementation(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request('implementation', request, true, signal); }
+	provideTypeDefinition(request: languages.LanguageLocationRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request('typeDefinition', request, true, signal); }
+	provideReferences(request: languages.LanguageReferenceRequest, signal: AbortSignal): Promise<readonly languages.LanguageLocation[]> { return this.request('references', request, request.includeDeclaration, signal); }
+	prepareCallHierarchy(request: languages.LanguageHierarchyRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.prepareHierarchy('prepareCall', request, signal); }
+	prepareTypeHierarchy(request: languages.LanguageHierarchyRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.prepareHierarchy('prepareType', request, signal); }
+	provideIncomingCalls(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageCallHierarchyEntry[]> { return this.followCallHierarchy('incomingCalls', request, signal); }
+	provideOutgoingCalls(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageCallHierarchyEntry[]> { return this.followCallHierarchy('outgoingCalls', request, signal); }
+	provideSupertypes(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.followTypeHierarchy('supertypes', request, signal); }
+	provideSubtypes(request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> { return this.followTypeHierarchy('subtypes', request, signal); }
 	async prepareRename(request: languages.LanguageRenameRequest, signal: AbortSignal): Promise<{ readonly range: Range; readonly placeholder: string; } | undefined> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
@@ -301,10 +311,10 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		return result?.preparation ? Object.freeze({ range: range(result.preparation.range), placeholder: result.preparation.placeholder }) : undefined;
 	}
 	async provideRenameEdits(request: languages.LanguageRenameRequest, signal: AbortSignal) {
-		if (!request.newName) throw new Error("Rename request requires a new name");
+		if (!request.newName) throw new Error('Rename request requires a new name');
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
-		if (!document) throw new Error("Rename is unavailable because this file is too large for App Server language synchronization");
+		if (!document) throw new Error('Rename is unavailable because this file is too large for App Server language synchronization');
 		const result = await this.requestFeature('rename', document, signal, signal => this.api.rename({ document, position: dtoPosition(request.position), newName: request.newName! }, { signal }));
 		return result ? workspaceEdit(root, result) : Object.freeze({ entries: Object.freeze([]) });
 	}
@@ -362,7 +372,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 			position: dtoPosition(request.position),
 			triggerKind: request.context.kind,
 			isRetrigger: request.context.isRetrigger ?? false,
-			triggerCharacter: request.context.kind === "triggerCharacter" ? request.context.triggerCharacter : null,
+			triggerCharacter: request.context.kind === 'triggerCharacter' ? request.context.triggerCharacter : null,
 		}, { signal }));
 		if (!result || result.revision !== request.snapshot.version || result.signatures.length === 0) return undefined;
 		return Object.freeze({
@@ -397,7 +407,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		if (!result || result.revision !== model.getVersionId() || result.ranges.length < 2) return undefined;
 		let wordPattern: RegExp | undefined;
 		if (result.wordPattern) {
-			try { wordPattern = new RegExp(result.wordPattern, "u"); } catch { wordPattern = undefined; }
+			try { wordPattern = new RegExp(result.wordPattern, 'u'); } catch { wordPattern = undefined; }
 		}
 		return Object.freeze({ ranges: result.ranges.map(value => range(value)), ...(wordPattern ? { wordPattern } : {}) });
 	}
@@ -500,7 +510,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		});
 	}
 
-	private async resolveDocumentLink(document: NonNullable<ReturnType<AppServerLanguageProvider["documentForRequest"]>>, link: LanguageDocumentLinkDto, signal: AbortSignal): Promise<LanguageDocumentLinkDto> {
+	private async resolveDocumentLink(document: NonNullable<ReturnType<AppServerLanguageProvider['documentForRequest']>>, link: LanguageDocumentLinkDto, signal: AbortSignal): Promise<LanguageDocumentLinkDto> {
 		signal.throwIfAborted();
 		const result = await this.requestFeature('documentLinkResolve', document, signal, signal => this.api.resolveDocumentLink({ document, link }, { signal }));
 		signal.throwIfAborted();
@@ -528,7 +538,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		}));
 	}
 
-	private async prepareHierarchy(kind: "prepareCall" | "prepareType", request: languages.LanguageHierarchyRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
+	private async prepareHierarchy(kind: 'prepareCall' | 'prepareType', request: languages.LanguageHierarchyRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
@@ -537,7 +547,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		return Object.freeze(result.entries.map(entry => hierarchyItem(root, entry.item)));
 	}
 
-	private async followCallHierarchy(kind: "incomingCalls" | "outgoingCalls", request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageCallHierarchyEntry[]> {
+	private async followCallHierarchy(kind: 'incomingCalls' | 'outgoingCalls', request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageCallHierarchyEntry[]> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
@@ -546,7 +556,7 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 		return Object.freeze(result.entries.map(entry => Object.freeze({ item: hierarchyItem(root, entry.item), ...(entry.fromPath ? { fromResource: workspaceResource(root, entry.fromPath) } : {}), fromRanges: Object.freeze(entry.fromRanges.map(range)) })));
 	}
 
-	private async followTypeHierarchy(kind: "supertypes" | "subtypes", request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
+	private async followTypeHierarchy(kind: 'supertypes' | 'subtypes', request: languages.LanguageHierarchyFollowupRequest, signal: AbortSignal): Promise<readonly languages.LanguageHierarchyItem[]> {
 		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
@@ -630,9 +640,9 @@ function languageInlayHintsDocument(root: LanguageWorkspaceRoot, request: langua
 }
 
 function appServerCompletionResolveData(value: unknown): { readonly document: NonNullable<ReturnType<typeof languageCompletionDocument>>; readonly providerData: unknown; readonly generation?: number; } {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError("App Server completion resolve data must be an object");
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError('App Server completion resolve data must be an object');
 	const data = value as { readonly document?: unknown; readonly providerData?: unknown; };
-	if (typeof data.document !== "object" || data.document === null) throw new TypeError("App Server completion resolve data must include its document snapshot");
+	if (typeof data.document !== 'object' || data.document === null) throw new TypeError('App Server completion resolve data must include its document snapshot');
 	return data as { readonly document: NonNullable<ReturnType<typeof languageCompletionDocument>>; readonly providerData: unknown; readonly generation?: number; };
 }
 
@@ -647,25 +657,25 @@ function formattingEdits(edits: readonly { readonly range: { readonly start: { r
 
 function completionKind(kind: LanguageCompletionItemKindDto): languages.LanguageCompletionItemKind {
 	switch (kind) {
-		case "method": return languages.LanguageCompletionItemKind.Method;
-		case "function": return languages.LanguageCompletionItemKind.Function;
-		case "constructor": return languages.LanguageCompletionItemKind.Constructor;
-		case "field": return languages.LanguageCompletionItemKind.Field;
-		case "variable": return languages.LanguageCompletionItemKind.Variable;
-		case "class": return languages.LanguageCompletionItemKind.Class;
-		case "interface": return languages.LanguageCompletionItemKind.Interface;
-		case "module": return languages.LanguageCompletionItemKind.Module;
-		case "property": return languages.LanguageCompletionItemKind.Property;
-		case "unit": return languages.LanguageCompletionItemKind.Unit;
-		case "value": return languages.LanguageCompletionItemKind.Value;
-		case "enum": return languages.LanguageCompletionItemKind.Enum;
-		case "keyword": return languages.LanguageCompletionItemKind.Keyword;
-		case "snippet": return languages.LanguageCompletionItemKind.Snippet;
-		case "file": return languages.LanguageCompletionItemKind.File;
-		case "folder": return languages.LanguageCompletionItemKind.Folder;
-		case "reference": return languages.LanguageCompletionItemKind.Reference;
-		case "typeParameter": return languages.LanguageCompletionItemKind.TypeParameter;
-		case "text": return languages.LanguageCompletionItemKind.Text;
+		case 'method': return languages.LanguageCompletionItemKind.Method;
+		case 'function': return languages.LanguageCompletionItemKind.Function;
+		case 'constructor': return languages.LanguageCompletionItemKind.Constructor;
+		case 'field': return languages.LanguageCompletionItemKind.Field;
+		case 'variable': return languages.LanguageCompletionItemKind.Variable;
+		case 'class': return languages.LanguageCompletionItemKind.Class;
+		case 'interface': return languages.LanguageCompletionItemKind.Interface;
+		case 'module': return languages.LanguageCompletionItemKind.Module;
+		case 'property': return languages.LanguageCompletionItemKind.Property;
+		case 'unit': return languages.LanguageCompletionItemKind.Unit;
+		case 'value': return languages.LanguageCompletionItemKind.Value;
+		case 'enum': return languages.LanguageCompletionItemKind.Enum;
+		case 'keyword': return languages.LanguageCompletionItemKind.Keyword;
+		case 'snippet': return languages.LanguageCompletionItemKind.Snippet;
+		case 'file': return languages.LanguageCompletionItemKind.File;
+		case 'folder': return languages.LanguageCompletionItemKind.Folder;
+		case 'reference': return languages.LanguageCompletionItemKind.Reference;
+		case 'typeParameter': return languages.LanguageCompletionItemKind.TypeParameter;
+		case 'text': return languages.LanguageCompletionItemKind.Text;
 	}
 }
 
@@ -688,10 +698,10 @@ function workspaceEdit(root: LanguageWorkspaceRoot, edit: LanguageDirectoryEditD
 	return Object.freeze({
 		entries: Object.freeze(edit.entries.map(entry => {
 			switch (entry.kind) {
-				case "textDocument": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.document.path), expectedText: entry.document.expectedText, edits: Object.freeze(entry.document.edits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText }))) });
-				case "create": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.path), existing: entry.existing });
-				case "rename": return Object.freeze({ kind: entry.kind, source: workspaceResource(root, entry.source), target: workspaceResource(root, entry.target), existing: entry.existing });
-				case "delete": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.path), missing: entry.missing, mode: entry.mode });
+				case 'textDocument': return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.document.path), expectedText: entry.document.expectedText, edits: Object.freeze(entry.document.edits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText }))) });
+				case 'create': return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.path), existing: entry.existing });
+				case 'rename': return Object.freeze({ kind: entry.kind, source: workspaceResource(root, entry.source), target: workspaceResource(root, entry.target), existing: entry.existing });
+				case 'delete': return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.path), missing: entry.missing, mode: entry.mode });
 			}
 		}))
 	});
@@ -726,7 +736,7 @@ async function withAbortSignal<T>(token: CancellationToken, run: (signal: AbortS
 	}
 }
 
-function diagnosticSeverity(severity: languages.LanguageDiagnosticSeverity): "error" | "warning" | "information" | "hint" {
+function diagnosticSeverity(severity: languages.LanguageDiagnosticSeverity): 'error' | 'warning' | 'information' | 'hint' {
 	return severity;
 }
 
@@ -743,13 +753,13 @@ function workspaceRootForResource(workspace: IWorkspaceContextService, resource:
 			// Resource belongs to a different Workspace folder.
 		}
 	}
-	if (!match) throw new Error("Language service resource is outside the current workspace");
+	if (!match) throw new Error('Language service resource is outside the current workspace');
 	return match;
 }
 
 function workspaceResource(root: LanguageWorkspaceRoot, relativePath: string): URI {
 	const resource = workspaceResourceFromPath(root.uri, relativePath);
-	if (!resource) throw new Error("Language service returned an invalid workspace path");
+	if (!resource) throw new Error('Language service returned an invalid workspace path');
 	return resource;
 }
 

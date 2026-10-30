@@ -1,13 +1,13 @@
-import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { addDisposableListener, getActiveElement, isHTMLElement } from '../../../../../base/browser/dom.js';
-import { isCancellationError } from "../../../../../base/common/errors.js";
+import { isCancellationError } from '../../../../../base/common/errors.js';
 import { IBulkEditService, type ResourceEdit } from '../../../../../editor/browser/services/bulkEditService.js';
-import { IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
-import { SyncDescriptor } from "../../../../../platform/instantiation/common/descriptors.js";
-import { registerWorkbenchContribution, WorkbenchPhase } from "../../../../common/contributions.js";
-import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../../common/views.js";
-import { IViewsService } from "../../../../services/views/common/viewsService.js";
-import { BulkEditPane } from "./bulkEditPane.js";
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../common/contributions.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../../common/views.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { BulkEditPane } from './bulkEditPane.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -43,11 +43,11 @@ for (const action of previewActions) {
 
 /** Registers the Workbench panel that hosts the transient bulk-edit preview. */
 export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.BulkEdit, title: "Refactor Preview", localizationKey: { bundle: "ash.views", key: "refactorPreview" }, location: ViewContainerLocation.Panel, order: 2.75, hideIfEmpty: true });
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.BulkEdit, title: 'Refactor Preview', localizationKey: { bundle: 'ash.views', key: 'refactorPreview' }, location: ViewContainerLocation.Panel, order: 2.75, hideIfEmpty: true });
 	registry.registerStaticViews(WorkbenchViewContainerId.BulkEdit, [{
 		id: BulkEditPane.ID,
-		title: "Refactor Preview",
-		localizationKey: { bundle: "ash.views", key: "refactorPreview" },
+		title: 'Refactor Preview',
+		localizationKey: { bundle: 'ash.views', key: 'refactorPreview' },
 		order: 1,
 		when: ContextKeyExpr.has('refactorPreview.enabled'),
 		ctorDescriptor: new SyncDescriptor(BulkEditPane),
@@ -103,7 +103,7 @@ export class BulkEditPreviewContribution extends Disposable {
 		try {
 			if (controller.signal.aborted) return [];
 			const view = await this.views.openView(BulkEditPane.ID);
-			if (!(view instanceof BulkEditPane)) throw new Error("Bulk edit preview view is not available");
+			if (!(view instanceof BulkEditPane)) throw new Error('Bulk edit preview view is not available');
 			if (controller.signal.aborted) return [];
 			return await view.setInput(edits, controller.signal) ?? [];
 		} catch (error) {
@@ -145,4 +145,4 @@ interface PreviewSession {
 	readonly previousFocus: Element | null;
 }
 
-registerWorkbenchContribution("workbench.contrib.bulkEditPreview", WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(BulkEditPreviewContribution));
+registerWorkbenchContribution('workbench.contrib.bulkEditPreview', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(BulkEditPreviewContribution));

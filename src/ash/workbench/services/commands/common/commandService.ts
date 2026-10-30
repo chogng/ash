@@ -1,15 +1,15 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import {
 	type CommandId,
 	type CommandRegistry,
 	CommandsRegistry,
 	type ICommandEvent,
 	type ICommandService,
-} from "../../../../platform/commands/common/commands.js";
+} from '../../../../platform/commands/common/commands.js';
 import type {
 	ServicesAccessor,
-} from "../../../../platform/instantiation/common/instantiation.js";
+} from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Executes registered commands with the services of one Workbench window. */
 export class CommandService

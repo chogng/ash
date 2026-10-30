@@ -1,15 +1,15 @@
-import "./tablist.css";
-import { addDisposableListener, getActiveElement } from "../../dom.js";
+import './tablist.css';
+import { addDisposableListener, getActiveElement } from '../../dom.js';
 import { AnimationFrameScheduler } from '../../scheduler.js';
-import type { Icon } from "../../../common/icon.js";
-import type { IAction } from "../../../common/actions.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
-import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation } from "../actionbar/actionbar.js";
-import { ScrollableElement } from "../scrollbar/scrollableElement.js";
+import type { Icon } from '../../../common/icon.js';
+import type { IAction } from '../../../common/actions.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
+import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation } from '../actionbar/actionbar.js';
+import { ScrollableElement } from '../scrollbar/scrollableElement.js';
 import type { ScrollableElementUpdateOptions } from '../scrollbar/scrollableElementOptions.js';
-import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
+import { TabAction, TabActionViewItem } from './tabActionViewItem.js';
 
-export { TAB_CLOSE_ACTION_ID } from "./tabActionViewItem.js";
+export { TAB_CLOSE_ACTION_ID } from './tabActionViewItem.js';
 
 /** Accessible actions rendered after one Tab's label content. */
 export interface TabListActions {
@@ -41,8 +41,8 @@ export interface TabListItem<T> {
 	readonly primaryAction?: IAction;
 }
 
-/** Flush and inset serve document tabs; navigation fits page categories to their labels. */
-export type TabListPresentation = "flush" | "inset" | "navigation";
+/** Visual treatments; tab sizing and action layout are independent of presentation. */
+export type TabListPresentation = 'flush' | 'inset' | 'navigation' | 'underline';
 /** Fit preserves labels; shrink shares available space; fixed shares bounded equal widths. */
 export type TabListSizing = { readonly mode: 'fit' | 'shrink'; } | { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number; };
 export type TabListDropPosition = ActionBarDropPosition;
@@ -102,9 +102,9 @@ export class TabList<T> extends Disposable {
 		this.select = options.onSelect;
 		const onClose = options.onClose;
 		const closeActionIcon = options.closeActionIcon;
-		const presentation = options.presentation ?? "flush";
+		const presentation = options.presentation ?? 'flush';
 		this.presentation = presentation;
-		const orientation = options.orientation ?? "horizontal";
+		const orientation = options.orientation ?? 'horizontal';
 		const dragAndDrop = options.dragAndDrop;
 		const actionBarDragAndDrop: ActionBarDragAndDrop | undefined = dragAndDrop
 			? {
@@ -125,13 +125,13 @@ export class TabList<T> extends Disposable {
 				onDragEnd: () => dragAndDrop.onDragEnd(),
 			}
 			: undefined;
-		const scrollableOptions = orientation === "vertical"
-			? { direction: "vertical" as const, vertical: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } }
-			: { direction: "horizontal" as const, horizontal: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } };
+		const scrollableOptions = orientation === 'vertical'
+			? { direction: 'vertical' as const, vertical: 'auto' as const, tabIndex: -1, wheel: { consume: 'when-scrolling' as const } }
+			: { direction: 'horizontal' as const, horizontal: 'auto' as const, tabIndex: -1, wheel: { consume: 'when-scrolling' as const } };
 		this.scrollable = this._register(new ScrollableElement(container, scrollableOptions));
 		this.actionBar = this._register(new ActionBar(this.scrollable.contentElement, {
 			ariaLabel: options.ariaLabel,
-			ariaRole: "tablist",
+			ariaRole: 'tablist',
 			orientation,
 			dragAndDrop: actionBarDragAndDrop,
 			actionViewItemProvider: (action) => {
@@ -143,10 +143,10 @@ export class TabList<T> extends Disposable {
 				return view;
 			},
 		}));
-		this.scrollable.element.classList.add("ash-tab-list");
+		this.scrollable.element.classList.add('ash-tab-list');
 		this.scrollable.element.classList.add(`ash-tab-list-${presentation}`);
 		this.scrollable.contentElement.classList.add(
-			"ash-tab-list-scroll-content",
+			'ash-tab-list-scroll-content',
 		);
 		this.element = this.scrollable.element;
 		this.scrollableElement = this.scrollable.scrollableElement;
@@ -160,18 +160,18 @@ export class TabList<T> extends Disposable {
 				this.scrollable.layout();
 			}
 		}));
-		if (this.select) this.actionBar.element.setAttribute("aria-multiselectable", "true");
+		if (this.select) this.actionBar.element.setAttribute('aria-multiselectable', 'true');
 		// Keyboard focus may move without changing the selected tab. Reveal the
 		// focused item through the shared scrollbar so both states stay accessible.
 		let pointerActivation = false;
 		this._register(addDisposableListener(this.actionBar.element, 'pointerdown', () => { pointerActivation = true; }, true));
 		this._register(addDisposableListener(this.actionBar.element.ownerDocument, 'pointerup', () => { pointerActivation = false; }));
 		this._register(addDisposableListener(this.actionBar.element.ownerDocument, 'pointercancel', () => { pointerActivation = false; }));
-		this._register(addDisposableListener(this.actionBar.element, "focusin", event => {
+		this._register(addDisposableListener(this.actionBar.element, 'focusin', event => {
 			const target = event.target as HTMLElement;
 			// Moving the pressed tab before pointerup prevents its click from completing.
 			if (pointerActivation || target.getAttribute('role') !== 'tab') return;
-			const tab = target.closest<HTMLElement>(".ash-tab");
+			const tab = target.closest<HTMLElement>('.ash-tab');
 			if (tab) {
 				this.layoutScheduler.cancel();
 				this.scrollable.reveal(tab);

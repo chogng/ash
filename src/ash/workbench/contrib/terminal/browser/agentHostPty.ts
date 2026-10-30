@@ -36,7 +36,10 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 		this.assertCanWrite();
 		if (this.isDisposed || this.closeTask) throw new CancellationError();
 		if (property === ProcessPropertyType.Title) return this.creation.profile.title as IProcessPropertyMap[T];
-		const info = await this.processes.getProcessInfo({ terminalId: this.creation.terminalId, ...(this.dirId === undefined ? {} : { dirId: this.dirId }) });
+		const info = await this.processes.getProcessInfo({
+			terminalId: this.creation.terminalId,
+			...(this.dirId === undefined ? {} : { dirId: this.dirId })
+		});
 		this.assertCanWrite();
 		if (this.isDisposed || this.closeTask) throw new CancellationError();
 		// Failure to inspect a process must not silently authorize killing it.
@@ -64,7 +67,6 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	get onProcessError() { return this.manager.onProcessError; }
 	get onDidChangeCommandStatus() { return this.manager.onDidChangeCommandStatus; }
 	get onDidChangeMetadata() { return this.manager.onDidChangeMetadata; }
-	get onOutputGap() { return this.manager.onOutputGap; }
 	get onPtyReconnect() { return this.manager.onPtyReconnect; }
 
 	protected assertCanWrite(): void { }

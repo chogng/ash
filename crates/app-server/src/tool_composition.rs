@@ -2208,7 +2208,8 @@ impl ActionPolicyService for CompositeActionPolicyService {
                 self.application.as_ref()
             }
             ActionSource::BuiltInTool
-                if request.provenance().source_id().starts_with("browser_") =>
+                if request.action_policy_revision().as_str()
+                    == crate::browser_tool::BROWSER_POLICY_REVISION =>
             {
                 self.host.as_ref()
             }

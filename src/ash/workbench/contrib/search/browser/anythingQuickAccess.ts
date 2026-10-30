@@ -3,8 +3,8 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { basename, dirname, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { match } from '../../../../base/common/glob.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
-import { ThemeIcon } from '../../../../base/common/themables.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
+import { getIconClasses } from '../../../../editor/common/services/getIconClasses.js';
 import { localize } from '../../../../nls.js';
 import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
@@ -23,6 +23,7 @@ import { untildify } from '../../../../base/common/labels.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ContentSearchConfiguration } from '../common/searchConfiguration.js';
+import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 
 export interface IAnythingQuickPickItem extends IPickerQuickAccessItem {
 	readonly resource: URI;
@@ -43,13 +44,15 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 		@INotificationService private readonly notifications: INotificationService,
 		@IPathService private readonly paths: IPathService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@ILanguageService private readonly languages: ILanguageService,
+		@IFileTextModelService private readonly models: IFileTextModelService,
 	) { super(AnythingQuickAccessProvider.PREFIX, { canAcceptInBackground: true }); }
 
 	protected override _getPicks(query: string, _resources: DisposableStore, token: CancellationToken, options: AnythingQuickAccessProviderRunOptions = {}): Picks<IPickerQuickAccessItem> | FastAndSlowPicks<IPickerQuickAccessItem> {
 		const itemFor = (resource: URI, kind = FileKind.File): IAnythingQuickPickItem => ({
 			label: basename(resource) || resource.path,
 			description: dirname(resource).path,
-			iconClass: ThemeIcon.asClassName(kind === FileKind.Directory ? Lxicon.folders : Lxicon.file),
+			iconClasses: getIconClasses(this.models, this.languages, resource, kind),
 			resource,
 			kind,
 			accept: () => { void this.editors.openEditor({ resource }, { pinned: true }).catch(error => this.notifications.error(String(error))); },

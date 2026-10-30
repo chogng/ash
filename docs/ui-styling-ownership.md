@@ -118,9 +118,15 @@ Mode–model 与 model–effort 的按钮边缘间距必须相同；两处都消
 
 `FastDomNode` 是 retained DOM 的局部样式写缓存，不是 `HTMLElement` 的替代接口。创建稳定节点的组件同时创建并保留唯一 wrapper；允许宿主投影根节点几何时，组件传递这个 wrapper，不得让宿主重新包装同一节点。wrapper 从构造时开始拥有其缓存属性，不读取 DOM 猜测初值；同一属性之后只能继续通过这个 wrapper 修改。文本、子树、`hidden`、tab order 和 ARIA 仍由具体组件直接拥有，不进入样式缓存。
 
-`domNode` 保持公开，用于事件、测量、attributes、挂载和未缓存的样式。已经缓存的属性不得通过 `domNode.style`、对应 attribute 或其他别名绕过 wrapper；class 增删使用缓存感知的 `toggleClassName`。`setTextContent` 只用于子内容不再由其他代码分别维护的 retained leaf，容器节点继续由其 DOM owner 管理 children。
+`FastDomNode.domNode` 暴露被缓存节点，用于 DOM 集成；这不是所有 UI 控件都应公开根节点的要求。组件的公开边界遵循 [DOM 所有权规则](../.github/instructions/browser-ui.instructions.md#dom-vocabulary-and-ownership)。已经缓存的属性不得通过 `domNode.style`、对应 attribute 或其他别名绕过 wrapper；class 增删使用缓存感知的 `toggleClassName`。`setTextContent` 只用于子内容不再由其他代码分别维护的 retained leaf，容器节点继续由其 DOM owner 管理 children。
 
 临时创建并立即替换的 DOM 不使用 `FastDomNode`。wrapper 不进入全局 registry，也不单独拥有 disposal；它与创建或接管该稳定节点的组件保持相同生命周期。
+
+### CountBadge 的组合边界
+
+`CountBadge` 在调用方提供的容器中呈现数量，拥有徽标节点、格式化、描述、Hover、展示变体和释放。它不提供节点访问接口；释放时只移除自己创建的节点，容器继续归宿主所有。
+
+Search 和 SCM 的计数槽参与行布局；Extensions 的标题计数槽承载跨组件的描述关联；Customize 的结果计数槽承载加载期间的显隐。宿主保留这些槽，数量更新仍通过同一个 `CountBadge` 实例完成。Theme Editor 的分类计数槽表达冗余语义，徽标内部外观归 `countBadge.css`。CompositeBar 的导航角标由其 action view item 自己呈现；它的叠放、压缩数字和窗口区域配色不属于通用 `CountBadge`。
 
 ## 当前控件的准确职责
 

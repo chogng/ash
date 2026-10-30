@@ -1,13 +1,13 @@
-import { serializeUserColorThemeDraft } from "./colorThemeData.js";
-import { type ColorValue } from "../../../../platform/theme/common/colorRegistry.js";
-import { createColorTheme } from "../../../../platform/theme/common/colorTheme.js";
-import type { IColorTheme } from "../../../../platform/theme/common/themeService.js";
-import { ColorScheme } from "../../../../platform/theme/common/theme.js";
+import { serializeUserColorThemeDraft } from './colorThemeData.js';
+import { type ColorValue } from '../../../../platform/theme/common/colorRegistry.js';
+import { createColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
+import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 
-const USER_COLOR_THEME_SCHEMA_URL = "https://ash.dev/schemas/color-theme.schema.json";
+const USER_COLOR_THEME_SCHEMA_URL = 'https://ash.dev/schemas/color-theme.schema.json';
 
-const LEGACY_EDITOR_TOKEN_PREFIX = "editor.semanticToken.";
-const EDITOR_TOKEN_PREFIX = "editor.token.";
+const LEGACY_EDITOR_TOKEN_PREFIX = 'editor.semanticToken.';
+const EDITOR_TOKEN_PREFIX = 'editor.token.';
 
 interface IUserColorThemeDocument {
 	readonly version: 1;
@@ -19,12 +19,12 @@ interface IUserColorThemeDocument {
 
 /** Parses untrusted JSON and compiles it through the canonical theme resolver. */
 function parseLegacyTheme(source: string): IColorTheme {
-	if (source.length > 1_048_576) throw new Error("User theme exceeds the 1 MiB document limit");
+	if (source.length > 1_048_576) throw new Error('User theme exceeds the 1 MiB document limit');
 	let candidate: unknown;
 	try {
 		candidate = JSON.parse(source);
 	} catch (error) {
-		throw new Error("User theme is not valid JSON", { cause: error });
+		throw new Error('User theme is not valid JSON', { cause: error });
 	}
 	const document = validateUserColorThemeDocument(candidate);
 	return createColorTheme({
@@ -46,11 +46,11 @@ function normalizeLegacyEditorTokenOverrides(colors: Readonly<Record<string, Col
 }
 
 function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument {
-	const document = exactRecord(value, ["$schema", "colorScheme", "colors", "id", "label", "version"]);
-	if (document.version !== 1) throw new Error("User theme version must be 1");
+	const document = exactRecord(value, ['$schema', 'colorScheme', 'colors', 'id', 'label', 'version']);
+	if (document.version !== 1) throw new Error('User theme version must be 1');
 	if (document.$schema !== undefined && document.$schema !== USER_COLOR_THEME_SCHEMA_URL) throw new Error(`User theme $schema must be '${USER_COLOR_THEME_SCHEMA_URL}'`);
-	if (typeof document.id !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(document.id)) throw new Error("User theme id must be lowercase kebab-case");
-	if (typeof document.label !== "string" || document.label.trim() !== document.label || document.label.length < 1 || document.label.length > 80) throw new Error("User theme label must contain 1 to 80 trimmed characters");
+	if (typeof document.id !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(document.id)) throw new Error('User theme id must be lowercase kebab-case');
+	if (typeof document.label !== 'string' || document.label.trim() !== document.label || document.label.length < 1 || document.label.length > 80) throw new Error('User theme label must contain 1 to 80 trimmed characters');
 	let colorScheme: ColorScheme;
 	switch (document.colorScheme) {
 		case 'dark': colorScheme = ColorScheme.Dark; break;
@@ -59,9 +59,9 @@ function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument
 		case 'high-contrast-light': colorScheme = ColorScheme.HighContrastLight; break;
 		default: throw new Error(`Unknown user theme colorScheme: ${String(document.colorScheme)}`);
 	}
-	const colors = record(document.colors, "colors");
+	const colors = record(document.colors, 'colors');
 	const entries = Object.entries(colors);
-	if (entries.length > 512) throw new Error("User theme contains more than 512 color overrides");
+	if (entries.length > 512) throw new Error('User theme contains more than 512 color overrides');
 	const overrides: Record<string, ColorValue> = {};
 	for (const [id, color] of entries) {
 		if (!/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)*$/.test(id)) throw new Error(`Invalid user theme color token ID: ${id}`);
@@ -78,46 +78,46 @@ function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument
 
 function validateJsonColorValue(value: unknown, path: string, depth: number): ColorValue {
 	if (depth > 8) throw new Error(`${path} exceeds the maximum transform depth`);
-	if (typeof value === "string") {
+	if (typeof value === 'string') {
 		if (value.length > 128) throw new Error(`${path} is too long`);
 		return value;
 	}
-	const transform = exactRecord(value, ["background", "factor", "op", "other", "value"]);
-	if (typeof transform.op !== "string") throw new Error(`${path}.op must be a string`);
+	const transform = exactRecord(value, ['background', 'factor', 'op', 'other', 'value']);
+	if (typeof transform.op !== 'string') throw new Error(`${path}.op must be a string`);
 	const source = validateJsonColorValue(transform.value, `${path}.value`, depth + 1);
 	switch (transform.op) {
-		case "transparent":
-			requireExactKeys(transform, ["factor", "op", "value"], path);
+		case 'transparent':
+			requireExactKeys(transform, ['factor', 'op', 'value'], path);
 			return Object.freeze({ op: 'transparent', value: source, factor: factor(transform.factor, `${path}.factor`) });
-		case "lighten":
-		case "darken":
-			requireExactKeys(transform, ["factor", "op", "value"], path);
+		case 'lighten':
+		case 'darken':
+			requireExactKeys(transform, ['factor', 'op', 'value'], path);
 			// Version-1 resources used RGBA mixing for brightness; preserve their saved appearance during migration.
 			return Object.freeze({
 				op: 'mix', value: source, other: transform.op === 'lighten' ? '#ffffff' : '#000000',
 				factor: factor(transform.factor, `${path}.factor`),
 			});
-		case "mix":
-			requireExactKeys(transform, ["factor", "op", "other", "value"], path);
-			return Object.freeze({ op: "mix", value: source, other: validateJsonColorValue(transform.other, `${path}.other`, depth + 1), factor: factor(transform.factor, `${path}.factor`) });
-		case "opaque":
-			requireExactKeys(transform, ["background", "op", "value"], path);
-			return Object.freeze({ op: "opaque", value: source, background: validateJsonColorValue(transform.background, `${path}.background`, depth + 1) });
+		case 'mix':
+			requireExactKeys(transform, ['factor', 'op', 'other', 'value'], path);
+			return Object.freeze({ op: 'mix', value: source, other: validateJsonColorValue(transform.other, `${path}.other`, depth + 1), factor: factor(transform.factor, `${path}.factor`) });
+		case 'opaque':
+			requireExactKeys(transform, ['background', 'op', 'value'], path);
+			return Object.freeze({ op: 'opaque', value: source, background: validateJsonColorValue(transform.background, `${path}.background`, depth + 1) });
 		default:
 			throw new Error(`${path}.op is not a supported color transform`);
 	}
 }
 
 function factor(value: unknown, path: string): number {
-	if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${path} must be a finite number between 0 and 1`);
+	if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) throw new Error(`${path} must be a finite number between 0 and 1`);
 	return value;
 }
 
 function exactRecord(value: unknown, allowedKeys: readonly string[]): Record<string, unknown> {
-	const result = record(value, "value");
+	const result = record(value, 'value');
 	const allowed = new Set(allowedKeys);
 	const unknown = Object.keys(result).filter((key) => !allowed.has(key));
-	if (unknown.length > 0) throw new Error(`Object contains unknown fields: ${unknown.join(", ")}`);
+	if (unknown.length > 0) throw new Error(`Object contains unknown fields: ${unknown.join(', ')}`);
 	return result;
 }
 
@@ -128,7 +128,7 @@ function requireExactKeys(value: Record<string, unknown>, keys: readonly string[
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${path} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${path} must be an object`);
 	return value as Record<string, unknown>;
 }
 
@@ -136,7 +136,7 @@ function record(value: unknown, path: string): Record<string, unknown> {
 export function migrateUserTheme(source: string): { readonly id: string; readonly content: string; } | undefined {
 	let value: unknown;
 	try { value = JSON.parse(source); } catch { return undefined; }
-	if (typeof value !== "object" || value === null || !("version" in value)) return undefined;
+	if (typeof value !== 'object' || value === null || !('version' in value)) return undefined;
 	const theme = parseLegacyTheme(source);
 	return { id: theme.id, content: serializeUserColorThemeDraft(theme, theme.label) };
 }

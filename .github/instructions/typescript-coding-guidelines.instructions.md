@@ -7,9 +7,7 @@ applyTo: "**/src/ash/**"
 
 ## Formatting
 
-- New files use tabs, single quotes and semicolons. Preserve existing files' indentation, quotes and private-member style; do not reformat unrelated lines.
-- Keep each import declaration on one physical line.
-- Keep short calls, signatures, conditions and expressions on one line. When wrapping, use one logical item per line and a trailing comma.
+- Use `pnpm format:ts:fix [file|directory ...]` with the TypeScript formatter and `tsfmt.json`. Preserve author-selected line breaks in imports, calls, signatures and objects; choose layout for readability, then normalize indentation, spaces and semicolons. Do not change a global width or reflow unrelated code to keep an import on one line.
 - Always use braces with the opening brace on the same line.
 
 ## Naming

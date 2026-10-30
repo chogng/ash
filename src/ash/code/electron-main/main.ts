@@ -1,9 +1,15 @@
-import { AshApplication, type AppServerStartupMode } from "./app.js";
+import { AshApplication, type AppServerStartupMode } from './app.js';
 import { isCancellationError } from '../../base/common/errors.js';
 import { app, protocol } from 'electron/main';
 import { Schemas } from '../../base/common/network.js';
-import { basename, dirname, join } from 'node:path';
-import { AshApplicationId, AshApplicationName, AshRendererDirectory, AshUserDataFolderName } from '../common/application.js';
+import { basename, dirname, join, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import {
+	AshApplicationId,
+	AshApplicationName,
+	AshRendererDirectory,
+	AshUserDataFolderName,
+} from '../common/application.js';
 import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import { getDefaultUserDataPath } from '../../platform/environment/node/userDataPath.js';
 import { resolveHome } from '../../platform/home/node/home.js';
@@ -15,7 +21,10 @@ import { localize2 } from '../../nls.js';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { access, writeFile } from 'node:fs/promises';
-import { GPUProcessMainService, IGPUProcessMainService } from '../../platform/gpu/electron-main/gpuProcessMainService.js';
+import {
+	GPUProcessMainService,
+	IGPUProcessMainService,
+} from '../../platform/gpu/electron-main/gpuProcessMainService.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
@@ -35,41 +44,137 @@ export async function startElectronApplication(): Promise<void> {
 			app.quit();
 		});
 	}
-	const mainServices = new InstantiationService(new ServiceCollection([
-		IGPUProcessMainService, new SyncDescriptor(GPUProcessMainService, [app]),
-	]));
+	const mainServices = new InstantiationService(
+		new ServiceCollection([IGPUProcessMainService, new SyncDescriptor(GPUProcessMainService, [app])]),
+	);
 	let application: AshApplication | undefined;
+	let releaseInstallation: (() => void) | undefined;
 	try {
 		// Capture GPU exit/recovery before profile I/O or window startup can yield.
 		mainServices.get(IGPUProcessMainService);
 		protocol.registerSchemesAsPrivileged([
-			{ scheme: Schemas.vscodeWebview, privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: true } },
+			{
+				scheme: Schemas.vscodeWebview,
+				privileges: { standard: true, secure: true, supportFetchAPI: true, allowServiceWorkers: true },
+			},
 		]);
+		if (!app.isPackaged) {
+			process.env.ASH_HOME ??= developmentArtifactsPath(app.getAppPath(), 'dev', 'profile');
+		}
 		const profileRoot = resolveHome();
-		const migrationConflict = await migrateLegacyLocalProfile({ legacyUserDataRoot: app.getPath('userData'), profileRoot });
-		if (migrationConflict) console.error(`Settings migration conflict: ${migrationConflict.legacyPath} and ${migrationConflict.settingsPath}`);
+		configureApplicationDataPaths();
+		if (app.isPackaged) {
+			// Record the actual paths before profile migration creates them.
+			// The shared maintenance host protects profiles used by another product.
+			const installation =
+				process.platform === 'darwin' ? resolve(process.resourcesPath, '..', '..') : dirname(process.execPath);
+			const lease = spawn(
+				join(
+					process.resourcesPath,
+					'bin',
+					process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon',
+				),
+				[
+					'installation',
+					'lease',
+					'--product',
+					'desktop',
+					'--root',
+					installation,
+					'--profile',
+					profileRoot,
+					'--user-data',
+					app.getPath('userData'),
+				],
+				{ windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
+			);
+			let closing = false;
+			releaseInstallation = () => {
+				closing = true;
+				lease.stdin.end();
+			};
+			// will-quit can be prevented while Main flushes state and closes its
+			// services. Keep ownership until that shutdown has actually completed.
+			app.once('quit', releaseInstallation);
+			lease.stdin.on('error', error => {
+				if (!closing) {
+					console.error('Installation lease disconnected', error);
+					app.quit();
+				}
+			});
+			await new Promise<void>((done, fail) => {
+				const timeout = setTimeout(() => {
+					lease.kill();
+					fail(new Error('Installation registration timed out'));
+				}, 30_000);
+				let output = '';
+				let errors = '';
+				lease.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+					output = (output + chunk).slice(-4096);
+					if (output === 'ready\n') {
+						clearTimeout(timeout);
+						done();
+					}
+				});
+				lease.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+					errors = (errors + chunk).slice(-4096);
+				});
+				lease.once('error', error => {
+					clearTimeout(timeout);
+					fail(error);
+				});
+				lease.once('exit', code => {
+					clearTimeout(timeout);
+					fail(new Error(`Installation registration exited with ${code}: ${errors}`));
+					if (!closing && output === 'ready\n') app.quit();
+				});
+			});
+		}
+		const migrationConflict = await migrateLegacyLocalProfile({
+			legacyUserDataRoot: app.getPath('userData'),
+			profileRoot,
+		});
+		if (migrationConflict)
+			console.error(
+				`Settings migration conflict: ${migrationConflict.legacyPath} and ${migrationConflict.settingsPath}`,
+			);
 		const rendererBase = app.isPackaged
 			? join(app.getAppPath(), 'dist', 'renderer')
 			: developmentArtifactsPath(app.getAppPath(), 'renderer');
 		const rendererRoot = app.isPackaged
 			? resolvePackagedRendererRoot(rendererBase)
 			: join(rendererBase, AshRendererDirectory);
-		const appServerStartupMode: AppServerStartupMode = process.env.ASH_DESKTOP_UI_ONLY === '1'
-			? 'disabled'
-			: 'required';
+		const appServerStartupMode: AppServerStartupMode =
+			process.env.ASH_DESKTOP_UI_ONLY === '1' ? 'disabled' : 'required';
 
 		app.setName(AshApplicationName);
-		configureApplicationDataPaths();
-		const initialLaunchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
-		const { args } = parseWindowLaunch(initialLaunchArguments, process.cwd(), localize2('taskbar.invalidAgentsArguments', 'Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.').original);
+		const initialLaunchArguments = parseMainProcessArgv({
+			arguments: process.argv,
+			packaging: app.isPackaged ? 'packaged' : 'development',
+			appPath: app.getAppPath(),
+		});
+		const { args } = parseWindowLaunch(
+			initialLaunchArguments,
+			process.cwd(),
+			localize2(
+				'taskbar.invalidAgentsArguments',
+				'Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.',
+			).original,
+		);
 		if (args.wait && !args.waitMarkerFilePath && !developmentLauncher) await addWaitMarker();
 
-		const launchArguments = parseMainProcessArgv({ arguments: process.argv, packaging: app.isPackaged ? 'packaged' : 'development', appPath: app.getAppPath() });
+		const launchArguments = parseMainProcessArgv({
+			arguments: process.argv,
+			packaging: app.isPackaged ? 'packaged' : 'development',
+			appPath: app.getAppPath(),
+		});
 		if (!app.requestSingleInstanceLock({ launchArguments, developmentLauncher })) {
 			if (developmentLauncher && process.connected && process.send) {
 				// A debugger may already have started the replacement while its previous
 				// instance is still saving state. Let the launcher wait for that lock.
-				await new Promise<void>(done => { process.send!('ash:dev:busy', () => done()); });
+				await new Promise<void>(done => {
+					process.send!('ash:dev:busy', () => done());
+				});
 				app.quit();
 				return;
 			}
@@ -84,16 +189,21 @@ export async function startElectronApplication(): Promise<void> {
 		// the previous instance. Only the successful replacement owns this wait.
 		if (args.wait && !args.waitMarkerFilePath && developmentLauncher) await addWaitMarker();
 
-		application = await AshApplication.create({
-			rendererRoot,
-			appServerStartupMode,
-			developmentLauncher,
-		}, mainServices);
+		application = await AshApplication.create(
+			{ rendererRoot, appServerStartupMode, developmentLauncher },
+			mainServices,
+		);
 
 		void startup(application, developmentLauncher);
 	} finally {
 		// Once created, the application owns this scope through shutdown/failure cleanup.
-		if (!application) mainServices.dispose();
+		if (!application) {
+			if (releaseInstallation) {
+				app.removeListener('quit', releaseInstallation);
+				releaseInstallation();
+			}
+			mainServices.dispose();
+		}
 	}
 }
 
@@ -135,7 +245,9 @@ async function startup(application: AshApplication, developmentLauncher: boolean
 		await application.startup();
 		if (developmentLauncher && process.connected) process.send?.('ash:dev:ready');
 	} catch (error) {
-		if (isCancellationError(error)) { return; }
+		if (isCancellationError(error)) {
+			return;
+		}
 		console.error('Failed to start Ash', error);
 		try {
 			await application.disposeAfterStartupFailure();
@@ -149,7 +261,9 @@ async function startup(application: AshApplication, developmentLauncher: boolean
 
 function configureApplicationDataPaths(): void {
 	if (process.platform === 'win32') app.setAppUserModelId(AshApplicationId);
-	if (!hasUserDataDirectoryOverride(process.argv)) app.setPath('userData', getDefaultUserDataPath(AshUserDataFolderName));
+	if (!hasUserDataDirectoryOverride(process.argv)) {
+		app.setPath('userData', app.isPackaged ? getDefaultUserDataPath(AshUserDataFolderName) : developmentArtifactsPath(app.getAppPath(), 'dev', 'user-data'));
+	}
 	const userDataPath = app.getPath('userData');
 	app.setPath('sessionData', join(userDataPath, 'session-data'));
 	app.setPath('logs', join(userDataPath, 'logs'));

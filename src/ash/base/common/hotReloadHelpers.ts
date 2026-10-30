@@ -1,11 +1,11 @@
-import { isHotReloadEnabled } from "./hotReload.js";
-import { registerHotReloadHandler } from "./hotReload.js";
-import { constObservable } from "./observable.js";
-import type { IObservable } from "./observable.js";
-import type { IReader } from "./observable.js";
-import type { ISettableObservable } from "./observable.js";
-import { observableSignalFromEvent } from "./observable.js";
-import { observableValue } from "./observable.js";
+import { isHotReloadEnabled } from './hotReload.js';
+import { registerHotReloadHandler } from './hotReload.js';
+import { constObservable } from './observable.js';
+import type { IObservable } from './observable.js';
+import type { IReader } from './observable.js';
+import type { ISettableObservable } from './observable.js';
+import { observableSignalFromEvent } from './observable.js';
+import { observableValue } from './observable.js';
 
 // All versions share one slot; retaining the original import must not retain every replaced class.
 const replacements = new WeakMap<object, { current: unknown; }>();
@@ -19,7 +19,7 @@ export function readHotReloadableExport<T>(value: T, reader: IReader | undefined
 /** Observes reloads of any module that currently exports one of the supplied values. */
 export function observeHotReloadableExports(values: readonly unknown[], reader: IReader | undefined): void {
 	if (!isHotReloadEnabled()) return;
-	const reload = observableSignalFromEvent("reload", event => registerHotReloadHandler(({ oldExports }) => {
+	const reload = observableSignalFromEvent('reload', event => registerHotReloadHandler(({ oldExports }) => {
 		const tracked = Object.entries(oldExports).filter(([, value]) => values.some(watched => currentExport(watched) === value));
 		if (tracked.length === 0) return undefined;
 		return newExports => {
@@ -81,11 +81,11 @@ export function createHotClass<T>(clazz: T): IObservable<T> {
 }
 
 function className(value: unknown): string {
-	const name = typeof value === "function" ? value.name : undefined;
-	if (!name) throw new TypeError("Hot classes must have a stable name");
+	const name = typeof value === 'function' ? value.name : undefined;
+	if (!name) throw new TypeError('Hot classes must have a stable name');
 	return name;
 }
 
 function isNamedClass(value: unknown, name: string): boolean {
-	return typeof value === "function" && value.name === name;
+	return typeof value === 'function' && value.name === name;
 }

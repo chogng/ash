@@ -1,7 +1,7 @@
-import type { Event } from "./event.js";
-import { Emitter } from "./event.js";
-import { DisposableMap, Disposable, DisposableStore, type IDisposable, toDisposable } from "./lifecycle.js";
-import { onUnexpectedError } from "./errors.js";
+import type { Event } from './event.js';
+import { Emitter } from './event.js';
+import { DisposableMap, Disposable, DisposableStore, type IDisposable, toDisposable } from './lifecycle.js';
+import { onUnexpectedError } from './errors.js';
 
 /** Reads an observable while recording it as a dependency of the current computation. */
 export interface IReader {
@@ -105,11 +105,11 @@ export function autorunWithStore(
 }
 
 export function isObservable(value: unknown): value is IObservable<unknown> {
-	return typeof value === "object" &&
+	return typeof value === 'object' &&
 		value !== null &&
-		typeof (value as Partial<IObservable<unknown>>).get === "function" &&
-		typeof (value as Partial<IObservable<unknown>>).read === "function" &&
-		typeof (value as Partial<IObservable<unknown>>).onDidChange === "function";
+		typeof (value as Partial<IObservable<unknown>>).get === 'function' &&
+		typeof (value as Partial<IObservable<unknown>>).read === 'function' &&
+		typeof (value as Partial<IObservable<unknown>>).onDidChange === 'function';
 }
 
 abstract class ConvenientObservable<T> implements IObservable<T> {
@@ -271,7 +271,7 @@ class ObservableReaction extends Disposable implements IReaderWithStore {
 
 	readObservable<T>(observable: IObservable<T>): T {
 		if (!this.running) {
-			throw new Error("Observable dependencies can only be read during a computation");
+			throw new Error('Observable dependencies can only be read during a computation');
 		}
 		const dependency = observable as IObservable<unknown>;
 		this.nextDependencies.add(dependency);

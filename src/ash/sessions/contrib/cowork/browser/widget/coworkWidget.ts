@@ -12,28 +12,28 @@ import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../../../workbench/contrib/c
 import './media/chat.css';
 import './media/chatListWidget.css';
 import type { IChatMcpAppDelegate } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import { Emitter, type Event } from "../../../../../base/common/event.js";
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { IChatWidgetService, type IChatWidget } from '../../../../../workbench/contrib/chat/browser/chat.js';
-import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../../workbench/services/chat/common/chatService.js";
-import type { ChatInputDelegate } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js";
-import type { SkillReference } from "../../../../../platform/agentHost/common/appServerApi.js";
-import type { IChatInputPart } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js";
-import type { ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/widget/chatListItems.js";
-import { ChatListWidget } from "../../../../../workbench/contrib/chat/browser/widget/chatListWidget.js";
-import type { ChatInputState } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js";
-import type { ModelReasoningEffort } from "../../../../../workbench/services/chat/common/modelCatalog.js";
-import type { IChatListItem } from "../../../../../workbench/contrib/chat/browser/widget/chatListItems.js";
-import { resolveChatContextAttachment, type ResolvedChatContext } from "../../../../../workbench/services/chat/common/chatContextService.js";
-import { getActiveWindow, h } from "../../../../../base/browser/dom.js";
-import type { ChatContextAttachment } from "../../../../../workbench/services/chat/common/chatContextService.js";
-import type { IOpenerService } from "../../../../../platform/opener/common/opener.js";
-import type { IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { Schemas } from "../../../../../base/common/network.js";
+import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../../workbench/services/chat/common/chatService.js';
+import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
+import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import type { ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import { ChatListWidget } from '../../../../../workbench/contrib/chat/browser/widget/chatListWidget.js';
+import type { ChatInputState } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import type { ModelReasoningEffort } from '../../../../../workbench/services/chat/common/modelCatalog.js';
+import type { IChatListItem } from '../../../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import { resolveChatContextAttachment, type ResolvedChatContext } from '../../../../../workbench/services/chat/common/chatContextService.js';
+import { getActiveWindow, h } from '../../../../../base/browser/dom.js';
+import type { ChatContextAttachment } from '../../../../../workbench/services/chat/common/chatContextService.js';
+import type { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import type { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { Schemas } from '../../../../../base/common/network.js';
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
-import { OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from "../../common/chat.js";
+import { OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../common/chat.js';
 import { OpenSettingsCommandId } from '../../../../../workbench/contrib/preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
@@ -70,6 +70,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	readonly element: HTMLElement;
 	private readonly hidden = this._register(new Emitter<void>());
 	readonly onDidHide = this.hidden.event;
+	private readonly visibilityChanged = this._register(new Emitter<void>());
+	readonly onDidChangeVisibility = this.visibilityChanged.event;
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
 	private readonly inputPart: IChatInputPart;
@@ -96,9 +98,9 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.element = h(ownerDocument, "div");
+		this.element = h(ownerDocument, 'div');
 		this.element.id = panelId;
-		this.element.className = "ash-cowork";
+		this.element.className = 'ash-cowork';
 		this.element.hidden = true;
 		container.append(this.element);
 		this.model = this._register(model);
@@ -110,8 +112,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			if (this.isDisposed || source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) throw canceled();
 			return source;
 		} : undefined));
-		this.goalElement = h(ownerDocument, "div");
-		this.goalElement.className = "ash-cowork-goal";
+		this.goalElement = h(ownerDocument, 'div');
+		this.goalElement.className = 'ash-cowork-goal';
 		this.goalElement.hidden = true;
 		const listWidgets = ChatListWidget.instantiateObservable(instantiationService, this._store, h(ownerDocument, 'div'), {
 			imageResourceLoader,
@@ -141,7 +143,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 				},
 			} satisfies IChatMcpAppDelegate,
 			onDidRequestLink: (target: string) => {
-				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error("Could not open Markdown link", error));
+				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error('Could not open Markdown link', error));
 			},
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
@@ -164,7 +166,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-			executeServerCommand: (invocation, submissionSignal) => invocation.name === "advisor" && !invocation.argumentsText.trim()
+			executeServerCommand: (invocation, submissionSignal) => invocation.name === 'advisor' && !invocation.argumentsText.trim()
 				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
 				: this.model.executeServerCommand(invocation.name, invocation.argumentsText, submissionSignal),
 			interrupt: () => this.model.interrupt(),
@@ -230,6 +232,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	setVisible(visible: boolean): void {
 		const wasVisible = this.visible;
 		this.element.hidden = !visible;
+		if (wasVisible !== visible) { this.visibilityChanged.fire(); }
 		if (wasVisible && !visible) this.hidden.fire();
 		if (!visible && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
 		this.inputPart.setVisible(visible);
@@ -245,6 +248,10 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	get inputEditor() { return this.inputPart.inputEditor; }
 	get isTranscriptProgressActive(): boolean { return this.model.inputState.inputBlocked === true || this.model.inputState.aiDisabled === true; }
 	get onDidChangeViewModel(): Event<void> { return this.model.onDidChangeComposer; }
+
+	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]> {
+		return this.inputPart.acquireContext(prepare, signal);
+	}
 
 	addContext(attachment: ChatContextAttachment): void {
 		this.inputPart.addContext(attachment);
@@ -297,16 +304,16 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 
 	private async handleTurnErrorAction(action: ChatTurnErrorAction): Promise<void> {
 		switch (action.type) {
-			case "retry":
+			case 'retry':
 				await this.model.retryFailedTurn(action.turnId);
 				return;
-			case "chooseModel":
+			case 'chooseModel':
 				this.inputPart.openModelSelector();
 				return;
-			case "startNewChat":
+			case 'startNewChat':
 				this.createUntitledSession();
 				return;
-			case "revise":
+			case 'revise':
 				this.inputPart.focus();
 				return;
 		}
@@ -337,14 +344,14 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
-		this.inputPart.render(this.model.inputState);
+		this.inputPart.render({ ...this.model.inputState, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
 	}
 
 	private renderGoal(): void {
 		const goal = this.model.goal;
 		if (!goal) {
 			this.goalElement.hidden = true;
-			this.goalElement.textContent = "";
+			this.goalElement.textContent = '';
 			return;
 		}
 		this.goalElement.hidden = false;
@@ -356,8 +363,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 
 	private updateConversationState(hasTranscript = this.model.items.length > 0): void {
 		const hasConversation = this.submittedMessage || hasTranscript;
-		this.element.classList.toggle("empty", !hasConversation);
-		this.element.classList.toggle("has-conversation", hasConversation);
+		this.element.classList.toggle('empty', !hasConversation);
+		this.element.classList.toggle('has-conversation', hasConversation);
 	}
 
 	private syncIdentity(): void {
@@ -365,11 +372,11 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		const threadId = this.model.threadId;
 		const untitledSessionId = this.model.untitledSessionId;
 		if (sessionId) this.element.dataset.sessionId = sessionId;
-		else this.element.removeAttribute("data-session-id");
+		else this.element.removeAttribute('data-session-id');
 		if (threadId) this.element.dataset.threadId = threadId;
-		else this.element.removeAttribute("data-thread-id");
+		else this.element.removeAttribute('data-thread-id');
 		if (untitledSessionId) this.element.dataset.untitledSessionId = untitledSessionId;
-		else this.element.removeAttribute("data-untitled-session-id");
+		else this.element.removeAttribute('data-untitled-session-id');
 	}
 }
 
@@ -378,7 +385,7 @@ export async function openChatMarkdownLink(
 	openerService: IOpenerService | undefined,
 	editorService: IEditorService | undefined,
 ): Promise<void> {
-	if (target.startsWith("#") || target.startsWith(`${Schemas.internal}:`)) return;
+	if (target.startsWith('#') || target.startsWith(`${Schemas.internal}:`)) return;
 	if (target.startsWith(`${Schemas.command}:`)) {
 		if (openerService) await openerService.open(target, { allowCommands: true, fromUserGesture: true });
 		return;
@@ -425,4 +432,4 @@ export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined
 	return undefined;
 }
 
-function formatNumber(value: number): string { return new Intl.NumberFormat("en-US").format(value); }
+function formatNumber(value: number): string { return new Intl.NumberFormat('en-US').format(value); }

@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../../../workbench/test/common/workbenchTestServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -170,14 +171,14 @@ function fixture() {
 		setContentVisibility: async () => { },
 		respondToPasswordSave: async () => { }, respondToPasswordFill: async () => { }, respondToAuthentication: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
-		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', getAccessibilityTree: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getBrowserViews: async () => [...f.pages.values()],
 		getOrCreateBrowserView: async (id, options) => {
 			const existing = f.pages.get(id);
 			if (existing) { return existing; }
-			const info: IBrowserViewInfo = { id, host: { windowId: 1 }, owner: options.owner, session: options.session, state: { targetId: id, url: options.initialUrl, title: '', loading: false, canGoBack: false, canGoForward: false, visible: false } };
+			const info: IBrowserViewInfo = { id, host: { windowId: 1 }, owner: options.owner, session: options.session, state: { isDevToolsOpen: false, targetId: id, url: options.initialUrl, title: '', loading: false, canGoBack: false, canGoForward: false, visible: false } };
 			f.pages.set(id, info);
 			events.fire({ type: 'created', info });
 			return info;
@@ -211,7 +212,7 @@ function fixture() {
 			onDidChangeWorkbenchState: Event.None,
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => ({ id: 'browser-test', folders: [] }), getWorkbenchState: () => WorkbenchState.FOLDER, getWorkspaceFolder: () => null
 		}],
-		[IWorkspaceTrustManagementService, { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) }],
+		[IWorkspaceTrustManagementService, resources.add(Object.assign(new TestWorkspaceTrustManagementService(), { onDidChangeTrust: Event.None, getUriTrustInfo: async (uri: import('../../../../../base/common/uri.js').URI) => ({ uri, trusted: true, permissions: undefined }), getWorkspaceTrustInfo: async () => ({ isTrusted: true, isReadOnly: false }) } satisfies Partial<IWorkspaceTrustManagementService>))],
 		[IFileService, { readFileBytes: async () => { throw new Error('No test file configured'); } } as unknown as IFileService], [IBrowserViewService, pages], [IEditorService, editors], [IEditorPart, editorPart], [IDialogsModel, dialogs],
 		[ITelemetryService, new NullTelemetryServiceShape()], [ISessionsManagementService, management], [ISessionsService, sessions],
 	)));

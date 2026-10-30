@@ -1,7 +1,7 @@
-import { isNonNegativeSafeInteger } from "ash:editor/base/common/numbers.js";
-import type { DocumentNode } from "../model/document.js";
-import type { DocumentPoint } from "./documentSelection.js";
-import type { DocumentSchema } from "../model/documentSchema.js";
+import { isNonNegativeSafeInteger } from 'ash:editor/base/common/numbers.js';
+import type { DocumentNode } from '../model/document.js';
+import type { DocumentPoint } from './documentSelection.js';
+import type { DocumentSchema } from '../model/documentSchema.js';
 
 /** Returns the ProseMirror-style node size used by Stanza's absolute positions. */
 export function documentNodeSize(node: DocumentNode, schema: DocumentSchema): number {

@@ -20,11 +20,11 @@ import { Range } from '../../../../editor/common/core/range.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { IDebugService, type DebugBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IFunctionBreakpoint, type IDataBreakpointOptions, type IDataBreakpoint, type IInstructionBreakpoint } from '../common/debug.js';
 type BreakpointEditorState =
-	| { readonly kind: "source"; readonly breakpoint: IDebugBreakpoint; }
-	| { readonly kind: "function"; readonly breakpoint?: IFunctionBreakpoint; }
-	| { readonly kind: "data"; readonly breakpoint: IDataBreakpoint; readonly options?: never; }
-	| { readonly kind: "data"; readonly breakpoint?: undefined; readonly options: IDataBreakpointOptions; }
-	| { readonly kind: "instruction"; readonly breakpoint?: IInstructionBreakpoint; readonly instructionReference: string; };
+	| { readonly kind: 'source'; readonly breakpoint: IDebugBreakpoint; }
+	| { readonly kind: 'function'; readonly breakpoint?: IFunctionBreakpoint; }
+	| { readonly kind: 'data'; readonly breakpoint: IDataBreakpoint; readonly options?: never; }
+	| { readonly kind: 'data'; readonly breakpoint?: undefined; readonly options: IDataBreakpointOptions; }
+	| { readonly kind: 'instruction'; readonly breakpoint?: IInstructionBreakpoint; readonly instructionReference: string; };
 
 /** Breakpoints owns breakpoint editors and live exception controls, not their definitions. */
 export class BreakpointsView extends ViewPane {
@@ -49,21 +49,21 @@ export class BreakpointsView extends ViewPane {
 		this.breakpointsElement.className = 'ash-debug-list ash-debug-breakpoints';
 		this.breakpointsElement.setAttribute('aria-label', localize('debug.breakpoints', 'Breakpoints'));
 		this.contentElement.append(this.breakpointsElement);
-		this.exceptionsElement = h(document, "ul");
-		this.exceptionsElement.className = "ash-debug-list ash-debug-exceptions";
-		this.exceptionsElement.setAttribute("aria-label", localize("debug.exceptions", "Exception Breakpoints"));
+		this.exceptionsElement = h(document, 'ul');
+		this.exceptionsElement.className = 'ash-debug-list ash-debug-exceptions';
+		this.exceptionsElement.setAttribute('aria-label', localize('debug.exceptions', 'Exception Breakpoints'));
 		this.contentElement.append(this.exceptionsElement);
-		this.breakpointToolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, contextMenus, { ariaLabel: localize("debug.breakpoints", "Breakpoints") }));
+		this.breakpointToolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, contextMenus, { ariaLabel: localize('debug.breakpoints', 'Breakpoints') }));
 		const breakpointActions = [
 			{
-				id: "debug.addFunctionBreakpoint",
-				label: localize("debug.addFunctionBreakpoint", "Add Function Breakpoint"),
+				id: 'debug.addFunctionBreakpoint',
+				label: localize('debug.addFunctionBreakpoint', 'Add Function Breakpoint'),
 				icon: Lxicon.add,
-				run: () => this.renderInputBox({ kind: "function" }),
+				run: () => this.renderInputBox({ kind: 'function' }),
 			},
-			{ id: "debug.enableAllBreakpoints", label: localize("debug.enableAllBreakpoints", "Enable All Breakpoints"), icon: Lxicon.check, run: () => this.debug.setBreakpointsEnabled(true) },
-			{ id: "debug.disableAllBreakpoints", label: localize("debug.disableAllBreakpoints", "Disable All Breakpoints"), icon: Lxicon.pause, run: () => this.debug.setBreakpointsEnabled(false) },
-			{ id: "debug.removeAllBreakpoints", label: localize("debug.removeAllBreakpoints", "Remove All Breakpoints"), icon: Lxicon.close, run: () => this.debug.removeAllBreakpoints() },
+			{ id: 'debug.enableAllBreakpoints', label: localize('debug.enableAllBreakpoints', 'Enable All Breakpoints'), icon: Lxicon.check, run: () => this.debug.setBreakpointsEnabled(true) },
+			{ id: 'debug.disableAllBreakpoints', label: localize('debug.disableAllBreakpoints', 'Disable All Breakpoints'), icon: Lxicon.pause, run: () => this.debug.setBreakpointsEnabled(false) },
+			{ id: 'debug.removeAllBreakpoints', label: localize('debug.removeAllBreakpoints', 'Remove All Breakpoints'), icon: Lxicon.close, run: () => this.debug.removeAllBreakpoints() },
 		];
 		this.breakpointToolbar.setActions(breakpointActions.map(action => ({ ...action, tooltip: action.label, enabled: true })));
 
@@ -78,23 +78,23 @@ export class BreakpointsView extends ViewPane {
 		this.render();
 	}
 	private async changeExceptionBreakpoints(): Promise<void> {
-		const filters = [...this.exceptionsElement.querySelectorAll<HTMLInputElement>("input[data-exception-filter]:checked")].map(input => input.dataset.exceptionFilter!).filter(Boolean);
+		const filters = [...this.exceptionsElement.querySelectorAll<HTMLInputElement>('input[data-exception-filter]:checked')].map(input => input.dataset.exceptionFilter!).filter(Boolean);
 		try { await this.debug.setExceptionBreakpoints(filters); }
 		catch (error) { this.notifications.error(message(error)); this.render(); }
 	}
 
 	private editBreakpoint(breakpoint: IDebugBreakpoint): void {
-		this.renderInputBox({ kind: "source", breakpoint });
+		this.renderInputBox({ kind: 'source', breakpoint });
 	}
 
 	private editAdditionalBreakpoint(breakpoint: Exclude<DebugBreakpoint, IDebugBreakpoint>): void {
 		switch (breakpoint.kind) {
-			case "function": this.renderInputBox({ kind: "function", breakpoint }); break;
-			case "data": {
-				this.renderInputBox({ kind: "data", breakpoint });
+			case 'function': this.renderInputBox({ kind: 'function', breakpoint }); break;
+			case 'data': {
+				this.renderInputBox({ kind: 'data', breakpoint });
 				break;
 			}
-			case "instruction": this.renderInputBox({ kind: "instruction", breakpoint, instructionReference: breakpoint.instructionReference }); break;
+			case 'instruction': this.renderInputBox({ kind: 'instruction', breakpoint, instructionReference: breakpoint.instructionReference }); break;
 		}
 	}
 
@@ -109,48 +109,48 @@ export class BreakpointsView extends ViewPane {
 		this.breakpointEditControls.clear();
 		const controls = new DisposableStore();
 		this.breakpointEditControls.value = controls;
-		const form = h(this.element.ownerDocument, "form");
-		form.className = "ash-debug-breakpoint-edit";
+		const form = h(this.element.ownerDocument, 'form');
+		form.className = 'ash-debug-breakpoint-edit';
 		controls.add(toDisposable(() => form.remove()));
-		form.setAttribute("aria-label", localize("debug.editBreakpoint", "Edit breakpoint"));
+		form.setAttribute('aria-label', localize('debug.editBreakpoint', 'Edit breakpoint'));
 		const inputs = new Map<keyof IDebugBreakpointUpdate, InputBox>();
-		const field = (key: keyof IDebugBreakpointUpdate, title: string, value = ""): InputBox => {
-			const label = h(this.element.ownerDocument, "label");
+		const field = (key: keyof IDebugBreakpointUpdate, title: string, value = ''): InputBox => {
+			const label = h(this.element.ownerDocument, 'label');
 			label.textContent = title;
 			form.append(label);
 			const input = controls.add(new InputBox(label, {
 				inputBoxStyles: defaultInputBoxStyles,
 				ariaLabel: title,
-				presentation: "compact",
+				presentation: 'compact',
 			}));
 			input.value = value;
 			const capabilities = this.debug.session?.capabilities;
-			const supported = key === "condition" ? capabilities?.supportsConditionalBreakpoints
-				: key === "hitCondition" ? capabilities?.supportsHitConditionalBreakpoints
-					: key === "logMessage" ? capabilities?.supportsLogPoints : undefined;
-			if (supported === false) input.inputElement.setAttribute("aria-description", localize("debug.breakpointUnsupported", "The active debug adapter does not support this breakpoint option."));
+			const supported = key === 'condition' ? capabilities?.supportsConditionalBreakpoints
+				: key === 'hitCondition' ? capabilities?.supportsHitConditionalBreakpoints
+					: key === 'logMessage' ? capabilities?.supportsLogPoints : undefined;
+			if (supported === false) input.inputElement.setAttribute('aria-description', localize('debug.breakpointUnsupported', 'The active debug adapter does not support this breakpoint option.'));
 			inputs.set(key, input);
 			return input;
 		};
-		if (state.kind === "function") field("name", localize("debug.functionName", "Function name"), state.breakpoint?.name);
-		if (state.kind === "instruction") {
-			field("instructionReference", localize("debug.instructionAddress", "Instruction address"), state.instructionReference);
-			field("offset", localize("debug.instructionOffset", "Instruction byte offset"), String(state.breakpoint?.offset ?? 0));
+		if (state.kind === 'function') field('name', localize('debug.functionName', 'Function name'), state.breakpoint?.name);
+		if (state.kind === 'instruction') {
+			field('instructionReference', localize('debug.instructionAddress', 'Instruction address'), state.instructionReference);
+			field('offset', localize('debug.instructionOffset', 'Instruction byte offset'), String(state.breakpoint?.offset ?? 0));
 		}
 		let access: HTMLSelectElement | undefined;
-		if (state.kind === "data") {
+		if (state.kind === 'data') {
 			const data = state.breakpoint ?? state.options;
-			const label = h(this.element.ownerDocument, "label");
-			label.textContent = localize("debug.dataAccess", "Break on access");
+			const label = h(this.element.ownerDocument, 'label');
+			label.textContent = localize('debug.dataAccess', 'Break on access');
 			access = select(this.element.ownerDocument, label.textContent);
 			access.append(...data.accessTypes.map(type => option(this.element.ownerDocument, type, dataAccessLabel(type))));
 			access.value = data.accessType;
 			label.append(access);
 			form.append(label);
 		}
-		field("condition", localize("debug.breakpointCondition", "Expression condition"), breakpoint?.condition);
-		field("hitCondition", localize("debug.breakpointHitCondition", "Hit count condition"), breakpoint?.hitCondition);
-		if (state.kind === "source") field("logMessage", localize("debug.breakpointLogMessage", "Log message"), state.breakpoint.logMessage);
+		field('condition', localize('debug.breakpointCondition', 'Expression condition'), breakpoint?.condition);
+		field('hitCondition', localize('debug.breakpointHitCondition', 'Hit count condition'), breakpoint?.hitCondition);
+		if (state.kind === 'source') field('logMessage', localize('debug.breakpointLogMessage', 'Log message'), state.breakpoint.logMessage);
 		const close = () => {
 			this.renderInputBox(undefined);
 			if (breakpoint) this.breakpointItems.get(breakpoint.id)?.focusEdit();
@@ -158,50 +158,50 @@ export class BreakpointsView extends ViewPane {
 		};
 		controls.add(new Button(form, {
 			...defaultButtonStyles,
-			label: localize("debug.saveBreakpoint", "Save breakpoint"),
-			type: "submit",
-			presentation: "primary",
+			label: localize('debug.saveBreakpoint', 'Save breakpoint'),
+			type: 'submit',
+			presentation: 'primary',
 		}));
 		controls.add(new Button(form, {
 			...defaultButtonStyles,
-			label: localize("debug.cancelBreakpoint", "Cancel breakpoint edit"),
+			label: localize('debug.cancelBreakpoint', 'Cancel breakpoint edit'),
 			onClick: close,
 		}));
-		controls.add(addDisposableListener(form, "keydown", event => {
-			if (event.key === "Escape" && !event.isComposing) {
+		controls.add(addDisposableListener(form, 'keydown', event => {
+			if (event.key === 'Escape' && !event.isComposing) {
 				event.preventDefault();
 				event.stopPropagation();
 				close();
 			}
 		}));
-		controls.add(addDisposableListener(form, "submit", event => {
+		controls.add(addDisposableListener(form, 'submit', event => {
 			event.preventDefault();
 			try {
 				const update: { -readonly [K in keyof IDebugBreakpointUpdate]: IDebugBreakpointUpdate[K] } = {};
 				for (const [key, input] of inputs) {
-					if (key === "offset") {
+					if (key === 'offset') {
 						if (!/^[+-]?\d+$/.test(input.value.trim()) || !Number.isSafeInteger(Number(input.value))) {
-							input.showValidation(localize("debug.invalidInstructionOffset", "Instruction byte offset must be an integer."));
+							input.showValidation(localize('debug.invalidInstructionOffset', 'Instruction byte offset must be an integer.'));
 							return;
 						}
 						update.offset = Number(input.value);
-					} else if (key === "name" || key === "instructionReference" || key === "condition" || key === "hitCondition" || key === "logMessage") update[key] = input.value;
+					} else if (key === 'name' || key === 'instructionReference' || key === 'condition' || key === 'hitCondition' || key === 'logMessage') update[key] = input.value;
 				}
-				if (state.kind === "instruction" && !update.instructionReference?.trim()) {
-					inputs.get("instructionReference")!.showValidation(localize("debug.instructionAddressRequired", "Enter an instruction address."));
+				if (state.kind === 'instruction' && !update.instructionReference?.trim()) {
+					inputs.get('instructionReference')!.showValidation(localize('debug.instructionAddressRequired', 'Enter an instruction address.'));
 					return;
 				}
-				if (access) update.accessType = access.value as IDataBreakpointOptions["accessType"];
+				if (access) update.accessType = access.value as IDataBreakpointOptions['accessType'];
 				if (breakpoint) this.debug.updateBreakpoint(breakpoint.id, update);
-				else if (state.kind === "function") {
-					if (!update.name?.trim()) throw new Error(localize("debug.functionNameRequired", "Enter a function name."));
+				else if (state.kind === 'function') {
+					if (!update.name?.trim()) throw new Error(localize('debug.functionNameRequired', 'Enter a function name.'));
 					this.debug.addFunctionBreakpoint({ name: update.name, condition: update.condition, hitCondition: update.hitCondition });
-				} else if (state.kind === "data" && !state.breakpoint) this.debug.addDataBreakpoint({ ...state.options, accessType: update.accessType!, condition: update.condition, hitCondition: update.hitCondition });
-				else if (state.kind === "instruction") this.debug.addInstructionBreakpoint({ instructionReference: update.instructionReference!, offset: update.offset, condition: update.condition, hitCondition: update.hitCondition });
+				} else if (state.kind === 'data' && !state.breakpoint) this.debug.addDataBreakpoint({ ...state.options, accessType: update.accessType!, condition: update.condition, hitCondition: update.hitCondition });
+				else if (state.kind === 'instruction') this.debug.addInstructionBreakpoint({ instructionReference: update.instructionReference!, offset: update.offset, condition: update.condition, hitCondition: update.hitCondition });
 				close();
 			} catch (error) { inputs.values().next().value!.showValidation(message(error)); }
 		}));
-		const sessionId = state.kind === "instruction" ? this.debug.session!.id : state.kind === "data" && !state.breakpoint ? state.options.sessionId : undefined;
+		const sessionId = state.kind === 'instruction' ? this.debug.session!.id : state.kind === 'data' && !state.breakpoint ? state.options.sessionId : undefined;
 		this.breakpointEdit = { id: breakpoint?.id, form, sessionId };
 		this.setCollapsed(false);
 		this.breakpointsElement.before(form);
@@ -234,10 +234,10 @@ export class BreakpointsView extends ViewPane {
 		this.breakpointsElement.replaceChildren(...allBreakpoints.map(breakpoint => {
 			let item = this.breakpointItems.get(breakpoint.id);
 			if (!item) item = this.breakpointItems.set(breakpoint.id, new DebugBreakpointItem(this.element.ownerDocument, this.debug, point => {
-				if ("resource" in point) void this.editor.openEditor({ resource: point.resource }, { selection: lineSelection(point.lineNumber) }).catch(error => { this.notifications.error(message(error)); this.render(); });
+				if ('resource' in point) void this.editor.openEditor({ resource: point.resource }, { selection: lineSelection(point.lineNumber) }).catch(error => { this.notifications.error(message(error)); this.render(); });
 				else this.editAdditionalBreakpoint(point);
 			}, point => {
-				if ("resource" in point) this.editBreakpoint(point);
+				if ('resource' in point) this.editBreakpoint(point);
 				else this.editAdditionalBreakpoint(point);
 			}));
 			item.update(breakpoint);
@@ -264,14 +264,14 @@ export class BreakpointsView extends ViewPane {
 
 
 }
-function select(document: Document, label: string): HTMLSelectElement { const element = h(document, "select"); element.setAttribute("aria-label", label); return element; }
-function option(document: Document, value: string, label: string): HTMLOptionElement { const element = h(document, "option"); element.value = value; element.textContent = label; return element; }
+function select(document: Document, label: string): HTMLSelectElement { const element = h(document, 'select'); element.setAttribute('aria-label', label); return element; }
+function option(document: Document, value: string, label: string): HTMLOptionElement { const element = h(document, 'option'); element.value = value; element.textContent = label; return element; }
 function exceptionItem(owner: DisposableStore, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement {
-	const item = h(document, "li"); const control = owner.add(new Checkbox(item, {
+	const item = h(document, 'li'); const control = owner.add(new Checkbox(item, {
 		...defaultCheckboxStyles,
 		label,
 		checked,
-	})); control.element.classList.add("ash-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item;
+	})); control.element.classList.add('ash-debug-exception-toggle'); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item;
 }
 class DebugBreakpointItem extends Disposable {
 	public readonly domNode: HTMLLIElement;
@@ -282,38 +282,38 @@ class DebugBreakpointItem extends Disposable {
 
 	constructor(document: Document, debug: IDebugService, open: (breakpoint: DebugBreakpoint) => void, edit: (breakpoint: DebugBreakpoint) => void) {
 		super();
-		this.domNode = h(document, "li");
+		this.domNode = h(document, 'li');
 		this.checkbox = this._register(new Checkbox(this.domNode, {
 			...defaultCheckboxStyles,
 			onChange: enabled => debug.updateBreakpoint(this.breakpoint.id, { enabled }),
 		}));
-		this.action = h(document, "button");
-		this.action.type = "button";
-		this.action.className = "ash-debug-breakpoint";
+		this.action = h(document, 'button');
+		this.action.type = 'button';
+		this.action.className = 'ash-debug-breakpoint';
 		this.domNode.append(this.action);
-		this._register(addDisposableListener(this.action, "click", () => open(this.breakpoint)));
-		this._register(addDisposableListener(this.action, "keydown", event => {
-			if (event.key === "F2") {
+		this._register(addDisposableListener(this.action, 'click', () => open(this.breakpoint)));
+		this._register(addDisposableListener(this.action, 'keydown', event => {
+			if (event.key === 'F2') {
 				event.preventDefault();
 				edit(this.breakpoint);
 			}
 		}));
 		this.edit = this._register(new Button(this.domNode, {
 			...defaultButtonStyles,
-			label: localize("debug.editBreakpoint", "Edit breakpoint"),
+			label: localize('debug.editBreakpoint', 'Edit breakpoint'),
 			icon: Lxicon.settings,
 			iconOnly: true,
-			size: "small",
-			title: localize("debug.editBreakpoint", "Edit breakpoint"),
+			size: 'small',
+			title: localize('debug.editBreakpoint', 'Edit breakpoint'),
 			onClick: () => edit(this.breakpoint),
 		}));
 		this._register(new Button(this.domNode, {
 			...defaultButtonStyles,
-			label: localize("debug.removeBreakpoint", "Remove breakpoint"),
+			label: localize('debug.removeBreakpoint', 'Remove breakpoint'),
 			icon: Lxicon.close,
 			iconOnly: true,
-			size: "small",
-			title: localize("debug.removeBreakpoint", "Remove breakpoint"),
+			size: 'small',
+			title: localize('debug.removeBreakpoint', 'Remove breakpoint'),
 			onClick: () => debug.removeBreakpoint(this.breakpoint.id),
 		}));
 	}
@@ -321,30 +321,30 @@ class DebugBreakpointItem extends Disposable {
 	public update(breakpoint: DebugBreakpoint): void {
 		this.breakpoint = breakpoint;
 		let location: string;
-		if ("resource" in breakpoint) location = `${basename(breakpoint.resource)}:${breakpoint.lineNumber}`;
-		else if (breakpoint.kind === "function") location = localize("debug.functionBreakpointLabel", "Function: {0}", breakpoint.name);
-		else if (breakpoint.kind === "data") location = localize("debug.dataBreakpointLabel", "Data: {0} ({1})", breakpoint.description, dataAccessLabel(breakpoint.accessType));
-		else location = localize("debug.instructionBreakpointLabel", "Instruction: {0} (offset {1})", breakpoint.instructionReference, breakpoint.offset ?? 0);
+		if ('resource' in breakpoint) location = `${basename(breakpoint.resource)}:${breakpoint.lineNumber}`;
+		else if (breakpoint.kind === 'function') location = localize('debug.functionBreakpointLabel', 'Function: {0}', breakpoint.name);
+		else if (breakpoint.kind === 'data') location = localize('debug.dataBreakpointLabel', 'Data: {0} ({1})', breakpoint.description, dataAccessLabel(breakpoint.accessType));
+		else location = localize('debug.instructionBreakpointLabel', 'Instruction: {0} (offset {1})', breakpoint.instructionReference, breakpoint.offset ?? 0);
 		this.domNode.dataset.breakpointId = breakpoint.id;
-		this.domNode.dataset.breakpointKind = "resource" in breakpoint ? "source" : breakpoint.kind;
-		this.domNode.classList.toggle("disabled", !breakpoint.enabled);
-		this.domNode.classList.toggle("unverified", !breakpoint.verified);
+		this.domNode.dataset.breakpointKind = 'resource' in breakpoint ? 'source' : breakpoint.kind;
+		this.domNode.classList.toggle('disabled', !breakpoint.enabled);
+		this.domNode.classList.toggle('unverified', !breakpoint.verified);
 		this.checkbox.checked = breakpoint.enabled;
-		this.checkbox.input.setAttribute("aria-label", localize("debug.enableBreakpoint", "Enable breakpoint at {0}", location));
-		const details = [breakpoint.condition, breakpoint.hitCondition, "resource" in breakpoint ? breakpoint.logMessage : undefined].filter(Boolean).join("; ");
-		this.action.textContent = `${location}${details ? ` — ${details}` : ""}`;
-		this.action.title = ["resource" in breakpoint ? breakpoint.resource.toString() : location, details, breakpoint.message].filter(Boolean).join("\n");
-		if (breakpoint.message) this.action.setAttribute("aria-description", breakpoint.message);
-		else this.action.removeAttribute("aria-description");
+		this.checkbox.input.setAttribute('aria-label', localize('debug.enableBreakpoint', 'Enable breakpoint at {0}', location));
+		const details = [breakpoint.condition, breakpoint.hitCondition, 'resource' in breakpoint ? breakpoint.logMessage : undefined].filter(Boolean).join('; ');
+		this.action.textContent = `${location}${details ? ` — ${details}` : ''}`;
+		this.action.title = ['resource' in breakpoint ? breakpoint.resource.toString() : location, details, breakpoint.message].filter(Boolean).join('\n');
+		if (breakpoint.message) this.action.setAttribute('aria-description', breakpoint.message);
+		else this.action.removeAttribute('aria-description');
 	}
 
 	public focusEdit(): void { this.edit.domNode.focus(); }
 }
-function dataAccessLabel(type: IDataBreakpointOptions["accessType"]): string {
+function dataAccessLabel(type: IDataBreakpointOptions['accessType']): string {
 	switch (type) {
-		case "read": return localize("debug.dataRead", "Read");
-		case "write": return localize("debug.dataWrite", "Write");
-		case "readWrite": return localize("debug.dataReadWrite", "Read and write");
+		case 'read': return localize('debug.dataRead', 'Read');
+		case 'write': return localize('debug.dataWrite', 'Write');
+		case 'readWrite': return localize('debug.dataReadWrite', 'Read and write');
 	}
 }
 function lineSelection(lineNumber: number): Range { return Range.fromPositions(new Position(lineNumber, 1)); }

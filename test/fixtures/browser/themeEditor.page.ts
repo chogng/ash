@@ -11,6 +11,7 @@ import '../../../src/ash/workbench/contrib/codeActions/browser/codeActions.contr
 import { SaveParticipantsContribution } from '../../../src/ash/workbench/contrib/codeEditor/browser/saveParticipants.js';
 import '../../../src/ash/workbench/contrib/themes/browser/themes.contribution.js';
 import '../../../src/ash/workbench/contrib/themeEditor/browser/themeEditor.contribution.js';
+import '../../../src/ash/workbench/contrib/files/browser/fileActions.contribution.js';
 import '../../../src/ash/workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { WorkbenchKeybindingService } from '../../../src/ash/workbench/services/keybinding/browser/keybindingService.js';
 import { BrowserKeyboardLayoutService } from '../../../src/ash/workbench/services/keybinding/browser/keyboardLayoutService.js';
@@ -46,12 +47,20 @@ import { AccessibleViewService } from '../../../src/ash/workbench/contrib/access
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { IFileDialogService, IDialogService, ConfirmResult } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
-import { EditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import { EditorPart, IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { EditorParts, IEditorPartsService } from '../../../src/ash/workbench/browser/parts/editor/editorParts.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { BrowserEditorService } from '../../../src/ash/workbench/services/editor/browser/browserEditorService.js';
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ThemeEditor } from '../../../src/ash/workbench/contrib/themeEditor/browser/themeEditor.js';
 import { CODE_EDITOR_ID } from '../../../src/ash/workbench/common/editor/codeEditorId.js';
+import { TextResourceEditor } from '../../../src/ash/workbench/browser/parts/editor/textResourceEditor.js';
+import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import { CodeEditorService } from '../../../src/ash/workbench/services/editor/browser/codeEditorService.js';
+import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { InstantiationType } from '../../../src/ash/platform/instantiation/common/extensions.js';
+import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { localize, setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
@@ -60,7 +69,6 @@ import { TokenizationRegistry } from '../../../src/ash/editor/common/languages.j
 import { TestExtensionService } from '../../../src/ash/workbench/test/common/testExtensionServices.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { IExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/common/extensionResourceLoader.js';
-import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
 import { parseExtensionManifest } from '../../../src/ash/workbench/services/extensions/common/extensionManifest.js';
 import { loadExtensionTheme } from '../../../src/ash/workbench/services/extensions/common/extensionTheme.js';
 
@@ -72,8 +80,8 @@ if (locale) {
 const resources = new DisposableStore();
 const bundledExtensions = createBuiltinExtensionFixture();
 let themeSourceRoot: URI | undefined;
+let installedThemeSources = false;
 let extensionCatalogReads = 0;
-const extensionResourceReads: string[] = [];
 let saveOnClose = false;
 let writeGate: { started: DeferredPromise<void>; release: DeferredPromise<void>; } | undefined;
 const extensionApi = {
@@ -81,14 +89,8 @@ const extensionApi = {
 	list: async (reload: 'cached' | 'refresh') => {
 		extensionCatalogReads++;
 		const catalog = await bundledExtensions.list(reload);
-		return { ...catalog, extensions: catalog.extensions.map(extension => themeSourceRoot && extension.id === 'vscode.theme-defaults' ? { ...extension, extensionLocation: themeSourceRoot.toString() } : extension) };
+		return { ...catalog, extensions: catalog.extensions.map(extension => themeSourceRoot && extension.id === 'vscode.theme-defaults' ? { ...extension, extensionLocation: installedThemeSources ? themeSourceRoot.toString() : 'file:///prepared/theme-defaults', ...(installedThemeSources ? { sourceKind: 'user' as const } : {}) } : extension) };
 	},
-	resources: new ExtensionResourceLoaderService(async request => {
-		extensionResourceReads.push(request.path);
-		return themeSourceRoot && request.extensionId === 'vscode.theme-defaults'
-			? new TextEncoder().encode((await files.readFile(URI.joinPath(themeSourceRoot, request.path))).content)
-			: bundledExtensions.resources.readExtensionResourceBytes(request);
-	}),
 };
 const extensions = resources.add(new ExtensionColorThemeService(extensionApi, { subscribe: () => toDisposable(() => { }) }));
 await extensions.start();
@@ -115,9 +117,10 @@ class ThemeFiles implements IFileSystemProvider {
 	private readonly changed = resources.add(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changed.event;
 	public directoryReads = 0;
+	public readonly sourceReads: string[] = [];
 	public watch() { return toDisposable(() => { }); }
 	public stat(uri: URI) { return this.delegate.stat(uri); }
-	public readFile(uri: URI) { return this.delegate.readFile(uri); }
+	public readFile(uri: URI) { this.sourceReads.push(uri.path); return this.delegate.readFile(uri); }
 	public async readDirectory(uri: URI) {
 		if (uri.path === '/themes') this.directoryReads++;
 		return [...this.paths].map(path => URI.parse(path)).filter(path => path.path.startsWith(uri.path + '/')).map(path => ({ resource: path, name: path.path.split('/').at(-1)!, kind: FileKind.File }));
@@ -159,6 +162,7 @@ services.registerSingleton(IKeybindingService, () => resources.add(services.crea
 	keyboardLayoutService: resources.add(new BrowserKeyboardLayoutService({ navigator })),
 })));
 services.registerSingleton(IAccessibleViewService, () => services.createInstance(AccessibleViewService));
+services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService), { instantiation: InstantiationType.Delayed });
 registerCodeEditorServices(services);
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, key, fallback) => localize(key, fallback) });
 const store = new BrowserTextResourceStore(textFiles);
@@ -177,7 +181,7 @@ services.registerInstance(IWorkbenchThemeService, themes);
 themes.initialize();
 const users = resources.add(await loadUserThemes(services, URI.file('/themes')));
 services.registerInstance(IUserThemeService, users);
-await themes.setColorTheme('aurora');
+await themes.setColorTheme('aurora', 'themePicker');
 services.registerInstance(IFileDialogService, {
 	pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
 	pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
@@ -185,8 +189,13 @@ services.registerInstance(IFileDialogService, {
 	pickFileToSave: async () => undefined, showSaveConfirm: async () => saveOnClose ? ConfirmResult.SAVE : ConfirmResult.DONT_SAVE,
 	showSaveDialog: async () => undefined, showOpenDialog: async () => undefined,
 });
-const editorOptions = { workingCopyService: services.get(IWorkingCopyService), fileService: files, textFileService: textFiles, configurationService: configuration, fileDialogService: services.get(IFileDialogService) };
-const main = resources.add(services.createInstance(EditorPart, document.querySelector<HTMLElement>('#editors')!, editorOptions));
+const editorOptions = { titleActions: { menuService: services.get(IMenuService), contextMenuProvider: services.get(IContextMenuService) }, workingCopyService: services.get(IWorkingCopyService), fileService: files, textFileService: textFiles, configurationService: configuration, fileDialogService: services.get(IFileDialogService) };
+const editorHost = document.querySelector<HTMLElement>('#editors')!;
+editorHost.style.position = 'relative';
+editorHost.style.display = 'flex';
+editorHost.style.height = 'calc(100vh - 100px)';
+const main = resources.add(services.createInstance(EditorPart, editorHost, editorOptions));
+main.layout({ width: window.innerWidth, height: Math.max(200, window.innerHeight - 100) });
 const windows = resources.add(services.createInstance(BrowserAuxiliaryWindowService, window, root));
 const parts = resources.add(services.createInstance(EditorParts, main, windows, (container: HTMLElement) => {
 	const part = services.createInstance(EditorPart, container, editorOptions);
@@ -195,6 +204,8 @@ const parts = resources.add(services.createInstance(EditorParts, main, windows, 
 	return { titlebar, part };
 }, services.get(IAccessibilityService), services.get(IStorageService)));
 services.registerInstance(IEditorPartsService, parts);
+services.registerInstance(IEditorPart, parts);
+services.registerInstance(IEditorService, resources.add(new BrowserEditorService(parts)));
 root.style.height = '100vh';
 root.style.background = 'var(--ash-editor-background)';
 root.style.color = 'var(--ash-foreground)';
@@ -214,11 +225,14 @@ declare global {
 			selectTheme(id: string): Promise<void>;
 			setSetting(key: string, value: unknown): Promise<void>;
 			open(): Promise<void>;
+			save(all?: boolean): Promise<boolean>;
+			detach(): Promise<void>;
 			mainEditors(): { resource: string; label: string | undefined; dirty: boolean; }[];
 			openJsonSource(): Promise<void>;
 			mainSource(): string;
 			extensionCatalogReads(reset?: boolean): number;
-			extensionResourceReads(reset?: boolean): string[];
+			sourceReads(reset?: boolean): string[];
+			installedThemeSource(path: string): Promise<string>;
 			directoryReads(reset?: boolean): number;
 			saveOnClose(): void;
 			holdNextWrite(): void;
@@ -226,30 +240,39 @@ declare global {
 			releaseWrite(): Promise<void>;
 			reloadThemes(): Promise<void>;
 			editors(): { resource: string; label: string | undefined; dirty: boolean; }[];
-			useWritableThemeSources(): Promise<void>;
+			useWritableThemeSources(installed?: boolean): Promise<void>;
 			themeSource(path: string): Promise<string>;
 			externalWrite(text: string): Promise<void>;
 		};
 	}
 }
-const pane = (): ThemeEditor => { const editor = parts.activePane; if (!(editor instanceof ThemeEditor)) throw new Error('No Theme Editor'); return editor; };
+const pane = (): ThemeEditor | TextResourceEditor => { const editor = parts.activePane; if (!(editor instanceof ThemeEditor) && !(editor instanceof TextResourceEditor)) throw new Error('No theme document editor'); return editor; };
 window.themeEditorTest = {
 	source: () => pane().getControl()!.getValue(),
 	draft: async () => (await backups.list()).find(backup => backup.resource.toString() === pane().workingCopy?.resource.toString())?.content,
 	colorMap: () => TokenizationRegistry.getColorMap()?.map(color => color.toString()) ?? [],
-	accessibleContent: () => pane().getAccessibleContent(),
+	accessibleContent: () => { const editor = pane(); return editor instanceof ThemeEditor ? editor.getAccessibleContent() : editor.getControl()!.getValue(); },
 	persisted: async (file = 'aurora.json') => (await files.readFile(URI.file('/themes/' + file))).content,
 	setSource: text => { const model = pane().getControl()!.getModel()!; model.pushStackElement(); pane().getControl()!.executeEdits('test.json', [{ range: model.getFullModelRange(), text }]); model.pushStackElement(); },
 	undo: () => { pane().getControl()!.getModel()!.undo(); },
-	close: () => parts.closeAuxiliaryEditorPart(parts.activePart),
-	selectTheme: id => themes.setColorTheme(id).then(() => { }),
+	close: async () => { const part = parts.activePart; const group = part.activeGroup; if (group.activeInput && !await group.closeEditor(group.activeInput)) return false; return parts.closeAuxiliaryEditorPart(part); },
+	selectTheme: id => themes.setColorTheme(id, 'themePicker').then(() => { }),
 	setSetting: (key, value) => configuration.updateValue(key, value),
 	open: async () => { await services.invokeFunction(accessor => CommandsRegistry.getCommand('workbench.action.openThemeEditor')!(accessor)); },
+	save: async all => {
+		const editors = services.get(IEditorService);
+		const result = all
+			? await editors.saveAll({ includeUntitled: true })
+			: await editors.save({ editor: parts.activeGroup.activeInput!, groupId: parts.activeGroup.id });
+		return result.success;
+	},
+	detach: async () => { const group = parts.activeGroup; const editor = group.editors.find(editor => editor.input === group.activeInput)!; await parts.openEditorsInNewWindow([editor], 'move'); },
 	mainEditors: () => main.groups.flatMap(group => group.editors.map(editor => ({ resource: editor.input.resource.toString(), label: editor.input.label, dirty: editor.isDirty }))),
 	openJsonSource: async () => { await main.openEditor({ resource, languageId: 'jsonc' }, { preferredEditorId: CODE_EDITOR_ID, pinned: true }); },
 	mainSource: () => services.get(IFileTextModelService).getModel(resource)!.getText(),
 	extensionCatalogReads: reset => { const count = extensionCatalogReads; if (reset) extensionCatalogReads = 0; return count; },
-	extensionResourceReads: reset => { const paths = [...extensionResourceReads]; if (reset) extensionResourceReads.length = 0; return paths; },
+	sourceReads: reset => { const paths = [...provider.sourceReads]; if (reset) provider.sourceReads.length = 0; return paths; },
+	installedThemeSource: async path => new TextDecoder().decode(await bundledExtensions.resources.readExtensionResourceBytes({ generation: extensionService.currentCatalog.generation, extensionId: 'vscode.theme-defaults', path })),
 	directoryReads: reset => { const count = provider.directoryReads; if (reset) provider.directoryReads = 0; return count; },
 	saveOnClose: () => { saveOnClose = true; },
 	holdNextWrite: () => { writeGate = { started: new DeferredPromise<void>(), release: new DeferredPromise<void>() }; },
@@ -257,7 +280,8 @@ window.themeEditorTest = {
 	releaseWrite: async () => { await writeGate?.release.complete(); },
 	reloadThemes: async () => { await Promise.all([extensions.reload(), users.reload()]); },
 	editors: () => parts.parts.flatMap(part => part.groups.flatMap(group => group.editors.map(editor => ({ resource: editor.input.resource.toString(), label: editor.input.label, dirty: editor.isDirty })))),
-	useWritableThemeSources: async () => {
+	useWritableThemeSources: async (installed = false) => {
+		installedThemeSources = installed;
 		const root = URI.file('/extension-sources/theme-defaults');
 		const catalog = await bundledExtensions.list('cached');
 		const descriptor = catalog.extensions.find(extension => extension.id === 'vscode.theme-defaults')!;

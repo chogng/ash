@@ -1,5 +1,5 @@
-import type { DocumentNode, DocumentNodeId } from "../../../../common/model/document.js";
-import { createDocumentPlugin, DocumentPluginKey, type DocumentPlugin } from "../../../../common/model/documentPlugin.js";
+import type { DocumentNode, DocumentNodeId } from '../../../../common/model/document.js';
+import { createDocumentPlugin, DocumentPluginKey, type DocumentPlugin } from '../../../../common/model/documentPlugin.js';
 
 export interface ReferenceEntry {
 	readonly key: string;
@@ -26,7 +26,7 @@ export interface ReferenceIndex {
 }
 
 /** Shared state key for citation-to-reference resolution. */
-export const REFERENCE_INDEX_KEY = new DocumentPluginKey<ReferenceIndex>("citation.referenceIndex");
+export const REFERENCE_INDEX_KEY = new DocumentPluginKey<ReferenceIndex>('citation.referenceIndex');
 
 /** Creates the plugin that resolves citation atoms to bibliography entries. */
 export function createReferenceIndexPlugin(): DocumentPlugin<ReferenceIndex> {
@@ -41,10 +41,10 @@ export function buildReferenceIndex(document: DocumentNode): ReferenceIndex {
 	const references: ReferenceEntry[] = [];
 	const citationNodes: Array<{ readonly key: string; readonly nodeId: DocumentNodeId; }> = [];
 	const visit = (node: DocumentNode): void => {
-		if (node.type === "reference" && typeof node.attrs.key === "string" && node.attrs.key.length > 0) {
+		if (node.type === 'reference' && typeof node.attrs.key === 'string' && node.attrs.key.length > 0) {
 			const text = readNodeText(node);
 			references.push({ key: node.attrs.key, nodeId: node.id, text, label: text.trim() || node.attrs.key, ordinal: references.length + 1 });
-		} else if (node.type === "citation" && typeof node.attrs.key === "string" && node.attrs.key.length > 0) {
+		} else if (node.type === 'citation' && typeof node.attrs.key === 'string' && node.attrs.key.length > 0) {
 			citationNodes.push({ key: node.attrs.key, nodeId: node.id });
 		}
 		for (const child of node.content) visit(child);
@@ -73,7 +73,7 @@ export function buildReferenceIndex(document: DocumentNode): ReferenceIndex {
 
 function readNodeText(node: DocumentNode): string {
 	if (node.text !== undefined) return node.text;
-	if (node.type === "hardBreak") return " ";
-	if (node.type === "image") return typeof node.attrs.alt === "string" ? node.attrs.alt : "";
-	return node.content.map(readNodeText).join("");
+	if (node.type === 'hardBreak') return ' ';
+	if (node.type === 'image') return typeof node.attrs.alt === 'string' ? node.attrs.alt : '';
+	return node.content.map(readNodeText).join('');
 }

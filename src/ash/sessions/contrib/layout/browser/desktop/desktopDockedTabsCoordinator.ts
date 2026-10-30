@@ -1,14 +1,14 @@
+import { URI } from '../../../../../base/common/uri.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../../workbench/common/editor.js';
-import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import { DockedEditorInput } from '../../../../common/dockedEditorInput.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 
-/** Only settled session/reveal transitions seed tabs; ordinary closes never recreate defaults. */
+/** Reconciles retained Changes tabs without creating editors for empty sessions. */
 export class DesktopDockedTabsCoordinator extends Disposable {
 	constructor(private readonly pageGroupId: number, @IEditorPart private readonly editor: IEditorPart, @IEditorService private readonly editors: IEditorService, @ISessionChangesService private readonly changes: ISessionChangesService, @ISessionsService private readonly sessions: ISessionsService) { super(); }
 
@@ -35,23 +35,6 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 				if (!this.isCurrent(selection) || !this.documentGroups.includes(group)) { return; }
 			}
 		}
-		const target = this.documentGroups.find(group => group.id === this.editor.activeGroup.id) ?? this.documentGroups[0];
-		if (!target) { return; }
-		// Product pages are retained in their own locked group. They must neither suppress nor receive Code's managed tabs.
-		const inputs = this.documentGroups.flatMap(group => group.inputs);
-		if (inputs.length === 0 || detailsOnly) {
-			if (!inputs.some(input => input.resource.scheme === 'ash-sessions-files')) {
-				const files = new EmptyFileEditorInput();
-				files.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
-				await this.editors.openEditor(files, { pinned: true, preserveFocus: true, inactive: true }, { groupId: target.id });
-				if (!this.isCurrent(selection) || !this.documentGroups.includes(target)) { return; }
-			}
-			if (!inputs.some(input => input.resource.scheme === 'ash-session-changes')) {
-				changes.capabilities = detailsOnly ? EditorInputCapabilities.CannotClose : EditorInputCapabilities.None;
-				await this.editors.openEditor(changes, { pinned: true, preserveFocus: true, inactive: true }, { groupId: target.id });
-				if (!this.isCurrent(selection) || !this.documentGroups.includes(target)) { return; }
-			}
-		}
 		for (const group of this.documentGroups) {
 			for (const input of group.inputs) {
 				if (input instanceof DockedEditorInput) {
@@ -63,25 +46,23 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 		}
 	}
 
-	public async removeFilesLandingTab(): Promise<void> {
+	public async removeRestoredDetailTabs(): Promise<void> {
 		if (this.isDisposed) { return; }
 		for (const group of this.documentGroups) {
-			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-sessions-files')) {
+			// Files lives in Details; a Changes tab needs a selected conversation to restore against.
+			const hasConversation = this.sessions.activeSelection?.kind === 'session';
+			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-sessions-files' || !hasConversation && input.resource.scheme === 'ash-session-changes')) {
 				await group.closeEditor(input, { skipConfirmation: true, reason: 'reset' });
 				if (this.isDisposed) { return; }
 			}
 		}
 	}
 
-	public async openFiles(): Promise<void> {
+	public async openChanges(): Promise<void> {
 		if (this.isDisposed) { return; }
-		const target = this.documentGroups.find(group => group.id === this.editor.activeGroup.id) ?? this.documentGroups[0];
-		if (target) { await this.editors.openEditor(new EmptyFileEditorInput(), { pinned: true }, { groupId: target.id }); }
-	}
-
-	public async openChanges(selection: SessionsViewSelection): Promise<void> {
-		if (!this.isCurrent(selection)) { return; }
-		await this.changes.openChangesEditor(new SessionChangesEditorInput(selection).sessionResource, { changesetSelection: { kind: 'id', id: undefined } });
+		const selection = this.sessions.activeSelection;
+		const resource = selection ? new SessionChangesEditorInput(selection).sessionResource : URI.parse('ash-session:/draft/empty');
+		await this.changes.openChangesEditor(resource, { changesetSelection: { kind: 'id', id: undefined } });
 	}
 
 	public isManaged(input: IResourceEditorInput): boolean {

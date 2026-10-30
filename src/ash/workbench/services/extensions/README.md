@@ -115,6 +115,14 @@ language. Removal or changed identity revokes the old registrations before bound
 and replacement; failed Workers can be retried. Refreshing for a remote activation does not
 restart an unchanged browser package or cancel its pending calls. A retained runtime carries
 its latest acknowledged SCM/status-bar registrations through other packages' activation.
+Executable built-in packages require workspace trust unless their manifest declares
+`capabilities.untrustedWorkspaces.supported` as `true` or `"limited"`. Limited providers own
+their restricted behavior; host operation permissions still apply. Browser Workers wait for
+workspace permission resolution, and invalidation retires trust-requiring Workers before
+refreshing registrations. Rust product provenance and installed-package consent do not replace
+the revocable directory authorization required by an extension without that opt-in.
+Declarative resources remain available in Restricted Mode.
+
 Packaged browser entries currently activate during reconciliation; this path does not implement
 backend JS manifest event scheduling. See [host lifecycle mechanisms](../../../../../docs/editor-extensions.md#浏览器-worker-与后端宿主的生命周期).
 

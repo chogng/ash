@@ -1,7 +1,7 @@
-import type { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../contextview/contextview.js";
-import type { HoverContent, HoverPersistence, IDelayedHoverOptions, IHoverLifecycleOptions } from "./hover.js";
-import type { IDisposable } from "../../../common/lifecycle.js";
-import { toDisposable } from "../../../common/lifecycle.js";
+import type { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../contextview/contextview.js';
+import type { HoverContent, HoverPersistence, IDelayedHoverOptions, IHoverLifecycleOptions } from './hover.js';
+import type { IDisposable } from '../../../common/lifecycle.js';
+import { toDisposable } from '../../../common/lifecycle.js';
 import { CancellationToken } from '../../../common/cancellation.js';
 
 /** Base-owned inputs understood by any managed Hover implementation. */
@@ -22,7 +22,7 @@ export interface HoverDelegateSetupOptions {
 export interface IManagedHover extends IDisposable {
 	readonly visible: boolean;
 
-	show(): void;
+	show(focus?: boolean): void;
 	hide(): void;
 	update(content: HoverContent): void;
 }
@@ -68,7 +68,7 @@ class NativeTitleHover implements IManagedHover {
 	private disposed = false;
 
 	constructor(private readonly target: HTMLElement, content: HoverContent) {
-		this.previousTitle = target.getAttribute("title");
+		this.previousTitle = target.getAttribute('title');
 		this.update(content);
 	}
 
@@ -78,12 +78,12 @@ class NativeTitleHover implements IManagedHover {
 
 	update(content: HoverContent): void {
 		if (this.disposed) return;
-		const value = typeof content === "function" ? content(CancellationToken.None) : content;
-		const title = typeof value === "string" ? value : value?.textContent;
+		const value = typeof content === 'function' ? content(CancellationToken.None) : content;
+		const title = typeof value === 'string' ? value : value?.textContent;
 		if (title) {
-			this.target.setAttribute("title", title);
+			this.target.setAttribute('title', title);
 		} else {
-			this.target.removeAttribute("title");
+			this.target.removeAttribute('title');
 		}
 	}
 
@@ -91,9 +91,9 @@ class NativeTitleHover implements IManagedHover {
 		if (this.disposed) return;
 		this.disposed = true;
 		if (this.previousTitle === null) {
-			this.target.removeAttribute("title");
+			this.target.removeAttribute('title');
 		} else {
-			this.target.setAttribute("title", this.previousTitle);
+			this.target.setAttribute('title', this.previousTitle);
 		}
 	}
 

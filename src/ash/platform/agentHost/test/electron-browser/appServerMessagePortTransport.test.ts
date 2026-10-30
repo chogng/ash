@@ -26,7 +26,7 @@ suite('App Server MessagePort transport', () => {
 			on: () => ({ dispose() { } }),
 		},
 		ipcMessagePort: { acquire: (_channel, nonce) => { registrations.add(nonce); return { dispose: () => { registrations.delete(nonce); } }; } },
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 	suiteSetup(async () => {
@@ -187,7 +187,11 @@ suite('App Server MessagePort transport', () => {
 		const channel = new MessageChannel();
 		try {
 			requests[0].resolve({ enabled: true, byteStream: true });
-			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
+				source: dom.window as unknown as Window,
+				data: { nonce: requests[0].nonce },
+				ports: [channel.port1 as unknown as MessagePort]
+			}));
 			await ready;
 			const socket = transport.socket;
 			const received = new Promise<unknown>(resolve => channel.port2.once('message', resolve));
@@ -204,7 +208,10 @@ suite('App Server MessagePort transport', () => {
 			transport.dispose();
 			await rejected;
 			assert.throws(() => socket.write(VSBuffer.fromString('old')), /socket is closed/);
-		} finally { channel.port1.close(); channel.port2.close(); }
+		} finally {
+			channel.port1.close();
+			channel.port2.close();
+		}
 	});
 
 	for (const shared of [false, true]) {
@@ -214,7 +221,11 @@ suite('App Server MessagePort transport', () => {
 			const channel = new MessageChannel();
 			try {
 				requests[0].resolve({ enabled: true, byteStream: true });
-				dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+				dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
+					source: dom.window as unknown as Window,
+					data: { nonce: requests[0].nonce },
+					ports: [channel.port1 as unknown as MessagePort]
+				}));
 				await ready;
 				let receivedArray: Uint8Array | undefined;
 				const incomingPort = channel.port1 as unknown as MessagePort;
@@ -248,7 +259,10 @@ suite('App Server MessagePort transport', () => {
 					await closed;
 					assert.equal(post.mock.calls.length, 1);
 				} finally { post.mock.restore(); }
-			} finally { channel.port1.close(); channel.port2.close(); }
+			} finally {
+				channel.port1.close();
+				channel.port2.close();
+			}
 		});
 	}
 
@@ -259,7 +273,11 @@ suite('App Server MessagePort transport', () => {
 		const channel = new MessageChannel();
 		try {
 			requests[0].resolve({ enabled: true, byteStream: true });
-			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
+				source: dom.window as unknown as Window,
+				data: { nonce: requests[0].nonce },
+				ports: [channel.port1 as unknown as MessagePort]
+			}));
 			await ready;
 			const consumed = new DeferredPromise<void>();
 			const delivered = new DeferredPromise<void>();
@@ -273,7 +291,10 @@ suite('App Server MessagePort transport', () => {
 				await consumed.complete();
 				assert.deepEqual(post.mock.calls.map(call => call.arguments[0]), retire ? [{ intentional: true }] : [{ ack: true }]);
 			} finally { post.mock.restore(); }
-		} finally { channel.port1.close(); channel.port2.close(); }
+		} finally {
+			channel.port1.close();
+			channel.port2.close();
+		}
 	});
 
 	test('an intentional Main closure publishes its classified close before generic EOF', async () => {
@@ -282,7 +303,11 @@ suite('App Server MessagePort transport', () => {
 		const channel = new MessageChannel();
 		try {
 			requests[0].resolve({ enabled: true, byteStream: true });
-			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
+				source: dom.window as unknown as Window,
+				data: { nonce: requests[0].nonce },
+				ports: [channel.port1 as unknown as MessagePort]
+			}));
 			await ready;
 			const notifications: string[] = [];
 			const closed = new DeferredPromise<void>();
@@ -296,7 +321,10 @@ suite('App Server MessagePort transport', () => {
 			await closed.p;
 			assert.deepEqual(notifications, ['intentional', 'EOF']);
 			assert.throws(() => transport.socket, /was closed/);
-		} finally { channel.port1.close(); channel.port2.close(); }
+		} finally {
+			channel.port1.close();
+			channel.port2.close();
+		}
 	});
 
 	test('releasing the renderer lease tells Main that the closure is intentional', async () => {
@@ -305,12 +333,19 @@ suite('App Server MessagePort transport', () => {
 		const channel = new MessageChannel();
 		try {
 			requests[0].resolve({ enabled: true, byteStream: true });
-			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
+				source: dom.window as unknown as Window,
+				data: { nonce: requests[0].nonce },
+				ports: [channel.port1 as unknown as MessagePort]
+			}));
 			await ready;
 			const released = new Promise<unknown>(resolve => channel.port2.once('message', resolve));
 			transport.dispose();
 			assert.deepEqual(await released, { intentional: true });
-		} finally { channel.port1.close(); channel.port2.close(); }
+		} finally {
+			channel.port1.close();
+			channel.port2.close();
+		}
 	});
 
 	test('exceeding the write queue closes the carrier and rejects drain instead of dropping bytes', async () => {
@@ -319,7 +354,11 @@ suite('App Server MessagePort transport', () => {
 		const channel = new MessageChannel();
 		try {
 			requests[0].resolve({ enabled: true, byteStream: true });
-			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
+				source: dom.window as unknown as Window,
+				data: { nonce: requests[0].nonce },
+				ports: [channel.port1 as unknown as MessagePort]
+			}));
 			await ready;
 			const socket = transport.socket;
 			for (let index = 0; index < 128; index++) { socket.write(VSBuffer.fromString('{}\n')); }
@@ -327,7 +366,10 @@ suite('App Server MessagePort transport', () => {
 			assert.throws(() => socket.write(VSBuffer.fromString('{}\n')), /capacity exceeded/);
 			await rejected;
 			assert.throws(() => transport.socket, /was closed/);
-		} finally { channel.port1.close(); channel.port2.close(); }
+		} finally {
+			channel.port1.close();
+			channel.port2.close();
+		}
 	});
 
 });

@@ -3,9 +3,9 @@ import type { Event } from '../../../base/common/event.js';
 import type { IFileBytes, IFileWriteOptions, IFileWriteResult, IFileStat } from '../../files/common/files.js';
 
 export const WORKSPACE_CONTEXT_READ_CHANNEL =
-	"ash:workspace:context:read";
+	'ash:workspace:context:read';
 export const WORKSPACE_CONTEXT_CHANGED_CHANNEL =
-	"ash:workspace:context:changed";
+	'ash:workspace:context:changed';
 export const WORKSPACE_EDIT_CHANNEL = 'ash:workspace:edit';
 
 export type WorkspaceEditRequest =
@@ -48,7 +48,7 @@ export interface IWorkspaceContextApi {
 
 export function validateWorkspaceContextRead(value: unknown): undefined {
 	if (value !== undefined) {
-		throw new Error("workspace context read does not accept parameters");
+		throw new Error('workspace context read does not accept parameters');
 	}
 	return undefined;
 }

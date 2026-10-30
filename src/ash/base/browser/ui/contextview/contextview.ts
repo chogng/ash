@@ -1,17 +1,17 @@
 import './contextview.css';
-import { Emitter } from "../../../common/event.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
-import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from "../../../common/layout.js";
-import { addDisposableListener, getActiveElement, getWindow, isHTMLElement, isNode, h } from "../../dom.js";
-import { isAncestorOfActiveElement, isFocusable, restoreFocus } from "../../focus.js";
-import { getViewport } from "../../geometry.js";
-import { observeResize } from "../../observer.js";
+import { Emitter } from '../../../common/event.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../common/lifecycle.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from '../../../common/layout.js';
+import { addDisposableListener, getActiveElement, getWindow, isHTMLElement, isNode, h } from '../../dom.js';
+import { isAncestorOfActiveElement, isFocusable, restoreFocus } from '../../focus.js';
+import { getViewport } from '../../geometry.js';
+import { observeResize } from '../../observer.js';
 
 export {
 	AnchorAlignment,
 	AnchorAxisAlignment,
 	AnchorPosition,
-} from "../../../common/layout.js";
+} from '../../../common/layout.js';
 
 export type ContextViewAnchor = Element | IRectangle;
 
@@ -30,7 +30,7 @@ export enum ContextViewHideReason {
 }
 
 /** Named shell treatments; plain lets the content own its floating surface. */
-export type ContextViewPresentation = "default" | "hover" | "menu" | "dialog" | "plain";
+export type ContextViewPresentation = 'default' | 'hover' | 'menu' | 'dialog' | 'plain';
 
 export interface ContextViewOptions {
 	readonly anchor: ContextViewAnchor;
@@ -74,10 +74,10 @@ export class ContextView
 	constructor(container: HTMLElement) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "div");
+		const element = h(ownerDocument, 'div');
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = "ash-context-view";
+		element.className = 'ash-context-view';
 		element.hidden = true;
 		container.append(element);
 		this._register(toDisposable(() => this.hide()));
@@ -109,21 +109,21 @@ export class ContextView
 		this.options = options;
 		this.element.replaceChildren(options.content);
 		this.element.className =
-			`ash-context-view ash-context-view-${options.presentation ?? "default"}`;
+			`ash-context-view ash-context-view-${options.presentation ?? 'default'}`;
 		this.element.style.setProperty(
-			"--ash-context-view-layer",
+			'--ash-context-view-layer',
 			String(options.layer ?? 0),
 		);
-		this.element.style.visibility = "hidden";
+		this.element.style.visibility = 'hidden';
 		this.element.hidden = false;
 		this.layout();
 		if (!this.visible) return false;
-		this.element.style.visibility = "";
+		this.element.style.visibility = '';
 		registerVisibleContextView(this);
 
 		this.visibleListeners.add(addDisposableListener(
 			ownerDocument,
-			"pointerdown",
+			'pointerdown',
 			(event: PointerEvent) => {
 				const target = event.target;
 				if (isTargetInAnotherModal(target, this.element)) return;
@@ -140,11 +140,11 @@ export class ContextView
 		));
 		this.visibleListeners.add(addDisposableListener(
 			ownerDocument,
-			"keydown",
+			'keydown',
 			(event: KeyboardEvent) => {
 				if (
 					event.isComposing ||
-					event.key !== "Escape" ||
+					event.key !== 'Escape' ||
 					!isTopmostContextView(this) ||
 					isTargetInAnotherModal(event.target, this.element)
 				) {
@@ -158,30 +158,30 @@ export class ContextView
 		));
 		this.visibleListeners.add(addDisposableListener(
 			targetWindow,
-			"blur",
+			'blur',
 			() => this.hide(ContextViewHideReason.WindowBlur),
 		));
 		this.visibleListeners.add(addDisposableListener(
 			targetWindow,
-			"resize",
+			'resize',
 			() => this.layout(),
 		));
 		const visualViewport = targetWindow.visualViewport;
 		if (visualViewport) {
 			this.visibleListeners.add(addDisposableListener(
 				visualViewport,
-				"resize",
+				'resize',
 				() => this.layout(),
 			));
 			this.visibleListeners.add(addDisposableListener(
 				visualViewport,
-				"scroll",
+				'scroll',
 				() => this.layout(),
 			));
 		}
 		this.visibleListeners.add(addDisposableListener(
 			ownerDocument,
-			"scroll",
+			'scroll',
 			() => this.layout(),
 			true,
 		));
@@ -210,32 +210,32 @@ export class ContextView
 			options,
 		);
 		this.element.classList.toggle(
-			"ash-context-view-above",
+			'ash-context-view-above',
 			result.anchorPosition === AnchorPosition.Above,
 		);
 		this.element.classList.toggle(
-			"ash-context-view-below",
+			'ash-context-view-below',
 			result.anchorPosition === AnchorPosition.Below,
 		);
 		this.element.classList.toggle(
-			"ash-context-view-align-right",
+			'ash-context-view-align-right',
 			result.anchorAlignment === AnchorAlignment.Right,
 		);
 		this.element.classList.toggle(
-			"ash-context-view-align-left",
+			'ash-context-view-align-left',
 			result.anchorAlignment === AnchorAlignment.Left,
 		);
 		this.element.classList.toggle(
-			"ash-context-view-align-center",
+			'ash-context-view-align-center',
 			result.anchorAlignment === AnchorAlignment.Center,
 		);
 		if (result.anchorAlignment === AnchorAlignment.Center && options.anchorAxisAlignment !== AnchorAxisAlignment.Horizontal) {
-			this.element.style.setProperty("--ash-context-view-anchor-offset", `${anchor.left + anchor.width / 2 - result.left}px`);
+			this.element.style.setProperty('--ash-context-view-anchor-offset', `${anchor.left + anchor.width / 2 - result.left}px`);
 		} else {
-			this.element.style.removeProperty("--ash-context-view-anchor-offset");
+			this.element.style.removeProperty('--ash-context-view-anchor-offset');
 		}
 		this.element.classList.toggle(
-			"ash-context-view-axis-horizontal",
+			'ash-context-view-axis-horizontal',
 			options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal,
 		);
 		this.element.style.left = `${result.left}px`;
@@ -259,7 +259,7 @@ export class ContextView
 		this.visibleListeners.clear();
 		this.element.hidden = true;
 		this.element.replaceChildren();
-		this.element.style.removeProperty("--ash-context-view-layer");
+		this.element.style.removeProperty('--ash-context-view-layer');
 		const restoreFocusTo = this.restoreFocusTo;
 		this.restoreFocusTo = undefined;
 		try {
@@ -314,7 +314,7 @@ function getAnchorDocument(
 	fallback: Document,
 ): Document {
 	if (isElementAnchor(anchor)) return anchor.ownerDocument;
-	const targetWindow = "targetWindow" in anchor
+	const targetWindow = 'targetWindow' in anchor
 		? (anchor as IRectangle & { readonly targetWindow?: Window; }).targetWindow
 		: undefined;
 	return targetWindow?.document ?? fallback;
@@ -340,5 +340,5 @@ function isElementAnchor(
 ): anchor is Element {
 	return isNode(anchor) &&
 		anchor.nodeType === 1 &&
-		typeof (anchor as Element).getBoundingClientRect === "function";
+		typeof (anchor as Element).getBoundingClientRect === 'function';
 }

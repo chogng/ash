@@ -13,31 +13,31 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { localize } from '../../../../nls.js';
-import { addDisposableListener, h, stopEvent } from "../../../../base/browser/dom.js";
-import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
-import type { ActionViewItem, ActionViewItemOptions } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
-import { DropdownMenuActionViewItem } from "../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
-import { Separator, SubmenuAction, type IAction } from "../../../../base/common/actions.js";
-import type { Icon } from "../../../../base/common/icon.js";
-import { MutableDisposable, DisposableStore, toDisposable, type IDisposable, type IReference } from "../../../../base/common/lifecycle.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
+import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
+import type { ActionViewItem, ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
+import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
+import type { Icon } from '../../../../base/common/icon.js';
+import { MutableDisposable, DisposableStore, toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { LogLevel } from '../../../../platform/log/common/log.js';
 import { CONTEXT_SAVED_LOGS_AVAILABLE, OPEN_SAVED_LOGS_COMMAND_ID } from '../../../services/output/common/output.js';
-import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { IStorageService } from "../../../../platform/storage/common/storage.js";
-import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
-import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import { type IOutputChannel, type IOutputEntry, IOutputService, CONTEXT_IN_OUTPUT, OutputSeverities, OPEN_OUTPUT_IN_EDITOR_COMMAND_ID, EXPORT_OUTPUT_COMMAND_ID, type OutputEntrySeverity, type IOutputViewFilters } from "../../../services/output/common/output.js";
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../browser/parts/views/viewPane.js';
+import { type IOutputChannel, type IOutputEntry, IOutputService, CONTEXT_IN_OUTPUT, OutputSeverities, OPEN_OUTPUT_IN_EDITOR_COMMAND_ID, EXPORT_OUTPUT_COMMAND_ID, type OutputEntrySeverity, type IOutputViewFilters } from '../../../services/output/common/output.js';
 
-import "./output.css";
+import './output.css';
 
-const SelectChannelActionId = "ash.output.selectChannel";
-const FilterActionId = "ash.output.filter";
-const ClearChannelActionId = "ash.output.clear";
-const AutoScrollActionId = "ash.output.autoScroll";
-const MoreActionId = "ash.output.more";
-const AutoScrollStorageKey = "output.autoScroll";
+const SelectChannelActionId = 'ash.output.selectChannel';
+const FilterActionId = 'ash.output.filter';
+const ClearChannelActionId = 'ash.output.clear';
+const AutoScrollActionId = 'ash.output.autoScroll';
+const MoreActionId = 'ash.output.more';
+const AutoScrollStorageKey = 'output.autoScroll';
 
 /** Generic Output channel projection with filtering, navigation, and export. */
 export class OutputViewPane extends ViewPane {
@@ -61,7 +61,7 @@ export class OutputViewPane extends ViewPane {
 	private readonly content: HTMLDivElement;
 	private readonly titleActions: ActionBar;
 	private autoScroll: boolean;
-	private titleStateKey = "";
+	private titleStateKey = '';
 
 	constructor(
 		container: HTMLElement,
@@ -78,33 +78,33 @@ export class OutputViewPane extends ViewPane {
 		@IDefaultLogLevelsService private readonly defaultLogLevels: IDefaultLogLevelsService,
 	) {
 		super(container, options);
-		this.contentElement.classList.add("ash-output");
+		this.contentElement.classList.add('ash-output');
 		this.filters = outputService.filters;
 		this._register(defaultLogLevels.onDidChangeDefaultLogLevels(() => this.renderScheduler.schedule()));
 		this.autoScroll = storageService.getBoolean(AutoScrollStorageKey, StorageScope.WORKSPACE, true);
-		this.titleControls = h(container.ownerDocument, "div");
-		this.titleControls.className = "ash-output-title-actions";
+		this.titleControls = h(container.ownerDocument, 'div');
+		this.titleControls.className = 'ash-output-title-actions';
 		this.headerActionsElement.append(this.titleControls);
 		this._register(toDisposable(() => this.titleControls.remove()));
 		this.titleActions = this._register(new ActionBar(this.titleControls, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('output.actions', 'Output actions'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
-		this.titleActions.element.classList.add("ash-toolbar");
-		this.filterBar = h(container.ownerDocument, "div");
-		this.filterBar.className = "ash-output-filter-bar";
+		this.titleActions.element.classList.add('ash-toolbar');
+		this.filterBar = h(container.ownerDocument, 'div');
+		this.filterBar.className = 'ash-output-filter-bar';
 		this.filterBar.hidden = true;
-		this.filterWidget = h(container.ownerDocument, "div");
-		this.filterWidget.className = "ash-output-filter-widget";
-		this.filterInput = h(container.ownerDocument, "input");
-		this.filterInput.className = "ash-output-filter-input";
-		this.filterInput.type = "search";
+		this.filterWidget = h(container.ownerDocument, 'div');
+		this.filterWidget.className = 'ash-output-filter-widget';
+		this.filterInput = h(container.ownerDocument, 'input');
+		this.filterInput.className = 'ash-output-filter-input';
+		this.filterInput.type = 'search';
 		this.filterInput.placeholder = localize('output.filterPlaceholder', 'Filter Output (text1,text2,!exclude)');
-		this.filterInput.setAttribute("aria-label", localize('output.filter', 'Filter Output'));
+		this.filterInput.setAttribute('aria-label', localize('output.filter', 'Filter Output'));
 		this.filterInput.value = this.filters.text;
 		this.filterWidget.append(this.filterInput);
 		this.filterToolbar = this._register(new ActionBar(this.filterWidget, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('output.filter', 'Filter Output'), highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
-		this.filterToolbar.element.classList.add("ash-toolbar");
+		this.filterToolbar.element.classList.add('ash-toolbar');
 		this.titleControls.prepend(this.filterWidget);
-		this.content = h(container.ownerDocument, "div");
-		this.content.className = "ash-output-content";
+		this.content = h(container.ownerDocument, 'div');
+		this.content.className = 'ash-output-content';
 		const hint = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Output);
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.content, model: null, readOnly: true,
@@ -123,12 +123,12 @@ export class OutputViewPane extends ViewPane {
 			}));
 		}
 		this.contentElement.append(this.filterBar, this.content);
-		this._register(addDisposableListener(this.filterInput, "input", () => this.filters.setText(this.filterInput.value)));
-		this._register(addDisposableListener(this.filterInput, "keydown", event => {
-			if (event.key !== "Escape" || !this.filterInput.value) return;
+		this._register(addDisposableListener(this.filterInput, 'input', () => this.filters.setText(this.filterInput.value)));
+		this._register(addDisposableListener(this.filterInput, 'keydown', event => {
+			if (event.key !== 'Escape' || !this.filterInput.value) return;
 			stopEvent(event);
-			this.filterInput.value = "";
-			this.filters.setText("");
+			this.filterInput.value = '';
+			this.filters.setText('');
 		}));
 		this._register(this.editor.onDidChangeCursorPosition(event => this.handleCursorPosition(event)));
 		this._register(this.editor.onDidScrollChange(event => { if (event.scrollTopChanged && !this.changingContent) this.acceptScrollPosition(); }));
@@ -244,7 +244,7 @@ export class OutputViewPane extends ViewPane {
 	private renderContent(): void {
 		const active = this.outputService.activeChannel;
 		const categories = active ? categoriesOf(active.entries) : [];
-		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join("\0"), active?.id ?? "", (active?.entries.length ?? 0) > 0, this.autoScroll, active?.descriptor.logger?.control.getLevel() ?? "", this.filters.text, this.defaultLogLevels.getDefaultLogLevel(active?.descriptor.extensionId), ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join("\u0001");
+		const titleStateKey = [this.outputService.channels.map(channel => channel.id).join('\0'), active?.id ?? '', (active?.entries.length ?? 0) > 0, this.autoScroll, active?.descriptor.logger?.control.getLevel() ?? '', this.filters.text, this.defaultLogLevels.getDefaultLogLevel(active?.descriptor.extensionId), ...OutputSeverities.map(severity => this.filters.isSeverityVisible(severity)), ...categories.map(category => `${category}:${this.filters.isCategoryVisible(category, active!.id)}`)].join('\u0001');
 		if (titleStateKey !== this.titleStateKey) {
 			this.titleStateKey = titleStateKey;
 			this.titleActions.updateActions(this.createTitleActions(active));
@@ -321,11 +321,11 @@ export class OutputViewPane extends ViewPane {
 	private filterActions(): readonly IAction[] {
 		const channel = this.outputService.activeChannel;
 		const categories = categoriesOf(channel?.entries ?? []);
-		const levelActions = (["trace", "debug", "information", "warning", "error"] as const).map(severity => this.action(`ash.output.filter.minimum.${severity}`, severityLabel(severity), localize('output.showMinimum', 'Show {0} and above', severityLabel(severity)), undefined, true, undefined, () => this.filters.setMinimumSeverity(severity)));
-		const logLevel = new SubmenuAction("ash.output.filter.minimum", localize('output.displayLevel', 'Minimum Display Level'), levelActions);
+		const levelActions = (['trace', 'debug', 'information', 'warning', 'error'] as const).map(severity => this.action(`ash.output.filter.minimum.${severity}`, severityLabel(severity), localize('output.showMinimum', 'Show {0} and above', severityLabel(severity)), undefined, true, undefined, () => this.filters.setMinimumSeverity(severity)));
+		const logLevel = new SubmenuAction('ash.output.filter.minimum', localize('output.displayLevel', 'Minimum Display Level'), levelActions);
 		const severityActions = OutputSeverities.map(severity => this.action(`ash.output.filter.severity.${severity}`, severityLabel(severity), localize('output.showSeverity', 'Show {0}', severityLabel(severity)), undefined, true, this.filters.isSeverityVisible(severity), () => this.filters.setSeverityVisible(severity, !this.filters.isSeverityVisible(severity))));
 		const categoryActions = categories.map(category => this.action(`ash.output.filter.category.${category}`, category, localize('output.showCategory', 'Show category {0} in this channel. Changing an older saved global choice moves only that category to this channel.', category), undefined, true, this.filters.isCategoryVisible(category, channel!.id), () => this.filters.setCategoryVisible(category, !this.filters.isCategoryVisible(category, channel!.id), channel!.id)));
-		return [logLevel, new Separator(), ...severityActions, ...(categoryActions.length ? [new Separator(), ...categoryActions] : []), new Separator(), this.action("ash.output.filter.reset", localize('output.reset', 'Reset Filters'), localize('output.resetTooltip', 'Reset Output Filters'), undefined, true, undefined, () => { this.filterInput.value = ""; this.filters.reset(); })];
+		return [logLevel, new Separator(), ...severityActions, ...(categoryActions.length ? [new Separator(), ...categoryActions] : []), new Separator(), this.action('ash.output.filter.reset', localize('output.reset', 'Reset Filters'), localize('output.resetTooltip', 'Reset Output Filters'), undefined, true, undefined, () => { this.filterInput.value = ''; this.filters.reset(); })];
 	}
 
 	private moreActions(): readonly IAction[] {
@@ -343,8 +343,8 @@ export class OutputViewPane extends ViewPane {
 				...recordingLevels, new Separator(),
 				this.action('workbench.action.output.activeOutputLogLevelDefault', localize('logLevelDefault.label', 'Set As Default'), localize('output.defaultLevelTooltip', 'Save this recording level for future windows and loggers'), undefined, logger.control.getLevel() !== this.defaultLogLevels.getDefaultLogLevel(active.descriptor.extensionId), undefined, () => this.commands.executeCommand('workbench.action.output.activeOutputLogLevelDefault')),
 			])] : []),
-			this.action("ash.output.openInEditor", localize('output.openEditor', 'Open Output in Editor'), localize('output.openChannel', 'Open {0} in Editor', active.label), Lxicon.linkExternal, true, undefined, () => this.commands.executeCommand(OPEN_OUTPUT_IN_EDITOR_COMMAND_ID)),
-			this.action("ash.output.export", localize('output.export', 'Export Output…'), localize('output.exportChannel', 'Export {0}', active.label), Lxicon.download, true, undefined, () => this.commands.executeCommand(EXPORT_OUTPUT_COMMAND_ID)),
+			this.action('ash.output.openInEditor', localize('output.openEditor', 'Open Output in Editor'), localize('output.openChannel', 'Open {0} in Editor', active.label), Lxicon.linkExternal, true, undefined, () => this.commands.executeCommand(OPEN_OUTPUT_IN_EDITOR_COMMAND_ID)),
+			this.action('ash.output.export', localize('output.export', 'Export Output…'), localize('output.exportChannel', 'Export {0}', active.label), Lxicon.download, true, undefined, () => this.commands.executeCommand(EXPORT_OUTPUT_COMMAND_ID)),
 			...(this.contextKeys.getValue<boolean>(CONTEXT_SAVED_LOGS_AVAILABLE.key) ? [this.action(OPEN_SAVED_LOGS_COMMAND_ID, localize('output.openSavedLogs', 'Open Saved Logs…'), localize('output.openSavedLogs', 'Open Saved Logs…'), undefined, true, undefined, () => this.commands.executeCommand(OPEN_SAVED_LOGS_COMMAND_ID))] : []),
 		];
 	}
@@ -377,7 +377,7 @@ export class OutputViewPane extends ViewPane {
 		}
 		this.autoScroll = autoScroll;
 		this.persistAutoScroll();
-		this.titleStateKey = "";
+		this.titleStateKey = '';
 		this.titleActions.updateActions(this.createTitleActions(this.outputService.activeChannel));
 	}
 

@@ -1,8 +1,8 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { appendIcon, setIconResolver } from "../../browser/ui/lxicons/lxicon.js";
-import { getLxiconDefinition, registerLxicon } from "../../common/lxiconsUtil.js";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { appendIcon, setIconResolver } from '../../browser/ui/lxicons/lxicon.js';
+import { getLxiconDefinition, registerLxicon } from '../../common/lxiconsUtil.js';
 import { Lxicon } from '../../common/lxicons.js';
 
 test('appendIcon creates isolated native glyph nodes in each document', () => {
@@ -20,7 +20,10 @@ test('appendIcon creates isolated native glyph nodes in each document', () => {
 		first.dataset.ashIconCharacter = 'X';
 		assert.equal(second.dataset.ashIconCharacter, '\ue001');
 		assert.equal(appendIcon(icon, secondDocument.body).dataset.ashIconCharacter, '\ue001');
-	} finally { firstDocument.defaultView?.close(); secondDocument.defaultView?.close(); }
+	} finally {
+		firstDocument.defaultView?.close();
+		secondDocument.defaultView?.close();
+	}
 });
 
 test('native font icons retain their identity through font theme overrides', () => {

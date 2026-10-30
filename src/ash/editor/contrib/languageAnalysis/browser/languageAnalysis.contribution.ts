@@ -1,9 +1,9 @@
-import { registerEditorContribution } from "../../../browser/editorFeatureRegistration.js";
-import { LanguageDiagnosticDecorationBridge, LanguageDiagnosticPublisherBridge } from "../../gotoError/common/diagnosticDecorations.js";
-import { TextEditorCapability } from "../../textEditorCapabilities.js";
+import { registerEditorContribution } from '../../../browser/editorFeatureRegistration.js';
+import { LanguageDiagnosticDecorationBridge, LanguageDiagnosticPublisherBridge } from '../../gotoError/common/diagnosticDecorations.js';
+import { TextEditorCapability } from '../../textEditorCapabilities.js';
 
 registerEditorContribution({
-	id: "editor.contrib.languageAnalysis",
+	id: 'editor.contrib.languageAnalysis',
 	configure: context => {
 		const diagnosticsSource = context.model.diagnostics;
 		context.register(diagnosticsSource.onDidEncounterError(context.onLanguageError));

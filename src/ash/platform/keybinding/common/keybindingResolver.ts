@@ -4,28 +4,28 @@ import {
 	matchesResolvedChord,
 	type ResolvedKeybinding,
 	resolveKeybinding,
-} from "../../../base/common/keybindings.js";
-import type { Event } from "../../../base/common/event.js";
+} from '../../../base/common/keybindings.js';
+import type { Event } from '../../../base/common/event.js';
 import type {
 	CommandId,
-} from "../../commands/common/commands.js";
+} from '../../commands/common/commands.js';
 import type {
 	Context,
-} from "../../contextkey/common/contextkey.js";
+} from '../../contextkey/common/contextkey.js';
 import {
 	type IRegisteredKeybindingRule,
 	type KeybindingRegistry,
 	KeybindingsRegistry,
 	KeybindingRuleKind,
 	KeybindingSource,
-} from "./keybindingsRegistry.js";
+} from './keybindingsRegistry.js';
 
 export enum KeybindingResolveKind {
-	NoMatch = "noMatch",
-	MoreChordsNeeded = "moreChordsNeeded",
-	Command = "command",
-	Blocked = "blocked",
-	PassThrough = "passThrough",
+	NoMatch = 'noMatch',
+	MoreChordsNeeded = 'moreChordsNeeded',
+	Command = 'command',
+	Blocked = 'blocked',
+	PassThrough = 'passThrough',
 }
 
 export type KeybindingResolveResult =
@@ -194,7 +194,7 @@ function keybindingIdentity(keybinding: ResolvedKeybinding): string {
 		Number(chord.shiftKey),
 		Number(chord.altKey),
 		Number(chord.metaKey),
-	].join(":")).join(" ");
+	].join(':')).join(' ');
 }
 
 function compareResolvedRules(

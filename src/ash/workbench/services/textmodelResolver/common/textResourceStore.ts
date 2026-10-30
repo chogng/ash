@@ -1,6 +1,6 @@
 import type { FileReadOperation } from '../../../../platform/files/common/files.js';
-import { type Event } from "../../../../base/common/event.js";
-import { type URI } from "../../../../base/common/uri.js";
+import { type Event } from '../../../../base/common/event.js';
+import { type URI } from '../../../../base/common/uri.js';
 
 /** Request used by the editor to resolve a persisted or bootstrapped text resource. */
 export interface TextResourceResolveRequest {
@@ -46,7 +46,7 @@ export interface TextResourceSaveResult {
 export class TextResourceConflictError extends Error {
 	constructor(readonly resource: URI) {
 		super(`Text resource changed since it was resolved: ${resource.toString()}`);
-		this.name = "TextResourceConflictError";
+		this.name = 'TextResourceConflictError';
 	}
 }
 

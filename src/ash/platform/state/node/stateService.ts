@@ -2,14 +2,14 @@ import {
 	mkdir,
 	readFile,
 	writeFile,
-} from "node:fs/promises";
-import { dirname } from "node:path";
+} from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { Promises } from '../../../base/node/pfs.js';
-import { isRecord } from "../../../base/common/types.js";
-import type { IStateService } from "./state.js";
+import { isRecord } from '../../../base/common/types.js';
+import type { IStateService } from './state.js';
 
 function isFileNotFound(error: unknown): boolean {
-	return isRecord(error) && error.code === "ENOENT";
+	return isRecord(error) && error.code === 'ENOENT';
 }
 
 /**
@@ -22,7 +22,7 @@ export class StateService implements IStateService {
 	private readonly filePath: string;
 	private readonly temporaryFilePath: string;
 	private items: Record<string, unknown> = Object.create(null);
-	private lastSavedContents = "";
+	private lastSavedContents = '';
 	private writeQueue: Promise<void> = Promise.resolve();
 	private closing: Promise<void> | undefined;
 	private closed = false;
@@ -42,7 +42,7 @@ export class StateService implements IStateService {
 	private async load(): Promise<void> {
 		let contents: string;
 		try {
-			contents = await readFile(this.filePath, "utf8");
+			contents = await readFile(this.filePath, 'utf8');
 		} catch (error) {
 			if (isFileNotFound(error)) {
 				return;
@@ -91,7 +91,7 @@ export class StateService implements IStateService {
 				}
 
 				await mkdir(dirname(this.filePath), { recursive: true });
-				await writeFile(this.temporaryFilePath, contents, "utf8");
+				await writeFile(this.temporaryFilePath, contents, 'utf8');
 				await Promises.rename(this.temporaryFilePath, this.filePath);
 				this.lastSavedContents = contents;
 			});
@@ -109,7 +109,7 @@ export class StateService implements IStateService {
 
 	private assertOpen(): void {
 		if (this.closed) {
-			throw new Error("State service is closed");
+			throw new Error('State service is closed');
 		}
 	}
 }

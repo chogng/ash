@@ -1,10 +1,10 @@
 import type { Event } from '../../../base/common/event.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
-import { Position } from "../core/position.js";
-import { Range } from "../core/range.js";
-import { type TextSnapshot } from "../core/textChange.js";
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
+import { type TextSnapshot } from '../core/textChange.js';
 import { VersionedLanguageResultStore } from '../model/languageResultStore.js';
-import { type TextModel } from "../model/textModel.js";
+import { type TextModel } from '../model/textModel.js';
 import { attachLanguageTokenResultDelta, getLanguageTokenResultDelta } from '../services/semanticTokensDto.js';
 
 export interface LanguageTokenizationSource {
@@ -32,7 +32,7 @@ export interface LanguageTokenPresentation {
 	readonly fontStyle?: readonly LanguageTokenFontStyle[];
 }
 
-export type LanguageTokenFontStyle = "italic" | "bold" | "underline" | "strikethrough";
+export type LanguageTokenFontStyle = 'italic' | 'bold' | 'underline' | 'strikethrough';
 
 export interface LanguageTokenResult {
 	readonly tokens: readonly LanguageToken[];
@@ -41,50 +41,50 @@ export interface LanguageTokenResult {
 export function createLanguageTokenStore(model: TextModel): VersionedLanguageResultStore<LanguageTokenResult> {
 	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageTokenResult(
 		value,
-		range => assertModelRange(currentModel, range, "Language token"),
+		range => assertModelRange(currentModel, range, 'Language token'),
 		true,
 	));
 }
 
 export function createLanguageTokenSnapshotNormalizer(snapshot: TextSnapshot): (value: LanguageTokenResult) => LanguageTokenResult {
-	const lines = snapshot.getText().split("\n");
-	return value => normalizeLanguageTokenResult(value, range => assertSnapshotRange(lines, range, "Language token"), false);
+	const lines = snapshot.getText().split('\n');
+	return value => normalizeLanguageTokenResult(value, range => assertSnapshotRange(lines, range, 'Language token'), false);
 }
 
 function normalizeLanguageTokenResult(value: LanguageTokenResult, validateRange: (range: Range) => void, preserveDelta: boolean): LanguageTokenResult {
-	if (typeof value !== "object" || value === null || !Array.isArray(value.tokens)) {
-		throw new TypeError("Language token result must contain a tokens array");
+	if (typeof value !== 'object' || value === null || !Array.isArray(value.tokens)) {
+		throw new TypeError('Language token result must contain a tokens array');
 	}
 	const delta = preserveDelta ? getLanguageTokenResultDelta(value) : undefined;
 	const tokens: LanguageToken[] = [];
 	let previousEnd: Position | undefined;
 	for (const token of value.tokens) {
-		if (typeof token !== "object" || token === null) {
-			throw new TypeError("Language token must be an object");
+		if (typeof token !== 'object' || token === null) {
+			throw new TypeError('Language token must be an object');
 		}
 		validateRange(token.range);
 		if (token.range.isEmpty()) {
-			throw new RangeError("Language token range must not be empty");
+			throw new RangeError('Language token range must not be empty');
 		}
 		if (token.range.startLineNumber !== token.range.endLineNumber) {
-			throw new RangeError("Language token range must stay on one line");
+			throw new RangeError('Language token range must stay on one line');
 		}
 		if (previousEnd && Position.compare(previousEnd, token.range.getStartPosition()) > 0) {
-			throw new RangeError("Language tokens must be sorted and non-overlapping");
+			throw new RangeError('Language tokens must be sorted and non-overlapping');
 		}
-		assertIdentifier(token.tokenType, "Language token type");
+		assertIdentifier(token.tokenType, 'Language token type');
 		if (!Array.isArray(token.modifiers)) {
-			throw new TypeError("Language token modifiers must be an array");
+			throw new TypeError('Language token modifiers must be an array');
 		}
 		const modifiers = token.modifiers.map((modifier: unknown) => {
-			assertIdentifier(modifier, "Language token modifier");
+			assertIdentifier(modifier, 'Language token modifier');
 			return modifier;
 		});
 		if (new Set(modifiers).size !== modifiers.length) {
-			throw new RangeError("Language token modifiers must be unique");
+			throw new RangeError('Language token modifiers must be unique');
 		}
-		const languageId = token.languageId === undefined ? undefined : normalizedIdentifier(token.languageId, "Language token embedded language ID");
-		if (token.balancedBrackets !== undefined && token.balancedBrackets !== false) throw new TypeError("Language token balanced-bracket metadata can only exclude a range");
+		const languageId = token.languageId === undefined ? undefined : normalizedIdentifier(token.languageId, 'Language token embedded language ID');
+		if (token.balancedBrackets !== undefined && token.balancedBrackets !== false) throw new TypeError('Language token balanced-bracket metadata can only exclude a range');
 		const presentation = token.presentation === undefined ? undefined : normalizePresentation(token.presentation);
 		tokens.push(Object.freeze({
 			range: token.range,
@@ -101,24 +101,24 @@ function normalizeLanguageTokenResult(value: LanguageTokenResult, validateRange:
 }
 
 function normalizePresentation(value: LanguageTokenPresentation): LanguageTokenPresentation {
-	if (typeof value !== "object" || value === null) throw new TypeError("Language token presentation must be an object");
-	const foreground = value.foreground === undefined ? undefined : normalizedColor(value.foreground, "foreground");
-	const background = value.background === undefined ? undefined : normalizedColor(value.background, "background");
+	if (typeof value !== 'object' || value === null) throw new TypeError('Language token presentation must be an object');
+	const foreground = value.foreground === undefined ? undefined : normalizedColor(value.foreground, 'foreground');
+	const background = value.background === undefined ? undefined : normalizedColor(value.background, 'background');
 	let fontStyle: readonly LanguageTokenFontStyle[] | undefined;
 	if (value.fontStyle !== undefined) {
-		if (!Array.isArray(value.fontStyle)) throw new TypeError("Language token font style must be an array");
+		if (!Array.isArray(value.fontStyle)) throw new TypeError('Language token font style must be an array');
 		const styles = value.fontStyle.map(style => {
-			if (style !== "italic" && style !== "bold" && style !== "underline" && style !== "strikethrough") throw new TypeError(`Unsupported language token font style '${String(style)}'`);
+			if (style !== 'italic' && style !== 'bold' && style !== 'underline' && style !== 'strikethrough') throw new TypeError(`Unsupported language token font style '${String(style)}'`);
 			return style;
 		});
-		if (new Set(styles).size !== styles.length) throw new RangeError("Language token font styles must be unique");
+		if (new Set(styles).size !== styles.length) throw new RangeError('Language token font styles must be unique');
 		fontStyle = Object.freeze(styles);
 	}
 	return Object.freeze({ ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) });
 }
 
 function normalizedColor(value: unknown, kind: string): string {
-	if (typeof value !== "string" || !/^#[0-9a-f]{3,4}(?:[0-9a-f]{3,4})?$/iu.test(value)) throw new TypeError(`Language token ${kind} must be a hexadecimal color`);
+	if (typeof value !== 'string' || !/^#[0-9a-f]{3,4}(?:[0-9a-f]{3,4})?$/iu.test(value)) throw new TypeError(`Language token ${kind} must be a hexadecimal color`);
 	return value;
 }
 
@@ -150,7 +150,7 @@ function assertSnapshotPosition(lines: readonly string[], position: Position, ow
 }
 
 function assertIdentifier(value: unknown, owner: string): asserts value is string {
-	if (typeof value !== "string" || value.length === 0 || value.trim() !== value) {
+	if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
 		throw new TypeError(`${owner} must be a non-empty trimmed string`);
 	}
 }

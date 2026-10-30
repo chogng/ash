@@ -21,6 +21,9 @@ export interface ExtensionQuickPickItem {
 
 /** Window services available during a connection-owned extension invocation. */
 export type ExtensionClientOperation =
+	| { operation: 'createTerminal'; name: string; cwd: string | null; env: Readonly<Record<string, string | null>>; appendEnv?: Readonly<Record<string, string>>; command: string | null; }
+	| { operation: 'readTerminal'; terminalId: string; afterSequence: number; }
+	| { operation: 'disposeTerminal'; terminalId: string; }
 	| { operation: 'scmUpdate'; registrationId: string; revision: number; providers: readonly JsonValue[]; }
 	| { operation: 'backendRequest'; capability: string; method: string; params: JsonValue; progress?: { title: string; cancellable: boolean; }; }
 	| { operation: 'editorOperation'; payload: JsonValue; }
@@ -54,9 +57,9 @@ export type ExtensionClientOperation =
 
 export type ExtensionClientResult =
 	| { result: 'value'; value: JsonValue; }
-	| { readonly result: "resourceFile"; readonly bytes: readonly number[]; }
-	| { readonly result: "resourceStat"; readonly fileType: number; readonly size: number; readonly mtime: number; }
-	| { readonly result: "resourceDirectory"; readonly entries: readonly (readonly [string, number])[]; }
+	| { readonly result: 'resourceFile'; readonly bytes: readonly number[]; }
+	| { readonly result: 'resourceStat'; readonly fileType: number; readonly size: number; readonly mtime: number; }
+	| { readonly result: 'resourceDirectory'; readonly entries: readonly (readonly [string, number])[]; }
 	| { result: 'initialization'; initialization: ExtensionHostInitialization; }
 	| { result: 'debugSessions'; sequence: number; sessions: readonly JsonValue[]; activeSession: string | null; breakpoints: readonly JsonValue[]; }
 	| { result: 'debugStarted'; started: boolean; }

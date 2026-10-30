@@ -421,5 +421,5 @@ export class EditOperationResult {
 }
 
 export function isQuote(ch: string): boolean {
-	return (ch === '\'' || ch === '"' || ch === '`');
+	return (ch === "'" || ch === '"' || ch === '`');
 }

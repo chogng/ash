@@ -260,20 +260,25 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	readonly exceptionBreakpoints: readonly string[] = ['uncaught'];
 	readonly onDidChangeExceptionBreakpoints = Event.None;
 	public get name(): string { return this.configuration.name; }
-	public setName(): void { throw new Error("Renaming is unsupported in this fixture"); }
+	public setName(): void { throw new Error('Renaming is unsupported in this fixture'); }
 	public async inspectStack(threadId?: number) {
 		const threads = await this.threads();
 		const selected = threads.find(thread => thread.id === threadId) ?? threads[0];
 		return { threads, frames: selected ? await this.stackTrace(selected.id) : [], ...(selected ? { threadId: selected.id } : {}) };
 	}
-	public async inspectFrame(frameId: number) {
-		return Promise.all((await this.scopes(frameId)).map(async scope => ({ scope, variables: scope.variablesReference > 0 ? await this.variables(scope.variablesReference) : [] })));
+	public async inspectFrame(frameId: number, selection: 'initial' | 'all' = 'initial') {
+		const scopes = await this.scopes(frameId);
+		const initial = scopes.find(scope => !scope.expensive && scope.variablesReference > 0);
+		return Promise.all(scopes.map(async scope => {
+			const variablesLoaded = scope.variablesReference > 0 && (selection === 'all' || scope === initial);
+			return { scope, variables: variablesLoaded ? await this.variables(scope.variablesReference) : [], variablesLoaded };
+		}));
 	}
 	public async evaluateWatchExpressions(expressions: readonly string[], frameId?: number) {
 		return Promise.all(expressions.map(async expression => { try { return { expression, result: await this.evaluate(expression, frameId, 'watch') }; } catch (error) { return { expression, error: error instanceof Error ? error.message : String(error) }; } }));
 	}
 	public getDebugProtocolBreakpoint(): undefined { return undefined; }
-	public async customRequest(): Promise<never> { throw new Error("Custom requests are unsupported in this fixture"); }
+	public async customRequest(): Promise<never> { throw new Error('Custom requests are unsupported in this fixture'); }
 	private consoleEntries: readonly DebugConsoleEntry[] = [];
 	private consoleRevision = 0;
 	get output(): string { return this.consoleEntries.map(entry => entry.output).join(''); }

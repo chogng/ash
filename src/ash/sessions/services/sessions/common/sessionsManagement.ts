@@ -1,10 +1,10 @@
-import type { Event } from "../../../../base/common/event.js";
-import type { IObservable } from "../../../../base/common/observable.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, ThreadId, SessionWorkspaceSelection } from "./session.js";
+import type { Event } from '../../../../base/common/event.js';
+import type { IObservable } from '../../../../base/common/observable.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IActiveSessionThread, IUntitledChatSession, ISession, ModelRef, SessionId, ThreadId, SessionWorkspaceSelection } from './session.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 
-export type SessionsManagementState = "loading" | "ready" | "creating" | "stopping" | "archiving" | "error";
+export type SessionsManagementState = 'loading' | 'ready' | 'creating' | 'stopping' | 'archiving' | 'error';
 
 /** Owns canonical Session management, active selection, and window-local untitled Chats. */
 export interface ISessionsManagementService {
@@ -47,4 +47,4 @@ export interface ISessionsManagementService {
 	setModel(model: ModelRef): Promise<void>;
 }
 
-export const ISessionsManagementService = createServiceIdentifier<ISessionsManagementService>("sessionsManagementService");
+export const ISessionsManagementService = createServiceIdentifier<ISessionsManagementService>('sessionsManagementService');

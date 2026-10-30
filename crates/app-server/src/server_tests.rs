@@ -6744,6 +6744,73 @@ fn slow_connection_writer_does_not_block_another_connection() {
 }
 
 #[test]
+fn secret_storage_recovery_refreshes_the_account_projection_for_all_windows() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Arc::new(
+        ash_secrets::ProfileSecretStore::open(
+            root.path(),
+            Arc::new(ash_secrets::MemorySecretStore::default()),
+        )
+        .unwrap(),
+    );
+    let driver = Arc::new(TestLoginDriver::default());
+    let login = Arc::new(LoginService::deferred(driver.clone()));
+    let server = server()
+        .with_login_service(login.clone())
+        .with_secret_store(store);
+    let mut actor = server.connection();
+    let mut observer = server.connection();
+    initialize(&server, &mut actor);
+    initialize(&server, &mut observer);
+    assert!(login.read_or_refresh().unwrap().accounts.is_empty());
+    for (index, (method, params)) in [
+        ("secrets/authorize", serde_json::json!({})),
+        (
+            "secrets/storageMode/set",
+            serde_json::json!({"mode":"encrypted"}),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let id = format!("recovered-{index}");
+        *driver.account.lock().unwrap() = Some(AccountSnapshot {
+            account: AccountRef {
+                provider: "chatgpt-subscription".into(),
+                account_id: id.clone(),
+            },
+            email: None,
+            display_name: None,
+            organization: None,
+            plan: None,
+            status: AccountStatus::Ready,
+            credential_revision: index as u64 + 1,
+        });
+        let reply = call(
+            &server,
+            &mut actor,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":index + 2, "method":method, "params":params,
+            }),
+        );
+        assert_eq!(reply["result"]["status"], "available", "{reply}");
+        assert_eq!(login.read().unwrap().accounts[0].account.account_id, id);
+        for window in [&mut actor, &mut observer] {
+            let updates: Vec<serde_json::Value> = server
+                .drain_notifications(window)
+                .into_iter()
+                .map(|value| serde_json::from_str(&value).unwrap())
+                .collect();
+            let updated = updates
+                .iter()
+                .find(|value| value["method"] == "account/updated")
+                .unwrap();
+            assert_eq!(updated["params"]["account"]["accounts"][0]["accountId"], id);
+        }
+    }
+}
+
+#[test]
 fn account_rpc_projects_login_completion_without_credentials() {
     let driver = Arc::new(TestLoginDriver::default());
     let login = Arc::new(LoginService::new(driver.clone()).unwrap());
@@ -7840,14 +7907,17 @@ fn git_named_fetch_rpc_keeps_other_refs_and_local_state_and_revalidates_remote_n
         serde_json::json!({"jsonrpc":"2.0","id":4,"method":"git/fetch","params":{"repositoryId":repository_id,"mode":{"remote":"team/backup"}}}),
     );
     assert!(fetched.get("error").is_none(), "{fetched}");
-    let backup_head = std::process::Command::new("git")
-        .current_dir(&producer)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .unwrap()
-        .stdout;
+    let backup_head = String::from_utf8(
+        std::process::Command::new("git")
+            .current_dir(&producer)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
     assert_eq!(
-        read_git(&["rev-parse", "refs/remotes/team/backup/main"]).as_bytes(),
+        read_git(&["rev-parse", "refs/remotes/team/backup/main"]),
         backup_head
     );
     assert_eq!(
@@ -7871,6 +7941,7 @@ fn git_named_fetch_rpc_keeps_other_refs_and_local_state_and_revalidates_remote_n
     );
     // Fetch advances the upstream comparison without moving the checked-out commit.
     let mut expected_head = initial["result"]["head"].clone();
+    expected_head["upstream"]["objectId"] = serde_json::json!(backup_head.trim());
     expected_head["upstream"]["behind"] = serde_json::json!(2);
     assert_eq!(fetched["result"]["status"]["head"], expected_head);
     assert!(

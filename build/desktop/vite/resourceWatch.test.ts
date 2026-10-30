@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
-import { cp, mkdtemp, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test, type TestContext } from 'node:test';
@@ -23,23 +23,31 @@ async function iconFixture(t: TestContext) {
 	return { root, sourceDirectory, outputFile: join(root, 'icons.ts'), fontDirectory: join(root, 'fonts') };
 }
 
-test('icon generation watches the manifest formatter configuration', async () => {
-	const config = join(repository, '.prettierrc.toml');
+test('icon generation watches formatter configuration and implementation', async () => {
+	const inputs = [join(repository, 'tsfmt.json'), join(repository, '.prettierrc.toml'), join(repository, 'build/format.ts'), join(repository, 'build/lib/generatedTypeScript.ts')];
 	const watched: string[] = [];
-	const watcher = Object.assign(new EventEmitter(), { add(path: string) { watched.push(path); } });
+	const watcher = Object.assign(new EventEmitter(), {
+		add(path: string) {
+			watched.push(path);
+		},
+	});
 	const httpServer = new EventEmitter();
 	const plugin = productIconsPlugin();
 	const close = plugin.closeBundle;
 	if (typeof close !== 'function') throw new Error('Missing plugin cleanup');
 	try {
 		plugin.configureServer({ watcher, httpServer, ws: { send() { } }, config: { logger: { error() { } } } });
-		assert.ok(watched.includes(config));
-		assert.deepEqual(plugin.handleHotUpdate({ file: config }), []);
-	} finally { await Reflect.apply(close, {}, []); }
+		for (const file of inputs) {
+			assert.ok(watched.includes(file));
+			assert.deepEqual(plugin.handleHotUpdate({ file }), []);
+		}
+	} finally {
+		await Reflect.apply(close, {}, []);
+	}
 	assert.equal(watcher.listenerCount('all'), 0);
 });
 
-test('all resource plugins remove subscriptions and cancel pending generation on shutdown', t => {
+test('all resource plugins remove subscriptions and cancel pending generation on shutdown', async t => {
 	t.mock.timers.enable({ apis: ['setTimeout'] });
 	const repository = resolve(import.meta.dirname, '../../..');
 	const plugins = [
@@ -52,19 +60,32 @@ test('all resource plugins remove subscriptions and cancel pending generation on
 			const watcher = Object.assign(new EventEmitter(), { add() { } });
 			const httpServer = middleware ? null : new EventEmitter();
 			const server = {
-				watcher, httpServer,
-				ws: { send() { assert.fail('closed server received a reload'); } },
-				config: { logger: { error() { assert.fail('pending generation ran after close'); } } },
+				watcher,
+				httpServer,
+				ws: {
+					send() {
+						assert.fail('closed server received a reload');
+					},
+				},
+				config: {
+					logger: {
+						error() {
+							assert.fail('pending generation ran after close');
+						},
+					},
+				},
 			};
 			// Repeated setup uses the same event emitter to detect retained subscriptions.
 			for (let index = 0; index < 3; index++) {
 				const plugin = create();
 				assert.ok(typeof plugin.configureServer === 'function');
 				assert.ok(typeof plugin.closeBundle === 'function');
-				Reflect.apply(plugin.configureServer, {}, [server]);
+				await Reflect.apply(plugin.configureServer, {}, [server]);
 				assert.equal(watcher.listenerCount('all'), 1);
 				watcher.emit('all', 'change', path);
-				if (httpServer) { httpServer.emit('close'); }
+				if (httpServer) {
+					httpServer.emit('close');
+				}
 				Reflect.apply(plugin.closeBundle, {}, []);
 				assert.equal(watcher.listenerCount('all'), 0);
 				assert.equal(httpServer?.listenerCount('close') ?? 0, 0);
@@ -79,7 +100,8 @@ test('Vite middleware server closes the icon watcher through the plugin lifecycl
 	const { root } = fixture;
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
 	const server = await createServer({
-		configFile: false, root,
+		configFile: false,
+		root,
 		plugins: [productIconsPlugin(fixture)],
 		server: { middlewareMode: true, watch: null },
 		optimizeDeps: { noDiscovery: true, include: [] },
@@ -91,6 +113,59 @@ test('Vite middleware server closes the icon watcher through the plugin lifecycl
 	assert.equal(server.watcher.listenerCount('all'), 0);
 });
 
+test('failed resource preparation during a Vite restart keeps HTTP available and source repair recovers', { timeout: 90_000 }, async t => {
+	const fixture = await iconFixture(t);
+	// Keep the real compiler and both font faces, with only its four required variable glyphs.
+	const names = ['add', 'code', 'projects', 'clockface'];
+	for (const file of await readdir(fixture.sourceDirectory)) {
+		if (file.endsWith('.svg') && !names.includes(file.slice(0, -4))) { await unlink(join(fixture.sourceDirectory, file)); }
+	}
+	const profilePath = join(fixture.sourceDirectory, 'font/sessions.json');
+	const profile = JSON.parse(await readFile(profilePath, 'utf8'));
+	for (const field of ['outlinedFills', 'outlineShapes', 'omitShapes', 'insetStrokes', 'sourceWidths']) {
+		profile[field] = Object.fromEntries(Object.entries(profile[field] ?? {}).filter(([name]) => names.includes(name)));
+	}
+	await writeFile(profilePath, JSON.stringify(profile));
+	await writeFile(join(fixture.root, 'index.html'), '<html><body>Resource server is available</body></html>');
+	const events = new EventEmitter();
+	const logger = createLogger('silent');
+	logger.error = message => { events.emit('failure', message); };
+	const server = await createServer({
+		configFile: false, root: fixture.root, customLogger: logger,
+		plugins: [productIconsPlugin({ ...fixture, debounceMilliseconds: 5 })],
+		server: { host: '127.0.0.1', port: 0 },
+		optimizeDeps: { noDiscovery: true, include: [] },
+	});
+	t.after(() => server.close());
+	server.ws.send = (message: HMRPayload | string) => {
+		if (typeof message !== 'string' && message.type === 'full-reload') { events.emit('reload'); }
+	};
+	await server.listen();
+	const httpServer = server.httpServer!;
+	const failed = once(events, 'failure');
+	const broken = join(fixture.sourceDirectory, 'broken.svg');
+	await writeFile(broken, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="url(#gradient)" d="M2 2H14V14H2Z"/></svg>');
+	server.watcher.emit('all', 'change', broken);
+	assert.match(String((await failed)[0]), /gradients|external resources/);
+	try {
+		await server.restart();
+	} catch (error) {
+		assert.match(String(error), /gradients|external resources/);
+	}
+	assert.equal(server.httpServer, httpServer, 'a failed replacement must retain the previous server');
+	assert.equal(httpServer.listening, true, 'resource errors must not leave a live process with a closed port');
+	const address = httpServer.address();
+	assert.ok(address && typeof address !== 'string');
+	const origin = `http://127.0.0.1:${address.port}`;
+	assert.match(await (await fetch(origin)).text(), /Resource server is available/);
+	const repaired = once(events, 'reload');
+	await writeFile(broken, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="none" stroke="#000" d="M2 2H14V14H2Z"/></svg>');
+	server.watcher.emit('all', 'change', broken);
+	await repaired;
+	assert.equal(httpServer.listening, true, 'source repair must recover without manually restarting the task');
+	assert.match(await (await fetch(origin)).text(), /Resource server is available/);
+});
+
 test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last good outputs on failure, and recover', { timeout: 180_000 }, async t => {
 	const fixture = await iconFixture(t);
 	const events = new EventEmitter();
@@ -100,18 +175,27 @@ test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last g
 		try {
 			return await Promise.race([
 				once(events, 'reload', { signal: controller.signal }),
-				once(events, 'failure', { signal: controller.signal }).then(([message]) => { throw new Error(String(message)); }),
+				once(events, 'failure', { signal: controller.signal }).then(([message]) => {
+					throw new Error(String(message));
+				}),
 			]);
-		} finally { controller.abort(); }
+		} finally {
+			controller.abort();
+		}
 	}
 	const plugin = productIconsPlugin({ ...fixture, debounceMilliseconds: 5 });
 	const close = plugin.closeBundle;
 	assert.equal(typeof close, 'function');
 	if (typeof close !== 'function') throw new Error('Missing plugin cleanup');
 	const logger = createLogger('silent');
-	logger.error = message => { events.emit('failure', message); };
+	logger.error = message => {
+		events.emit('failure', message);
+	};
 	const server = await createServer({
-		configFile: false, root: fixture.root, customLogger: logger, plugins: [plugin],
+		configFile: false,
+		root: fixture.root,
+		customLogger: logger,
+		plugins: [plugin],
 		server: { host: '127.0.0.1', port: 0 },
 		optimizeDeps: { noDiscovery: true, include: [] },
 	});
@@ -124,8 +208,12 @@ test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last g
 	};
 	await server.listen();
 	const original = JSON.parse(await readFile(join(fixture.sourceDirectory, 'font/manifest.json'), 'utf8'));
-	const paths = [fixture.outputFile, join(fixture.sourceDirectory, 'font/manifest.json'),
-	join(fixture.sourceDirectory, 'manifest.json'), ...['lxicon.woff2', 'lxicon-variable.woff2'].map(name => join(fixture.fontDirectory, name))];
+	const paths = [
+		fixture.outputFile,
+		join(fixture.sourceDirectory, 'font/manifest.json'),
+		join(fixture.sourceDirectory, 'manifest.json'),
+		...['lxicon.woff2', 'lxicon-variable.woff2'].map(name => join(fixture.fontDirectory, name)),
+	];
 	const contents = () => Promise.all(paths.map(path => readFile(path)));
 	const first = join(fixture.sourceDirectory, 'watch-first.svg');
 	const second = join(fixture.sourceDirectory, 'watch-second.svg');
@@ -140,8 +228,11 @@ test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last g
 	assert.equal(manifest.color['watch-second'], 'Source solid colors or opacity');
 	assert.match(await readFile(fixture.outputFile, 'utf8'), /watchFirst: registerLxicon\("watch-first", 0x[\da-f]+\)/);
 	const python = join(repository, '.build/product-icon-font/venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-	const { stdout } = await execute(python, ['-c',
-		'import json,sys; from fontTools.ttLib import TTFont; fonts=[TTFont(path) for path in sys.argv[1:]]; print(json.dumps([{ "cmap": font.getBestCmap(), "colors": [record.BaseGlyph for record in font["COLR"].table.BaseGlyphList.BaseGlyphPaintRecord] } for font in fonts]))', ...paths.slice(3)]);
+	const { stdout } = await execute(python, [
+		'-c',
+		'import json,sys; from fontTools.ttLib import TTFont; fonts=[TTFont(path) for path in sys.argv[1:]]; print(json.dumps([{ "cmap": font.getBestCmap(), "colors": [record.BaseGlyph for record in font["COLR"].table.BaseGlyphList.BaseGlyphPaintRecord] } for font in fonts]))',
+		...paths.slice(3),
+	]);
 	for (const font of JSON.parse(stdout)) {
 		assert.equal(font.cmap[parseInt(manifest.codepoints['watch-first'], 16)], 'watch-first');
 		assert.equal(font.cmap[parseInt(manifest.codepoints['watch-second'], 16)], 'watch-second');
@@ -159,7 +250,7 @@ test('SVG imports rebuild both real WOFF2 faces and the catalog, preserve last g
 	assert.notDeepEqual(after[3], before[3], 'the IDE face must rebuild even when the catalog stays unchanged');
 	assert.notDeepEqual(after[4], before[4], 'the Sessions face must rebuild as well');
 	const modified = await Promise.all(paths.map(async path => (await stat(path)).mtimeMs));
-	await plugin.buildStart();
+	await plugin.config();
 	assert.deepEqual(await Promise.all(paths.map(async path => (await stat(path)).mtimeMs)), modified, 'a no-op build must not rewrite watched outputs');
 
 	const broken = join(fixture.sourceDirectory, 'watch-broken.svg');

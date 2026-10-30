@@ -3,7 +3,7 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { FocusedViewContext } from '../../../common/contextkeys.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
-import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IMemoriesService } from '../../../../platform/memories/common/memoriesService.js';

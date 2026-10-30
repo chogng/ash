@@ -1,41 +1,43 @@
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 import { ITextFileService } from '../../../textfile/common/textfiles.js';
 import type { ITextFileSaveEvent } from '../../../textfile/common/textFileService.js';
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import { suite, test } from "mocha";
+import { suite, test } from 'mocha';
 import { DeferredPromise, raceCancellationError } from '../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { Emitter, Event } from "../../../../../base/common/event.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { Position } from "../../../../../editor/common/core/position.js";
-import { Range } from "../../../../../editor/common/core/range.js";
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageDiagnosticSeverity } from '../../../../../editor/common/languages.js';
-import { TextModel } from "../../../../../editor/common/model/textModel.js";
+import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
-import { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { AppServerRemoteError } from "../../../../../platform/agentHost/common/appServerError.js";
-import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
+import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { AppServerRemoteError } from '../../../../../platform/agentHost/common/appServerError.js';
+import { type ILanguageApi } from '../../../../../platform/language/common/languageApi.js';
 import { IWorkspaceTrustManagementService, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
-import { TestWorkspaceService } from "../../../configuration/test/common/testServices.js";
-import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
-import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
+import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
+import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from '../../../codeIntelligence/common/codeIntelligenceDocumentService.js';
+import { AppServerLanguageDiagnosticsService } from '../../browser/appServerLanguageDiagnosticsService.js';
 
 function createDiagnosticsService(api: FakeLanguageApi, events: FakeServerEvents, workspace: TestWorkspaceService, documents?: ICodeIntelligenceDocumentService, trust?: IWorkspaceTrustManagementService, saves: Event<ITextFileSaveEvent> = Event.None): AppServerLanguageDiagnosticsService {
 	using services = new InstantiationService();
+	using defaultTrust = new TestWorkspaceTrustManagementService();
 	services.registerInstance(IServerEventApi, events);
 	services.registerInstance(ITextFileService, { onDidSave: saves, onDidChangeFiles: Event.None, resolve: async () => { throw new Error('unexpected resolve'); }, save: async () => { throw new Error('unexpected save'); } });
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IConfigurationService, workspace);
-	services.registerInstance(IWorkspaceTrustManagementService, trust ?? {
+	services.registerInstance(IWorkspaceTrustManagementService, trust ?? Object.assign(defaultTrust, {
 		onDidChangeTrust: Event.None,
 		getUriTrustInfo: async () => { throw new Error('Backend-authorized diagnostics must not inspect host grants'); },
 		getWorkspaceTrustInfo: async () => undefined,
-	});
+	} satisfies Partial<IWorkspaceTrustManagementService>));
 	const service = services.createInstance(AppServerLanguageDiagnosticsService, api, documents, !!trust);
 	api.onServers = params => {
 		if (!api.negotiateCapabilities) return;
@@ -52,35 +54,35 @@ function createDiagnosticsService(api: FakeLanguageApi, events: FakeServerEvents
 	return service;
 }
 
-test("App Server diagnostics service synchronizes, filters revisions, and closes once", async () => {
+test('App Server diagnostics service synchronizes, filters revisions, and closes once', async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	const documents = new FakeCodeIntelligenceDocuments();
-	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('C:/project') });
 	using service = createDiagnosticsService(api, events, workspace, documents);
-	using model = new TextModel("fn main() {}\n");
-	const resource = URI.file("C:/project/main.rs");
-	using first = service.acquire(resource, "rust", model);
-	using second = service.acquire(resource, "rust", model);
+	using model = new TextModel('fn main() {}\n');
+	const resource = URI.file('C:/project/main.rs');
+	using first = service.acquire(resource, 'rust', model);
+	using second = service.acquire(resource, 'rust', model);
 	await tick();
 	assert.equal(api.synchronized.length, 1);
 	assert.equal(api.diagnosticPulls.length, 1);
-	assert.equal(api.synchronized[0]!.document.path, "main.rs");
+	assert.equal(api.synchronized[0]!.document.path, 'main.rs');
 	assert.deepEqual(documents.synchronized, api.synchronized.map(request => request.document));
 
-	events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error", message: "broken", code: "E1", source: "fixture" }] } });
-	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]!.message, "broken");
+	events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: 'error', message: 'broken', code: 'E1', source: 'fixture' }] } });
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]!.message, 'broken');
 	using publisher = service.createPublisher(resource);
-	publisher.update(1, [{ range: Range.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (7) + 1)), severity: LanguageDiagnosticSeverity.Error, message: "broken", code: "E1", source: "fixture" }]);
+	publisher.update(1, [{ range: Range.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (7) + 1)), severity: LanguageDiagnosticSeverity.Error, message: 'broken', code: 'E1', source: 'fixture' }]);
 	assert.equal(service.getDiagnostics(resource)?.diagnostics.length, 1);
 	assert.equal(service.getAllDiagnostics().length, 1);
-	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "// " }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: '// ' }]);
 	assert.equal(service.getDiagnostics(resource)?.revision, 1);
-	publisher.update(2, [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)), severity: LanguageDiagnosticSeverity.Warning, message: "local warning", source: "syntax" }]);
+	publisher.update(2, [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)), severity: LanguageDiagnosticSeverity.Warning, message: 'local warning', source: 'syntax' }]);
 	assert.equal(service.getDiagnostics(resource)?.revision, 2);
-	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]!.message, "local warning");
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]!.message, 'local warning');
 
-	events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 0, diagnostics: [] } });
+	events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: 0, diagnostics: [] } });
 	assert.equal(service.getDiagnostics(resource)?.revision, 2);
 	await new Promise(resolve => setTimeout(resolve, 200));
 	assert.equal(api.synchronized.at(-1)!.document.revision, 2);
@@ -89,7 +91,7 @@ test("App Server diagnostics service synchronizes, filters revisions, and closes
 	assert.equal(api.closed.length, 0);
 	first.dispose();
 	await tick();
-	assert.deepEqual(api.closed, [{ path: "main.rs" }]);
+	assert.deepEqual(api.closed, [{ path: 'main.rs' }]);
 	assert.deepEqual(documents.closed, api.closed.map(request => request.path));
 	assert.equal(service.getAllDiagnostics().length, 1);
 	publisher.dispose();
@@ -169,60 +171,60 @@ suite('App Server diagnostics shutdown', () => {
 	});
 });
 
-test("App Server diagnostics retain pushes received before the editor acquires its model", async () => {
+test('App Server diagnostics retain pushes received before the editor acquires its model', async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("/project") });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
-	const resource = URI.file("/project/main.rs");
-	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error" as const, message: "server diagnostic", code: null, source: "fixture" };
-	events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 1, diagnostics: [diagnostic] } });
-	using model = new TextModel("fn main() {}\n");
-	using acquisition = service.acquire(resource, "rust", model);
+	const resource = URI.file('/project/main.rs');
+	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: 'error' as const, message: 'server diagnostic', code: null, source: 'fixture' };
+	events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: 1, diagnostics: [diagnostic] } });
+	using model = new TextModel('fn main() {}\n');
+	using acquisition = service.acquire(resource, 'rust', model);
 	await tick();
-	assert.deepEqual(service.getAllDiagnostics().map(snapshot => ({ revision: snapshot.revision, messages: snapshot.diagnostics.map(diagnostic => diagnostic.message) })), [{ revision: 1, messages: ["server diagnostic"] }]);
+	assert.deepEqual(service.getAllDiagnostics().map(snapshot => ({ revision: snapshot.revision, messages: snapshot.diagnostics.map(diagnostic => diagnostic.message) })), [{ revision: 1, messages: ['server diagnostic'] }]);
 	acquisition.dispose();
 	await tick();
 	assert.deepEqual(service.getAllDiagnostics(), []);
 });
 
-test("App Server diagnostics discard a push from a different revision when acquiring a model", async () => {
+test('App Server diagnostics discard a push from a different revision when acquiring a model', async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("/project") });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
-	const resource = URI.file("/project/main.rs");
-	events.fire({ method: "language/diagnostics", params: { path: "main.rs", revision: 2, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: "error", message: "different revision", code: null, source: "fixture" }] } });
-	using model = new TextModel("fn main() {}\n");
-	using acquisition = service.acquire(resource, "rust", model);
+	const resource = URI.file('/project/main.rs');
+	events.fire({ method: 'language/diagnostics', params: { path: 'main.rs', revision: 2, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }, severity: 'error', message: 'different revision', code: null, source: 'fixture' }] } });
+	using model = new TextModel('fn main() {}\n');
+	using acquisition = service.acquire(resource, 'rust', model);
 	await tick();
 	assert.deepEqual(service.getAllDiagnostics(), []);
 });
 
-test("App Server diagnostics keep equal relative paths isolated by Workspace folder", async () => {
+test('App Server diagnostics keep equal relative paths isolated by Workspace folder', async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	const documents = new FakeCodeIntelligenceDocuments();
 	using workspace = new TestWorkspaceService({
-		id: "multi-root",
+		id: 'multi-root',
 		folders: [
-			{ id: "one", uri: URI.file("C:/one"), name: "one", index: 0 },
-			{ id: "two", uri: URI.file("C:/two"), name: "two", index: 1 },
+			{ id: 'one', uri: URI.file('C:/one'), name: 'one', index: 0 },
+			{ id: 'two', uri: URI.file('C:/two'), name: 'two', index: 1 },
 		],
-		configuration: URI.file("C:/project.code-workspace"),
+		configuration: URI.file('C:/project.code-workspace'),
 	});
 	using service = createDiagnosticsService(api, events, workspace, documents);
-	using model = new TextModel("fn second() {}\n");
-	const resource = URI.file("C:/two/main.rs");
-	using acquisition = service.acquire(resource, "rust", model);
+	using model = new TextModel('fn second() {}\n');
+	const resource = URI.file('C:/two/main.rs');
+	using acquisition = service.acquire(resource, 'rust', model);
 	await tick();
 
-	assert.equal(api.synchronized[0]!.document.dirId, "two");
+	assert.equal(api.synchronized[0]!.document.dirId, 'two');
 	assert.deepEqual(documents.synchronized, [], 'path-only code-intelligence overlays cannot identify a multi-root document');
-	events.fire({ method: "language/diagnostics", params: { dirId: "two", path: "main.rs", revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 9 } }, severity: "warning", message: "second root", code: null, source: "fixture" }] } });
-	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, "second root");
+	events.fire({ method: 'language/diagnostics', params: { dirId: 'two', path: 'main.rs', revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 9 } }, severity: 'warning', message: 'second root', code: null, source: 'fixture' }] } });
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'second root');
 });
 
 test('App Server diagnostics synchronize Shell documents using the grammar language identity', async () => {
@@ -257,55 +259,55 @@ class FakeLanguageApi implements ILanguageApi {
 	async save(_params: Parameters<ILanguageApi['save']>[0]): Promise<void> { }
 
 	availableServers = [
-		{ id: "typescript", languageIds: ["typescript", "typescriptreact", "javascript", "javascriptreact"] },
-		{ id: "rust", languageIds: ["rust"] },
-		{ id: "json", languageIds: ["json", "jsonc"] },
-		{ id: "shell", languageIds: ["shellscript"] },
+		{ id: 'typescript', languageIds: ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'] },
+		{ id: 'rust', languageIds: ['rust'] },
+		{ id: 'json', languageIds: ['json', 'jsonc'] },
+		{ id: 'shell', languageIds: ['shellscript'] },
 	];
 	readonly serverReads: Parameters<ILanguageApi['servers']>[0][] = [];
-	async servers(params: Parameters<ILanguageApi['servers']>[0]): ReturnType<ILanguageApi["servers"]> {
+	async servers(params: Parameters<ILanguageApi['servers']>[0]): ReturnType<ILanguageApi['servers']> {
 		this.serverReads.push(params);
 		this.onServers(params);
 		return { servers: this.availableServers };
 	}
 
-	readonly synchronized: Parameters<ILanguageApi["synchronize"]>[0][] = [];
-	readonly closed: Parameters<ILanguageApi["close"]>[0][] = [];
-	readonly diagnosticPulls: Parameters<ILanguageApi["documentDiagnostics"]>[0][] = [];
+	readonly synchronized: Parameters<ILanguageApi['synchronize']>[0][] = [];
+	readonly closed: Parameters<ILanguageApi['close']>[0][] = [];
+	readonly diagnosticPulls: Parameters<ILanguageApi['documentDiagnostics']>[0][] = [];
 	documentDiagnosticsError: Error | undefined;
 	workspaceDiagnosticPulls = 0;
 	directoryDiagnosticsError: Error | undefined;
-	workspaceReport: Awaited<ReturnType<ILanguageApi["directoryDiagnostics"]>> = { supported: false, snapshots: [] };
-	async synchronize(params: Parameters<ILanguageApi["synchronize"]>[0]): Promise<void> { this.synchronized.push(params); }
-	async close(params: Parameters<ILanguageApi["close"]>[0]): Promise<void> { this.closed.push(params); }
-	hover(): ReturnType<ILanguageApi["hover"]> { throw new Error("unused"); }
-	completions(): ReturnType<ILanguageApi["completions"]> { throw new Error("unused"); }
-	resolveCompletion(): ReturnType<ILanguageApi["resolveCompletion"]> { throw new Error("unused"); }
-	executeCommand(): ReturnType<ILanguageApi["executeCommand"]> { throw new Error("unused"); }
-	async documentDiagnostics(params: Parameters<ILanguageApi["documentDiagnostics"]>[0], _options?: Parameters<ILanguageApi['documentDiagnostics']>[1]): ReturnType<ILanguageApi["documentDiagnostics"]> { this.diagnosticPulls.push(params); if (this.documentDiagnosticsError) throw this.documentDiagnosticsError; return { revision: params.document.revision, kind: "unchanged", diagnostics: [] }; }
-	async directoryDiagnostics(_params: Parameters<ILanguageApi['directoryDiagnostics']>[0], _options?: Parameters<ILanguageApi['directoryDiagnostics']>[1]): ReturnType<ILanguageApi["directoryDiagnostics"]> { this.workspaceDiagnosticPulls += 1; if (this.directoryDiagnosticsError) throw this.directoryDiagnosticsError; return this.workspaceReport; }
-	formatDocument(): ReturnType<ILanguageApi["formatDocument"]> { throw new Error("unused"); }
-	formatOnType(): ReturnType<ILanguageApi["formatOnType"]> { throw new Error("unused"); }
-	formatRange(): ReturnType<ILanguageApi["formatRange"]> { throw new Error("unused"); }
-	signatureHelp(): ReturnType<ILanguageApi["signatureHelp"]> { throw new Error("unused"); }
-	inlayHints(): ReturnType<ILanguageApi["inlayHints"]> { throw new Error("unused"); }
-	linkedEditingRanges(): ReturnType<ILanguageApi["linkedEditingRanges"]> { throw new Error("unused"); }
-	semanticTokens(): ReturnType<ILanguageApi["semanticTokens"]> { throw new Error("unused"); }
-	documentSymbols(): ReturnType<ILanguageApi["documentSymbols"]> { throw new Error("unused"); }
-	codeLenses(): ReturnType<ILanguageApi["codeLenses"]> { throw new Error("unused"); }
-	resolveCodeLens(): ReturnType<ILanguageApi["resolveCodeLens"]> { throw new Error("unused"); }
-	documentLinks(): ReturnType<ILanguageApi["documentLinks"]> { throw new Error("unused"); }
-	resolveDocumentLink(): ReturnType<ILanguageApi["resolveDocumentLink"]> { throw new Error("unused"); }
-	documentColors(): ReturnType<ILanguageApi["documentColors"]> { throw new Error("unused"); }
-	colorPresentations(): ReturnType<ILanguageApi["colorPresentations"]> { throw new Error("unused"); }
-	foldingRanges(): ReturnType<ILanguageApi["foldingRanges"]> { throw new Error("unused"); }
-	locations(): ReturnType<ILanguageApi["locations"]> { throw new Error("unused"); }
-	hierarchy(): ReturnType<ILanguageApi["hierarchy"]> { throw new Error("unused"); }
-	directorySymbols(): ReturnType<ILanguageApi["directorySymbols"]> { throw new Error("unused"); }
-	prepareRename(): ReturnType<ILanguageApi["prepareRename"]> { throw new Error("unused"); }
-	rename(): ReturnType<ILanguageApi["rename"]> { throw new Error("unused"); }
-	codeActions(): ReturnType<ILanguageApi["codeActions"]> { throw new Error("unused"); }
-	resolveCodeAction(): ReturnType<ILanguageApi["resolveCodeAction"]> { throw new Error("unused"); }
+	workspaceReport: Awaited<ReturnType<ILanguageApi['directoryDiagnostics']>> = { supported: false, snapshots: [] };
+	async synchronize(params: Parameters<ILanguageApi['synchronize']>[0]): Promise<void> { this.synchronized.push(params); }
+	async close(params: Parameters<ILanguageApi['close']>[0]): Promise<void> { this.closed.push(params); }
+	hover(): ReturnType<ILanguageApi['hover']> { throw new Error('unused'); }
+	completions(): ReturnType<ILanguageApi['completions']> { throw new Error('unused'); }
+	resolveCompletion(): ReturnType<ILanguageApi['resolveCompletion']> { throw new Error('unused'); }
+	executeCommand(): ReturnType<ILanguageApi['executeCommand']> { throw new Error('unused'); }
+	async documentDiagnostics(params: Parameters<ILanguageApi['documentDiagnostics']>[0], _options?: Parameters<ILanguageApi['documentDiagnostics']>[1]): ReturnType<ILanguageApi['documentDiagnostics']> { this.diagnosticPulls.push(params); if (this.documentDiagnosticsError) throw this.documentDiagnosticsError; return { revision: params.document.revision, kind: 'unchanged', diagnostics: [] }; }
+	async directoryDiagnostics(_params: Parameters<ILanguageApi['directoryDiagnostics']>[0], _options?: Parameters<ILanguageApi['directoryDiagnostics']>[1]): ReturnType<ILanguageApi['directoryDiagnostics']> { this.workspaceDiagnosticPulls += 1; if (this.directoryDiagnosticsError) throw this.directoryDiagnosticsError; return this.workspaceReport; }
+	formatDocument(): ReturnType<ILanguageApi['formatDocument']> { throw new Error('unused'); }
+	formatOnType(): ReturnType<ILanguageApi['formatOnType']> { throw new Error('unused'); }
+	formatRange(): ReturnType<ILanguageApi['formatRange']> { throw new Error('unused'); }
+	signatureHelp(): ReturnType<ILanguageApi['signatureHelp']> { throw new Error('unused'); }
+	inlayHints(): ReturnType<ILanguageApi['inlayHints']> { throw new Error('unused'); }
+	linkedEditingRanges(): ReturnType<ILanguageApi['linkedEditingRanges']> { throw new Error('unused'); }
+	semanticTokens(): ReturnType<ILanguageApi['semanticTokens']> { throw new Error('unused'); }
+	documentSymbols(): ReturnType<ILanguageApi['documentSymbols']> { throw new Error('unused'); }
+	codeLenses(): ReturnType<ILanguageApi['codeLenses']> { throw new Error('unused'); }
+	resolveCodeLens(): ReturnType<ILanguageApi['resolveCodeLens']> { throw new Error('unused'); }
+	documentLinks(): ReturnType<ILanguageApi['documentLinks']> { throw new Error('unused'); }
+	resolveDocumentLink(): ReturnType<ILanguageApi['resolveDocumentLink']> { throw new Error('unused'); }
+	documentColors(): ReturnType<ILanguageApi['documentColors']> { throw new Error('unused'); }
+	colorPresentations(): ReturnType<ILanguageApi['colorPresentations']> { throw new Error('unused'); }
+	foldingRanges(): ReturnType<ILanguageApi['foldingRanges']> { throw new Error('unused'); }
+	locations(): ReturnType<ILanguageApi['locations']> { throw new Error('unused'); }
+	hierarchy(): ReturnType<ILanguageApi['hierarchy']> { throw new Error('unused'); }
+	directorySymbols(): ReturnType<ILanguageApi['directorySymbols']> { throw new Error('unused'); }
+	prepareRename(): ReturnType<ILanguageApi['prepareRename']> { throw new Error('unused'); }
+	rename(): ReturnType<ILanguageApi['rename']> { throw new Error('unused'); }
+	codeActions(): ReturnType<ILanguageApi['codeActions']> { throw new Error('unused'); }
+	resolveCodeAction(): ReturnType<ILanguageApi['resolveCodeAction']> { throw new Error('unused'); }
 }
 
 async function tick(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
@@ -408,38 +410,38 @@ test('pull capability is scoped to each directory for the same language', async 
 	assert.deepEqual(api.diagnosticPulls.map(request => request.document.dirId), ['one']);
 });
 
-test("App Server diagnostics service includes unopened workspace reports", async () => {
+test('App Server diagnostics service includes unopened workspace reports', async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	api.workspaceReport = { supported: true, snapshots: [{ path: "src/unopened.rs", diagnostics: [{ range: { start: { lineIndex: 2, columnIndex: 1 }, end: { lineIndex: 2, columnIndex: 4 } }, severity: "warning", message: "workspace warning", code: null, source: "fixture" }] }] };
-	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
+	api.workspaceReport = { supported: true, snapshots: [{ path: 'src/unopened.rs', diagnostics: [{ range: { start: { lineIndex: 2, columnIndex: 1 }, end: { lineIndex: 2, columnIndex: 4 } }, severity: 'warning', message: 'workspace warning', code: null, source: 'fixture' }] }] };
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('C:/project') });
 	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	await tick();
-	const resource = URI.file("C:/project/src/unopened.rs");
+	const resource = URI.file('C:/project/src/unopened.rs');
 	assert.equal(service.getDiagnostics(resource)?.revision, 0);
-	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, "workspace warning");
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, 'workspace warning');
 	assert.equal(service.getAllDiagnostics().length, 1);
 
-	using model = new TextModel("fn open() {}\n");
-	using acquisition = service.acquire(resource, "rust", model);
+	using model = new TextModel('fn open() {}\n');
+	using acquisition = service.acquire(resource, 'rust', model);
 	await tick();
 	assert.equal(service.getDiagnostics(resource), undefined);
 });
 
-test("App Server diagnostics reports real pull failures while retaining typed availability handling", async () => {
+test('App Server diagnostics reports real pull failures while retaining typed availability handling', async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	api.documentDiagnosticsError = new AppServerRemoteError(-32000, "Language request failed", { kind: "LanguageRequestFailed" });
-	api.directoryDiagnosticsError = new AppServerRemoteError(-32000, "Language service unavailable", { kind: "LanguageServiceUnavailable" });
+	api.documentDiagnosticsError = new AppServerRemoteError(-32000, 'Language request failed', { kind: 'LanguageRequestFailed' });
+	api.directoryDiagnosticsError = new AppServerRemoteError(-32000, 'Language service unavailable', { kind: 'LanguageServiceUnavailable' });
 	const reported: unknown[][] = [];
 	const originalConsoleError = console.error;
 	console.error = (...arguments_: unknown[]) => reported.push(arguments_);
 	try {
-		using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
+		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('C:/project') });
 		using service = createDiagnosticsService(api, events, workspace);
-		using model = new TextModel("fn main() {}\n");
-		using acquisition = service.acquire(URI.file("C:/project/main.rs"), "rust", model);
+		using model = new TextModel('fn main() {}\n');
+		using acquisition = service.acquire(URI.file('C:/project/main.rs'), 'rust', model);
 		await tick();
 		await tick();
 
@@ -451,41 +453,41 @@ test("App Server diagnostics reports real pull failures while retaining typed av
 	}
 });
 
-test("App Server diagnostics service waits for a workspace folder before pulling workspace diagnostics", async () => {
+test('App Server diagnostics service waits for a workspace folder before pulling workspace diagnostics', async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	using workspace = new TestWorkspaceService({ id: "empty-window" });
+	using workspace = new TestWorkspaceService({ id: 'empty-window' });
 	using service = createDiagnosticsService(api, events, workspace);
 
 	await tick();
 	assert.equal(api.workspaceDiagnosticPulls, 0);
 
-	workspace.updateWorkspace({ id: "workspace", uri: URI.file("C:/project") });
+	workspace.updateWorkspace({ id: 'workspace', uri: URI.file('C:/project') });
 	await tick();
 	await tick();
 	assert.ok(api.workspaceDiagnosticPulls > 0);
 });
 
-test("App Server diagnostics service gates Editor synchronization on directory permissions and replays open models after access is allowed", async () => {
+test('App Server diagnostics service gates Editor synchronization on directory permissions and replays open models after access is allowed', async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
 	using permissions = new FakeWorkspaceTrustService([]);
-	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("C:/project") });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('C:/project') });
 	using service = createDiagnosticsService(api, events, workspace, undefined, permissions);
-	using model = new TextModel("fn main() {}\n");
-	using acquisition = service.acquire(URI.file("C:/project/main.rs"), "rust", model);
+	using model = new TextModel('fn main() {}\n');
+	using acquisition = service.acquire(URI.file('C:/project/main.rs'), 'rust', model);
 
 	await tick();
 	await tick();
 	assert.equal(api.synchronized.length, 0);
 	assert.equal(api.workspaceDiagnosticPulls, 0);
 
-	permissions.value = ["executeCommands", "useLanguageServices"];
+	permissions.value = ['executeCommands', 'useLanguageServices'];
 	permissions.notify();
 	await tick();
 	await tick();
 	assert.equal(api.synchronized.length, 1);
-	assert.equal(api.synchronized[0]!.document.path, "main.rs");
+	assert.equal(api.synchronized[0]!.document.path, 'main.rs');
 	assert.ok(api.workspaceDiagnosticPulls > 0);
 
 	permissions.value = [];
@@ -493,39 +495,39 @@ test("App Server diagnostics service gates Editor synchronization on directory p
 	await tick();
 	await tick();
 	const synchronizedBeforeEdit = api.synchronized.length;
-	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "// " }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: '// ' }]);
 	await new Promise(resolve => setTimeout(resolve, 200));
 	assert.equal(api.synchronized.length, synchronizedBeforeEdit);
 });
 
-class FakeWorkspaceTrustService extends Disposable implements IWorkspaceTrustManagementService {
+class FakeWorkspaceTrustService extends TestWorkspaceTrustManagementService {
 	private readonly change = this._register(new Emitter<void>());
-	readonly onDidChangeTrust = this.change.event;
+	override readonly onDidChangeTrustedFolders = this.change.event;
 	constructor(public value: readonly WorkspaceTrustPermission[]) { super(); }
-	async getUriTrustInfo(uri: URI) { return { uri, trusted: false, permissions: this.value }; }
-	async getWorkspaceTrustInfo() { return undefined; }
+	override async getUriTrustInfo(uri: URI) { return { uri, trusted: false, permissions: this.value }; }
+	override async getWorkspaceTrustInfo() { return undefined; }
 	notify() { this.change.fire(); }
 }
 
-test("installing a language server synchronizes an already open document and uninstall stops it", async () => {
+test('installing a language server synchronizes an already open document and uninstall stops it', async () => {
 	const api = new FakeLanguageApi();
 	api.availableServers = [];
 	const events = new FakeServerEvents();
-	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("/project") });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	using service = createDiagnosticsService(api, events, workspace);
-	using model = new TextModel("value = 1", { languageId: "python" });
-	using acquisition = service.acquire(URI.file("/project/main.py"), "python", model);
+	using model = new TextModel('value = 1', { languageId: 'python' });
+	using acquisition = service.acquire(URI.file('/project/main.py'), 'python', model);
 	await tick();
 	assert.equal(api.synchronized.length, 0);
-	api.availableServers = [{ id: "pyright", languageIds: ["python"] }];
-	events.fire({ method: "extensions/changed", params: { instanceId: "test", generation: 2 } });
+	api.availableServers = [{ id: 'pyright', languageIds: ['python'] }];
+	events.fire({ method: 'extensions/changed', params: { instanceId: 'test', generation: 2 } });
 	await tick();
 	assert.equal(api.synchronized.length, 1);
-	assert.equal(api.synchronized[0]!.document.languageId, "python");
+	assert.equal(api.synchronized[0]!.document.languageId, 'python');
 	api.availableServers = [];
-	events.fire({ method: "extensions/changed", params: { instanceId: "test", generation: 3 } });
+	events.fire({ method: 'extensions/changed', params: { instanceId: 'test', generation: 3 } });
 	await tick();
-	model.applyEdits([{ range: new Range(1, 1, 1, 1), text: "# comment\n" }]);
+	model.applyEdits([{ range: new Range(1, 1, 1, 1), text: '# comment\n' }]);
 	await new Promise(resolve => setTimeout(resolve, 200));
 	assert.equal(api.synchronized.length, 1);
 });
@@ -804,25 +806,25 @@ for (const desktop of [false, true]) test(`profile configuration changes replay 
 });
 
 
-test("uninstall discards pending workspace diagnostic reports and late server notifications", async () => {
+test('uninstall discards pending workspace diagnostic reports and late server notifications', async () => {
 	const api = new FakeLanguageApi();
-	api.availableServers = [{ id: "pyright", languageIds: ["python"] }];
-	let complete!: (report: Awaited<ReturnType<ILanguageApi["directoryDiagnostics"]>>) => void;
+	api.availableServers = [{ id: 'pyright', languageIds: ['python'] }];
+	let complete!: (report: Awaited<ReturnType<ILanguageApi['directoryDiagnostics']>>) => void;
 	api.directoryDiagnostics = () => new Promise(resolve => { complete = resolve; });
 	const events = new FakeServerEvents();
-	using workspace = new TestWorkspaceService({ id: "workspace", uri: URI.file("/project") });
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/project') });
 	using service = createDiagnosticsService(api, events, workspace);
 	await tick();
 	api.availableServers = [];
-	events.fire({ method: "extensions/changed", params: { instanceId: "test", generation: 2 } });
+	events.fire({ method: 'extensions/changed', params: { instanceId: 'test', generation: 2 } });
 	await tick();
-	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: "error" as const, message: "removed server", code: null, source: "pyright" };
-	complete({ supported: true, snapshots: [{ path: "main.py", diagnostics: [diagnostic] }] });
+	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: 'error' as const, message: 'removed server', code: null, source: 'pyright' };
+	complete({ supported: true, snapshots: [{ path: 'main.py', diagnostics: [diagnostic] }] });
 	await tick();
 	assert.deepEqual(service.getAllDiagnostics(), []);
-	using model = new TextModel("x", { languageId: "python" });
-	using acquisition = service.acquire(URI.file("/project/main.py"), "python", model);
-	events.fire({ method: "language/diagnostics", params: { path: "main.py", revision: 1, diagnostics: [diagnostic] } });
+	using model = new TextModel('x', { languageId: 'python' });
+	using acquisition = service.acquire(URI.file('/project/main.py'), 'python', model);
+	events.fire({ method: 'language/diagnostics', params: { path: 'main.py', revision: 1, diagnostics: [diagnostic] } });
 	assert.deepEqual(service.getAllDiagnostics(), []);
 });
 

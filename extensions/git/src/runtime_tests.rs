@@ -12,6 +12,7 @@ fn status(stream: &str, revision: u64) -> Status {
         stream_instance_id: stream.into(),
         revision,
         history_revision: 1,
+        history_change_silent: false,
         path: String::new(),
         head: Head::Unborn {
             name: "main".into(),
@@ -36,6 +37,7 @@ fn repository(initial_status: Option<Status>) -> Repository {
         draft: "Retained draft".into(),
         input_revision: 7,
         operation: None,
+        history_operation_revision: 0,
         error: String::new(),
         notice: String::new(),
         commit_editor_head: None,
@@ -191,6 +193,7 @@ fn primary_action_only_synchronizes_outstanding_commits() {
             object_id: "commit".into(),
             upstream: Some(crate::model::Upstream {
                 name: "origin/main".into(),
+                object_id: None,
                 ahead,
                 behind,
             }),
@@ -210,4 +213,16 @@ fn primary_action_only_synchronizes_outstanding_commits() {
         object_id: "commit".into(),
     };
     assert_eq!(crate::scm::primary_action(&repository), "commit");
+}
+
+#[test]
+fn upstream_snapshots_preserve_optional_captured_commits() {
+    for value in [
+        serde_json::json!({"name":"origin/main","ahead":0,"behind":0}),
+        serde_json::json!({"name":"origin/main","objectId":"captured-tip","ahead":1,"behind":0}),
+    ] {
+        let upstream: crate::model::Upstream = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(upstream.object_id.as_deref(), value["objectId"].as_str());
+        assert_eq!(serde_json::to_value(upstream).unwrap(), value);
+    }
 }

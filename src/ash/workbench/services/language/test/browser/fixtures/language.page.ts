@@ -1,3 +1,4 @@
+import { TestWorkspaceTrustManagementService } from '../../../../../test/common/workbenchTestServices.js';
 import { ILanguageServerLifecycleService } from '../../../common/languageServerLifecycleService.js';
 import { IPaneCompositePartService } from '../../../../panecomposite/browser/panecomposite.js';
 import { IViewDescriptorService } from '../../../../../common/views.js';
@@ -128,11 +129,11 @@ api.completions = async params => {
 };
 const providerServices = store.add(statusServices.createChild());
 providerServices.registerInstance(IWorkspaceContextService, workspace);
-providerServices.registerInstance(IWorkspaceTrustManagementService, {
+providerServices.registerInstance(IWorkspaceTrustManagementService, store.add(Object.assign(new TestWorkspaceTrustManagementService(), {
 	onDidChangeTrust: Event.None,
 	getUriTrustInfo: async () => { throw new Error('Backend-authorized requests must not inspect host grants'); },
 	getWorkspaceTrustInfo: async () => undefined,
-});
+} satisfies Partial<IWorkspaceTrustManagementService>)));
 providerServices.registerInstance(IServerEventApi, { subscribe: listener => changes.event(listener) });
 providerServices.registerInstance(ILanguageServerLifecycleService, { start() {}, withActivity: (_document, _signal, operation) => operation() });
 const languageProviders = store.add(providerServices.createInstance(AppServerLanguageProviders, api, { checkWorkspaceTrust: false }));

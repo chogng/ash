@@ -638,6 +638,7 @@ where
         client.list_models()?
     } else {
         ModelListResult {
+            catalog_statuses: Vec::new(),
             catalog_scopes: None,
             models: Vec::new(),
         }

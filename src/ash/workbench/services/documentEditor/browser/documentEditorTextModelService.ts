@@ -1,15 +1,15 @@
 import { localize } from '../../../../nls.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { DocumentNode } from '../common/documentCodec.js';
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { AbstractDisposable, Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { AbstractDisposable, Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 import type { DocumentTextModel } from '../common/documentCodec.js';
-import type { TextModelBlockInput, TextModelWorkingCopyReference } from "../../textmodelResolver/common/textModelResourceService.js";
-import { ITextFileService } from "../../textfile/common/textfiles.js";
-import { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
+import type { TextModelBlockInput, TextModelWorkingCopyReference } from '../../textmodelResolver/common/textModelResourceService.js';
+import { ITextFileService } from '../../textfile/common/textfiles.js';
+import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 import type { IDocumentEditorTextModelService } from '../common/documentTypes.js';
-import { DocumentWorkingCopy } from "./documentWorkingCopy.js";
+import { DocumentWorkingCopy } from './documentWorkingCopy.js';
 
 /** Workbench persistence adapter for a DocumentTextModel opened by the document editor. */
 export class DocumentEditorTextModelService extends Disposable implements IDocumentEditorTextModelService {
@@ -21,7 +21,7 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 
 	async acquire(input: TextModelBlockInput, signal: AbortSignal): Promise<TextModelWorkingCopyReference> {
 		this.assertNotDisposed();
-		throwIfCancelled(signal, "Stanza document editor TextModel acquisition was cancelled");
+		throwIfCancelled(signal, 'Stanza document editor TextModel acquisition was cancelled');
 		if (!input.contentType) { throw new TypeError('Document acquisition requires a content type'); }
 		const key = extUri.getComparisonKey(input.resource);
 		const existing = this.entries.get(key);
@@ -33,7 +33,7 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 			resource: input.resource,
 			...(initialText === undefined ? {} : { bootstrapText: initialText }),
 		}, signal);
-		throwIfCancelled(signal, "Stanza document editor TextModel acquisition was cancelled");
+		throwIfCancelled(signal, 'Stanza document editor TextModel acquisition was cancelled');
 		this.assertNotDisposed();
 		const concurrent = this.entries.get(key);
 		if (concurrent) { return this.reference(key, concurrent, input); }
@@ -136,7 +136,7 @@ class TextModelWorkingCopyReferenceImpl extends AbstractDisposable implements Te
 		return this.workingCopy.save(signal);
 	}
 
-	saveAs(resource: TextModelWorkingCopyReference["resource"], signal: AbortSignal): Promise<void> {
+	saveAs(resource: TextModelWorkingCopyReference['resource'], signal: AbortSignal): Promise<void> {
 		return this.workingCopy.saveAs(resource, signal);
 	}
 

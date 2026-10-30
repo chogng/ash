@@ -1,4 +1,4 @@
-import "./selections.css";
+import './selections.css';
 import { h, reset, svg } from '../../../../base/browser/dom.js';
 import { createStanzaVisualSelectionGeometry, type VisualSelectionRectangle } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';

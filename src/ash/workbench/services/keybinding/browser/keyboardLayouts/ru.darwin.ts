@@ -39,7 +39,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Digit6: ['6', ',', '^', '¬', 0],
 		Digit7: ['7', '.', '&', '¶', 0],
 		Digit8: ['8', ';', '*', '√', 0],
-		Digit9: ['9', '(', '{', '\'', 0],
+		Digit9: ['9', '(', '{', "'", 0],
 		Digit0: ['0', ')', '}', '`', 0],
 		Enter: [],
 		Escape: [],

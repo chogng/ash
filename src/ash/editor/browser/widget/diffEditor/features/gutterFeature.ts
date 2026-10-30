@@ -43,7 +43,7 @@ export class DiffEditorGutter extends Disposable {
 	private readonly renderedItems = observableValue<readonly DiffGutterItem[]>(this, []);
 	private nextItemId = 0;
 	private enabled = false;
-	private renderRevert = false;
+	private inlineView = false;
 	private available = false;
 	private readonly contentHeightEmitter = this._register(new Emitter<void>());
 	public readonly onDidChangeContentHeight = this.contentHeightEmitter.event;
@@ -72,13 +72,13 @@ export class DiffEditorGutter extends Disposable {
 				// action availability changes the gutter, not for unrelated editor contexts.
 				if (this.available === this.hasActions()) return;
 				const width = this.width;
-				this.update(this.enabled, { renderRevert: this.renderRevert });
+				this.update(this.enabled, this.inlineView);
 				if (this.width !== width) this.onDidChangeWidth();
 			}));
 		}
 		this._register(editor.onDidChangeCursorSelection(() => {
 			if (this.items.some(item => item.isSelection) || editor.getSelections()?.some(selection => !selection.isEmpty())) {
-				this.update(this.enabled, { renderRevert: this.renderRevert });
+				this.update(this.enabled, this.inlineView);
 			}
 		}));
 		this._register(new EditorGutter(editor, this.domNode, {
@@ -95,10 +95,10 @@ export class DiffEditorGutter extends Disposable {
 		return this.enabled && this.available ? 35 : 0;
 	}
 
-	public update(enabled: boolean, options: { renderRevert: boolean; }): void {
+	public update(enabled: boolean, inlineView: boolean): void {
 		const previousHeight = this.getContentHeight();
 		this.enabled = enabled;
-		this.renderRevert = options.renderRevert;
+		this.inlineView = inlineView;
 		this.available = this.hasActions();
 		this.domNode.hidden = this.width === 0;
 		const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
@@ -127,7 +127,7 @@ export class DiffEditorGutter extends Disposable {
 	}
 
 	private get canRevert(): boolean {
-		return this.renderRevert && !this.editor.getOption(EditorOption.readOnly);
+		return !this.editor.getOption(EditorOption.readOnly);
 	}
 
 	private hasActions(): boolean {
@@ -186,7 +186,7 @@ export class DiffEditorGutter extends Disposable {
 				id: 'diffEditor.revert',
 				label: revertLabel,
 				tooltip: revertLabel,
-				icon: Lxicon.arrowRight,
+				icon: this.inlineView ? Lxicon.discard : Lxicon.arrowRight,
 				enabled: true,
 				run: () => menuId === MenuId.DiffEditorSelectionToolbar ? this.widget.revertRangeMappings(mapping.innerChanges ?? []) : this.widget.revert(mapping),
 			}] : [],

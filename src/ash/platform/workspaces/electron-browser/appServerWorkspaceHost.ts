@@ -12,9 +12,9 @@ import { parseWorkspace } from '../../workspace/common/workspace.js';
 import type { IWorkspaceContextApi } from '../../workspace/common/workspaceIpc.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import type { EnvDirSetEntry, PermissionDto } from '../../../../../.build/protocol/typescript/index.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type IWorkspaceTrustRequestService } from '../../workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type IDirectoryPermissionRequestService } from '../../workspace/common/workspaceTrust.js';
 
-export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi): Promise<void> {
+export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi): Promise<void> {
 	const generation = client.generation;
 	const workspace = parseWorkspace(await workspaceApi.getWorkspace());
 	if (generation !== client.generation || client.state !== 'ready') throw canceled();
@@ -25,7 +25,7 @@ export async function initializeWorkspace(client: AppServerProtocolClient, works
 }
 
 /** Binds only these directories on this connection; a label affects the trust prompt, never authorization. */
-export async function initializeWorkspaceDirectories(client: AppServerProtocolClient, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi, folders: readonly { readonly id: string; readonly path: string; readonly label?: string; }[]): Promise<void> {
+export async function initializeWorkspaceDirectories(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, folders: readonly { readonly id: string; readonly path: string; readonly label?: string; }[]): Promise<void> {
 	const generation = client.generation;
 	let retired = client.state !== 'ready';
 	const cancellation = new AbortController();
@@ -50,9 +50,9 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 				continue;
 			}
 			// The frontend prompt can outlive its connection; retiring setup must not wait for its answer.
-			const choice = await raceCancellationError(workspaceTrust.requestWorkspaceTrust(folder.label ?? path, cancellation.signal), cancellation.signal);
+			const choice = await raceCancellationError(workspaceTrust.requestDirectoryPermissions(folder.label ?? path, cancellation.signal), cancellation.signal);
 			assertCurrent();
-			if (choice === 'cancel') { throw new Error('Directory permission selection cancelled'); }
+			if (choice === 'cancel') { throw canceled(); }
 			if (choice !== 'development' && choice !== 'readOnly') { throw new TypeError('Invalid directory permission selection'); }
 			const permissions: PermissionDto[] = [...(choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS)];
 			const grant = await trustApi.createGrant(path, permissions);
@@ -61,14 +61,14 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 			assertCurrent();
 			dirs.push({ id: folder.id, path, grant: { type: 'config' } });
 		}
-		if (dirs.length) { await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs }); }
+		if (dirs.length) await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs });
 		assertCurrent();
 	} finally {
 		connection.dispose();
 	}
 }
 
-export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi, validateFolders: (folders: readonly URI[]) => void = () => { }, resourceForPath: (path: string) => URI = URI.file): IDisposable {
+export function registerAppServerWorkspaceHost(ready: () => Promise<void>, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, setFolders: (folders: readonly EnvDirSetEntry[]) => Promise<unknown>, validateFolders: (folders: readonly URI[]) => void = () => { }, resourceForPath: (path: string) => URI = URI.file): IDisposable {
 	const subscription = subscribe('ash:workspace:operation', (value: unknown) => {
 		if (!isRecord(value) || typeof value.nonce !== 'string' || !isRecord(value.params)) { return; }
 		const { nonce, operation, params } = value;
@@ -77,7 +77,7 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 			switch (operation) {
 				case 'selectPermissions': {
 					if (typeof params.path !== 'string') throw new TypeError('Invalid directory path');
-					return workspaceTrust.requestWorkspaceTrust(params.path);
+					return workspaceTrust.requestDirectoryPermissions(params.path);
 				}
 				case 'readPermissions': {
 					const request = decodeAppServerRequestParams('config/directoryGrants/read', params);
@@ -107,7 +107,7 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 					validateFolders(request.dirs.map(folder => resourceForPath(folder.path)));
 					return;
 				}
-				case 'setFolders': return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));
+				case 'setFolders': return setFolders(decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }).dirs);
 				default: throw new Error('Unknown workspace operation');
 			}
 		};

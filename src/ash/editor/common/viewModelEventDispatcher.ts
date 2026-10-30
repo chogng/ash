@@ -584,5 +584,3 @@ export class ModelFontChangedEvent {
 		return null;
 	}
 }
-
-

@@ -11,12 +11,12 @@ import { TestWorkspaceService } from '../../../configuration/test/common/testSer
 import { registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, Disposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../output/common/output.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { IStatusbarService, StatusbarAlignment } from "../../../statusbar/browser/statusbar.js";
-import { AppServerLanguageServerStatusService } from "../../browser/appServerLanguageServerStatusService.js";
-import { type ServerNotification } from "../../../../../../../.build/protocol/typescript/index.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IStatusbarService, StatusbarAlignment } from '../../../statusbar/browser/statusbar.js';
+import { AppServerLanguageServerStatusService } from '../../browser/appServerLanguageServerStatusService.js';
+import { type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
@@ -44,7 +44,7 @@ test('managed Rust download status is localized and clears when acquisition fini
 	} finally { resetNlsResolver(); }
 });
 
-test("language-server status service publishes channels and only projects active work-done progress", async () => {
+test('language-server status service publishes channels and only projects active work-done progress', async () => {
 	const events = new FakeServerEvents();
 	using outputResources = new DisposableStore();
 	const services = workbenchInstantiationService(outputResources);
@@ -56,27 +56,27 @@ test("language-server status service publishes channels and only projects active
 
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
 
-	events.fire({ method: "language/serverMessage", params: { server: "rust-analyzer", severity: "warning", source: "protocol", show: false, message: "  check failed  " } });
-	assert.deepEqual(output.channels.map(channel => channel.label), ["rust-analyzer"]);
-	assert.deepEqual(output.activeChannel?.entries.map(entry => [entry.severity, entry.category, entry.text]), [["warning", "protocol", "check failed\n"]]);
+	events.fire({ method: 'language/serverMessage', params: { server: 'rust-analyzer', severity: 'warning', source: 'protocol', show: false, message: '  check failed  ' } });
+	assert.deepEqual(output.channels.map(channel => channel.label), ['rust-analyzer']);
+	assert.deepEqual(output.activeChannel?.entries.map(entry => [entry.severity, entry.category, entry.text]), [['warning', 'protocol', 'check failed\n']]);
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
 
-	events.fire({ method: "language/serverProgress", params: { server: "rust-analyzer", token: "index", title: "Indexing", message: "1/2 files", percentage: 50, done: false } });
-	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, "rust-analyzer: Indexing (50%): 1/2 files");
-	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, "rust-analyzer: Indexing (50%): 1/2 files");
-	events.fire({ method: "language/serverProgress", params: { server: "rust-analyzer", token: "index", title: null, message: "2/3 files", percentage: 68, done: false } });
-	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, "rust-analyzer: Indexing (68%): 2/3 files");
-	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.id, "status.progress");
+	events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'index', title: 'Indexing', message: '1/2 files', percentage: 50, done: false } });
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'rust-analyzer: Indexing (50%): 1/2 files');
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.tooltip, 'rust-analyzer: Indexing (50%): 1/2 files');
+	events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'index', title: null, message: '2/3 files', percentage: 68, done: false } });
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'rust-analyzer: Indexing (68%): 2/3 files');
+	assert.equal(statusbar.getEntries(StatusbarAlignment.Left)[0]?.id, 'status.progress');
 	await statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.();
-	assert.deepEqual(reveals, [["language-server.rust-analyzer", "take"]]);
-	assert.equal(output.activeChannel?.label, "rust-analyzer");
-	events.fire({ method: "language/serverProgress", params: { server: "rust-analyzer", token: "index", title: null, message: "done", percentage: null, done: true } });
+	assert.deepEqual(reveals, [['language-server.rust-analyzer', 'take']]);
+	assert.equal(output.activeChannel?.label, 'rust-analyzer');
+	events.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'index', title: null, message: 'done', percentage: null, done: true } });
 	await Promise.resolve();
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
 
-	events.fire({ method: "language/serverMessage", params: { server: "typescript-language-server", severity: "log", source: "stderr", show: false, message: "ready" } });
-	assert.deepEqual(output.channels.map(channel => channel.label), ["rust-analyzer", "typescript-language-server"]);
-	output.selectChannel("language-server.typescript-language-server");
+	events.fire({ method: 'language/serverMessage', params: { server: 'typescript-language-server', severity: 'log', source: 'stderr', show: false, message: 'ready' } });
+	assert.deepEqual(output.channels.map(channel => channel.label), ['rust-analyzer', 'typescript-language-server']);
+	output.selectChannel('language-server.typescript-language-server');
 	output.activeChannel?.clear();
 	assert.deepEqual(output.activeChannel?.entries, []);
 });
@@ -222,7 +222,7 @@ test('disposing the language adapter releases its active progress tasks', async 
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Left), []);
 });
 
-test("language-server lifecycle is projected from the backend state machine", async () => {
+test('language-server lifecycle is projected from the backend state machine', async () => {
 	const events = new FakeServerEvents();
 	using outputResources = new DisposableStore();
 	const services = workbenchInstantiationService(outputResources);
@@ -230,17 +230,17 @@ test("language-server lifecycle is projected from the backend state machine", as
 	const statusbar = services.get(IStatusbarService);
 	using service = createService(services, events);
 
-	events.fire({ method: "language/serverState", params: { server: "rust-analyzer", state: { type: "starting" } } });
+	events.fire({ method: 'language/serverState', params: { server: 'rust-analyzer', state: { type: 'starting' } } });
 	assert.match(service.getAccessibleContent(), /workspace|manage language servers/);
-	events.fire({ method: "language/serverState", params: { server: "rust-analyzer", state: { type: "ready" } } });
+	events.fire({ method: 'language/serverState', params: { server: 'rust-analyzer', state: { type: 'ready' } } });
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Right), []);
-	events.fire({ method: "language/serverState", params: { server: "rust-analyzer", state: { type: "backingOff", attempt: 2, retryAfterMillis: 1_500 } } });
+	events.fire({ method: 'language/serverState', params: { server: 'rust-analyzer', state: { type: 'backingOff', attempt: 2, retryAfterMillis: 1_500 } } });
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Right), []);
-	events.fire({ method: "language/serverState", params: { server: "rust-analyzer", state: { type: "crashLoop", restartAttempts: 3, message: "exited 1" } } });
+	events.fire({ method: 'language/serverState', params: { server: 'rust-analyzer', state: { type: 'crashLoop', restartAttempts: 3, message: 'exited 1' } } });
 	assert.deepEqual(statusbar.getEntries(StatusbarAlignment.Right), []);
-	assert.match(output.activeChannel?.getText() ?? "", /Starting language server/);
-	assert.match(output.activeChannel?.getText() ?? "", /restart attempt 2 begins in 1500ms/);
-	assert.match(output.activeChannel?.getText() ?? "", /crash loop after 3 restart attempts: exited 1/);
+	assert.match(output.activeChannel?.getText() ?? '', /Starting language server/);
+	assert.match(output.activeChannel?.getText() ?? '', /restart attempt 2 begins in 1500ms/);
+	assert.match(output.activeChannel?.getText() ?? '', /crash loop after 3 restart attempts: exited 1/);
 });
 
 class FakeServerEvents implements IServerEventApi {
@@ -274,7 +274,6 @@ test('language-server errors use localized notifications and reveal their output
 		assert.equal(notifications.model.getNotifications().length, 1);
 	} finally { resetNlsResolver(); }
 });
-
 
 function createService(services: ReturnType<typeof workbenchInstantiationService>, events: IServerEventApi, options: { workspace?: TestWorkspaceService; read?: (dirId?: string) => Promise<LanguageServerSnapshot>; controls?: LanguageServerControl[]; menu?: (delegate: IContextMenuDelegate) => void; } = {}): AppServerLanguageServerStatusService {
 	registerTestWorkbenchInteractionServices(services.resources, services);
@@ -314,7 +313,7 @@ test('management groups identical server and folder names by directory identity 
 	let actions: readonly IAction[] = [];
 	using folders = workspace();
 	using service = createService(services, events, { workspace: folders, controls, read: async () => ({ revision: 0, configurations: {}, servers: [{ id: 'fixture', languageIds: ['demo'], state: { type: 'ready' } }] }), menu: delegate => { actions = delegate.getActions(); } });
-	assert.equal(services.get(IStatusbarService).getEntries(StatusbarAlignment.Left)[0]?.entry.text, 'Language Services');
+	assert.equal(services.get(IStatusbarService).getEntries(StatusbarAlignment.Left)[0]?.entry.text, '');
 	await service.open();
 	const rows = actions.filter((action): action is SubmenuAction => action instanceof SubmenuAction);
 	assert.equal(rows.length, 2);

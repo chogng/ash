@@ -218,7 +218,9 @@ test.describe('SCM editor groups', () => {
 		await Promise.all(bulkFiles.map(path => writeFile(join(testWorkspace.directory, path), 'export const bulk = 1;\n')));
 		await run('git', ['add', '--', ...bulkFiles], { cwd: testWorkspace.directory });
 		await bindResourceGroupNavigation(workbench);
+		await workbench.git.open();
 		const page = workbench.page;
+		await workbench.menus.select(application, () => page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as Tree']);
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const group = (label: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText(label, { exact: true }) });
 		const focused = async (label: string): Promise<void> => {
@@ -274,6 +276,7 @@ test.describe('SCM editor groups', () => {
 		await prepareGroupChanges(testWorkspace.directory);
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		await workbench.menus.select(application, () => page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as Tree']);
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const group = (label: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText(label, { exact: true }) });
 		const folder = (groupId: string, label: string) => tree.locator(`[role="treeitem"][data-tree-id*='${JSON.stringify(groupId)}']`).filter({ has: page.locator('.ash-scm-folder').getByText(label, { exact: true }) });
@@ -318,6 +321,7 @@ test.describe('SCM editor groups', () => {
 		({ application, workbench } = await restartWorkbench());
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^源代码管理(?:,|$)/u }).click();
+		await workbench.menus.select(application, () => page.getByRole('toolbar', { name: '源代码管理操作', exact: true }).getByRole('button', { name: '更多操作', exact: true }).click(), ['以树形式查看']);
 		const tree = page.getByRole('tree', { name: '源代码管理更改', exact: true });
 		await expect(tree.getByRole('button', { name: '打开 暂存的更改 的src/nested/two.ts', exact: true })).toBeVisible();
 		await expect(tree).toHaveAttribute('aria-description', /Shift\+F10.*全部折叠/u);
@@ -331,12 +335,13 @@ test.describe('SCM editor groups', () => {
 		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
 	});
 
-	test('SCM directories fold with the keyboard and retain state across Git refreshes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	test('SCM directories fold with the keyboard and retain state across Git refreshes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		await mkdir(join(testWorkspace.directory, 'src/nested'), { recursive: true });
 		await writeFile(join(testWorkspace.directory, 'src/first.ts'), 'export const first = 1;\n');
 		await writeFile(join(testWorkspace.directory, 'src/nested/second.ts'), 'export const second = 2;\n');
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		await workbench.menus.select(application, () => page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as Tree']);
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const folder = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-folder').filter({ has: page.getByText('src', { exact: true }) }) });
 		const first = tree.getByRole('button', { name: 'Open src/first.ts for Changes', exact: true });
@@ -364,6 +369,51 @@ test.describe('SCM editor groups', () => {
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'first.ts' })).toHaveCount(1);
 		await expect(tree).toBeFocused();
 	});
+
+	for (const [locale, untrackedChanges] of [['en', 'mixed'], ['zh-CN', 'separate']]) {
+		test(`SCM untracked files open without diff markers and retain staged comparisons in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }, testInfo) => {
+			const contents = 'export const first = 1;\nexport const second = 2;\n';
+			await writeFile(join(testWorkspace.directory, 'new.ts'), contents);
+			const settings = await readUserSettings(workbench.page);
+			await writeUserSettings(workbench.page, JSON.stringify({
+				...parseJsonc(settings.content) as Record<string, unknown>,
+				'git.untrackedChanges': untrackedChanges,
+			}), settings.revision);
+			if (locale === 'zh-CN') {
+				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+				const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+				await picker.getByRole('combobox').fill('简体中文');
+				await picker.getByRole('combobox').press('Enter');
+				({ workbench } = await restartWorkbench());
+			}
+			const page = workbench.page;
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
+			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
+			const row = tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 未跟踪的更改 的new.ts' : 'Open new.ts for Changes', exact: true });
+			const group = workbench.editors.groupAt(0);
+			const assertPlainFile = async () => {
+				await expect(row.locator('xpath=..').locator('.ash-scm-change-status')).toHaveText('U');
+				await row.click();
+				await expect(group.content.locator('.stanza-diff-editor:visible')).toHaveCount(0);
+				await group.editor.waitForEditorContents(text => text.trimEnd() === contents.trimEnd());
+				await workbench.quickaccess.runCommand('scm.quickDiff.next');
+				await expect(page.locator('.ash-quick-diff-peek')).toHaveCount(0);
+				await expect(group.editor.element.locator('.ash-quick-diff-gutter')).toHaveCount(0);
+			};
+			await assertPlainFile();
+			await testInfo.attach(`untracked-file-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
+			await row.hover();
+			await row.locator('xpath=..').getByRole('button', { name: locale === 'zh-CN' ? '暂存更改' : 'Stage Changes', exact: true }).click();
+			const staged = tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 暂存的更改 的new.ts' : 'Open new.ts for Staged Changes', exact: true });
+			await staged.click();
+			await expect(group.content.locator('.stanza-diff-editor')).toBeVisible();
+			await expect(group.content.locator('.modified .stanza-diff-line-added')).toHaveCount(2);
+			await staged.hover();
+			await staged.locator('xpath=..').getByRole('button', { name: locale === 'zh-CN' ? '取消暂存更改' : 'Unstage Changes', exact: true }).click();
+			await assertPlainFile();
+			expect(await readFile(join(testWorkspace.directory, 'new.ts'), 'utf8')).toBe(contents);
+		});
+	}
 
 	test('Git Quick Diff opens its baseline and updates decorations for unsaved edits', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
@@ -732,6 +782,7 @@ test.describe('SCM editor groups', () => {
 			return { arrowWidth: twistie.width, contentOffset: contents.x - bounds.x, guideOffset: guide.x - bounds.x };
 		});
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		await workbench.menus.select(application, () => page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as Tree']);
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const row = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open src/details.ts for Changes', exact: true }) });
 		await expect(row).toBeVisible();
@@ -775,9 +826,9 @@ test.describe('SCM editor groups', () => {
 	test('Git badges and file decorations update together across Explorer, tabs, Open Editors and SCM', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		const page = workbench.page;
 		const gitTab = page.locator('.ash-composite-bar-item[data-action-id="ash.git"]');
-		const activity = gitTab.locator('.ash-count-badge');
+		const activity = gitTab.locator('.ash-composite-bar-badge');
 		await expect(activity).toHaveText('1');
-		await expect(gitTab).toHaveAttribute('aria-label', 'Git, 1 changed file');
+		await expect(gitTab).toHaveAttribute('aria-label', 'Source Control, 1 changed file');
 		const explorerLabel = page.locator('.ash-explorer .ash-icon-label').filter({ has: page.getByText('main.ts', { exact: true }) });
 		await expect(explorerLabel).toHaveAttribute('aria-label', 'main.ts, Modified');
 		await explorerLabel.dblclick();
@@ -795,7 +846,7 @@ test.describe('SCM editor groups', () => {
 		await expect(activity).toHaveText('1');
 		await run('git', ['restore', '--staged', '--worktree', 'main.ts'], { cwd: testWorkspace.directory });
 		await expect(activity).toHaveCount(0);
-		await expect(gitTab).toHaveAttribute('aria-label', 'Git');
+		await expect(gitTab).toHaveAttribute('aria-label', 'Source Control');
 		await expect(editorLabel).toHaveAttribute('aria-label', 'main.ts');
 		await page.locator('.ash-composite-bar-item[data-action-id="ash.sidebar"]').click();
 		await expect(openEditorLabel).toHaveAttribute('aria-label', 'main.ts');

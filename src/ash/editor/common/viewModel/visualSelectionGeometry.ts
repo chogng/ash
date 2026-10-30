@@ -1,6 +1,6 @@
-import { type Selection } from "../core/selection.js";
-import { type TextModel } from "../model/textModel.js";
-import { type EditorVisualLineProjection } from "./modelLineProjection.js";
+import { type Selection } from '../core/selection.js';
+import { type TextModel } from '../model/textModel.js';
+import { type EditorVisualLineProjection } from './modelLineProjection.js';
 import { type EditorLineRange, type TextMeasurer } from '../viewModel.js';
 
 export interface VisualSelectionRectangle {
@@ -25,7 +25,7 @@ export interface VisualSelectionGeometry {
 /** @internal */
 export function createStanzaVisualSelectionGeometry(model: TextModel, selectionSet: readonly Selection[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): VisualSelectionGeometry {
 	if (projection.modelVersion !== model.version) {
-		throw new Error("Visual selection geometry requires the current text model projection");
+		throw new Error('Visual selection geometry requires the current text model projection');
 	}
 	const carets: VisualCaretRectangle[] = [];
 	for (let selectionIndex = 0; selectionIndex < selectionSet.length; selectionIndex += 1) {
@@ -49,15 +49,22 @@ export function createStanzaVisualSelectionGeometry(model: TextModel, selectionS
 	});
 }
 
-function selectionRectangles(model: TextModel, selections: readonly Selection[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): readonly VisualSelectionRectangle[] {
+function selectionRectangles(
+	model: TextModel,
+	selections: readonly Selection[],
+	projection: EditorVisualLineProjection,
+	renderLines: EditorLineRange,
+	textLeft: number,
+	measurer: TextMeasurer,
+): readonly VisualSelectionRectangle[] {
 	const rectangles: VisualSelectionRectangle[] = [];
-	const newlineWidth = measurer.measureLineWidth(" ");
+	const newlineWidth = measurer.measureLineWidth(' ');
 	for (let selectionIndex = 0; selectionIndex < selections.length; selectionIndex += 1) {
 		const range = selections[selectionIndex]!;
 		if (range.isEmpty()) continue;
 		for (let visualLineIndex = renderLines.startLineIndex; visualLineIndex < renderLines.endLineIndexExclusive; visualLineIndex += 1) {
 			const visualLine = projection.lineAt(visualLineIndex);
-			if (!visualLine || (visualLine.logicalLineIndex < range.startLineNumber - 1 || visualLine.logicalLineIndex > range.endLineNumber - 1)) continue;
+			if (!visualLine || visualLine.logicalLineIndex < range.startLineNumber - 1 || visualLine.logicalLineIndex > range.endLineNumber - 1) continue;
 			const logicalText = model.getLineContent((visualLine.logicalLineIndex) + 1);
 			const startsOnLogicalLine = visualLine.logicalLineIndex === range.startLineNumber - 1;
 			const endsOnLogicalLine = visualLine.logicalLineIndex === range.endLineNumber - 1;

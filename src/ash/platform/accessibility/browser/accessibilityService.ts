@@ -1,10 +1,10 @@
-import { alert, setARIAContainer, status } from "../../../base/browser/ui/aria/aria.js";
-import { Emitter } from "../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { IContextKey } from "../../contextkey/common/contextkey.js";
-import { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
-import { IConfigurationService } from "../../configuration/common/configuration.js";
-import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED, IAccessibilityService, type AccessibilityReductionConfiguration, type AccessibilitySupportConfiguration } from "../common/accessibility.js";
+import { alert, setARIAContainer, status } from '../../../base/browser/ui/aria/aria.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { IContextKey } from '../../contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../configuration/common/configuration.js';
+import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED, IAccessibilityService, type AccessibilityReductionConfiguration, type AccessibilitySupportConfiguration } from '../common/accessibility.js';
 
 /** Inputs required by the browser-independent accessibility policy. */
 export interface AccessibilityServiceOptions {
@@ -50,25 +50,25 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 		this._register(setARIAContainer(options.root));
 		this._register(toDisposable(() => {
 			this.accessibilityModeEnabledContext.reset();
-			this.root.classList.remove("ash-reduce-motion", "ash-enable-motion", "ash-reduce-transparency", "ash-underline-links");
+			this.root.classList.remove('ash-reduce-motion', 'ash-enable-motion', 'ash-reduce-transparency', 'ash-underline-links');
 		}));
 
 		const ownerWindow = ownerDocument.defaultView;
-		const motionMatcher = createMediaMatcher(ownerWindow, "(prefers-reduced-motion: reduce)");
-		const transparencyMatcher = createMediaMatcher(ownerWindow, "(prefers-reduced-transparency: reduce)");
+		const motionMatcher = createMediaMatcher(ownerWindow, '(prefers-reduced-motion: reduce)');
+		const transparencyMatcher = createMediaMatcher(ownerWindow, '(prefers-reduced-transparency: reduce)');
 		this.systemMotionReduced = motionMatcher?.matches ?? false;
 		this.systemTransparencyReduced = transparencyMatcher?.matches ?? false;
 		if (motionMatcher) {
 			this._register(listenToMediaQuery(motionMatcher, () => {
 				this.systemMotionReduced = motionMatcher.matches;
-				if (this.configMotionReduced === "auto") this.onDidChangeReducedMotionEmitter.fire();
+				if (this.configMotionReduced === 'auto') this.onDidChangeReducedMotionEmitter.fire();
 				this.updateMotionClasses();
 			}));
 		}
 		if (transparencyMatcher) {
 			this._register(listenToMediaQuery(transparencyMatcher, () => {
 				this.systemTransparencyReduced = transparencyMatcher.matches;
-				if (this.configTransparencyReduced === "auto") this.onDidChangeReducedTransparencyEmitter.fire();
+				if (this.configTransparencyReduced === 'auto') this.onDidChangeReducedTransparencyEmitter.fire();
 				this.updateTransparencyClass();
 			}));
 		}
@@ -107,15 +107,15 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 
 	isScreenReaderOptimized(): boolean {
 		const configured = this.configurationService.getValue<AccessibilitySupportConfiguration>(AccessibilityConfiguration.editorAccessibilitySupport);
-		return configured === "on" || (configured === "auto" && this.accessibilitySupport === AccessibilitySupport.Enabled);
+		return configured === 'on' || (configured === 'auto' && this.accessibilitySupport === AccessibilitySupport.Enabled);
 	}
 
 	isMotionReduced(): boolean {
-		return this.configMotionReduced === "on" || (this.configMotionReduced === "auto" && this.systemMotionReduced);
+		return this.configMotionReduced === 'on' || (this.configMotionReduced === 'auto' && this.systemMotionReduced);
 	}
 
 	isTransparencyReduced(): boolean {
-		return this.configTransparencyReduced === "on" || (this.configTransparencyReduced === "auto" && this.systemTransparencyReduced);
+		return this.configTransparencyReduced === 'on' || (this.configTransparencyReduced === 'auto' && this.systemTransparencyReduced);
 	}
 
 	getAccessibilitySupport(): AccessibilitySupport {
@@ -143,16 +143,16 @@ export class AccessibilityService extends Disposable implements IAccessibilitySe
 
 	private updateMotionClasses(): void {
 		const reduced = this.isMotionReduced();
-		this.root.classList.toggle("ash-reduce-motion", reduced);
-		this.root.classList.toggle("ash-enable-motion", !reduced);
+		this.root.classList.toggle('ash-reduce-motion', reduced);
+		this.root.classList.toggle('ash-enable-motion', !reduced);
 	}
 
 	private updateTransparencyClass(): void {
-		this.root.classList.toggle("ash-reduce-transparency", this.isTransparencyReduced());
+		this.root.classList.toggle('ash-reduce-transparency', this.isTransparencyReduced());
 	}
 
 	private updateLinkUnderlineClass(): void {
-		this.root.classList.toggle("ash-underline-links", this.linkUnderlinesEnabled);
+		this.root.classList.toggle('ash-underline-links', this.linkUnderlinesEnabled);
 	}
 }
 
@@ -167,9 +167,9 @@ function createMediaMatcher(ownerWindow: Window | null, query: string): MediaQue
 function listenToMediaQuery(matcher: MediaQueryList, listener: () => void) {
 	const eventListener = () => listener();
 	const legacyMatcher = matcher as MediaQueryList & { addListener?: (listener: (event: MediaQueryListEvent) => void) => void; removeListener?: (listener: (event: MediaQueryListEvent) => void) => void; };
-	if (typeof matcher.addEventListener === "function") {
-		matcher.addEventListener("change", eventListener);
-		return toDisposable(() => matcher.removeEventListener("change", eventListener));
+	if (typeof matcher.addEventListener === 'function') {
+		matcher.addEventListener('change', eventListener);
+		return toDisposable(() => matcher.removeEventListener('change', eventListener));
 	}
 	legacyMatcher.addListener?.(eventListener);
 	return toDisposable(() => legacyMatcher.removeListener?.(eventListener));

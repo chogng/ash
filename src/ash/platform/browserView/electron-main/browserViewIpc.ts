@@ -3,7 +3,7 @@ import type { Event } from '../../../base/common/event.js';
 import type { IChannel, IServerChannel } from '../../../base/parts/ipc/common/ipc.js';
 import type {
 	IpcRoute,
-} from "../../ipc/electron-main/trustedIpcRouter.js";
+} from '../../ipc/electron-main/trustedIpcRouter.js';
 import {
 	type IBrowserViewCreateRequest,
 	type IBrowserViewLayoutRequest,
@@ -15,7 +15,7 @@ import {
 	validateBrowserViewNavigateRequest,
 	validateBrowserViewTargetRequest,
 	validateBrowserViewVisibilityRequest,
-} from "../common/browserView.js";
+} from '../common/browserView.js';
 
 import type { IBrowserViewService } from '../common/browserView.js';
 import { isRecord } from '../../../base/common/types.js';
@@ -131,7 +131,7 @@ export function browserViewChannel(service: IBrowserViewService, sharing: IChann
 function callPreloadService(service: IBrowserViewService, command: string, value: unknown): Promise<unknown> | undefined {
 	const arity: Record<string, readonly [number, number]> = {
 		updateWindowConfiguration: [2, 2],
-		getConsoleLogs: [1, 1], getSelectedText: [1, 1],
+		getConsoleLogs: [1, 1], getSelectedText: [1, 1], getAccessibilityTree: [1, 1],
 		findInPage: [2, 3],
 		stopFindInPage: [1, 2],
 		toggleElementSelection: [1, 3],
@@ -182,6 +182,7 @@ function callPreloadService(service: IBrowserViewService, command: string, value
 	if (command === 'getSelectedText') {
 		return service.getSelectedText(targetId);
 	}
+	if (command === 'getAccessibilityTree') { return service.getAccessibilityTree(targetId); }
 	if (command === 'findInPage') {
 		if (
 			typeof args[1] !== 'string' ||

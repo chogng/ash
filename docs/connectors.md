@@ -204,3 +204,9 @@ Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状�
 使用 broker 时把 `type` 改为 `githubBrokered`，并增加 `brokerBaseUrl`；broker API 固定为
 `v1/oauth/github/{authorize,token,revoke}`，response 必须带 provider-validated account identity。OAuth adapter
 可先于对应 Plugin 安装而注册；它保持 dormant，直到 exact Connector contribution 进入 activation snapshot。
+
+## 界面刷新验收
+
+2026-10-30 在 Windows x64、`473f5cd4ea` 上通过 6 项定向测试：中英文各验证 25 次变更通知在读取进行中只合并为一次后续读取，补读展示最新状态；隐藏面板撤销排队刷新，重新打开后恢复读取。适配器另验证声明／运行实例身份区分、不可用绑定及非破坏性启停请求。入口为 `extensionsView.test.ts` 的 Connections 合并／隐藏场景和 `appServerConnectorService.test.ts`，日志在 `.build/todo-acceptance-connectors-unit.log` 与 `.build/todo-acceptance-code-contracts.log`。
+
+这闭合的是已复现的请求放大防护。2026-10-21 用户确认原点击已恢复正常，隔离 Desktop 展开／键盘切换也已通过；原整窗无响应没有建立 Renderer／Main 故障链，不能据这些测试宣称历史根因已修复。复发时仍需保留实际进程栈与请求现场。

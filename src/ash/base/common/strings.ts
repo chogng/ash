@@ -12,7 +12,7 @@ export function htmlAttributeEncodeValue(value: string): string {
 			case '<': return '&lt;';
 			case '>': return '&gt;';
 			case '"': return '&quot;';
-			case '\'': return '&apos;';
+			case "'": return '&apos;';
 			case '&': return '&amp;';
 		}
 		return ch;

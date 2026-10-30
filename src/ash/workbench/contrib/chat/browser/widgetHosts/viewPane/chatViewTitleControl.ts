@@ -1,12 +1,12 @@
-import "./media/chatViewTitleControl.css";
-import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
-import { AnchorPosition } from "../../../../../../base/common/layout.js";
-import { MenuWorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
-import { getFlatContextMenuActions } from "../../../../../../platform/actions/browser/menuEntryActionViewItem.js";
-import { IMenuService, MenuId } from "../../../../../../platform/actions/common/actions.js";
-import { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
-import type { PartTitleProjection } from "../../../../../browser/parts/views/viewPane.js";
-import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
+import './media/chatViewTitleControl.css';
+import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { AnchorPosition } from '../../../../../../base/common/layout.js';
+import { MenuWorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
+import { getFlatContextMenuActions } from '../../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { IMenuService, MenuId } from '../../../../../../platform/actions/common/actions.js';
+import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
+import type { PartTitleProjection } from '../../../../../browser/parts/views/viewPane.js';
+import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { appendIcon } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -67,8 +67,8 @@ export class ChatViewTitleControl extends Disposable {
 		}));
 		this.update(undefined);
 
-		this.actionsElement = h(ownerDocument, "div");
-		this.actionsElement.className = "ash-chat-title-actions";
+		this.actionsElement = h(ownerDocument, 'div');
+		this.actionsElement.className = 'ash-chat-title-actions';
 		container.append(this.actionsElement);
 		const toolbar = this._register(new MenuWorkbenchToolBar(
 			this.actionsElement,
@@ -77,7 +77,7 @@ export class ChatViewTitleControl extends Disposable {
 			MenuId.ChatTitle,
 			{ hoverAnchorPosition: AnchorPosition.Below, menuOptions: { renderShortTitle: true } },
 		));
-		toolbar.element.setAttribute("aria-label", localize("chat.title.actions", "Chat actions"));
+		toolbar.element.setAttribute('aria-label', localize('chat.title.actions', 'Chat actions'));
 		this.layoutToolbar = this._register(new MenuWorkbenchToolBar(
 			this.actionsElement,
 			menuService,
@@ -85,8 +85,8 @@ export class ChatViewTitleControl extends Disposable {
 			MenuId.ChatTitleLayout,
 			{ highlightToggledItems: true, hoverAnchorPosition: AnchorPosition.Below },
 		));
-		this.layoutToolbar.element.setAttribute("aria-label", localize("chat.title.layout", "Chat layout"));
-		this.layoutToolbar.element.classList.add("ash-chat-title-layout-actions");
+		this.layoutToolbar.element.setAttribute('aria-label', localize('chat.title.layout', 'Chat layout'));
+		this.layoutToolbar.element.classList.add('ash-chat-title-layout-actions');
 		this._register(toDisposable(() => this.actionsElement.remove()));
 	}
 

@@ -11,26 +11,26 @@ import { localize } from '../../../../nls.js';
 import { type JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { type KeybindingsSchemaContribution } from '../../../../platform/keybinding/common/keybinding.js';
-import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { getWindows, onDidRegisterWindow, onWillUnregisterWindow } from "../../../../base/browser/window.js";
-import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
+import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { getWindows, onDidRegisterWindow, onWillUnregisterWindow } from '../../../../base/browser/window.js';
+import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import {
 	isModifierKey,
 	StandardKeyboardEvent,
-} from "../../../../base/browser/keyboardEvent.js";
-import { Emitter } from "../../../../base/common/event.js";
-import { getErrorMessage } from "../../../../base/common/errors.js";
-import { IME } from "../../../../base/common/ime.js";
+} from '../../../../base/browser/keyboardEvent.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { getErrorMessage } from '../../../../base/common/errors.js';
+import { IME } from '../../../../base/common/ime.js';
 import {
 	getKeybindingLabel,
-} from "../../../../base/common/keybindingLabels.js";
-import { parseKeybinding } from "../../../../base/common/keybindingParser.js";
+} from '../../../../base/common/keybindingLabels.js';
+import { parseKeybinding } from '../../../../base/common/keybindingParser.js';
 import {
 	type Keybinding,
 	KeybindingChordKind,
 	type KeybindingEvent,
 	ResolvedKeybinding,
-} from "../../../../base/common/keybindings.js";
+} from '../../../../base/common/keybindings.js';
 import {
 	combinedDisposable,
 	Disposable,
@@ -40,44 +40,44 @@ import {
 	type IDisposable,
 
 	toDisposable,
-} from "../../../../base/common/lifecycle.js";
+} from '../../../../base/common/lifecycle.js';
 import {
 	type CommandId,
 	type ICommandService,
 	type CommandRegistry,
 	CommandsRegistry,
-} from "../../../../platform/commands/common/commands.js";
-import { type Context, type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import { type IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+} from '../../../../platform/commands/common/commands.js';
+import { type Context, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { type IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import {
 	IKeybindingService,
 	KeybindingContextKeys,
-} from "../../../../platform/keybinding/common/keybinding.js";
+} from '../../../../platform/keybinding/common/keybinding.js';
 import {
 	KeybindingResolveKind,
 	KeybindingResolver,
 	type KeybindingResolveResult,
-} from "../../../../platform/keybinding/common/keybindingResolver.js";
+} from '../../../../platform/keybinding/common/keybindingResolver.js';
 import {
 	KeybindingRuleKind,
 	KeybindingSource,
 	type KeybindingRegistry,
 	KeybindingsRegistry,
-} from "../../../../platform/keybinding/common/keybindingsRegistry.js";
+} from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import type {
 	IKeyboardLayoutService,
-} from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import { Severity, INotificationService } from "../../../../platform/notification/common/notification.js";
+} from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import { Severity, INotificationService } from '../../../../platform/notification/common/notification.js';
 import type {
 	IStatusbarEntryAccessor,
 	IStatusbarService,
-} from "../../statusbar/browser/statusbar.js";
-import { StatusbarAlignment } from "../../statusbar/browser/statusbar.js";
-import type { IKeyboardShortcutTroubleshootingService } from "../common/keyboardShortcutTroubleshooting.js";
+} from '../../statusbar/browser/statusbar.js';
+import { StatusbarAlignment } from '../../statusbar/browser/statusbar.js';
+import type { IKeyboardShortcutTroubleshootingService } from '../common/keyboardShortcutTroubleshooting.js';
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
-export { KeybindingContextKeys } from "../../../../platform/keybinding/common/keybinding.js";
+export { KeybindingContextKeys } from '../../../../platform/keybinding/common/keybinding.js';
 
 export interface WorkbenchKeybindingServiceOptions {
 	readonly ownerDocument: Document;
@@ -139,7 +139,7 @@ export class WorkbenchKeybindingService
 	) {
 		super();
 		const ownerWindow = options.ownerDocument.defaultView;
-		if (!ownerWindow) throw new Error("WorkbenchKeybindingService requires an owner window");
+		if (!ownerWindow) throw new Error('WorkbenchKeybindingService requires an owner window');
 		this.ownerWindow = ownerWindow;
 		this.commandService = options.commandService;
 		this.contextKeyService = options.contextKeyService;
@@ -327,16 +327,16 @@ export class WorkbenchKeybindingService
 		const listeners = new DisposableStore();
 		this.windowListeners.set(targetWindow, listeners);
 		const document = targetWindow.document;
-		listeners.add(addDisposableListener(document, "keydown", (event: KeyboardEvent) => this.dispatchEvent(event), true));
-		listeners.add(addDisposableListener(document, "keyup", (event: KeyboardEvent) => this.dispatchKeyupEvent(event), true));
-		listeners.add(addDisposableListener(document, "compositionstart", () => {
+		listeners.add(addDisposableListener(document, 'keydown', (event: KeyboardEvent) => this.dispatchEvent(event), true));
+		listeners.add(addDisposableListener(document, 'keyup', (event: KeyboardEvent) => this.dispatchKeyupEvent(event), true));
+		listeners.add(addDisposableListener(document, 'compositionstart', () => {
 			this.finishHoldMode();
 			this.isComposingKey.set(true);
 			this.singleModifierCandidate = undefined;
 			this.leaveChordMode();
 		}, true));
-		listeners.add(addDisposableListener(document, "compositionend", () => this.isComposingKey.set(false), true));
-		listeners.add(addDisposableListener(targetWindow, "blur", () => {
+		listeners.add(addDisposableListener(document, 'compositionend', () => this.isComposingKey.set(false), true));
+		listeners.add(addDisposableListener(targetWindow, 'blur', () => {
 			if (this.holdMode && keyboardEventWindow(this.holdMode.event, this.ownerWindow) === targetWindow) this.finishHoldMode();
 			this.singleModifierCandidate = undefined;
 			this.leaveChordMode();
@@ -354,7 +354,7 @@ export class WorkbenchKeybindingService
 	toggle(): boolean {
 		this.troubleshootingEnabled = !this.troubleshootingEnabled;
 		this._onDidLog.fire(
-			`Keyboard shortcuts troubleshooting ${this.troubleshootingEnabled ? "enabled" : "disabled"}.`,
+			`Keyboard shortcuts troubleshooting ${this.troubleshootingEnabled ? 'enabled' : 'disabled'}.`,
 		);
 		return this.troubleshootingEnabled;
 	}
@@ -364,7 +364,7 @@ export class WorkbenchKeybindingService
 			.getKeyboardMapper()
 			.resolveKeybinding(keybinding);
 		if (!resolved[0]) {
-			throw new Error("Keyboard mapper could not resolve the keybinding");
+			throw new Error('Keyboard mapper could not resolve the keybinding');
 		}
 		return resolved[0];
 	}
@@ -440,7 +440,7 @@ export class WorkbenchKeybindingService
 			this.logTroubleshooting(
 				this.singleModifierCandidate
 					? `Modifier candidate: ${this.singleModifierCandidate}`
-					: "Modifier key is not eligible for a single-modifier binding.",
+					: 'Modifier key is not eligible for a single-modifier binding.',
 			);
 			return false;
 		}
@@ -453,7 +453,7 @@ export class WorkbenchKeybindingService
 		if (
 			event.isComposing ||
 			(event.altGraphKey && !this.keyboardLayoutService.getKeyboardMapperConfiguration().mapAltGrToCtrlAlt) ||
-			event.key === "Process"
+			event.key === 'Process'
 		) {
 			return false;
 		}
@@ -487,7 +487,7 @@ export class WorkbenchKeybindingService
 		const candidate = this.singleModifierCandidate;
 		this.singleModifierCandidate = undefined;
 		if (!released || released !== candidate || hasAnyModifier(browserEvent)) {
-			this.logTroubleshooting("Keyup: no unused single-modifier candidate.");
+			this.logTroubleshooting('Keyup: no unused single-modifier candidate.');
 			return false;
 		}
 		const event = new StandardKeyboardEvent(browserEvent);
@@ -586,7 +586,7 @@ export class WorkbenchKeybindingService
 					ariaLabel: `${label} was pressed. Waiting for another key`,
 				},
 				{
-					id: "ash.keybinding.chord",
+					id: 'ash.keybinding.chord',
 					alignment: StatusbarAlignment.Left,
 					priority: 10_000,
 				},
@@ -612,14 +612,14 @@ export class WorkbenchKeybindingService
 	}
 }
 
-type SingleModifierKey = "ctrl" | "shift" | "alt" | "meta";
+type SingleModifierKey = 'ctrl' | 'shift' | 'alt' | 'meta';
 
 function modifierKey(key: string): SingleModifierKey | undefined {
 	switch (key) {
-		case "Control": return "ctrl";
-		case "Shift": return "shift";
-		case "Alt": return "alt";
-		case "Meta": return "meta";
+		case 'Control': return 'ctrl';
+		case 'Shift': return 'shift';
+		case 'Alt': return 'alt';
+		case 'Meta': return 'meta';
 		default: return undefined;
 	}
 }
@@ -637,7 +637,7 @@ function singleModifierCandidate(event: StandardKeyboardEvent): SingleModifierKe
 }
 
 function hasAnyModifier(event: KeyboardEvent): boolean {
-	return event.ctrlKey || event.shiftKey || event.altKey || event.metaKey || event.getModifierState?.("AltGraph") === true;
+	return event.ctrlKey || event.shiftKey || event.altKey || event.metaKey || event.getModifierState?.('AltGraph') === true;
 }
 
 function toDispatchEvent(
@@ -669,9 +669,9 @@ function keyboardEventTarget(event: KeyboardEvent): Node | null {
 }
 
 function isNodeLike(value: unknown): value is Node {
-	return typeof value === "object" &&
+	return typeof value === 'object' &&
 		value !== null &&
-		"nodeType" in value;
+		'nodeType' in value;
 }
 
 function formatKeyboardEvent(event: KeybindingEvent): string {
@@ -702,7 +702,7 @@ function keyboardEventWindow(event: KeyboardEvent, fallback: Window): Window {
 function formatResolveResult(result: KeybindingResolveResult): string {
 	switch (result.kind) {
 		case KeybindingResolveKind.NoMatch:
-			return "no matching keybinding";
+			return 'no matching keybinding';
 		case KeybindingResolveKind.MoreChordsNeeded:
 			return `waiting for chord (${getKeybindingLabel(result.keybinding)})`;
 		case KeybindingResolveKind.Command:

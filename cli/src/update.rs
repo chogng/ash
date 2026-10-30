@@ -140,6 +140,10 @@ struct ManagedInstall {
     update_public_key: ash_product_update::UpdatePublicKey,
 }
 
+pub(super) fn managed_root() -> Result<PathBuf, String> {
+    ManagedInstall::current().map(|installation| installation.root)
+}
+
 fn managed_install_paths(executable: &Path) -> Option<(&Path, &Path, &Path)> {
     let binary_directory = executable
         .parent()
@@ -330,6 +334,7 @@ fn run_for_install(
         .join(format!(".update-package-{}", std::process::id()));
     fs::create_dir(&staging)
         .map_err(|error| format!("could not create update staging: {error}"))?;
+    mark_staging(&staging)?;
     let package = staging.join("package");
     fs::create_dir(&package)
         .map_err(|error| format!("could not create update staging: {error}"))?;
@@ -339,13 +344,19 @@ fn run_for_install(
             .map_err(package_error)?;
         let installed = publish_package(&install.versions, &package, &latest, target)?;
         install.select(&installed)?;
+        if let Err(error) = clean_versions(&install.root, &installed) {
+            eprintln!(
+                "{}",
+                crate::nls::format(crate::nls::Message::CleanupFailed, error)
+            );
+        }
         record_check(&install.root, policy)?;
         Ok(UpdateOutcome::Installed {
             previous: current,
             current: latest,
         })
     })();
-    let _ = fs::remove_dir_all(&staging);
+    let _ = remove_staging(&staging);
     result
 }
 
@@ -371,10 +382,74 @@ pub(super) fn publish_package(
             return Err(crate::nls::text(crate::nls::Message::UpdateBuildMismatch).into());
         }
     } else {
+        // Every managed CLI, including a bootstrap installation, participates in
+        // package leasing so upgrades cannot reclaim a running generation.
+        fs::write(package.join(".lease"), []).map_err(|error| error.to_string())?;
         fs::rename(package, &installed)
             .map_err(|error| format!("could not publish the downloaded Ash version: {error}"))?;
     }
     Ok(installed)
+}
+
+/// Retains the selected generation and one rollback, plus every live lease.
+/// Validate the complete package before deletion: unknown files and modified
+/// installations belong to the user until their ownership can be established.
+pub(super) fn clean_versions(root: &Path, selected: &Path) -> Result<(), String> {
+    let versions = root.join("versions");
+    let mut candidates = Vec::new();
+    for entry in fs::read_dir(&versions).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        if !entry
+            .file_type()
+            .map_err(|error| error.to_string())?
+            .is_dir()
+        {
+            continue;
+        }
+        let package = entry.path();
+        // Old clients without a lease cannot prove that their package is idle.
+        if !package.join(".lease").is_file() {
+            continue;
+        }
+        let Ok(identity) = ash_package_store::validate_package_identity(&package) else {
+            continue;
+        };
+        let Ok(version) = Version::parse(&identity.version) else {
+            continue;
+        };
+        if package != selected {
+            candidates.push((version, package));
+        }
+    }
+    candidates.sort_by(|left, right| right.cmp(left));
+    for (_, package) in candidates.into_iter().skip(1) {
+        let Some(lease) = ash_package_store::PackageLease::try_exclusive(&package)
+            .map_err(|error| error.to_string())?
+        else {
+            continue;
+        };
+        // Windows needs the open lease removed last; retain the lock while
+        // removing all package contents, then remove the empty lease and root.
+        for entry in fs::read_dir(&package).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            if entry.file_name() == ".lease" {
+                continue;
+            }
+            if entry
+                .file_type()
+                .map_err(|error| error.to_string())?
+                .is_dir()
+            {
+                fs::remove_dir_all(entry.path()).map_err(|error| error.to_string())?;
+            } else {
+                fs::remove_file(entry.path()).map_err(|error| error.to_string())?;
+            }
+        }
+        drop(lease);
+        fs::remove_file(package.join(".lease")).map_err(|error| error.to_string())?;
+        fs::remove_dir(package).map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 struct ResolvedRelease {
@@ -556,22 +631,35 @@ pub(super) fn clean_staging(versions: &Path) -> Result<(), String> {
         if !entry.file_name().to_string_lossy().starts_with(".update-") {
             continue;
         }
-        let kind = entry
-            .file_type()
-            .map_err(|error| format!("could not inspect stale update staging: {error}"))?;
-        if kind.is_dir() {
-            fs::remove_dir_all(entry.path())
-                .map_err(|error| format!("could not clear stale update staging: {error}"))?;
-        } else if kind.is_file() {
-            fs::remove_file(entry.path())
-                .map_err(|error| format!("could not clear stale update archive: {error}"))?;
-        } else {
-            return Err(
-                "the Ash version store contains an unsupported update staging entry".into(),
-            );
-        }
+        remove_staging(&entry.path())?;
     }
     Ok(())
+}
+
+pub(super) fn mark_staging(path: &Path) -> Result<(), String> {
+    fs::write(
+        path.join(".ash-stage.json"),
+        b"{\"schemaVersion\":1,\"product\":\"ash-cli\"}",
+    )
+    .map_err(|error| error.to_string())
+}
+
+pub(super) fn remove_staging(path: &Path) -> Result<(), String> {
+    let marker = path.join(".ash-stage.json");
+    if !fs::symlink_metadata(&marker).is_ok_and(|metadata| {
+        metadata.is_file() && !metadata.file_type().is_symlink() && metadata.len() < 256
+    }) || fs::read(&marker).ok().as_deref()
+        != Some(b"{\"schemaVersion\":1,\"product\":\"ash-cli\"}".as_slice())
+    {
+        return Ok(());
+    }
+    let mut report = ash_installation::RemovalReport::default();
+    ash_installation::remove_owned_tree(path, &mut report).map_err(|error| error.to_string())?;
+    if report.failures.is_empty() {
+        Ok(())
+    } else {
+        Err(report.failures.join("; "))
+    }
 }
 
 fn checked_recently(root: &Path, policy: ash_product_update::UpdatePolicy) -> Result<bool, String> {

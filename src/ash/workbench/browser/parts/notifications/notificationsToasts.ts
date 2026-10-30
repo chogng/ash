@@ -1,16 +1,16 @@
 import { getNotificationsPosition, NotificationsPosition, type NotificationsModel, type NotificationItem } from '../../../common/notifications.js';
-import "./media/notificationsToasts.css";
-import { addDisposableListener, getActiveElement, isEditableElement } from "../../../../base/browser/dom.js";
-import type { IActionRunner } from "../../../../base/common/actions.js";
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import './media/notificationsToasts.css';
+import { addDisposableListener, getActiveElement, isEditableElement } from '../../../../base/browser/dom.js';
+import type { IActionRunner } from '../../../../base/common/actions.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { INotificationService, NotificationPriority, NotificationsFilter, Severity } from "../../../../platform/notification/common/notification.js";
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService, NotificationPriority, NotificationsFilter, Severity } from '../../../../platform/notification/common/notification.js';
 import { IHostService } from '../../../services/host/browser/host.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
-import { NotificationsList } from "./notificationsList.js";
-import { PendingNotificationToasts } from "./pendingNotificationToasts.js";
+import { NotificationsList } from './notificationsList.js';
+import { PendingNotificationToasts } from './pendingNotificationToasts.js';
 
 /** Transient presentation of notification history. Explicit removal clears the shared record. */
 export class NotificationsToasts extends Disposable {
@@ -29,7 +29,7 @@ export class NotificationsToasts extends Disposable {
 	constructor(private readonly container: HTMLElement, private readonly model: NotificationsModel, actionRunner: IActionRunner, @IInstantiationService instantiationService: IInstantiationService, @INotificationService private readonly notificationService: INotificationService, @IHostService private readonly hostService: IHostService, @IConfigurationService private readonly configurationService: IConfigurationService) {
 		super();
 		const document = container.ownerDocument;
-		this.list = this._register(instantiationService.createInstance(NotificationsList, container, "toast", actionRunner));
+		this.list = this._register(instantiationService.createInstance(NotificationsList, container, 'toast', actionRunner));
 		this.element = this.list.domNode;
 		this.pending = this._register(new PendingNotificationToasts<number>(
 			id => !this.hidden && model.getNotifications().some(current => current.id === id && !this.isFiltered(current) && !this.coversActiveInput(current)),
@@ -56,15 +56,15 @@ export class NotificationsToasts extends Disposable {
 			}
 			this.render();
 		}));
-		this._register(addDisposableListener(this.element, "focusin", event => {
+		this._register(addDisposableListener(this.element, 'focusin', event => {
 			const HTMLElement = document.defaultView?.HTMLElement;
 			const target = event.relatedTarget;
 			if (HTMLElement && target instanceof HTMLElement && target !== document.body && !this.element.contains(target)) {
 				this.previousFocus = target;
 			}
 		}));
-		this._register(addDisposableListener(this.element, "keydown", event => {
-			if (event.key !== "Escape" || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || this.hidden || this.isDisposed) return;
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if (event.key !== 'Escape' || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.isComposing || this.hidden || this.isDisposed) return;
 			const target = event.target;
 			const HTMLElement = document.defaultView?.HTMLElement;
 			if (!HTMLElement || !(target instanceof HTMLElement) || target !== document.activeElement || !this.element.isConnected || !this.element.contains(target) || !target.closest('.ash-notification')) return;
@@ -76,21 +76,21 @@ export class NotificationsToasts extends Disposable {
 			this.pending.clear();
 			this.render();
 			// DOM removal can transfer ownership of focus or dispose this window's presentation.
-			if (!this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body && previousFocus?.isConnected && !previousFocus.closest("[hidden], [inert], [aria-hidden='true']") && !previousFocus.matches(":disabled") && previousFocus.checkVisibility?.({ checkVisibilityCSS: true })) {
+			if (!this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body && previousFocus?.isConnected && !previousFocus.closest("[hidden], [inert], [aria-hidden='true']") && !previousFocus.matches(':disabled') && previousFocus.checkVisibility?.({ checkVisibilityCSS: true })) {
 				previousFocus.focus();
 			}
 		}));
 		this._register(this.list.onDidRequestRemove(id => {
 			if (model.get(id)?.hasActiveProgress) return;
 			const button = this.element.querySelector<HTMLButtonElement>(`[data-notification-close="${id}"]`);
-			const buttons = [...this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]")];
+			const buttons = [...this.element.querySelectorAll<HTMLButtonElement>('[data-notification-close]')];
 			const focusedIndex = document.activeElement === button ? buttons.indexOf(button!) : -1;
 			const rows = [...this.element.children] as HTMLElement[];
 			const focusedRowIndex = rows.findIndex(row => row.contains(document.activeElement));
 			model.remove(id);
 			// Removal listeners can open the center, move focus, or dispose this owner.
 			if (focusedIndex >= 0 && !this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body) {
-				const remaining = this.element.querySelectorAll<HTMLButtonElement>("[data-notification-close]");
+				const remaining = this.element.querySelectorAll<HTMLButtonElement>('[data-notification-close]');
 				const nextFocus = remaining[Math.min(focusedIndex, remaining.length - 1)] ?? this.previousFocus;
 				if (nextFocus?.isConnected) nextFocus.focus();
 			} else if (focusedRowIndex >= 0 && !this.hidden && !this.isDisposed && this.element.isConnected && document.activeElement === document.body) {

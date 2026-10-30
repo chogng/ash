@@ -1,17 +1,17 @@
-import { addDisposableListener, h } from "../../dom.js";
-import type { IAction } from "../../../common/actions.js";
-import type { Icon } from "../../../common/icon.js";
-import { Lxicon } from "../../../common/lxicons.js";
-import { MutableDisposable } from "../../../common/lifecycle.js";
-import type { IManagedHover } from "../hover/hoverDelegate.js";
-import { assertDefined } from "../../../common/types.js";
-import { ActionBar } from "../actionbar/actionbar.js";
-import { ActionViewItem } from "../actionbar/actionViewItems.js";
-import { IconLabel } from "../iconlabel/iconlabel.js";
-import type { TabListItem } from "./tabList.js";
-import { localize } from "../../../../nls.js";
+import { addDisposableListener, h } from '../../dom.js';
+import type { IAction } from '../../../common/actions.js';
+import type { Icon } from '../../../common/icon.js';
+import { Lxicon } from '../../../common/lxicons.js';
+import { MutableDisposable } from '../../../common/lifecycle.js';
+import type { IManagedHover } from '../hover/hoverDelegate.js';
+import { assertDefined } from '../../../common/types.js';
+import { ActionBar } from '../actionbar/actionbar.js';
+import { ActionViewItem } from '../actionbar/actionViewItems.js';
+import { IconLabel } from '../iconlabel/iconlabel.js';
+import type { TabListItem } from './tabList.js';
+import { localize } from '../../../../nls.js';
 
-export const TAB_CLOSE_ACTION_ID = "ash.tab.close";
+export const TAB_CLOSE_ACTION_ID = 'ash.tab.close';
 
 /** Internal action representation of one selectable TabList item. */
 export class TabAction<T> implements IAction {
@@ -71,14 +71,14 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			throw new Error(`TabList item is already rendered: ${this.action.id}`);
 		}
 		const item = this.tabAction.tab;
-		container.classList.add("ash-tab");
+		container.classList.add('ash-tab');
 		this.container = container;
 
-		const tab = h(container.ownerDocument, "button");
+		const tab = h(container.ownerDocument, 'button');
 		this.tabElement = tab;
-		tab.className = "ash-tab-label";
-		tab.type = "button";
-		tab.setAttribute("role", "tab");
+		tab.className = 'ash-tab-label';
+		tab.type = 'button';
+		tab.setAttribute('role', 'tab');
 		this.hover = this.setupHover(tab, this.tabAction.tooltip);
 		if (item.renderLabel) {
 			this._register(item.renderLabel(tab));
@@ -87,7 +87,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		}
 		container.append(tab);
 
-		this._register(addDisposableListener(tab, "click", (event) => {
+		this._register(addDisposableListener(tab, 'click', (event) => {
 			event.preventDefault();
 			event.stopPropagation();
 			if (this.tabAction.select?.(this.tabAction.tab.value, event)) {
@@ -96,15 +96,15 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			this.tabAction.run();
 		}));
 		if (this.onClose || this.tabAction.select) {
-			tab.setAttribute("aria-keyshortcuts", [this.onClose ? "Delete" : "", this.tabAction.select ? "Control+Space Shift+Space" : ""].filter(Boolean).join(" "));
-			this._register(addDisposableListener(tab, "keydown", (event) => {
-				if (this.tabAction.select && event.key === " " && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+			tab.setAttribute('aria-keyshortcuts', [this.onClose ? 'Delete' : '', this.tabAction.select ? 'Control+Space Shift+Space' : ''].filter(Boolean).join(' '));
+			this._register(addDisposableListener(tab, 'keydown', (event) => {
+				if (this.tabAction.select && event.key === ' ' && (event.ctrlKey || event.metaKey || event.shiftKey)) {
 					event.preventDefault();
 					event.stopPropagation();
 					this.tabAction.select(this.tabAction.tab.value, event);
 					return;
 				}
-				if (!this.onClose || event.key !== "Delete") {
+				if (!this.onClose || event.key !== 'Delete') {
 					return;
 				}
 				event.preventDefault();
@@ -120,10 +120,10 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		const previous = this.rendered;
 		const container = this.container!;
 		const tab = this.tab;
-		container.classList.toggle("checked", this.tabAction.checked);
-		container.classList.toggle("selected", this.tabAction.selected);
-		container.classList.toggle("icon", item.icon !== undefined);
-		container.classList.toggle("preview", item.preview === true);
+		container.classList.toggle('checked', this.tabAction.checked);
+		container.classList.toggle('selected', this.tabAction.selected);
+		container.classList.toggle('icon', item.icon !== undefined);
+		container.classList.toggle('preview', item.preview === true);
 		if (previous?.state !== item.state) {
 			if (item.state === undefined) {
 				delete container.dataset.state;
@@ -135,25 +135,25 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			tab.id = item.tabId;
 		}
 		const selected = String(this.tabAction.selected);
-		if (tab.getAttribute("aria-selected") !== selected) {
-			tab.setAttribute("aria-selected", selected);
+		if (tab.getAttribute('aria-selected') !== selected) {
+			tab.setAttribute('aria-selected', selected);
 		}
 		const ariaLabel = item.ariaLabel ?? item.label;
 		if ((previous?.ariaLabel ?? previous?.label) !== ariaLabel) {
-			tab.setAttribute("aria-label", ariaLabel);
+			tab.setAttribute('aria-label', ariaLabel);
 		}
 		if (previous?.ariaDescription !== item.ariaDescription) {
 			if (item.ariaDescription) {
-				tab.setAttribute("aria-description", item.ariaDescription);
+				tab.setAttribute('aria-description', item.ariaDescription);
 			} else {
-				tab.removeAttribute("aria-description");
+				tab.removeAttribute('aria-description');
 			}
 		}
 		if (previous?.panelId !== item.panelId) {
 			if (item.panelId) {
-				tab.setAttribute("aria-controls", item.panelId);
+				tab.setAttribute('aria-controls', item.panelId);
 			} else {
-				tab.removeAttribute("aria-controls");
+				tab.removeAttribute('aria-controls');
 			}
 		}
 		// Managed hover and IconLabel were initialized by render; unchanged content needs no DOM work.
@@ -171,10 +171,8 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			this.closeAction = closeTabAction(this.tabAction, this.onClose, this.closeActionIcon);
 		}
 		const primaryAction = item.primaryAction ?? this.closeAction;
-		const actions = [
-			...(item.actions?.items ?? []),
-			...(primaryAction ? [primaryAction] : []),
-		];
+		const actions = [...(item.actions?.items ?? []), ...(primaryAction ? [primaryAction] : [])];
+		container.classList.toggle('has-actions', actions.length > 0);
 		const hadActionFocus = this.toolbar.value?.element.contains(container.ownerDocument.activeElement);
 		if (actions.length === 0) {
 			this.toolbar.clear();
@@ -189,13 +187,13 @@ export class TabActionViewItem<T> extends ActionViewItem {
 			} else {
 				actionBar = new ActionBar(container, { actions, ariaLabel });
 				this.toolbar.value = actionBar;
-				actionBar.element.classList.add("ash-tab-actions");
+				actionBar.element.classList.add('ash-tab-actions');
 			}
 			for (const actionContainer of actionBar.element.children) {
 				const isPrimary = (actionContainer as HTMLElement).dataset.actionId === primaryAction?.id;
-				actionContainer.classList.toggle("ash-tab-primary-action", isPrimary);
-				actionContainer.classList.toggle("ash-tab-close-action", isPrimary && item.primaryAction === undefined);
-				actionContainer.classList.toggle("custom-action", isPrimary && item.primaryAction !== undefined);
+				actionContainer.classList.toggle('ash-tab-primary-action', isPrimary);
+				actionContainer.classList.toggle('ash-tab-close-action', isPrimary && item.primaryAction === undefined);
+				actionContainer.classList.toggle('custom-action', isPrimary && item.primaryAction !== undefined);
 			}
 		}
 		if (hadActionFocus && container.ownerDocument.activeElement === container.ownerDocument.body) {

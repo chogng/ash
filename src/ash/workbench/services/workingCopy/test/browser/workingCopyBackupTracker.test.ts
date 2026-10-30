@@ -1,21 +1,21 @@
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
-import { BrowserLifecycleService } from "../../../lifecycle/browser/lifecycleService.js";
-import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import { ILogService, NullLoggerService } from "../../../../../platform/log/common/log.js";
-import { IStorageService, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
-import { BrowserStorageService } from "../../../storage/browser/storageService.js";
-import { Emitter, Event } from "../../../../../base/common/event.js";
-import { DeferredPromise } from "../../../../../base/common/async.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { BrowserWorkingCopyService } from "../../browser/browserWorkingCopyService.js";
-import { WorkingCopyBackupTracker } from "../../browser/workingCopyBackupTracker.js";
-import { IndexedDbWorkingCopyBackupService } from "../../browser/indexedDbWorkingCopyBackupService.js";
-import { type IWorkingCopyBackupService, type WorkingCopyBackup } from "../../common/workingCopyBackupService.js";
-import { type IWorkingCopy } from "../../common/workingCopyService.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { BrowserLifecycleService } from '../../../lifecycle/browser/lifecycleService.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { IStorageService, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../storage/browser/storageService.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { BrowserWorkingCopyService } from '../../browser/browserWorkingCopyService.js';
+import { WorkingCopyBackupTracker } from '../../browser/workingCopyBackupTracker.js';
+import { IndexedDbWorkingCopyBackupService } from '../../browser/indexedDbWorkingCopyBackupService.js';
+import { type IWorkingCopyBackupService, type WorkingCopyBackup } from '../../common/workingCopyBackupService.js';
+import { type IWorkingCopy } from '../../common/workingCopyService.js';
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
 import { TextModelSaveCompletionError, type TextModelReference } from '../../../textmodelResolver/common/textModelResourceService.js';
 import { TextResourceConflictError, type ITextResourceStore, type TextResourceResolveRequest, type TextResourceSaveRequest } from '../../../textmodelResolver/common/textResourceStore.js';
@@ -216,19 +216,19 @@ test('file write failure retains the prepared dirty content and its original err
 	assert.deepEqual([fixture.files.text, copy.isDirty, await fixture.backups.list()], ['retry edit', false, []]);
 });
 
-test("working-copy backup tracker persists the latest dirty content and deletes clean backups", async () => {
+test('working-copy backup tracker persists the latest dirty content and deletes clean backups', async () => {
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	const backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
-	using copy = new TestWorkingCopy(URI.file("C:\\project\\main.ts"));
+	using copy = new TestWorkingCopy(URI.file('C:\\project\\main.ts'));
 	using registration = workingCopies.register(copy);
 
-	copy.change("first");
-	copy.change("latest");
+	copy.change('first');
+	copy.change('latest');
 	ownerWindow.runTimers();
 	await tracker.flush();
-	assert.equal((await backups.list())[0]?.content, "latest");
+	assert.equal((await backups.list())[0]?.content, 'latest');
 
 	copy.markClean();
 	ownerWindow.runTimers();
@@ -250,7 +250,7 @@ test('working-copy backup tracker removes a backup when the last owner explicitl
 	assert.deepEqual(await backups.list(), []);
 });
 
-test("working-copy backup tracker keeps another open copy and retains the last dirty draft on unregister", async () => {
+test('working-copy backup tracker keeps another open copy and retains the last dirty draft on unregister', async () => {
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
@@ -789,13 +789,13 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	private readonly dirtyChanges = this._register(new Emitter<void>());
 	private readonly contentChanges = this._register(new Emitter<void>());
 	readonly resource;
-	readonly backupKind = "text" as const;
+	readonly backupKind = 'text' as const;
 	readonly onDidChangeDirty = this.dirtyChanges.event;
 	readonly onDidChangeContent = this.contentChanges.event;
 	readonly onDidChangeExternalChange = () => ({ dispose() { }, [Symbol.dispose]() { } });
 	isDirty = false;
 	readonly hasExternalChange = false;
-	private content = "";
+	private content = '';
 	duringBackup: (() => void) | undefined;
 
 	constructor(resource: URI) { super(); this.resource = resource; }

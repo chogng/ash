@@ -26,7 +26,7 @@ import { ITextModelService } from '../../../editor/common/services/resolverServi
 import { ITextModelResourceService } from '../../services/textmodelResolver/common/textModelResourceService.js';
 import { TextModelResolverService } from '../../services/textmodelResolver/common/textModelResolverService.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
-import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
 import { IFileTextModelService } from '../../services/textmodelResolver/common/textModelResourceService.js';

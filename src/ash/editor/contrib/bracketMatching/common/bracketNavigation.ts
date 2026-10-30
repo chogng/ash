@@ -1,7 +1,7 @@
-import { Selection } from "../../../common/core/selection.js";
-import { type IBracketPairsTextModelPart } from "../../../common/textModelBracketPairs.js";
-import { type Range } from "../../../common/core/range.js";
-import { Position } from "../../../common/core/position.js";
+import { Selection } from '../../../common/core/selection.js';
+import { type IBracketPairsTextModelPart } from '../../../common/textModelBracketPairs.js';
+import { type Range } from '../../../common/core/range.js';
+import { Position } from '../../../common/core/position.js';
 
 /** Moves every active cursor to its lexically valid matching bracket when present. */
 export function jumpToMatchingBrackets(bracketPairs: IBracketPairsTextModelPart, selections: readonly Selection[]): readonly Selection[] {

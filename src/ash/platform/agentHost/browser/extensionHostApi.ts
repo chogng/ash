@@ -11,13 +11,13 @@ import { inertSubscription } from '../../renderer/browser/disconnectedHost.js';
 export function createDisconnectedExtensionHostApi(unavailable: UnavailableOperation): IExtensionHostApi {
 	return {
 		registerClientHandler: () => inertSubscription(),
-		start: () => unavailable("extensionHost.start"),
+		start: () => unavailable('extensionHost.start'),
 		isAvailable: () => Promise.resolve(false),
-		list: () => unavailable("extensionHost.list"),
-		reconcile: () => unavailable("extensionHost.reconcile"),
-		activateByEvent: () => unavailable("extensionHost.activate"),
-		invoke: () => unavailable("extensionHost.invoke"),
-		getConnectionState: () => Promise.resolve("stopped"),
+		list: () => unavailable('extensionHost.list'),
+		reconcile: () => unavailable('extensionHost.reconcile'),
+		activateByEvent: () => unavailable('extensionHost.activate'),
+		invoke: () => unavailable('extensionHost.invoke'),
+		getConnectionState: () => Promise.resolve('stopped'),
 		onDidChange: inertSubscription,
 		onConnectionState: inertSubscription,
 	};
@@ -31,9 +31,9 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 		onDidDisconnect: (listener: (error: Error) => void) => connection.onStateChange((state, error) => {
 			if (state !== 'ready') listener(error ?? new Error(`App Server is not ready: ${state}`));
 		}),
-		start: (request: Parameters<IExtensionHostApi["invoke"]>[0]) => appServerRequest(connection, "extensionHost/invoke/start", request),
-		read: (invocationId: string) => appServerRequest(connection, "extensionHost/invoke/read", { invocationId }),
-		cancel: (invocationId: string, resultRetention: 'retain' | 'discard') => appServerRequest(connection, "extensionHost/invoke/cancel", { invocationId, discardResult: resultRetention === 'discard' }),
+		start: (request: Parameters<IExtensionHostApi['invoke']>[0]) => appServerRequest(connection, 'extensionHost/invoke/start', request),
+		read: (invocationId: string) => appServerRequest(connection, 'extensionHost/invoke/read', { invocationId }),
+		cancel: (invocationId: string, resultRetention: 'retain' | 'discard') => appServerRequest(connection, 'extensionHost/invoke/cancel', { invocationId, discardResult: resultRetention === 'discard' }),
 	};
 	return {
 		registerClientHandler: handler => connection.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['extensionClient/request'], async ({ operation, ...source }, context) => {
@@ -53,7 +53,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 			const value = await handler(request, context.signal, source);
 			// These operations use the protocol's generic JSON result in both Rust and browser hosts.
 			if (value && typeof value === 'object' && 'result' in value && value.result === 'value'
-				&& !['editorOperation', 'backendRequest', 'backendState'].includes(operation.operation)) {
+				&& !['editorOperation', 'backendRequest', 'backendState', 'createTerminal', 'readTerminal'].includes(operation.operation)) {
 				throw new TypeError('Browser extension results cannot be returned over the App Server protocol');
 			}
 			let response = value;
@@ -76,11 +76,11 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 				default: return result;
 			}
 		}),
-		start: async environment => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/start", { environment: { ...environment } })),
+		start: async environment => normalizeExtensionHostSnapshot(await appServerRequest(connection, 'extensionHost/start', { environment: { ...environment } })),
 		isAvailable: () => Promise.resolve(connection.capabilities?.extensionHost === true),
-		list: async () => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/list", {})),
-		reconcile: async mode => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/reconcile", { mode })),
-		activateByEvent: async request => normalizeExtensionHostSnapshot(await appServerRequest(connection, "extensionHost/activate", {
+		list: async () => normalizeExtensionHostSnapshot(await appServerRequest(connection, 'extensionHost/list', {})),
+		reconcile: async mode => normalizeExtensionHostSnapshot(await appServerRequest(connection, 'extensionHost/reconcile', { mode })),
+		activateByEvent: async request => normalizeExtensionHostSnapshot(await appServerRequest(connection, 'extensionHost/activate', {
 			...request,
 			initialization: request.initialization ? {
 				...request.initialization,
@@ -92,7 +92,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 		invoke: (request, signal) => invokeExtensionHost(transport, request, signal),
 		getConnectionState: () => Promise.resolve(connection.state),
 		onDidChange: listener => connection.onNotification(event => {
-			if (event.method === "extensionHost/changed") listener(normalizeExtensionHostChanged(event.params));
+			if (event.method === 'extensionHost/changed') listener(normalizeExtensionHostChanged(event.params));
 		}),
 		onConnectionState: listener => connection.onStateChange(listener),
 	};

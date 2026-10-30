@@ -89,7 +89,7 @@ export function coalesceHistoryUndoEdits(
 		});
 	}
 
-	throw new Error("Unsupported history coalescing shape");
+	throw new Error('Unsupported history coalescing shape');
 }
 
 export function canReplaceHistoryEdits(

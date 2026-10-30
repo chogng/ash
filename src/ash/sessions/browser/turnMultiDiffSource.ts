@@ -174,7 +174,9 @@ export async function createTurnCommitPreviewInput(chat: IChatService, sessionId
 		const modified = { resource: resource.with({ query: 'commit' }), initialText: contents.after ?? '', readOnly: true };
 		let label = file.previousPath ? `${file.previousPath} → ${file.path}` : file.path;
 		if (contents.binary) { label = localize('sessions.changes.binaryLabel', '{0} (binary)', label); }
-		if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) { label = localize('sessions.changes.modeLabel', '{0} (mode {1} → {2})', label, file.beforeMode, file.afterMode); }
+		if (file.beforeMode && file.afterMode && file.beforeMode !== file.afterMode) {
+			label = localize('sessions.changes.modeLabel', '{0} (mode {1} → {2})', label, file.beforeMode, file.afterMode);
+		}
 		return { label, original, modified, binary: contents.binary, goToFile: modified };
 	}));
 	const resource = URI.parse(`ash-multi-diff:/turn-commit/${encodeURIComponent(preview.commitId)}?session=${encodeURIComponent(sessionId)}&thread=${encodeURIComponent(threadId)}`);

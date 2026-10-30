@@ -170,4 +170,3 @@ function text(value: unknown, maximum: number, allowEmpty = false): string {
 	if (typeof value !== 'string' || value.length > maximum || !allowEmpty && (!value || /[\u0000-\u001f\u007f]/.test(value))) throw invalid();
 	return value;
 }
-

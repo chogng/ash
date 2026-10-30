@@ -27,4 +27,3 @@ export type EditorWorkerRequest = languages.LanguageCompletionRequest | EditorWo
 export type EditorWorkerResult = languages.LanguageCompletionResult | readonly UnicodeHighlight[] | readonly languages.TextEdit[] | languages.IInplaceReplaceSupportResult | undefined;
 export type EditorWorkerImplementation = LanguageWorker<EditorWorkerLane, EditorWorkerRequest, EditorWorkerResult>;
 export type EditorWorkerImplementationFactory = () => EditorWorkerImplementation;
-

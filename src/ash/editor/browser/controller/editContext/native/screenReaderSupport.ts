@@ -1,14 +1,14 @@
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
-import { Disposable, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { type Event } from "../../../../../base/common/event.js";
-import { AccessibilitySupport } from "../../../../../platform/accessibility/common/accessibility.js";
-import { Position } from "../../../../common/core/position.js";
-import { type View } from "../../../view.js";
-import { RichScreenReaderContent } from "./screenReaderContentRich.js";
-import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
-import { type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
-import { type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
+import { Disposable, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { type Event } from '../../../../../base/common/event.js';
+import { AccessibilitySupport } from '../../../../../platform/accessibility/common/accessibility.js';
+import { Position } from '../../../../common/core/position.js';
+import { type View } from '../../../view.js';
+import { RichScreenReaderContent } from './screenReaderContentRich.js';
+import { SimpleScreenReaderContent } from './screenReaderContentSimple.js';
+import { type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from './screenReaderUtils.js';
+import { type SemanticTokenSource } from '../../../viewParts/viewLines/viewLine.js';
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { type RenderingContext, type RestrictedRenderingContext } from '../../../view/renderingContext.js';
 import * as viewEvents from '../../../../common/viewEvents.js';
@@ -52,15 +52,15 @@ export class ScreenReaderSupport extends Disposable {
 		if (options.onDidFocus) {
 			this._register(options.onDidFocus(() => this.handleFocusChange(true)));
 		} else {
-			this._register(addDisposableListener(element, "focus", () => this.handleFocusChange(true)));
+			this._register(addDisposableListener(element, 'focus', () => this.handleFocusChange(true)));
 		}
 		if (options.onDidBlur) {
 			this._register(options.onDidBlur(() => this.handleFocusChange(false)));
 		} else {
-			this._register(addDisposableListener(element, "blur", () => this.handleFocusChange(false)));
+			this._register(addDisposableListener(element, 'blur', () => this.handleFocusChange(false)));
 		}
-		this._register(addDisposableListener(element, "cut", () => this.onWillCut()));
-		this._register(addDisposableListener(element, "paste", () => this.onWillPaste()));
+		this._register(addDisposableListener(element, 'cut', () => this.onWillCut()));
+		this._register(addDisposableListener(element, 'paste', () => this.onWillPaste()));
 		this._register(options.viewport.onDidChangeLayout(() => this.scheduleSynchronization()));
 		if (options.semanticTokenSource) {
 			this._register(options.semanticTokenSource.onDidChange(() => this.scheduleSynchronization()));
@@ -185,7 +185,7 @@ export class ScreenReaderSupport extends Disposable {
 		const element = this.options.domNode.domNode;
 		const rootLeft = readInlinePixel(element.style.left);
 		const rootTop = readInlinePixel(element.style.top);
-		element.classList.add("stanza-native-screen-reader-content-active");
+		element.classList.add('stanza-native-screen-reader-content-active');
 		content.layout({
 			left: desiredLeft - rootLeft,
 			top: desiredTop - rootTop,
@@ -197,7 +197,7 @@ export class ScreenReaderSupport extends Disposable {
 	}
 
 	private resetNativeScreenReaderLayout(): void {
-		this.options.domNode.domNode.classList.remove("stanza-native-screen-reader-content-active");
+		this.options.domNode.domNode.classList.remove('stanza-native-screen-reader-content-active');
 	}
 
 	private refreshContent(): void {

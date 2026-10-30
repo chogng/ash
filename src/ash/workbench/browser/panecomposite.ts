@@ -1,11 +1,11 @@
 import { IThemeService } from '../../platform/theme/common/themeService.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
-import { compositePanelId, compositeTabId } from "./parts/compositeBar.js";
-import { localize } from "../services/localization/common/localizationService.js";
-import { ViewPaneContainer, type IViewPaneContainerOptions } from "./parts/views/viewPaneContainer.js";
-import type { PartTitleProjection, ViewPane } from "./parts/views/viewPane.js";
-import { IStorageService } from "../../platform/storage/common/storage.js";
-import type { IPaneComposite } from "../common/panecomposite.js";
+import { compositePanelId, compositeTabId } from './parts/compositeBar.js';
+import { localize } from '../services/localization/common/localizationService.js';
+import { ViewPaneContainer, type IViewPaneContainerOptions } from './parts/views/viewPaneContainer.js';
+import type { PartTitleProjection, ViewPane } from './parts/views/viewPane.js';
+import { IStorageService } from '../../platform/storage/common/storage.js';
+import type { IPaneComposite } from '../common/panecomposite.js';
 import { IMenuService, MenuId, SubmenuItemAction } from '../../platform/actions/common/actions.js';
 import { Separator, type IAction } from '../../base/common/actions.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
@@ -17,7 +17,7 @@ export interface PaneCompositeOptions extends IViewPaneContainerOptions {
 	readonly mergeViewWithContainerWhenSingleView?: boolean;
 }
 
-export type PaneHeaderVisibility = "visible" | "hidden";
+export type PaneHeaderVisibility = 'visible' | 'hidden';
 export type PaneLayout = NonNullable<IViewPaneContainerOptions['paneLayout']>;
 
 /**
@@ -43,13 +43,13 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 	) {
 		super(container, options, storageService, themeService, menuService, configurationService, instantiationService, contextKeyService);
 		this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
-		this.element.classList.add("ash-pane-composite");
-		this.element.classList.toggle("ash-pane-composite-pane-headers-hidden", options.paneHeaders === "hidden");
-		this.element.classList.toggle("ash-pane-composite-pane-layout-fill", options.paneLayout === "fill");
-		this.element.setAttribute("aria-label", this.title);
+		this.element.classList.add('ash-pane-composite');
+		this.element.classList.toggle('ash-pane-composite-pane-headers-hidden', options.paneHeaders === 'hidden');
+		this.element.classList.toggle('ash-pane-composite-pane-layout-fill', options.paneLayout === 'fill');
+		this.element.setAttribute('aria-label', this.title);
 		this.element.id = compositePanelId(options.viewContainer.location, options.viewContainer.id);
-		this.element.setAttribute("role", "tabpanel");
-		this.element.setAttribute("aria-labelledby", compositeTabId(options.viewContainer.location, options.viewContainer.id));
+		this.element.setAttribute('role', 'tabpanel');
+		this.element.setAttribute('aria-labelledby', compositeTabId(options.viewContainer.location, options.viewContainer.id));
 		if (options.mergeViewWithContainerWhenSingleView) {
 			this._register(options.model.onDidChangeVisibleViewDescriptors(() => this.updateMergedPane()));
 			this.updateMergedPane();
@@ -108,7 +108,7 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 			(projection): projection is PartTitleProjection => projection !== undefined,
 		);
 		if (projections.length > 1) {
-			throw new Error("A PaneComposite may receive a title projection from only one visible View");
+			throw new Error('A PaneComposite may receive a title projection from only one visible View');
 		}
 		return projections[0];
 	}

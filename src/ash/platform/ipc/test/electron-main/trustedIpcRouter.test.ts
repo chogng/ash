@@ -1,6 +1,6 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { registerTrustedIpcRoutes, TrustedIpcRouter, type IpcMainInvokeEventLike, type IpcMainLike, type IpcRoute } from "../../../../platform/ipc/electron-main/trustedIpcRouter.js";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { registerTrustedIpcRoutes, TrustedIpcRouter, type IpcMainInvokeEventLike, type IpcMainLike, type IpcRoute } from '../../../../platform/ipc/electron-main/trustedIpcRouter.js';
 
 class FakeIpcMain implements IpcMainLike {
 	readonly handlers = new Map<
@@ -20,7 +20,7 @@ class FakeIpcMain implements IpcMainLike {
 	}
 }
 
-function target(url = "file:///ash-desktop/workbench.html") {
+function target(url = 'file:///ash-desktop/workbench.html') {
 	const mainFrame = { url };
 	const webContents = { mainFrame };
 	return {
@@ -30,20 +30,20 @@ function target(url = "file:///ash-desktop/workbench.html") {
 	};
 }
 
-test("trusted IPC router enforces webContents, main frame, exact URL, and params", async () => {
+test('trusted IPC router enforces webContents, main frame, exact URL, and params', async () => {
 	const ipcMain = new FakeIpcMain();
 	const trusted = target();
 	let calls = 0;
 	const routes: readonly IpcRoute<unknown, unknown>[] = [
 		{
-			channel: "test:invoke",
+			channel: 'test:invoke',
 			validate(value) {
-				if (value !== "valid") throw new Error("invalid params");
+				if (value !== 'valid') throw new Error('invalid params');
 				return value;
 			},
 			invoke() {
 				calls += 1;
-				return "ok";
+				return 'ok';
 			},
 		},
 	];
@@ -51,18 +51,18 @@ test("trusted IPC router enforces webContents, main frame, exact URL, and params
 		ipcMain,
 		{
 			webContents: trusted.webContents,
-			allowedEntryUrls: new Set(["file:///ash-desktop/workbench.html"]),
+			allowedEntryUrls: new Set(['file:///ash-desktop/workbench.html']),
 		},
 		routes,
 	);
-	const invoke = ipcMain.handlers.get("test:invoke")!;
+	const invoke = ipcMain.handlers.get('test:invoke')!;
 
-	assert.equal(await invoke(trusted.event, "valid"), "ok");
+	assert.equal(await invoke(trusted.event, 'valid'), 'ok');
 	assert.throws(
 		() =>
 			invoke(
 				{ sender: { mainFrame: trusted.mainFrame }, senderFrame: trusted.mainFrame },
-				"valid",
+				'valid',
 			),
 		/Untrusted renderer/,
 	);
@@ -71,65 +71,65 @@ test("trusted IPC router enforces webContents, main frame, exact URL, and params
 			invoke(
 				{
 					sender: trusted.webContents,
-					senderFrame: { url: "file:///ash-desktop/workbench.html" },
+					senderFrame: { url: 'file:///ash-desktop/workbench.html' },
 				},
-				"valid",
+				'valid',
 			),
 		/main frame/,
 	);
-	trusted.mainFrame.url = "file:///ash-desktop/other.html";
-	assert.throws(() => invoke(trusted.event, "valid"), /URL is not allowed/);
-	trusted.mainFrame.url = "file:///ash-desktop/workbench.html";
-	assert.throws(() => invoke(trusted.event, "invalid"), /invalid params/);
+	trusted.mainFrame.url = 'file:///ash-desktop/other.html';
+	assert.throws(() => invoke(trusted.event, 'valid'), /URL is not allowed/);
+	trusted.mainFrame.url = 'file:///ash-desktop/workbench.html';
+	assert.throws(() => invoke(trusted.event, 'invalid'), /invalid params/);
 	assert.equal(calls, 1);
 
 	dispose.dispose();
 	assert.equal(ipcMain.handlers.size, 0);
 });
 
-test("trusted IPC router selects a route per trusted renderer window", async () => {
+test('trusted IPC router selects a route per trusted renderer window', async () => {
 	const ipcMain = new FakeIpcMain();
 	const router = new TrustedIpcRouter(ipcMain);
-	const workbench = target("file:///ash-desktop/workbench.html");
-	const sessions = target("file:///ash-desktop/sessions.html");
+	const workbench = target('file:///ash-desktop/workbench.html');
+	const sessions = target('file:///ash-desktop/sessions.html');
 	const workbenchRegistration = router.register({
 		webContents: workbench.webContents,
-		allowedEntryUrls: new Set(["file:///ash-desktop/workbench.html"]),
+		allowedEntryUrls: new Set(['file:///ash-desktop/workbench.html']),
 	}, [{
-		channel: "test:shared",
+		channel: 'test:shared',
 		validate: (value) => value,
-		invoke: () => "workbench",
+		invoke: () => 'workbench',
 	}]);
 	const sessionsRegistration = router.register({
 		webContents: sessions.webContents,
-		allowedEntryUrls: new Set(["file:///ash-desktop/sessions.html"]),
+		allowedEntryUrls: new Set(['file:///ash-desktop/sessions.html']),
 	}, [{
-		channel: "test:shared",
+		channel: 'test:shared',
 		validate: (value) => value,
-		invoke: () => "sessions",
+		invoke: () => 'sessions',
 	}]);
-	const invoke = ipcMain.handlers.get("test:shared")!;
+	const invoke = ipcMain.handlers.get('test:shared')!;
 
-	assert.equal(await invoke(workbench.event, undefined), "workbench");
-	assert.equal(await invoke(sessions.event, undefined), "sessions");
+	assert.equal(await invoke(workbench.event, undefined), 'workbench');
+	assert.equal(await invoke(sessions.event, undefined), 'sessions');
 	assert.throws(
 		() => invoke(target().event, undefined),
 		/Untrusted renderer/,
 	);
 
 	sessionsRegistration.dispose();
-	assert.equal(ipcMain.handlers.has("test:shared"), true);
-	assert.equal(await invoke(workbench.event, undefined), "workbench");
+	assert.equal(ipcMain.handlers.has('test:shared'), true);
+	assert.equal(await invoke(workbench.event, undefined), 'workbench');
 	workbenchRegistration.dispose();
-	assert.equal(ipcMain.handlers.has("test:shared"), false);
+	assert.equal(ipcMain.handlers.has('test:shared'), false);
 	router.dispose();
 });
 
-test("trusted IPC router rejects duplicate route registrations", () => {
+test('trusted IPC router rejects duplicate route registrations', () => {
 	const ipcMain = new FakeIpcMain();
 	const trusted = target();
 	const route: IpcRoute<unknown, unknown> = {
-		channel: "duplicate",
+		channel: 'duplicate',
 		validate: (value) => value,
 		invoke: () => undefined,
 	};
@@ -140,7 +140,7 @@ test("trusted IPC router rejects duplicate route registrations", () => {
 				ipcMain,
 				{
 					webContents: trusted.webContents,
-					allowedEntryUrls: new Set(["file:///ash-desktop/workbench.html"]),
+					allowedEntryUrls: new Set(['file:///ash-desktop/workbench.html']),
 				},
 				[route, route],
 			),

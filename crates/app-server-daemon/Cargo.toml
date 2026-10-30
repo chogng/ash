@@ -21,6 +21,7 @@ ash-utils-home-dir = { workspace = true }
 remote = { package = "ash-remote", path = "../remote" }
 signal-hook = { workspace = true }
 ash-install-context = { workspace = true }
+ash-installation = { workspace = true }
 process-hardening = { workspace = true }
 build-info = { workspace = true }
 dunce = { workspace = true }
@@ -40,6 +41,7 @@ ureq-update = { workspace = true }
 sha2 = { workspace = true, features = ["asm"] }
 
 [target.'cfg(windows)'.dependencies]
+ash-utils-pty = { workspace = true }
 sha2 = { workspace = true }
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
 

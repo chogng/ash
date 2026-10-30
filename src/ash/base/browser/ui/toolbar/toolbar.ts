@@ -1,15 +1,15 @@
 import type { IButtonStyles } from '../button/button.js';
 import './toolbar.css';
-import { localize } from "../../../../nls.js";
-import type { IContextMenuProvider } from "../../contextmenu.js";
-import type { IAction } from "../../../common/actions.js";
-import { Separator } from "../../../common/actions.js";
-import { Disposable } from "../../../common/lifecycle.js";
-import { Lxicon } from "../../../common/lxicons.js";
-import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
-import type { ActionViewItemOptions } from "../actionbar/actionViewItems.js";
-import type { AnchorPosition } from "../contextview/contextview.js";
-import { DropdownMenuActionViewItem } from "../dropdown/dropdownMenuActionViewItem.js";
+import { localize } from '../../../../nls.js';
+import type { IContextMenuProvider } from '../../contextmenu.js';
+import type { IAction } from '../../../common/actions.js';
+import { Separator } from '../../../common/actions.js';
+import { Disposable } from '../../../common/lifecycle.js';
+import { Lxicon } from '../../../common/lxicons.js';
+import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from '../actionbar/actionbar.js';
+import type { ActionViewItemOptions } from '../actionbar/actionViewItems.js';
+import type { AnchorPosition } from '../contextview/contextview.js';
+import { DropdownMenuActionViewItem } from '../dropdown/dropdownMenuActionViewItem.js';
 
 export interface ToolBarOptions {
 	readonly buttonStyles?: IButtonStyles;
@@ -29,7 +29,7 @@ export interface MoreActionsPlacement {
 }
 
 /** Component-owned visual adaptation selected by a toolbar host. */
-export type ToolBarPresentation = "default" | "inherit-foreground";
+export type ToolBarPresentation = 'default' | 'inherit-foreground';
 
 /**
  * Presents primary actions inline, secondary actions in a menu, and pinned
@@ -68,7 +68,7 @@ export class ToolBar extends Disposable {
 			},
 		}));
 		this.element = this.actionBar.element;
-		this.element.classList.add("ash-toolbar", `ash-toolbar-${options.presentation ?? "default"}`);
+		this.element.classList.add('ash-toolbar', `ash-toolbar-${options.presentation ?? 'default'}`);
 	}
 
 	setActions(
@@ -115,8 +115,8 @@ export class ToolBar extends Disposable {
 }
 
 class MoreActionsAction implements IAction {
-	readonly id = "ash.toolbar.moreActions";
-	readonly label = localize("toolbar.moreActions", "More Actions");
+	readonly id = 'ash.toolbar.moreActions';
+	readonly label = localize('toolbar.moreActions', 'More Actions');
 	readonly tooltip = this.label;
 	readonly icon = Lxicon.ellipsis;
 	readonly enabled = true;
@@ -128,7 +128,7 @@ class MoreActionsAction implements IAction {
 class MoreActionsViewItem extends DropdownMenuActionViewItem {
 	override render(container: HTMLElement): void {
 		super.render(container);
-		container.classList.add("ash-toolbar-more-actions");
+		container.classList.add('ash-toolbar-more-actions');
 	}
 }
 

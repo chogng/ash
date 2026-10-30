@@ -1,58 +1,58 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import {
 	WorkbenchState,
-} from "../../../../platform/workspace/common/workspace.js";
+} from '../../../../platform/workspace/common/workspace.js';
 import {
 	defaultWindowState,
-} from "../../../../platform/window/electron-main/window.js";
+} from '../../../../platform/window/electron-main/window.js';
 import { resolveContextMenuStyle } from '../../../../platform/window/common/window.js';
 import {
 	resolveBrowserWindowOptions,
 	WindowControlsOverlay,
-} from "../../../../platform/windows/electron-main/windows.js";
+} from '../../../../platform/windows/electron-main/windowImpl.js';
 
-test("window options apply the custom titlebar host policy", () => {
+test('window options apply the custom titlebar host policy', () => {
 	const webPreferences = {
 		contextIsolation: true,
 		nodeIntegration: false,
 		sandbox: true,
-		preload: "preload.js",
+		preload: 'preload.js',
 		additionalArguments: [],
 	};
 	const state = defaultWindowState(WorkbenchState.FOLDER);
 	const customWindows = resolveBrowserWindowOptions({
 		state,
 		webPreferences,
-		platform: "win32",
+		platform: 'win32',
 	});
-	assert.equal(customWindows.titleBarStyle, "hidden");
+	assert.equal(customWindows.titleBarStyle, 'hidden');
 	assert.equal(customWindows.frame, false);
 	assert.deepEqual(customWindows.titleBarOverlay, {
-		color: "#ffffff",
-		symbolColor: "#000000",
+		color: '#ffffff',
+		symbolColor: '#000000',
 		height: 35,
 	});
 
 	const customMac = resolveBrowserWindowOptions({
 		state,
 		webPreferences,
-		platform: "darwin",
+		platform: 'darwin',
 	});
-	assert.equal(customMac.titleBarStyle, "hiddenInset");
+	assert.equal(customMac.titleBarStyle, 'hiddenInset');
 	assert.equal(customMac.frame, undefined);
 	assert.equal(customMac.titleBarOverlay, true);
 
 	const customLinux = resolveBrowserWindowOptions({
 		state,
 		webPreferences,
-		platform: "linux",
+		platform: 'linux',
 	});
-	assert.equal(customLinux.titleBarStyle, "hidden");
+	assert.equal(customLinux.titleBarStyle, 'hidden');
 	assert.equal(customLinux.frame, false);
 	assert.deepEqual(customLinux.titleBarOverlay, {
-		color: "#ffffff",
-		symbolColor: "#000000",
+		color: '#ffffff',
+		symbolColor: '#000000',
 		height: 35,
 	});
 	for (const platform of ['win32', 'linux', 'darwin'] as const) {

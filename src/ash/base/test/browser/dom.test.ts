@@ -1,45 +1,45 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { addDisposableListener, computeScreenAwareSize, Dimension, getActiveDocument, getActiveElement, getDocument, getDomNodePagePosition, getShadowRoot, getWindow, h, isEditableElement, isElement, isHTMLElement, isNode, stopEvent, svg } from "../../browser/dom.js";
-import { registerWindow } from "../../browser/window.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { addDisposableListener, computeScreenAwareSize, Dimension, getActiveDocument, getActiveElement, getDocument, getDomNodePagePosition, getShadowRoot, getWindow, h, isEditableElement, isElement, isHTMLElement, isNode, stopEvent, svg } from '../../browser/dom.js';
+import { registerWindow } from '../../browser/window.js';
 
-test("disposable DOM listeners detach deterministically", () => {
+test('disposable DOM listeners detach deterministically', () => {
 	const target = new EventTarget();
 	let calls = 0;
 	const registration = addDisposableListener(
 		target,
-		"change",
+		'change',
 		() => calls++,
 	);
 
-	target.dispatchEvent(new Event("change"));
+	target.dispatchEvent(new Event('change'));
 	registration.dispose();
 	registration.dispose();
-	target.dispatchEvent(new Event("change"));
+	target.dispatchEvent(new Event('change'));
 
 	assert.equal(calls, 1);
 });
 
-test("disposable DOM listeners retain their registered capture mode", () => {
-	const ownerWindow = new JSDOM("<!doctype html><body><button></button></body>").window;
-	const button = ownerWindow.document.querySelector("button")!;
+test('disposable DOM listeners retain their registered capture mode', () => {
+	const ownerWindow = new JSDOM('<!doctype html><body><button></button></body>').window;
+	const button = ownerWindow.document.querySelector('button')!;
 	const options = { capture: true };
 	let calls = 0;
-	const registration = addDisposableListener(button, "click", () => calls++, options);
+	const registration = addDisposableListener(button, 'click', () => calls++, options);
 
 	options.capture = false;
 	registration.dispose();
-	button.dispatchEvent(new ownerWindow.MouseEvent("click", { bubbles: true }));
+	button.dispatchEvent(new ownerWindow.MouseEvent('click', { bubbles: true }));
 
 	assert.equal(calls, 0);
 });
 
-test("DOM guards validate nodes from their owning window", () => {
-	const firstDocument = new JSDOM("<!doctype html><body></body>").window.document;
-	const secondDocument = new JSDOM("<!doctype html><body></body>").window.document;
-	const element = h(secondDocument, "div");
-	const svgElement = svg(secondDocument, "svg");
+test('DOM guards validate nodes from their owning window', () => {
+	const firstDocument = new JSDOM('<!doctype html><body></body>').window.document;
+	const secondDocument = new JSDOM('<!doctype html><body></body>').window.document;
+	const element = h(secondDocument, 'div');
+	const svgElement = svg(secondDocument, 'svg');
 
 	assert.deepEqual({
 		firstDocument: isNode(firstDocument),
@@ -50,7 +50,7 @@ test("DOM guards validate nodes from their owning window", () => {
 		svgHtmlElement: isHTMLElement(svgElement),
 		structuralLookalike: isNode({
 			nodeType: 1,
-			namespaceURI: "http://www.w3.org/1999/xhtml",
+			namespaceURI: 'http://www.w3.org/1999/xhtml',
 		}),
 	}, {
 		firstDocument: true,
@@ -63,12 +63,12 @@ test("DOM guards validate nodes from their owning window", () => {
 	});
 });
 
-test("DOM exposes shared geometry and editable-element guards", () => {
+test('DOM exposes shared geometry and editable-element guards', () => {
 	const ownerWindow = new JSDOM("<!doctype html><body><input><div contenteditable='true'></div><span></span></body>").window;
-	const input = ownerWindow.document.querySelector("input")!;
-	const editable = ownerWindow.document.querySelector("div")!;
-	const span = ownerWindow.document.querySelector("span")!;
-	Object.defineProperty(span, "getBoundingClientRect", { value: () => ({ left: 2, top: 3, width: 4, height: 5 }) });
+	const input = ownerWindow.document.querySelector('input')!;
+	const editable = ownerWindow.document.querySelector('div')!;
+	const span = ownerWindow.document.querySelector('span')!;
+	Object.defineProperty(span, 'getBoundingClientRect', { value: () => ({ left: 2, top: 3, width: 4, height: 5 }) });
 	assert.equal(Dimension.None, Dimension.Zero);
 	assert.equal(isEditableElement(input), true);
 	assert.equal(isEditableElement(editable), true);
@@ -77,9 +77,9 @@ test("DOM exposes shared geometry and editable-element guards", () => {
 	ownerWindow.close();
 });
 
-test("DOM context queries resolve the owning window and document", () => {
-	const ownerWindow = new JSDOM("<!doctype html><body><button></button></body>").window;
-	const button = ownerWindow.document.querySelector("button")!;
+test('DOM context queries resolve the owning window and document', () => {
+	const ownerWindow = new JSDOM('<!doctype html><body><button></button></body>').window;
+	const button = ownerWindow.document.querySelector('button')!;
 
 	assert.deepEqual({
 		windowFromNode: getWindow(button),
@@ -93,9 +93,9 @@ test("DOM context queries resolve the owning window and document", () => {
 	ownerWindow.close();
 });
 
-test("screen-aware CSS sizes occupy stable whole physical pixels", () => {
-	const ownerWindow = new JSDOM("<!doctype html><body></body>").window;
-	Object.defineProperty(ownerWindow, "devicePixelRatio", { configurable: true, value: 1.25 });
+test('screen-aware CSS sizes occupy stable whole physical pixels', () => {
+	const ownerWindow = new JSDOM('<!doctype html><body></body>').window;
+	Object.defineProperty(ownerWindow, 'devicePixelRatio', { configurable: true, value: 1.25 });
 
 	assert.deepEqual({
 		thin: computeScreenAwareSize(ownerWindow as unknown as Window, 1),
@@ -107,10 +107,10 @@ test("screen-aware CSS sizes occupy stable whole physical pixels", () => {
 	ownerWindow.close();
 });
 
-test("active DOM context follows a registered focused window", () => {
-	const ownerWindow = new JSDOM("<!doctype html><body><button></button></body>").window;
+test('active DOM context follows a registered focused window', () => {
+	const ownerWindow = new JSDOM('<!doctype html><body><button></button></body>').window;
 	const registration = registerWindow(ownerWindow as unknown as Window);
-	const button = ownerWindow.document.querySelector("button")!;
+	const button = ownerWindow.document.querySelector('button')!;
 	button.focus();
 
 	try {
@@ -139,17 +139,17 @@ test('getShadowRoot resolves an element inside an open shadow tree', () => {
 	ownerWindow.close();
 });
 
-test("stopEvent prevents native behavior and propagation", () => {
-	const event = new Event("submit", {
+test('stopEvent prevents native behavior and propagation', () => {
+	const event = new Event('submit', {
 		bubbles: true,
 		cancelable: true,
 	});
 	let propagated = false;
 	const target = new EventTarget();
-	target.addEventListener("submit", (next) =>
+	target.addEventListener('submit', (next) =>
 		stopEvent(next, { immediate: true }),
 	);
-	target.addEventListener("submit", () => {
+	target.addEventListener('submit', () => {
 		propagated = true;
 	});
 

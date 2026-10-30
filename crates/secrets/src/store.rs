@@ -10,11 +10,20 @@ pub enum DeleteSecretOutcome {
     NotFound,
 }
 
-/// Profile persistence selected explicitly by the user, never as an error fallback.
+/// Profile persistence chosen by the host default or an explicit user selection, never as an error fallback.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SecretStorageMode {
     Encrypted,
     File,
+}
+
+/// The facility currently serving credentials; a fallback retains its redacted cause.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SecretPersistence {
+    Persisted,
+    InMemory {
+        reason: Option<SecretStoreErrorKind>,
+    },
 }
 
 /// Persists opaque secret values for domain runtimes.
@@ -23,6 +32,15 @@ pub enum SecretStorageMode {
 /// namespace from other products, sanitize all errors, and never copy secret values into ordinary
 /// configuration, logs, telemetry, command arguments, or durable product events.
 pub trait SecretStore: Send + Sync {
+    fn persistence(&self) -> Result<SecretPersistence, SecretStoreError> {
+        Ok(SecretPersistence::Persisted)
+    }
+
+    /// Retries durable storage after an explicit user recovery action.
+    fn restore_persistence(&self) -> Result<(), SecretStoreError> {
+        self.check_availability()
+    }
+
     /// Reports configurable profile persistence; injected stores need not expose a choice.
     fn storage_mode(&self) -> Result<Option<SecretStorageMode>, SecretStoreError> {
         Ok(None)

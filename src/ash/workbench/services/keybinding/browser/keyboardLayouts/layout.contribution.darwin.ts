@@ -16,4 +16,3 @@ import './ko.darwin.js';
 import './dvorak.darwin.js';
 
 export { KeyboardLayoutContribution } from './_.contribution.js';
-

@@ -1,11 +1,11 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { ContextKeyExpr } from "../../../contextkey/common/contextkey.js";
-import assert from "node:assert/strict";
-import { suite, test } from "mocha";
-import { JSDOM } from "jsdom";
-import { h } from "../../../../base/browser/dom.js";
-import { Event } from "../../../../base/common/event.js";
-import type { INotificationService } from "../../../notification/common/notification.js";
+import { ContextKeyExpr } from '../../../contextkey/common/contextkey.js';
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { h } from '../../../../base/browser/dom.js';
+import { Event } from '../../../../base/common/event.js';
+import type { INotificationService } from '../../../notification/common/notification.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 
 suite('Toolbar open menu refreshes', () => {
@@ -67,9 +67,9 @@ suite('Toolbar open menu refreshes', () => {
 	});
 });
 
-test("toolbar submenu items retain toolbar button semantics", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
+test('toolbar submenu items retain toolbar button semantics', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
 		value: dom.window,
 	});
@@ -78,23 +78,23 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
 		{ createActionViewItem },
 	] =
 		await Promise.all([
-			import("../../../../platform/actions/common/actions.js"),
-			import("../../../../platform/actions/browser/menuEntryActionViewItem.js"),
+			import('../../../../platform/actions/common/actions.js'),
+			import('../../../../platform/actions/browser/menuEntryActionViewItem.js'),
 		]);
 	let shownOptions:
-		| import("../../../../base/browser/contextmenu.js").IContextMenuDelegate
+		| import('../../../../base/browser/contextmenu.js').IContextMenuDelegate
 		| undefined;
 	const childAction = {
-		id: "test.toolbar.child",
-		label: "Child",
-		tooltip: "Child",
+		id: 'test.toolbar.child',
+		label: 'Child',
+		tooltip: 'Child',
 		enabled: true,
 		run() { },
 	};
 	const item = createActionViewItem(
 		new SubmenuItemAction({
-			title: "More",
-			submenu: MenuId.for("test.toolbar.submenu"),
+			title: 'More',
+			submenu: MenuId.for('test.toolbar.submenu'),
 		}, [childAction]),
 		{
 			showContextMenu(options) {
@@ -103,60 +103,60 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
 		},
 	);
 	assert.ok(item);
-	const container = h(dom.window.document, "div");
+	const container = h(dom.window.document, 'div');
 	dom.window.document.body.append(container);
 
 	item.render(container);
 
-	const button = container.querySelector("button");
+	const button = container.querySelector('button');
 	assert.ok(button instanceof dom.window.HTMLButtonElement);
-	assert.equal(button.hasAttribute("role"), false);
-	assert.equal(button.getAttribute("aria-haspopup"), "menu");
+	assert.equal(button.hasAttribute('role'), false);
+	assert.equal(button.getAttribute('aria-haspopup'), 'menu');
 	assert.ok(button.querySelector(
-		".ash-dropdown-menu-indicator > .ash-icon",
+		'.ash-dropdown-menu-indicator > .ash-icon',
 	));
 	button.click();
 	assert.ok(shownOptions);
 	assert.equal(shownOptions.getAnchor(), button);
 	assert.deepEqual(shownOptions.getActions(), [childAction]);
-	assert.equal(button.getAttribute("aria-expanded"), "true");
+	assert.equal(button.getAttribute('aria-expanded'), 'true');
 	shownOptions.onHide?.(false);
-	assert.equal(button.getAttribute("aria-expanded"), "false");
+	assert.equal(button.getAttribute('aria-expanded'), 'false');
 
 	item.dispose();
 	dom.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
-test("menu entry actions switch to their alternative while Alt is held", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('menu entry actions switch to their alternative while Alt is held', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const [
 		{ ModifierKeyEmitter },
 		{ MenuItemAction },
 		{ ContextKeyService },
 		{ createActionViewItem, resolveAlternativeMenuActions },
 	] = await Promise.all([
-		import("../../../../base/browser/dom.js"),
-		import("../../../../platform/actions/common/actions.js"),
-		import("../../../../platform/contextkey/browser/contextKeyService.js"),
-		import("../../../../platform/actions/browser/menuEntryActionViewItem.js"),
+		import('../../../../base/browser/dom.js'),
+		import('../../../../platform/actions/common/actions.js'),
+		import('../../../../platform/contextkey/browser/contextKeyService.js'),
+		import('../../../../platform/actions/browser/menuEntryActionViewItem.js'),
 	]);
 	const runs: string[] = [];
 	const commandService = {
 		executeCommand: async (id: string) => {
 			runs.push(id);
 		},
-	} as unknown as import("../../../../platform/commands/common/commands.js").ICommandService;
+	} as unknown as import('../../../../platform/commands/common/commands.js').ICommandService;
 	using contexts = new ContextKeyService();
 	const alternate = new MenuItemAction(
-		{ id: "test.toolbar.alternative", title: "Alternative" },
+		{ id: 'test.toolbar.alternative', title: 'Alternative' },
 		undefined,
 		undefined,
 		contexts,
 		commandService,
 	);
 	const primary = new MenuItemAction(
-		{ id: "test.toolbar.primary", title: "Primary" },
+		{ id: 'test.toolbar.primary', title: 'Primary' },
 		alternate,
 		undefined,
 		contexts,
@@ -164,54 +164,99 @@ test("menu entry actions switch to their alternative while Alt is held", async (
 	);
 	const item = createActionViewItem(primary, { showContextMenu() { } });
 	assert.ok(item);
-	const container = h(dom.window.document, "div");
+	const container = h(dom.window.document, 'div');
 	dom.window.document.body.append(container);
 	item.render(container);
-	const button = container.querySelector("button");
+	const button = container.querySelector('button');
 	assert.ok(button instanceof dom.window.HTMLButtonElement);
 
-	container.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
-	dom.window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Alt", altKey: true }));
-	assert.equal(button.textContent, "Alternative");
+	container.dispatchEvent(new dom.window.MouseEvent('mouseenter'));
+	dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Alt', altKey: true }));
+	assert.equal(button.textContent, 'Alternative');
 	button.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.deepEqual(runs, ["test.toolbar.alternative"]);
-	assert.equal(resolveAlternativeMenuActions([primary], true)[0]?.id, "test.toolbar.alternative");
+	assert.deepEqual(runs, ['test.toolbar.alternative']);
+	assert.equal(resolveAlternativeMenuActions([primary], true)[0]?.id, 'test.toolbar.alternative');
 
-	dom.window.dispatchEvent(new dom.window.KeyboardEvent("keyup", { key: "Alt" }));
-	assert.equal(button.textContent, "Primary");
+	dom.window.dispatchEvent(new dom.window.KeyboardEvent('keyup', { key: 'Alt' }));
+	assert.equal(button.textContent, 'Primary');
 	button.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.deepEqual(runs, ["test.toolbar.alternative", "test.toolbar.primary"]);
+	assert.deepEqual(runs, ['test.toolbar.alternative', 'test.toolbar.primary']);
 
 	item.dispose();
 	ModifierKeyEmitter.disposeInstance(dom.window as unknown as Window);
 	dom.window.close();
 });
 
-test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('split primary menu commands preserve modifiers without changing their dropdown', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const [{ ModifierKeyEmitter }, { MenuItemAction }, { ContextKeyService }, { DropdownWithPrimaryActionViewItem }] = await Promise.all([
+		import('../../../../base/browser/dom.js'),
+		import('../../common/actions.js'),
+		import('../../../contextkey/browser/contextKeyService.js'),
+		import('../../browser/dropdownWithPrimaryActionViewItem.js'),
+	]);
+	try {
+		using contexts = new ContextKeyService();
+		const runs: Array<{ id: string; args: readonly unknown[]; }> = [];
+		const commands = { executeCommand: async (id: string, ...args: readonly unknown[]) => { runs.push({ id, args }); } } as unknown as import('../../../commands/common/commands.js').ICommandService;
+		const alternate = new MenuItemAction({ id: 'split.alternate', title: 'Split' }, undefined, { arg: 'origin' }, contexts, commands);
+		const action = new MenuItemAction({ id: 'split.primary', title: 'New' }, alternate, { arg: 'origin' }, contexts, commands);
+		let shown: import('../../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
+		const menuAction = testAction('profiles');
+		const profile = testAction('shell');
+		using item = new DropdownWithPrimaryActionViewItem(action, menuAction, [profile], { showContextMenu(delegate) { shown = delegate; } });
+		const container = h(dom.window.document, 'div');
+		dom.window.document.body.append(container);
+		item.render(container);
+		const primary = container.querySelector<HTMLButtonElement>('.ash-split-action-primary button')!;
+		const dropdown = container.querySelector<HTMLButtonElement>('.ash-split-action-dropdown button')!;
+		primary.click();
+		primary.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, altKey: true }));
+		assert.equal(primary.getAttribute('aria-label'), 'Split');
+		primary.click();
+		dropdown.click();
+		assert.deepEqual(shown!.getActions(), [profile]);
+		assert.equal(dropdown.getAttribute('aria-label'), 'profiles');
+		shown!.onHide?.(true);
+		dom.window.dispatchEvent(new dom.window.KeyboardEvent('keyup', { key: 'Alt' }));
+		assert.equal(primary.getAttribute('aria-label'), 'New');
+		primary.click();
+		assert.deepEqual(runs, [
+			{ id: 'split.primary', args: ['origin'] },
+			{ id: 'split.alternate', args: ['origin'] },
+			{ id: 'split.primary', args: ['origin'] },
+		]);
+	} finally {
+		ModifierKeyEmitter.disposeInstance(dom.window as unknown as Window);
+		dom.window.close();
+	}
+});
+
+test('DropdownWithPrimaryActionViewItem presents one split toolbar item', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const [
 		{ DropdownWithPrimaryActionViewItem },
 		{ ToolBar },
 	] = await Promise.all([
-		import("../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js"),
-		import("../../../../base/browser/ui/toolbar/toolbar.js"),
+		import('../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js'),
+		import('../../../../base/browser/ui/toolbar/toolbar.js'),
 	]);
-	let shownOptions: import("../../../../base/browser/contextmenu.js").IContextMenuDelegate | undefined;
+	let shownOptions: import('../../../../base/browser/contextmenu.js').IContextMenuDelegate | undefined;
 	const contextMenuProvider = {
-		showContextMenu(options: import("../../../../base/browser/contextmenu.js").IContextMenuDelegate) {
+		showContextMenu(options: import('../../../../base/browser/contextmenu.js').IContextMenuDelegate) {
 			shownOptions = options;
 		},
 	};
 	let primaryRuns = 0;
-	const primaryAction = { ...testAction("new"), run: () => primaryRuns++ };
-	const dropdownAction = testAction("select-profile");
-	let splitViewItem: import("../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js").DropdownWithPrimaryActionViewItem | undefined;
+	const primaryAction = { ...testAction('new'), run: () => primaryRuns++ };
+	const dropdownAction = testAction('select-profile');
+	let splitViewItem: import('../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js').DropdownWithPrimaryActionViewItem | undefined;
 	using toolbar = new ToolBar(dom.window.document.body, {
 		contextMenuProvider,
 		actionViewItemProvider: (item, options) => {
-			splitViewItem = new DropdownWithPrimaryActionViewItem(item, dropdownAction, [testAction("cmd")], contextMenuProvider, options);
+			splitViewItem = new DropdownWithPrimaryActionViewItem(item, dropdownAction, [testAction('cmd')], contextMenuProvider, options);
 			return splitViewItem;
 		},
 	});
@@ -221,116 +266,116 @@ test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async 
 	const visibility: boolean[] = [];
 	splitViewItem.onDidChangeDropdownVisibility((visible) => visibility.push(visible));
 
-	const splitItem = toolbar.element.querySelector<HTMLElement>(".ash-dropdown-with-primary-action-view-item");
-	const primaryButton = splitItem?.querySelector<HTMLButtonElement>(".ash-dropdown-with-primary-primary > .ash-button");
-	const dropdownButton = splitItem?.querySelector<HTMLButtonElement>(".ash-dropdown-with-primary-dropdown > .ash-button");
+	const splitItem = toolbar.element.querySelector<HTMLElement>('.ash-dropdown-with-primary-action-view-item');
+	const primaryButton = splitItem?.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-primary > .ash-button');
+	const dropdownButton = splitItem?.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button');
 	assert.ok(splitItem);
 	assert.ok(primaryButton);
 	assert.ok(dropdownButton);
-	assert.equal(toolbar.element.querySelectorAll(":scope > .ash-action-view-item").length, 1);
+	assert.equal(toolbar.element.querySelectorAll(':scope > .ash-action-view-item').length, 1);
 	assert.equal(primaryButton.tabIndex, 0);
 	assert.equal(dropdownButton.tabIndex, -1);
 
 	primaryButton.click();
 	assert.equal(primaryRuns, 1);
 	primaryButton.focus();
-	primaryButton.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowRight" }));
+	primaryButton.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowRight' }));
 	assert.equal(dom.window.document.activeElement, dropdownButton);
 	assert.equal(primaryButton.tabIndex, -1);
 	assert.equal(dropdownButton.tabIndex, 0);
-	dropdownButton.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowLeft" }));
+	dropdownButton.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowLeft' }));
 	assert.equal(dom.window.document.activeElement, primaryButton);
 
 	dropdownButton.click();
 	assert.equal(shownOptions?.getAnchor(), dropdownButton);
-	assert.deepEqual(shownOptions?.getActions().map(({ id }) => id), ["cmd"]);
-	assert.equal(dropdownButton.getAttribute("aria-expanded"), "true");
-	assert.equal(splitItem.classList.contains("active"), true);
+	assert.deepEqual(shownOptions?.getActions().map(({ id }) => id), ['cmd']);
+	assert.equal(dropdownButton.getAttribute('aria-expanded'), 'true');
+	assert.equal(splitItem.classList.contains('active'), true);
 	shownOptions?.onHide?.(false);
-	assert.equal(dropdownButton.getAttribute("aria-expanded"), "false");
-	assert.equal(splitItem.classList.contains("active"), false);
+	assert.equal(dropdownButton.getAttribute('aria-expanded'), 'false');
+	assert.equal(splitItem.classList.contains('active'), false);
 	assert.deepEqual(visibility, [true, false]);
 
-	splitViewItem.update(testAction("select-other"), [testAction("other")]);
-	const updatedDropdownButton = splitItem.querySelector<HTMLButtonElement>(".ash-dropdown-with-primary-dropdown > .ash-button");
+	splitViewItem.update(testAction('select-other'), [testAction('other')]);
+	const updatedDropdownButton = splitItem.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-dropdown > .ash-button');
 	assert.ok(updatedDropdownButton);
 	assert.notEqual(updatedDropdownButton, dropdownButton);
 	splitViewItem.focus(true);
 	assert.equal(dom.window.document.activeElement, updatedDropdownButton);
 	splitViewItem.showDropdown();
-	assert.deepEqual(shownOptions?.getActions().map(({ id }) => id), ["other"]);
-	assert.equal(splitItem.classList.contains("active"), true);
-	splitViewItem.update(testAction("select-final"), [testAction("final")]);
-	assert.equal(splitItem.classList.contains("active"), false);
+	assert.deepEqual(shownOptions?.getActions().map(({ id }) => id), ['other']);
+	assert.equal(splitItem.classList.contains('active'), true);
+	splitViewItem.update(testAction('select-final'), [testAction('final')]);
+	assert.equal(splitItem.classList.contains('active'), false);
 	splitViewItem.showDropdown();
-	assert.deepEqual(shownOptions?.getActions().map(({ id }) => id), ["final"]);
+	assert.deepEqual(shownOptions?.getActions().map(({ id }) => id), ['final']);
 	shownOptions?.onHide?.(false);
 	assert.deepEqual(visibility, [true, false, true, false, true, false]);
 
 	dom.window.close();
 });
 
-test("menu action grouping supports primary predicates, separators, and submenu inlining", async () => {
+test('menu action grouping supports primary predicates, separators, and submenu inlining', async () => {
 	const [
 		{ Separator, SubmenuAction },
 		{ getActionBarActions, getFlatContextMenuActions },
 	] = await Promise.all([
-		import("../../../../base/common/actions.js"),
-		import("../../../../platform/actions/browser/menuEntryActionViewItem.js"),
+		import('../../../../base/common/actions.js'),
+		import('../../../../platform/actions/browser/menuEntryActionViewItem.js'),
 	]);
-	const first = testAction("first");
-	const second = testAction("second");
-	const child = testAction("child");
-	const trailing = testAction("trailing");
-	const submenu = new SubmenuAction("submenu", "Submenu", [child]);
+	const first = testAction('first');
+	const second = testAction('second');
+	const child = testAction('child');
+	const trailing = testAction('trailing');
+	const submenu = new SubmenuAction('submenu', 'Submenu', [child]);
 	const groups = [
-		["primary.one", [first]],
-		["primary.two", [submenu]],
-		["secondary.one", [second]],
-		["secondary.two", [trailing]],
+		['primary.one', [first]],
+		['primary.two', [submenu]],
+		['secondary.one', [second]],
+		['secondary.two', [trailing]],
 	] as const;
 
 	const grouped = getActionBarActions(
 		groups,
-		(group) => group.startsWith("primary."),
+		(group) => group.startsWith('primary.'),
 		(action) => action === submenu,
 		true,
 	);
 
 	assert.deepEqual(grouped.primary.map(({ id }) => id), [
-		"first",
+		'first',
 		Separator.ID,
-		"child",
+		'child',
 	]);
 	assert.deepEqual(grouped.secondary.map(({ id }) => id), [
-		"second",
+		'second',
 		Separator.ID,
-		"trailing",
+		'trailing',
 	]);
 	assert.deepEqual(
 		getFlatContextMenuActions(groups, undefined, undefined).map(({ id }) => id),
-		["first", Separator.ID, "submenu", Separator.ID, "second", Separator.ID, "trailing"],
+		['first', Separator.ID, 'submenu', Separator.ID, 'second', Separator.ID, 'trailing'],
 	);
 });
 
-test("menu toolbar applies custom primary groups and submenu inlining", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('menu toolbar applies custom primary groups and submenu inlining', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const [
 		{ SubmenuAction },
 		{ Event },
 		{ MenuId },
 		{ MenuWorkbenchToolBar },
 	] = await Promise.all([
-		import("../../../../base/common/actions.js"),
-		import("../../../../base/common/event.js"),
-		import("../../../../platform/actions/common/actions.js"),
-		import("../../../../platform/actions/browser/toolbar.js"),
+		import('../../../../base/common/actions.js'),
+		import('../../../../base/common/event.js'),
+		import('../../../../platform/actions/common/actions.js'),
+		import('../../../../platform/actions/browser/toolbar.js'),
 	]);
-	const child = testAction("inline-child");
-	const secondary = testAction("secondary");
+	const child = testAction('inline-child');
+	const secondary = testAction('secondary');
 	const groups = [
-		["inline", [new SubmenuAction("submenu", "Submenu", [child])]],
-		["secondary", [secondary]],
+		['inline', [new SubmenuAction('submenu', 'Submenu', [child])]],
+		['secondary', [secondary]],
 	] as const;
 	const menu = {
 		onDidChange: Event.None,
@@ -341,31 +386,31 @@ test("menu toolbar applies custom primary groups and submenu inlining", async ()
 	const menuService = {
 		createMenu: () => menu,
 		getMenuActions: () => groups,
-	} as import("../../../../platform/actions/common/actions.js").IMenuService;
+	} as import('../../../../platform/actions/common/actions.js').IMenuService;
 	using toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
 		menuService,
 		{ showContextMenu() { } },
-		MenuId.for("test.toolbar.custom-groups"),
+		MenuId.for('test.toolbar.custom-groups'),
 		{
 			toolbarOptions: {
-				primaryGroup: "inline",
+				primaryGroup: 'inline',
 				shouldInlineSubmenu: () => true,
 			},
 		},
 	);
 
 	assert.deepEqual(
-		[...toolbar.element.querySelectorAll<HTMLElement>("[data-action-id]")]
+		[...toolbar.element.querySelectorAll<HTMLElement>('[data-action-id]')]
 			.map(({ dataset }) => dataset.actionId),
-		["inline-child", "ash.toolbar.moreActions"],
+		['inline-child', 'ash.toolbar.moreActions'],
 	);
 	dom.window.close();
 });
 
-test("workbench toolbar adapts manually supplied platform menu actions", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
+test('workbench toolbar adapts manually supplied platform menu actions', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
 		value: dom.window,
 	});
@@ -379,22 +424,22 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
 		{ DisposableStore },
 		{ WorkbenchToolBar },
 	] = await Promise.all([
-		import("../../../../platform/actions/common/actions.js"),
-		import("../../../../platform/actions/common/menuService.js"),
-		import("../../../../platform/commands/common/commands.js"),
-		import("../../../../platform/contextkey/browser/contextKeyService.js"),
+		import('../../../../platform/actions/common/actions.js'),
+		import('../../../../platform/actions/common/menuService.js'),
+		import('../../../../platform/commands/common/commands.js'),
+		import('../../../../platform/contextkey/browser/contextKeyService.js'),
 		import('../../../../platform/instantiation/common/instantiationService.js'),
-		import("../../../../workbench/services/commands/common/commandService.js"),
-		import("../../../../base/common/lifecycle.js"),
-		import("../../../../platform/actions/browser/toolbar.js"),
+		import('../../../../workbench/services/commands/common/commandService.js'),
+		import('../../../../base/common/lifecycle.js'),
+		import('../../../../platform/actions/browser/toolbar.js'),
 	]);
 	using registrations = new DisposableStore();
-	const menuId = new MenuId("test.toolbar.workbench");
-	const commandId = "test.toolbar.workbench.action";
+	const menuId = new MenuId('test.toolbar.workbench');
+	const commandId = 'test.toolbar.workbench.action';
 	registrations.add(CommandsRegistry.register(commandId, () => undefined));
 	registrations.add(MenusRegistry.appendMenuItem(menuId, {
-		command: { id: commandId, title: "Workbench action" },
-		group: "navigation",
+		command: { id: commandId, title: 'Workbench action' },
+		group: 'navigation',
 	}));
 	const commands = new CommandService(new InstantiationService());
 	const contexts = registrations.add(new ContextKeyService());
@@ -405,16 +450,16 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
 	toolbar.setActions([action]);
 	dom.window.document.body.append(toolbar.element);
 
-	assert.equal(toolbar.element.querySelector(".ash-menu-entry button")?.textContent, "Workbench action");
+	assert.equal(toolbar.element.querySelector('.ash-menu-entry button')?.textContent, 'Workbench action');
 
 	toolbar.dispose();
 	dom.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
-test("menu toolbar keeps navigation inline and moves other groups into More Actions", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
+test('menu toolbar keeps navigation inline and moves other groups into More Actions', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
 		value: dom.window,
 	});
@@ -428,44 +473,44 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 		{ DisposableStore },
 		{ MenuWorkbenchToolBar },
 	] = await Promise.all([
-		import("../../../../platform/actions/common/actions.js"),
-		import("../../../../platform/actions/common/menuService.js"),
-		import("../../../../platform/commands/common/commands.js"),
-		import("../../../../platform/contextkey/browser/contextKeyService.js"),
+		import('../../../../platform/actions/common/actions.js'),
+		import('../../../../platform/actions/common/menuService.js'),
+		import('../../../../platform/commands/common/commands.js'),
+		import('../../../../platform/contextkey/browser/contextKeyService.js'),
 		import('../../../../platform/instantiation/common/instantiationService.js'),
-		import("../../../../workbench/services/commands/common/commandService.js"),
-		import("../../../../base/common/lifecycle.js"),
-		import("../../../../platform/actions/browser/toolbar.js"),
+		import('../../../../workbench/services/commands/common/commandService.js'),
+		import('../../../../base/common/lifecycle.js'),
+		import('../../../../platform/actions/browser/toolbar.js'),
 	]);
 	using registrations = new DisposableStore();
-	const menuId = new MenuId("test.toolbar.groups");
+	const menuId = new MenuId('test.toolbar.groups');
 	registrations.add(CommandsRegistry.register(
-		"test.toolbar.navigation",
+		'test.toolbar.navigation',
 		() => undefined,
 	));
 	registrations.add(CommandsRegistry.register(
-		"test.toolbar.secondary",
+		'test.toolbar.secondary',
 		() => undefined,
 	));
 	registrations.add(MenusRegistry.appendMenuItem(menuId, {
 		command: {
-			id: "test.toolbar.navigation",
-			title: "Navigation",
+			id: 'test.toolbar.navigation',
+			title: 'Navigation',
 		},
-		group: "navigation",
+		group: 'navigation',
 	}));
 	registrations.add(MenusRegistry.appendMenuItem(menuId, {
 		command: {
-			id: "test.toolbar.secondary",
-			title: "Secondary",
+			id: 'test.toolbar.secondary',
+			title: 'Secondary',
 		},
-		group: "other",
+		group: 'other',
 	}));
 	const commands = new CommandService(new InstantiationService());
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(commands, contexts);
 	let shownOptions:
-		| import("../../../../base/browser/contextmenu.js").IContextMenuDelegate
+		| import('../../../../base/browser/contextmenu.js').IContextMenuDelegate
 		| undefined;
 	const toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
@@ -479,15 +524,15 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 	);
 	dom.window.document.body.append(toolbar.element);
 
-	const buttons = toolbar.element.querySelectorAll("button");
+	const buttons = toolbar.element.querySelectorAll('button');
 	assert.equal(buttons.length, 2);
-	assert.equal(buttons[0]?.textContent, "Navigation");
-	assert.equal(buttons[1]?.title, "More Actions");
-	assert.equal(toolbar.element.textContent?.includes("Secondary"), false);
+	assert.equal(buttons[0]?.textContent, 'Navigation');
+	assert.equal(buttons[1]?.title, 'More Actions');
+	assert.equal(toolbar.element.textContent?.includes('Secondary'), false);
 	buttons[1]?.click();
 	assert.deepEqual(
 		shownOptions?.getActions().map(({ id }) => id),
-		["test.toolbar.secondary"],
+		['test.toolbar.secondary'],
 	);
 	assert.throws(
 		() => toolbar.setActions([]),
@@ -496,12 +541,12 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 
 	toolbar.dispose();
 	dom.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
-test("menu toolbar projects empty state as a stable visual class", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
+test('menu toolbar projects empty state as a stable visual class', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
 		value: dom.window,
 	});
@@ -515,23 +560,23 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 		{ DisposableStore },
 		{ MenuWorkbenchToolBar },
 	] = await Promise.all([
-		import("../../../../platform/actions/common/actions.js"),
-		import("../../../../platform/actions/common/menuService.js"),
-		import("../../../../platform/commands/common/commands.js"),
-		import("../../../../platform/contextkey/browser/contextKeyService.js"),
+		import('../../../../platform/actions/common/actions.js'),
+		import('../../../../platform/actions/common/menuService.js'),
+		import('../../../../platform/commands/common/commands.js'),
+		import('../../../../platform/contextkey/browser/contextKeyService.js'),
 		import('../../../../platform/instantiation/common/instantiationService.js'),
-		import("../../../../workbench/services/commands/common/commandService.js"),
-		import("../../../../base/common/lifecycle.js"),
-		import("../../../../platform/actions/browser/toolbar.js"),
+		import('../../../../workbench/services/commands/common/commandService.js'),
+		import('../../../../base/common/lifecycle.js'),
+		import('../../../../platform/actions/browser/toolbar.js'),
 	]);
 	using registrations = new DisposableStore();
-	const menuId = new MenuId("test.toolbar.empty-state");
-	const actionId = "test.toolbar.visible-action";
+	const menuId = new MenuId('test.toolbar.empty-state');
+	const actionId = 'test.toolbar.visible-action';
 	registrations.add(CommandsRegistry.register(actionId, () => undefined));
 	registrations.add(MenusRegistry.appendMenuItem(menuId, {
-		command: { id: actionId, title: "Visible action" },
-		group: "navigation",
-		when: ContextKeyExpr.has("test.toolbar.visible"),
+		command: { id: actionId, title: 'Visible action' },
+		group: 'navigation',
+		when: ContextKeyExpr.has('test.toolbar.visible'),
 	}));
 	const contexts = registrations.add(new ContextKeyService());
 	const toolbar = new MenuWorkbenchToolBar(
@@ -545,24 +590,24 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 	toolbar.onDidChangeMenuItems(() => menuChanges++);
 
 	assert.equal(toolbar.element.hidden, true);
-	assert.equal(toolbar.element.classList.contains("empty"), true);
-	contexts.setContext("test.toolbar.visible", true);
+	assert.equal(toolbar.element.classList.contains('empty'), true);
+	contexts.setContext('test.toolbar.visible', true);
 	assert.equal(menuChanges, 1);
 	assert.equal(toolbar.element.hidden, false);
-	assert.equal(toolbar.element.classList.contains("empty"), false);
-	contexts.setContext("test.toolbar.visible", false);
+	assert.equal(toolbar.element.classList.contains('empty'), false);
+	contexts.setContext('test.toolbar.visible', false);
 	assert.equal(menuChanges, 2);
 	assert.equal(toolbar.element.hidden, true);
-	assert.equal(toolbar.element.classList.contains("empty"), true);
+	assert.equal(toolbar.element.classList.contains('empty'), true);
 
 	toolbar.dispose();
 	dom.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
-test("menu toolbar retains action slots for enablement and toggle changes", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
+test('menu toolbar retains action slots for enablement and toggle changes', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
 		value: dom.window,
 	});
@@ -576,27 +621,27 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 		{ DisposableStore },
 		{ MenuWorkbenchToolBar },
 	] = await Promise.all([
-		import("../../../../platform/actions/common/actions.js"),
-		import("../../../../platform/actions/common/menuService.js"),
-		import("../../../../platform/commands/common/commands.js"),
-		import("../../../../platform/contextkey/browser/contextKeyService.js"),
+		import('../../../../platform/actions/common/actions.js'),
+		import('../../../../platform/actions/common/menuService.js'),
+		import('../../../../platform/commands/common/commands.js'),
+		import('../../../../platform/contextkey/browser/contextKeyService.js'),
 		import('../../../../platform/instantiation/common/instantiationService.js'),
-		import("../../../../workbench/services/commands/common/commandService.js"),
-		import("../../../../base/common/lifecycle.js"),
-		import("../../../../platform/actions/browser/toolbar.js"),
+		import('../../../../workbench/services/commands/common/commandService.js'),
+		import('../../../../base/common/lifecycle.js'),
+		import('../../../../platform/actions/browser/toolbar.js'),
 	]);
 	using registrations = new DisposableStore();
-	const menuId = new MenuId("test.toolbar.retained-actions");
-	const actionId = "test.toolbar.retained-action";
+	const menuId = new MenuId('test.toolbar.retained-actions');
+	const actionId = 'test.toolbar.retained-action';
 	registrations.add(CommandsRegistry.register(actionId, () => undefined));
 	registrations.add(MenusRegistry.appendMenuItem(menuId, {
 		command: {
 			id: actionId,
-			title: "Retained action",
-			precondition: ContextKeyExpr.has("test.toolbar.ready"),
-			toggled: ContextKeyExpr.has("test.toolbar.active"),
+			title: 'Retained action',
+			precondition: ContextKeyExpr.has('test.toolbar.ready'),
+			toggled: ContextKeyExpr.has('test.toolbar.active'),
 		},
-		group: "navigation",
+		group: 'navigation',
 	}));
 	const contexts = registrations.add(new ContextKeyService());
 	const toolbar = new MenuWorkbenchToolBar(
@@ -609,30 +654,30 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 	const slot = toolbar.element.querySelector<HTMLElement>(`[data-action-id='${actionId}']`);
 	assert.ok(slot);
 
-	contexts.setContext("test.toolbar.ready", true);
+	contexts.setContext('test.toolbar.ready', true);
 	assert.equal(toolbar.element.querySelector(`[data-action-id='${actionId}']`), slot);
-	assert.equal(slot.querySelector("button")?.disabled, false);
+	assert.equal(slot.querySelector('button')?.disabled, false);
 	toolbar.focus();
-	assert.equal(dom.window.document.activeElement, slot.querySelector("button"));
+	assert.equal(dom.window.document.activeElement, slot.querySelector('button'));
 
-	contexts.setContext("test.toolbar.active", true);
+	contexts.setContext('test.toolbar.active', true);
 	assert.equal(toolbar.element.querySelector(`[data-action-id='${actionId}']`), slot);
-	assert.equal(slot.querySelector("button")?.classList.contains("checked"), true);
+	assert.equal(slot.querySelector('button')?.classList.contains('checked'), true);
 	toolbar.focus();
-	assert.equal(dom.window.document.activeElement, slot.querySelector("button"));
+	assert.equal(dom.window.document.activeElement, slot.querySelector('button'));
 
 	toolbar.dispose();
 	dom.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
-test("More Actions opens an anchored Menu with actionable list items", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	Object.defineProperty(dom.window.HTMLElement.prototype, "scrollTo", {
+test('More Actions opens an anchored Menu with actionable list items', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	Object.defineProperty(dom.window.HTMLElement.prototype, 'scrollTo', {
 		configurable: true,
 		value: () => { },
 	});
-	Object.defineProperty(dom.window.HTMLElement.prototype, "getClientRects", {
+	Object.defineProperty(dom.window.HTMLElement.prototype, 'getClientRects', {
 		configurable: true,
 		value: () => [{ width: 24, height: 24 }],
 	});
@@ -657,16 +702,16 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		{ BrowserContextViewService },
 		{ BrowserContextMenuService },
 	] = await Promise.all([
-		import("../../../../base/common/actions.js"),
-		import("../../../../base/browser/ui/toolbar/toolbar.js"),
-		import("../../../../platform/contextkey/browser/contextKeyService.js"),
-		import("../../../../platform/actions/common/menuService.js"),
+		import('../../../../base/common/actions.js'),
+		import('../../../../base/browser/ui/toolbar/toolbar.js'),
+		import('../../../../platform/contextkey/browser/contextKeyService.js'),
+		import('../../../../platform/actions/common/menuService.js'),
 		import('../../../../platform/instantiation/common/instantiationService.js'),
-		import("../../../../workbench/services/commands/common/commandService.js"),
-		import("../../../../platform/contextview/browser/contextViewService.js"),
-		import("../../../../platform/contextview/browser/contextMenuService.js"),
+		import('../../../../workbench/services/commands/common/commandService.js'),
+		import('../../../../platform/contextview/browser/contextViewService.js'),
+		import('../../../../platform/contextview/browser/contextMenuService.js'),
 	]);
-	const host = dom.window.document.querySelector<HTMLElement>("main");
+	const host = dom.window.document.querySelector<HTMLElement>('main');
 	assert.ok(host);
 	using contexts = new ContextKeyService();
 	const commands = new CommandService(new InstantiationService());
@@ -685,7 +730,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 			getKeybindings: () => [],
 			enableKeybindingHoldMode: () => undefined,
 			onDidUpdateKeybindings: Event.None,
-			resolveKeybinding() { throw new Error("Not used"); },
+			resolveKeybinding() { throw new Error('Not used'); },
 			resolveUserBinding() { return undefined; },
 			lookupKeybindings() { return []; },
 			lookupKeybinding() { return undefined; },
@@ -694,21 +739,21 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		notifications,
 	);
 	const openingOrder: string[] = [];
-	contextMenus.onDidShowContextMenu(() => openingOrder.push("show"));
-	host.addEventListener("focusin", (event) => {
-		if ((event.target as HTMLElement).closest(".ash-menu")) openingOrder.push("focus");
+	contextMenus.onDidShowContextMenu(() => openingOrder.push('show'));
+	host.addEventListener('focusin', (event) => {
+		if ((event.target as HTMLElement).closest('.ash-menu')) openingOrder.push('focus');
 	});
 	let cleared = 0;
 	using toolbar = new ToolBar(dom.window.document.body, {
 		contextMenuProvider: contextMenus,
-		moreActionsPlacement: { beforeActionId: "maximize" },
+		moreActionsPlacement: { beforeActionId: 'maximize' },
 	});
 	toolbar.setActions(
-		[testAction("kill"), testAction("maximize"), testAction("close")],
+		[testAction('kill'), testAction('maximize'), testAction('close')],
 		[
-			testAction("clear", () => cleared++),
+			testAction('clear', () => cleared++),
 			new Separator(),
-			{ ...testAction("output"), checked: true },
+			{ ...testAction('output'), checked: true },
 		],
 	);
 	host.append(toolbar.element);
@@ -717,33 +762,33 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	assert.ok(more);
 	more.click();
 
-	const popup = host.querySelector<HTMLElement>(".ash-context-view .ash-menu");
+	const popup = host.querySelector<HTMLElement>('.ash-context-view .ash-menu');
 	assert.ok(popup);
-	assert.equal(popup.parentElement?.classList.contains("ash-context-view-menu"), true);
-	assert.deepEqual(openingOrder, ["show", "focus"]);
-	assert.equal(popup.getAttribute("role"), "menu");
+	assert.equal(popup.parentElement?.classList.contains('ash-context-view-menu'), true);
+	assert.deepEqual(openingOrder, ['show', 'focus']);
+	assert.equal(popup.getAttribute('role'), 'menu');
 	assert.deepEqual(
 		[...popup.querySelectorAll<HTMLElement>("[role='menuitem'], [role='menuitemcheckbox']")]
 			.map((item) => item.textContent),
-		["clear", "output"],
+		['clear', 'output'],
 	);
-	assert.equal(popup.querySelectorAll(".ash-action-view-item-separator").length, 1);
+	assert.equal(popup.querySelectorAll('.ash-action-view-item-separator').length, 1);
 	const popupItems = popup.querySelectorAll<HTMLElement>("[role='menuitem'], [role='menuitemcheckbox']");
 	assert.equal(popupItems.length, 2);
-	assert.equal([...popupItems].every((item) => item.querySelector(":scope > .ash-menu-leading-slot") !== null), true);
+	assert.equal([...popupItems].every((item) => item.querySelector(':scope > .ash-menu-leading-slot') !== null), true);
 	const checkedPopupItem = popup.querySelector<HTMLElement>("[role='menuitemcheckbox']");
-	assert.equal(checkedPopupItem?.getAttribute("aria-checked"), "true");
-	assert.equal(checkedPopupItem?.querySelector(":scope > .ash-menu-leading-check") !== null, true);
-	assert.equal(checkedPopupItem?.querySelector(":scope > .ash-menu-leading-check > .ash-icon") !== null, true);
+	assert.equal(checkedPopupItem?.getAttribute('aria-checked'), 'true');
+	assert.equal(checkedPopupItem?.querySelector(':scope > .ash-menu-leading-check') !== null, true);
+	assert.equal(checkedPopupItem?.querySelector(':scope > .ash-menu-leading-check > .ash-icon') !== null, true);
 	popup.querySelector<HTMLButtonElement>("[data-action-id='clear'] button")?.click();
 	await Promise.resolve();
 	assert.equal(cleared, 1);
-	assert.equal(more.getAttribute("aria-expanded"), "false");
+	assert.equal(more.getAttribute('aria-expanded'), 'false');
 
-	toolbar.setActions([testAction("close")], [
-		testAction("fail", async () => {
+	toolbar.setActions([testAction('close')], [
+		testAction('fail', async () => {
 			await Promise.resolve();
-			throw new Error("Action failed after the menu closed");
+			throw new Error('Action failed after the menu closed');
 		}),
 	]);
 	const nextMore = toolbar.element.querySelector<HTMLButtonElement>(
@@ -752,13 +797,13 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	assert.ok(nextMore);
 	nextMore.click();
 	host.querySelector<HTMLButtonElement>("[data-action-id='fail'] button")?.click();
-	assert.equal(nextMore.getAttribute("aria-expanded"), "false");
-	assert.equal(host.querySelector(".ash-menu"), null);
+	assert.equal(nextMore.getAttribute('aria-expanded'), 'false');
+	assert.equal(host.querySelector('.ash-menu'), null);
 	await errorFeedback;
-	assert.deepEqual(notificationMessages, ["Action failed after the menu closed"]);
+	assert.deepEqual(notificationMessages, ['Action failed after the menu closed']);
 
 	dom.window.close();
-	for (const name of ["window", "Node", "Element", "HTMLElement"]) {
+	for (const name of ['window', 'Node', 'Element', 'HTMLElement']) {
 		Reflect.deleteProperty(globalThis, name);
 	}
 });

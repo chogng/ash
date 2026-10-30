@@ -1,8 +1,8 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -22,10 +22,10 @@ const {
 	StandardMouseEvent,
 	StandardPointerEvent,
 	StandardWheelEvent,
-} = await import("../../browser/mouseEvent.js");
+} = await import('../../browser/mouseEvent.js');
 
-test("StandardMouseEvent exposes stable coordinates and event controls", () => {
-	const event = new browserEnvironment.window.MouseEvent("dblclick", {
+test('StandardMouseEvent exposes stable coordinates and event controls', () => {
+	const event = new browserEnvironment.window.MouseEvent('dblclick', {
 		bubbles: true,
 		button: 0,
 		buttons: 1,
@@ -49,8 +49,8 @@ test("StandardMouseEvent exposes stable coordinates and event controls", () => {
 	assert.equal(standard.defaultPrevented, true);
 });
 
-test("StandardPointerEvent supplies mouse-compatible pointer defaults", () => {
-	const event = new browserEnvironment.window.MouseEvent("pointermove", {
+test('StandardPointerEvent supplies mouse-compatible pointer defaults', () => {
+	const event = new browserEnvironment.window.MouseEvent('pointermove', {
 		button: 0,
 		buttons: 1,
 		clientX: 8,
@@ -60,14 +60,14 @@ test("StandardPointerEvent supplies mouse-compatible pointer defaults", () => {
 	);
 
 	assert.equal(standard.pointerId, 0);
-	assert.equal(standard.pointerType, "mouse");
+	assert.equal(standard.pointerType, 'mouse');
 	assert.equal(standard.pressure, 0.5);
 	assert.equal(standard.isPrimary, true);
 	assert.equal(standard.width, 1);
 	assert.equal(standard.clientX, 8);
 });
 
-test("StandardWheelEvent normalizes pixel, line, and page deltas", () => {
+test('StandardWheelEvent normalizes pixel, line, and page deltas', () => {
 	const pixel = new StandardWheelEvent(wheelEvent({
 		deltaX: 3,
 		deltaY: 7,
@@ -103,7 +103,7 @@ test("StandardWheelEvent normalizes pixel, line, and page deltas", () => {
 	);
 });
 
-test("StandardWheelEvent stop prevents the native default", () => {
+test('StandardWheelEvent stop prevents the native default', () => {
 	const event = wheelEvent({ deltaY: 1 });
 	const standard = new StandardWheelEvent(event);
 
@@ -115,7 +115,7 @@ test("StandardWheelEvent stop prevents the native default", () => {
 function wheelEvent(
 	options: WheelEventInit,
 ): WheelEvent {
-	return new browserEnvironment.window.WheelEvent("wheel", {
+	return new browserEnvironment.window.WheelEvent('wheel', {
 		bubbles: true,
 		cancelable: true,
 		...options,

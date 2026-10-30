@@ -50,7 +50,7 @@ test('an editor cannot overwrite or delete an unobserved recovery record', async
 	assert.deepEqual(await backend.list('one'), [stored]);
 });
 
-test('stale editors preserve another window\'s latest backup when writing or deleting', async () => {
+test("stale editors preserve another window's latest backup when writing or deleting", async () => {
 	using services = new InstantiationService();
 	using context = new TestWorkspaceService({ id: 'one' });
 	const backend = new VersionedBackups();
@@ -65,7 +65,7 @@ test('stale editors preserve another window\'s latest backup when writing or del
 	assert.equal((await second.list())[0]?.content, 'second window');
 });
 
-test('switching workspaces clears observed revisions and keeps each workspace\'s content', async () => {
+test("switching workspaces clears observed revisions and keeps each workspace's content", async () => {
 	using services = new InstantiationService();
 	using context = new TestWorkspaceService({ id: 'one' });
 	const backend = new VersionedBackups();

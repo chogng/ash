@@ -99,7 +99,7 @@ impl GitHubExtensionRuntime {
                     entrypoint: "ash-github-extension".into(),
                 },
                 runtime_api_version: 1,
-                activation_events: vec!["onCapability:github.api.v1".into()],
+                activation_events: vec!["onCapability:github.api.v2".into()],
                 capabilities: vec![ExtensionCapability::DataChannel],
             },
             NonZeroU64::new(1).expect("activation generation"),
@@ -228,7 +228,7 @@ impl GitHubProvider for Provider {
             .runtime
             .supervisor
             .begin_invoke(ExtensionInvocation {
-                registration_id: "github.api.v1".into(),
+                registration_id: "github.api.v2".into(),
                 operation: "receiveData".into(),
                 payload,
                 deadline_unix_millis: NonZeroU64::new(deadline).ok_or_else(unavailable)?,

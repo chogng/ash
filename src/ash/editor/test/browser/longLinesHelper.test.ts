@@ -1,18 +1,18 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { toDisposable } from "../../../base/common/lifecycle.js";
-import { LineWidthIndex } from "../../browser/viewParts/viewLines/viewLines.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { toDisposable } from '../../../base/common/lifecycle.js';
+import { LineWidthIndex } from '../../browser/viewParts/viewLines/viewLines.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
-test("LineWidthIndex matches full scans across random transactions", () => {
+test('LineWidthIndex matches full scans across random transactions', () => {
 	const random = seededRandom(0xA17A);
 	const measurer = new WeightedTextMeasurer();
 	using model = new TextModel(Array.from(
 		{ length: 30 },
 		(_, index) => `initial ${index}`,
-	).join("\n"));
+	).join('\n'));
 	const index = new LineWidthIndex(model, measurer);
 	using listener = model.onDidChangeContent(change => {
 		index.applyModelChange(change);
@@ -35,10 +35,10 @@ test("LineWidthIndex matches full scans across random transactions", () => {
 	}
 });
 
-test("LineWidthIndex refines large initial scans without blocking construction", () => {
+test('LineWidthIndex refines large initial scans without blocking construction', () => {
 	const scheduler = new ManualMeasurementScheduler();
 	const measurer = new WeightedTextMeasurer();
-	using model = new TextModel("a\nbbbbbbbb\ncccccccccc\nddddddddddd");
+	using model = new TextModel('a\nbbbbbbbb\ncccccccccc\nddddddddddd');
 	using index = new LineWidthIndex(model, measurer, {
 		initialMeasurement: {
 			initialLineCount: 1,
@@ -60,10 +60,10 @@ test("LineWidthIndex refines large initial scans without blocking construction",
 	assert.deepEqual(maxima, [20, 33]);
 });
 
-test("LineWidthIndex restarts an incomplete scan after an edit", () => {
+test('LineWidthIndex restarts an incomplete scan after an edit', () => {
 	const scheduler = new ManualMeasurementScheduler();
 	const measurer = new WeightedTextMeasurer();
-	using model = new TextModel("a\nbbbbbbbb\ncccccccccc\nddddddddddd");
+	using model = new TextModel('a\nbbbbbbbb\ncccccccccc\nddddddddddd');
 	using index = new LineWidthIndex(model, measurer, {
 		initialMeasurement: {
 			initialLineCount: 1,
@@ -75,7 +75,7 @@ test("LineWidthIndex restarts an incomplete scan after an edit", () => {
 
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(1)),
-		text: "xxxxxxxx",
+		text: 'xxxxxxxx',
 	}]);
 	scheduler.runAll();
 
@@ -83,10 +83,10 @@ test("LineWidthIndex restarts an incomplete scan after an edit", () => {
 	assert.equal(index.maximumLineWidth, fullScanMaximum(model, measurer));
 });
 
-test("LineWidthIndex bounds initial work and measures later visible lines on demand", () => {
+test('LineWidthIndex bounds initial work and measures later visible lines on demand', () => {
 	const scheduler = new ManualMeasurementScheduler();
 	const measurer = new WeightedTextMeasurer();
-	using model = new TextModel("a\nbb\nccc\ndddddddddddddddd");
+	using model = new TextModel('a\nbb\nccc\ndddddddddddddddd');
 	using index = new LineWidthIndex(model, measurer, {
 		initialMeasurement: {
 			initialLineCount: 1,
@@ -99,11 +99,11 @@ test("LineWidthIndex bounds initial work and measures later visible lines on dem
 	scheduler.runAll();
 	assert.equal(index.complete, false);
 	assert.equal(index.maximumLineWidth, Math.max(
-		measurer.measureLineWidth("a"),
-		measurer.measureLineWidth("bb"),
+		measurer.measureLineWidth('a'),
+		measurer.measureLineWidth('bb'),
 	));
 	index.observeLines([3]);
-	assert.equal(index.maximumLineWidth, measurer.measureLineWidth("dddddddddddddddd"));
+	assert.equal(index.maximumLineWidth, measurer.measureLineWidth('dddddddddddddddd'));
 });
 
 class ManualMeasurementScheduler {
@@ -119,7 +119,7 @@ class ManualMeasurementScheduler {
 
 	runNext(): void {
 		const entry = this.pending.shift();
-		if (!entry) throw new Error("Expected one scheduled measurement slice");
+		if (!entry) throw new Error('Expected one scheduled measurement slice');
 		if (!entry.cancelled) entry.callback();
 	}
 
@@ -139,7 +139,7 @@ class WeightedTextMeasurer implements TextMeasurer {
 	measureLineWidth(text: string): number {
 		let width = 0;
 		for (const character of text) {
-			width += character === "\t"
+			width += character === '\t'
 				? 11
 				: character.codePointAt(0)! % 7 + 1;
 		}
@@ -211,9 +211,9 @@ function randomEdit(
 }
 
 function randomText(random: () => number): string {
-	const alphabet = "abcXYZ09 \t\n";
+	const alphabet = 'abcXYZ09 \t\n';
 	const length = randomInteger(random, 0, 12);
-	let result = "";
+	let result = '';
 	for (let index = 0; index < length; index++) {
 		result += alphabet[randomInteger(random, 0, alphabet.length - 1)];
 	}

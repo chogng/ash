@@ -1,14 +1,14 @@
-import { Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const LogLevel = Object.freeze({
-	Off: "off",
-	Trace: "trace",
-	Debug: "debug",
-	Info: "information",
-	Warning: "warning",
-	Error: "error",
+	Off: 'off',
+	Trace: 'trace',
+	Debug: 'debug',
+	Info: 'information',
+	Warning: 'warning',
+	Error: 'error',
 } as const);
 
 export type LogLevel = typeof LogLevel[keyof typeof LogLevel];
@@ -40,8 +40,8 @@ export interface ILogServiceHost extends ILogService {
 	registerSink(sink: ILogSink, replay?: boolean): IDisposable;
 }
 
-export const ILogService = createServiceIdentifier<ILogService>("logService");
-export const ILoggerService = createServiceIdentifier<ILoggerService>("loggerService");
+export const ILogService = createServiceIdentifier<ILogService>('logService');
+export const ILoggerService = createServiceIdentifier<ILoggerService>('loggerService');
 
 export interface ILoggerService {
 	createLogger(id: string, options?: ILoggerOptions): ILogger;
@@ -149,7 +149,7 @@ export interface ILogger extends ILogServiceHost, IDisposable {
 }
 
 export function isLogLevel(value: unknown): value is LogLevel {
-	return typeof value === "string" && Object.values(LogLevel).includes(value as LogLevel);
+	return typeof value === 'string' && Object.values(LogLevel).includes(value as LogLevel);
 }
 
 /** The startup resource uses the standard short spellings, independently of entry severity names. */
@@ -186,14 +186,14 @@ export function log(logger: ILogService, level: LogLevel, message: string): void
 }
 
 export class ConsoleLogger implements ILogService {
-	constructor(private readonly category = "application", private readonly target: Pick<Console, "debug" | "info" | "warn" | "error"> = console) { }
-	trace(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("debug", message, argument, arguments_); }
-	debug(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("debug", message, argument, arguments_); }
-	info(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("info", message, argument, arguments_); }
-	warn(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("warn", message, argument, arguments_); }
-	error(message: string | Error, argument?: unknown, ...arguments_: unknown[]): void { this.write("error", message instanceof Error ? message.message : message, argument, message instanceof Error ? [message, ...arguments_] : arguments_); }
+	constructor(private readonly category = 'application', private readonly target: Pick<Console, 'debug' | 'info' | 'warn' | 'error'> = console) { }
+	trace(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write('debug', message, argument, arguments_); }
+	debug(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write('debug', message, argument, arguments_); }
+	info(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write('info', message, argument, arguments_); }
+	warn(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write('warn', message, argument, arguments_); }
+	error(message: string | Error, argument?: unknown, ...arguments_: unknown[]): void { this.write('error', message instanceof Error ? message.message : message, argument, message instanceof Error ? [message, ...arguments_] : arguments_); }
 
-	private write(method: "debug" | "info" | "warn" | "error", message: string, argument: unknown, arguments_: readonly unknown[]): void {
+	private write(method: 'debug' | 'info' | 'warn' | 'error', message: string, argument: unknown, arguments_: readonly unknown[]): void {
 		const values = argument === undefined ? arguments_ : [argument, ...arguments_];
 		this.target[method](`[${this.category}] ${message}`, ...values);
 	}

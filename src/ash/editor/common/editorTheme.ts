@@ -27,4 +27,3 @@ export class EditorTheme {
 		return this._theme.getColor(color);
 	}
 }
-

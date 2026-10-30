@@ -1,11 +1,11 @@
-import { URI } from "../../../base/common/uri.js";
-import type { LanguagePackCatalog, LanguagePackIndexEntry, PreinstalledLanguagePack } from "../common/languagePackContract.js";
-import { Emitter } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import { IExtensionManagementService, type ExtensionsInstalledPackage } from "../../extensionManagement/common/extensionManagementService.js";
-import { decodeBase64, normalizeLocale, parseLanguagePackCatalog } from "../common/languagePackCatalog.js";
-import { ILanguagePackStore } from "../common/languagePackStore.js";
-import type { ILanguagePackService, ILanguagePackItem } from "../common/languagePacks.js";
+import { URI } from '../../../base/common/uri.js';
+import type { LanguagePackCatalog, LanguagePackIndexEntry, PreinstalledLanguagePack } from '../common/languagePackContract.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { IExtensionManagementService, type ExtensionsInstalledPackage } from '../../extensionManagement/common/extensionManagementService.js';
+import { decodeBase64, normalizeLocale, parseLanguagePackCatalog } from '../common/languagePackCatalog.js';
+import { ILanguagePackStore } from '../common/languagePackStore.js';
+import type { ILanguagePackService, ILanguagePackItem } from '../common/languagePacks.js';
 import { IMeteredConnectionService } from '../../meteredConnection/common/meteredConnection.js';
 
 /** Browser client adapter that projects Extensions localization capabilities. */
@@ -158,17 +158,17 @@ async function loadInstalledCatalogs(
 ): Promise<readonly LanguagePackIndexEntry[]> {
 	const catalogs: LanguagePackIndexEntry[] = [];
 	for (const packageValue of installed) {
-		if (packageValue.state !== "installed") continue;
+		if (packageValue.state !== 'installed') continue;
 		for (const capability of packageValue.capabilities) {
-			if (capability.kind !== "localization") continue;
-			let acquired: Awaited<ReturnType<IExtensionManagementService["acquireCapability"]>>;
+			if (capability.kind !== 'localization') continue;
+			let acquired: Awaited<ReturnType<IExtensionManagementService['acquireCapability']>>;
 			try {
 				acquired = await extensionManagement.acquireCapability(capability.reference.id);
 			} catch {
 				continue;
 			}
 			try {
-				if (acquired.spec.kind !== "localization") continue;
+				if (acquired.spec.kind !== 'localization') continue;
 				const content = await extensionManagement.openResource(acquired.lease.id, acquired.spec.catalog.id);
 				let parsed: unknown;
 				try {

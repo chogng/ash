@@ -1,8 +1,8 @@
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { refineServiceDecorator } from "../../instantiation/common/instantiation.js";
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { refineServiceDecorator } from '../../instantiation/common/instantiation.js';
 import { IContextKeyService as IContextKeyValueService } from '../common/contextkey.js';
-import type { Context, ContextKeyValue, ContextKeyExpression, ContextKeyChangeEvent, IContextKey } from "../common/contextkey.js";
+import type { Context, ContextKeyValue, ContextKeyExpression, ContextKeyChangeEvent, IContextKey } from '../common/contextkey.js';
 
 /** Evaluates and publishes context values for one window or DOM scope. */
 export interface IContextKeyService extends IContextKeyValueService {
@@ -173,7 +173,7 @@ class ScopedContextKeyService
 		state: ContextKeyState,
 	) {
 		if (state.scopes.has(target)) {
-			throw new Error("A context key scope is already bound to this element");
+			throw new Error('A context key scope is already bound to this element');
 		}
 		super(state, parent);
 		state.scopes.set(target, this);
@@ -194,7 +194,7 @@ class BoundContextKey<T extends ContextKeyValue>
 		key: string,
 		defaultValue: T,
 	) {
-		if (!key) throw new TypeError("Context key must not be empty");
+		if (!key) throw new TypeError('Context key must not be empty');
 		this.service = service;
 		this.key = key;
 		this.defaultValue = defaultValue;
@@ -221,7 +221,7 @@ class BoundContextKey<T extends ContextKeyValue>
 function getComposedParent(node: Node): Node | null {
 	if (node.parentNode) return node.parentNode;
 	const root = node.getRootNode();
-	return "host" in root ? (root as ShadowRoot).host : null;
+	return 'host' in root ? (root as ShadowRoot).host : null;
 }
 
 function findScopedContext(

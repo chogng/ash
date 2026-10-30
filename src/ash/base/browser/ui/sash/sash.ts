@@ -1,11 +1,14 @@
 import './sash.css';
-import { addDisposableListener, getWindow, h } from "../../dom.js";
-import { ManagedStyleSheet } from "../../domStylesheets.js";
-import { disposableWindowTimeout } from "../../scheduler.js";
-import { type IDisposable, MutableDisposable, Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
-import { isFiniteNumber } from "../../../common/numbers.js";
+import { addDisposableListener, getWindow, h } from '../../dom.js';
+import { ManagedStyleSheet } from '../../domStylesheets.js';
+import { disposableWindowTimeout } from '../../scheduler.js';
+import { type IDisposable, MutableDisposable, Disposable, DisposableStore, toDisposable } from '../../../common/lifecycle.js';
+import { isFiniteNumber } from '../../../common/numbers.js';
 
-export type SashOrientation = "vertical" | "horizontal";
+export enum Orientation {
+	VERTICAL,
+	HORIZONTAL,
+}
 
 /** Separators surrounding a view, in physical screen directions. Borrowed from its Grid. */
 export interface IBoundarySashes {
@@ -32,7 +35,7 @@ export enum SashState {
  * Sashes from competing for pointer events at grid intersections.
  */
 export interface InsetSashPresentation {
-	readonly type: "inset";
+	readonly type: 'inset';
 	readonly gap: number;
 }
 
@@ -45,16 +48,36 @@ export interface SashSettings {
 	readonly hoverDelay: number;
 }
 
-export interface SashDragEvent {
-	/** Signed movement from the position where the current drag started. */
-	readonly delta: number;
-	readonly input: "pointer" | "keyboard";
+export interface ISashEvent {
+	readonly startX: number;
+	readonly currentX: number;
+	readonly startY: number;
+	readonly currentY: number;
+	/** Ash extension: keyboard steps use the same coordinate contract as pointer movement. */
+	readonly input: 'pointer' | 'keyboard';
 	readonly altKey: boolean;
 }
 
-const SashDragAreaSizeProperty = "--ash-sash-dragAreaSize";
-const SashHoverFeedbackSizeProperty = "--ash-sash-hoverFeedbackSize";
-const SashHoverDelayProperty = "--ash-sash-hover-delay";
+export interface IVerticalSashLayoutProvider {
+	getVerticalSashLeft(sash: Sash): number;
+	getVerticalSashTop?(sash: Sash): number;
+	getVerticalSashHeight?(sash: Sash): number;
+}
+
+export interface IHorizontalSashLayoutProvider {
+	getHorizontalSashTop(sash: Sash): number;
+	getHorizontalSashLeft?(sash: Sash): number;
+	getHorizontalSashWidth?(sash: Sash): number;
+}
+
+export interface ISashOptions {
+	readonly orientation: Orientation;
+	readonly presentation?: SashPresentation;
+}
+
+const SashDragAreaSizeProperty = '--ash-sash-dragAreaSize';
+const SashHoverFeedbackSizeProperty = '--ash-sash-hoverFeedbackSize';
+const SashHoverDelayProperty = '--ash-sash-hover-delay';
 const DefaultSashHoverDelay = 300;
 let nextSashSettingsBindingId = 1;
 
@@ -78,9 +101,9 @@ export class SashSettingsBinding extends Disposable {
 	}
 
 	update(settings: SashSettings): void {
-		assertPositiveFinite(settings.dragAreaSize, "drag area size");
-		assertPositiveFinite(settings.hoverFeedbackSize, "hover feedback size");
-		assertNonNegativeFinite(settings.hoverDelay, "hover delay");
+		assertPositiveFinite(settings.dragAreaSize, 'drag area size');
+		assertPositiveFinite(settings.hoverFeedbackSize, 'hover feedback size');
+		assertNonNegativeFinite(settings.hoverDelay, 'hover delay');
 		this.styleSheet.setText(`
       .${this.scopeClass} .ash-sash {
         ${SashDragAreaSizeProperty}: ${settings.dragAreaSize}px;
@@ -95,8 +118,8 @@ export class SashSettingsBinding extends Disposable {
 export class Sash extends Disposable {
 	readonly element: HTMLDivElement;
 	private _state = SashState.Enabled;
-	private readonly startListeners = new Set<() => void>();
-	private readonly changeListeners = new Set<(event: SashDragEvent) => void>();
+	private readonly startListeners = new Set<(event: ISashEvent) => void>();
+	private readonly changeListeners = new Set<(event: ISashEvent) => void>();
 	private readonly resetListeners = new Set<() => void>();
 	private readonly endListeners = new Set<() => void>();
 	private readonly stateListeners = new Set<(state: SashState) => void>();
@@ -110,23 +133,26 @@ export class Sash extends Disposable {
 	private _orthogonalEndSash: Sash | undefined;
 	private _linkedSash: Sash | undefined;
 	private _presentation: SashPresentation;
+	readonly orientation: Orientation;
 
 	constructor(
 		container: HTMLElement,
-		readonly orientation: SashOrientation,
-		presentation: SashPresentation = undefined,
+		private readonly layoutProvider: IVerticalSashLayoutProvider | IHorizontalSashLayoutProvider,
+		options: ISashOptions,
 	) {
 		super();
+		const { orientation } = options;
+		this.orientation = orientation;
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "div");
+		const element = h(ownerDocument, 'div');
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = `ash-sash ash-sash-${orientation}`;
+		element.className = `ash-sash ash-sash-${orientation === Orientation.VERTICAL ? 'vertical' : 'horizontal'}`;
 		this._presentation = undefined;
-		this.presentation = presentation;
-		element.setAttribute("role", "separator");
-		element.setAttribute("aria-orientation", orientation);
-		element.setAttribute("aria-disabled", "false");
+		this.presentation = options.presentation;
+		element.setAttribute('role', 'separator');
+		element.setAttribute('aria-orientation', orientation === Orientation.VERTICAL ? 'vertical' : 'horizontal');
+		element.setAttribute('aria-disabled', 'false');
 		element.tabIndex = 0;
 		container.append(element);
 		this.dragListeners = this._register(new DisposableStore());
@@ -145,27 +171,41 @@ export class Sash extends Disposable {
 			this.endListeners.clear();
 			this.stateListeners.clear();
 		}));
-		this._register(addDisposableListener(element, "pointerdown", (event: PointerEvent) =>
+		this._register(addDisposableListener(element, 'pointerdown', (event: PointerEvent) =>
 			this.beginDrag(event),
 		));
-		this._register(addDisposableListener(element, "keydown", (event: KeyboardEvent) =>
+		this._register(addDisposableListener(element, 'keydown', (event: KeyboardEvent) =>
 			this.handleKeydown(event),
 		));
-		this._register(addDisposableListener(element, "pointerenter", () =>
+		this._register(addDisposableListener(element, 'pointerenter', () =>
 			this.beginHover(),
 		));
-		this._register(addDisposableListener(element, "pointerleave", () =>
+		this._register(addDisposableListener(element, 'pointerleave', () =>
 			this.endHover(),
 		));
-		this._register(addDisposableListener(element, "dblclick", () => this.reset()));
+		this._register(addDisposableListener(element, 'dblclick', () => this.reset()));
 	}
 
-	onDidStart(listener: () => void): IDisposable {
+	layout(): void {
+		if (this.orientation === Orientation.VERTICAL) {
+			const provider = this.layoutProvider as IVerticalSashLayoutProvider;
+			this.element.style.left = `${provider.getVerticalSashLeft(this)}px`;
+			if (provider.getVerticalSashTop) this.element.style.top = `${provider.getVerticalSashTop(this)}px`;
+			if (provider.getVerticalSashHeight) this.element.style.height = `${provider.getVerticalSashHeight(this)}px`;
+		} else {
+			const provider = this.layoutProvider as IHorizontalSashLayoutProvider;
+			this.element.style.top = `${provider.getHorizontalSashTop(this)}px`;
+			if (provider.getHorizontalSashLeft) this.element.style.left = `${provider.getHorizontalSashLeft(this)}px`;
+			if (provider.getHorizontalSashWidth) this.element.style.width = `${provider.getHorizontalSashWidth(this)}px`;
+		}
+	}
+
+	onDidStart(listener: (event: ISashEvent) => void): IDisposable {
 		this.startListeners.add(listener);
 		return toDisposable(() => this.startListeners.delete(listener));
 	}
 
-	onDidChange(listener: (event: SashDragEvent) => void): IDisposable {
+	onDidChange(listener: (event: ISashEvent) => void): IDisposable {
 		this.changeListeners.add(listener);
 		return toDisposable(() => this.changeListeners.delete(listener));
 	}
@@ -195,13 +235,13 @@ export class Sash extends Disposable {
 
 	set presentation(presentation: SashPresentation) {
 		if (sameSashPresentation(this._presentation, presentation)) return;
-		if (presentation?.type === "inset") assertPositiveFinite(presentation.gap, "inset gap");
+		if (presentation?.type === 'inset') assertPositiveFinite(presentation.gap, 'inset gap');
 		this._presentation = presentation;
-		this.element.classList.toggle("ash-sash-inset", presentation?.type === "inset");
-		if (presentation?.type === "inset") {
-			this.element.style.setProperty("--ash-sash-inset-gap", `${presentation.gap}px`);
+		this.element.classList.toggle('ash-sash-inset', presentation?.type === 'inset');
+		if (presentation?.type === 'inset') {
+			this.element.style.setProperty('--ash-sash-inset-gap', `${presentation.gap}px`);
 		} else {
-			this.element.style.removeProperty("--ash-sash-inset-gap");
+			this.element.style.removeProperty('--ash-sash-inset-gap');
 		}
 	}
 
@@ -209,14 +249,14 @@ export class Sash extends Disposable {
 		if (this._state === state) return;
 		this._state = state;
 		const disabled = state === SashState.Disabled;
-		this.element.classList.toggle("ash-sash-disabled", disabled);
-		this.element.classList.toggle("ash-sash-minimum", state === SashState.AtMinimum);
-		this.element.classList.toggle("ash-sash-maximum", state === SashState.AtMaximum);
-		this.element.setAttribute("aria-disabled", String(disabled));
+		this.element.classList.toggle('ash-sash-disabled', disabled);
+		this.element.classList.toggle('ash-sash-minimum', state === SashState.AtMinimum);
+		this.element.classList.toggle('ash-sash-maximum', state === SashState.AtMaximum);
+		this.element.setAttribute('aria-disabled', String(disabled));
 		this.element.tabIndex = disabled ? -1 : 0;
 		if (disabled) this.clearSashHoverState();
-		this.updateOrthogonalHandle("start");
-		this.updateOrthogonalHandle("end");
+		this.updateOrthogonalHandle('start');
+		this.updateOrthogonalHandle('end');
 		for (const listener of this.stateListeners) listener(state);
 	}
 
@@ -225,7 +265,7 @@ export class Sash extends Disposable {
 	}
 
 	set orthogonalStartSash(sash: Sash | undefined) {
-		this.setOrthogonalSash("start", sash);
+		this.setOrthogonalSash('start', sash);
 	}
 
 	get orthogonalEndSash(): Sash | undefined {
@@ -233,7 +273,7 @@ export class Sash extends Disposable {
 	}
 
 	set orthogonalEndSash(sash: Sash | undefined) {
-		this.setOrthogonalSash("end", sash);
+		this.setOrthogonalSash('end', sash);
 	}
 
 	/** A same-orientation Sash which receives this Sash's interactions. */
@@ -242,48 +282,52 @@ export class Sash extends Disposable {
 	}
 
 	set linkedSash(sash: Sash | undefined) {
-		if (sash === this) throw new TypeError("A Sash cannot link to itself");
+		if (sash === this) throw new TypeError('A Sash cannot link to itself');
 		if (sash && sash.orientation !== this.orientation) {
-			throw new TypeError("Linked Sashes must use the same orientation");
+			throw new TypeError('Linked Sashes must use the same orientation');
 		}
 		this._linkedSash = sash;
 	}
 
 	clearSashHoverState(): void {
 		this.hoverTimer.clear();
-		this.element.classList.remove("ash-sash-hover");
+		this.element.classList.remove('ash-sash-hover');
 	}
 
 	private beginDrag(event: PointerEvent, fromLinkedSash = false): void {
 		if (event.button !== 0 || this._state === SashState.Disabled) return;
 		event.preventDefault();
 		this.endHover(fromLinkedSash);
-		this.element.classList.add("ash-sash-active");
+		this.element.classList.add('ash-sash-active');
 		this.dragListeners.clear();
-		const start = this.coordinate(event);
-		this.fire(this.startListeners);
+		for (const listener of this.startListeners) listener({
+			startX: event.clientX, currentX: event.clientX,
+			startY: event.clientY, currentY: event.clientY,
+			input: 'pointer', altKey: event.altKey,
+		});
 		if (
 			!fromLinkedSash &&
-			typeof event.pointerId === "number" &&
-			typeof this.element.setPointerCapture === "function"
+			typeof event.pointerId === 'number' &&
+			typeof this.element.setPointerCapture === 'function'
 		) {
 			this.element.setPointerCapture(event.pointerId);
 		}
 		const move = (next: PointerEvent) => {
-			const dragEvent: SashDragEvent = {
-				delta: this.coordinate(next) - start,
-				input: "pointer",
+			const dragEvent: ISashEvent = {
+				startX: event.clientX, currentX: next.clientX,
+				startY: event.clientY, currentY: next.clientY,
+				input: 'pointer',
 				altKey: next.altKey,
 			};
 			for (const listener of this.changeListeners) listener(dragEvent);
 		};
 		const stop = () => {
 			this.dragListeners.clear();
-			this.element.classList.remove("ash-sash-active");
+			this.element.classList.remove('ash-sash-active');
 			if (
 				!fromLinkedSash &&
-				typeof event.pointerId === "number" &&
-				typeof this.element.hasPointerCapture === "function" &&
+				typeof event.pointerId === 'number' &&
+				typeof this.element.hasPointerCapture === 'function' &&
 				this.element.hasPointerCapture(event.pointerId)
 			) {
 				this.element.releasePointerCapture(event.pointerId);
@@ -293,24 +337,24 @@ export class Sash extends Disposable {
 		const targetWindow = getWindow(this.element);
 		this.dragListeners.add(addDisposableListener(
 			targetWindow,
-			"pointermove",
+			'pointermove',
 			move,
 		));
 		this.dragListeners.add(addDisposableListener(
 			targetWindow,
-			"pointerup",
+			'pointerup',
 			stop,
 			{ once: true },
 		));
 		this.dragListeners.add(addDisposableListener(
 			targetWindow,
-			"pointercancel",
+			'pointercancel',
 			stop,
 			{ once: true },
 		));
 		this.dragListeners.add(addDisposableListener(
 			targetWindow,
-			"blur",
+			'blur',
 			stop,
 			{ once: true },
 		));
@@ -323,18 +367,18 @@ export class Sash extends Disposable {
 		this.hoverTimer.clear();
 		const delay = sashHoverDelay(this.element);
 		if (delay === 0) {
-			this.element.classList.add("ash-sash-hover");
+			this.element.classList.add('ash-sash-hover');
 			return;
 		}
 		const targetWindow = getWindow(this.element);
 		this.hoverTimer.value = disposableWindowTimeout(targetWindow, () => {
-			this.element.classList.add("ash-sash-hover");
+			this.element.classList.add('ash-sash-hover');
 		}, delay);
 	}
 
 	private endHover(fromLinkedSash = false): void {
 		this.hoverTimer.clear();
-		this.element.classList.remove("ash-sash-hover");
+		this.element.classList.remove('ash-sash-hover');
 		if (!fromLinkedSash) this._linkedSash?.endHover(true);
 	}
 
@@ -343,41 +387,44 @@ export class Sash extends Disposable {
 		const delta = this.keyboardDelta(event);
 		if (delta === undefined) return;
 		event.preventDefault();
-		this.fire(this.startListeners);
+		for (const listener of this.startListeners) listener({
+			startX: 0, currentX: 0, startY: 0, currentY: 0, input: 'keyboard', altKey: false,
+		});
 		for (const listener of this.changeListeners) {
-			listener({ delta, input: "keyboard", altKey: false });
+			listener({
+				startX: 0, startY: 0,
+				currentX: this.orientation === Orientation.VERTICAL ? delta : 0,
+				currentY: this.orientation === Orientation.HORIZONTAL ? delta : 0,
+				input: 'keyboard', altKey: false,
+			});
 		}
 		this.fire(this.endListeners);
 	}
 
-	private coordinate(event: Pick<PointerEvent, "clientX" | "clientY">): number {
-		return this.orientation === "vertical" ? event.clientX : event.clientY;
-	}
-
-	private setOrthogonalSash(edge: "start" | "end", sash: Sash | undefined): void {
+	private setOrthogonalSash(edge: 'start' | 'end', sash: Sash | undefined): void {
 		if (sash?.orientation === this.orientation) {
-			throw new TypeError("Orthogonal Sashes must use different orientations");
+			throw new TypeError('Orthogonal Sashes must use different orientations');
 		}
-		const current = edge === "start" ? this._orthogonalStartSash : this._orthogonalEndSash;
+		const current = edge === 'start' ? this._orthogonalStartSash : this._orthogonalEndSash;
 		if (current === sash) return;
-		if (edge === "start") {
+		if (edge === 'start') {
 			this._orthogonalStartSash = sash;
-			this.orthogonalStartListener.value = sash?.onDidChangeState(() => this.updateOrthogonalHandle("start"));
+			this.orthogonalStartListener.value = sash?.onDidChangeState(() => this.updateOrthogonalHandle('start'));
 		} else {
 			this._orthogonalEndSash = sash;
-			this.orthogonalEndListener.value = sash?.onDidChangeState(() => this.updateOrthogonalHandle("end"));
+			this.orthogonalEndListener.value = sash?.onDidChangeState(() => this.updateOrthogonalHandle('end'));
 		}
 		this.updateOrthogonalHandle(edge);
 	}
 
-	private updateOrthogonalHandle(edge: "start" | "end"): void {
-		const resources = edge === "start" ? this.orthogonalStartResources : this.orthogonalEndResources;
-		const orthogonalSash = edge === "start" ? this._orthogonalStartSash : this._orthogonalEndSash;
+	private updateOrthogonalHandle(edge: 'start' | 'end'): void {
+		const resources = edge === 'start' ? this.orthogonalStartResources : this.orthogonalEndResources;
+		const orthogonalSash = edge === 'start' ? this._orthogonalStartSash : this._orthogonalEndSash;
 		const stateClass = `ash-sash-has-orthogonal-${edge}`;
 		resources.clear();
 		this.element.classList.remove(stateClass);
 		if (!orthogonalSash || this.state === SashState.Disabled || orthogonalSash.state === SashState.Disabled) return;
-		const handle = h(this.element.ownerDocument, "div");
+		const handle = h(this.element.ownerDocument, 'div');
 		handle.className = `ash-sash-orthogonal-handle ash-sash-orthogonal-handle-${edge}`;
 		this.element.append(handle);
 		this.element.classList.add(stateClass);
@@ -385,29 +432,29 @@ export class Sash extends Disposable {
 			handle.remove();
 			this.element.classList.remove(stateClass);
 		}));
-		resources.add(addDisposableListener(handle, "pointerdown", (event: PointerEvent) => {
+		resources.add(addDisposableListener(handle, 'pointerdown', (event: PointerEvent) => {
 			event.stopPropagation();
 			this.beginDrag(event);
 			orthogonalSash.beginDrag(event);
 		}));
-		resources.add(addDisposableListener(handle, "dblclick", (event: MouseEvent) => {
+		resources.add(addDisposableListener(handle, 'dblclick', (event: MouseEvent) => {
 			event.stopPropagation();
 			this.reset();
 			orthogonalSash.reset();
 		}));
-		resources.add(addDisposableListener(handle, "pointerenter", () => orthogonalSash.beginHover()));
-		resources.add(addDisposableListener(handle, "pointerleave", () => orthogonalSash.endHover()));
+		resources.add(addDisposableListener(handle, 'pointerenter', () => orthogonalSash.beginHover()));
+		resources.add(addDisposableListener(handle, 'pointerleave', () => orthogonalSash.endHover()));
 	}
 
 	private keyboardDelta(event: KeyboardEvent): number | undefined {
 		const step = event.altKey ? 1 : 10;
-		if (this.orientation === "vertical") {
-			if (event.key === "ArrowLeft") return -step;
-			if (event.key === "ArrowRight") return step;
+		if (this.orientation === Orientation.VERTICAL) {
+			if (event.key === 'ArrowLeft') return -step;
+			if (event.key === 'ArrowRight') return step;
 			return undefined;
 		}
-		if (event.key === "ArrowUp") return -step;
-		if (event.key === "ArrowDown") return step;
+		if (event.key === 'ArrowUp') return -step;
+		if (event.key === 'ArrowDown') return step;
 		return undefined;
 	}
 
@@ -426,8 +473,8 @@ function sashHoverDelay(element: HTMLElement): number {
 	const value = getWindow(element).getComputedStyle(element)
 		.getPropertyValue(SashHoverDelayProperty)
 		.trim();
-	if (value === "") return DefaultSashHoverDelay;
-	const milliseconds = value.endsWith("ms")
+	if (value === '') return DefaultSashHoverDelay;
+	const milliseconds = value.endsWith('ms')
 		? Number(value.slice(0, -2))
 		: Number.NaN;
 	return isFiniteNumber(milliseconds) && milliseconds >= 0
@@ -437,7 +484,7 @@ function sashHoverDelay(element: HTMLElement): number {
 
 function sameSashPresentation(left: SashPresentation, right: SashPresentation): boolean {
 	if (left === right) return true;
-	return left?.type === "inset" && right?.type === "inset" && left.gap === right.gap;
+	return left?.type === 'inset' && right?.type === 'inset' && left.gap === right.gap;
 }
 
 function assertPositiveFinite(value: number, name: string): void {

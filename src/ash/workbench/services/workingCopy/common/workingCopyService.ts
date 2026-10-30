@@ -1,7 +1,7 @@
-import { type Event } from "../../../../base/common/event.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { type Event } from '../../../../base/common/event.js';
+import { type IDisposable } from '../../../../base/common/lifecycle.js';
+import { type URI } from '../../../../base/common/uri.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ISaveOptions } from '../../../common/editor.js';
 
 /**
@@ -12,7 +12,7 @@ import type { ISaveOptions } from '../../../common/editor.js';
  */
 export interface IWorkingCopy extends IDisposable {
 	readonly resource: URI;
-	readonly backupKind: "text" | "structuredDocument";
+	readonly backupKind: 'text' | 'structuredDocument';
 	readonly backupLanguageId?: string;
 	readonly backupContentType?: string;
 	readonly backupLabel?: string;
@@ -46,4 +46,4 @@ export interface IWorkingCopyService extends IDisposable {
 	getAll(): readonly IWorkingCopy[];
 }
 
-export const IWorkingCopyService = createServiceIdentifier<IWorkingCopyService>("workingCopyService");
+export const IWorkingCopyService = createServiceIdentifier<IWorkingCopyService>('workingCopyService');

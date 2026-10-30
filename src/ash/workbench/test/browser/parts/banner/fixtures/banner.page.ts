@@ -1,9 +1,13 @@
+import { WorkspaceTrustManagementService, WorkspaceTrustRequestService } from '../../../../../services/workspaces/common/workspaceTrust.js';
+import { IRemoteAuthorityResolverService } from '../../../../../../platform/remote/common/remoteAuthorityResolver.js';
+import { RemoteAuthorityResolverService } from '../../../../../../platform/remote/browser/remoteAuthorityResolverService.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { EditorPanes } from '../../../../../browser/editor.js';
 import type { EditorPane } from '../../../../../browser/parts/editor/editorPane.js';
 import { IAgentCapabilitiesService } from '../../../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
 import { IDialogService } from '../../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
+import { IDialogsModel } from '../../../../../common/dialogs.js';
 import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../../../browser/parts/dialogs/dialog.web.contribution.js';
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
@@ -47,7 +51,7 @@ import { IStorageService } from '../../../../../../platform/storage/common/stora
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
-import { IWorkspaceTrustManagementService, type IWorkspaceTrustInfo } from '../../../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../../../services/storage/browser/storageService.js';
@@ -55,6 +59,7 @@ import { URI } from '../../../../../../base/common/uri.js';
 import { WorkbenchState } from '../../../../../../platform/workspace/common/workspace.js';
 import { WorkbenchLayout } from '../../../../../browser/layout.js';
 import { Part } from '../../../../../browser/part.js';
+import { WorkbenchWindowBarHeight } from '../../../../../browser/parts/workbenchPartDimensions.js';
 import { BannerPart } from '../../../../../browser/parts/banner/bannerPart.js';
 import { IBannerService } from '../../../../../services/banner/browser/bannerService.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
@@ -80,6 +85,7 @@ resources.add(bindTestColorTheme(theme, root));
 const dialogs = resources.add(new DialogService());
 resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(root)));
 services.registerInstance(IDialogService, dialogs);
+services.registerInstance(IDialogsModel, dialogs.model);
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback, parameters) => formatNlsMessage(new URLSearchParams(location.search).has('zh') ? (settingsChinese as Record<string, Record<string, string>>)[bundle]?.[key] ?? fallback : fallback, parameters) });
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
@@ -127,8 +133,8 @@ class ContentPart extends Part {
 			this.contentDomNode.append(filter);
 		}
 	}
-	override get minimumHeight(): number { return this.partId === 'titlebar' || this.partId === 'statusbar' ? 28 : 0; }
-	override get maximumHeight(): number { return this.partId === 'titlebar' || this.partId === 'statusbar' ? 28 : Infinity; }
+	override get minimumHeight(): number { return this.partId === 'titlebar' ? WorkbenchWindowBarHeight : this.partId === 'statusbar' ? 28 : 0; }
+	override get maximumHeight(): number { return this.partId === 'titlebar' || this.partId === 'statusbar' ? this.minimumHeight : Infinity; }
 }
 layout.createParts(new Map(workbenchPartIds.map(id => [id, id === 'banner' ? banner : resources.add(new ContentPart(id))])));
 layout.layout(new Dimension(innerWidth, innerHeight));
@@ -140,8 +146,9 @@ let managementAllowed = true;
 let revision = 1;
 let connectionGeneration = 1;
 let grantWrites = 0;
+const trustResponses: string[] = [];
 let effectiveKnown = true;
-let granted: readonly WorkspaceTrustPermission[] = READ_DIR_PERMISSIONS;
+let granted: readonly WorkspaceTrustPermission[] = DEVELOPMENT_DIR_PERMISSIONS;
 let savedPermissions: readonly WorkspaceTrustPermission[] = granted;
 
 const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRecovery['status']; } = {
@@ -151,23 +158,16 @@ const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRec
 		if (managementMode) {
 			await Promise.resolve();
 			granted = savedPermissions;
-			permissionInfo = { isTrusted: DEVELOPMENT_DIR_PERMISSIONS.every(permission => granted.includes(permission)), isReadOnly: granted.length === READ_DIR_PERMISSIONS.length && READ_DIR_PERMISSIONS.every(permission => granted.includes(permission)) };
 			recovery.status = 'idle'; changed.fire(); permissionChanges.fire();
 		}
 	},
 };
 services.registerInstance(IAppServerApi, { get connectionGeneration() { return connectionGeneration; }, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), recovery });
 const permissionChanges = resources.add(new Emitter<void>());
-let permissionInfo: IWorkspaceTrustInfo | undefined;
-services.registerInstance(IWorkspaceTrustManagementService, {
-	onDidChangeTrust: permissionChanges.event,
-	getWorkspaceTrustInfo: async () => permissionInfo,
-	getUriTrustInfo: async uri => ({ uri, trusted: permissionInfo?.isTrusted ?? false, permissions: effectiveKnown ? granted : undefined }),
-});
 services.registerInstance(IAgentCapabilitiesService, { isAvailable: true, onDidChange: Event.None, read: async () => ({ directoryGrantsReadable: managementAllowed, localProcessSandboxConfigured: false, sandboxBackends: [], sandboxDiagnostics: [] }) });
 services.registerInstance(IWorkspaceTrustApi, {
 	onDidChangeTrust: permissionChanges.event,
-	readWorkspaceDirectory: async () => granted,
+	readWorkspaceDirectory: async () => effectiveKnown ? granted : undefined,
 	readDirectory: async path => ({ dir: path, permissions: savedPermissions }),
 	listDirectories: async () => ({ revision, entries: [{ dir: workspace.getWorkspace().folders[0]!.uri.fsPath, path: workspace.getWorkspace().folders[0]!.uri.fsPath, permissions: savedPermissions }] }),
 	setDirectoryPermissions: async (path, permissions, expectedRevision) => {
@@ -178,6 +178,11 @@ services.registerInstance(IWorkspaceTrustApi, {
 	},
 	forgetDirectory: async () => { throw new Error('Not used'); }, createGrant: async () => { throw new Error('Not used'); }, persistGrant: async () => { throw new Error('Not used'); },
 });
+services.registerInstance(IRemoteAuthorityResolverService, resources.add(services.createInstance(RemoteAuthorityResolverService)));
+const trustManagement = resources.add(services.createInstance(WorkspaceTrustManagementService));
+services.registerInstance(IWorkspaceTrustManagementService, trustManagement);
+const trustRequests = resources.add(services.createInstance(WorkspaceTrustRequestService));
+services.registerInstance(IWorkspaceTrustRequestService, trustRequests);
 let trustPane: EditorPane | undefined;
 services.registerInstance(IEditorService, {
 	async openEditor(input) {
@@ -193,22 +198,25 @@ services.registerInstance(IEditorService, {
 		trustPane.layout(new Dimension(800, 560)); trustPane.focus();
 	},
 } as IEditorService);
-const contribution = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.appServerRecovery', 'workbench.contrib.workspacePermissionStatus']));
+const contribution = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.appServerRecovery', 'workbench.contrib.workspacePermissionStatus', 'workbench.contrib.workspaceTrustRequestHandler']));
 contribution.advance(WorkbenchPhase.AfterRestored);
 let closed = 0;
 window.ashBannerIntegration = {
 	setRecovery(status) { recovery.status = status; changed.fire(); },
 	setPermissions(mode) {
 		effectiveKnown = mode !== 'unknown';
-		permissionInfo = mode === 'unknown' ? undefined : { isTrusted: mode === 'trusted', isReadOnly: mode === 'readonly' };
 		granted = mode === 'trusted' ? DEVELOPMENT_DIR_PERMISSIONS : mode === 'readonly' ? READ_DIR_PERMISSIONS : [...READ_DIR_PERMISSIONS, 'executeCommands'];
 		savedPermissions = granted;
 		permissionChanges.fire();
 	},
+	requestTrust() {
+		managementMode = true;
+		void trustRequests.requestWorkspaceTrust().then(result => trustResponses.push(result === undefined ? 'canceled' : result ? 'trusted' : 'restricted'));
+	},
 	setManagementAllowed(value) { managementAllowed = value; },
 	conflictGrant() { revision++; },
 	bumpConnection() { connectionGeneration++; changed.fire(); },
-	managementState: () => ({ grantWrites, saved: [...savedPermissions], path: workspace.getWorkspace().folders[0]!.uri.fsPath }),
+	managementState: () => ({ grantWrites, saved: [...savedPermissions], path: workspace.getWorkspace().folders[0]!.uri.fsPath, trustResponses: [...trustResponses] }),
 	layoutTrustEditor: (width, height) => trustPane?.layout(new Dimension(width, height)),
 	async switchWorkspace(id) {
 		await (services.get(IStorageService) as BrowserStorageService).switchWorkspace(id);
@@ -240,9 +248,10 @@ declare global {
 			setManagementAllowed(value: boolean): void;
 			conflictGrant(): void;
 			bumpConnection(): void;
-			managementState(): { grantWrites: number; saved: string[]; path: string; };
+			managementState(): { grantWrites: number; saved: string[]; path: string; trustResponses: string[]; };
 			layoutTrustEditor(width: number, height: number): void;
 			setPermissions(mode: 'trusted' | 'readonly' | 'restricted' | 'unknown'): void;
+			requestTrust(): void;
 			switchWorkspace(id: string): Promise<void>;
 			setBannerPolicy(policy: 'always' | 'untilDismissed' | 'never'): Promise<void>;
 			show(id: string, message: string, priority?: number, markdown?: boolean): void;

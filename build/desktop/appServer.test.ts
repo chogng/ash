@@ -29,7 +29,10 @@ function mockSourceChanges(t: TestContext) {
 		listeners.set(args[0] as string, args.at(-1) as (event: string, file: string) => void);
 		return Object.assign(new EventEmitter(), { close() { } });
 	});
-	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	t.after(() => {
+		t.mock.restoreAll();
+		syncBuiltinESMExports();
+	});
 	return (file: string, workspaceManifest = false, sourceRoot = 'crates') => {
 		const directory = workspaceManifest ? repositoryRoot : join(repositoryRoot, sourceRoot);
 		const watched = workspaceManifest && process.platform === 'darwin' ? join(repositoryRoot, file) : directory;
@@ -55,7 +58,10 @@ for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const
 	for (const succeeds of [true, false]) {
 		test(`${javascriptRuntime} startup ${succeeds ? 'waits for preparation before selecting the runtime' : 'rejects failed preparation without selecting an old runtime'}`, async t => {
 			const commands: { command: string; args: string[]; }[] = [];
-			t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+			t.after(() => {
+				t.mock.restoreAll();
+				syncBuiltinESMExports();
+			});
 			t.mock.method(childProcess, 'spawn', (command: string, args: readonly string[], options: { stdio: unknown; }) => {
 				assert.deepEqual(options.stdio, ['ignore', 'inherit', 'inherit']);
 				commands.push({ command, args: [...args] });
@@ -79,7 +85,10 @@ test('cancelled preparation never starts a builder or selects a runtime', async 
 	const reason = new Error('startup cancelled');
 	cancellation.abort(reason);
 	const spawn = t.mock.method(childProcess, 'spawn', () => { throw new Error('Cancelled preparation spawned a builder'); });
-	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	t.after(() => {
+		t.mock.restoreAll();
+		syncBuiltinESMExports();
+	});
 	syncBuiltinESMExports();
 	await assert.rejects(prepareAppServer('host-provided-node', cancellation.signal), error => error === reason);
 	assert.equal(spawn.mock.callCount(), 0);
@@ -250,7 +259,10 @@ test('saves consumed by a queued live batch cannot later trigger an empty backen
 		return child;
 	});
 	syncBuiltinESMExports();
-	const stop = await watchAppServer({ skipInitial: true, environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') } });
+	const stop = await watchAppServer({
+		skipInitial: true,
+		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') }
+	});
 	t.after(stop);
 	save('diff/src/lib.rs');
 	t.mock.timers.tick(250);
@@ -329,7 +341,10 @@ test('macOS backend watching does not subscribe to the repository or its build c
 		paths.push(file);
 		return Object.assign(new EventEmitter(), { close() { closed++; } });
 	});
-	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	t.after(() => {
+		t.mock.restoreAll();
+		syncBuiltinESMExports();
+	});
 	syncBuiltinESMExports();
 	const stop = await watchAppServer({ skipInitial: true });
 	t.after(stop);
@@ -346,7 +361,10 @@ test('a failed subscription closes previously registered source watches', async 
 		if (++opened === 3) throw failure;
 		return Object.assign(new EventEmitter(), { close() { closed++; } });
 	});
-	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	t.after(() => {
+		t.mock.restoreAll();
+		syncBuiltinESMExports();
+	});
 	syncBuiltinESMExports();
 	await assert.rejects(watchAppServer({ skipInitial: true }), error => error === failure);
 	assert.equal(closed, 2);
@@ -403,7 +421,10 @@ for (const succeeds of [true, false]) {
 		const commands: string[][] = [];
 		const completed = Promise.withResolvers<void>();
 		let reloads = 0;
-		t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+		t.after(() => {
+			t.mock.restoreAll();
+			syncBuiltinESMExports();
+		});
 		mockProtocolDirectories(t);
 		t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
 		t.mock.method(console, 'error', (message: string) => {

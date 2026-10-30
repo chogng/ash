@@ -1,13 +1,13 @@
 import type { IFindWidgetStyles } from './abstractTree.js';
 import type { IListStyles } from '../list/listWidget.js';
-import { Emitter, type Event } from "../../../common/event.js";
-import { TaskQueue } from "../../../common/async.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
-import type { ListScrolling } from "../list/list.js";
-import { CompressibleObjectTree, ObjectTree, type CompressibleKeyboardNavigationLabelProvider, type CompressibleTreeAcceptEvent, type CompressibleTreeFocusChangeEvent, type CompressibleTreePointerEvent, type CompressibleTreeSelectionChangeEvent, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "./objectTree.js";
-import type { CompressibleTreeElement, CompressedTreeNode } from "./compressedObjectTreeModel.js";
-import type { ObjectTreeIdentityProvider, ObjectTreeNode } from "./objectTreeModel.js";
-import type { AsyncTreeDataSource, TreeDragAndDrop, TreeElement, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerTarget, TreeSorter, TreeTwistieState } from "./tree.js";
+import { Emitter, type Event } from '../../../common/event.js';
+import { TaskQueue } from '../../../common/async.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
+import type { ListScrolling } from '../list/list.js';
+import { CompressibleObjectTree, ObjectTree, type CompressibleKeyboardNavigationLabelProvider, type CompressibleTreeAcceptEvent, type CompressibleTreeFocusChangeEvent, type CompressibleTreePointerEvent, type CompressibleTreeSelectionChangeEvent, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from './objectTree.js';
+import type { CompressibleTreeElement, CompressedTreeNode } from './compressedObjectTreeModel.js';
+import type { ObjectTreeIdentityProvider, ObjectTreeNode } from './objectTreeModel.js';
+import type { AsyncTreeDataSource, TreeDragAndDrop, TreeElement, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerTarget, TreeSorter, TreeTwistieState } from './tree.js';
 
 export interface AsyncTreeTwistieState extends TreeTwistieState {
 	readonly loading: boolean;
@@ -112,7 +112,7 @@ interface AsyncTreeCollapseEvent<T> {
 }
 
 interface AsyncTreeView<T> extends IDisposable {
-	updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling"> & { readonly compressionEnabled?: boolean; }): void;
+	updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean; }): void;
 	readonly element: HTMLDivElement;
 	readonly domNode: HTMLDivElement;
 	readonly onPointer: Event<AsyncTreePointerEvent<T>>;
@@ -202,7 +202,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	protected abstract createTree(container: HTMLElement, options: TOptions): AsyncTreeView<T>;
 
 	getInput(): TInput | undefined { return this.input; }
-	public updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, "indent" | "indentGuides" | "twistieAdditionalCssClass" | "smoothScrolling"> & { readonly compressionEnabled?: boolean; }): void {
+	public updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean; }): void {
 		const state = this.getViewState();
 		if (options.compressionEnabled !== undefined) this.compressionEnabled = options.compressionEnabled;
 		this.tree.updateOptions(options);
@@ -493,9 +493,9 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	}
 
 	private isCurrentRequest(key: string | undefined, request: AsyncTreeRequest): boolean { return !this.isDisposed && request.generation === this.generation && this.requests.get(key) === request; }
-	private updateAriaBusy(): void { this.element.setAttribute("aria-busy", String(this.requests.size > 0)); }
+	private updateAriaBusy(): void { this.element.setAttribute('aria-busy', String(this.requests.size > 0)); }
 	private requireInput(): TInput {
-		if (this.input === undefined) throw new Error("AsyncDataTree input is not set");
+		if (this.input === undefined) throw new Error('AsyncDataTree input is not set');
 		return this.input;
 	}
 }
@@ -529,7 +529,7 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 			findMatchType: options.findMatchType,
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
-			modelOptions: { defaultCollapseState: "collapsed", identityProvider: { getId: (element) => this.getId(element) }, sorter: options.sorter, filter: options.filter },
+			modelOptions: { defaultCollapseState: 'collapsed', identityProvider: { getId: (element) => this.getId(element) }, sorter: options.sorter, filter: options.filter },
 			onWillRender: options.onWillRender,
 			reuseRows: options.reuseRows,
 			onDidRemoveRow: options.onDidRemoveRow,
@@ -573,7 +573,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 			findMatchType: options.findMatchType,
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
-			modelOptions: { defaultCollapseState: "collapsed", identityProvider: { getId: (element) => this.getId(element) }, sorter: options.sorter, filter: options.filter, compressionEnabled: options.compressionEnabled },
+			modelOptions: { defaultCollapseState: 'collapsed', identityProvider: { getId: (element) => this.getId(element) }, sorter: options.sorter, filter: options.filter, compressionEnabled: options.compressionEnabled },
 			onWillRender: options.onWillRender,
 			reuseRows: options.reuseRows,
 			onDidRemoveRow: options.onDidRemoveRow,
@@ -670,6 +670,6 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 
 function last<T>(elements: readonly T[]): T {
 	const element = elements[elements.length - 1];
-	if (element === undefined) throw new Error("Compressed tree nodes must contain at least one element");
+	if (element === undefined) throw new Error('Compressed tree nodes must contain at least one element');
 	return element;
 }

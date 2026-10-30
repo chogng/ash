@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { EventEmitter, once } from 'node:events';
 import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
-import { createServer } from 'vite';
+import { createLogger, createServer } from 'vite';
 import { extractLocalizationMessages, isLocalizationInput, validateLocalizationTranslation } from './localization.ts';
 
 test('localization watches the same declarations that the scanner accepts', () => {
@@ -283,11 +284,14 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	await writeFile(clientDormant, `import { localize } from '../../../src/ash/nls.js'; localize('clientDormant', 'Package before');`);
 	await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'Before edit');`);
 	const { localizationPlugin } = await import(pathToFileURL(join(root, 'build/resources/localization.ts')).href) as typeof import('./localization.ts');
+	const events = new EventEmitter();
+	const logger = createLogger('silent');
+	logger.error = message => { events.emit('failure', message); };
 	const server = await createServer({
-		configFile: false, root: join(root, 'src/ash/code'), logLevel: 'silent',
+		configFile: false, root: join(root, 'src/ash/code'), customLogger: logger,
 		plugins: [localizationPlugin()], optimizeDeps: { noDiscovery: true },
 		// Exercise the real watcher without depending on native events in temporary directories.
-		server: { port: 0, watch: { usePolling: true, interval: 20 } },
+		server: { host: '127.0.0.1', port: 0, watch: { usePolling: true, interval: 20 } },
 	});
 	try {
 		await server.listen();
@@ -307,6 +311,28 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		} while (Date.now() < updatedBy);
 		assert.match(catalog, /After edit/, 'unimported declarations update the language resource');
 		assert.match(catalog, /Package after/, 'unimported package declarations update the language resource');
+
+		const httpServer = server.httpServer!;
+		const translations = join(root, 'extensions/language-pack-zh-cn/translations/messages.json');
+		const failed = once(events, 'failure', { signal: AbortSignal.timeout(5_000) });
+		await writeFile(translations, '{"ash":{"hello":"你好","hello":"重复翻译"}}');
+		assert.match(String((await failed)[0]), /Duplicate translation property:/);
+		await server.restart();
+		assert.equal(server.httpServer, httpServer, 'invalid translations must not replace the serving HTTP server');
+		assert.equal(httpServer.listening, true);
+		const address = httpServer.address();
+		assert.ok(address && typeof address !== 'string');
+		assert.equal((await fetch(`http://127.0.0.1:${address.port}/entry.js`)).status, 200);
+		await writeFile(translations, JSON.stringify({ ash: { hello: '你好，已恢复', packageClient: '包内文档' } }));
+		const repairedBy = Date.now() + 5_000;
+		let repaired;
+		do {
+			repaired = JSON.parse(await readFile(join(extensionRoot, 'localization/package.json'), 'utf8'));
+			if (repaired.bundles.ash.hello === '你好，已恢复') break;
+			await delay(20);
+		} while (Date.now() < repairedBy);
+		assert.equal(repaired.bundles.ash.hello, '你好，已恢复', 'the real watcher recovers after fixing duplicate translations');
+		assert.equal(httpServer.listening, true);
 	} finally { await server.close(); }
 	// Large CJK catalogs remain byte-bounded modules while preserving the same runtime contract.
 	const largeMessages = Object.fromEntries(Array.from({ length: 120 }, (_, index) => [`large.${index}`, '翻译'.repeat(1000)]));

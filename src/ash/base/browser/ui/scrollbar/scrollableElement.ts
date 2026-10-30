@@ -5,36 +5,36 @@ import { Scrollable, SmoothScrollingOperation, ScrollbarVisibility as ScrollbarV
 import { isReducedMotion } from '../animations/animations.js';
 import type { IMouseWheelEvent } from '../../mouseEvent.js';
 import type { ScrollableElementCreationOptions, ScrollableElementChangeOptions } from './scrollableElementOptions.js';
-import { addDisposableListener, h } from "../../dom.js";
-import { FastDomNode } from "../../fastDomNode.js";
-import { StandardWheelEvent } from "../../mouseEvent.js";
-import { observeResize } from "../../observer.js";
-import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from "../../scheduler.js";
-import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
-import type { ScrollbarAxis } from "./abstractScrollbar.js";
-import { HorizontalScrollbar } from "./horizontalScrollbar.js";
+import { addDisposableListener, h } from '../../dom.js';
+import { FastDomNode } from '../../fastDomNode.js';
+import { StandardWheelEvent } from '../../mouseEvent.js';
+import { observeResize } from '../../observer.js';
+import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from '../../scheduler.js';
+import { Emitter, type Event } from '../../../common/event.js';
+import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
+import type { ScrollbarAxis } from './abstractScrollbar.js';
+import { HorizontalScrollbar } from './horizontalScrollbar.js';
 import {
 	clampScrollbarPosition,
 	createScrollbarAxisMetrics,
 	type ScrollbarAxisMetrics,
-} from "./scrollbarState.js";
+} from './scrollbarState.js';
 import {
 	resolveScrollableElementOptions,
 	type ScrollableElementUpdateOptions,
 	type ResolvedScrollableElementOptions,
 	type ScrollableElementOptions,
 	type ScrollbarVisibility,
-} from "./scrollableElementOptions.js";
-import { VerticalScrollbar } from "./verticalScrollbar.js";
+} from './scrollableElementOptions.js';
+import { VerticalScrollbar } from './verticalScrollbar.js';
 
 export type {
 	ScrollableElementOptions,
 	ScrollbarVisibility,
 	ScrollbarWheelOptions,
 	ScrollDirection,
-} from "./scrollableElementOptions.js";
-export type { ScrollbarAxis } from "./abstractScrollbar.js";
+} from './scrollableElementOptions.js';
+export type { ScrollbarAxis } from './abstractScrollbar.js';
 
 export interface ScrollPosition {
 	readonly left: number;
@@ -101,25 +101,25 @@ export class ScrollableElement extends Disposable {
 		this.options = resolveScrollableElementOptions(options);
 		this.onScrollOption = options.onScroll;
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "div");
-		const viewport = h(ownerDocument, "div");
-		const content = h(ownerDocument, "div");
+		const element = h(ownerDocument, 'div');
+		const viewport = h(ownerDocument, 'div');
+		const content = h(ownerDocument, 'div');
 		viewport.id = `ash-scrollable-${nextScrollableId++}`;
 		const horizontal = this._register(new HorizontalScrollbar(element, {
 			viewport,
 			trackClickBehavior: this.options.trackClickBehavior,
-			getMetrics: () => this.axisMetrics("horizontal"),
+			getMetrics: () => this.axisMetrics('horizontal'),
 			setPosition: (position) =>
-				this.setAxisPosition("horizontal", position),
+				this.setAxisPosition('horizontal', position),
 		}));
 		const vertical = this._register(new VerticalScrollbar(element, {
 			viewport,
 			trackClickBehavior: this.options.trackClickBehavior,
-			getMetrics: () => this.axisMetrics("vertical"),
+			getMetrics: () => this.axisMetrics('vertical'),
 			setPosition: (position) =>
-				this.setAxisPosition("vertical", position),
+				this.setAxisPosition('vertical', position),
 		}));
-		const corner = h(ownerDocument, "div");
+		const corner = h(ownerDocument, 'div');
 		this.element = element;
 		this.scrollableElement = viewport;
 		this.contentElement = content;
@@ -130,22 +130,22 @@ export class ScrollableElement extends Disposable {
 		this.onDidScrollEmitter = this._register(new Emitter<ScrollableScrollEvent>());
 		this.onDidScroll = this.onDidScrollEmitter.event;
 
-		element.className = "ash-scrollable-element ash-scrollbar";
+		element.className = 'ash-scrollable-element ash-scrollbar';
 		element.dataset.scrollDirection = this.options.direction;
 		element.tabIndex = options.tabIndex ?? 0;
 		element.style.setProperty(
-			"--ash-scrollbar-size",
+			'--ash-scrollbar-size',
 			`${this.options.scrollbarSize}px`,
 		);
 		if (options.ariaLabel) {
-			element.setAttribute("role", "region");
-			element.setAttribute("aria-label", options.ariaLabel);
+			element.setAttribute('role', 'region');
+			element.setAttribute('aria-label', options.ariaLabel);
 		}
-		viewport.className = "ash-scrollbar-viewport";
-		content.className = "ash-scrollbar-content";
+		viewport.className = 'ash-scrollbar-viewport';
+		content.className = 'ash-scrollbar-content';
 		horizontal.setVisibility(scrollbarVisibility(this.options.horizontal));
 		vertical.setVisibility(scrollbarVisibility(this.options.vertical));
-		this.cornerNode.setClassName("ash-scrollbar-corner");
+		this.cornerNode.setClassName('ash-scrollbar-corner');
 		viewport.append(content);
 		element.append(
 			viewport,
@@ -171,13 +171,13 @@ export class ScrollableElement extends Disposable {
 			this.pendingReveal = undefined;
 			element.remove();
 		}));
-		this._register(addDisposableListener(viewport, "scroll", () =>
+		this._register(addDisposableListener(viewport, 'scroll', () =>
 			this.handleNativeScroll(),
 		));
-		this._register(addDisposableListener(viewport, "wheel", (event: WheelEvent) =>
+		this._register(addDisposableListener(viewport, 'wheel', (event: WheelEvent) =>
 			this.handleWheel(event),
 			{ passive: false }));
-		this._register(addDisposableListener(element, "keydown", (event: KeyboardEvent) =>
+		this._register(addDisposableListener(element, 'keydown', (event: KeyboardEvent) =>
 			this.handleContainerKeydown(event),
 		));
 		// Direct manipulation and focus navigation interrupt an outstanding wheel gesture.
@@ -228,10 +228,10 @@ export class ScrollableElement extends Disposable {
 	layout(): void {
 		const width = Math.max(0, this.scrollableElement.clientWidth);
 		const height = Math.max(0, this.scrollableElement.clientHeight);
-		const scrollWidth = this.options.direction === "vertical"
+		const scrollWidth = this.options.direction === 'vertical'
 			? width
 			: Math.max(width, this.scrollableElement.scrollWidth);
-		const scrollHeight = this.options.direction === "horizontal"
+		const scrollHeight = this.options.direction === 'horizontal'
 			? height
 			: Math.max(height, this.scrollableElement.scrollHeight);
 		const maximumLeft = Math.max(0, scrollWidth - width);
@@ -281,7 +281,7 @@ export class ScrollableElement extends Disposable {
 	/** Reveals a descendant at the nearest visible edge on the enabled axes. */
 	reveal(element: Element): void {
 		if (!this.contentElement.contains(element)) {
-			throw new RangeError("ScrollableElement can only reveal its descendants");
+			throw new RangeError('ScrollableElement can only reveal its descendants');
 		}
 		this.pendingReveal = element;
 		this.layout();
@@ -295,15 +295,15 @@ export class ScrollableElement extends Disposable {
 			return;
 		}
 		if (
-			(this.options.direction !== "vertical" && this._state.width <= 0) ||
-			(this.options.direction !== "horizontal" && this._state.height <= 0)
+			(this.options.direction !== 'vertical' && this._state.width <= 0) ||
+			(this.options.direction !== 'horizontal' && this._state.height <= 0)
 		) return;
 		this.pendingReveal = undefined;
 		const viewportBounds = this.scrollableElement.getBoundingClientRect();
 		const elementBounds = element.getBoundingClientRect();
 		let left = this._state.left;
 		let top = this._state.top;
-		if (this.options.direction !== "vertical") {
+		if (this.options.direction !== 'vertical') {
 			const viewportLeft = viewportBounds.left;
 			const viewportRight = viewportBounds.left + this._state.width -
 				(this.vertical.rendered ? this.options.scrollbarSize : 0);
@@ -313,7 +313,7 @@ export class ScrollableElement extends Disposable {
 				left += elementBounds.right - viewportRight;
 			}
 		}
-		if (this.options.direction !== "horizontal") {
+		if (this.options.direction !== 'horizontal') {
 			const viewportTop = viewportBounds.top;
 			const viewportBottom = viewportBounds.top + this._state.height -
 				(this.horizontal.rendered ? this.options.scrollbarSize : 0);
@@ -347,20 +347,20 @@ export class ScrollableElement extends Disposable {
 		let deltaY = wheel.deltaY;
 		if (
 			wheel.shiftKey &&
-			this.options.wheel.shift === "horizontal" &&
+			this.options.wheel.shift === 'horizontal' &&
 			deltaX === 0
 		) {
 			deltaX = deltaY;
 			deltaY = 0;
 		}
-		if (this.options.direction === "horizontal") {
+		if (this.options.direction === 'horizontal') {
 			if (deltaX === 0) deltaX = deltaY;
 			deltaY = 0;
-		} else if (this.options.direction === "vertical") {
+		} else if (this.options.direction === 'vertical') {
 			deltaX = 0;
 		}
 		if (
-			this.options.wheel.axis === "predominant" &&
+			this.options.wheel.axis === 'predominant' &&
 			deltaX !== 0 &&
 			deltaY !== 0
 		) {
@@ -376,7 +376,7 @@ export class ScrollableElement extends Disposable {
 		const changed = smooth ? this.setScrollPositionSmooth(left, top) : this.setScrollPosition(left, top);
 		if (
 			changed ||
-			this.options.wheel.consume === "always"
+			this.options.wheel.consume === 'always'
 		) {
 			wheel.stop();
 		}
@@ -388,42 +388,42 @@ export class ScrollableElement extends Disposable {
 		let left = this._state.left;
 		let top = this._state.top;
 		switch (event.key) {
-			case "ArrowLeft":
-				if (this.options.direction === "vertical") return;
+			case 'ArrowLeft':
+				if (this.options.direction === 'vertical') return;
 				left -= step;
 				break;
-			case "ArrowRight":
-				if (this.options.direction === "vertical") return;
+			case 'ArrowRight':
+				if (this.options.direction === 'vertical') return;
 				left += step;
 				break;
-			case "ArrowUp":
-				if (this.options.direction === "horizontal") return;
+			case 'ArrowUp':
+				if (this.options.direction === 'horizontal') return;
 				top -= step;
 				break;
-			case "ArrowDown":
-				if (this.options.direction === "horizontal") return;
+			case 'ArrowDown':
+				if (this.options.direction === 'horizontal') return;
 				top += step;
 				break;
-			case "PageUp":
-				if (this.options.direction === "horizontal") {
+			case 'PageUp':
+				if (this.options.direction === 'horizontal') {
 					left -= this._state.width;
 				} else {
 					top -= this._state.height;
 				}
 				break;
-			case "PageDown":
-				if (this.options.direction === "horizontal") {
+			case 'PageDown':
+				if (this.options.direction === 'horizontal') {
 					left += this._state.width;
 				} else {
 					top += this._state.height;
 				}
 				break;
-			case "Home":
-				if (this.options.direction === "horizontal") left = 0;
+			case 'Home':
+				if (this.options.direction === 'horizontal') left = 0;
 				else top = 0;
 				break;
-			case "End":
-				if (this.options.direction === "horizontal") {
+			case 'End':
+				if (this.options.direction === 'horizontal') {
 					left = this._state.maximumLeft;
 				} else {
 					top = this._state.maximumTop;
@@ -436,7 +436,7 @@ export class ScrollableElement extends Disposable {
 	}
 
 	private setAxisPosition(axis: ScrollbarAxis, position: number): boolean {
-		return axis === "horizontal"
+		return axis === 'horizontal'
 			? this.setScrollPosition(position, this._state.top)
 			: this.setScrollPosition(this._state.left, position);
 	}
@@ -556,13 +556,13 @@ export class ScrollableElement extends Disposable {
 	}
 
 	private axisMetrics(axis: ScrollbarAxis): ScrollbarAxisMetrics {
-		const oppositeRendered = axis === "horizontal"
+		const oppositeRendered = axis === 'horizontal'
 			? this.vertical.rendered
 			: this.horizontal.rendered;
 		const trackSize = (
-			axis === "horizontal" ? this._state.width : this._state.height
+			axis === 'horizontal' ? this._state.width : this._state.height
 		) - (oppositeRendered ? this.options.scrollbarSize : 0);
-		return axis === "horizontal"
+		return axis === 'horizontal'
 			? createScrollbarAxisMetrics(
 				this._state.width,
 				this._state.scrollWidth,
@@ -610,13 +610,13 @@ function isRendered(
 	visibility: ScrollbarVisibility,
 	needed: boolean,
 ): boolean {
-	return visibility === "visible" ||
-		(visibility === "auto" && needed);
+	return visibility === 'visible' ||
+		(visibility === 'auto' && needed);
 }
 
 function ownerWindow(element: HTMLElement): Window {
 	const targetWindow = element.ownerDocument.defaultView;
-	if (!targetWindow) throw new Error("ScrollableElement requires a browser window");
+	if (!targetWindow) throw new Error('ScrollableElement requires a browser window');
 	return targetWindow;
 }
 

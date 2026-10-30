@@ -26,6 +26,10 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { getActiveElement } from '../../../../base/browser/dom.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IProgressService } from '../../../../platform/progress/common/progress.js';
+import { signInChatGPT } from './chatGPTLogin.js';
 
 registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
 registerSingleton(IChatGPTTransport, ElectronChatGPTTransport, InstantiationType.Delayed);
@@ -54,7 +58,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
 			const chat = accessor.get(IChatGPTService);
 			return new AccessibleContentProvider(AccessibleViewProviderId.ChatGPT, { type }, () => type === AccessibleViewType.Help
-				? localize('sessions.chatgpt.navigationHelp', 'ChatGPT conversations are in the window sidebar. Projects, Artifacts and Customize keep this list. Opening a conversation returns to ChatGPT. Use New at the top of the sidebar to start a chat. Use Search at the top of the sidebar, then select Sessions to find loaded ChatGPT conversations by title or project name. Use Tab to reach the conversation list. Arrow keys, Home and End move within the list; Enter opens a conversation. Scrolling near the bottom automatically loads more conversations. If loading fails, scroll again to retry. Accessibility commands open help and a selectable text view of the current chat; closing the view returns focus here. Enter sends a message; Shift+Enter inserts a line break. Select Stop to interrupt a reply. Login is managed externally. Reload ChatGPT from the New button context menu to refresh its content. Drafts are retained when switching conversations. Use window separators to resize the sidebar and the title bar to show or hide it.')
+				? localize('sessions.chatgpt.navigationHelp', 'ChatGPT conversations are in the window sidebar. Projects, Artifacts and Customize keep this list. Opening a conversation returns to ChatGPT. Use New at the top of the sidebar to start a chat. Use Search at the top of the sidebar, then select Sessions to find loaded ChatGPT conversations by title or project name. Use Tab to reach the conversation list. Arrow keys, Home and End move within the list; Enter opens a conversation. Scrolling near the bottom automatically loads more conversations. If loading fails, scroll again to retry. Accessibility commands open help and a selectable text view of the current chat; closing the view returns focus here. Enter sends a message; Shift+Enter inserts a line break. Select Stop to interrupt a reply. Use the New button context menu to sign in to Ash, select the Codex login, sign out of Ash or reload ChatGPT. Independent Ash sign-in renews automatically. Codex login is managed by Codex. Drafts are retained when switching conversations. Use window separators to resize the sidebar and the title bar to show or hide it.')
 				+ '\n\n' + localize('sessions.chatgpt.actionsHelp', 'Conversation rows reveal More actions and Pin on hover or keyboard focus. Use Tab to reach the action bar and Left and Right Arrow to move between More and Pin. The More menu offers Rename, Share, Archive, Delete and Move to project. Move to project contains a submenu of projects; Right Arrow opens it, Left Arrow returns, and Escape closes the menu. Delete and Share require confirmation. Pinned, each project and Recent are sibling panes in the sidebar. Pinned chats appear once, above their projects. Unpinning returns a chat to its project or Recent. Pane headings are buttons: Enter or Space toggles them, Left Arrow collapses and Right Arrow expands. Each pane remembers its collapsed state across restarts and workspaces. Search opens separately and keeps these states unchanged.')
 				+ '\n\n' + localize('sessions.chatgpt.inputHelp', 'The message input starts with one line and grows as you type. Use Tab and Shift+Tab to reach Attach files, the message, model, Dictate message and Send or Stop. Choose files with Attach files, or paste and drop files into the input. Attachments show upload status; failed uploads offer Retry and all attachments offer Remove. Sending waits until every attachment is ready. Files can be sent without text. The rightmost button starts voice conversation when the draft is empty, sends when there is text or an attachment, and stops the current reply or voice conversation. Voice uses the microphone and plays replies; leaving ChatGPT or switching conversations stops voice. Dictation inserts completed phrases at the cursor without sending. Select Stop dictation to finish or press Escape to discard unfinished speech. Switching conversations or leaving ChatGPT cancels dictation. While loading, replying or in voice conversation, the message input is read-only. The model button shows the selected level and opens the thinking slider. Use Up and Down Arrow to move between its heading and slider. Left and Right Arrow adjust the focused slider; Home and End select its first and last levels. Available levels include Instant, thinking and Pro options. Activate the heading to open the model family list. Use Up and Down Arrow to browse and Enter to select a model and return to its slider. Escape closes either page and returns to the button.')
 				+ '\n\n' + localize('sessions.chatgpt.richContentHelp', 'Press Enter on a citation number to expand source details. Media provides playback controls; attachments can be previewed, opened or downloaded here. Use Tab to move between interactive preview controls. Charts support type, zoom and series controls; focus a chart and use Left and Right Arrow to read data points.')
@@ -113,5 +117,38 @@ registerAction2(class ReloadChatGPT extends Action2 {
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		await accessor.get(IChatGPTService).reload();
+	}
+});
+
+const authenticationMenu = {
+	id: Menus.ActivityBarContext,
+	when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has('sessions.activity.chatgptSelected')),
+	group: 'authentication',
+};
+
+registerAction2(class SignInChatGPT extends Action2 {
+	constructor() {
+		super({ id: 'sessions.chatgpt.signIn', title: localize2('sessions.chatgpt.signIn', 'ChatGPT: Sign In to Ash'), f1: true, menu: authenticationMenu });
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await signInChatGPT(accessor.get(IAccountService), accessor.get(INotificationService), accessor.get(IProgressService));
+	}
+});
+
+registerAction2(class UseCodexChatGPTLogin extends Action2 {
+	constructor() {
+		super({ id: 'sessions.chatgpt.useCodexLogin', title: localize2('sessions.chatgpt.useCodexLogin', 'ChatGPT: Use Codex Login'), f1: true, menu: authenticationMenu });
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IAccountService).startLogin({ type: 'chatGptWebCodex' });
+	}
+});
+
+registerAction2(class SignOutChatGPT extends Action2 {
+	constructor() {
+		super({ id: 'sessions.chatgpt.signOut', title: localize2('sessions.chatgpt.signOut', 'ChatGPT: Sign Out of Ash'), f1: true, menu: authenticationMenu });
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(IAccountService).logout('chatgpt-web');
 	}
 });

@@ -206,3 +206,40 @@ fn catalog_transports_retirement_without_requiring_a_date() {
         );
     }
 }
+
+#[test]
+fn old_catalogs_default_agent_capability_and_optional_metadata() {
+    let model = ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("test").unwrap(),
+    );
+    let mut value = serde_json::to_value(ModelCatalogEntry::from_info(
+        model.clone(),
+        &ModelInfo::new(model.model, "Test"),
+    ))
+    .unwrap();
+    value["capabilities"]
+        .as_object_mut()
+        .unwrap()
+        .remove("agent_mode");
+    let parsed: ModelCatalogEntry = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        parsed.capabilities.agent_mode,
+        ash_protocol::CapabilitySupport::Unknown
+    );
+    assert!(parsed.pricing.is_empty());
+    assert!(parsed.source.is_none());
+}
+
+#[test]
+fn old_catalog_responses_default_connection_statuses_without_inventing_evidence() {
+    let parsed: ModelListResult =
+        serde_json::from_value(serde_json::json!({ "models": [] })).unwrap();
+    assert!(parsed.catalog_statuses.is_empty());
+    assert!(
+        serde_json::to_value(parsed)
+            .unwrap()
+            .get("catalog_statuses")
+            .is_none()
+    );
+}

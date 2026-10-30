@@ -1,7 +1,7 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { h } from "../../browser/dom.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { h } from '../../browser/dom.js';
 import type { CancellationToken } from '../../common/cancellation.js';
 
 const environment = new JSDOM("<!doctype html><html><body><main></main><button id='target' title='Native title'>Target</button></body></html>");
@@ -19,42 +19,42 @@ Object.defineProperty(environment.window.Element.prototype, 'scrollTo', {
 	value(this: Element, left: number, top: number) { this.scrollLeft = left; this.scrollTop = top; },
 });
 
-const { ContextView } = await import("../../browser/ui/contextview/contextview.js");
-const { Hover } = await import("../../browser/ui/hover/hover.js");
+const { ContextView } = await import('../../browser/ui/contextview/contextview.js');
+const { Hover } = await import('../../browser/ui/hover/hover.js');
 
-test("Hover replaces native title with managed accessible content", () => {
-	const container = requiredElement<HTMLElement>("main");
-	const target = requiredElement<HTMLButtonElement>("#target");
+test('Hover replaces native title with managed accessible content', () => {
+	const container = requiredElement<HTMLElement>('main');
+	const target = requiredElement<HTMLButtonElement>('#target');
 	const contextView = new ContextView(container);
 	contextView.element.getBoundingClientRect = () => rectangle(0, 0, 120, 40);
 	target.getBoundingClientRect = () => rectangle(20, 60, 80, 24);
 	const hover = new Hover({
 		target,
-		content: "Managed title",
+		content: 'Managed title',
 		contextViewProvider: contextView,
 	});
 
-	assert.equal(target.hasAttribute("title"), false);
+	assert.equal(target.hasAttribute('title'), false);
 	hover.show();
-	const tooltip = contextView.element.querySelector<HTMLElement>(".ash-hover");
+	const tooltip = contextView.element.querySelector<HTMLElement>('.ash-hover');
 	assert.ok(tooltip);
-	assert.equal(contextView.element.classList.contains("ash-context-view-hover"), true);
-	assert.equal(tooltip.textContent, "Managed title");
-	assert.equal(tooltip.getAttribute("role"), "tooltip");
-	assert.equal(target.getAttribute("aria-describedby"), tooltip.id);
-	assert.equal(contextView.element.style.left, "0px");
-	assert.equal(contextView.element.classList.contains("ash-context-view-align-center"), true);
+	assert.equal(contextView.element.classList.contains('ash-context-view-hover'), true);
+	assert.equal(tooltip.textContent, 'Managed title');
+	assert.equal(tooltip.getAttribute('role'), 'tooltip');
+	assert.equal(target.getAttribute('aria-describedby'), tooltip.id);
+	assert.equal(contextView.element.style.left, '0px');
+	assert.equal(contextView.element.classList.contains('ash-context-view-align-center'), true);
 
-	hover.update("Updated title");
-	assert.equal(tooltip.textContent, "Updated title");
+	hover.update('Updated title');
+	assert.equal(tooltip.textContent, 'Updated title');
 	hover.hide();
-	assert.equal(target.hasAttribute("aria-describedby"), false);
+	assert.equal(target.hasAttribute('aria-describedby'), false);
 	hover.dispose();
-	assert.equal(target.title, "Native title");
+	assert.equal(target.title, 'Native title');
 	contextView.dispose();
 });
 
-test("Hover returns focus to its target when Escape dismisses focused content", () => {
+test('Hover returns focus to its target when Escape dismisses focused content', () => {
 	const container = requiredElement<HTMLElement>('main');
 	const target = requiredElement<HTMLButtonElement>('#target');
 	using contextView = new ContextView(container);
@@ -126,9 +126,9 @@ test('Hover cancels content work on update, hide and disposal', () => {
 	assert.equal(hidden, 1);
 });
 
-test("Hover skips empty content and sticky persistence requires explicit dismissal", async () => {
-	const container = requiredElement<HTMLElement>("main");
-	const target = requiredElement<HTMLButtonElement>("#target");
+test('Hover skips empty content and sticky persistence requires explicit dismissal', async () => {
+	const container = requiredElement<HTMLElement>('main');
+	const target = requiredElement<HTMLButtonElement>('#target');
 	const contextView = new ContextView(container);
 	contextView.element.getBoundingClientRect = () => rectangle(0, 0, 120, 40);
 	target.getBoundingClientRect = () => rectangle(20, 60, 80, 24);
@@ -137,17 +137,17 @@ test("Hover skips empty content and sticky persistence requires explicit dismiss
 		target,
 		content: () => content,
 		delayMs: 0,
-		persistence: "sticky",
+		persistence: 'sticky',
 		contextViewProvider: contextView,
 	});
 
 	hover.show();
 	assert.equal(hover.visible, false);
-	content = "Sticky title";
-	target.dispatchEvent(new environment.window.MouseEvent("pointerenter"));
+	content = 'Sticky title';
+	target.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
 	await nextTimer();
 	assert.equal(hover.visible, true);
-	target.dispatchEvent(new environment.window.MouseEvent("pointerleave"));
+	target.dispatchEvent(new environment.window.MouseEvent('pointerleave'));
 	await nextTimer();
 	assert.equal(hover.visible, true);
 	hover.hide();
@@ -157,28 +157,28 @@ test("Hover skips empty content and sticky persistence requires explicit dismiss
 	contextView.dispose();
 });
 
-test("Hover delays keyboard focus and ignores focus restored from dismissed overlays", async () => {
-	const container = requiredElement<HTMLElement>("main");
-	const target = requiredElement<HTMLButtonElement>("#target");
-	const previous = h(environment.window.document, "button");
-	const dismissedHover = h(environment.window.document, "div");
-	dismissedHover.className = "ash-hover";
-	const hoverAction = h(environment.window.document, "button");
+test('Hover delays keyboard focus and ignores focus restored from dismissed overlays', async () => {
+	const container = requiredElement<HTMLElement>('main');
+	const target = requiredElement<HTMLButtonElement>('#target');
+	const previous = h(environment.window.document, 'button');
+	const dismissedHover = h(environment.window.document, 'div');
+	dismissedHover.className = 'ash-hover';
+	const hoverAction = h(environment.window.document, 'button');
 	dismissedHover.append(hoverAction);
 	container.append(previous, dismissedHover);
 	const contextView = new ContextView(container);
 	const hover = new Hover({
 		target,
-		content: "Managed title",
+		content: 'Managed title',
 		delayMs: 1,
 		contextViewProvider: contextView,
 	});
 
-	target.dispatchEvent(new environment.window.FocusEvent("focusin", { bubbles: true }));
+	target.dispatchEvent(new environment.window.FocusEvent('focusin', { bubbles: true }));
 	assert.equal(hover.visible, false);
-	target.dispatchEvent(new environment.window.FocusEvent("focusin", { bubbles: true, relatedTarget: hoverAction }));
+	target.dispatchEvent(new environment.window.FocusEvent('focusin', { bubbles: true, relatedTarget: hoverAction }));
 	assert.equal(hover.visible, false);
-	target.dispatchEvent(new environment.window.FocusEvent("focusin", { bubbles: true, relatedTarget: previous }));
+	target.dispatchEvent(new environment.window.FocusEvent('focusin', { bubbles: true, relatedTarget: previous }));
 	assert.equal(hover.visible, false);
 	await nextTimer();
 	assert.equal(hover.visible, true);
@@ -189,15 +189,15 @@ test("Hover delays keyboard focus and ignores focus restored from dismissed over
 	dismissedHover.remove();
 });
 
-test("Hover closes an in-flight ContextView when target layout disposes it", () => {
-	const container = requiredElement<HTMLElement>("main");
-	const target = h(environment.window.document, "button");
+test('Hover closes an in-flight ContextView when target layout disposes it', () => {
+	const container = requiredElement<HTMLElement>('main');
+	const target = h(environment.window.document, 'button');
 	container.append(target);
 	const contextView = new ContextView(container);
 	contextView.element.getBoundingClientRect = () => rectangle(0, 0, 120, 40);
 	const hover = new Hover({
 		target,
-		content: "Transient title",
+		content: 'Transient title',
 		contextViewProvider: contextView,
 	});
 	target.getBoundingClientRect = () => {
@@ -210,7 +210,7 @@ test("Hover closes an in-flight ContextView when target layout disposes it", () 
 	assert.equal(contextView.visible, false);
 	assert.doesNotThrow(() => contextView.show({
 		anchor: rectangle(40, 80, 0, 0),
-		content: h(environment.window.document, "div"),
+		content: h(environment.window.document, 'div'),
 	}));
 	assert.equal(contextView.visible, true);
 
@@ -240,3 +240,53 @@ function rectangle(left: number, top: number, width: number, height: number): DO
 async function nextTimer(): Promise<void> {
 	await new Promise<void>((resolve) => environment.window.setTimeout(resolve, 5));
 }
+
+test('Hover releases interaction listeners when a target becomes idle', async () => {
+	const target = h(environment.window.document, 'button');
+	environment.window.document.body.append(target);
+	const active = new Set<EventListenerOrEventListenerObject>();
+	const add = target.addEventListener.bind(target);
+	const remove = target.removeEventListener.bind(target);
+	target.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
+		active.add(listener);
+		add(type, listener, options);
+	}) as typeof target.addEventListener;
+	target.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) => {
+		active.delete(listener);
+		remove(type, listener, options);
+	}) as typeof target.removeEventListener;
+	using contextView = new ContextView(requiredElement<HTMLElement>('main'));
+	const hover = new Hover({ target, content: 'Details', delayMs: 1000, contextViewProvider: contextView });
+	try {
+		const idle = active.size;
+		assert.ok(idle <= 3, 'Idle targets should not retain pointer-release and focus-exit handlers');
+		for (let visit = 0; visit < 3; visit++) {
+			target.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
+			assert.ok(active.size > idle);
+			target.dispatchEvent(new environment.window.MouseEvent('pointerleave'));
+			assert.equal(active.size, idle);
+			assert.equal(hover.visible, false);
+		}
+		const previous = requiredElement<HTMLButtonElement>('#target');
+		target.dispatchEvent(new environment.window.FocusEvent('focusin', { relatedTarget: previous }));
+		target.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
+		target.dispatchEvent(new environment.window.MouseEvent('pointerleave'));
+		assert.ok(active.size > idle, 'Keyboard focus still owns exit tracking');
+		target.dispatchEvent(new environment.window.FocusEvent('focusout', { relatedTarget: previous }));
+		assert.equal(active.size, idle);
+		hover.show();
+		assert.equal(hover.visible, true);
+		target.dispatchEvent(new environment.window.MouseEvent('pointerleave'));
+		await new Promise<void>(resolve => environment.window.setTimeout(resolve, 100));
+		assert.equal(hover.visible, false, 'Programmatic show must still dismiss when leaving the target');
+		assert.equal(active.size, idle);
+		hover.show();
+		hover.hide();
+		assert.equal(active.size, idle, 'Explicit dismissal must release programmatic exit tracking');
+		hover.dispose();
+		assert.equal(active.size, 0);
+	} finally {
+		hover.dispose();
+		target.remove();
+	}
+});

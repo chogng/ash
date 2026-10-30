@@ -1,4 +1,5 @@
 use ash_async_utils::CancellationToken;
+use ash_protocol::SessionId;
 use std::fmt;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -7,6 +8,31 @@ pub struct BrowserTargetId(pub String);
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CreateBrowserTargetRequest {
     pub url: String,
+    pub canvas: Option<BrowserCanvasPresentation>,
+}
+
+/// Presentation supplied by a task opening an interactive page beside its conversation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BrowserCanvasPresentation {
+    pub session_id: SessionId,
+    pub instance_id: String,
+    pub title: String,
+    pub definition: Option<BrowserCanvasDefinitionId>,
+}
+
+/// An admitted extension's stable Canvas type; it never contains a page URL or task identity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BrowserCanvasDefinitionId {
+    pub extension_id: String,
+    pub canvas_id: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BrowserCanvasDefinition {
+    pub id: BrowserCanvasDefinitionId,
+    pub display_name: String,
+    pub description: String,
+    pub requires_input: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -154,6 +180,14 @@ impl std::error::Error for BrowserError {}
 /// enforcing target ownership, origin policy, deadlines, and cancellation. Protocol access requires
 /// a separate explicit host grant; a closed target must never silently resolve to a different tab.
 pub trait BrowserCapability: Send + Sync {
+    /// Returns `None` while the originating host's extension registry is unsettled.
+    fn list_canvases(
+        &self,
+        _session: &SessionId,
+        _cancellation: &CancellationToken,
+    ) -> Result<Option<Vec<BrowserCanvasDefinition>>, BrowserError> {
+        Err(BrowserError::CapabilityUnavailable)
+    }
     fn create_target(
         &self,
         request: CreateBrowserTargetRequest,

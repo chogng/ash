@@ -1,6 +1,6 @@
-import type { CodebaseStatusResult, ConfigCommandResult, CodebaseModelsDto } from "../../../../../../.build/protocol/typescript/index.js";
-import type { ICodebaseApi } from "../../../../platform/codebase/common/codebaseApi.js";
-import type { CodebaseConfigurationCommandResult, CodebaseConfigurationSnapshot, CodebaseStatus, ICodebaseService, CodebaseAutomaticContext, CodebaseModels } from "../../../../platform/codebase/common/codebaseService.js";
+import type { CodebaseStatusResult, ConfigCommandResult, CodebaseModelsDto } from '../../../../../../.build/protocol/typescript/index.js';
+import type { ICodebaseApi } from '../../../../platform/codebase/common/codebaseApi.js';
+import type { CodebaseConfigurationCommandResult, CodebaseConfigurationSnapshot, CodebaseStatus, ICodebaseService, CodebaseAutomaticContext, CodebaseModels } from '../../../../platform/codebase/common/codebaseService.js';
 
 export class AppServerCodebaseService implements ICodebaseService {
 	constructor(private readonly api: ICodebaseApi) { }
@@ -19,7 +19,7 @@ export class AppServerCodebaseService implements ICodebaseService {
 
 	async configure(models: CodebaseModels | undefined, automaticContext: CodebaseAutomaticContext, expectedRevision: number): Promise<CodebaseConfigurationCommandResult> {
 		return projectCommandResult(await this.api.configure({
-			commandId: commandId("configure"),
+			commandId: commandId('configure'),
 			expectedRevision,
 			models: models ? modelsDto(models) : null,
 			automaticContext,

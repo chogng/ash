@@ -15,6 +15,8 @@ rand.workspace = true
 globset.workspace = true
 ash-sandboxing.workspace = true
 tokio-tungstenite.workspace = true
+tokio.workspace = true
+ash-debug-adapter.workspace = true
 
 [lints]
 workspace = true

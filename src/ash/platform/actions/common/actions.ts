@@ -1,48 +1,48 @@
 import {
 	SubmenuAction,
 	type IAction,
-} from "../../../base/common/actions.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import type { Icon } from "../../../base/common/icon.js";
-import type { Keybinding } from "../../../base/common/keybindings.js";
+} from '../../../base/common/actions.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import type { Icon } from '../../../base/common/icon.js';
+import type { Keybinding } from '../../../base/common/keybindings.js';
 import {
 	DisposableStore,
 	type IDisposable,
 	toDisposable,
-} from "../../../base/common/lifecycle.js";
-import { getOrSet } from "../../../base/common/map.js";
-import { operatingSystem, OperatingSystem } from "../../../base/common/platform.js";
+} from '../../../base/common/lifecycle.js';
+import { getOrSet } from '../../../base/common/map.js';
+import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import {
 	commandActionLabel,
 	type CommandActionTitle,
 	type ICommandAction,
 	isCommandActionToggleInfo,
-} from "../../action/common/action.js";
+} from '../../action/common/action.js';
 import {
 	CommandsRegistry,
 	type ICommandService,
-} from "../../commands/common/commands.js";
+} from '../../commands/common/commands.js';
 import type {
 	ContextKeyExpression,
 	IContextKeyService,
-} from "../../contextkey/common/contextkey.js";
+} from '../../contextkey/common/contextkey.js';
 import {
 	ContextKeyExpr,
-} from "../../contextkey/common/contextkey.js";
+} from '../../contextkey/common/contextkey.js';
 import {
 	createServiceIdentifier,
 	type ServicesAccessor,
-} from "../../instantiation/common/instantiation.js";
+} from '../../instantiation/common/instantiation.js';
 import {
 	KeybindingsRegistry,
 	type KeybindingSource,
-} from "../../keybinding/common/keybindingsRegistry.js";
+} from '../../keybinding/common/keybindingsRegistry.js';
 
 export interface IMenuItem {
 	readonly command: ICommandAction;
 	readonly alt?: ICommandAction;
 	readonly when?: ContextKeyExpression;
-	readonly group?: "navigation" | string;
+	readonly group?: 'navigation' | string;
 	readonly order?: number;
 }
 
@@ -52,83 +52,85 @@ export interface ISubmenuItem {
 	readonly title: CommandActionTitle;
 	readonly submenu: MenuId;
 	readonly when?: ContextKeyExpression;
-	readonly group?: "navigation" | string;
+	readonly group?: 'navigation' | string;
 	readonly order?: number;
 }
 
 export type MenuRegistryItem = IMenuItem | ISubmenuItem;
 
 export function isMenuItem(item: MenuRegistryItem): item is IMenuItem {
-	return "command" in item;
+	return 'command' in item;
 }
 
 /** Identifies an action contribution location, regardless of its final UI. */
 export class MenuId {
 	private static readonly instances = new Map<string, MenuId>();
 
-	static readonly CommandPalette = new MenuId("CommandPalette");
-	static readonly CommandCenter = new MenuId("CommandCenter");
-	static readonly GlobalActivity = new MenuId("GlobalActivity");
+	static readonly CommandPalette = new MenuId('CommandPalette');
+	static readonly BrowserActionsToolbar = new MenuId('BrowserActionsToolbar');
+	static readonly CommandCenter = new MenuId('CommandCenter');
+	static readonly GlobalActivity = new MenuId('GlobalActivity');
 	static readonly SidebarTitle = new MenuId('SidebarTitle');
 	static readonly ViewContainerTitle = new MenuId('ViewContainerTitle');
 	static readonly ViewContainerTitleContext = new MenuId('ViewContainerTitleContext');
 	static readonly ActivityBarPositionMenu = new MenuId('ActivityBarPositionMenu');
-	static readonly TitleBar = new MenuId("TitleBar");
+	static readonly TitleBar = new MenuId('TitleBar');
 	static readonly NotificationsCenterPositionMenu = new MenuId('NotificationsCenterPositionMenu');
-	static readonly LayoutControlMenu = new MenuId("LayoutControlMenu");
-	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
-	static readonly TitleBarAdjacentCenter = new MenuId("TitleBarAdjacentCenter");
-	static readonly EditorTitle = new MenuId("EditorTitle");
+	static readonly LayoutControlMenu = new MenuId('LayoutControlMenu');
+	static readonly TitleBarLeft = new MenuId('TitleBarLeft');
+	static readonly TitleBarAdjacentCenter = new MenuId('TitleBarAdjacentCenter');
+	static readonly EditorTitle = new MenuId('EditorTitle');
 	static readonly ModalEditorTitle = new MenuId('ModalEditorTitle');
-	static readonly CompactWindowEditorTitle = new MenuId("CompactWindowEditorTitle");
+	static readonly CompactWindowEditorTitle = new MenuId('CompactWindowEditorTitle');
 	static readonly DiffEditorViewSubmenu = new MenuId('DiffEditorViewSubmenu');
-	static readonly EditorTitleContext = new MenuId("EditorTitleContext");
+	static readonly EditorTitleContext = new MenuId('EditorTitleContext');
 	static readonly EditorSplitMoveSubmenu = new MenuId('EditorSplitMoveSubmenu');
-	static readonly TouchBarContext = new MenuId("TouchBarContext");
-	static readonly EditorContext = new MenuId("EditorContext");
+	static readonly TouchBarContext = new MenuId('TouchBarContext');
+	static readonly EditorContext = new MenuId('EditorContext');
 	static readonly EditorContextPeek = new MenuId('EditorContextPeek');
-	static readonly StickyScrollContext = new MenuId("StickyScrollContext");
-	static readonly SimpleEditorContext = new MenuId("SimpleEditorContext");
-	static readonly EditorContextCopy = new MenuId("EditorContextCopy");
-	static readonly EditorContextShare = new MenuId("EditorContextShare");
-	static readonly ExplorerContext = new MenuId("ExplorerContext");
-	static readonly ExplorerContextShare = new MenuId("ExplorerContextShare");
-	static readonly MenubarCopy = new MenuId("MenubarCopy");
-	static readonly MultiDiffEditorFileToolbar = new MenuId("MultiDiffEditorFileToolbar");
+	static readonly StickyScrollContext = new MenuId('StickyScrollContext');
+	static readonly SimpleEditorContext = new MenuId('SimpleEditorContext');
+	static readonly EditorContextCopy = new MenuId('EditorContextCopy');
+	static readonly EditorContextShare = new MenuId('EditorContextShare');
+	static readonly ExplorerContext = new MenuId('ExplorerContext');
+	static readonly ExplorerContextShare = new MenuId('ExplorerContextShare');
+	static readonly MenubarCopy = new MenuId('MenubarCopy');
+	static readonly MultiDiffEditorFileToolbar = new MenuId('MultiDiffEditorFileToolbar');
 	static readonly DiffEditorHunkToolbar = new MenuId('DiffEditorHunkToolbar');
 	static readonly DiffEditorSelectionToolbar = new MenuId('DiffEditorSelectionToolbar');
-	static readonly ChatTitle = new MenuId("ChatTitle");
-	static readonly ChatTitleLayout = new MenuId("ChatTitleLayout");
+	static readonly ChatTitle = new MenuId('ChatTitle');
+	static readonly ChatNewMenu = new MenuId('ChatNewMenu');
+	static readonly ChatTitleLayout = new MenuId('ChatTitleLayout');
 	static readonly ChatInputSecondary = new MenuId('ChatInputSecondary');
 	static readonly ChatInputStatus = new MenuId('ChatInputStatus');
 	static readonly ChatInputResourceAttachmentContext = new MenuId('ChatInputResourceAttachmentContext');
 	static readonly ChatInputSymbolAttachmentContext = new MenuId('ChatInputSymbolAttachmentContext');
-	static readonly AgentSidebarTitle = new MenuId("AgentSidebarTitle");
+	static readonly AgentSidebarTitle = new MenuId('AgentSidebarTitle');
 	static readonly SCMTitle = new MenuId('SCMTitle');
 	static readonly SCMInputBox = new MenuId('SCMInputBox');
 	static readonly SCMResourceGroupContext = new MenuId('SCMResourceGroupContext');
 	static readonly SCMHistoryTitle = new MenuId('SCMHistoryTitle');
-	static readonly SCMHistoryItemContext = new MenuId("SCMHistoryItemContext");
-	static readonly SCMHistoryItemRefContext = new MenuId("SCMHistoryItemRefContext");
-	static readonly SCMHistoryItemChangeContext = new MenuId("SCMHistoryItemChangeContext");
-	static readonly PanelTitle = new MenuId("PanelTitle");
+	static readonly SCMHistoryItemContext = new MenuId('SCMHistoryItemContext');
+	static readonly SCMHistoryItemRefContext = new MenuId('SCMHistoryItemRefContext');
+	static readonly SCMHistoryItemChangeContext = new MenuId('SCMHistoryItemChangeContext');
+	static readonly PanelTitle = new MenuId('PanelTitle');
 	static readonly AuxiliaryBarTitle = new MenuId('AuxiliaryBarTitle');
-	static readonly TerminalTitle = new MenuId("TerminalTitle");
-	static readonly TerminalNewDropdownContext = new MenuId("TerminalNewDropdownContext");
+	static readonly TerminalTitle = new MenuId('TerminalTitle');
+	static readonly TerminalNewDropdownContext = new MenuId('TerminalNewDropdownContext');
 	static readonly TerminalInstanceContext = new MenuId('TerminalInstanceContext');
-	static readonly MenubarMainMenu = new MenuId("MenubarMainMenu");
-	static readonly MenubarFileMenu = new MenuId("MenubarFileMenu");
-	static readonly MenubarEditMenu = new MenuId("MenubarEditMenu");
+	static readonly MenubarMainMenu = new MenuId('MenubarMainMenu');
+	static readonly MenubarFileMenu = new MenuId('MenubarFileMenu');
+	static readonly MenubarEditMenu = new MenuId('MenubarEditMenu');
 	static readonly MenubarSelectionMenu = new MenuId(
-		"MenubarSelectionMenu",
+		'MenubarSelectionMenu',
 	);
-	static readonly MenubarViewMenu = new MenuId("MenubarViewMenu");
-	static readonly MenubarGoMenu = new MenuId("MenubarGoMenu");
-	static readonly MenubarRunMenu = new MenuId("MenubarRunMenu");
+	static readonly MenubarViewMenu = new MenuId('MenubarViewMenu');
+	static readonly MenubarGoMenu = new MenuId('MenubarGoMenu');
+	static readonly MenubarRunMenu = new MenuId('MenubarRunMenu');
 	static readonly MenubarTerminalMenu = new MenuId(
-		"MenubarTerminalMenu",
+		'MenubarTerminalMenu',
 	);
-	static readonly MenubarHelpMenu = new MenuId("MenubarHelpMenu");
+	static readonly MenubarHelpMenu = new MenuId('MenubarHelpMenu');
 
 	static for(identifier: string): MenuId {
 		return this.instances.get(identifier) ?? new MenuId(identifier);
@@ -242,7 +244,7 @@ export interface IMenuService {
 }
 
 export const IMenuService =
-	createServiceIdentifier<IMenuService>("menuService");
+	createServiceIdentifier<IMenuService>('menuService');
 
 /** A command contribution resolved into a runnable UI action. */
 export class MenuItemAction implements IAction {
@@ -293,7 +295,7 @@ export class MenuItemAction implements IAction {
 		const commandArgs: unknown[] = [];
 		if (this.options?.args) {
 			commandArgs.push(...this.options.args);
-		} else if (this.options && "arg" in this.options) {
+		} else if (this.options && 'arg' in this.options) {
 			commandArgs.push(this.options.arg);
 		}
 		if (this.options?.shouldForwardArgs) commandArgs.push(...args);
@@ -335,7 +337,7 @@ export interface IAction2Options extends ICommandAction {
 	readonly menu?: OneOrMany<{
 		readonly id: MenuId;
 		readonly when?: ContextKeyExpression;
-		readonly group?: "navigation" | string;
+		readonly group?: 'navigation' | string;
 		readonly order?: number;
 	}>;
 	readonly keybinding?: OneOrMany<IAction2KeybindingOptions>;

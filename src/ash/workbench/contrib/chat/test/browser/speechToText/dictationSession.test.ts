@@ -226,8 +226,10 @@ function commandFixture() {
 	const changed = resources.add(new Emitter<void>());
 	const released = new DeferredPromise<void>();
 	const widget: IChatWidget & { visible: boolean; isTranscriptProgressActive: boolean; } = {
+		sessionId: undefined, threadId: undefined, onDidChangeVisibility: Event.None,
 		domNode: f.editor.getContainerDomNode(), inputEditor: f.editor, visible: true,
 		isTranscriptProgressActive: false, onDidHide: hidden.event, onDidChangeViewModel: changed.event,
+		acquireContext: async () => { throw new Error('Unexpected context preparation'); },
 		startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); },
 	};
 	const registration = resources.add(widgets.register(widget));

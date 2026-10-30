@@ -1,11 +1,11 @@
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import "./unicodeHighlighter.css";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
+import './unicodeHighlighter.css';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { type TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 
-import { type TextModel } from "../../../common/model/textModel.js";
-import { type IVersionedEditorWorkerClient } from "../../../browser/services/editorWorkerService.js";
-import { type UnicodeHighlight } from "../common/unicodeHighlights.js";
+import { type TextModel } from '../../../common/model/textModel.js';
+import { type IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
+import { type UnicodeHighlight } from '../common/unicodeHighlights.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
 /** Maintains Unicode warning ranges as a feature-owned decoration collection. */
@@ -17,7 +17,7 @@ export class UnicodeHighlighterController extends Disposable {
 
 	constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<UnicodeHighlight>, private readonly editorWorker: IVersionedEditorWorkerClient, private readonly onError: (error: unknown) => void) {
 		super();
-		if (decorations.textModel !== model) throw new TypeError("Stanza Unicode highlighter dependencies must share a text model");
+		if (decorations.textModel !== model) throw new TypeError('Stanza Unicode highlighter dependencies must share a text model');
 		this._register(model.onDidChangeContent(() => this.updateScheduler.schedule()));
 		this.updateScheduler.schedule();
 	}

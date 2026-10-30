@@ -58,6 +58,10 @@
 	border-color: var(--ash-focusBorder);
 }
 
+.ash-input-box-field.has-validation {
+	border-color: var(--ash-error-foreground);
+}
+
 .ash-input-box.is-disabled {
 	opacity: 0.6;
 }

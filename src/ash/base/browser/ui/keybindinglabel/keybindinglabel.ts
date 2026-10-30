@@ -1,9 +1,9 @@
-import "./keybindinglabel.css";
-import { getKeybindingLabel, getKeybindingLabelParts, KeybindingLabelStyle } from "../../../common/keybindingLabels.js";
-import type { ResolvedKeybinding } from "../../../common/keybindings.js";
-import { Disposable, toDisposable } from "../../../common/lifecycle.js";
-import { setAriaAttribute } from "../aria/aria.js";
-import { h } from "../../dom.js";
+import './keybindinglabel.css';
+import { getKeybindingLabel, getKeybindingLabelParts, KeybindingLabelStyle } from '../../../common/keybindingLabels.js';
+import type { ResolvedKeybinding } from '../../../common/keybindings.js';
+import { Disposable, toDisposable } from '../../../common/lifecycle.js';
+import { setAriaAttribute } from '../aria/aria.js';
+import { h } from '../../dom.js';
 
 /** Host-provided CSS colors, resolved through the containing theme root. */
 export interface IKeybindingLabelStyles {
@@ -20,7 +20,7 @@ export interface KeybindingLabelOptions extends Partial<IKeybindingLabelStyles> 
 }
 
 /** Component-owned visual treatment for a rendered keybinding. */
-export type KeybindingLabelPresentation = "plain" | "keycap";
+export type KeybindingLabelPresentation = 'plain' | 'keycap';
 
 /** Presents a resolved keybinding without owning matching or dispatch policy. */
 export class KeybindingLabel extends Disposable {
@@ -31,9 +31,9 @@ export class KeybindingLabel extends Disposable {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this._keybinding = options.keybinding;
-		this.element = h(ownerDocument, "span");
+		this.element = h(ownerDocument, 'span');
 		this._register(toDisposable(() => this.element.remove()));
-		this.element.className = `ash-keybinding-label ash-keybinding-label-${options.presentation ?? "plain"}`;
+		this.element.className = `ash-keybinding-label ash-keybinding-label-${options.presentation ?? 'plain'}`;
 		{
 			const colors = {
 				'--ash-keybinding-style-keybinding-label-background': options.keybindingLabelBackground,
@@ -61,13 +61,13 @@ export class KeybindingLabel extends Disposable {
 		const ownerDocument = this.element.ownerDocument;
 		const parts = getKeybindingLabelParts(this._keybinding);
 		this.element.replaceChildren(...parts.map((part) => {
-			if (this.options.presentation === "keycap") {
-				const chord = h(ownerDocument, "span");
-				chord.className = "ash-keybinding-label-chord";
+			if (this.options.presentation === 'keycap') {
+				const chord = h(ownerDocument, 'span');
+				chord.className = 'ash-keybinding-label-chord';
 				// The complete shortcut is announced by the containing label.
-				chord.setAttribute("aria-hidden", "true");
+				chord.setAttribute('aria-hidden', 'true');
 				chord.append(...part.keys.map(key => {
-					const token = h(ownerDocument, "kbd");
+					const token = h(ownerDocument, 'kbd');
 					token.textContent = key;
 					if (this.options.keybindingLabelBottomBorder) {
 						token.style.borderBottomColor = this.options.keybindingLabelBottomBorder;
@@ -79,14 +79,14 @@ export class KeybindingLabel extends Disposable {
 				}));
 				return chord;
 			}
-			const token = h(ownerDocument, "kbd");
+			const token = h(ownerDocument, 'kbd');
 			token.textContent = part.label;
-			setAriaAttribute(token, "label", part.ariaLabel);
+			setAriaAttribute(token, 'label', part.ariaLabel);
 			return token;
 		}));
 		setAriaAttribute(
 			this.element,
-			"label",
+			'label',
 			getKeybindingLabel(
 				this._keybinding,
 				KeybindingLabelStyle.Aria,

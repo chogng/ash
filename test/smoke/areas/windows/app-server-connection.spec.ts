@@ -3,7 +3,7 @@ import { Dialogs } from '../../../automation/dialogs.js';
 import { _electron, type ElectronApplication, type Page } from '@playwright/test';
 import { expect, test as baseTest } from '../../../automation/test.js';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -87,7 +87,7 @@ const scenario = globalThis.connectionScenario = {
 	waitingWorkspaceRead: false,
 	workspaceReadFailures: 0,
 };
-// Fault injection stays at Main's workspace IPC boundary; the renderer and Banner are real.
+// Fault injection stays at Main's workspace IPC boundary; the renderer and window chrome are real.
 const { TrustedIpcRouter } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/ipc/electron-main/trustedIpcRouter.js')).href)});
 let holdWorkspaceRead = false;
 let workspaceReadBarrier;
@@ -198,7 +198,7 @@ startElectronApplication();
 			page.on('pageerror', error => startupErrors.push(error.stack ?? error.message));
 			page.on('console', message => { if (message.type() === 'error') startupErrors.push(message.text()); });
 			if (workspaceFolder) {
-				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: connectionWorkspace === 'readOnly' ? 'Open Read Only' : 'Trust Folder & Enable Features', exact: true }).click();
+				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: connectionWorkspace === 'readOnly' ? 'Open Read-Only' : 'Trust Folder', exact: true }).click();
 			}
 			try {
 				await new Workbench(page).waitForReady();
@@ -217,6 +217,15 @@ startElectronApplication();
 					return JSON.parse(output.stdout) as { pid: number; instanceId: string; };
 				}
 			});
+			if (testInfo.status !== testInfo.expectedStatus) {
+				const rendererErrors = testInfo.outputPath('renderer-errors.txt');
+				await writeFile(rendererErrors, startupErrors.join('\n'));
+				await testInfo.attach('renderer-errors.txt', { path: rendererErrors, contentType: 'text/plain' });
+				const connectionState = testInfo.outputPath('connection-state.txt');
+				await writeFile(connectionState, JSON.stringify(await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario)));
+				await testInfo.attach('connection-state.txt', { path: connectionState, contentType: 'text/plain' });
+				await testInfo.attach('connection-marks.txt', { body: await page.evaluate(() => performance.getEntriesByType('mark').filter(entry => /appServer|rendererApi/.test(entry.name)).map(entry => entry.name).join('\n')), contentType: 'text/plain' });
+			}
 		} finally {
 			await application.evaluate(({ BrowserWindow }) => {
 				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
@@ -234,10 +243,17 @@ startElectronApplication();
 	}
 });
 
-test('Agents shows a persistent banner and automatically restores its connection after the carrier exits', async ({ connectionHarness: { application, page } }, testInfo) => {
-	// Main's handshake completes before the renderer finishes startup. Inject
-	// failure only after the window is usable, so this exercises recovery.
-	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeEditable();
+test('Agents shows connection status without moving content and automatically restores its connection after the carrier exits', async ({
+	connectionHarness: { application, page },
+}, testInfo) => {
+	// Use local content so this connection test does not depend on a signed-in chat provider.
+	await page.locator('[data-action-id="sessions.open.projects"] button').click();
+	const projects = page.locator('.ash-projects');
+	await expect(projects).toBeVisible();
+	const contentAction = projects.locator('[data-action-id="projects.create"] button');
+	await contentAction.focus();
+	await expect(contentAction).toBeFocused();
+	const contentBounds = await projects.boundingBox();
 	const before = await application.evaluate(() => {
 		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 		return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
@@ -247,27 +263,107 @@ test('Agents shows a persistent banner and automatically restores its connection
 		scenario.holdNextAcquisitionValidation();
 		scenario.killConnection();
 	});
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingValidation)).toBe(true);
-	const banner = page.locator('[data-part="banner"]');
-	await expect(banner).toContainText('Reconnecting to the Agent Host');
-	await banner.focus();
-	await page.keyboard.press('Alt+F1');
-	const help = page.getByRole('textbox', { name: 'Accessibility Help', exact: true });
-	await expect(help).toBeFocused();
-	await expect(help).toHaveValue(/Window Banner/);
-	await help.press('Escape');
-	await expect(banner).toBeFocused();
-	await page.screenshot({ path: testInfo.outputPath('agent-host-recovery-banner.png') });
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation());
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.acquisitions)).toBeGreaterThan(before.acquisitions);
-	await expect.poll(() => application.evaluate(() => {
-		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
-		return { state: scenario.state, readyCount: scenario.readyCount };
-	})).toEqual({ state: 'ready', readyCount: before.readyCount + 1 });
-	await expect(banner).toBeHidden();
-	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
+	await expect
+		.poll(() =>
+			application.evaluate(
+				() =>
+					(globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario
+						.waitingValidation,
+			),
+		)
+		.toBe(true);
+	const connection = page
+		.locator('[data-part="titlebar"]')
+		.getByRole('button', { name: 'Reconnecting to the Agent Host…', exact: true });
+	await expect(connection).toBeVisible();
+	await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
+	await expect(contentAction).toBeFocused();
+	expect(await projects.boundingBox()).toEqual(contentBounds);
+	await page.screenshot({ path: testInfo.outputPath('agent-host-recovery-status.png') });
+	await application.evaluate(() =>
+		(globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation(),
+	);
+	await expect
+		.poll(() =>
+			application.evaluate(
+				() =>
+					(globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario
+						.acquisitions,
+			),
+		)
+		.toBeGreaterThan(before.acquisitions);
+	await expect
+		.poll(() =>
+			application.evaluate(() => {
+				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; })
+					.connectionScenario;
+				return { state: scenario.state, readyCount: scenario.readyCount };
+			}),
+		)
+		.toEqual({ state: 'ready', readyCount: before.readyCount + 1 });
+	await expect(connection).toHaveCount(0);
+	await expect(contentAction).toBeFocused();
+	expect(await projects.boundingBox()).toEqual(contentBounds);
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
+});
+
+test.describe('Agents recovery actions', () => {
+	test.use({ connectionWorkspace: 'readOnly' });
+	test('Agents retries a failed workspace restore from the keyboard without a banner or layout shift', async ({
+		connectionHarness: { application, page },
+	}, testInfo) => {
+		const titlebar = page.locator('[data-part="titlebar"]');
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const before = { titlebar: await titlebar.boundingBox(), sidebar: await sidebar.boundingBox() };
+		await application.evaluate(() => {
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+			scenario.holdNextWorkspaceRead();
+			scenario.killConnection();
+		});
+		await expect
+			.poll(() =>
+				application.evaluate(
+					() =>
+						(globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario
+							.waitingWorkspaceRead,
+				),
+			)
+			.toBe(true);
+		await expect(
+			titlebar.getByRole('button', { name: 'Reconnecting to the Agent Host…', exact: true }),
+		).toBeVisible();
+		const connection = await application.evaluate(() => {
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+			scenario.releaseWorkspaceRead();
+			return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
+		});
+		const reconnect = titlebar.getByRole('button', { name: 'Reconnect Agent Host', exact: true });
+		await expect(reconnect).toBeVisible();
+		await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
+		expect({ titlebar: await titlebar.boundingBox(), sidebar: await sidebar.boundingBox() }).toEqual(before);
+		await reconnect.focus();
+		await reconnect.press('Alt+F1');
+		const help = page.getByRole('textbox', { name: 'Accessibility Help', exact: true });
+		await expect(help).toBeFocused();
+		await expect(help).toHaveValue(/Agent window status/);
+		await help.press('Escape');
+		await expect(reconnect).toBeFocused();
+		await page.screenshot({ path: testInfo.outputPath('agents-connection-retry.png') });
+		await reconnect.press('Enter');
+		await expect(reconnect).toHaveCount(0);
+		await expect(
+			titlebar.getByRole('button', { name: 'Reconnecting to the Agent Host…', exact: true }),
+		).toHaveCount(0);
+		expect(
+			await application.evaluate(() => {
+				const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; })
+					.connectionScenario;
+				return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
+			}),
+		).toEqual(connection);
+		expect({ titlebar: await titlebar.boundingBox(), sidebar: await sidebar.boundingBox() }).toEqual(before);
+	});
 });
 
 test.describe('main Workbench recovery', () => {
@@ -419,11 +515,77 @@ test('initialization of an exited carrier cannot report a ready Agents connectio
 for (const surface of ['workbench', 'agents'] as const) {
 	test.describe(`${surface} Workspace Trust`, () => {
 		test.use({ connectionSurface: surface, connectionWorkspace: 'readOnly' });
-		test('Banner manages the current workspace permissions and refreshes effective trust', async ({ connectionHarness: { application, page, workspaceFolder } }, testInfo) => {
+		if (surface === 'agents') {
+			test('Agents scopes permission status to Code without a banner or content offset', async ({
+				connectionHarness: { page },
+			}, testInfo) => {
+				await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
+				const permissions = page.locator(
+					'[data-part="titlebar"] [data-action-id="workbench.trust.manage"] button',
+				);
+				await expect(permissions).toHaveCount(0);
+				await page.locator('[data-action-id="sessions.open.projects"] button').click();
+				await expect(page.locator('.ash-projects')).toBeVisible();
+				const partStyles = await readFile(join(desktop, 'src/ash/workbench/browser/media/part.css'), 'utf8');
+				await page.addStyleTag({ content: partStyles });
+				const titlebar = page.locator('[data-part="titlebar"]');
+				const titlebarBounds = (await titlebar.boundingBox())!;
+				expect(titlebarBounds.y).toBe(0);
+				expect(titlebarBounds.height).toBe(process.platform === 'darwin' ? 36 : 35);
+				for (const id of ['sidebar', 'editor']) {
+					const bounds = (await page.locator(`[data-part="${id}"]`).boundingBox())!;
+					expect(bounds.y).toBe(titlebarBounds.height);
+					expect(bounds.y + bounds.height).toBeLessThanOrEqual(await page.evaluate(() => innerHeight));
+				}
+				await expect(permissions).toHaveCount(0);
+				await page
+					.locator('.ash-window-mode-control')
+					.getByRole('button', { name: 'Code', exact: true })
+					.click();
+				await expect(permissions).toHaveAttribute('aria-label', 'Read-only workspace: workspace');
+				await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
+				expect(await titlebar.boundingBox()).toEqual(titlebarBounds);
+				for (const button of await titlebar.getByRole('button').all()) {
+					const bounds = (await button.boundingBox())!;
+					expect(Math.abs(bounds.y + bounds.height / 2 - titlebarBounds.height / 2)).toBeLessThanOrEqual(1);
+				}
+				await page.screenshot({ path: testInfo.outputPath('agents-scoped-workspace-permissions.png') });
+			});
+		}
+		if (surface === 'workbench') {
+			test('New Terminal awaits Workspace Trust before creating a process in a read-only workspace', async ({ connectionHarness: { application, page } }) => {
+				const workbench = new Workbench(page);
+				const banner = page.locator('[data-part="banner"]');
+				await expect(banner).toContainText('This workspace is read-only');
+				const dialogs = new Dialogs(page);
+				const canceled = await dialogs.confirm(application, 'Workspace Trust', 'Cancel', () => workbench.quickaccess.runCommand('workbench.action.terminal.new'));
+				expect(canceled.message).toContain('Creating a terminal can run code from this workspace');
+				await expect(page.locator('.xterm-screen')).toHaveCount(0);
+				await expect(banner).toContainText('This workspace is read-only');
+				await dialogs.confirm(application, 'Workspace Trust', 'Trust workspace', () => workbench.quickaccess.runCommand('workbench.action.terminal.new'));
+				await expect(banner).toBeHidden();
+				await expect(page.locator('[data-part="panel"] .xterm-screen')).toBeVisible();
+			});
+		}
+		test('Workspace status manages the current permissions and refreshes effective trust', async ({
+			connectionHarness: { application, page, workspaceFolder },
+		}, testInfo) => {
 			const folder = await realpath(workspaceFolder!);
-			const banner = page.locator('[data-part="banner"]');
-			await expect(banner).toContainText('This workspace is read-only');
-			await banner.getByRole('button', { name: 'Manage permissions', exact: true }).click();
+			const permissionStatus =
+				surface === 'agents'
+					? page.locator('[data-part="titlebar"]').getByRole('button', { name: /^Read-only workspace:/u })
+					: page.locator('[data-part="banner"]');
+			if (surface === 'agents') {
+				await page
+					.locator('.ash-window-mode-control')
+					.getByRole('button', { name: 'Code', exact: true })
+					.click();
+				await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
+				await permissionStatus.click();
+			} else {
+				await expect(permissionStatus).toContainText('This workspace is read-only');
+				await permissionStatus.getByRole('button', { name: 'Manage', exact: true }).click();
+			}
 			const editor = page.locator('.ash-workspace-trust-editor');
 			await expect(editor).toBeVisible();
 			const modal = page.getByRole('dialog', { name: 'Workspace Trust', exact: true });
@@ -446,19 +608,19 @@ for (const surface of ['workbench', 'agents'] as const) {
 				}
 			};
 			await page.screenshot({ path: testInfo.outputPath(`${surface}-workspace-trust-read-only.png`) });
-			await expect(banner).toBeVisible();
+			await expect(permissionStatus).toBeVisible();
 			await confirm('Cancel', true);
 			await expect(trust).toBeEnabled();
-			await expect(banner).toBeVisible();
+			await expect(permissionStatus).toBeVisible();
 			await confirm('Trust workspace', true);
-			await expect(banner).toBeHidden();
+			await expect(permissionStatus).toBeHidden();
 			await expect(editor.getByRole('heading', { level: 2 })).toHaveText('Trusted workspace');
 			await expect(trust).toBeHidden();
 			await expect(editor.getByRole('switch')).toHaveCount(0);
 			await page.screenshot({ path: testInfo.outputPath(`${surface}-workspace-trust-management.png`) });
 			await confirm('Open read-only', false);
 			await expect(editor.getByRole('heading', { level: 2 })).toHaveText('Read-only workspace');
-			await expect(banner).toContainText('This workspace is read-only');
+			await expect(permissionStatus).toBeVisible();
 			await editor.locator('summary').focus();
 			await page.keyboard.press('Enter');
 			const write = editor.getByRole('switch', { name: 'Write files', exact: true });
@@ -469,7 +631,7 @@ for (const surface of ['workbench', 'agents'] as const) {
 			await save.focus();
 			await expect(save).toBeInViewport({ ratio: 1 });
 			await expect(modal).toHaveCSS('height', '360px');
-			await expect(banner).toContainText('This workspace is read-only');
+			await expect(permissionStatus).toBeVisible();
 			await page.keyboard.press('Escape');
 			await expect(modal).toBeHidden();
 		});

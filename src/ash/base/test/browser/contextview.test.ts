@@ -1,13 +1,13 @@
-import assert from "node:assert/strict";
-import { suiteTeardown, test } from "mocha";
-import { JSDOM } from "jsdom";
-import type { ContextViewHideReason as ContextViewHideReasonValue } from "../../browser/ui/contextview/contextview.js";
-import { h } from "../../browser/dom.js";
-import { ActionRunner, SubmenuAction } from "../../common/actions.js";
-import { DisposableStore, toDisposable } from "../../common/lifecycle.js";
+import assert from 'node:assert/strict';
+import { suiteTeardown, test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import type { ContextViewHideReason as ContextViewHideReasonValue } from '../../browser/ui/contextview/contextview.js';
+import { h } from '../../browser/dom.js';
+import { ActionRunner, SubmenuAction } from '../../common/actions.js';
+import { DisposableStore, toDisposable } from '../../common/lifecycle.js';
 
 const environment = new JSDOM("<!doctype html><html><body><main></main><button id='anchor'>Anchor</button><button id='outside'>Outside</button></body></html>");
-const previousGlobals = new Map(["window", "document", "Node"].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+const previousGlobals = new Map(['window', 'document', 'Node'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
 Object.defineProperties(globalThis, {
 	window: { configurable: true, value: environment.window },
 	document: { configurable: true, value: environment.window.document },
@@ -17,17 +17,17 @@ Object.defineProperties(environment.window, {
 	innerWidth: { configurable: true, value: 800 },
 	innerHeight: { configurable: true, value: 600 },
 });
-Object.defineProperty(environment.window.Element.prototype, "scrollTo", {
+Object.defineProperty(environment.window.Element.prototype, 'scrollTo', {
 	configurable: true,
 	value: () => { },
 });
 // jsdom has no layout. Model painted boxes, including targets hidden by ancestors.
-Object.defineProperty(environment.window.Element.prototype, "getClientRects", {
+Object.defineProperty(environment.window.Element.prototype, 'getClientRects', {
 	configurable: true,
 	value(this: Element): readonly DOMRect[] {
-		if (!this.isConnected || this.closest("[hidden]")) return [];
+		if (!this.isConnected || this.closest('[hidden]')) return [];
 		for (let element: Element | null = this; element; element = element.parentElement) {
-			if (environment.window.getComputedStyle(element).display === "none") return [];
+			if (environment.window.getComputedStyle(element).display === 'none') return [];
 		}
 		return [rectangle(0, 0, 100, 20)];
 	},
@@ -41,32 +41,32 @@ suiteTeardown(() => {
 	}
 });
 
-const { ContextView, ContextViewFocusRestore, ContextViewHideReason } = await import("../../browser/ui/contextview/contextview.js");
+const { ContextView, ContextViewFocusRestore, ContextViewHideReason } = await import('../../browser/ui/contextview/contextview.js');
 
-test("ContextView positions next to its anchor and flips within the viewport", () => {
-	const container = requiredElement<HTMLElement>("main");
-	const anchor = requiredElement<HTMLElement>("#anchor");
+test('ContextView positions next to its anchor and flips within the viewport', () => {
+	const container = requiredElement<HTMLElement>('main');
+	const anchor = requiredElement<HTMLElement>('#anchor');
 	anchor.getBoundingClientRect = () => rectangle(750, 550, 40, 30);
 	const contextView = new ContextView(container);
 	contextView.element.getBoundingClientRect = () => rectangle(0, 0, 200, 120);
 
 	assert.equal(contextView.show({
 		anchor,
-		content: h(environment.window.document, "div"),
+		content: h(environment.window.document, 'div'),
 		gap: 4,
 	}), true);
 
-	assert.equal(contextView.element.style.left, "590px");
-	assert.equal(contextView.element.style.top, "426px");
-	assert.equal(contextView.element.classList.contains("ash-context-view-above"), true);
-	assert.equal(contextView.element.classList.contains("ash-context-view-align-right"), true);
+	assert.equal(contextView.element.style.left, '590px');
+	assert.equal(contextView.element.style.top, '426px');
+	assert.equal(contextView.element.classList.contains('ash-context-view-above'), true);
+	assert.equal(contextView.element.classList.contains('ash-context-view-align-right'), true);
 	contextView.dispose();
 });
 
-test("ContextView reports replacement and outside-pointer hide reasons exactly once", () => {
-	const container = requiredElement<HTMLElement>("main");
-	const anchor = requiredElement<HTMLElement>("#anchor");
-	const outside = requiredElement<HTMLElement>("#outside");
+test('ContextView reports replacement and outside-pointer hide reasons exactly once', () => {
+	const container = requiredElement<HTMLElement>('main');
+	const anchor = requiredElement<HTMLElement>('#anchor');
+	const outside = requiredElement<HTMLElement>('#outside');
 	anchor.getBoundingClientRect = () => rectangle(20, 20, 30, 20);
 	const contextView = new ContextView(container);
 	contextView.element.getBoundingClientRect = () => rectangle(0, 0, 100, 80);
@@ -74,16 +74,16 @@ test("ContextView reports replacement and outside-pointer hide reasons exactly o
 
 	contextView.show({
 		anchor,
-		content: h(environment.window.document, "div"),
+		content: h(environment.window.document, 'div'),
 		onHide: (reason) => reasons.push(reason),
 	});
 	contextView.show({
 		anchor,
-		content: h(environment.window.document, "div"),
+		content: h(environment.window.document, 'div'),
 		onHide: (reason) => reasons.push(reason),
 	});
-	outside.dispatchEvent(new environment.window.MouseEvent("pointerdown", { bubbles: true }));
-	outside.dispatchEvent(new environment.window.MouseEvent("pointerdown", { bubbles: true }));
+	outside.dispatchEvent(new environment.window.MouseEvent('pointerdown', { bubbles: true }));
+	outside.dispatchEvent(new environment.window.MouseEvent('pointerdown', { bubbles: true }));
 
 	assert.deepEqual(reasons, [
 		ContextViewHideReason.Replaced,
@@ -93,12 +93,12 @@ test("ContextView reports replacement and outside-pointer hide reasons exactly o
 	contextView.dispose();
 });
 
-test("ContextView restores focus after Escape closes the topmost view", () => {
-	const container = requiredElement<HTMLElement>("main");
-	const anchor = requiredElement<HTMLButtonElement>("#anchor");
+test('ContextView restores focus after Escape closes the topmost view', () => {
+	const container = requiredElement<HTMLElement>('main');
+	const anchor = requiredElement<HTMLButtonElement>('#anchor');
 	anchor.getBoundingClientRect = () => rectangle(20, 20, 30, 20);
 	anchor.focus();
-	const content = h(environment.window.document, "button");
+	const content = h(environment.window.document, 'button');
 	const contextView = new ContextView(container);
 	contextView.element.getBoundingClientRect = () => rectangle(0, 0, 100, 80);
 	const reasons: ContextViewHideReasonValue[] = [];
@@ -110,14 +110,14 @@ test("ContextView restores focus after Escape closes the topmost view", () => {
 	});
 	content.focus();
 
-	environment.window.document.dispatchEvent(new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Escape" }));
+	environment.window.document.dispatchEvent(new environment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
 
 	assert.deepEqual(reasons, [ContextViewHideReason.Escape]);
 	assert.equal(environment.window.document.activeElement, anchor);
 	contextView.dispose();
 });
 
-test("ContextView follows anchor and content size changes", () => {
+test('ContextView follows anchor and content size changes', () => {
 	const observers: TestResizeObserver[] = [];
 	class TestResizeObserver {
 		readonly targets = new Set<Element>();
@@ -142,12 +142,12 @@ test("ContextView follows anchor and content size changes", () => {
 			this.listener([], this as unknown as ResizeObserver);
 		}
 	}
-	Object.defineProperty(environment.window, "ResizeObserver", {
+	Object.defineProperty(environment.window, 'ResizeObserver', {
 		configurable: true,
 		value: TestResizeObserver,
 	});
-	const container = requiredElement<HTMLElement>("main");
-	const anchor = requiredElement<HTMLElement>("#anchor");
+	const container = requiredElement<HTMLElement>('main');
+	const anchor = requiredElement<HTMLElement>('#anchor');
 	let anchorTop = 40;
 	let viewWidth = 100;
 	anchor.getBoundingClientRect = () => rectangle(750, anchorTop, 30, 20);
@@ -155,25 +155,25 @@ test("ContextView follows anchor and content size changes", () => {
 	contextView.element.getBoundingClientRect = () => rectangle(0, 0, viewWidth, 80);
 	contextView.show({
 		anchor,
-		content: h(environment.window.document, "div"),
+		content: h(environment.window.document, 'div'),
 	});
 
 	assert.equal(observers.length, 1);
 	assert.deepEqual([...observers[0]!.targets], [contextView.element, anchor]);
-	assert.equal(contextView.element.style.top, "60px");
-	assert.equal(contextView.element.style.left, "680px");
+	assert.equal(contextView.element.style.top, '60px');
+	assert.equal(contextView.element.style.left, '680px');
 	anchorTop = 120;
 	viewWidth = 200;
 	observers[0]!.fire();
-	assert.equal(contextView.element.style.top, "140px");
-	assert.equal(contextView.element.style.left, "580px");
+	assert.equal(contextView.element.style.top, '140px');
+	assert.equal(contextView.element.style.left, '580px');
 
 	contextView.dispose();
 	assert.equal(observers[0]!.targets.size, 0);
-	Reflect.deleteProperty(environment.window, "ResizeObserver");
+	Reflect.deleteProperty(environment.window, 'ResizeObserver');
 });
 
-test("ContextView hides when a resized element anchor is no longer connected", () => {
+test('ContextView hides when a resized element anchor is no longer connected', () => {
 	let listener: ResizeObserverCallback | undefined;
 	class TestResizeObserver {
 		constructor(callback: ResizeObserverCallback) {
@@ -184,12 +184,12 @@ test("ContextView hides when a resized element anchor is no longer connected", (
 		unobserve(): void { }
 		disconnect(): void { }
 	}
-	Object.defineProperty(environment.window, "ResizeObserver", {
+	Object.defineProperty(environment.window, 'ResizeObserver', {
 		configurable: true,
 		value: TestResizeObserver,
 	});
-	const container = requiredElement<HTMLElement>("main");
-	const anchor = h(environment.window.document, "button");
+	const container = requiredElement<HTMLElement>('main');
+	const anchor = h(environment.window.document, 'button');
 	container.append(anchor);
 	anchor.getBoundingClientRect = () => rectangle(40, 40, 30, 20);
 	const contextView = new ContextView(container);
@@ -197,7 +197,7 @@ test("ContextView hides when a resized element anchor is no longer connected", (
 	const reasons: ContextViewHideReasonValue[] = [];
 	contextView.show({
 		anchor,
-		content: h(environment.window.document, "div"),
+		content: h(environment.window.document, 'div'),
 		onHide: (reason) => reasons.push(reason),
 	});
 
@@ -206,10 +206,10 @@ test("ContextView hides when a resized element anchor is no longer connected", (
 
 	assert.deepEqual(reasons, [ContextViewHideReason.AnchorRemoved]);
 	contextView.dispose();
-	Reflect.deleteProperty(environment.window, "ResizeObserver");
+	Reflect.deleteProperty(environment.window, 'ResizeObserver');
 });
 
-test("ContextView leaves focus transferred outside unchanged for every hide reason", () => {
+test('ContextView leaves focus transferred outside unchanged for every hide reason', () => {
 	for (const reason of [ContextViewHideReason.Programmatic, ContextViewHideReason.OutsidePointer, ContextViewHideReason.Escape, ContextViewHideReason.WindowBlur, ContextViewHideReason.AnchorRemoved]) {
 		using fixture = createFocusFixture();
 		fixture.show();
@@ -221,27 +221,27 @@ test("ContextView leaves focus transferred outside unchanged for every hide reas
 	}
 });
 
-test("ContextView outside-pointer dismissal preserves an already transferred focus", () => {
+test('ContextView outside-pointer dismissal preserves an already transferred focus', () => {
 	using fixture = createFocusFixture();
 	fixture.show();
 	fixture.outside.focus();
-	fixture.outside.dispatchEvent(new environment.window.MouseEvent("pointerdown", { bubbles: true }));
+	fixture.outside.dispatchEvent(new environment.window.MouseEvent('pointerdown', { bubbles: true }));
 	assert.deepEqual({ focused: environment.window.document.activeElement, attempts: fixture.focusAttempts(), reasons: fixture.reasons }, {
 		focused: fixture.outside, attempts: 0, reasons: [ContextViewHideReason.OutsidePointer],
 	});
 });
 
-test("ContextView does not attempt to restore unavailable focus targets", () => {
+test('ContextView does not attempt to restore unavailable focus targets', () => {
 	const unavailable = [
 		(anchor: HTMLButtonElement) => anchor.remove(),
 		(anchor: HTMLButtonElement) => { anchor.hidden = true; },
 		(anchor: HTMLButtonElement) => { anchor.parentElement!.hidden = true; },
-		(anchor: HTMLButtonElement) => { anchor.style.display = "none"; },
-		(anchor: HTMLButtonElement) => { anchor.parentElement!.style.display = "none"; },
-		(anchor: HTMLButtonElement) => { anchor.style.visibility = "hidden"; },
+		(anchor: HTMLButtonElement) => { anchor.style.display = 'none'; },
+		(anchor: HTMLButtonElement) => { anchor.parentElement!.style.display = 'none'; },
+		(anchor: HTMLButtonElement) => { anchor.style.visibility = 'hidden'; },
 		(anchor: HTMLButtonElement) => { anchor.disabled = true; },
-		(anchor: HTMLButtonElement) => { anchor.parentElement!.setAttribute("inert", ""); },
-		(anchor: HTMLButtonElement) => { anchor.parentElement!.setAttribute("aria-hidden", "true"); },
+		(anchor: HTMLButtonElement) => { anchor.parentElement!.setAttribute('inert', ''); },
+		(anchor: HTMLButtonElement) => { anchor.parentElement!.setAttribute('aria-hidden', 'true'); },
 	];
 	for (const invalidate of unavailable) {
 		using fixture = createFocusFixture();
@@ -253,11 +253,11 @@ test("ContextView does not attempt to restore unavailable focus targets", () => 
 	}
 });
 
-test("ContextView lets another menu keep focus when an older view closes", () => {
+test('ContextView lets another menu keep focus when an older view closes', () => {
 	using fixture = createFocusFixture();
 	fixture.show();
 	using next = new ContextView(fixture.host);
-	const content = h(environment.window.document, "button");
+	const content = h(environment.window.document, 'button');
 	next.show({ anchor: fixture.outside, content, focusRestore: ContextViewFocusRestore.Previous });
 	content.focus();
 	fixture.contextView.hide();
@@ -270,7 +270,7 @@ test("ContextView replacement captures the new owner's focus without restoring t
 	using fixture = createFocusFixture();
 	fixture.show();
 	fixture.outside.focus();
-	const next = h(environment.window.document, "button");
+	const next = h(environment.window.document, 'button');
 	const nextReasons: ContextViewHideReasonValue[] = [];
 	fixture.contextView.show({ anchor: fixture.outside, content: next, focusRestore: ContextViewFocusRestore.Previous, onHide: reason => nextReasons.push(reason) });
 	next.focus();
@@ -280,44 +280,44 @@ test("ContextView replacement captures the new owner's focus without restoring t
 	});
 });
 
-test("ContextView menu replacement keeps the new focus origin across a separate close and show", () => {
+test('ContextView menu replacement keeps the new focus origin across a separate close and show', () => {
 	using fixture = createFocusFixture();
 	fixture.show();
 	fixture.outside.focus();
 	// ContextMenuHandler closes the previous menu before it shows the next one.
 	fixture.contextView.hide();
-	const next = h(environment.window.document, "button");
+	const next = h(environment.window.document, 'button');
 	fixture.contextView.show({ anchor: fixture.host, content: next, focusRestore: ContextViewFocusRestore.Previous });
 	next.focus();
-	next.dispatchEvent(new environment.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+	next.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.deepEqual({ focused: environment.window.document.activeElement, attempts: fixture.focusAttempts(), reasons: fixture.reasons }, {
 		focused: fixture.outside, attempts: 0, reasons: [ContextViewHideReason.Programmatic],
 	});
 });
 
-test("ContextView Escape unwinds nested views through their own focus targets", () => {
+test('ContextView Escape unwinds nested views through their own focus targets', () => {
 	using fixture = createFocusFixture();
 	fixture.show();
 	using child = new ContextView(fixture.host);
-	const content = h(environment.window.document, "button");
+	const content = h(environment.window.document, 'button');
 	const childReasons: ContextViewHideReasonValue[] = [];
 	child.show({ anchor: fixture.content, content, focusRestore: ContextViewFocusRestore.Previous, onHide: reason => childReasons.push(reason) });
 	content.focus();
-	content.dispatchEvent(new environment.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+	content.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.deepEqual({ focused: environment.window.document.activeElement, parentVisible: fixture.contextView.visible, childVisible: child.visible, attempts: fixture.focusAttempts(), childReasons }, {
 		focused: fixture.content, parentVisible: true, childVisible: false, attempts: 0, childReasons: [ContextViewHideReason.Escape],
 	});
-	fixture.content.dispatchEvent(new environment.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+	fixture.content.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.deepEqual({ focused: environment.window.document.activeElement, parentVisible: fixture.contextView.visible, attempts: fixture.focusAttempts(), reasons: fixture.reasons }, {
 		focused: fixture.anchor, parentVisible: false, attempts: 1, reasons: [ContextViewHideReason.Escape],
 	});
 });
 
-test("ContextView does not reclaim focus owned by a child hosted inside its content", () => {
+test('ContextView does not reclaim focus owned by a child hosted inside its content', () => {
 	using fixture = createFocusFixture();
 	fixture.show();
 	using child = new ContextView(fixture.content);
-	const content = h(environment.window.document, "button");
+	const content = h(environment.window.document, 'button');
 	const childReasons: ContextViewHideReasonValue[] = [];
 	child.show({ anchor: fixture.content, content, focusRestore: ContextViewFocusRestore.Previous, onHide: reason => childReasons.push(reason) });
 	content.focus();
@@ -331,15 +331,15 @@ test("ContextView does not reclaim focus owned by a child hosted inside its cont
 test("ContextView closing beneath a modal keeps the dialog's focus", () => {
 	using fixture = createFocusFixture();
 	fixture.show();
-	const dialog = h(environment.window.document, "dialog");
-	const content = h(environment.window.document, "button");
+	const dialog = h(environment.window.document, 'dialog');
+	const content = h(environment.window.document, 'button');
 	dialog.append(content);
 	fixture.host.append(dialog);
 	// jsdom lacks the dialog top layer; model only the modal lookup used by the host.
 	const closest = content.closest.bind(content);
-	content.closest = (selector: string) => selector === "dialog:modal" ? dialog : closest(selector);
+	content.closest = (selector: string) => selector === 'dialog:modal' ? dialog : closest(selector);
 	content.focus();
-	content.dispatchEvent(new environment.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+	content.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
 	assert.equal(fixture.contextView.visible, true);
 	fixture.contextView.hide();
 	assert.deepEqual({ focused: environment.window.document.activeElement, attempts: fixture.focusAttempts(), reasons: fixture.reasons }, {
@@ -347,26 +347,26 @@ test("ContextView closing beneath a modal keeps the dialog's focus", () => {
 	});
 });
 
-test("ContextView does not restore behind a modal hosted inside its content", () => {
+test('ContextView does not restore behind a modal hosted inside its content', () => {
 	using fixture = createFocusFixture();
 	fixture.show();
-	const dialog = h(environment.window.document, "dialog");
-	const content = h(environment.window.document, "button");
+	const dialog = h(environment.window.document, 'dialog');
+	const content = h(environment.window.document, 'button');
 	dialog.append(content);
 	fixture.content.append(dialog);
 	const closest = content.closest.bind(content);
-	content.closest = (selector: string) => selector === "dialog:modal" ? dialog : closest(selector);
+	content.closest = (selector: string) => selector === 'dialog:modal' ? dialog : closest(selector);
 	content.focus();
 	fixture.contextView.hide();
 	assert.deepEqual({ attempts: fixture.focusAttempts(), reasons: fixture.reasons }, { attempts: 0, reasons: [ContextViewHideReason.Programmatic] });
 	assert.notEqual(environment.window.document.activeElement, fixture.anchor);
 });
 
-test("ContextView restores focus held by a shadow descendant", () => {
+test('ContextView restores focus held by a shadow descendant', () => {
 	using fixture = createFocusFixture();
 	fixture.show();
-	const content = h(environment.window.document, "button");
-	fixture.content.attachShadow({ mode: "open" }).append(content);
+	const content = h(environment.window.document, 'button');
+	fixture.content.attachShadow({ mode: 'open' }).append(content);
 	content.focus();
 	fixture.contextView.hide();
 	assert.deepEqual({ focused: environment.window.document.activeElement, attempts: fixture.focusAttempts(), reasons: fixture.reasons }, {
@@ -374,14 +374,14 @@ test("ContextView restores focus held by a shadow descendant", () => {
 	});
 });
 
-test("ContextView restores the menu owner before a related submenu action runs", async () => {
-	const { Menu } = await import("../../browser/ui/menu/menu.js");
+test('ContextView restores the menu owner before a related submenu action runs', async () => {
+	const { Menu } = await import('../../browser/ui/menu/menu.js');
 	using fixture = createFocusFixture();
 	using runner = new ActionRunner();
 	let actionFocus: Element | null = null;
 	using menu = new Menu(fixture.host, {
-		actions: [new SubmenuAction("test.more", "More", [{
-			id: "test.child", label: "Child", tooltip: "Child", enabled: true,
+		actions: [new SubmenuAction('test.more', 'More', [{
+			id: 'test.child', label: 'Child', tooltip: 'Child', enabled: true,
 			run: () => { actionFocus = environment.window.document.activeElement; fixture.outside.focus(); },
 		}])],
 		actionRunner: runner,
@@ -394,7 +394,7 @@ test("ContextView restores the menu owner before a related submenu action runs",
 	using close = runner.onWillRun(() => { fixture.contextView.hide(); menu.dispose(); });
 	const completion = new Promise<void>(resolve => fixture.add(runner.onDidRun(() => resolve())));
 	const trigger = menu.element.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
-	trigger.dispatchEvent(new environment.window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+	trigger.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
 	const child = fixture.host.querySelector<HTMLButtonElement>('.ash-context-view-menu [role="menuitem"]')!;
 	assert.ok(child);
 	assert.equal(environment.window.document.activeElement, child);
@@ -405,7 +405,7 @@ test("ContextView restores the menu owner before a related submenu action runs",
 	});
 });
 
-test("ContextView disposal restores only focus it still owns and reports closure once", () => {
+test('ContextView disposal restores only focus it still owns and reports closure once', () => {
 	for (const movedOutside of [false, true]) {
 		using fixture = createFocusFixture();
 		fixture.show();
@@ -425,7 +425,7 @@ test("ContextView restores before action execution and leaves the action's new f
 	fixture.show();
 	let actionRan = false;
 	await runner.run({
-		id: "test.action", label: "Run", tooltip: "Run", enabled: true,
+		id: 'test.action', label: 'Run', tooltip: 'Run', enabled: true,
 		run: () => {
 			assert.equal(environment.window.document.activeElement, fixture.anchor);
 			actionRan = true;
@@ -437,9 +437,9 @@ test("ContextView restores before action execution and leaves the action's new f
 	});
 });
 
-test("ContextView onHide can open a new view without a late focus restore or duplicate callback", () => {
+test('ContextView onHide can open a new view without a late focus restore or duplicate callback', () => {
 	using fixture = createFocusFixture();
-	const next = h(environment.window.document, "button");
+	const next = h(environment.window.document, 'button');
 	const nextReasons: ContextViewHideReasonValue[] = [];
 	fixture.show(() => {
 		fixture.contextView.show({ anchor: fixture.anchor, content: next, focusRestore: ContextViewFocusRestore.Previous, onHide: reason => nextReasons.push(reason) });
@@ -456,7 +456,7 @@ test("ContextView onHide can open a new view without a late focus restore or dup
 	});
 });
 
-test("ContextView does not refocus an owner when its content never took focus", () => {
+test('ContextView does not refocus an owner when its content never took focus', () => {
 	using fixture = createFocusFixture();
 	fixture.show();
 	fixture.anchor.focus();
@@ -478,15 +478,15 @@ function createFocusFixture(): DisposableStore & {
 	readonly show: (onHide?: () => void) => void;
 } {
 	const resources = new DisposableStore();
-	const host = h(environment.window.document, "section");
+	const host = h(environment.window.document, 'section');
 	resources.add(toDisposable(() => host.remove()));
-	const anchorHost = h(environment.window.document, "div");
-	const anchor = h(environment.window.document, "button");
-	const outside = h(environment.window.document, "input");
+	const anchorHost = h(environment.window.document, 'div');
+	const anchor = h(environment.window.document, 'button');
+	const outside = h(environment.window.document, 'input');
 	anchorHost.append(anchor);
 	host.append(anchorHost, outside);
 	environment.window.document.body.append(host);
-	const content = h(environment.window.document, "div");
+	const content = h(environment.window.document, 'div');
 	content.tabIndex = -1;
 	const contextView = resources.add(new ContextView(host));
 	const reasons: ContextViewHideReasonValue[] = [];

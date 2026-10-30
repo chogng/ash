@@ -1,7 +1,7 @@
-import { SashSettingsBinding } from "../../../../base/browser/ui/sash/sash.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { SashConfiguration } from "../common/sash.js";
+import { SashSettingsBinding } from '../../../../base/browser/ui/sash/sash.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { SashConfiguration } from '../common/sash.js';
 
 const MinimumDragAreaSize = 4;
 const MaximumHoverFeedbackSize = 8;

@@ -1,5 +1,5 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import { Emitter } from '../../../../base/common/event.js';
 import type { VSBuffer } from '../../../../base/common/buffer.js';
 import { IPCClient, ProxyChannel } from '../../../../base/parts/ipc/common/ipc.js';
@@ -10,45 +10,55 @@ import {
 	validateBrowserViewNavigateRequest,
 	validateBrowserViewVisibilityRequest,
 	type IBrowserViewState, type BrowserViewEvent, type IBrowserViewService,
-} from "../../../../platform/browserView/common/browserView.js";
+} from '../../../../platform/browserView/common/browserView.js';
 import {
 	browserViewChannel
-} from "../../../../platform/browserView/electron-main/browserViewIpc.js";
+} from '../../../../platform/browserView/electron-main/browserViewIpc.js';
 
 const options = { initialUrl: 'https://example.com/', owner: { type: 'user' as const }, session: { scope: BrowserViewStorageScope.Workspace as const } };
-const targetId = "browser_target_123e4567-e89b-12d3-a456-426614174000";
+const targetId = 'browser_target_123e4567-e89b-12d3-a456-426614174000';
 
-test("browser view validators admit secure and loopback navigation", () => {
+test('Canvas creation validates the complete presentation and requires isolated Agent storage', () => {
+	const agent = { initialUrl: 'https://example.test/', owner: { type: 'agent', sessionId: 'thread-one' }, session: { scope: BrowserViewStorageScope.Agent, affinity: 'thread-one' } };
+	const canvas = { sessionId: 'session-one', instanceId: 'preview-1', title: 'Preview' };
+	assert.deepEqual(validateBrowserViewCreateRequest({ targetId, options: { ...agent, canvas } }).options, { ...agent, canvas });
+	for (const invalid of [{ ...canvas, instanceId: '../other' }, { ...canvas, title: ' ' }, { ...canvas, instanceId: 'a'.repeat(129) }, { ...canvas, source: 'https://private.test' }]) {
+		assert.throws(() => validateBrowserViewCreateRequest({ targetId, options: { ...agent, canvas: invalid } }));
+	}
+	assert.throws(() => validateBrowserViewCreateRequest({ targetId, options: { ...options, canvas } }), /Canvas/);
+});
+
+test('browser view validators admit secure and loopback navigation', () => {
 	assert.equal(
-		normalizeBrowserViewUrl("https://example.com/path"),
-		"https://example.com/path",
+		normalizeBrowserViewUrl('https://example.com/path'),
+		'https://example.com/path',
 	);
 	assert.equal(
-		normalizeBrowserViewUrl("http://localhost:3000/path"),
-		"http://localhost:3000/path",
+		normalizeBrowserViewUrl('http://localhost:3000/path'),
+		'http://localhost:3000/path',
 	);
-	assert.equal(normalizeBrowserViewUrl("about:blank"), "about:blank");
-	assert.equal(normalizeBrowserViewUrl("file:///workspace/index.html"), "file:///workspace/index.html");
+	assert.equal(normalizeBrowserViewUrl('about:blank'), 'about:blank');
+	assert.equal(normalizeBrowserViewUrl('file:///workspace/index.html'), 'file:///workspace/index.html');
 	assert.deepEqual(validateBrowserViewCreateRequest({ targetId, options }), { targetId, options });
 	assert.deepEqual(
 		validateBrowserViewNavigateRequest({
 			targetId,
-			url: "https://example.com",
+			url: 'https://example.com',
 		}),
 		{
 			targetId,
-			url: "https://example.com/",
+			url: 'https://example.com/',
 		},
 	);
 });
 
-test("browser view validators reject privileged URLs and malformed geometry", () => {
+test('browser view validators reject privileged URLs and malformed geometry', () => {
 	for (
 		const url of [
-			"http://example.com",
-			"file://remote/secret.txt",
-			"javascript:alert(1)",
-			"https://user:password@example.com",
+			'http://example.com',
+			'file://remote/secret.txt',
+			'javascript:alert(1)',
+			'https://user:password@example.com',
 		]
 	) {
 		assert.throws(() => normalizeBrowserViewUrl(url));
@@ -56,8 +66,8 @@ test("browser view validators reject privileged URLs and malformed geometry", ()
 	assert.throws(() =>
 		validateBrowserViewCreateRequest({
 			targetId,
-			url: "https://example.com",
-			preload: "unsafe.js",
+			url: 'https://example.com',
+			preload: 'unsafe.js',
 		})
 	);
 	assert.throws(() =>
@@ -74,20 +84,21 @@ test("browser view validators reject privileged URLs and malformed geometry", ()
 	);
 	assert.throws(() =>
 		validateBrowserViewVisibilityRequest({
-			targetId: "not-a-target",
+			targetId: 'not-a-target',
 			visible: true,
 		})
 	);
 });
 
-test("browser view proxies preserve validated commands, subscriptions and backend sharing across IPC", async () => {
+test('browser view proxies preserve validated commands, subscriptions and backend sharing across IPC', async () => {
 	const calls: string[] = [];
 	using events = new Emitter<BrowserViewEvent>();
 	const received: BrowserViewEvent[] = [];
 	const state: IBrowserViewState = {
+		isDevToolsOpen: false,
 		targetId,
-		url: "https://example.com/",
-		title: "",
+		url: 'https://example.com/',
+		title: '',
 		loading: true,
 		canGoBack: false,
 		canGoForward: false,
@@ -97,7 +108,7 @@ test("browser view proxies preserve validated commands, subscriptions and backen
 		setContentVisibility: async () => { },
 		respondToPasswordSave: async () => { }, respondToPasswordFill: async () => { }, respondToAuthentication: async () => { }, setPermissions: async () => { }, respondToFileRequest: async () => { },
 		toggleDevTools: async () => { }, clearStorage: async () => { }, setBrowserZoomIndex: async () => { }, setDeviceEmulation: async () => { },
-		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
+		updateWindowConfiguration: async () => { }, getConsoleLogs: async () => '', getSelectedText: async () => '', getAccessibilityTree: async () => '', findInPage: async () => { }, stopFindInPage: async () => { },
 		toggleElementSelection: async () => { }, setElementComments: async () => { }, toggleAreaSelection: async () => { }, captureScreenshot: async () => { throw new Error('Unexpected screenshot'); },
 		getBrowserHistory: async () => ({ items: [] }), deleteBrowserHistory: async () => { },
 		getSharing: async () => [], setSharing: async () => { throw new Error('Sharing must pass through the backend'); },
@@ -105,21 +116,21 @@ test("browser view proxies preserve validated commands, subscriptions and backen
 		respondToPermission: async () => { }, clearPermissions: async () => { }, cancelDownloads: async () => { },
 		getBrowserViews: async () => [],
 		getOrCreateBrowserView: async () => {
-			calls.push("create");
+			calls.push('create');
 			return { id: targetId, host: { windowId: 1 }, owner: options.owner, session: options.session, state };
 		},
 		getState: async () => state,
-		layout: async () => { calls.push("layout"); },
-		setVisible: async () => { calls.push("visibility"); },
+		layout: async () => { calls.push('layout'); },
+		setVisible: async () => { calls.push('visibility'); },
 		loadURL: async () => {
-			calls.push("navigate");
+			calls.push('navigate');
 		},
-		goBack: async () => { calls.push("back"); },
-		goForward: async () => { calls.push("forward"); },
-		reload: async () => { calls.push("reload"); },
-		stop: async () => { calls.push("stop"); },
-		focus: async () => { calls.push("focus"); },
-		destroyBrowserView: async () => { calls.push("close"); },
+		goBack: async () => { calls.push('back'); },
+		goForward: async () => { calls.push('forward'); },
+		reload: async () => { calls.push('reload'); },
+		stop: async () => { calls.push('stop'); },
+		focus: async () => { calls.push('focus'); },
+		destroyBrowserView: async () => { calls.push('close'); },
 	};
 	const grants: unknown[] = [];
 	const channel = browserViewChannel(service, {

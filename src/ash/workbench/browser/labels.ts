@@ -3,7 +3,7 @@ import { colorCssVariable } from '../../platform/theme/common/colorUtils.js';
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { getIconClasses } from '../../editor/common/services/getIconClasses.js';
 import { IFileTextModelService } from '../services/textmodelResolver/common/textModelResourceService.js';
-import { IconLabel, type IconLabelValueOptions } from '../../base/browser/ui/iconlabel/iconlabel.js';
+import { IconLabel, type IconLabelOptions, type IconLabelValueOptions } from '../../base/browser/ui/iconlabel/iconlabel.js';
 import { getPathLabel, type IRelativePathProvider } from '../../base/common/labels.js';
 import { Emitter, Event } from '../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../base/common/lifecycle.js';
@@ -119,7 +119,7 @@ export class ResourceLabels extends Disposable {
 		if (services.decorationsService) this._register(services.decorationsService.onDidChangeDecorations(event => this.onDecorationChange(event)));
 	}
 
-	create(container: HTMLElement, options?: { readonly supportIcons?: boolean; }): IResourceLabel {
+	create(container: HTMLElement, options?: Pick<IconLabelOptions, 'supportIcons' | 'hoverTargetOverride'>): IResourceLabel {
 		const widget = new ResourceLabelWidget(container, this.services, options);
 		widget.setIconVisibility(this.iconsVisible);
 		this.widgets.add(widget);
@@ -275,11 +275,11 @@ class ResourceLabelWidget extends Disposable {
 		return resourceOf(this.current);
 	}
 
-	constructor(container: HTMLElement, services: ResourceLabelServices, options: { readonly supportIcons?: boolean; } | undefined) {
+	constructor(container: HTMLElement, services: ResourceLabelServices, options: Pick<IconLabelOptions, 'supportIcons' | 'hoverTargetOverride'> | undefined) {
 		super();
 		this.services = services;
 		this.supportIcons = options?.supportIcons === true;
-		this.label = this._register(new IconLabel(container, { label: '', supportIcons: this.supportIcons }));
+		this.label = this._register(new IconLabel(container, { ...options, label: '' }));
 		this.element = this.label.element;
 	}
 

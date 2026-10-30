@@ -1,32 +1,32 @@
+import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { EditorInputCapabilities, type IResourceEditorInput, type IEditorPane, type IEditorIdentifier } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
-import { addDisposableListener, getWindow } from "../../../../base/browser/dom.js";
-import type { IDimension } from "../../../../base/browser/dom.js";
-import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { onUnexpectedError } from "../../../../base/common/errors.js";
-import { DisposableMap, Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { rot } from "../../../../base/common/numbers.js";
-import { IInstantiationService, createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
+import type { IDimension } from '../../../../base/browser/dom.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { DisposableMap, Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { rot } from '../../../../base/common/numbers.js';
+import { IInstantiationService, createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { type IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
-import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
-import type { EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
-import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
-import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState } from "../../../services/editor/common/editorState.js";
+import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import type { EditorOpenOptions, EditorOpenTarget } from '../../../services/editor/common/editorService.js';
+import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from '../../../services/editor/common/editorWorkingSet.js';
+import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState } from '../../../services/editor/common/editorState.js';
 import { localize } from '../../../../nls.js';
 import { EditorCloseEmptyGroupsConfiguration } from '../../../services/editor/common/editorConfiguration.js';
-import { parseAuxiliaryWindowState, type AuxiliaryWindowOpenOptions, type AuxiliaryWindowState, type IAuxiliaryWindow, type IAuxiliaryWindowService } from "../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
+import { parseAuxiliaryWindowState, type AuxiliaryWindowOpenOptions, type AuxiliaryWindowState, type IAuxiliaryWindow, type IAuxiliaryWindowService } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 
-import { editorInputKey } from "./editorTabsControl.js";
-import type { EditorCloseAllOptions, IEditorPart } from "./editorPart.js";
-import type { IEditorGroupView } from "./editor.js";
+import { editorInputKey } from './editorTabsControl.js';
+import type { EditorCloseAllOptions, IEditorPart } from './editorPart.js';
+import type { IEditorGroupView } from './editor.js';
 import type { IEditorGroup, IFindGroupScope } from '../../../services/editor/common/editorGroupsService.js';
 import {
 	AuxiliaryEditorPart,
 	type AuxiliaryEditorPartCreation,
 	type AuxiliaryEditorPartFactory,
-} from "./auxiliaryEditorPart.js";
+} from './auxiliaryEditorPart.js';
 
 export interface EditorPartsState {
 	readonly version: 1;
@@ -52,7 +52,7 @@ export interface IEditorPartsService extends IEditorPart {
 	pauseStatePersistence(): IDisposable;
 }
 
-export const IEditorPartsService = createServiceIdentifier<IEditorPartsService>("editorPartsService");
+export const IEditorPartsService = createServiceIdentifier<IEditorPartsService>('editorPartsService');
 
 /** Coordinates one primary EditorPart and zero or more auxiliary-window parts. */
 export class EditorParts extends Disposable implements IEditorPartsService {
@@ -252,12 +252,11 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		const recentGroups = this.mainPart.editorsMru.map(editor => editor.groupId);
 		return recentGroups.map(id => this.mainPart.groups.find(group => group.id === id)).find(group => group && !group.isLocked)
 			?? this.mainPart.groups.find(group => !group.isLocked)
-			?? this.mainPart.addGroup(this.mainPart.activeGroup.id, 'right');
+			?? this.mainPart.addGroup(this.mainPart.activeGroup.id, Direction.Right);
 	}
 
 	private async prepareAuxiliaryClose(part: IEditorPart): Promise<boolean> {
 		if (!this.auxiliary.has(part)) return false;
-		if (part.activePane?.prefersWindowCloseConfirmation && !await part.confirmCloseAllEditors()) return false;
 		const target = this.getReturnGroup();
 		const editors = part.groups.flatMap(group => group.editors.map(editor => ({ group, editor })));
 		for (const { group, editor } of editors) {
@@ -287,7 +286,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return this._activePart.openEditor(input, options, target);
 	}
 
-	public addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView {
+	public addGroup(reference: EditorGroupId, direction: Direction): IEditorGroupView {
 		return this.parts.find(part => part.groups.some(group => group.id === reference))!.addGroup(reference, direction);
 	}
 	public removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean> {
@@ -320,7 +319,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	}
 
 	activateEditorMru(offset: number): IEditorPane | undefined {
-		if (!Number.isInteger(offset) || offset === 0) throw new TypeError("Editor MRU offset must be a non-zero integer");
+		if (!Number.isInteger(offset) || offset === 0) throw new TypeError('Editor MRU offset must be a non-zero integer');
 		const editors = this.editorsMru;
 		if (editors.length === 0) return undefined;
 		const index = rot(offset, editors.length);
@@ -366,7 +365,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		for (const part of this.parts) {
 			if (!await part.closeAllEditors({ ...options, skipConfirmation: true }, closingEditors)) return false;
 		}
-		if (options.reason === "reset") {
+		if (options.reason === 'reset') {
 			for (const part of [...this.auxiliary.keys()]) this.removeAuxiliaryPart(part);
 			this.setActivePart(this.mainPart);
 		}
@@ -379,10 +378,10 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	saveActiveEditor(): Promise<void> { return this._activePart.saveActiveEditor(); }
 	setContent(content: Element): Promise<void> { return this._activePart.setContent(content); }
-	splitActiveGroup(direction: GridDirection): Promise<void> { return this._activePart.splitActiveGroup(direction); }
+	splitActiveGroup(direction: Direction): Promise<void> { return this._activePart.splitActiveGroup(direction); }
 	splitActiveGroupHorizontal(): Promise<void> { return this._activePart.splitActiveGroupHorizontal(); }
 	splitActiveGroupVertical(): Promise<void> { return this._activePart.splitActiveGroupVertical(); }
-	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: GridDirection): Promise<void> {
+	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: Direction): Promise<void> {
 		const part = this.parts.find(candidate => candidate.groups.some(group => group.id === groupId));
 		if (!part) throw new RangeError(`Editor group is not open: ${groupId}`);
 		return part.splitEditors(groupId, inputs, direction);
@@ -400,14 +399,14 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			if (isActivationEvent(event)) this.setActivePart(part, false);
 			this.editorChangeEmitter.fire(event);
 		}));
-		listeners.add(addDisposableListener(part.domNode, "focusin", () => this.setActivePart(part)));
+		listeners.add(addDisposableListener(part.domNode, 'focusin', () => this.setActivePart(part)));
 		// Window chrome and shortcuts can receive focus without focusing the editor DOM.
 		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
 			listeners.add(addDisposableListener(getWindow(part.domNode), event, () => this.setActivePart(part), true));
 		}
 		if (auxiliaryWindow) listeners.add(addDisposableListener(auxiliaryWindow.container, 'focusin', () => this.setActivePart(part)));
 		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onBeforeUnload(event => {
-			if (this.isDisposed || part.activePane?.prefersWindowCloseConfirmation) return;
+			if (this.isDisposed) return;
 			const target = this.getReturnGroup();
 			for (const group of part.groups) for (const editor of group.editors) {
 				const veto = editor.input.canMove?.(group.id, target.id);
@@ -452,7 +451,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	private setActivePart(part: IEditorPart, publish = true): void {
 		if (this._activePart === part) return;
 		this._activePart = part;
-		if (publish) this.editorChangeEmitter.fire(Object.freeze({ kind: "activeGroupChanged", groupId: part.activeGroup.id }));
+		if (publish) this.editorChangeEmitter.fire(Object.freeze({ kind: 'activeGroupChanged', groupId: part.activeGroup.id }));
 	}
 
 	private findPartForInput(input: IResourceEditorInput): IEditorPart | undefined {
@@ -462,7 +461,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 }
 
 function isActivationEvent(event: EditorPartChangeEvent): boolean {
-	return event.kind === "activeGroupChanged" || (event.kind === "groupChanged" && event.event.kind === "activeEditorChanged");
+	return event.kind === 'activeGroupChanged' || (event.kind === 'groupChanged' && event.event.kind === 'activeEditorChanged');
 }
 
 function uniqueEditors(editors: readonly EditorIdentifier[]): readonly EditorIdentifier[] {

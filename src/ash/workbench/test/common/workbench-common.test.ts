@@ -1,66 +1,66 @@
 import { TestUriIdentityServices } from '../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../base/common/event.js';
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { URI } from "../../../base/common/uri.js";
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { URI } from '../../../base/common/uri.js';
 import {
 	ConfigurationScope,
 	Extensions as ConfigurationExtensions,
 	type IConfigurationRegistry,
-} from "../../../platform/configuration/common/configurationRegistry.js";
-import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
+} from '../../../platform/configuration/common/configurationRegistry.js';
+import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
 import {
 	darkColorTheme,
 	lightColorTheme,
-} from "../../../platform/theme/common/colorTheme.js";
-import { Registry } from "../../../platform/registry/common/platform.js";
+} from '../../../platform/theme/common/colorTheme.js';
+import { Registry } from '../../../platform/registry/common/platform.js';
 import {
 	WorkbenchState,
-} from "../../../platform/workspace/common/workspace.js";
-import { TestWorkspaceService } from "../../services/configuration/test/common/testServices.js";
+} from '../../../platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { BrowserWorkingCopyService } from '../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import {
 	getVisibleViewContextKey,
-} from "../../../workbench/common/contextkeys.js";
+} from '../../../workbench/common/contextkeys.js';
 import { createTestWorkbenchContextKeysHandler } from './testWorkbenchContextKeys.js';
 import {
 	WorkbenchContributionRegistry,
 	WorkbenchPhase,
-} from "../../../workbench/common/contributions.js";
-import { WorkbenchConfiguration } from "../../../workbench/common/configuration.js";
+} from '../../../workbench/common/contributions.js';
+import { WorkbenchConfiguration } from '../../../workbench/common/configuration.js';
 import { EditorTabSizingConfiguration, EditorTabSizingFixedMinWidthConfiguration, EditorTabSizingFixedMaxWidthConfiguration } from '../../services/editor/common/editorConfiguration.js';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-import { DialogsModel } from "../../../workbench/common/dialogs.js";
+import { DialogsModel } from '../../../workbench/common/dialogs.js';
 import {
 	getWorkbenchColorTheme,
 	SystemColorThemePreference,
 	WorkbenchThemeRegistry,
-} from "../../../workbench/common/theme.js";
+} from '../../../workbench/common/theme.js';
 import {
 	type IView,
 	ViewContainerLocation,
 	WorkbenchViewContainerId,
 	WorkbenchViewRegistry,
-} from "../../../workbench/common/views.js";
+} from '../../../workbench/common/views.js';
 import {
 	DialogResult,
 	DialogSeverity,
-} from "../../../platform/dialogs/common/dialogs.js";
+} from '../../../platform/dialogs/common/dialogs.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
-test("workbench context keys describe the current workspace", () => {
+test('workbench context keys describe the current workspace', () => {
 	using contextKeys = new ContextKeyService();
 	using workspace = new TestWorkspaceService({
-		id: "workspace",
-		uri: URI.file("C:\\project"),
+		id: 'workspace',
+		uri: URI.file('C:\\project'),
 	});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	const initialChanges: string[][] = [];
@@ -92,14 +92,14 @@ test("workbench context keys describe the current workspace", () => {
 		'workbenchState',
 		'workspaceFolderCount',
 	]]);
-	assert.equal(contextKeys.getValue("workbenchState"), "folder");
-	assert.equal(contextKeys.getValue("workspaceFolderCount"), 1);
+	assert.equal(contextKeys.getValue('workbenchState'), 'folder');
+	assert.equal(contextKeys.getValue('workspaceFolderCount'), 1);
 	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), false);
 	assert.equal(contextKeys.getValue('isNative'), true);
 	assert.equal(contextKeys.getValue('isWeb'), false);
 	assert.equal(
-		getVisibleViewContextKey("ash.explorer"),
-		"view.ash.explorer.visible",
+		getVisibleViewContextKey('ash.explorer'),
+		'view.ash.explorer.visible',
 	);
 	workspace.updateWorkspace({
 		id: 'workspace',
@@ -112,9 +112,9 @@ test("workbench context keys describe the current workspace", () => {
 	assert.equal(contextKeys.getValue('workbenchState'), 'workspace');
 	assert.equal(contextKeys.getValue('workspaceFolderCount'), 2);
 
-	workspace.updateWorkspace({ id: "empty" });
-	assert.equal(contextKeys.getValue("workbenchState"), "empty");
-	assert.equal(contextKeys.getValue("workspaceFolderCount"), 0);
+	workspace.updateWorkspace({ id: 'empty' });
+	assert.equal(contextKeys.getValue('workbenchState'), 'empty');
+	assert.equal(contextKeys.getValue('workspaceFolderCount'), 0);
 
 	using copy = new TestWorkingCopy(URI.file('C:\\project\\main.ts'));
 	using registration = workingCopies.register(copy);
@@ -122,27 +122,27 @@ test("workbench context keys describe the current workspace", () => {
 	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), true);
 });
 
-test("workbench contributions start once at their declared phases", async () => {
-	const serviceId = createServiceIdentifier<string>("testService");
+test('workbench contributions start once at their declared phases', async () => {
+	const serviceId = createServiceIdentifier<string>('testService');
 	const services = new InstantiationService();
-	services.registerInstance(serviceId, "ready");
+	services.registerInstance(serviceId, 'ready');
 	const registry = new WorkbenchContributionRegistry();
 	const calls: string[] = [];
 	using startupRegistration = registry.register(
-		"test.startup",
+		'test.startup',
 		WorkbenchPhase.BlockStartup,
 		(accessor) => {
 			calls.push(`startup:${accessor.get(serviceId)}`);
-			return toDisposable(() => calls.push("dispose:startup"));
+			return toDisposable(() => calls.push('dispose:startup'));
 		},
 	);
 	using restoredRegistration = registry.register(
-		"test.restored",
+		'test.restored',
 		WorkbenchPhase.AfterRestored,
 		() => {
-			calls.push("restored");
-			return Object.assign(toDisposable(() => calls.push("dispose:restored")), {
-				onWorkspaceRestored: () => { calls.push("workspace:restored"); },
+			calls.push('restored');
+			return Object.assign(toDisposable(() => calls.push('dispose:restored')), {
+				onWorkspaceRestored: () => { calls.push('workspace:restored'); },
 			});
 		},
 	);
@@ -154,14 +154,14 @@ test("workbench contributions start once at their declared phases", async () => 
 		host.advance(WorkbenchPhase.AfterRestored);
 		host.advance(WorkbenchPhase.AfterRestored);
 		await host.workspaceRestored();
-		assert.deepEqual(calls, ["startup:ready", "restored", "workspace:restored"]);
+		assert.deepEqual(calls, ['startup:ready', 'restored', 'workspace:restored']);
 	}
 	assert.deepEqual(calls, [
-		"startup:ready",
-		"restored",
-		"workspace:restored",
-		"dispose:restored",
-		"dispose:startup",
+		'startup:ready',
+		'restored',
+		'workspace:restored',
+		'dispose:restored',
+		'dispose:startup',
 	]);
 });
 
@@ -185,7 +185,7 @@ test('a product window starts only its selected contributions and rejects missin
 	assert.throws(() => registry.createHost(services, undefined, ['test.missing']), /Unknown workbench contribution/);
 });
 
-test("workbench configuration resolves registered color themes", () => {
+test('workbench configuration resolves registered color themes', () => {
 	assert.equal(
 		configurationRegistry.owns(WorkbenchConfiguration.colorTheme),
 		true,
@@ -204,22 +204,22 @@ test("workbench configuration resolves registered color themes", () => {
 		colorTheme.parse(lightColorTheme.id),
 		lightColorTheme.id,
 	);
-	assert.equal(colorTheme.parse("extension.theme"), "extension.theme", "Themes installed after startup retain their persisted identity");
+	assert.equal(colorTheme.parse('extension.theme'), 'extension.theme', 'Themes installed after startup retain their persisted identity');
 	assert.equal(
 		getWorkbenchColorTheme(lightColorTheme.id).id,
 		lightColorTheme.id,
 	);
 });
 
-test("workbench configuration exposes modern and flat layout styles", () => {
+test('workbench configuration exposes modern and flat layout styles', () => {
 	assert.equal(configurationRegistry.owns(WorkbenchConfiguration.layoutStyle), true);
 	const layoutStyle = configurationRegistry.getConfiguration(WorkbenchConfiguration.layoutStyle);
 	assert.ok(layoutStyle);
-	assert.equal(layoutStyle.defaultValue, "modern");
-	assert.equal(layoutStyle.parse("modern"), "modern");
-	assert.equal(layoutStyle.parse("flat"), "flat");
+	assert.equal(layoutStyle.defaultValue, 'modern');
+	assert.equal(layoutStyle.parse('modern'), 'modern');
+	assert.equal(layoutStyle.parse('flat'), 'flat');
 	assert.throws(
-		() => layoutStyle.parse("classic"),
+		() => layoutStyle.parse('classic'),
 		/Unknown Workbench layout style/,
 	);
 });
@@ -249,7 +249,7 @@ test('editor tab widths validate sizing modes and fixed bounds before applying p
 	}
 });
 
-test("workbench theme registries reject duplicate themes", () => {
+test('workbench theme registries reject duplicate themes', () => {
 	const registry = new WorkbenchThemeRegistry([darkColorTheme]);
 	assert.equal(registry.getColorTheme(darkColorTheme.id), darkColorTheme);
 	assert.throws(
@@ -263,7 +263,7 @@ test("workbench theme registries reject duplicate themes", () => {
 	);
 });
 
-test("dialogs model publishes and settles renderer items", async () => {
+test('dialogs model publishes and settles renderer items', async () => {
 	using model = new DialogsModel();
 	const events: string[] = [];
 	using willShow = model.onWillShowDialog(
@@ -271,96 +271,96 @@ test("dialogs model publishes and settles renderer items", async () => {
 	);
 	using didClose = model.onDidCloseDialog(
 		(event) => events.push(
-			event.kind === "result"
+			event.kind === 'result'
 				? `close:${event.result.button}`
-				: "close:error",
+				: 'close:error',
 		),
 	);
 	const handle = model.show({
-		kind: "message",
+		kind: 'message',
 		severity: DialogSeverity.Info,
-		message: "Saved",
+		message: 'Saved',
 	});
 
 	assert.equal(model.dialogs.length, 1);
 	handle.item.close({ button: DialogResult.Primary });
 	assert.deepEqual(await handle.result, { button: DialogResult.Primary });
 	assert.equal(model.dialogs.length, 0);
-	assert.deepEqual(events, ["show:message", "close:primary"]);
+	assert.deepEqual(events, ['show:message', 'close:primary']);
 });
 
-test("view registrations are ordered and disposed atomically", () => {
+test('view registrations are ordered and disposed atomically', () => {
 	using registry = new WorkbenchViewRegistry();
 	const changes: string[] = [];
 	using registered = registry.onDidRegisterViews(
 		(event) => changes.push(
-			`add:${event.views.map((view) => view.id).join(",")}`,
+			`add:${event.views.map((view) => view.id).join(',')}`,
 		),
 	);
 	using removed = registry.onDidDeregisterViews(
 		(event) => changes.push(
-			`remove:${event.views.map((view) => view.id).join(",")}`,
+			`remove:${event.views.map((view) => view.id).join(',')}`,
 		),
 	);
 	using container = registry.registerViewContainer({
-		id: "ash.sidebar",
-		title: "Navigation",
+		id: 'ash.sidebar',
+		title: 'Navigation',
 		location: ViewContainerLocation.Sidebar,
 	});
-	using views = registry.registerViews("ash.sidebar", [
+	using views = registry.registerViews('ash.sidebar', [
 		{
-			id: "ash.search",
-			title: "Search",
+			id: 'ash.search',
+			title: 'Search',
 			order: 20,
-			ctorDescriptor: new SyncDescriptor(TestView, ["ash.search"]),
+			ctorDescriptor: new SyncDescriptor(TestView, ['ash.search']),
 		},
 		{
-			id: "ash.explorer",
-			title: "Explorer",
+			id: 'ash.explorer',
+			title: 'Explorer',
 			order: 10,
-			ctorDescriptor: new SyncDescriptor(TestView, ["ash.explorer"]),
+			ctorDescriptor: new SyncDescriptor(TestView, ['ash.explorer']),
 		},
 	]);
 
 	assert.deepEqual(
-		registry.getViews("ash.sidebar").map((view) => view.id),
-		["ash.explorer", "ash.search"],
+		registry.getViews('ash.sidebar').map((view) => view.id),
+		['ash.explorer', 'ash.search'],
 	);
 	assert.equal(
-		registry.getViewContainerForView("ash.explorer")?.id,
-		"ash.sidebar",
+		registry.getViewContainerForView('ash.explorer')?.id,
+		'ash.sidebar',
 	);
 	assert.throws(
-		() => registry.registerViews("ash.sidebar", [
+		() => registry.registerViews('ash.sidebar', [
 			{
-				id: "ash.explorer",
-				title: "Duplicate",
-				ctorDescriptor: new SyncDescriptor(TestView, ["ash.explorer"]),
+				id: 'ash.explorer',
+				title: 'Duplicate',
+				ctorDescriptor: new SyncDescriptor(TestView, ['ash.explorer']),
 			},
 		]),
 		/already registered/,
 	);
 	assert.deepEqual(
-		registry.getViews("ash.sidebar").map((view) => view.id),
-		["ash.explorer", "ash.search"],
+		registry.getViews('ash.sidebar').map((view) => view.id),
+		['ash.explorer', 'ash.search'],
 	);
 
 	views.dispose();
 	assert.deepEqual(changes, [
-		"add:ash.explorer,ash.search",
-		"remove:ash.explorer,ash.search",
+		'add:ash.explorer,ash.search',
+		'remove:ash.explorer,ash.search',
 	]);
 });
 
-test("file views register after their host container", async () => {
+test('file views register after their host container', async () => {
 	using registry = new WorkbenchViewRegistry();
 	registry.registerStaticViewContainer({
 		id: WorkbenchViewContainerId.Sidebar,
-		title: "Navigation",
+		title: 'Navigation',
 		location: ViewContainerLocation.Sidebar,
 	});
-	const browserEnvironment = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
+	const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
 		value: browserEnvironment.window,
 	});
@@ -368,13 +368,13 @@ test("file views register after their host container", async () => {
 		const {
 			registerFilesViews,
 		} = await import(
-			"../../../workbench/contrib/files/browser/explorerViewlet.js"
+			'../../../workbench/contrib/files/browser/explorerViewlet.js'
 		);
 		const { EmptyView } = await import(
-			"../../../workbench/contrib/files/browser/views/emptyView.js"
+			'../../../workbench/contrib/files/browser/views/emptyView.js'
 		);
 		const { VIEW_ID } = await import(
-			"../../../workbench/contrib/files/common/files.js"
+			'../../../workbench/contrib/files/common/files.js'
 		);
 
 		registerFilesViews(registry);
@@ -383,7 +383,7 @@ test("file views register after their host container", async () => {
 			registry.getViews(WorkbenchViewContainerId.Sidebar).map(
 				(view) => view.id,
 			),
-			["workbench.explorer.openEditorsView", VIEW_ID, EmptyView.ID],
+			['workbench.explorer.openEditorsView', VIEW_ID, EmptyView.ID],
 		);
 		using contextKeys = new ContextKeyService();
 		const explorer = registry.getView(VIEW_ID);
@@ -391,16 +391,16 @@ test("file views register after their host container", async () => {
 		assert.ok(explorer);
 		assert.ok(empty);
 
-		contextKeys.setContext("workspaceFolderCount", 0);
+		contextKeys.setContext('workspaceFolderCount', 0);
 		assert.equal(contextKeys.contextMatchesRules(explorer.when), false);
 		assert.equal(contextKeys.contextMatchesRules(empty.when), true);
 
-		contextKeys.setContext("workspaceFolderCount", 1);
+		contextKeys.setContext('workspaceFolderCount', 1);
 		assert.equal(contextKeys.contextMatchesRules(explorer.when), true);
 		assert.equal(contextKeys.contextMatchesRules(empty.when), false);
 	} finally {
 		browserEnvironment.window.close();
-		Reflect.deleteProperty(globalThis, "window");
+		Reflect.deleteProperty(globalThis, 'window');
 	}
 });
 

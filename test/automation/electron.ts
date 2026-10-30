@@ -1,7 +1,7 @@
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { createTestEnvironment } from './testEnvironment.ts';
-import type { AppServerTestMode } from "./testTarget.js";
+import type { AppServerTestMode } from './testTarget.js';
 import { resolveDevelopmentElectronExecutable } from '../../build/desktop/electron.ts';
 
 export type ElectronWindowMode = 'hidden' | 'inactive' | 'active';
@@ -17,17 +17,19 @@ export interface ElectronLaunchOptions {
 	/** Total budget for process launch and Workbench restoration. */
 	readonly startupTimeout?: number;
 	readonly userDataDirectory: string;
+	/** Installation tests keep OS-owned home files separate from removable application data. */
+	readonly homeDirectory?: string;
 	readonly profileDirectory?: string;
 	/** Explicit opt-in for real-model scenarios; ordinary tests keep account storage isolated. */
 	readonly externalCodexHome?: string;
 	/** Public product configuration, selected before the profile daemon starts. */
 	readonly productServicesPath?: string;
 	readonly workspaceDirectory?: string;
-	readonly workspacePermissions?: "development";
+	readonly workspacePermissions?: 'development';
 	readonly extraArgs?: readonly string[];
 	readonly recordVideo?: {
 		readonly directory: string;
-		readonly size: { readonly width: number; readonly height: number; };
+		readonly size: { readonly width: number; readonly height: number };
 	};
 	/** Repository application root. Scenario bundles pass this explicitly because their output lives elsewhere. */
 	readonly desktopDirectory?: string;
@@ -46,33 +48,51 @@ export interface ElectronConfiguration {
 /** Resolves the Electron executable, arguments, and environment for a test run. */
 export function resolveElectronConfiguration(options: ElectronLaunchOptions): ElectronConfiguration {
 	// A long smoke run can pin a copy of this checkout's prepared product artifacts.
-	const desktopDirectory = options.desktopDirectory ?? (options.environment ?? process.env).ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve(import.meta.dirname, "../..");
+	const desktopDirectory =
+		options.desktopDirectory ??
+		(options.environment ?? process.env).ASH_SMOKE_DESKTOP_DIRECTORY ??
+		resolve(import.meta.dirname, '../..');
 	const bundle = options.packagedBundle && resolve(options.packagedBundle);
-	const resourcesPath = bundle ? process.platform === 'darwin' ? join(bundle, 'Contents', 'Resources') : join(bundle, 'resources') : '';
+	const resourcesPath = bundle
+		? process.platform === 'darwin'
+			? join(bundle, 'Contents', 'Resources')
+			: join(bundle, 'resources')
+		: '';
 	const electronExecutablePath = bundle
-		? process.platform === 'darwin' ? join(bundle, 'Contents', 'MacOS', 'Ash') : join(bundle, 'Ash.exe')
+		? process.platform === 'darwin'
+			? join(bundle, 'Contents', 'MacOS', 'Ash')
+			: join(bundle, 'Ash.exe')
 		: resolveDevelopmentElectronExecutable(desktopDirectory);
-	const environment = createTestEnvironment(options.userDataDirectory, options.environment ?? process.env, options.externalCodexHome);
+	const homeDirectory = options.homeDirectory ?? options.userDataDirectory;
+	const environment = createTestEnvironment(
+		homeDirectory,
+		options.environment ?? process.env,
+		options.externalCodexHome,
+	);
 	if (process.platform === 'win32') {
 		// Known-folder APIs verify this directory exists before returning LocalAppData
 		// to backend services such as the cross-process Git operation lock.
-		mkdirSync(join(options.userDataDirectory, 'AppData', 'Local'), { recursive: true });
+		mkdirSync(join(homeDirectory, 'AppData', 'Local'), { recursive: true });
 		// Windows cannot begin a Jump List transaction without its destination stores
 		// beneath the isolated USERPROFILE. Keep Shell data inside the test home too.
 		for (const store of ['AutomaticDestinations', 'CustomDestinations']) {
-			mkdirSync(join(options.userDataDirectory, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Recent', store), { recursive: true });
+			mkdirSync(join(homeDirectory, 'AppData', 'Roaming', 'Microsoft', 'Windows', 'Recent', store), {
+				recursive: true,
+			});
 		}
 	}
 	if (bundle) {
 		for (const key of Object.keys(environment)) if (key.startsWith('ASH_')) delete environment[key];
 		environment.ELECTRON_ENABLE_LOGGING = '1';
 	}
-	if (options.appServerMode === "disabled") {
-		environment.ASH_DESKTOP_UI_ONLY = "1";
+	if (options.appServerMode === 'disabled') {
+		environment.ASH_DESKTOP_UI_ONLY = '1';
 	} else {
 		delete environment.ASH_DESKTOP_UI_ONLY;
 	}
-	environment.ASH_HOME = options.profileDirectory ?? resolve(options.userDataDirectory, "profile");
+	environment.ASH_HOME = options.profileDirectory ?? resolve(options.userDataDirectory, 'profile');
+	environment.ASH_INSTALLATION_REGISTRY =
+		options.environment?.ASH_INSTALLATION_REGISTRY ?? join(options.userDataDirectory, 'installation-registry');
 	if (options.productServicesPath) environment.ASH_PRODUCT_SERVICES_PATH = options.productServicesPath;
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;
@@ -86,17 +106,23 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	return {
 		executablePath: electronExecutablePath,
 		args: [
-			"--disable-gpu",
-			"--in-process-gpu",
+			'--disable-gpu',
+			'--in-process-gpu',
 			...(options.useInMemorySecretStorage === false ? [] : ['--use-inmemory-secretstorage']),
 			// Chromium cookie encryption bypasses the application's credential service.
 			// Test profiles use the native test facility rather than a system keychain.
-			...(process.platform === 'darwin' ? ['--use-mock-keychain'] : process.platform === 'linux' ? ['--password-store=basic'] : []),
+			...(process.platform === 'darwin'
+				? ['--use-mock-keychain']
+				: process.platform === 'linux'
+					? ['--password-store=basic']
+					: []),
 			// The development launcher ignores inline --require= values. Packaged
 			// launches retain their inline switch so its value cannot become a file to open.
-			...(windowMode === 'active' ? [] : bundle
-				? [`--require=${join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')}`]
-				: ['--require', join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')]),
+			...(windowMode === 'active'
+				? []
+				: bundle
+					? [`--require=${join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')}`]
+					: ['--require', join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')]),
 			...(bundle ? [] : [desktopDirectory]),
 			`--user-data-dir=${options.userDataDirectory}`,
 			// AppKit's recovery prompt can block ready after test-owned processes are terminated.

@@ -1,8 +1,8 @@
-import { mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import type { ElectronApplication, Page } from "@playwright/test";
-import { expect, test } from "../../../automation/test.js";
+import { mkdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import type { ElectronApplication, Page } from '@playwright/test';
+import { expect, test } from '../../../automation/test.js';
 import type { Workbench } from '../../../automation/workbench.js';
 
 test('Explorer title actions create files and folders, refresh and collapse from the keyboard', { tag: ['@browser-ui'] }, async ({ target, workbench, application, restartWorkbench, restartMessage }, testInfo) => {
@@ -335,26 +335,26 @@ test('file tab copy and reveal actions target inactive and selected files', { ta
 	await expect(untitled).toBeFocused();
 });
 
-test("App Server workspace files open in Stanza and save through the editor region", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('App Server workspace files open in Stanza and save through the editor region', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
-	const explorer = page.locator(".ash-explorer");
+	const explorer = page.locator('.ash-explorer');
 	await expect(explorer).toBeVisible();
 
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.ts" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "workspace file appears in Explorer" }).toBe(1);
-	await fileRow.locator(".ash-icon-label-icon").click();
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.ts' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'workspace file appears in Explorer' }).toBe(1);
+	await fileRow.locator('.ash-icon-label-icon').click();
 
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs).toHaveCount(2);
-	await expect(group.tabs.filter({ hasText: "Welcome" })).toHaveCount(1);
-	await expect(group.tabs.filter({ hasText: "main.ts" })).toHaveAttribute("aria-selected", "true");
+	await expect(group.tabs.filter({ hasText: 'Welcome' })).toHaveCount(1);
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-selected', 'true');
 	await expect(group.title.locator('[data-action-id="revealFileInOS"]')).toHaveCount(0);
-	const tab = group.title.locator('.ash-tab').filter({ hasText: "main.ts" });
+	const tab = group.title.locator('.ash-tab').filter({ hasText: 'main.ts' });
 	await expect(tab).toHaveClass(/preview/);
 	await expect(explorer.locator('.ash-explorer-error')).toHaveCount(0);
 	await expect(explorer.locator('.ash-tree')).toBeFocused();
-	await expect(group.content.locator(".stanza-editor")).toBeVisible();
+	await expect(group.content.locator('.stanza-editor')).toBeVisible();
 
 	await tab.getByRole('tab').dblclick();
 	await expect(tab).not.toHaveClass(/preview/);
@@ -376,14 +376,14 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	const input = group.content.getByRole('textbox', { name: 'main.ts', exact: true });
 	await expect(input).toBeAttached();
 	await input.focus();
-	await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
-	await input.type("const value = 2;");
-	await input.press(process.platform === "darwin" ? "Meta+S" : "Control+S");
+	await input.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+	await input.type('const value = 2;');
+	await input.press(process.platform === 'darwin' ? 'Meta+S' : 'Control+S');
 
 	await expect.poll(
-		() => readFile(testWorkspace.file, "utf8"),
-		{ timeout: 15_000, message: "Stanza save reaches the App Server workspace" },
-	).toBe("const value = 2;");
+		() => readFile(testWorkspace.file, 'utf8'),
+		{ timeout: 15_000, message: 'Stanza save reaches the App Server workspace' },
+	).toBe('const value = 2;');
 });
 
 test('Bazel workspace files load bundled Starlark and bazelrc grammars', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
@@ -452,110 +452,110 @@ test('Find input recalls saved searches with arrow keys and restores the draft',
 	await expect(replaceInput).toHaveValue('replacement draft');
 });
 
-test("Show All Editors searches recent editors and restores editor focus", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Show All Editors searches recent editors and restores editor focus', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const page = workbench.page;
-	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
 	await fileRow.dblclick();
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs).toHaveCount(1);
-	const breadcrumbs = group.title.getByRole("navigation", { name: "Editor breadcrumbs" });
+	const breadcrumbs = group.title.getByRole('navigation', { name: 'Editor breadcrumbs' });
 	await expect(breadcrumbs).toBeVisible();
 	const currentBreadcrumb = breadcrumbs.locator('[aria-current="page"]');
-	await expect(currentBreadcrumb.locator('.ash-icon-label-text')).toHaveText("main.ts");
+	await expect(currentBreadcrumb.locator('.ash-icon-label-text')).toHaveText('main.ts');
 	await expect(currentBreadcrumb).toHaveClass(/current/u);
-	await expect(currentBreadcrumb).toHaveAccessibleName("main.ts");
+	await expect(currentBreadcrumb).toHaveAccessibleName('main.ts');
 	const breadcrumbStyle = await breadcrumbs.evaluate(element => ({
 		display: getComputedStyle(element).display,
 		gap: getComputedStyle(element).gap,
 		color: getComputedStyle(element.querySelector('.current')!).color,
 	}));
-	expect(breadcrumbStyle.display).toBe("flex");
-	expect(breadcrumbStyle.gap).toBe("4px");
-	expect(breadcrumbStyle.color).not.toBe("rgba(0, 0, 0, 0)");
+	expect(breadcrumbStyle.display).toBe('flex');
+	expect(breadcrumbStyle.gap).toBe('4px');
+	expect(breadcrumbStyle.color).not.toBe('rgba(0, 0, 0, 0)');
 	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.rs' }).click();
 	await expect(group.tabs).toHaveCount(2);
 
-	await page.keyboard.press("F1");
-	const picker = page.locator(".ash-quick-pick");
-	await picker.getByRole("combobox").fill(">Show All Editors");
-	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Show All Editors" })).toBeVisible();
-	await page.keyboard.press("Enter");
+	await page.keyboard.press('F1');
+	const picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox').fill('>Show All Editors');
+	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: 'Show All Editors' })).toBeVisible();
+	await page.keyboard.press('Enter');
 
-	const search = picker.getByRole("combobox");
-	await expect(search).toHaveValue("edt mru ");
-	await search.fill("edt mru main");
+	const search = picker.getByRole('combobox');
+	await expect(search).toHaveValue('edt mru ');
+	await search.fill('edt mru main');
 	const otherEditor = picker.locator('.ash-quick-pick-row-content').filter({ hasText: 'main.rs' });
 	await otherEditor.getByRole('button', { name: 'Close' }).click();
 	await expect(otherEditor).toHaveCount(0);
 	await expect(picker).toBeVisible();
 	await expect(group.tabs).toHaveCount(1);
-	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "main.ts" })).toBeVisible();
-	await search.press("Enter");
+	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: 'main.ts' })).toBeVisible();
+	await search.press('Enter');
 	await expect(picker).toHaveCount(0);
-	await expect(group.content.locator(".stanza-editor-input")).toBeFocused();
+	await expect(group.content.locator('.stanza-editor-input')).toBeFocused();
 });
 
-test("Editor tabs support modifier selection and close the selected set", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Editor tabs support modifier selection and close the selected set', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
-	const explorer = page.locator(".ash-explorer .ash-tree-row");
-	await explorer.filter({ hasText: "main.ts" }).dblclick();
-	await explorer.filter({ hasText: "main.rs" }).dblclick();
+	const explorer = page.locator('.ash-explorer .ash-tree-row');
+	await explorer.filter({ hasText: 'main.ts' }).dblclick();
+	await explorer.filter({ hasText: 'main.rs' }).dblclick();
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs).toHaveCount(2);
-	const first = group.tabs.filter({ hasText: "main.ts" });
-	const second = group.tabs.filter({ hasText: "main.rs" });
-	await first.click({ modifiers: [process.platform === "darwin" ? "Meta" : "Control"] });
-	await expect(first).toHaveAttribute("aria-selected", "true");
-	await expect(second).toHaveAttribute("aria-selected", "true");
-	await expect(group.content.getByRole("textbox", { name: "main.rs" })).toBeAttached();
-	await page.keyboard.press("F1");
-	const picker = page.locator(".ash-quick-pick");
-	const search = picker.getByRole("combobox");
-	await search.fill(">Close");
-	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: /^Close$/u })).toBeVisible();
-	await search.press("Enter");
+	const first = group.tabs.filter({ hasText: 'main.ts' });
+	const second = group.tabs.filter({ hasText: 'main.rs' });
+	await first.click({ modifiers: [process.platform === 'darwin' ? 'Meta' : 'Control'] });
+	await expect(first).toHaveAttribute('aria-selected', 'true');
+	await expect(second).toHaveAttribute('aria-selected', 'true');
+	await expect(group.content.getByRole('textbox', { name: 'main.rs' })).toBeAttached();
+	await page.keyboard.press('F1');
+	const picker = page.locator('.ash-quick-pick');
+	const search = picker.getByRole('combobox');
+	await search.fill('>Close');
+	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: /^Close$/u })).toBeVisible();
+	await search.press('Enter');
 	await expect(group.tabs).toHaveCount(0);
 });
 
-test("Editor breadcrumbs open sibling and nested files", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Editor breadcrumbs open sibling and nested files', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
-	const explorer = page.locator(".ash-explorer .ash-tree-row");
-	await explorer.filter({ hasText: "main.ts" }).click();
+	const explorer = page.locator('.ash-explorer .ash-tree-row');
+	await explorer.filter({ hasText: 'main.ts' }).click();
 	const group = workbench.editors.groupAt(0);
-	const breadcrumbs = group.title.getByRole("navigation", { name: "Editor breadcrumbs" });
+	const breadcrumbs = group.title.getByRole('navigation', { name: 'Editor breadcrumbs' });
 	const pathItems = breadcrumbs.locator('.ash-breadcrumbs-widget').getByRole('button');
 	await expect(pathItems).toHaveCount(1);
 	await expect(pathItems.first().locator('.ash-icon-label-text')).toHaveText('main.ts');
 	await pathItems.last().click();
 
-	const picker = page.locator(".ash-quick-pick");
-	await expect(picker.getByRole("combobox")).toBeFocused();
-	await picker.getByRole("combobox").fill("main.rs");
-	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "main.rs" })).toBeVisible();
-	await page.keyboard.press("Enter");
+	const picker = page.locator('.ash-quick-pick');
+	await expect(picker.getByRole('combobox')).toBeFocused();
+	await picker.getByRole('combobox').fill('main.rs');
+	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: 'main.rs' })).toBeVisible();
+	await page.keyboard.press('Enter');
 
 	await expect(picker).toHaveCount(0);
-	await expect(group.tabs.filter({ hasText: "main.rs" })).toHaveCount(1);
-	await expect(group.content.getByRole("textbox", { name: "main.rs" })).toBeFocused();
+	await expect(group.tabs.filter({ hasText: 'main.rs' })).toHaveCount(1);
+	await expect(group.content.getByRole('textbox', { name: 'main.rs' })).toBeFocused();
 	await expect(breadcrumbs.getByRole('button', { name: 'main.rs', exact: true })).toBeVisible();
-	await expect(breadcrumbs.locator('[aria-current="page"] .ash-icon-label-text')).toHaveText("main");
+	await expect(breadcrumbs.locator('[aria-current="page"] .ash-icon-label-text')).toHaveText('main');
 
-	const nestedDirectory = join(testWorkspace.directory, "breadcrumb-folder");
+	const nestedDirectory = join(testWorkspace.directory, 'breadcrumb-folder');
 	await mkdir(nestedDirectory);
-	await writeFile(join(nestedDirectory, "nested.ts"), "// nested fixture\n");
+	await writeFile(join(nestedDirectory, 'nested.ts'), '// nested fixture\n');
 	await breadcrumbs.getByRole('button', { name: 'main.rs', exact: true }).click();
-	await picker.getByRole("combobox").fill("breadcrumb-folder");
-	await page.keyboard.press("Enter");
-	await picker.getByRole("combobox").fill("nested.ts");
-	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "nested.ts" })).toBeVisible();
-	await page.keyboard.press("Enter");
-	await expect(group.tabs.filter({ hasText: "nested.ts" })).toHaveCount(1);
+	await picker.getByRole('combobox').fill('breadcrumb-folder');
+	await page.keyboard.press('Enter');
+	await picker.getByRole('combobox').fill('nested.ts');
+	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: 'nested.ts' })).toBeVisible();
+	await page.keyboard.press('Enter');
+	await expect(group.tabs.filter({ hasText: 'nested.ts' })).toHaveCount(1);
 	await expect(pathItems).toHaveCount(2);
 	await expect(pathItems.locator('.ash-icon-label-text')).toHaveText(['breadcrumb-folder', 'nested.ts']);
 	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.width = '180px'; });
@@ -580,22 +580,22 @@ test("Editor breadcrumbs open sibling and nested files", { tag: ['@browser-app-s
 	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.removeProperty('width'); });
 });
 
-test("Sticky and ordinary editors occupy separate tab rows", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Sticky and ordinary editors occupy separate tab rows', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await expect(workbench.editors.groupAt(0).tabs).toHaveCount(0);
-	const explorer = workbench.page.locator(".ash-explorer .ash-tree-row");
-	await explorer.filter({ hasText: "main.ts" }).dblclick();
-	await explorer.filter({ hasText: "main.rs" }).dblclick();
+	const explorer = workbench.page.locator('.ash-explorer .ash-tree-row');
+	await explorer.filter({ hasText: 'main.ts' }).dblclick();
+	await explorer.filter({ hasText: 'main.rs' }).dblclick();
 	const group = workbench.editors.groupAt(0);
-	const ordinary = group.title.locator(".ash-ordinary-editor-tabs-row");
-	const sticky = group.title.locator(".ash-sticky-editor-tabs-row");
-	await expect(ordinary.locator(".ash-tab")).toHaveCount(2);
-	await ordinary.locator('.ash-tab').filter({ hasText: "main.ts" }).getByRole('tab').click();
-	await ordinary.locator('.ash-tab').filter({ hasText: "main.ts" }).getByRole('tab').press('Alt+Enter');
-	await expect(sticky.locator(".ash-tab")).toHaveCount(1);
-	await expect(ordinary.locator(".ash-tab")).toHaveCount(1);
-	await expect(sticky.getByRole("tab", { name: "main.ts" })).toBeFocused();
+	const ordinary = group.title.locator('.ash-ordinary-editor-tabs-row');
+	const sticky = group.title.locator('.ash-sticky-editor-tabs-row');
+	await expect(ordinary.locator('.ash-tab')).toHaveCount(2);
+	await ordinary.locator('.ash-tab').filter({ hasText: 'main.ts' }).getByRole('tab').click();
+	await ordinary.locator('.ash-tab').filter({ hasText: 'main.ts' }).getByRole('tab').press('Alt+Enter');
+	await expect(sticky.locator('.ash-tab')).toHaveCount(1);
+	await expect(ordinary.locator('.ash-tab')).toHaveCount(1);
+	await expect(sticky.getByRole('tab', { name: 'main.ts' })).toBeFocused();
 	const pinnedTab = sticky.locator('.ash-tab');
 	const appearance = await pinnedTab.evaluate(element => {
 		const button = element.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!;
@@ -631,12 +631,12 @@ test("Sticky and ordinary editors occupy separate tab rows", { tag: ['@browser-a
 	await unpin.hover();
 	await expect(unpin.locator('.ash-icon')).toBeVisible();
 	await unpin.click();
-	await expect(sticky.locator(".ash-tab")).toHaveCount(0);
-	await expect(ordinary.locator(".ash-tab")).toHaveCount(2);
+	await expect(sticky.locator('.ash-tab')).toHaveCount(0);
+	await expect(ordinary.locator('.ash-tab')).toHaveCount(2);
 	await expect(ordinary.locator('.ash-tab').filter({ hasText: 'main.ts' })).toHaveAttribute('data-state', 'dirty');
 });
 
-test("Connected editor tab follows horizontal tab scrolling", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Connected editor tab follows horizontal tab scrolling', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
@@ -647,79 +647,79 @@ test("Connected editor tab follows horizontal tab scrolling", { tag: ['@browser-
 	await page.getByRole('option', { name: 'Connected', exact: true }).click();
 	await page.locator('.ash-modal-editor-close').click();
 	const names = Array.from({ length: 8 }, (_, index) => `horizontal-scrolling-editor-${index}.ts`);
-	await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), "export const value = 1;\n")));
-	const explorer = page.locator(".ash-explorer .ash-tree-row");
+	await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), 'export const value = 1;\n')));
+	const explorer = page.locator('.ash-explorer .ash-tree-row');
 	for (const name of names) {
 		await explorer.filter({ hasText: name }).dblclick();
 	}
 	await page.setViewportSize({ width: 600, height: 720 });
 	const group = workbench.editors.groupAt(0);
-	const selected = group.title.locator(".ash-ordinary-editor-tabs-row .ash-tab.checked");
-	const viewport = group.title.locator(".ash-ordinary-editor-tabs-row .ash-scrollbar-viewport");
+	const selected = group.title.locator('.ash-ordinary-editor-tabs-row .ash-tab.checked');
+	const viewport = group.title.locator('.ash-ordinary-editor-tabs-row .ash-scrollbar-viewport');
 	await expect(selected).toHaveCount(1);
 	await expect.poll(() => viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 	await viewport.evaluate(element => { element.scrollLeft = 0; });
 	await expect.poll(() => selected.evaluate(tab => {
-		const edge = tab.closest(".ash-scrollbar-viewport")!.getBoundingClientRect().right;
-		return tab.getBoundingClientRect().right > edge && tab.classList.contains("connected-tab-right-clipped");
+		const edge = tab.closest('.ash-scrollbar-viewport')!.getBoundingClientRect().right;
+		return tab.getBoundingClientRect().right > edge && tab.classList.contains('connected-tab-right-clipped');
 	})).toBe(true);
 	await viewport.evaluate(element => { element.scrollLeft = element.scrollWidth; });
 	await expect(selected).not.toHaveClass(/connected-tab-right-clipped/u);
-	await expect.poll(() => selected.evaluate(tab => getComputedStyle(tab).borderBottomWidth)).toBe("0px");
+	await expect.poll(() => selected.evaluate(tab => getComputedStyle(tab).borderBottomWidth)).toBe('0px');
 });
 
-test("Single editor tab uses the available title width", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Single editor tab uses the available title width', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
-	const mainFile = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	const mainFile = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await mainFile.click();
 	await workbench.settingsEditor.openUserSettingsUI();
-	const settings = page.locator(".ash-settings-editor");
+	const settings = page.locator('.ash-settings-editor');
 	await expect(settings).toBeVisible();
 	await workbench.settingsEditor.selectEditorCategory('editor-opening');
-	await settings.getByRole("searchbox", { name: "Search settings" }).fill("workbench.editor.showTabs");
+	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.editor.showTabs');
 	const mode = settings.locator('[data-configuration-key="workbench.editor.showTabs"]');
 	await expect(mode).toBeVisible();
-	await mode.getByRole("combobox").click();
-	await page.getByRole("option", { name: "Single" }).click();
-	await page.locator(".ash-modal-editor-close").click();
+	await mode.getByRole('combobox').click();
+	await page.getByRole('option', { name: 'Single' }).click();
+	await page.locator('.ash-modal-editor-close').click();
 	await mainFile.click();
 
-	const control = workbench.editors.groupAt(0).title.locator(".ash-single-editor-tabs-control");
-	await expect(control.getByRole("tab", { name: "main.ts" })).toBeVisible();
+	const control = workbench.editors.groupAt(0).title.locator('.ash-single-editor-tabs-control');
+	await expect(control.getByRole('tab', { name: 'main.ts' })).toBeVisible();
 	const widths = await control.evaluate(element => ({
 		available: element.getBoundingClientRect().width,
-		tab: element.querySelector(".ash-tab")!.getBoundingClientRect().width,
+		tab: element.querySelector('.ash-tab')!.getBoundingClientRect().width,
 	}));
 	expect(widths.tab).toBeGreaterThan(widths.available * 0.8);
 });
 
-test("Binary content shows an editor error with a working alternative", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Binary content shows an editor error with a working alternative', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	await writeFile(testWorkspace.file, new Uint8Array([0x48, 0x69, 0x00, 0xff, 0x00]));
-	const fileRow = workbench.page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	const fileRow = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
 	await fileRow.click();
 
 	const content = workbench.editors.groupAt(0).content;
-	const error = content.getByRole("alert");
+	const error = content.getByRole('alert');
 	await expect(error.getByRole('heading')).toHaveText('This file cannot be displayed as text because it is binary or uses an unsupported text encoding.');
 	await expect(error).toHaveClass(/warning/u);
-	await expect(error.getByRole("button", { name: "Retry" })).toHaveCount(0);
-	const alternative = error.getByRole("button", { name: "Open as Binary" });
+	await expect(error.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+	const alternative = error.getByRole('button', { name: 'Open as Binary' });
 	await expect(alternative).toBeVisible();
 	const styles = await error.evaluate(element => ({
 		display: getComputedStyle(element).display,
 		gap: getComputedStyle(element).gap,
-		actionGap: getComputedStyle(element.querySelector(".ash-editor-open-error-actions")!).gap,
-		color: getComputedStyle(element.querySelector(".ash-editor-open-error-detail")!).color,
+		actionGap: getComputedStyle(element.querySelector('.ash-editor-open-error-actions')!).gap,
+		color: getComputedStyle(element.querySelector('.ash-editor-open-error-detail')!).color,
 	}));
-	expect(styles.display).toBe("flex");
-	expect(styles.gap).toBe("12px");
-	expect(styles.actionGap).toBe("8px");
-	expect(styles.color).not.toBe("rgba(0, 0, 0, 0)");
+	expect(styles.display).toBe('flex');
+	expect(styles.gap).toBe('12px');
+	expect(styles.actionGap).toBe('8px');
+	expect(styles.color).not.toBe('rgba(0, 0, 0, 0)');
 	await alternative.click();
-	await expect(content.locator(".ash-binary-editor-content")).toContainText("48 69 00 ff 00");
+	await expect(content.locator('.ash-binary-editor-content')).toContainText('48 69 00 ff 00');
 	expect(await content.getByRole('region').evaluate(element => ({
 		display: getComputedStyle(element).display,
 		direction: getComputedStyle(element).flexDirection,
@@ -743,26 +743,26 @@ test("Binary content shows an editor error with a working alternative", { tag: [
 	await expect(content.locator('.ash-binary-editor-content')).toHaveCount(0);
 });
 
-test("Compare open files as binary shows both byte views", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, application, reloadWorkbench }) => {
+test('Compare open files as binary shows both byte views', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, application, reloadWorkbench }) => {
 	const page = workbench.page;
-	const explorer = page.locator(".ash-explorer .ash-tree-row");
+	const explorer = page.locator('.ash-explorer .ash-tree-row');
 	const editor = workbench.editors.groupAt(0).editor;
-	await explorer.filter({ hasText: "main.ts" }).dblclick();
+	await explorer.filter({ hasText: 'main.ts' }).dblclick();
 	await editor.waitForEditorContents(text => text === 'const value = 1;\n');
 	await expect(editor.input).toBeFocused();
-	await explorer.filter({ hasText: "main.rs" }).dblclick();
+	await explorer.filter({ hasText: 'main.rs' }).dblclick();
 	await editor.waitForEditorContents(text => text.includes('fn main'));
 	await expect(editor.input).toBeFocused();
 	await workbench.quickaccess.runCommand('workbench.action.compareActiveFileAsBinary');
-	const picker = page.locator(".ash-quick-pick");
-	const candidateSearch = picker.getByRole("combobox");
-	await expect(candidateSearch).toHaveAttribute("placeholder", "Select the original file to compare");
-	await candidateSearch.fill("main.ts");
-	await candidateSearch.press("Enter");
-	const sides = workbench.editors.groupAt(0).content.locator(".ash-side-by-side-editor > section");
+	const picker = page.locator('.ash-quick-pick');
+	const candidateSearch = picker.getByRole('combobox');
+	await expect(candidateSearch).toHaveAttribute('placeholder', 'Select the original file to compare');
+	await candidateSearch.fill('main.ts');
+	await candidateSearch.press('Enter');
+	const sides = workbench.editors.groupAt(0).content.locator('.ash-side-by-side-editor > section');
 	await expect(sides).toHaveCount(2);
-	await expect(sides.first().locator(".ash-binary-editor-content")).toContainText("00000000");
-	await expect(sides.last().locator(".ash-binary-editor-content")).toContainText("00000000");
+	await expect(sides.first().locator('.ash-binary-editor-content')).toContainText('00000000');
+	await expect(sides.last().locator('.ash-binary-editor-content')).toContainText('00000000');
 	const boxes = await sides.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
 	expect(boxes[1].left).toBeGreaterThanOrEqual(boxes[0].right);
 	if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -790,10 +790,10 @@ test("Compare open files as binary shows both byte views", { tag: ['@browser-app
 	}
 });
 
-test("Reopen With switches the active file to Binary Editor", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Reopen With switches the active file to Binary Editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
-	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
 	await fileRow.click();
 	const content = workbench.editors.groupAt(0).content;
@@ -801,12 +801,12 @@ test("Reopen With switches the active file to Binary Editor", { tag: ['@browser-
 	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
 
 	await workbench.quickaccess.runCommand('workbench.action.reopenWithEditor');
-	const picker = page.locator(".ash-quick-pick");
-	await expect(picker.getByRole("combobox")).toHaveAttribute("placeholder", "Select an editor");
-	await picker.locator(".ash-quick-pick-row-label", { hasText: "Binary Editor" }).click();
+	const picker = page.locator('.ash-quick-pick');
+	await expect(picker.getByRole('combobox')).toHaveAttribute('placeholder', 'Select an editor');
+	await picker.locator('.ash-quick-pick-row-label', { hasText: 'Binary Editor' }).click();
 
 	await expect(picker).toHaveCount(0);
-	await expect(content.locator(".ash-binary-editor-content")).toContainText("63 6f 6e 73 74");
+	await expect(content.locator('.ash-binary-editor-content')).toContainText('63 6f 6e 73 74');
 });
 
 test('Reopen Closed Editor reads the real file again and preserves its tab position', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
@@ -878,20 +878,20 @@ test('Reopen Closed Editor skips a deleted real file and does not restore replac
 	await expect(group.tabs.filter({ hasText: 'history-preview-a.ts' })).toHaveCount(0);
 });
 
-test("Close Editor command closes the active tab", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Close Editor command closes the active tab', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	const page = workbench.page;
-	const fileRow = page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
+	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
 	await fileRow.click();
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs).toHaveCount(1);
 
-	await page.keyboard.press("F1");
-	const picker = page.locator(".ash-quick-pick");
-	await picker.getByRole("combobox").fill(">Close");
-	await picker.locator(".ash-quick-pick-row-label", { hasText: /^Close$/u }).click();
+	await page.keyboard.press('F1');
+	const picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox').fill('>Close');
+	await picker.locator('.ash-quick-pick-row-label', { hasText: /^Close$/u }).click();
 	await expect(group.tabs).toHaveCount(0);
 });
 
@@ -964,16 +964,16 @@ test('Code opens Go to Line from the command palette in the focused editor', { t
 	await expect(input).toBeFocused();
 });
 
-test("Code highlights Rust locally and obtains document symbols asynchronously", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Code highlights Rust locally and obtains document symbols asynchronously', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
-	const explorer = page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+	const explorer = page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'Rust workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	await expect(group.content.locator(".stanza-editor")).toBeVisible();
+	await expect(group.content.locator('.stanza-editor')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Language Rust', exact: true })).toBeVisible();
 	const keyword = group.content.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ }).first();
 	const string = group.content.locator('.stanza-editor-token.token-string').filter({ hasText: 'hello' }).first();
@@ -984,9 +984,9 @@ test("Code highlights Rust locally and obtains document symbols asynchronously",
 	await expect.poll(() => string.evaluate(element => getComputedStyle(element).color)).not.toBe(foreground);
 	expect(await keyword.evaluate(element => getComputedStyle(element).color)).not.toBe(await string.evaluate(element => getComputedStyle(element).color));
 
-	const input = group.content.locator(".stanza-editor-input");
+	const input = group.content.locator('.stanza-editor-input');
 	await input.focus();
-	await input.press(process.platform === "darwin" ? "Meta+Shift+O" : "Control+Shift+O");
+	await input.press(process.platform === 'darwin' ? 'Meta+Shift+O' : 'Control+Shift+O');
 	await expect(page.locator('.ash-quick-pick-row-label')).toContainText('main');
 });
 
@@ -1007,7 +1007,12 @@ test('Git files load bundled highlighting through the product extension catalog'
 		const row = explorer.getByRole('treeitem', { name: filename, exact: true });
 		await expect(row).toBeVisible({ timeout: 15_000 });
 		await row.click();
-		await expect(page.getByRole('button', { name: `Language ${{ 'ignore': 'Ignore', 'git-commit': 'Git Commit Message', 'git-rebase': 'Git Rebase Message', 'properties': 'Properties', 'diff': 'Diff' }[language] ?? language}`, exact: true })).toBeVisible();
+		await expect(
+			page.getByRole('button', {
+				name: `Language ${{ ignore: 'Ignore', 'git-commit': 'Git Commit Message', 'git-rebase': 'Git Rebase Message', properties: 'Properties', diff: 'Diff' }[language] ?? language}`,
+				exact: true,
+			}),
+		).toBeVisible();
 		const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
 		const token = editor.locator('.stanza-editor-token').filter({ hasText: lexeme }).first();
 		await expect(token).toBeVisible();
@@ -1067,50 +1072,50 @@ test('Markdown source styles follow all Ash themes and refresh after editing and
 	await expect(firstLine).toHaveText('# Heading');
 });
 
-test("Code finds local workspace symbols when the language server has no workspace-symbol provider", async ({ target, workbench }) => {
+test('Code finds local workspace symbols when the language server has no workspace-symbol provider', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
-		"This scenario requires Code with the smoke-test language server",
+		target.appServerMode !== 'required' || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		'This scenario requires Code with the smoke-test language server',
 	);
 	test.setTimeout(120_000);
 
 	const page = workbench.page;
-	await page.keyboard.press(process.platform === "darwin" ? "Meta+T" : "Control+T");
-	const quickPick = page.locator(".ash-quick-pick");
-	const query = quickPick.locator(".ash-quick-pick-input input");
+	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+T' : 'Control+T');
+	const quickPick = page.locator('.ash-quick-pick');
+	const query = quickPick.locator('.ash-quick-pick-input input');
 	await query.focus();
 	await expect(query).toBeFocused();
-	await query.fill("@main");
-	const result = quickPick.locator(".ash-quick-pick-row-content").filter({ has: page.locator(".ash-quick-pick-row-label", { hasText: /^main$/ }) }).filter({ hasText: "main.rs" });
+	await query.fill('@main');
+	const result = quickPick.locator('.ash-quick-pick-row-content').filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^main$/ }) }).filter({ hasText: 'main.rs' });
 	await expect(result).toBeVisible({ timeout: 60_000 });
-	await query.press("Enter");
+	await query.press('Enter');
 
 	await expect(quickPick).toBeHidden();
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs.filter({ hasText: 'main.rs' })).toHaveAttribute('aria-selected', 'true');
-	await expect(group.content.locator(".stanza-editor-accessibility-status")).toContainText("4 characters selected");
+	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('4 characters selected');
 });
 
-test("Code searches and opens a workspace symbol from unsaved editor content", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Code searches and opens a workspace symbol from unsaved editor content', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	test.setTimeout(120_000);
 
 	const page = workbench.page;
-	const explorer = page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+	const explorer = page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'Rust workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const input = group.content.locator(".stanza-editor-input");
+	const input = group.content.locator('.stanza-editor-input');
 	await input.focus();
-	await input.press(process.platform === "darwin" ? "Meta+Home" : "Control+Home");
-	for (let index = 0; index < 3; index += 1) await input.press("ArrowRight");
-	for (let index = 0; index < 4; index += 1) await input.press("Shift+ArrowRight");
-	await workbench.page.keyboard.insertText("ephemeral_workspace_symbol");
-	await page.keyboard.press(process.platform === "darwin" ? "Meta+T" : "Control+T");
+	await input.press(process.platform === 'darwin' ? 'Meta+Home' : 'Control+Home');
+	for (let index = 0; index < 3; index += 1) await input.press('ArrowRight');
+	for (let index = 0; index < 4; index += 1) await input.press('Shift+ArrowRight');
+	await workbench.page.keyboard.insertText('ephemeral_workspace_symbol');
+	await page.keyboard.press(process.platform === 'darwin' ? 'Meta+T' : 'Control+T');
 
-	const quickPick = page.locator(".ash-quick-pick");
-	const query = quickPick.locator(".ash-quick-pick-input input");
+	const quickPick = page.locator('.ash-quick-pick');
+	const query = quickPick.locator('.ash-quick-pick-input input');
 	await expect(query).toBeFocused();
 	// Query the current overlay index again while the unsaved revision is being indexed.
 	await expect(async () => {
@@ -1118,74 +1123,74 @@ test("Code searches and opens a workspace symbol from unsaved editor content", {
 		await query.fill('@ephemeral_workspace_symbol');
 		await expect(quickPick.locator('.ash-quick-pick-row-label', { hasText: /^ephemeral_workspace_symbol$/ })).toBeVisible({ timeout: 1_000 });
 	}).toPass({ timeout: 60_000 });
-	await query.press("Enter");
+	await query.press('Enter');
 
 	await expect(quickPick).toBeHidden();
-	await expect(group.content.locator(".stanza-editor-accessibility-status")).toContainText("26 characters selected");
+	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('26 characters selected');
 });
 
-test("Code expands and shrinks Smart Select through semantic editor state", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Code expands and shrinks Smart Select through semantic editor state', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	test.setTimeout(120_000);
 
-	const explorer = workbench.page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+	const explorer = workbench.page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'Rust workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const input = group.content.locator(".stanza-editor-input");
-	const status = group.content.locator(".stanza-editor-accessibility-status");
+	const input = group.content.locator('.stanza-editor-input');
+	const status = group.content.locator('.stanza-editor-accessibility-status');
 	await input.focus();
-	await input.press(process.platform === "darwin" ? "Meta+Home" : "Control+Home");
-	await input.press("ArrowDown");
-	await input.press("Home");
-	for (let index = 0; index < 10; index += 1) await input.press("ArrowRight");
+	await input.press(process.platform === 'darwin' ? 'Meta+Home' : 'Control+Home');
+	await input.press('ArrowDown');
+	await input.press('Home');
+	for (let index = 0; index < 10; index += 1) await input.press('ArrowRight');
 
-	await input.press(process.platform === "darwin" ? "Meta+Shift+ArrowRight" : "Control+Shift+ArrowRight");
-	await expect(status).toContainText("7 characters selected");
-	await input.press(process.platform === "darwin" ? "Meta+Shift+ArrowRight" : "Control+Shift+ArrowRight");
-	await expect.poll(async () => selectedCharacterCount(await status.textContent()), { timeout: 60_000, message: "Smart Select expands beyond the identifier" }).toBeGreaterThan(7);
-	await input.press(process.platform === "darwin" ? "Meta+Shift+ArrowLeft" : "Control+Shift+ArrowLeft");
-	await expect(status).toContainText("7 characters selected");
+	await input.press(process.platform === 'darwin' ? 'Meta+Shift+ArrowRight' : 'Control+Shift+ArrowRight');
+	await expect(status).toContainText('7 characters selected');
+	await input.press(process.platform === 'darwin' ? 'Meta+Shift+ArrowRight' : 'Control+Shift+ArrowRight');
+	await expect.poll(async () => selectedCharacterCount(await status.textContent()), { timeout: 60_000, message: 'Smart Select expands beyond the identifier' }).toBeGreaterThan(7);
+	await input.press(process.platform === 'darwin' ? 'Meta+Shift+ArrowLeft' : 'Control+Shift+ArrowLeft');
+	await expect(status).toContainText('7 characters selected');
 });
 
-test("Code shows App Server LSP completions in Stanza", async ({ target, workbench }) => {
+test('Code shows App Server LSP completions in Stanza', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
-		"This scenario requires Code with the smoke-test language server",
+		target.appServerMode !== 'required' || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		'This scenario requires Code with the smoke-test language server',
 	);
 	test.setTimeout(120_000);
 
-	const explorer = workbench.page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+	const explorer = workbench.page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'Rust workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const input = group.content.locator(".stanza-editor-input");
+	const input = group.content.locator('.stanza-editor-input');
 	await input.focus();
-	await input.press(process.platform === "darwin" ? "Meta+End" : "Control+End");
-	await input.press("ArrowUp");
-	await input.press("ArrowUp");
-	await input.press("End");
-	await input.press("Control+Space");
+	await input.press(process.platform === 'darwin' ? 'Meta+End' : 'Control+End');
+	await input.press('ArrowUp');
+	await input.press('ArrowUp');
+	await input.press('End');
+	await input.press('Control+Space');
 
-	const options = group.content.locator(".stanza-editor-completion-option");
-	await expect.poll(() => options.count(), { timeout: 60_000, message: "LSP completion candidates appear" }).toBeGreaterThan(0);
-	await expect(options.filter({ hasText: "len" }).first()).toBeVisible();
+	const options = group.content.locator('.stanza-editor-completion-option');
+	await expect.poll(() => options.count(), { timeout: 60_000, message: 'LSP completion candidates appear' }).toBeGreaterThan(0);
+	await expect(options.filter({ hasText: 'len' }).first()).toBeVisible();
 });
 
-test("Code streams current App Server LSP diagnostics into Stanza", async ({ target, workbench }) => {
+test('Code streams current App Server LSP diagnostics into Stanza', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
-		"This scenario requires Code with the smoke-test language server",
+		target.appServerMode !== 'required' || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		'This scenario requires Code with the smoke-test language server',
 	);
 	test.setTimeout(120_000);
 
 	const page = workbench.page;
-	const explorer = page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+	const explorer = page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'Rust workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
@@ -1198,34 +1203,34 @@ test("Code streams current App Server LSP diagnostics into Stanza", async ({ tar
 	const diagnostics = page.locator('.ash-problems-message').filter({ hasText: /^fixture diagnostic v\d+$/u });
 	await expect(diagnostics).toHaveText('fixture diagnostic v1');
 
-	const input = group.content.locator(".stanza-editor-input");
+	const input = group.content.locator('.stanza-editor-input');
 	await input.focus();
-	await input.press(process.platform === "darwin" ? "Meta+End" : "Control+End");
-	await input.type(" ");
+	await input.press(process.platform === 'darwin' ? 'Meta+End' : 'Control+End');
+	await input.type(' ');
 	await expect(diagnostics).toHaveText('fixture diagnostic v2');
 	await expect(marker).toHaveCount(2);
 });
 
-test("Code applies and undoes App Server LSP document formatting in Stanza", async ({ target, workbench }) => {
+test('Code applies and undoes App Server LSP document formatting in Stanza', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
-		"This scenario requires Code with the smoke-test language server",
+		target.appServerMode !== 'required' || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		'This scenario requires Code with the smoke-test language server',
 	);
 	test.setTimeout(120_000);
 
-	const explorer = workbench.page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+	const explorer = workbench.page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'Rust workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const secondLine = group.content.locator(".stanza-editor-line-text").nth(1);
+	const secondLine = group.content.locator('.stanza-editor-line-text').nth(1);
 	await expect(secondLine).toHaveText(/^ {4}let /);
-	const input = group.content.locator(".stanza-editor-input");
+	const input = group.content.locator('.stanza-editor-input');
 	await input.focus();
-	await input.press(process.platform === "darwin" ? "Meta+Shift+I" : "Control+Shift+I");
+	await input.press(process.platform === 'darwin' ? 'Meta+Shift+I' : 'Control+Shift+I');
 	await expect(secondLine).toHaveText(/^ {2}let /, { timeout: 60_000 });
-	await input.press(process.platform === "darwin" ? "Meta+Z" : "Control+Z");
+	await input.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
 	await expect(secondLine).toHaveText(/^ {4}let /);
 });
 
@@ -1281,46 +1286,46 @@ test.describe('Code LSP on-type formatting', () => {
 	}
 });
 
-test("Code shows App Server LSP parameter hints in Stanza", async ({ target, workbench }) => {
+test('Code shows App Server LSP parameter hints in Stanza', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
-		"This scenario requires Code with the smoke-test language server",
+		target.appServerMode !== 'required' || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		'This scenario requires Code with the smoke-test language server',
 	);
 	test.setTimeout(120_000);
 
-	const explorer = workbench.page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+	const explorer = workbench.page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'Rust workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const input = group.content.locator(".stanza-editor-input");
+	const input = group.content.locator('.stanza-editor-input');
 	await input.focus();
-	await input.press(process.platform === "darwin" ? "Meta+Shift+Space" : "Control+Shift+Space");
-	await expect(group.content.locator(".stanza-editor-parameter-hints")).toContainText("String::from(value: &str)", { timeout: 60_000 });
-	await expect(group.content.locator(".stanza-editor-parameter-hints-parameter.active")).toHaveText("value: &str");
-	await input.press("Escape");
-	await input.press(process.platform === "darwin" ? "Meta+End" : "Control+End");
-	await input.type("(");
-	await expect(group.content.locator(".stanza-editor-parameter-hints")).toContainText("String::from(value: &str)", { timeout: 60_000 });
+	await input.press(process.platform === 'darwin' ? 'Meta+Shift+Space' : 'Control+Shift+Space');
+	await expect(group.content.locator('.stanza-editor-parameter-hints')).toContainText('String::from(value: &str)', { timeout: 60_000 });
+	await expect(group.content.locator('.stanza-editor-parameter-hints-parameter.active')).toHaveText('value: &str');
+	await input.press('Escape');
+	await input.press(process.platform === 'darwin' ? 'Meta+End' : 'Control+End');
+	await input.type('(');
+	await expect(group.content.locator('.stanza-editor-parameter-hints')).toContainText('String::from(value: &str)', { timeout: 60_000 });
 });
 
-test("Code shows App Server LSP inlay hints in Stanza", async ({ target, workbench }) => {
+test('Code shows App Server LSP inlay hints in Stanza', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
-		"This scenario requires Code with the smoke-test language server",
+		target.appServerMode !== 'required' || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		'This scenario requires Code with the smoke-test language server',
 	);
 	test.setTimeout(120_000);
 
-	const explorer = workbench.page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+	const explorer = workbench.page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'Rust workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
-	const hint = workbench.editors.groupAt(0).content.locator(".stanza-editor-inlay-hint").filter({ hasText: ": String" });
+	const hint = workbench.editors.groupAt(0).content.locator('.stanza-editor-inlay-hint').filter({ hasText: ': String' });
 	await expect(hint).toBeVisible({ timeout: 60_000 });
 	await hint.hover();
-	await expect(hint).toHaveAttribute("title", "inferred type");
+	await expect(hint).toHaveAttribute('title', 'inferred type');
 
 	const editor = workbench.editors.groupAt(0).editor;
 	await editor.waitForEditorFocus();
@@ -1338,35 +1343,35 @@ test("Code shows App Server LSP inlay hints in Stanza", async ({ target, workben
 	await expect(editor.input).toBeFocused();
 });
 
-test("Code keeps App Server LSP linked edits in one undo step", async ({ target, workbench }) => {
+test('Code keeps App Server LSP linked edits in one undo step', async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
-		"This scenario requires Code with the smoke-test language server",
+		target.appServerMode !== 'required' || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		'This scenario requires Code with the smoke-test language server',
 	);
 	test.setTimeout(120_000);
 
-	const explorer = workbench.page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.rs" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "Rust workspace file appears in Explorer" }).toBe(1);
+	const explorer = workbench.page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.rs' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'Rust workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const editor = group.content.locator(".stanza-editor");
-	const input = editor.locator(".stanza-editor-input");
+	const editor = group.content.locator('.stanza-editor');
+	const input = editor.locator('.stanza-editor-input');
 	await input.focus();
-	await input.press(process.platform === "darwin" ? "Meta+Home" : "Control+Home");
-	await input.press("ArrowDown");
-	await input.press("Home");
-	await input.press("Home");
-	for (let index = 0; index < 9; index += 1) await input.press("ArrowRight");
+	await input.press(process.platform === 'darwin' ? 'Meta+Home' : 'Control+Home');
+	await input.press('ArrowDown');
+	await input.press('Home');
+	await input.press('Home');
+	for (let index = 0; index < 9; index += 1) await input.press('ArrowRight');
 	await expect(editor).toHaveClass(/linked-editing-active/, { timeout: 60_000 });
 
-	await input.type("X");
-	await expect(group.content.locator(".stanza-editor-line-text").nth(1)).toContainText("mXessage");
-	await expect(group.content.locator(".stanza-editor-line-text").nth(2)).toContainText("mXessage");
-	await input.press(process.platform === "darwin" ? "Meta+Z" : "Control+Z");
-	await expect(group.content.locator(".stanza-editor-line-text").nth(1)).toContainText("let message");
-	await expect(group.content.locator(".stanza-editor-line-text").nth(2)).toContainText("message.");
+	await input.type('X');
+	await expect(group.content.locator('.stanza-editor-line-text').nth(1)).toContainText('mXessage');
+	await expect(group.content.locator('.stanza-editor-line-text').nth(2)).toContainText('mXessage');
+	await input.press(process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z');
+	await expect(group.content.locator('.stanza-editor-line-text').nth(1)).toContainText('let message');
+	await expect(group.content.locator('.stanza-editor-line-text').nth(2)).toContainText('message.');
 });
 
 test('PDF files use the text fallback when the optional viewer is not installed', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
@@ -1378,32 +1383,32 @@ test('PDF files use the text fallback when the optional viewer is not installed'
 	await expect(group.content.locator('.ash-pdf-editor')).toHaveCount(0);
 });
 
-test.describe("large files", () => {
+test.describe('large files', () => {
 	test.use({ includeLargeTestFile: true });
 
-	test("Code keeps a 300,001-line file editable and saveable without background tokenization", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+	test('Code keeps a 300,001-line file editable and saveable without background tokenization', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 		test.setTimeout(120_000);
 
-		const explorer = workbench.page.locator(".ash-explorer");
-		const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "large.ts" });
-		await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "large file appears in Explorer" }).toBe(1);
+		const explorer = workbench.page.locator('.ash-explorer');
+		const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'large.ts' });
+		await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'large file appears in Explorer' }).toBe(1);
 		await fileRow.click();
 
 		const group = workbench.editors.groupAt(0);
-		const editor = group.content.locator(".stanza-editor");
+		const editor = group.content.locator('.stanza-editor');
 		await expect(editor).toBeVisible({ timeout: 60_000 });
-		await expect(editor.locator(".stanza-editor-token")).toHaveCount(0);
+		await expect(editor.locator('.stanza-editor-token')).toHaveCount(0);
 
-		const input = editor.locator(".stanza-editor-input");
+		const input = editor.locator('.stanza-editor-input');
 		await input.focus();
-		await input.press("ControlOrMeta+Home");
-		await workbench.page.keyboard.insertText("// edited\n");
-		await expect(editor.locator(".view-lines")).toContainText("// edited");
-		await input.press("ControlOrMeta+S");
+		await input.press('ControlOrMeta+Home');
+		await workbench.page.keyboard.insertText('// edited\n');
+		await expect(editor.locator('.view-lines')).toContainText('// edited');
+		await input.press('ControlOrMeta+S');
 
 		await expect.poll(
-			async () => (await readFile(testWorkspace.largeFile, "utf8")).startsWith("// edited\nlet value = 1;"),
-			{ timeout: 60_000, message: "large-file edit reaches the App Server workspace" },
+			async () => (await readFile(testWorkspace.largeFile, 'utf8')).startsWith('// edited\nlet value = 1;'),
+			{ timeout: 60_000, message: 'large-file edit reaches the App Server workspace' },
 		).toBe(true);
 	});
 });
@@ -1412,8 +1417,6 @@ function selectedCharacterCount(status: string | null): number {
 	const match = status?.match(/(\d+) characters selected/u);
 	return match ? Number(match[1]) : 0;
 }
-
-
 
 for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto save on focus change'] as const) {
 	test(`Code preserves ${mode} file edits across restart`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, application, restartWorkbench }) => {
@@ -1474,60 +1477,60 @@ for (const mode of ['manual save', 'unsaved', 'auto save after delay', 'auto sav
 	});
 }
 
-test("Code restores unsaved editor content after a browser reload", { tag: ['@browser-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Code restores unsaved editor content after a browser reload', { tag: ['@browser-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
-	const explorer = page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "main.ts" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "workspace file appears in Explorer" }).toBe(1);
+	const explorer = page.locator('.ash-explorer');
+	const fileRow = explorer.locator('.ash-tree-row').filter({ hasText: 'main.ts' });
+	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: 'workspace file appears in Explorer' }).toBe(1);
 	await fileRow.click();
 
 	const group = workbench.editors.groupAt(0);
-	const input = group.content.locator(".stanza-editor-input");
+	const input = group.content.locator('.stanza-editor-input');
 	await input.focus();
-	await input.press("ControlOrMeta+A");
-	await input.type("const recovered = 42;");
-	await expect.poll(() => hasWorkingCopyBackup(page, "const recovered = 42;"), { message: "dirty editor content reaches IndexedDB" }).toBe(true);
-	expect(await readFile(testWorkspace.file, "utf8")).toBe("const value = 1;\n");
+	await input.press('ControlOrMeta+A');
+	await input.type('const recovered = 42;');
+	await expect.poll(() => hasWorkingCopyBackup(page, 'const recovered = 42;'), { message: 'dirty editor content reaches IndexedDB' }).toBe(true);
+	expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
 
 	await workbench.reloadWindow();
-	await expect(group.tabs.filter({ hasText: "main.ts" })).toHaveCount(1);
-	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("const recovered = 42;");
-	expect(await readFile(testWorkspace.file, "utf8")).toBe("const value = 1;\n");
+	await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
+	await expect(group.content.locator('.stanza-editor-line-text').first()).toContainText('const recovered = 42;');
+	expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
 
-	const restoredInput = group.content.locator(".stanza-editor-input");
+	const restoredInput = group.content.locator('.stanza-editor-input');
 	await restoredInput.focus();
-	await restoredInput.press("ControlOrMeta+S");
-	await expect.poll(() => readFile(testWorkspace.file, "utf8"), { message: "restored content can still be saved" }).toBe("const recovered = 42;");
-	await expect.poll(() => hasWorkingCopyBackup(page, "const recovered = 42;"), { message: "saving removes the crash backup" }).toBe(false);
+	await restoredInput.press('ControlOrMeta+S');
+	await expect.poll(() => readFile(testWorkspace.file, 'utf8'), { message: 'restored content can still be saved' }).toBe('const recovered = 42;');
+	await expect.poll(() => hasWorkingCopyBackup(page, 'const recovered = 42;'), { message: 'saving removes the crash backup' }).toBe(false);
 });
 
-test("Code restores an untitled draft and opens the next document separately", { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Code restores an untitled draft and opens the next document separately', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
-	await workbench.quickaccess.runCommand("workbench.action.closeAllEditors");
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await expect(group.tabs).toHaveCount(0);
-	await page.keyboard.press("ControlOrMeta+N");
-	const input = group.content.locator(".stanza-editor-input");
+	await page.keyboard.press('ControlOrMeta+N');
+	const input = group.content.locator('.stanza-editor-input');
 	await expect(input).toBeVisible();
 	await input.focus();
-	await input.type("recovered untitled draft");
-	await expect.poll(() => hasWorkingCopyBackup(page, "recovered untitled draft"), { message: "untitled draft reaches IndexedDB" }).toBe(true);
+	await input.type('recovered untitled draft');
+	await expect.poll(() => hasWorkingCopyBackup(page, 'recovered untitled draft'), { message: 'untitled draft reaches IndexedDB' }).toBe(true);
 
-	await page.reload({ waitUntil: "domcontentloaded" });
+	await page.reload({ waitUntil: 'domcontentloaded' });
 	await workbench.waitForReady();
-	const restoredTab = group.tabs.filter({ hasText: "Untitled-1" });
+	const restoredTab = group.tabs.filter({ hasText: 'Untitled-1' });
 	await expect(restoredTab).toHaveCount(1);
-	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
+	await expect(group.content.locator('.stanza-editor-line-text').first()).toContainText('recovered untitled draft');
 
 	await expect(group.tabs.filter({ hasText: /^Untitled-/u })).toHaveCount(1);
 	await group.editor.input.focus();
-	await page.keyboard.press("ControlOrMeta+N");
+	await page.keyboard.press('ControlOrMeta+N');
 	await expect(group.tabs.filter({ hasText: /^Untitled-/u })).toHaveCount(2);
-	await expect(group.tabs.filter({ hasText: "Untitled-2" })).toHaveCount(1);
+	await expect(group.tabs.filter({ hasText: 'Untitled-2' })).toHaveCount(1);
 	await restoredTab.click();
-	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
+	await expect(group.content.locator('.stanza-editor-line-text').first()).toContainText('recovered untitled draft');
 });
 
 async function hasWorkingCopyBackup(page: Page, content: string, application?: ElectronApplication): Promise<boolean> {
@@ -1541,15 +1544,15 @@ async function hasWorkingCopyBackup(page: Page, content: string, application?: E
 	}
 	return page.evaluate(async expectedContent => {
 		const database = await new Promise<IDBDatabase>((resolve, reject) => {
-			const opening = indexedDB.open("ash-working-copy-backups", 1);
+			const opening = indexedDB.open('ash-working-copy-backups', 1);
 			opening.onsuccess = () => resolve(opening.result);
-			opening.onerror = () => reject(opening.error ?? new Error("Could not inspect working-copy backups"));
+			opening.onerror = () => reject(opening.error ?? new Error('Could not inspect working-copy backups'));
 		});
 		try {
 			const records = await new Promise<Array<{ readonly content?: string; }>>((resolve, reject) => {
-				const request = database.transaction("backups", "readonly").objectStore("backups").getAll();
+				const request = database.transaction('backups', 'readonly').objectStore('backups').getAll();
 				request.onsuccess = () => resolve(request.result);
-				request.onerror = () => reject(request.error ?? new Error("Could not read working-copy backups"));
+				request.onerror = () => reject(request.error ?? new Error('Could not read working-copy backups'));
 			});
 			return records.some(record => record.content === expectedContent);
 		} finally {
@@ -1557,7 +1560,6 @@ async function hasWorkingCopyBackup(page: Page, content: string, application?: E
 		}
 	}, content);
 }
-
 
 test('Code replaces a selection with multiline text and remains editable', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
@@ -1708,12 +1710,6 @@ test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain und
 	}
 });
 
-
-
-
-
-
-
 test('Agent review commands are available without an App Server connection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench, restartWorkbench }) => {
 	const runEmptyReview = async (label: string): Promise<void> => {
 		await workbench.quickaccess.open('>chatEditing.reviewChanges');
@@ -1732,8 +1728,6 @@ test('Agent review commands are available without an App Server connection', { t
 	({ workbench } = await restartWorkbench());
 	await runEmptyReview('审核 Agent 修改');
 });
-
-
 
 async function setAutoAcceptDelay(workbench: import('../../../automation/workbench.js').Workbench, seconds: number): Promise<void> {
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
@@ -1773,9 +1767,6 @@ test('Agent automatic acceptance setting has Chinese metadata', { tag: ['@browse
 	await expect(localized.getByRole('spinbutton', { name: '自动接受 Agent 修改', exact: true })).toHaveValue('7');
 	await expect(localized).toContainText('回复完成后，等待多少秒自动接受修改');
 });
-
-
-
 
 for (const mode of ['manual', 'After Delay', 'On Focus Change', 'On Window Change'] as const) {
 	test(`save cleanup persists configured bytes through ${mode} in the product`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench }) => {

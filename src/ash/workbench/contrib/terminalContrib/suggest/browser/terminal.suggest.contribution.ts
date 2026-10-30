@@ -227,7 +227,10 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 			}
 			const unconfirmed = pending && model.value !== pending.prefix + pending.value;
 			this.pendingInput = unconfirmed ? { prefix: pending.prefix, value: pending.value + data } : { prefix: model.value, value: data };
-			if (this.pendingInput.value.length > 1024) { this.retire(); return; }
+			if (this.pendingInput.value.length > 1024) {
+				this.retire();
+				return;
+			}
 			this.inputExpiry.schedule();
 		});
 		this._register(toDisposable(() => input.dispose()));
@@ -299,7 +302,10 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 		const publish = (): void => {
 			if (!valid()) return;
 			this.widget?.show(items, item => {
-				if (!valid() || item.isValid?.() === false) { this.retire(); return; }
+				if (!valid() || item.isValid?.() === false) {
+					this.retire();
+					return;
+				}
 				this.retire();
 				void instance.sendText(item.inputData, false).catch(() => undefined);
 			});

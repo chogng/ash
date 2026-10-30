@@ -1,20 +1,20 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled } from '../../../../base/common/errors.js';
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { autorun, observableValue, transaction, type IReader, type ITransaction } from "../../../../base/common/observable.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { autorun, observableValue, transaction, type IReader, type ITransaction } from '../../../../base/common/observable.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../common/session.js";
-import { ISessionsManagementService } from "../common/sessionsManagement.js";
+import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from '../common/session.js';
+import { ISessionsManagementService } from '../common/sessionsManagement.js';
 import type { SessionWorkspaceSelection } from '../common/session.js';
 import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 import { ICustomViewService } from '../../customView/browser/customViewService.js';
 
 /** One visible slot in the dedicated Sessions Workbench. */
 export type SessionsViewSelection =
-	| { readonly kind: "session"; readonly active: IActiveSessionThread; }
-	| { readonly kind: "untitled"; readonly session: IUntitledChatSession; };
+	| { readonly kind: 'session'; readonly active: IActiveSessionThread; }
+	| { readonly kind: 'untitled'; readonly session: IUntitledChatSession; };
 
 export interface SessionsSelection {
 	readonly visibleSelections: readonly SessionsViewSelection[];
@@ -42,11 +42,11 @@ export interface ISessionsService {
 	navigateForward(): void;
 }
 
-export const ISessionsService = createServiceIdentifier<ISessionsService>("sessionsService");
+export const ISessionsService = createServiceIdentifier<ISessionsService>('sessionsService');
 
 type SessionsViewReference =
-	| { readonly kind: "session"; readonly sessionId: SessionId; readonly threadId: ThreadId; }
-	| { readonly kind: "untitled"; readonly untitledSessionId: string; };
+	| { readonly kind: 'session'; readonly sessionId: SessionId; readonly threadId: ThreadId; }
+	| { readonly kind: 'untitled'; readonly untitledSessionId: string; };
 
 type NavigationEntry = SessionsViewReference | { readonly kind: 'customView'; readonly id: string; };
 
@@ -167,7 +167,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		if (wasActive) {
 			state.activeReference.set(undefined);
 		}
-		if (selection.kind === "untitled") {
+		if (selection.kind === 'untitled') {
 			this.sessionService.discardUntitledSession(selection.session.untitledSessionId);
 		}
 		if (wasActive && replacement) this.activate(replacement, state, 'focus', 'automatic');
@@ -327,13 +327,13 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 	private resolve(reference: SessionsViewReference | undefined): SessionsViewSelection | undefined {
 		if (!reference) return undefined;
-		if (reference.kind === "untitled") {
+		if (reference.kind === 'untitled') {
 			const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === reference.untitledSessionId);
-			return session ? { kind: "untitled", session } : undefined;
+			return session ? { kind: 'untitled', session } : undefined;
 		}
-		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === "active");
-		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === "active");
-		return session && thread ? { kind: "session", active: { session, threadId: thread.threadId } } : undefined;
+		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active');
+		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === 'active');
+		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId } } : undefined;
 	}
 }
 
@@ -350,17 +350,17 @@ class SessionsViewState {
 
 function activeSelection(sessionService: ISessionsManagementService): SessionsViewSelection | undefined {
 	const untitled = sessionService.activeUntitledSession;
-	if (untitled) return { kind: "untitled", session: untitled };
+	if (untitled) return { kind: 'untitled', session: untitled };
 	const active = sessionService.active;
-	return active?.session.status === "active" && active.session.chats.some(thread => thread.threadId === active.threadId && thread.status === "active")
-		? { kind: "session", active }
+	return active?.session.status === 'active' && active.session.chats.some(thread => thread.threadId === active.threadId && thread.status === 'active')
+		? { kind: 'session', active }
 		: undefined;
 }
 
 function referenceForSelection(selection: SessionsViewSelection): SessionsViewReference {
-	return selection.kind === "session"
-		? { kind: "session", sessionId: selection.active.session.sessionId, threadId: selection.active.threadId }
-		: { kind: "untitled", untitledSessionId: selection.session.untitledSessionId };
+	return selection.kind === 'session'
+		? { kind: 'session', sessionId: selection.active.session.sessionId, threadId: selection.active.threadId }
+		: { kind: 'untitled', untitledSessionId: selection.session.untitledSessionId };
 }
 
 function selectionKey(selection: SessionsViewSelection | undefined): string | undefined {
@@ -372,13 +372,13 @@ function navigationKey(entry: NavigationEntry | undefined): string | undefined {
 }
 
 function referenceKey(reference: SessionsViewReference | undefined): string | undefined {
-	return reference?.kind === "session"
+	return reference?.kind === 'session'
 		? `session:${reference.sessionId}:${reference.threadId}`
 		: reference ? `untitled:${reference.untitledSessionId}` : undefined;
 }
 
 function visibilityKey(reference: SessionsViewReference | undefined): string | undefined {
-	return reference?.kind === "session"
+	return reference?.kind === 'session'
 		? `session:${reference.sessionId}`
 		: reference ? `untitled:${reference.untitledSessionId}` : undefined;
 }

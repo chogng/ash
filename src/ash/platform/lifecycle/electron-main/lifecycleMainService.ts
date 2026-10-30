@@ -5,6 +5,7 @@ import { isCancellationError } from '../../../base/common/errors.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IStateService } from '../../state/node/state.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
+import type { IAuxiliaryWindow } from '../../auxiliaryWindow/electron-main/auxiliaryWindow.js';
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_QUIT_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
 
 interface WindowCloseState {
@@ -27,9 +28,9 @@ interface ILifecycleWindow {
 	close(): void;
 	readonly webContents: {
 		on(event: 'render-process-gone', listener: () => void): unknown;
-		on(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
+		on(event: 'did-navigate', listener: () => void): unknown;
 		off(event: 'render-process-gone', listener: () => void): unknown;
-		off(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
+		off(event: 'did-navigate', listener: () => void): unknown;
 		send(channel: string, token: number): void;
 	};
 }
@@ -41,6 +42,7 @@ export interface ILifecycleMainService<TWindow = Electron.BrowserWindow> {
 	stopStartup(): Promise<void>;
 	prepareUpdateRestart(version: string): Promise<void>;
 	registerWindow(window: TWindow): IDisposable;
+	registerAuxWindow(auxWindow: IAuxiliaryWindow): void;
 	unload(window: TWindow, reason?: 'load' | 'reload'): Promise<boolean>;
 	respondToClose(window: TWindow, response: WindowCloseResponse): void;
 }
@@ -51,6 +53,7 @@ export const ILifecycleMainService = createDecorator<ILifecycleMainService>('lif
 export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disposable implements ILifecycleMainService<TWindow> {
 	private static readonly updateRestartStateKey = 'updateRestartVersion';
 	private readonly windowRegistrations = this._register(new DisposableMap<TWindow, IDisposable>());
+	private readonly auxiliaryWindowRegistrations = this._register(new DisposableMap<number, IDisposable>());
 	private readonly closeStates = new Map<TWindow, WindowCloseState>();
 	private nextCloseToken = 0;
 	private readonly startupCancellation = this._register(new CancellationTokenSource());
@@ -125,32 +128,48 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 			window.webContents.send(reason === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL, token);
 		};
 		const onRendererLoading = (): void => { state.ready = false; clearPending(); };
-		const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
-			// Webviews navigate independently of the Workbench document and its shutdown participants.
-			if (mainFrame && !inPlace) { onRendererLoading(); }
-		};
 		window.on('close', onClose);
-		window.webContents.on('did-start-navigation', onNavigation);
+		// A navigation attempt can be prevented while the old document still owns
+		// shutdown participants. Retire them only when a new main document commits.
+		window.webContents.on('did-navigate', onRendererLoading);
 		window.webContents.on('render-process-gone', onRendererLoading);
 		this.windowRegistrations.set(window, toDisposable(() => {
 			clearPending();
 			this.closeStates.delete(window);
 			window.off('close', onClose);
 			if (!window.isDestroyed()) {
-				window.webContents.off('did-start-navigation', onNavigation);
+				window.webContents.off('did-navigate', onRendererLoading);
 				window.webContents.off('render-process-gone', onRendererLoading);
 			}
 		}));
 		return toDisposable(() => this.windowRegistrations.deleteAndDispose(window));
 	}
 
+	/** Auxiliary windows stay live until their owner has saved its editor layout during quit. */
+	public registerAuxWindow(auxWindow: IAuxiliaryWindow): void {
+		this.assertNotDisposed();
+		if (this.auxiliaryWindowRegistrations.has(auxWindow.id)) throw new Error('Auxiliary window is already registered for close');
+		const window = auxWindow.win;
+		const onClose = (event: { preventDefault(): void; }): void => {
+			// Electron can close this window before its owner finishes the renderer
+			// shutdown handshake. The owner's resource scope will destroy it afterward.
+			if (this.getCloseReason() === 'quit') event.preventDefault();
+		};
+		const onClosed = (): void => { this.auxiliaryWindowRegistrations.deleteAndDispose(auxWindow.id); };
+		window.on('close', onClose);
+		window.once('closed', onClosed);
+		this.auxiliaryWindowRegistrations.set(auxWindow.id, toDisposable(() => {
+			window.off('close', onClose);
+			window.off('closed', onClosed);
+		}));
+	}
+
 	/** The renderer must finish its shutdown participants before this window loads another workspace. */
 	public unload(window: TWindow, reason: 'load' | 'reload' = 'load'): Promise<boolean> {
 		const state = this.closeStates.get(window);
 		if (!state || window.isDestroyed() || !state.ready && reason !== 'reload') throw new Error('Workbench window is not ready to unload');
-		// A prevented navigation can emit did-start-loading before beforeunload.
-		// Main observed the live product document prevent it, so its participant remains available.
-		if (reason === 'reload') state.ready = true;
+		// Startup failures have no renderer shutdown participants to acknowledge Retry.
+		if (!state.ready) return Promise.resolve(true);
 		if (state.pendingToken !== undefined) throw new Error('Workbench window already has a shutdown request');
 		return new Promise<boolean>(resolve => {
 			const token = ++this.nextCloseToken;

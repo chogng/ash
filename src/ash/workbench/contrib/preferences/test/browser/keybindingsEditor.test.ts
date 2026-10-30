@@ -1,3 +1,4 @@
+import { Direction } from '../../../../../base/browser/ui/grid/grid.js';
 import { emptyEditorGroupsService } from '../../../../test/common/testWorkbenchContextKeys.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
@@ -376,7 +377,7 @@ test('Keyboard Shortcuts reuses one modal and reconciles resource rows across ed
 	assert.equal((await resources.read())[0]?.key, 'ctrl+[KeyJ]');
 	// Closing the source's last tab retires that empty group. Create a live target
 	// for the move while retaining the same input and resolved shortcut model.
-	const targetGroup = editor.addGroup(splitGroup.id, 'left');
+	const targetGroup = editor.addGroup(splitGroup.id, Direction.Left);
 	await splitGroup.moveEditorTo(splitGroup.inputs[0]!, targetGroup, 0);
 	editor.activateGroup(targetGroup.id);
 	assert.equal(splitGroup.inputs.length, 0);

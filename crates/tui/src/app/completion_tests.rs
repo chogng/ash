@@ -209,6 +209,7 @@ fn model_option_failure_is_visible_without_interrupting_the_turn_or_draft() {
         ));
         app.insert_text("keep draft");
         let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+            catalog_statuses: Vec::new(),
             catalog_scopes: None,
             models: vec![],
         };
@@ -307,9 +308,12 @@ fn status_line_context_follows_thread_snapshots() {
         model: "model".into(),
     });
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                source: None,
+                pricing: Vec::new(),
                 retirement: None,
                 description: None,
                 discovered: None,

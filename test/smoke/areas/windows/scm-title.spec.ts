@@ -27,12 +27,11 @@ test('Changes title menus switch and retain view and sort choices through regist
 	};
 	await expect(changes.locator('.ash-scm-change')).toHaveCount(3);
 	await expect(toolbar.getByRole('button', { name: 'Refresh', exact: true })).toBeEnabled();
-	const sortTree = await workbench.menus.inspect(application, open, ['View & Sort']);
-	expect(sortTree).toEqual(expect.arrayContaining([
-		expect.objectContaining({ label: 'View as Tree', checked: true }),
-		expect.objectContaining({ label: 'Sort Changes by Name', enabled: false }),
+	const sortList = await workbench.menus.inspect(application, open, ['View & Sort']);
+	expect(sortList).toEqual(expect.arrayContaining([
+		expect.objectContaining({ label: 'View as List', checked: true }),
+		expect.objectContaining({ label: 'Sort Changes by Name', enabled: true }),
 	]));
-	await workbench.menus.select(application, open, ['View as List']);
 	await expect(changes.locator('.ash-scm-folder')).toHaveCount(0);
 	await workbench.menus.select(application, open, ['View & Sort', 'Sort Changes by Path']);
 	await expect.poll(() => changes.locator('.ash-scm-change-open').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Open a/z.ts for Changes', 'Open b/a.ts for Changes', 'Open main.ts for Changes']);
@@ -54,6 +53,14 @@ test('Changes title menus switch and retain view and sort choices through regist
 	]));
 	await workbench.menus.select(application, open, ['View as Tree']);
 	await expect(changes.locator('.ash-scm-folder')).toHaveCount(2);
+	await page.reload();
+	await workbench.waitForReady();
+	await workbench.git.open();
+	await expect(changes.locator('.ash-scm-folder')).toHaveCount(2);
+	expect(await workbench.menus.inspect(application, open, ['View & Sort'])).toEqual(expect.arrayContaining([
+		expect.objectContaining({ label: 'View as Tree', checked: true }),
+		expect.objectContaining({ label: 'Sort Changes by Name', enabled: false }),
+	]));
 	await changes.locator('.ash-pane-view-header').hover();
 	await toolbar.getByRole('button', { name: 'Refresh', exact: true }).click();
 	await workbench.menus.select(application, open, ['Branch', 'Create Branch…']);
@@ -108,7 +115,6 @@ test('Changes title registers Chinese menus and dispatches their actions', { tag
 	};
 	await workbench.menus.select(application, open, ['更改', '暂存所有更改']);
 	await expect(page.getByRole('button', { name: '打开 暂存的更改 的main.ts', exact: true })).toBeVisible();
-	await workbench.menus.select(application, open, ['以列表形式查看']);
 	expect(await workbench.menus.inspect(application, open, ['视图和排序'])).toEqual(expect.arrayContaining([
 		expect.objectContaining({ label: '以列表形式查看', checked: true }),
 	]));

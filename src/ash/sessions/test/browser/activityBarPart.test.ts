@@ -47,7 +47,7 @@ suiteTeardown(() => browser.window.close());
 setup(() => browser.window.localStorage.clear());
 const { SessionsConfiguration } = await import('../../common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
-const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../workbench/services/configuration/test/common/testServices.js");
+const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/test/common/testServices.js');
 
 test('Sessions common entry registers the shared speech service for unavailable capture hosts', async () => {
 	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');

@@ -403,6 +403,7 @@
   "git.status.syncTooltip": "与 {0} 同步更改：{1}",
   "git.status.syncOne": "{0} 个传入和 {1} 个传出的更改",
   "git.status.syncMany": "{0} 个传入和 {1} 个传出的更改",
+  "git.syncButton": "同步更改 ↓{0} ↑{1}",
   "git.changedFile": "{0} 个文件已更改",
   "git.changedFiles": "{0} 个文件已更改",
   "git.diff.invalidContext": "请打开更改工具栏来执行此 Git 操作。",

@@ -4,16 +4,16 @@ import { Schemas } from '../../../base/common/network.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { posix } from '../../../base/common/path.js';
 import { createFileSystemProviderError, FileSystemProviderErrorCode } from '../../files/common/files.js';
-import type { IResourceApi, ResourceMetadataResult, ResourceReadResult } from "./appServerApi.js";
-import { AppServerRemoteError } from "./appServerError.js";
-import { decodeBase64, encodeBase64, VSBuffer } from "../../../base/common/buffer.js";
-import { Emitter, Event } from "../../../base/common/event.js";
-import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import type { IResourceApi, ResourceMetadataResult, ResourceReadResult } from './appServerApi.js';
+import { AppServerRemoteError } from './appServerError.js';
+import { decodeBase64, encodeBase64, VSBuffer } from '../../../base/common/buffer.js';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { canceled } from '../../../base/common/errors.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { listenStream, newWriteableStream, type ReadableStream } from '../../../base/common/stream.js';
-import { URI } from "../../../base/common/uri.js";
+import { URI } from '../../../base/common/uri.js';
 import {
 	FileKind,
 	FileNotFoundError,
@@ -37,8 +37,8 @@ import {
 	type IFileWriteOptions,
 	type IFileWriteResult,
 	type IWatchOptions,
-} from "../../files/common/files.js";
-import { workspaceRelativePath, workspaceResourceFromPath } from "../../workspace/common/workspace.js";
+} from '../../files/common/files.js';
+import { workspaceRelativePath, workspaceResourceFromPath } from '../../workspace/common/workspace.js';
 import { dirname, extUri } from '../../../base/common/resources.js';
 import type { IFileApi, IFileSystemDirectory } from '../../files/common/fileApi.js';
 import type { ISystemFileTransferService } from '../../files/common/systemFileTransferService.js';
@@ -740,7 +740,13 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const route = this.connectionRoute(resource);
 		if (route) { return this.onRoute(route, provider => provider.createFile(resource, existing)); }
 		const result = await this.onFileTarget(resource, target => this.api.createFile({ ...target, existing }));
-		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
+		return {
+			resource,
+			kind: fileKind(result.fileType),
+			sizeBytes: result.sizeBytes,
+			readonly: result.readonly,
+			modifiedAtMillis: result.modifiedAtMillis ?? undefined
+		};
 	}
 
 	async createDirectory(resource: URI): Promise<IFileStat> {
@@ -757,7 +763,13 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			return { resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
 		}
 		const result = await this.onFileTarget(resource, target => this.api.createDirectory(target), assertScope);
-		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
+		return {
+			resource,
+			kind: fileKind(result.fileType),
+			sizeBytes: result.sizeBytes,
+			readonly: result.readonly,
+			modifiedAtMillis: result.modifiedAtMillis ?? undefined
+		};
 	}
 
 	async copy(source: URI, target: URI): Promise<void> {
@@ -887,7 +899,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 
 	private async readResourceBytes(resource: ResourceMetadataResult, generation: number, epoch: number): Promise<Uint8Array> {
 		if (!Number.isSafeInteger(resource.size) || resource.size < 0 || resource.size > MAX_FILE_READ_BYTES) {
-			throw new Error("Workspace binary resource size is invalid");
+			throw new Error('Workspace binary resource size is invalid');
 		}
 		const bytes = new Uint8Array(resource.size);
 		let offset = 0;
@@ -935,7 +947,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 				state.requests.clear();
 			}
 		}
-		if (change.type === "rescanRequired") {
+		if (change.type === 'rescanRequired') {
 			this.fileChanges.fire(Object.freeze({ resources: undefined }));
 			return;
 		}
@@ -958,11 +970,11 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 }
 
 function isRevisionConflict(error: unknown): boolean {
-	return error instanceof AppServerRemoteError && error.errorName === "FileSystemRevisionConflict";
+	return error instanceof AppServerRemoteError && error.errorName === 'FileSystemRevisionConflict';
 }
 
 function isFileNotFound(error: unknown): boolean {
-	return error instanceof AppServerRemoteError && error.errorName === "FileSystemNotFound";
+	return error instanceof AppServerRemoteError && error.errorName === 'FileSystemNotFound';
 }
 
 const MAX_RESOURCE_READ_BYTES = 262_144;
@@ -975,24 +987,24 @@ function encodeBinaryFile(bytes: Uint8Array): string {
 
 function decodeResourceChunk(chunk: ResourceReadResult, resourceId: string, expectedOffset: number, totalSize: number): Uint8Array {
 	if (chunk.resourceId !== resourceId || chunk.offset !== expectedOffset) {
-		throw new Error("Workspace binary resource response is inconsistent");
+		throw new Error('Workspace binary resource response is inconsistent');
 	}
 	const bytes = decodeBase64(chunk.dataBase64).buffer;
 	if (chunk.decodedLength !== bytes.byteLength || bytes.byteLength === 0 || bytes.byteLength > totalSize - expectedOffset || chunk.eof !== (expectedOffset + bytes.byteLength === totalSize)) {
-		throw new Error("Workspace binary resource response is inconsistent");
+		throw new Error('Workspace binary resource response is inconsistent');
 	}
 	return bytes;
 }
 
 function fileKind(fileType: Awaited<ReturnType<IFileApi['getMetadata']>>['fileType']): FileKind {
 	switch (fileType) {
-		case "directory":
+		case 'directory':
 			return FileKind.Directory;
-		case "file":
+		case 'file':
 			return FileKind.File;
-		case "symbolicLink":
+		case 'symbolicLink':
 			return FileKind.SymbolicLink;
-		case "other":
+		case 'other':
 			return FileKind.Other;
 	}
 }

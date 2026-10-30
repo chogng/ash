@@ -8,7 +8,7 @@ import { createScreenPermissionGuide } from './permissionGuide.js';
 const lifetime = new DisposableStore();
 let editor: ScreenshotEditor | undefined;
 let completion: { resolve(value: boolean): void; reject(error: Error): void; } | undefined;
-let permissionResult: { resolve(value: boolean): void; reject(error: Error): void; } | undefined;
+const permissionResults = new Map<ImageEditorPermissionAction, { resolve(value: boolean): void; reject(error: Error): void; }>();
 let initialized = false;
 lifetime.add(addDisposableListener(window, 'message', event => {
 	if (event.source !== parent || !event.data || typeof event.data !== 'object') return;
@@ -16,9 +16,10 @@ lifetime.add(addDisposableListener(window, 'message', event => {
 		if (event.data.error) completion?.reject(new Error(event.data.error)); else completion?.resolve(event.data.accepted === true);
 		completion = undefined;
 	} else if (event.data.type === 'permissionResult') {
-		if (event.data.error) permissionResult?.reject(new Error(event.data.error));
-		else permissionResult?.resolve(event.data.accepted === true);
-		permissionResult = undefined;
+		const result = permissionResults.get(event.data.action);
+		permissionResults.delete(event.data.action);
+		if (event.data.error) result?.reject(new Error(event.data.error));
+		else result?.resolve(event.data.accepted === true);
 	} else if (event.data.type === 'initialize' && !initialized) {
 		initialized = true;
 		void open(event.data as ImageEditorInput).catch(error => { parent.postMessage({ type: 'complete', result: { kind: 'error', message: String(error).slice(0, 4096) } }, '*'); });
@@ -58,9 +59,10 @@ async function open(input: ImageEditorInput): Promise<void> {
 	document.documentElement.dataset.colorScheme = input.colorScheme;
 	if (input.permission) {
 		lifetime.add(createScreenPermissionGuide(document, input.permission, state?.accessibilityHints !== false, (action: ImageEditorPermissionAction) => {
-			if (permissionResult) return Promise.resolve(false);
+			// A native drag must start while the mouse is held, even if opening Settings is still pending.
+			if (permissionResults.has(action)) return Promise.resolve(false);
 			return new Promise<boolean>((resolve, reject) => {
-				permissionResult = { resolve, reject };
+				permissionResults.set(action, { resolve, reject });
 				parent.postMessage({ type: 'permission', action }, '*');
 			});
 		}));

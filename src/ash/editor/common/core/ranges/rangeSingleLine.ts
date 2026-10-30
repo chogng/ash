@@ -1,5 +1,5 @@
-import { Range } from "../range.js";
-import { ColumnRange } from "./columnRange.js";
+import { Range } from '../range.js';
+import { ColumnRange } from './columnRange.js';
 
 export class RangeSingleLine {
 	static fromRange(range: Range): RangeSingleLine | undefined {

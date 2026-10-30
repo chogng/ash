@@ -20,18 +20,18 @@ import { ITextFileService } from '../../../services/textfile/common/textfiles.js
 import type { IBreakpointUpdateData } from '../common/debug.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { CONTEXT_DEBUG_STATE, IAdapterManager, type IResolvedDebugConfiguration, type IDebugStackFrame, type IDebugThread, type IViewModel, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../common/debug.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import { URI } from "../../../../base/common/uri.js";
-import { generateUuid } from "../../../../base/common/uuid.js";
-import { IDebugAdapterProcessService, type DebugWorkspaceEdit } from "../../../../platform/debug/common/debugAdapterProcessService.js";
-import { FileNotFoundError, IFileService } from "../../../../platform/files/common/files.js";
-import { ILogService } from "../../../../platform/log/common/log.js";
-import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { DebugStorage, type PersistedDebugState } from "../common/debugStorage.js";
-import { ITaskService } from "../../tasks/common/taskService.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { IDebugAdapterProcessService, type DebugWorkspaceEdit } from '../../../../platform/debug/common/debugAdapterProcessService.js';
+import { FileNotFoundError, IFileService } from '../../../../platform/files/common/files.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { DebugStorage, type PersistedDebugState } from '../common/debugStorage.js';
+import { ITaskService } from '../../tasks/common/taskService.js';
 import { DebugTaskRunner } from './debugTaskRunner.js';
-import { ITerminalService, type ITerminalInstance } from "../../terminal/browser/terminal.js";
+import { ITerminalService, type ITerminalInstance } from '../../terminal/browser/terminal.js';
 import { ITerminalProfileResolverService, type IShellLaunchConfigResolveOptions } from '../../terminal/common/terminal.js';
 import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { escapeNonWindowsPath } from '../../../../platform/terminal/common/terminalEnvironment.js';
@@ -39,8 +39,8 @@ import { GeneralShellType } from '../../../../platform/terminal/common/terminal.
 import { mergeEnvironments } from '../../terminal/common/terminalEnvironment.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
-import { DebugSession } from "./debugSession.js";
-import { ConfigurationManager, parseLaunchConfigurationDocument } from "./debugConfigurationManager.js";
+import { DebugSession } from './debugSession.js';
+import { ConfigurationManager, parseLaunchConfigurationDocument } from './debugConfigurationManager.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { saveAllBeforeDebugStart } from '../common/debugUtils.js';
@@ -408,7 +408,7 @@ export class DebugService extends Disposable implements IDebugService {
 		const compounds: IDebugCompound[] = [];
 		await Promise.all(folders.map(async folder => {
 			try {
-				const document = parseLaunchConfigurationDocument((await this.files.readFile(childResource(folder.uri, ".vscode/launch.json"))).content, type => this.resolveDebugAdapter(type));
+				const document = parseLaunchConfigurationDocument((await this.files.readFile(childResource(folder.uri, '.vscode/launch.json'))).content, type => this.resolveDebugAdapter(type));
 				configurations.push(...document.configurations.map(configuration => Object.freeze({
 					...configuration,
 					id: multiRoot ? `${folder.id}:${configuration.id}` : configuration.id,
@@ -428,9 +428,9 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	async start(configuration: IDebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession> {
-		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
+		if (!this.processes) throw new Error('This host does not provide the Code debug adapter capability');
 		const current = this.configurations.find(candidate => candidate.id === configuration.id);
-		if (!current) throw new Error("Debug configuration is no longer present in launch.json");
+		if (!current) throw new Error('Debug configuration is no longer present in launch.json');
 		return this.startDebugging(current, options);
 	}
 
@@ -444,24 +444,26 @@ export class DebugService extends Disposable implements IDebugService {
 
 	async startDebugging(current: IDebugConfiguration, options: IDebugSessionOptions = {}): Promise<IDebugSession> {
 		const sessionOptions = this.normalizeSessionOptions(options);
-		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
+		if (!this.processes) throw new Error('This host does not provide the Code debug adapter capability');
 		const generation = this.workspaceGeneration;
-		const relation = await this.processes.reserveSession({
-			id: generateUuid(), workspaceId: this.workspace.getWorkspace().id, parentId: sessionOptions.parentSession?.id ?? null,
-			lifecycleManagedByParent: sessionOptions.lifecycleManagedByParent ?? false,
-			mergeConsole: sessionOptions.consoleMode === DebugConsoleMode.MergeWithParent,
-			noDebug: sessionOptions.noDebug ?? (sessionOptions.parentSession ? null : typeof current.arguments.noDebug === 'boolean' ? current.arguments.noDebug : null),
-		});
+		const id = generateUuid();
 		const controller = new AbortController();
-		this.launchControllers.set(relation.id, controller);
+		this.launchControllers.set(id, controller);
 		try {
+			const relation = await this.processes.reserveSession({
+				id, workspaceId: this.workspace.getWorkspace().id, parentId: sessionOptions.parentSession?.id ?? null,
+				lifecycleManagedByParent: sessionOptions.lifecycleManagedByParent ?? false,
+				mergeConsole: sessionOptions.consoleMode === DebugConsoleMode.MergeWithParent,
+				noDebug: sessionOptions.noDebug ?? (sessionOptions.parentSession ? null : typeof current.arguments.noDebug === 'boolean' ? current.arguments.noDebug : null),
+			});
+			throwIfCancelled(controller.signal);
 			if (this.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
 			const launch = relation.noDebug === null ? current : Object.freeze({ ...current, arguments: Object.freeze({ ...current.arguments, noDebug: relation.noDebug }) });
 			return await this.startAdmittedDebugging(launch, sessionOptions, relation.id, controller.signal);
 		} catch (error) {
-			await this.processes.manageSession(relation.id, 'end').catch(() => { });
+			await this.processes.manageSession(id, 'end').catch(() => { });
 			throw error;
-		} finally { this.launchControllers.delete(relation.id); }
+		} finally { this.launchControllers.delete(id); }
 	}
 
 	private async startAdmittedDebugging(current: IDebugConfiguration, sessionOptions: IDebugSessionOptions, id: string, signal: AbortSignal): Promise<IDebugSession> {
@@ -469,7 +471,7 @@ export class DebugService extends Disposable implements IDebugService {
 			throwIfCancelled(signal);
 			if (sessionOptions.parentSession && (this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession || ['terminated', 'error'].includes(sessionOptions.parentSession.state))) throw new CancellationError();
 		};
-		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
+		if (!this.processes) throw new Error('This host does not provide the Code debug adapter capability');
 		const assertAdmitted = async (): Promise<void> => {
 			assertParent();
 			if ((await this.processes!.manageSession(id, 'read')).ended) throw new CancellationError();
@@ -521,7 +523,7 @@ export class DebugService extends Disposable implements IDebugService {
 		if (!resolvedConfiguration.adapter && !factory?.createDebugAdapterDescriptor) throw new Error(`No Debug Adapter factory is available for '${resolvedConfiguration.type}'`);
 		assertParent();
 		await assertAdmitted();
-		await this.runTask(resolvedConfiguration.preLaunchTask, "preLaunchTask", current.dirId ?? undefined, signal);
+		await this.runTask(resolvedConfiguration.preLaunchTask, 'preLaunchTask', current.dirId ?? undefined, signal);
 		if (generation !== this.workspaceGeneration || this.isDisposed) throw new CancellationError();
 		if (factory && this.adapters.get(resolvedConfiguration.type) !== factory) throw new CancellationError();
 
@@ -529,7 +531,7 @@ export class DebugService extends Disposable implements IDebugService {
 		let initializingSession: IDebugSession | undefined;
 		const acceptsBreakpointEvents = (): boolean => !this.isDisposed && workspaceGeneration === this.workspaceGeneration && initializingSession !== undefined && !['terminated', 'error'].includes(initializingSession.state);
 		const session = await DebugSession.start({
-			id, admitted: true, configuration: current, sessionOptions,
+			id, admitted: true, configuration: current, sessionOptions, signal,
 			processService: this.processes,
 			resolvedConfiguration: factory?.createDebugAdapterDescriptor ? { ...resolvedConfiguration, adapter: undefined } : resolvedConfiguration,
 			workspace: root, breakpoints: () => this.currentBreakpoints,
@@ -612,8 +614,8 @@ export class DebugService extends Disposable implements IDebugService {
 			throw error;
 		});
 		this.preparingSessions.delete(session.id);
-		if (generation !== this.workspaceGeneration || this.isDisposed || sessionOptions.parentSession && this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession) {
-			// Initialization can finish after the workspace or service lifetime ends.
+		if (signal.aborted || generation !== this.workspaceGeneration || this.isDisposed || sessionOptions.parentSession && this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession) {
+			// Initialization can finish after stopping or after the workspace or service lifetime ends.
 			// Release the returned process before publishing a session to any consumer.
 			try { await session.disconnect(); } finally { session.dispose(); await this.stopChildSessions(session); this.endSessionEmitter.fire(session); }
 			throw new CancellationError();
@@ -625,16 +627,22 @@ export class DebugService extends Disposable implements IDebugService {
 			if (this.session === session) void this.refreshFocusedStack();
 		}));
 		listener.add(session.onDidChangeState(state => {
-			if (this.session === session && state !== "stopped") void this.focusStackFrame(undefined);
+			if (state === 'stopped' && this.session !== session) {
+				this.viewModel.setFocus(undefined, undefined, session, false);
+				this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
+			}
+			if (this.session === session && state !== 'stopped') void this.focusStackFrame(undefined);
 			if (this.sessionRecords.has(session.id)) this.sessionEmitter.fire(this.session);
-			if (state === "terminated" || state === "error") queueMicrotask(() => { void this.finishSession(session); });
+			if (state === 'terminated' || state === 'error') queueMicrotask(() => { void this.finishSession(session); });
 		}));
 		this.sessionRecords.set(session.id, { session, workspaceGeneration, workspaceId: this.workspace.getWorkspace().id, listener, postDebugTask: resolvedConfiguration.postDebugTask });
-		this.viewModel.setFocus(undefined, undefined, session, true);
+		// Discovering a running worker must preserve the frame being inspected.
+		const preserveFocus = sessionOptions.lifecycleManagedByParent && session.state !== 'stopped' && this.session?.state === 'stopped';
+		if (!preserveFocus) this.viewModel.setFocus(undefined, undefined, session, true);
 		this.newSessionEmitter.fire(session);
-		this.sessionEmitter.fire(session);
+		if (!preserveFocus) this.sessionEmitter.fire(session);
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
-		if (session.state === "terminated" || session.state === "error") { await this.finishSession(session); }
+		if (session.state === 'terminated' || session.state === 'error') { await this.finishSession(session); }
 		return session;
 	}
 
@@ -689,10 +697,10 @@ export class DebugService extends Disposable implements IDebugService {
 
 	async startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]> {
 		const current = this.compounds.find(candidate => candidate.id === compound.id);
-		if (!current) throw new Error("Debug compound is no longer present in launch.json");
+		if (!current) throw new Error('Debug compound is no longer present in launch.json');
 		// Resolve the entire group before a pre-launch task can have side effects.
 		const configurations = current.configurations.map(reference => resolveCompoundConfiguration(reference, this.configurations, current.dirId));
-		await this.runTask(current.preLaunchTask, "compound preLaunchTask", current.dirId);
+		await this.runTask(current.preLaunchTask, 'compound preLaunchTask', current.dirId);
 		const started: IDebugSession[] = [];
 		try {
 			for (const configuration of configurations) started.push(await this.start(configuration));
@@ -703,7 +711,7 @@ export class DebugService extends Disposable implements IDebugService {
 		if (current.stopAll) {
 			let stopping = false;
 			for (const session of started) this.sessionRecords.get(session.id)?.listener.add(session.onDidChangeState(state => {
-				if (stopping || (state !== "terminated" && state !== "error")) return;
+				if (stopping || (state !== 'terminated' && state !== 'error')) return;
 				stopping = true;
 				void Promise.allSettled(started.filter(candidate => candidate !== session).map(candidate => this.stop(candidate)));
 			}));
@@ -712,7 +720,7 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	setActiveSession(session: IDebugSession): void {
-		if (!this.sessionRecords.has(session.id)) throw new Error("Debug session is no longer active");
+		if (!this.sessionRecords.has(session.id)) throw new Error('Debug session is no longer active');
 		if (this.viewModel.focusedSession === session) return;
 		this.viewModel.setFocus(undefined, undefined, session, true);
 		this.sessionEmitter.fire(session);
@@ -774,8 +782,8 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	async restart(session: IDebugSession | undefined = this.session): Promise<IDebugSession> {
-		if (!session) throw new Error("There is no active debug session to restart");
-		if (!this.sessionRecords.has(session.id)) throw new Error("Debug session is no longer active");
+		if (!session) throw new Error('There is no active debug session to restart');
+		if (!this.sessionRecords.has(session.id)) throw new Error('Debug session is no longer active');
 		const target = await this.processes!.manageSession(session.id, 'route');
 		if (target.lifecycleTargetId !== session.id) return this.restart(this.getSession(target.lifecycleTargetId));
 		if (session.capabilities.supportsRestart) { await session.restart(); return session; }
@@ -785,7 +793,14 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	async stop(session: IDebugSession | undefined = this.session): Promise<void> {
-		if (!session) return;
+		if (!session) {
+			// The first launch may still be preparing its task or adapter without a focused session.
+			this.taskRunner.cancel();
+			for (const controller of this.launchControllers.values()) controller.abort();
+			await Promise.allSettled([...this.preparingSessions.values()].map(session => this.stop(session)));
+			return;
+		}
+		this.launchControllers.get(session.id)?.abort();
 		const target = await this.processes!.manageSession(session.id, 'route');
 		if (target.lifecycleTargetId !== session.id) return this.stop(this.getSession(target.lifecycleTargetId));
 		const record = this.sessionRecords.get(session.id);
@@ -802,6 +817,8 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	async stopAll(): Promise<void> {
+		this.taskRunner.cancel();
+		for (const controller of this.launchControllers.values()) controller.abort();
 		await Promise.allSettled([...this.sessions, ...this.preparingSessions.values()].map(session => this.stop(session)));
 	}
 
@@ -843,7 +860,7 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	toggleBreakpoint(resource: URI, lineNumber: number): void {
-		if (!Number.isSafeInteger(lineNumber) || lineNumber <= 0) throw new RangeError("Breakpoint line number must be positive");
+		if (!Number.isSafeInteger(lineNumber) || lineNumber <= 0) throw new RangeError('Breakpoint line number must be positive');
 		const existing = this.currentBreakpoints.find(breakpoint => breakpoint.resource.toString() === resource.toString() && breakpoint.lineNumber === lineNumber);
 		this.currentBreakpoints = existing ? Object.freeze(this.currentBreakpoints.filter(breakpoint => breakpoint !== existing)) : Object.freeze([...this.currentBreakpoints, createBreakpoint(resource, lineNumber, true)].sort(compareBreakpoints));
 		this.breakpointStateChanged();
@@ -859,22 +876,22 @@ export class DebugService extends Disposable implements IDebugService {
 
 	updateBreakpoint(id: string, update: IDebugBreakpointUpdate): void {
 		const breakpoint = this.allBreakpoints().find(candidate => candidate.id === id);
-		if (!breakpoint) throw new Error("Breakpoint is no longer present");
+		if (!breakpoint) throw new Error('Breakpoint is no longer present');
 		const patch = { ...update };
-		for (const field of ["condition", "hitCondition", "logMessage"] as const) {
+		for (const field of ['condition', 'hitCondition', 'logMessage'] as const) {
 			if (update[field] !== undefined) patch[field] = normalizeBreakpointExpression(update[field], field);
 		}
 		if (patch.name !== undefined) {
-			if (!("kind" in breakpoint) || breakpoint.kind !== "function") throw new TypeError("Only function breakpoints have a name");
-			patch.name = normalizePersistedString(patch.name, "name", 32_768);
+			if (!('kind' in breakpoint) || breakpoint.kind !== 'function') throw new TypeError('Only function breakpoints have a name');
+			patch.name = normalizePersistedString(patch.name, 'name', 32_768);
 		}
-		if (patch.accessType !== undefined && (!("kind" in breakpoint) || breakpoint.kind !== "data" || !breakpoint.accessTypes.includes(patch.accessType))) throw new TypeError("Unsupported data breakpoint access type");
+		if (patch.accessType !== undefined && (!('kind' in breakpoint) || breakpoint.kind !== 'data' || !breakpoint.accessTypes.includes(patch.accessType))) throw new TypeError('Unsupported data breakpoint access type');
 		if (patch.instructionReference !== undefined || patch.offset !== undefined) {
-			if (!("kind" in breakpoint) || breakpoint.kind !== "instruction") throw new TypeError("Only instruction breakpoints have an instruction reference or offset");
-			if (patch.instructionReference !== undefined) patch.instructionReference = normalizeBreakpointReference(patch.instructionReference, "instructionReference");
-			if (patch.offset !== undefined && !Number.isSafeInteger(patch.offset)) throw new TypeError("Instruction offset must be an integer");
+			if (!('kind' in breakpoint) || breakpoint.kind !== 'instruction') throw new TypeError('Only instruction breakpoints have an instruction reference or offset');
+			if (patch.instructionReference !== undefined) patch.instructionReference = normalizeBreakpointReference(patch.instructionReference, 'instructionReference');
+			if (patch.offset !== undefined && !Number.isSafeInteger(patch.offset)) throw new TypeError('Instruction offset must be an integer');
 		}
-		if (update.logMessage !== undefined && !("resource" in breakpoint)) throw new TypeError("Log messages require a source breakpoint");
+		if (update.logMessage !== undefined && !('resource' in breakpoint)) throw new TypeError('Log messages require a source breakpoint');
 		const change = <T extends IBaseBreakpoint>(points: readonly T[]): readonly T[] => Object.freeze(points.map(point => point.id === id ? Object.freeze({ ...point, ...patch, verified: false, message: undefined }) : point));
 		this.currentBreakpoints = Object.freeze(this.currentBreakpoints.map(point => point.id === id
 			? Object.freeze({ ...updateSourceBreakpoint(point, patch), ...(patch.enabled === undefined ? {} : { enabled: patch.enabled }), verified: false, message: undefined })
@@ -927,21 +944,21 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	addFunctionBreakpoint(options: IFunctionBreakpointOptions): void {
-		this.addBreakpoints([{ kind: "function", id: generateUuid(), name: options.name, enabled: true, verified: false, ...breakpointConditions(options) }]);
+		this.addBreakpoints([{ kind: 'function', id: generateUuid(), name: options.name, enabled: true, verified: false, ...breakpointConditions(options) }]);
 	}
 
 	addDataBreakpoint(options: IDataBreakpointOptions): void {
 		const session = this.session;
-		if (!session || session.id !== options.sessionId || session.state !== "stopped") throw new Error(localize("debug.dataRequiresPause", "Data breakpoints require the paused session that identified the variable."));
-		if (!session.capabilities.supportsDataBreakpoints) throw new Error(localize("debug.unsupportedDataBreakpoints", "Debug Adapter does not support data breakpoints"));
-		if (!options.accessTypes.includes(options.accessType)) throw new TypeError("Unsupported data breakpoint access type");
-		const dataId = normalizeBreakpointReference(options.dataId, "dataId");
+		if (!session || session.id !== options.sessionId || session.state !== 'stopped') throw new Error(localize('debug.dataRequiresPause', 'Data breakpoints require the paused session that identified the variable.'));
+		if (!session.capabilities.supportsDataBreakpoints) throw new Error(localize('debug.unsupportedDataBreakpoints', 'Debug Adapter does not support data breakpoints'));
+		if (!options.accessTypes.includes(options.accessType)) throw new TypeError('Unsupported data breakpoint access type');
+		const dataId = normalizeBreakpointReference(options.dataId, 'dataId');
 		this.currentDataBreakpoints = Object.freeze([...this.currentDataBreakpoints, Object.freeze({
 			...options,
 			dataId,
 			accessTypes: Object.freeze([...options.accessTypes]),
 			id: generateUuid(),
-			kind: "data" as const,
+			kind: 'data' as const,
 			enabled: true,
 			verified: false,
 			adapterType: session.configuration.type,
@@ -952,11 +969,11 @@ export class DebugService extends Disposable implements IDebugService {
 
 	addInstructionBreakpoint(options: IInstructionBreakpointOptions): void {
 		const session = this.session;
-		if (!session || session.state !== "stopped") throw new Error(localize("debug.instructionRequiresPause", "Instruction breakpoints require a paused debug session."));
-		if (!session.capabilities.supportsInstructionBreakpoints) throw new Error(localize("debug.unsupportedInstructionBreakpoints", "Debug Adapter does not support instruction breakpoints"));
-		if (options.offset !== undefined && !Number.isSafeInteger(options.offset)) throw new TypeError("Instruction offset must be an integer");
-		const instructionReference = normalizeBreakpointReference(options.instructionReference, "instructionReference");
-		this.currentInstructionBreakpoints = Object.freeze([...this.currentInstructionBreakpoints, Object.freeze({ ...options, instructionReference, id: generateUuid(), kind: "instruction" as const, enabled: true, verified: false, sessionId: session.id, ...breakpointConditions(options) })]);
+		if (!session || session.state !== 'stopped') throw new Error(localize('debug.instructionRequiresPause', 'Instruction breakpoints require a paused debug session.'));
+		if (!session.capabilities.supportsInstructionBreakpoints) throw new Error(localize('debug.unsupportedInstructionBreakpoints', 'Debug Adapter does not support instruction breakpoints'));
+		if (options.offset !== undefined && !Number.isSafeInteger(options.offset)) throw new TypeError('Instruction offset must be an integer');
+		const instructionReference = normalizeBreakpointReference(options.instructionReference, 'instructionReference');
+		this.currentInstructionBreakpoints = Object.freeze([...this.currentInstructionBreakpoints, Object.freeze({ ...options, instructionReference, id: generateUuid(), kind: 'instruction' as const, enabled: true, verified: false, sessionId: session.id, ...breakpointConditions(options) })]);
 		this.breakpointStateChanged();
 	}
 
@@ -982,7 +999,7 @@ export class DebugService extends Disposable implements IDebugService {
 
 	async setExceptionBreakpoints(filters: readonly string[]): Promise<void> {
 		const session = this.session;
-		if (!session) throw new Error("Exception breakpoints require an active debug session");
+		if (!session) throw new Error('Exception breakpoints require an active debug session');
 		const generation = this.workspaceGeneration;
 		await session.setExceptionBreakpoints(filters);
 		if (this.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
@@ -1032,7 +1049,7 @@ export class DebugService extends Disposable implements IDebugService {
 		}
 		this.sessionEmitter.fire(this.session);
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
-		try { await this.runTask(record.postDebugTask, "postDebugTask", session.configuration.dirId ?? undefined); }
+		try { await this.runTask(record.postDebugTask, 'postDebugTask', session.configuration.dirId ?? undefined); }
 		catch (error) { this.reportError(error); }
 	}
 
@@ -1124,11 +1141,11 @@ export class DebugService extends Disposable implements IDebugService {
 
 
 	private reportError(error: unknown): void {
-		this.logService.error("debug.service", "Debug service operation failed", error);
+		this.logService.error('debug.service', 'Debug service operation failed', error);
 	}
 }
 
-function childResource(root: URI, relativePath: string): URI { return URI.joinPath(root, ...relativePath.split("/")); }
+function childResource(root: URI, relativePath: string): URI { return URI.joinPath(root, ...relativePath.split('/')); }
 function createBreakpoint(resource: URI, lineNumber: number, enabled: boolean): IDebugBreakpoint { return Object.freeze({ id: generateUuid(), resource, lineNumber, enabled, verified: false }); }
 
 function updateSourceBreakpoint(point: IDebugBreakpoint, update: IBreakpointUpdateData): IDebugBreakpoint {
@@ -1147,10 +1164,10 @@ function updateSourceBreakpoint(point: IDebugBreakpoint, update: IBreakpointUpda
 }
 function compareBreakpoints(left: IDebugBreakpoint, right: IDebugBreakpoint): number { return left.resource.toString().localeCompare(right.resource.toString()) || left.lineNumber - right.lineNumber; }
 function normalizeBreakpointExpression(value: string, field: string): string | undefined {
-	if (value.length > 32_768 || value.includes("\0")) throw new TypeError(`${field} must contain at most 32768 characters and no null characters`);
+	if (value.length > 32_768 || value.includes('\0')) throw new TypeError(`${field} must contain at most 32768 characters and no null characters`);
 	return value.trim() ? value : undefined;
 }
-function breakpointExpressions(value: Pick<IDebugBreakpoint, "condition" | "hitCondition" | "logMessage">) {
+function breakpointExpressions(value: Pick<IDebugBreakpoint, 'condition' | 'hitCondition' | 'logMessage'>) {
 	return {
 		...(value.condition === undefined ? {} : { condition: value.condition }),
 		...(value.hitCondition === undefined ? {} : { hitCondition: value.hitCondition }),
@@ -1158,23 +1175,23 @@ function breakpointExpressions(value: Pick<IDebugBreakpoint, "condition" | "hitC
 	};
 }
 
-function breakpointConditions(value: Pick<IBaseBreakpoint, "condition" | "hitCondition">): Pick<IBaseBreakpoint, "condition" | "hitCondition"> {
+function breakpointConditions(value: Pick<IBaseBreakpoint, 'condition' | 'hitCondition'>): Pick<IBaseBreakpoint, 'condition' | 'hitCondition'> {
 	return {
-		condition: value.condition === undefined ? undefined : normalizeBreakpointExpression(value.condition, "condition"),
-		hitCondition: value.hitCondition === undefined ? undefined : normalizeBreakpointExpression(value.hitCondition, "hitCondition"),
+		condition: value.condition === undefined ? undefined : normalizeBreakpointExpression(value.condition, 'condition'),
+		hitCondition: value.hitCondition === undefined ? undefined : normalizeBreakpointExpression(value.hitCondition, 'hitCondition'),
 	};
 }
 function normalizeExpression(expression: string): string {
 	const normalized = expression.trim();
-	if (!normalized || normalized.length > 32_768 || normalized.includes("\0")) throw new TypeError("Watch expression must contain 1 to 32768 characters");
+	if (!normalized || normalized.length > 32_768 || normalized.includes('\0')) throw new TypeError('Watch expression must contain 1 to 32768 characters');
 	return normalized;
 }
 
-function resolveCompoundConfiguration(reference: IDebugCompound["configurations"][number], configurations: readonly IDebugConfiguration[], dirId?: string): IDebugConfiguration {
-	const name = typeof reference === "string" ? reference : reference.name;
+function resolveCompoundConfiguration(reference: IDebugCompound['configurations'][number], configurations: readonly IDebugConfiguration[], dirId?: string): IDebugConfiguration {
+	const name = typeof reference === 'string' ? reference : reference.name;
 	const matches = configurations.filter(configuration => {
 		if (configuration.id !== name && configuration.name !== name) return false;
-		return typeof reference === "string"
+		return typeof reference === 'string'
 			? dirId === undefined || configuration.dirId === dirId
 			: configuration.workspaceFolderName === reference.folder;
 	});
@@ -1190,13 +1207,13 @@ function normalizePersistedString(value: unknown, path: string, maximum: number)
 
 function normalizeBreakpointReference(value: unknown, field: string): string {
 	// DAP references are opaque adapter identifiers; whitespace is part of their identity.
-	if (typeof value !== "string" || !value.trim() || value.length > 32_768 || value.includes("\0")) throw new TypeError(`${field} must contain 1 to 32768 characters`);
+	if (typeof value !== 'string' || !value.trim() || value.length > 32_768 || value.includes('\0')) throw new TypeError(`${field} must contain 1 to 32768 characters`);
 	return value;
 }
 
 
 interface RunInTerminalArguments {
-	readonly kind: "integrated" | "external";
+	readonly kind: 'integrated' | 'external';
 	readonly title: string | undefined;
 	readonly cwd: string | undefined;
 	readonly args: readonly string[];
@@ -1215,7 +1232,7 @@ async function runDebuggeeInTerminal(
 	observeTerminal?: (terminal: ITerminalInstance) => void,
 ): Promise<Readonly<{ shellProcessId: number; }>> {
 	const request = parseRunInTerminalArguments(value);
-	if (request.kind === "external") throw new Error("External debug terminals are not supported; use an integrated terminal");
+	if (request.kind === 'external') throw new Error('External debug terminals are not supported; use an integrated terminal');
 	const profile = await profiles.getDefaultProfile(options);
 	assertCurrent();
 	const shell: IShellLaunchConfig = { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color };
@@ -1247,60 +1264,60 @@ async function runDebuggeeInTerminal(
 }
 
 function parseRunInTerminalArguments(value: unknown): RunInTerminalArguments {
-	const input = record(value, "runInTerminal arguments");
-	const kind = input.kind === undefined ? "integrated" : input.kind;
-	if (kind !== "integrated" && kind !== "external") throw new TypeError("runInTerminal kind must be 'integrated' or 'external'");
-	const args = stringArray(input.args, "runInTerminal args", 256, 4096);
-	if (args.length === 0) throw new TypeError("runInTerminal args must contain the executable");
+	const input = record(value, 'runInTerminal arguments');
+	const kind = input.kind === undefined ? 'integrated' : input.kind;
+	if (kind !== 'integrated' && kind !== 'external') throw new TypeError("runInTerminal kind must be 'integrated' or 'external'");
+	const args = stringArray(input.args, 'runInTerminal args', 256, 4096);
+	if (args.length === 0) throw new TypeError('runInTerminal args must contain the executable');
 	const env = input.env === undefined ? {} : environment(input.env);
-	return Object.freeze({ kind, title: optionalString(input.title, "runInTerminal title", 256), cwd: optionalString(input.cwd, "runInTerminal cwd", 4096), args, env, argsCanBeInterpretedByShell: input.argsCanBeInterpretedByShell === true });
+	return Object.freeze({ kind, title: optionalString(input.title, 'runInTerminal title', 256), cwd: optionalString(input.cwd, 'runInTerminal cwd', 4096), args, env, argsCanBeInterpretedByShell: input.argsCanBeInterpretedByShell === true });
 }
 
 function terminalCommand(request: RunInTerminalArguments, executable: string): string {
 	const shell = shellKind(executable);
-	const command = request.argsCanBeInterpretedByShell ? request.args.join(" ") : request.args.map(argument => quote(argument, shell)).join(" ");
-	const prefix = shell === "powershell" ? powershellPrefix(request) : shell === "cmd" ? cmdPrefix(request) : posixPrefix(request);
+	const command = request.argsCanBeInterpretedByShell ? request.args.join(' ') : request.args.map(argument => quote(argument, shell)).join(' ');
+	const prefix = shell === 'powershell' ? powershellPrefix(request) : shell === 'cmd' ? cmdPrefix(request) : posixPrefix(request);
 	return prefix ? `${prefix}${command}` : command;
 }
 
 function powershellPrefix(request: RunInTerminalArguments): string {
 	const parts: string[] = [];
-	if (request.cwd) parts.push(`Set-Location -LiteralPath ${quote(request.cwd, "powershell")}`);
-	return parts.length > 0 ? `${parts.join("; ")}; & ` : "& ";
+	if (request.cwd) parts.push(`Set-Location -LiteralPath ${quote(request.cwd, 'powershell')}`);
+	return parts.length > 0 ? `${parts.join('; ')}; & ` : '& ';
 }
 
 function cmdPrefix(request: RunInTerminalArguments): string {
 	const parts: string[] = [];
-	if (request.cwd) parts.push(`cd /d ${quote(request.cwd, "cmd")}`);
-	return parts.length > 0 ? `${parts.join(" && ")} && ` : "";
+	if (request.cwd) parts.push(`cd /d ${quote(request.cwd, 'cmd')}`);
+	return parts.length > 0 ? `${parts.join(' && ')} && ` : '';
 }
 
 function posixPrefix(request: RunInTerminalArguments): string {
-	return request.cwd ? `cd -- ${quote(request.cwd, "posix")} && ` : "";
+	return request.cwd ? `cd -- ${quote(request.cwd, 'posix')} && ` : '';
 }
 
-function quote(value: string, shell: "powershell" | "cmd" | "posix"): string {
-	if (shell === "powershell") return escapeNonWindowsPath(value, GeneralShellType.PowerShell);
-	if (shell === "cmd") {
-		if (/[\r\n]/.test(value)) throw new TypeError("cmd debug terminal arguments cannot contain line breaks");
-		return `"${value.replaceAll("%", "%%").replaceAll("\"", "\\\"")}"`;
+function quote(value: string, shell: 'powershell' | 'cmd' | 'posix'): string {
+	if (shell === 'powershell') return escapeNonWindowsPath(value, GeneralShellType.PowerShell);
+	if (shell === 'cmd') {
+		if (/[\r\n]/.test(value)) throw new TypeError('cmd debug terminal arguments cannot contain line breaks');
+		return `"${value.replaceAll('%', '%%').replaceAll('"', '\\"')}"`;
 	}
 	return escapeNonWindowsPath(value);
 }
 
-function shellKind(executable: string): "powershell" | "cmd" | "posix" {
+function shellKind(executable: string): 'powershell' | 'cmd' | 'posix' {
 	const basename = executable.split(/[\\/]/).at(-1)!.replace(/\.exe$/i, '');
-	if (/^(?:powershell|pwsh)$/i.test(basename)) return "powershell";
-	if (/^(?:cmd|command-prompt)$/i.test(basename)) return "cmd";
-	return "posix";
+	if (/^(?:powershell|pwsh)$/i.test(basename)) return 'powershell';
+	if (/^(?:cmd|command-prompt)$/i.test(basename)) return 'cmd';
+	return 'posix';
 }
 
 function environment(value: unknown): Readonly<Record<string, string | null>> {
-	const input = record(value, "runInTerminal env");
-	if (Object.keys(input).length > 128) throw new RangeError("runInTerminal env cannot contain more than 128 entries");
+	const input = record(value, 'runInTerminal env');
+	if (Object.keys(input).length > 128) throw new RangeError('runInTerminal env cannot contain more than 128 entries');
 	return Object.freeze(Object.fromEntries(Object.entries(input).map(([key, item]) => {
 		if (!key || key.length > 256 || /[=\0]/.test(key)) throw new TypeError(`runInTerminal env key '${key}' is invalid`);
-		if (item !== null && (typeof item !== "string" || item.length > 32_768 || item.includes("\0"))) throw new TypeError(`runInTerminal env '${key}' must be a bounded string or null`);
+		if (item !== null && (typeof item !== 'string' || item.length > 32_768 || item.includes('\0'))) throw new TypeError(`runInTerminal env '${key}' must be a bounded string or null`);
 		return [key, item as string | null];
 	})));
 }
@@ -1308,19 +1325,19 @@ function environment(value: unknown): Readonly<Record<string, string | null>> {
 function stringArray(value: unknown, path: string, maximumItems: number, maximumLength: number): readonly string[] {
 	if (!Array.isArray(value) || value.length > maximumItems) throw new TypeError(`${path} must be an array with at most ${maximumItems} items`);
 	return Object.freeze(value.map((item, index) => {
-		if (typeof item !== "string" || item.length > maximumLength || item.includes("\0")) throw new TypeError(`${path}[${index}] must be a bounded string`);
+		if (typeof item !== 'string' || item.length > maximumLength || item.includes('\0')) throw new TypeError(`${path}[${index}] must be a bounded string`);
 		return item;
 	}));
 }
 
 function optionalString(value: unknown, path: string, maximumLength: number): string | undefined {
 	if (value === undefined) return undefined;
-	if (typeof value !== "string" || value.length > maximumLength || value.includes("\0")) throw new TypeError(`${path} must be a bounded string`);
+	if (typeof value !== 'string' || value.length > maximumLength || value.includes('\0')) throw new TypeError(`${path} must be a bounded string`);
 	return value;
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
 	return value as Record<string, unknown>;
 }
 

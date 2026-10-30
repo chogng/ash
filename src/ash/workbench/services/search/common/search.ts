@@ -1,11 +1,15 @@
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { IExpression } from '../../../../base/common/glob.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 
 export const ISearchService = createDecorator<ISearchService>('searchService');
 
+export const enum SearchProviderType { file }
+
 export interface ISearchService {
+	registerSearchResultProvider(scheme: string, type: SearchProviderType, provider: ISearchResultProvider): IDisposable;
 	fileSearch(query: IFileQuery, token?: CancellationToken): Promise<ISearchComplete>;
 	textSearch(query: ITextQuery, token?: CancellationToken, onProgress?: (result: ISearchProgressItem) => void): Promise<ISearchComplete>;
 }

@@ -85,7 +85,7 @@ export class VariablesView extends ViewPane {
 		}, error => { if (this.isCurrentInspection(session, generation)) this.notifications.error(message(error)); });
 	}
 	private isCurrentInspection(session: IDebugSession, generation: number): boolean {
-		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === "stopped";
+		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === 'stopped';
 	}
 	private saveExpansion(): void {
 		if (this.renderedFrame) {
@@ -111,9 +111,11 @@ export class VariablesView extends ViewPane {
 		if (!this.isCurrentInspection(session, generation) || this.selectedFrameId !== frameId) return;
 		const saved = this.expandedFrames.get(session)?.get(frameId);
 		const expanded = saved ?? new Set<string>();
-		const rows = await Promise.all(scopes.map(entry => {
-			const row = this.scopeRow(entry.scope);
-			return this.restoreChildren(session, saved && !saved.has(JSON.stringify(row.path)) ? { ...row, expanded: false } : row, entry.variables, expanded, generation);
+		const rows = await Promise.all(scopes.map(async entry => {
+			const show = saved ? saved.has(JSON.stringify([entry.scope.name])) : entry.variablesLoaded;
+			const row = this.scopeRow(entry.scope, show);
+			const variables = show && !entry.variablesLoaded ? await session.variables(row.variablesReference) : entry.variables;
+			return this.restoreChildren(session, row, variables, expanded, generation);
 		}));
 		if (!this.isCurrentInspection(session, generation) || this.selectedFrameId !== frameId) return;
 		this.variableRows = Object.freeze(rows.flat());
@@ -146,10 +148,10 @@ export class VariablesView extends ViewPane {
 	}
 
 	private expandVariable(event: Event): void {
-		const index = indexFromEvent(event, ".ash-debug-variable", "variableIndex", this.element.ownerDocument);
+		const index = indexFromEvent(event, '.ash-debug-variable', 'variableIndex', this.element.ownerDocument);
 		const row = index === undefined ? undefined : this.variableRows[index];
 		const session = this.debug.session;
-		if (!row || !session || session.state !== "stopped" || row.variablesReference <= 0 || this.variableEdit?.row.key === row.key) return;
+		if (!row || !session || session.state !== 'stopped' || row.variablesReference <= 0 || this.variableEdit?.row.key === row.key) return;
 		this.variableEdit = undefined;
 		this.variableEditControls.clear();
 		const generation = this.refreshGeneration;
@@ -179,31 +181,31 @@ export class VariablesView extends ViewPane {
 	}
 
 	private editVariable(event: Event): void {
-		const index = indexFromEvent(event, ".ash-debug-variable", "variableIndex", this.element.ownerDocument);
+		const index = indexFromEvent(event, '.ash-debug-variable', 'variableIndex', this.element.ownerDocument);
 		const row = index === undefined ? undefined : this.variableRows[index];
 		const session = this.debug.session;
-		if (!row || !session || session.state !== "stopped" || !session.capabilities.supportsSetVariable || row.value === undefined || !row.parentVariablesReference || row.readOnly) return;
+		if (!row || !session || session.state !== 'stopped' || !session.capabilities.supportsSetVariable || row.value === undefined || !row.parentVariablesReference || row.readOnly) return;
 		event.preventDefault();
 		this.variableEditControls.clear();
 		const controls = new DisposableStore();
 		this.variableEditControls.value = controls;
-		const form = h(this.element.ownerDocument, "form");
-		form.className = "ash-debug-variable-edit";
+		const form = h(this.element.ownerDocument, 'form');
+		form.className = 'ash-debug-variable-edit';
 		const input = controls.add(new InputBox(form, {
 			inputBoxStyles: defaultInputBoxStyles,
-			ariaLabel: localize("debug.editVariable", "Value of {0}", row.name),
-			presentation: "compact",
+			ariaLabel: localize('debug.editVariable', 'Value of {0}', row.name),
+			presentation: 'compact',
 		}));
-		input.inputElement.setAttribute("aria-description", localize("debug.editVariableHelp", "Press Enter to apply the value or Escape to cancel."));
+		input.inputElement.setAttribute('aria-description', localize('debug.editVariableHelp', 'Press Enter to apply the value or Escape to cancel.'));
 		input.value = row.value;
 		const edit: VariableEdit = { row, session, generation: this.refreshGeneration, input, form, pending: false };
 		this.variableEdit = edit;
-		controls.add(addDisposableListener(form, "submit", event => {
+		controls.add(addDisposableListener(form, 'submit', event => {
 			event.preventDefault();
 			void this.submitVariable(edit);
 		}));
 		controls.add(input.onKeyDown(event => {
-			if (event.key !== "Escape" || event.isComposing || edit.pending) return;
+			if (event.key !== 'Escape' || event.isComposing || edit.pending) return;
 			event.preventDefault();
 			event.stopPropagation();
 			this.variableEdit = undefined;
@@ -220,7 +222,7 @@ export class VariablesView extends ViewPane {
 		if (edit.pending || this.variableEdit !== edit || !this.isCurrentInspection(edit.session, edit.generation)) return;
 		edit.pending = true;
 		edit.input.readOnly = true;
-		edit.input.showValidation("");
+		edit.input.showValidation('');
 		try {
 			const variable = await edit.session.setVariable(edit.row.parentVariablesReference!, edit.row.name, edit.input.value);
 			if (this.variableEdit !== edit || !this.isCurrentInspection(edit.session, edit.generation)) return;
@@ -251,14 +253,14 @@ export class VariablesView extends ViewPane {
 	private async breakOnVariable(index: number): Promise<void> {
 		const row = this.variableRows[index];
 		const session = this.debug.session;
-		if (!row?.parentVariablesReference || !session || session.state !== "stopped") return;
+		if (!row?.parentVariablesReference || !session || session.state !== 'stopped') return;
 		const generation = this.refreshGeneration;
 		try {
 			const info = await session.dataBreakpointInfo(row.name, row.parentVariablesReference, this.selectedFrameId);
 			if (!this.isCurrentInspection(session, generation)) return;
 			if (info.dataId === null) throw new Error(info.description);
-			const accessType = info.accessTypes.includes("write") ? "write" : info.accessTypes[0];
-			if (!accessType) throw new Error(localize("debug.noDataAccess", "The adapter did not provide a supported data access type."));
+			const accessType = info.accessTypes.includes('write') ? 'write' : info.accessTypes[0];
+			if (!accessType) throw new Error(localize('debug.noDataAccess', 'The adapter did not provide a supported data access type.'));
 			await this.commands.executeCommand(ADD_DATA_BREAKPOINT_ID, { ...info, dataId: info.dataId, sessionId: session.id, accessType });
 		} catch (error) {
 			if (!this.isCurrentInspection(session, generation)) return;
@@ -291,9 +293,9 @@ export class VariablesView extends ViewPane {
 		}));
 		if (variableInputWasFocused) this.variableEdit?.input.focus();
 	}
-	private scopeRow(scope: IDebugScope): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: scope.name, path: Object.freeze([scope.name]), variablesReference: scope.variablesReference, depth: 0, expanded: true }); }
+	private scopeRow(scope: IDebugScope, expanded: boolean): DebugVariableRow { return Object.freeze({ key: ++this.variableKey, name: scope.name, path: Object.freeze([scope.name]), variablesReference: scope.variablesReference, depth: 0, expanded }); }
 	private variableRow(variable: IDebugVariable, depth: number, parentVariablesReference: number, parentPath: readonly string[]): DebugVariableRow {
-		return Object.freeze({ key: ++this.variableKey, name: variable.name, path: Object.freeze([...parentPath, variable.name]), value: variable.value, memoryReference: variable.memoryReference, variablesReference: variable.variablesReference, parentVariablesReference, readOnly: variable.presentationHint?.attributes?.includes("readOnly") || variable.presentationHint?.lazy === true, depth, expanded: false, ...(variable.type ? { type: variable.type } : {}) });
+		return Object.freeze({ key: ++this.variableKey, name: variable.name, path: Object.freeze([...parentPath, variable.name]), value: variable.value, memoryReference: variable.memoryReference, variablesReference: variable.variablesReference, parentVariablesReference, readOnly: variable.presentationHint?.attributes?.includes('readOnly') || variable.presentationHint?.lazy === true, depth, expanded: false, ...(variable.type ? { type: variable.type } : {}) });
 	}
 }
 
@@ -307,53 +309,53 @@ class DebugVariableItem extends Disposable {
 
 	constructor(document: Document, breakOnData: (index: number) => void, viewMemory: (index: number) => void) {
 		super();
-		this.domNode = h(document, "li");
-		this.action = h(document, "button");
-		this.action.type = "button";
-		this.action.className = "ash-debug-variable";
-		this.hover = this._register(getHoverDelegate().setupHover({ target: this.action, content: "" }));
+		this.domNode = h(document, 'li');
+		this.action = h(document, 'button');
+		this.action.type = 'button';
+		this.action.className = 'ash-debug-variable';
+		this.hover = this._register(getHoverDelegate().setupHover({ target: this.action, content: '' }));
 		this.dataBreakpoint = this._register(new Button(this.domNode, {
 			...defaultButtonStyles,
-			label: localize("debug.breakOnData", "Break on data access"),
+			label: localize('debug.breakOnData', 'Break on data access'),
 			icon: Lxicon.add,
 			iconOnly: true,
-			size: "small",
-			title: localize("debug.breakOnData", "Break on data access"),
+			size: 'small',
+			title: localize('debug.breakOnData', 'Break on data access'),
 			onClick: () => breakOnData(this.variableIndex),
 		}));
 		this.memory = this._register(new Button(this.domNode, {
 			...defaultButtonStyles, label: localize('debug.viewMemoryShort', 'View memory'), title: localize('debug.viewMemoryShort', 'View memory'), icon: Lxicon.inspect, iconOnly: true, size: 'small', onClick: () => viewMemory(this.variableIndex),
 		}));
-		this.dataBreakpoint.domNode.classList.add("ash-debug-variable-data");
+		this.dataBreakpoint.domNode.classList.add('ash-debug-variable-data');
 	}
 
 	public update(row: DebugVariableRow, index: number, supportsSetVariable: boolean, supportsDataBreakpoints: boolean, editForm: HTMLFormElement | undefined, supportsMemory: boolean): void {
 		this.variableIndex = index;
-		const indicator = row.variablesReference > 0 ? row.expanded ? "▾ " : "▸ " : "  ";
-		const label = `${indicator}${row.name}${row.value === undefined ? "" : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ""}`;
+		const indicator = row.variablesReference > 0 ? row.expanded ? '▾ ' : '▸ ' : '  ';
+		const label = `${indicator}${row.name}${row.value === undefined ? '' : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ''}`;
 		this.action.textContent = label;
 		this.hover.update(label);
 		this.action.dataset.variableIndex = String(index);
 		this.action.dataset.variableKey = String(row.key);
 		if (row.variablesReference > 0) {
-			this.action.setAttribute("aria-expanded", String(row.expanded));
+			this.action.setAttribute('aria-expanded', String(row.expanded));
 		} else {
-			this.action.removeAttribute("aria-expanded");
+			this.action.removeAttribute('aria-expanded');
 		}
 		if (supportsSetVariable && row.value !== undefined && !row.readOnly) {
-			this.action.setAttribute("aria-keyshortcuts", "F2");
-			this.action.setAttribute("aria-description", localize("debug.variableEditHint", "Press F2 or double-click to change the value."));
+			this.action.setAttribute('aria-keyshortcuts', 'F2');
+			this.action.setAttribute('aria-description', localize('debug.variableEditHint', 'Press F2 or double-click to change the value.'));
 		} else {
-			this.action.removeAttribute("aria-keyshortcuts");
-			this.action.removeAttribute("aria-description");
+			this.action.removeAttribute('aria-keyshortcuts');
+			this.action.removeAttribute('aria-description');
 		}
 		this.action.style.paddingInlineStart = `${6 + row.depth * 14}px`;
 		this.action.disabled = row.variablesReference <= 0 && row.value === undefined;
 		const canWatch = supportsDataBreakpoints && Boolean(row.parentVariablesReference) && !editForm;
-		this.dataBreakpoint.label = localize("debug.breakOnVariable", "Break on data access for {0}", row.name);
+		this.dataBreakpoint.label = localize('debug.breakOnVariable', 'Break on data access for {0}', row.name);
 		this.dataBreakpoint.enabled = canWatch;
 		this.dataBreakpoint.domNode.hidden = !canWatch;
-		this.dataBreakpoint.domNode.classList.toggle("empty", !canWatch);
+		this.dataBreakpoint.domNode.classList.toggle('empty', !canWatch);
 		this.memory.domNode.hidden = !supportsMemory || !row.memoryReference || !!editForm;
 		this.memory.enabled = !this.memory.domNode.hidden;
 		this.domNode.replaceChildren(editForm ?? this.action, this.dataBreakpoint.domNode, ...(!this.memory.domNode.hidden ? [this.memory.domNode] : []));

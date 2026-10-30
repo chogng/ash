@@ -24,7 +24,35 @@ export interface ModelRetirement {
 	readonly shutdownDate?: string | null;
 }
 
+/** Unknown evidence is preserved across adapters and is never treated as a negative declaration. */
+export type ModelCapabilitySupport = 'supported' | 'unsupported' | 'unknown';
+
+export interface ModelCatalogSource {
+	readonly providerId: string;
+	readonly connectionId: string;
+	readonly metadata: 'providerLive' | 'userConfigured' | 'builtinCurated' | 'providerSeed' | 'persistedObservation' | 'unknown';
+}
+
+/** Exact decimal currency amounts per million tokens for one published API rate rule. */
+export interface ModelTokenPricing {
+	readonly currency: string;
+	readonly serviceTier: string;
+	readonly region: string;
+	readonly minInputTokens: number;
+	readonly maxInputTokens: number | null;
+	readonly input: string | null;
+	readonly output: string | null;
+	readonly cacheRead: string | null;
+	readonly cacheWrite: string | null;
+	readonly revision: string;
+	readonly reviewedAt: string;
+	readonly sourceUrls: readonly string[];
+}
+
 export interface ModelCatalogEntry {
+	readonly capabilities?: { readonly toolCalling: ModelCapabilitySupport; readonly agentMode: ModelCapabilitySupport; };
+	readonly source?: ModelCatalogSource;
+	readonly pricing?: readonly ModelTokenPricing[];
 	/** Unknown modalities preserve existing attachment behavior. */
 	readonly inputModalities?: readonly ('text' | 'image' | 'audio')[] | null;
 	readonly longContext: boolean | null;
@@ -56,6 +84,7 @@ export type AdvisorSelection =
 	| { readonly type: 'model'; readonly config: AdvisorConfig; };
 
 export interface ModelProviderCredentialStatus {
+	readonly catalog?: ModelCatalogStatus;
 	readonly connection: string;
 	readonly access: 'apiKey' | 'subscription' | 'local' | 'enterprise' | 'unknown';
 	readonly active: boolean;
@@ -67,8 +96,17 @@ export interface ModelProviderCredentialStatus {
 	readonly apiKeyConfigured: boolean;
 }
 
+/** Discovery evidence for one connection; it does not certify model invocation readiness. */
+export interface ModelCatalogStatus {
+	readonly provider: string;
+	readonly connection: string;
+	readonly freshness: 'fresh' | 'staleUsable' | 'expired' | 'staticOnly';
+	readonly issues: readonly ('refreshFailed' | 'discoveryUnsupported' | 'authenticationRequired' | 'staleCatalog' | 'unknownCapability' | 'unlistedModel')[];
+}
+
 export interface AgentModelCatalog {
 	readonly models: readonly ModelCatalogEntry[];
+	readonly statuses?: readonly ModelCatalogStatus[];
 	readonly scopes?: readonly { readonly connection: string; readonly identity: string | null; }[];
 }
 
@@ -130,6 +168,7 @@ export interface IAgentModelsService {
 	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null; }): Promise<void>;
 	listCustomProviders(): Promise<readonly CustomModelProvider[]>;
 	saveCustomProvider(provider: CustomModelProvider): Promise<void>;
+	removeCustomProvider(connection: string): Promise<void>;
 	testProviderModel(provider: CustomModelProvider, model: string): Promise<ModelProviderTestResult>;
 	listModels(): Promise<AgentModelCatalog>;
 	listProviders(): Promise<AgentModelProviders>;

@@ -1,11 +1,11 @@
-import { Emitter, type Event } from "../common/event.js";
+import { Emitter, type Event } from '../common/event.js';
 import {
 	Disposable,
 	DisposableStore,
 	type IDisposable,
 
 	toDisposable,
-} from "../common/lifecycle.js";
+} from '../common/lifecycle.js';
 
 export type BrowserWindow = Window & typeof globalThis;
 export type CodeWindow = BrowserWindow;
@@ -41,7 +41,7 @@ export const onDidUnregisterWindow: Event<BrowserWindow> =
 export function registerWindow(targetWindow: Window): IDisposable {
 	registerMainWindowIfAvailable();
 	if (windowIds.has(targetWindow)) {
-		throw new Error("Browser window is already registered");
+		throw new Error('Browser window is already registered');
 	}
 
 	const id = nextWindowId++;
@@ -83,7 +83,7 @@ export function openWindowNoOpener(
 	targetWindow: Window,
 	url: URL,
 ): void {
-	targetWindow.open(url.toString(), "_blank", "noopener");
+	targetWindow.open(url.toString(), '_blank', 'noopener');
 }
 
 export interface PopupWindowOptions {
@@ -100,20 +100,20 @@ export function openPopupWindow(
 	options: PopupWindowOptions = {},
 ): void {
 	const features = [
-		"popup=yes",
-		"noopener",
+		'popup=yes',
+		'noopener',
 		options.width === undefined ? undefined : `width=${options.width}`,
 		options.height === undefined ? undefined : `height=${options.height}`,
 		options.left === undefined ? undefined : `left=${options.left}`,
 		options.top === undefined ? undefined : `top=${options.top}`,
 	].filter((feature): feature is string => feature !== undefined);
-	targetWindow.open(url.toString(), "_blank", features.join(","));
+	targetWindow.open(url.toString(), '_blank', features.join(','));
 }
 
 export function isWindow(value: unknown): value is Window {
-	return typeof value === "object" &&
+	return typeof value === 'object' &&
 		value !== null &&
-		"window" in value &&
+		'window' in value &&
 		(value as Window).window === value;
 }
 

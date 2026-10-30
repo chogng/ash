@@ -1,30 +1,30 @@
-import { resolve } from "node:path";
-import { defineConfig, normalizePath, type Plugin } from "vite";
-import { AshRendererDirectory } from "../../../src/ash/code/common/application.js";
+import { resolve } from 'node:path';
+import { defineConfig, normalizePath, type Plugin } from 'vite';
+import { AshRendererDirectory } from '../../../src/ash/code/common/application.js';
 import { codeSessionsProfile } from '../../../src/ash/code/common/codeSessionsProfile.js';
-import { desktopBuildPath } from "../paths.ts";
+import { desktopBuildPath } from '../paths.ts';
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { desktopStartupTracePlugin } from './desktopStartupTracePlugin.ts';
 import { rendererOutput } from './rendererOutput.ts';
 import { rendererDependencyAliases } from './rendererDependencies.ts';
-import { hotReloadPlugin } from "./hotReloadPlugin.ts";
-import { productIconsPlugin } from "./productIconsPlugin.ts";
-import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
-import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
+import { hotReloadPlugin } from './hotReloadPlugin.ts';
+import { productIconsPlugin } from './productIconsPlugin.ts';
+import { webAppServerVitePlugin } from './webAppServerPlugin.ts';
+import { workbenchEntryPlugin } from './workbenchEntryPlugin.ts';
 import { webUpdatePlugin } from './webUpdatePlugin.ts';
 import { browserExtensionsPlugin } from './extensionsPlugin.ts';
 import { CSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 import { installChatGPTVerification } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTVerification.ts';
 
 export default defineConfig(({ mode, command }) => {
-	const desktopRoot = resolve(import.meta.dirname, "../../..");
+	const desktopRoot = resolve(import.meta.dirname, '../../..');
 	const repositoryRoot = desktopRoot;
-	const webAppServerEnabled = process.env.ASH_WEB_APP_SERVER === "1";
-	const webOnly = mode === "web";
+	const webAppServerEnabled = process.env.ASH_WEB_APP_SERVER === '1';
+	const webOnly = mode === 'web';
 	const agentsWindow = process.env.ASH_DEV_AGENTS_WINDOW === '1';
 	// Separate Web origins allow parallel IDE/Agents debugging; Desktop keeps its renderer port.
 	const developmentPort = (webAppServerEnabled ? 5174 : 5173) + (webOnly && agentsWindow ? 2 : 0);
-	const sourceRoot = resolve(desktopRoot, "src/ash/code");
+	const sourceRoot = resolve(desktopRoot, 'src/ash/code');
 	const sessionsWebEntry = 'browser/sessions/sessions';
 	const moduleUrl = (path: string): string => `/@fs/${normalizePath(resolve(repositoryRoot, 'src/ash', path))}`;
 	// The host supplies the page and product identity; Sessions owns the embedded Web application.
@@ -70,8 +70,8 @@ export default defineConfig(({ mode, command }) => {
 	const browserEntryPath = agentsWindow
 		? `/${sessionsWebEntry}.html`
 		: '/browser/workbench/workbench.html';
-	const browserEntry = "browser/workbench/workbench";
-	const electronEntry = "electron-browser/workbench/workbench";
+	const browserEntry = 'browser/workbench/workbench';
+	const electronEntry = 'electron-browser/workbench/workbench';
 	const browserInputs = {
 		[browserEntry]: resolve(sourceRoot, `${browserEntry}.html`),
 		[sessionsWebEntry]: resolve(sourceRoot, `${sessionsWebEntry}.html`),
@@ -82,7 +82,7 @@ export default defineConfig(({ mode, command }) => {
 		'sessions/electron-browser/sessions': resolve(sourceRoot, 'sessions/electron-browser/sessions.html'),
 	};
 	const remoteRuntimeInstallInput = {
-		"electron-browser/remote-runtime-install/remoteRuntimeInstall": resolve(sourceRoot, "electron-browser/remote-runtime-install/remoteRuntimeInstall.html"),
+		'electron-browser/remote-runtime-install/remoteRuntimeInstall': resolve(sourceRoot, 'electron-browser/remote-runtime-install/remoteRuntimeInstall.html'),
 	};
 	const verificationScript = `(${installChatGPTVerification.toString()})();`;
 	const inputs = webOnly ? browserInputs : {
@@ -94,11 +94,11 @@ export default defineConfig(({ mode, command }) => {
 	};
 
 	return {
-		base: "./",
+		base: './',
 		root: sourceRoot,
-		publicDir: resolve(repositoryRoot, "resources/server"),
+		publicDir: resolve(repositoryRoot, 'resources/server'),
 		define: {
-			__ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled || command === "build" && !webOnly),
+			__ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled || command === 'build' && !webOnly),
 			'import.meta.env.ASH_SESSIONS_PROFILE': JSON.stringify(codeSessionsProfile),
 		},
 		plugins: [
@@ -141,15 +141,15 @@ export default defineConfig(({ mode, command }) => {
 			// Extension preparation publishes localization first and owns the shared resource watcher.
 			browserExtensionsPlugin(),
 			{
-				name: "ash-electron-file-html",
-				apply: "build",
+				name: 'ash-electron-file-html',
+				apply: 'build',
 				transformIndexHtml: {
-					order: "post",
+					order: 'post',
 					handler(html, context) {
-						const file = context.filename.replaceAll("\\", "/");
-						if (!file.includes("/electron-browser/") && !file.includes('/browser/theme-preview/')) return;
+						const file = context.filename.replaceAll('\\', '/');
+						if (!file.includes('/electron-browser/') && !file.includes('/browser/theme-preview/')) return;
 						// File-URL module preloads can prevent Linux Electron from loading its stylesheets.
-						return html.replace(/<link rel="modulepreload"[^>]*>\s*/g, "");
+						return html.replace(/<link rel="modulepreload"[^>]*>\s*/g, '');
 					},
 				},
 			},
@@ -159,11 +159,11 @@ export default defineConfig(({ mode, command }) => {
 		optimizeDeps: {
 			// The dependency scanner parses source before Vite transforms parameter decorators.
 			noDiscovery: true,
-			include: ["@xterm/xterm", "@xterm/addon-fit"],
+			include: ['@xterm/xterm', '@xterm/addon-fit', '@vscode/tree-sitter-wasm'],
 		},
 		resolve: { alias: rendererDependencyAliases },
 		server: {
-			host: "127.0.0.1",
+			host: '127.0.0.1',
 			port: developmentPort,
 			strictPort: true,
 			// Ash owns runtime diagnostics. Vite's console forwarding can throw on HMR
@@ -184,7 +184,7 @@ export default defineConfig(({ mode, command }) => {
 			},
 		},
 		build: {
-			outDir: desktopBuildPath(repositoryRoot, webOnly ? "web" : "renderer", AshRendererDirectory),
+			outDir: desktopBuildPath(repositoryRoot, webOnly ? 'web' : 'renderer', AshRendererDirectory),
 			emptyOutDir: true,
 			rolldownOptions: {
 				output: rendererOutput,

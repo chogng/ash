@@ -131,6 +131,8 @@
     "start:web": "cross-env ASH_WEB_APP_SERVER=0 node build/desktop/launch/web.ts .build/desktop/web/ash 5173",
     "start:web:full": "cross-env ASH_WEB_APP_SERVER=1 node build/desktop/launch/web.ts .build/desktop/web/ash 5174",
     "dev:rust": "node build/desktop/watch-app-server.ts",
+    "debug:backend": "node build/python.ts -B build/desktop/debug.py",
+    "debug:backend:status": "node build/python.ts -B build/desktop/debug.py --status",
     "dev:electron": "wait-on tcp:127.0.0.1:5173 && cross-env ASH_DEV_APP_SERVER_RELOAD=1 ASH_RENDERER_URL=http://127.0.0.1:5173 node build/desktop/launch/electron.ts --watch",
     "prestart": "pnpm run prepare:output && pnpm run prepare:desktop",
     "verify:protocol": "just test ash-app-server-protocol",

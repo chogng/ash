@@ -15,7 +15,10 @@ use ash_app_server_protocol::protocol::github::GitHubFileReadParams;
 use ash_app_server_protocol::protocol::github::GitHubForkBranches;
 use ash_app_server_protocol::protocol::github::GitHubForkCreateParams;
 use ash_app_server_protocol::protocol::github::GitHubForkResult;
+use ash_app_server_protocol::protocol::github::GitHubManagedSettingsFailure;
 use ash_app_server_protocol::protocol::github::GitHubManagedSettingsParams;
+use ash_app_server_protocol::protocol::github::GitHubManagedSettingsReadMode;
+use ash_app_server_protocol::protocol::github::GitHubManagedSettingsRefresh;
 use ash_app_server_protocol::protocol::github::GitHubManagedSettingsResult;
 use ash_app_server_protocol::protocol::github::GitHubNotification;
 use ash_app_server_protocol::protocol::github::GitHubNotificationFilter;
@@ -24,12 +27,18 @@ use ash_app_server_protocol::protocol::github::GitHubNotificationsParams;
 use ash_app_server_protocol::protocol::github::GitHubNotificationsReadParams;
 use ash_app_server_protocol::protocol::github::GitHubNotificationsResult;
 use ash_app_server_protocol::protocol::github::GitHubRemoteRepository;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryBlobParams;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryBlobResult;
 use ash_app_server_protocol::protocol::github::GitHubRepositoryBranch;
 use ash_app_server_protocol::protocol::github::GitHubRepositoryBranchesParams;
 use ash_app_server_protocol::protocol::github::GitHubRepositoryBranchesResult;
 use ash_app_server_protocol::protocol::github::GitHubRepositoryCreateParams;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryEntryKind;
 use ash_app_server_protocol::protocol::github::GitHubRepositorySearchParams;
 use ash_app_server_protocol::protocol::github::GitHubRepositorySearchResult;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryTreeEntry;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryTreeParams;
+use ash_app_server_protocol::protocol::github::GitHubRepositoryTreeResult;
 use ash_app_server_protocol::protocol::github::GitHubRepositoryVisibility;
 use ash_app_server_protocol::protocol::github::GitHubRequestedReviewers;
 use ash_app_server_protocol::protocol::github::GitHubReviewComment;
@@ -361,6 +370,8 @@ impl GitHubRequestProcessor {
                 | ClientMethod::GitHubPullRequestFiles
                 | ClientMethod::GitHubPullRequestReviews
                 | ClientMethod::GitHubPullRequestDiff
+                | ClientMethod::GitHubRepositoryTree
+                | ClientMethod::GitHubRepositoryBlob
                 | ClientMethod::GitHubFileRead
                 | ClientMethod::GitHubReviewThreads
                 | ClientMethod::GitHubReviewThreadRead
@@ -513,10 +524,16 @@ impl GitHubRequestProcessor {
                 })
             }
             ClientMethod::GitHubManagedSettings => {
-                let _: GitHubManagedSettingsParams = decode(params)?;
-                result(&GitHubManagedSettingsResult {
-                    settings: client.managed_settings().await.map_err(github_error)?,
-                })
+                let p: GitHubManagedSettingsParams = decode(params)?;
+                let mode = match p.mode {
+                    GitHubManagedSettingsReadMode::Automatic => {
+                        github::ManagedSettingsReadMode::Automatic
+                    }
+                    GitHubManagedSettingsReadMode::Retry => github::ManagedSettingsReadMode::Retry,
+                };
+                result(&managed_settings_snapshot(
+                    client.managed_settings(mode).await.map_err(github_error)?,
+                ))
             }
             ClientMethod::GitHubNotificationsList => {
                 let p: GitHubNotificationsParams = decode(params)?;
@@ -813,6 +830,46 @@ impl GitHubRequestProcessor {
                     Ok::<_, github::Error>(GitHubReviewDiffResult {
                         base_commit: diff.base_commit,
                         files: review_files(diff.files),
+                    })
+                })
+            }
+            ClientMethod::GitHubRepositoryTree => {
+                operation!(GitHubRepositoryTreeParams, |p, repository| {
+                    let tree = client.repository_tree(&repository, &p.reference).await?;
+                    Ok::<_, github::Error>(GitHubRepositoryTreeResult {
+                        sha: tree.sha,
+                        entries: tree
+                            .entries
+                            .into_iter()
+                            .map(|entry| GitHubRepositoryTreeEntry {
+                                path: entry.path,
+                                sha: entry.sha,
+                                size: entry.size,
+                                kind: match entry.kind {
+                                    github::RepositoryEntryKind::File => {
+                                        GitHubRepositoryEntryKind::File
+                                    }
+                                    github::RepositoryEntryKind::Directory => {
+                                        GitHubRepositoryEntryKind::Directory
+                                    }
+                                    github::RepositoryEntryKind::SymbolicLink => {
+                                        GitHubRepositoryEntryKind::SymbolicLink
+                                    }
+                                    github::RepositoryEntryKind::Submodule => {
+                                        GitHubRepositoryEntryKind::Submodule
+                                    }
+                                },
+                            })
+                            .collect(),
+                    })
+                })
+            }
+            ClientMethod::GitHubRepositoryBlob => {
+                operation!(GitHubRepositoryBlobParams, |p, repository| {
+                    let blob = client.repository_blob(&repository, &p.sha).await?;
+                    Ok::<_, github::Error>(GitHubRepositoryBlobResult {
+                        sha: blob.sha,
+                        content_base64: blob.content_base64,
                     })
                 })
             }
@@ -1172,6 +1229,56 @@ pub(super) fn github_authentication_error(error: ash_login::LoginError) -> RpcEr
         | ash_login::LoginErrorKind::Driver => {
             RpcError::new(-32030, AppServerErrorName::AccountOperationFailed)
         }
+    }
+}
+
+fn managed_settings_snapshot(
+    snapshot: github::ManagedSettingsSnapshot,
+) -> GitHubManagedSettingsResult {
+    let refresh = match snapshot.refresh {
+        github::ManagedSettingsRefresh::Ready {
+            last_attempt_at,
+            last_success_at,
+        } => GitHubManagedSettingsRefresh::Ready {
+            last_attempt_at,
+            last_success_at,
+        },
+        github::ManagedSettingsRefresh::Failed {
+            last_attempt_at,
+            last_success_at,
+            failure,
+        } => {
+            let failure = match failure {
+                github::ManagedSettingsFailure::AuthenticationRequired => {
+                    GitHubManagedSettingsFailure::AuthenticationRequired
+                }
+                github::ManagedSettingsFailure::PermissionDenied => {
+                    GitHubManagedSettingsFailure::PermissionDenied
+                }
+                github::ManagedSettingsFailure::RateLimited => {
+                    GitHubManagedSettingsFailure::RateLimited
+                }
+                github::ManagedSettingsFailure::UpdateRequired => {
+                    GitHubManagedSettingsFailure::UpdateRequired
+                }
+                github::ManagedSettingsFailure::InvalidResponse => {
+                    GitHubManagedSettingsFailure::InvalidResponse
+                }
+                github::ManagedSettingsFailure::Unavailable => {
+                    GitHubManagedSettingsFailure::Unavailable
+                }
+                github::ManagedSettingsFailure::TimedOut => GitHubManagedSettingsFailure::TimedOut,
+            };
+            GitHubManagedSettingsRefresh::Failed {
+                last_attempt_at,
+                last_success_at,
+                failure,
+            }
+        }
+    };
+    GitHubManagedSettingsResult {
+        settings: snapshot.settings,
+        refresh,
     }
 }
 

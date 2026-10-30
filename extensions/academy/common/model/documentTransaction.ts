@@ -1,11 +1,11 @@
-import { collectDocumentNodeIds, containsDocumentNode, createDocumentNode, findDocumentNode, freezeDocumentNode, insertDocumentNode, removeDocumentNode, replaceDocumentNode, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from "./document.js";
-import { type DocumentSchema } from "./documentSchema.js";
-import { nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from "../core/documentSelection.js";
+import { collectDocumentNodeIds, containsDocumentNode, createDocumentNode, findDocumentNode, freezeDocumentNode, insertDocumentNode, removeDocumentNode, replaceDocumentNode, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from './document.js';
+import { type DocumentSchema } from './documentSchema.js';
+import { nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from '../core/documentSelection.js';
 
 export type DocumentStep = ReplaceTextStep | InsertNodeStep | DeleteNodeStep | MoveNodeStep | SetNodeAttributesStep | SetNodeMarksStep | SetNodeTypeStep;
 
 export interface ReplaceTextStep {
-	readonly kind: "replaceText";
+	readonly kind: 'replaceText';
 	readonly nodeId: DocumentNodeId;
 	readonly from: number;
 	readonly to: number;
@@ -14,38 +14,38 @@ export interface ReplaceTextStep {
 }
 
 export interface InsertNodeStep {
-	readonly kind: "insertNode";
+	readonly kind: 'insertNode';
 	readonly parentId: DocumentNodeId;
 	readonly index: number;
 	readonly node: DocumentNode;
 }
 
 export interface DeleteNodeStep {
-	readonly kind: "deleteNode";
+	readonly kind: 'deleteNode';
 	readonly nodeId: DocumentNodeId;
 }
 
 export interface MoveNodeStep {
-	readonly kind: "moveNode";
+	readonly kind: 'moveNode';
 	readonly nodeId: DocumentNodeId;
 	readonly parentId: DocumentNodeId;
 	readonly index: number;
 }
 
 export interface SetNodeAttributesStep {
-	readonly kind: "setNodeAttributes";
+	readonly kind: 'setNodeAttributes';
 	readonly nodeId: DocumentNodeId;
 	readonly attrs: DocumentAttributes;
 }
 
 export interface SetNodeMarksStep {
-	readonly kind: "setNodeMarks";
+	readonly kind: 'setNodeMarks';
 	readonly nodeId: DocumentNodeId;
 	readonly marks: readonly DocumentMark[];
 }
 
 export interface SetNodeTypeStep {
-	readonly kind: "setNodeType";
+	readonly kind: 'setNodeType';
 	readonly nodeId: DocumentNodeId;
 	readonly type: string;
 	readonly attrs: DocumentAttributes;
@@ -89,37 +89,37 @@ export class DocumentTransaction {
 		this.selectionSet = options.selectionSet ?? options.selection !== undefined;
 		this.storedMarks = options.storedMarks === undefined ? undefined : cloneMarks(options.storedMarks);
 		this.storedMarksSet = options.storedMarksSet ?? options.storedMarks !== undefined;
-		if (options.historyGroup !== undefined && (typeof options.historyGroup !== "string" || options.historyGroup.length === 0)) throw new TypeError("Document history group must be a non-empty string");
+		if (options.historyGroup !== undefined && (typeof options.historyGroup !== 'string' || options.historyGroup.length === 0)) throw new TypeError('Document history group must be a non-empty string');
 		this.historyGroup = options.historyGroup;
 		this.metadata = Object.freeze(normalizeMetadata(options.metadata));
 	}
 
 	replaceText(nodeId: DocumentNodeId, from: number, to: number, text: string, marks?: readonly DocumentMark[]): DocumentTransaction {
-		return this.append({ kind: "replaceText", nodeId, from, to, text, ...(marks === undefined ? {} : { marks }) });
+		return this.append({ kind: 'replaceText', nodeId, from, to, text, ...(marks === undefined ? {} : { marks }) });
 	}
 
 	insertNode(parentId: DocumentNodeId, index: number, node: DocumentNode): DocumentTransaction {
-		return this.append({ kind: "insertNode", parentId, index, node });
+		return this.append({ kind: 'insertNode', parentId, index, node });
 	}
 
 	deleteNode(nodeId: DocumentNodeId): DocumentTransaction {
-		return this.append({ kind: "deleteNode", nodeId });
+		return this.append({ kind: 'deleteNode', nodeId });
 	}
 
 	moveNode(nodeId: DocumentNodeId, parentId: DocumentNodeId, index: number): DocumentTransaction {
-		return this.append({ kind: "moveNode", nodeId, parentId, index });
+		return this.append({ kind: 'moveNode', nodeId, parentId, index });
 	}
 
 	setNodeAttributes(nodeId: DocumentNodeId, attrs: DocumentAttributes): DocumentTransaction {
-		return this.append({ kind: "setNodeAttributes", nodeId, attrs });
+		return this.append({ kind: 'setNodeAttributes', nodeId, attrs });
 	}
 
 	setNodeMarks(nodeId: DocumentNodeId, marks: readonly DocumentMark[]): DocumentTransaction {
-		return this.append({ kind: "setNodeMarks", nodeId, marks });
+		return this.append({ kind: 'setNodeMarks', nodeId, marks });
 	}
 
 	setNodeType(nodeId: DocumentNodeId, type: string, attrs: DocumentAttributes = {}): DocumentTransaction {
-		return this.append({ kind: "setNodeType", nodeId, type, attrs });
+		return this.append({ kind: 'setNodeType', nodeId, type, attrs });
 	}
 
 	withSelection(selection: DocumentSelection | undefined): DocumentTransaction {
@@ -206,58 +206,58 @@ export function applyDocumentTransaction(
 	for (const step of transaction.steps) {
 		const previous = current;
 		switch (step.kind) {
-			case "replaceText":
+			case 'replaceText':
 				applyReplaceText(step, schema, current, result => {
 					current = result.document;
 					inverse.unshift(result.inverse);
 				});
 				break;
-			case "insertNode":
+			case 'insertNode':
 				{
 					const node = freezeDocumentNode(step.node);
 					schema.validateFragment(node, { allowIncompleteContent: true });
 					if (hasAnyNodeId(current, node)) throw new Error(`Inserted node '${node.id}' duplicates an existing node id`);
 					current = insertDocumentNode(current, step.parentId, step.index, node);
-					inverse.unshift({ kind: "deleteNode", nodeId: node.id });
+					inverse.unshift({ kind: 'deleteNode', nodeId: node.id });
 				}
 				break;
-			case "deleteNode": {
+			case 'deleteNode': {
 				const removed = removeDocumentNode(current, step.nodeId);
 				current = removed.document;
-				inverse.unshift({ kind: "insertNode", parentId: removed.parentId, index: removed.index, node: removed.removed });
+				inverse.unshift({ kind: 'insertNode', parentId: removed.parentId, index: removed.index, node: removed.removed });
 				break;
 			}
-			case "moveNode": {
+			case 'moveNode': {
 				const location = findDocumentNode(current, step.nodeId);
 				if (!location || !location.parent) throw new RangeError(`Document node '${step.nodeId}' does not exist or is the root`);
-				if (containsDocumentNode(location.node, step.parentId)) throw new RangeError("A document node cannot be moved into its own subtree");
+				if (containsDocumentNode(location.node, step.parentId)) throw new RangeError('A document node cannot be moved into its own subtree');
 				const removed = removeDocumentNode(current, step.nodeId);
 				current = insertDocumentNode(removed.document, step.parentId, step.index, removed.removed);
-				inverse.unshift({ kind: "moveNode", nodeId: step.nodeId, parentId: removed.parentId, index: removed.index });
+				inverse.unshift({ kind: 'moveNode', nodeId: step.nodeId, parentId: removed.parentId, index: removed.index });
 				break;
 			}
-			case "setNodeAttributes": {
+			case 'setNodeAttributes': {
 				const location = findDocumentNode(current, step.nodeId);
 				if (!location) throw new RangeError(`Document node '${step.nodeId}' does not exist`);
 				const replacement = createDocumentNode({ id: location.node.id, type: location.node.type, attrs: step.attrs, content: location.node.content, marks: location.node.marks, ...(location.node.text === undefined ? {} : { text: location.node.text }) });
 				current = replaceDocumentNode(current, step.nodeId, replacement);
-				inverse.unshift({ kind: "setNodeAttributes", nodeId: step.nodeId, attrs: location.node.attrs });
+				inverse.unshift({ kind: 'setNodeAttributes', nodeId: step.nodeId, attrs: location.node.attrs });
 				break;
 			}
-			case "setNodeMarks": {
+			case 'setNodeMarks': {
 				const location = findDocumentNode(current, step.nodeId);
 				if (!location || location.node.text === undefined) throw new RangeError(`Document node '${step.nodeId}' is not a text node`);
 				const replacement = createDocumentNode({ id: location.node.id, type: location.node.type, attrs: location.node.attrs, content: location.node.content, marks: step.marks, text: location.node.text });
 				current = replaceDocumentNode(current, step.nodeId, replacement);
-				inverse.unshift({ kind: "setNodeMarks", nodeId: step.nodeId, marks: location.node.marks });
+				inverse.unshift({ kind: 'setNodeMarks', nodeId: step.nodeId, marks: location.node.marks });
 				break;
 			}
-			case "setNodeType": {
+			case 'setNodeType': {
 				const location = findDocumentNode(current, step.nodeId);
 				if (!location) throw new RangeError(`Document node '${step.nodeId}' does not exist`);
 				const replacement = createDocumentNode({ id: location.node.id, type: step.type, attrs: step.attrs, content: location.node.content, marks: location.node.marks, ...(location.node.text === undefined ? {} : { text: location.node.text }) });
 				current = replaceDocumentNode(current, step.nodeId, replacement);
-				inverse.unshift({ kind: "setNodeType", nodeId: step.nodeId, type: location.node.type, attrs: location.node.attrs });
+				inverse.unshift({ kind: 'setNodeType', nodeId: step.nodeId, type: location.node.type, attrs: location.node.attrs });
 				break;
 			}
 		}
@@ -299,7 +299,7 @@ export function applyDocumentTransaction(
 		if (attrs.anchor !== next.attrs.anchor) { if (!anchors.has(comment.id)) anchors.set(comment.id, comment.attrs); current = replaceDocumentNode(current, comment.id, createDocumentNode({ ...next, attrs })); }
 	}
 
-	for (const [nodeId, attrs] of anchors) if (findDocumentNode(current, nodeId)) inverse.push({ kind: "setNodeAttributes", nodeId, attrs });
+	for (const [nodeId, attrs] of anchors) if (findDocumentNode(current, nodeId)) inverse.push({ kind: 'setNodeAttributes', nodeId, attrs });
 	schema.validate(current);
 	return Object.freeze({ document: current, inverse: new DocumentTransaction(inverse, { addToHistory: false, label: transaction.label }), selection: mappedSelection, mapping: new DocumentTransactionMapping(mapping) });
 }
@@ -307,15 +307,15 @@ export function applyDocumentTransaction(
 /** Maps an identity-based selection through one already-applied document step. */
 function mapDocumentSelectionThroughStep(selection: DocumentSelection | undefined, before: DocumentNode, after: DocumentNode, step: DocumentStep): DocumentSelection | undefined {
 	if (!selection) return undefined;
-	if (selection.kind === "all") return selection;
-	if (selection.kind === "node") return findDocumentNode(after, selection.nodeId) ? nodeSelection(selection.nodeId) : undefined;
+	if (selection.kind === 'all') return selection;
+	if (selection.kind === 'node') return findDocumentNode(after, selection.nodeId) ? nodeSelection(selection.nodeId) : undefined;
 	const anchor = mapDocumentPoint(selection.anchor, before, after, step);
 	const head = mapDocumentPoint(selection.head, before, after, step);
 	return anchor && head ? textSelection(anchor, head) : undefined;
 }
 
 function mapDocumentPoint(point: DocumentPoint, before: DocumentNode, after: DocumentNode, step: DocumentStep): DocumentPoint | undefined {
-	if (step.kind === "replaceText" && point.nodeId === step.nodeId) {
+	if (step.kind === 'replaceText' && point.nodeId === step.nodeId) {
 		const replacement = findDocumentNode(after, step.nodeId)?.node;
 		if (replacement?.text !== undefined) {
 			const insertedLength = normalizeText(step.text).length;
@@ -330,7 +330,7 @@ function mapDocumentPoint(point: DocumentPoint, before: DocumentNode, after: Doc
 		}
 		return findFallbackTextPoint(before, after, step.nodeId);
 	}
-	if (step.kind === "deleteNode") {
+	if (step.kind === 'deleteNode') {
 		const deleted = findDocumentNode(before, step.nodeId);
 		if (deleted && containsDocumentNode(deleted.node, point.nodeId)) return findFallbackTextPoint(before, after, step.nodeId);
 	}
@@ -392,19 +392,19 @@ function applyReplaceText(
 	const location = findDocumentNode(document, step.nodeId);
 	if (!location || location.node.text === undefined) throw new RangeError(`Document node '${step.nodeId}' is not a text node`);
 	if (!Number.isSafeInteger(step.from) || !Number.isSafeInteger(step.to) || step.from < 0 || step.to < step.from || step.to > location.node.text.length) throw new RangeError(`Text replacement range must satisfy 0 <= from <= to <= ${location.node.text.length}`);
-	if (typeof step.text !== "string") throw new TypeError("Text replacement must contain a string");
+	if (typeof step.text !== 'string') throw new TypeError('Text replacement must contain a string');
 	const text = normalizeText(step.text);
 	const replacedText = location.node.text.slice(step.from, step.to);
 	const nextText = location.node.text.slice(0, step.from) + text + location.node.text.slice(step.to);
 	if (nextText.length === 0) {
-		if (!location.parent) throw new RangeError("The document root cannot be a text node");
+		if (!location.parent) throw new RangeError('The document root cannot be a text node');
 		const removed = removeDocumentNode(document, step.nodeId);
-		callback({ document: removed.document, inverse: { kind: "insertNode", parentId: removed.parentId, index: removed.index, node: location.node } });
+		callback({ document: removed.document, inverse: { kind: 'insertNode', parentId: removed.parentId, index: removed.index, node: location.node } });
 		return;
 	}
 	const replacementMarks = step.marks ?? location.node.marks;
 	const replacement = createDocumentNode({ id: location.node.id, type: location.node.type, attrs: location.node.attrs, content: location.node.content, marks: replacementMarks, text: nextText });
-	callback({ document: replaceDocumentNode(document, step.nodeId, replacement), inverse: { kind: "replaceText", nodeId: step.nodeId, from: step.from, to: step.from + text.length, text: replacedText, marks: location.node.marks } });
+	callback({ document: replaceDocumentNode(document, step.nodeId, replacement), inverse: { kind: 'replaceText', nodeId: step.nodeId, from: step.from, to: step.from + text.length, text: replacedText, marks: location.node.marks } });
 	schema.validateFragment(replacement);
 }
 
@@ -416,18 +416,18 @@ function hasAnyNodeId(document: DocumentNode, node: DocumentNode): boolean {
 
 function cloneStep(step: DocumentStep): DocumentStep {
 	switch (step.kind) {
-		case "replaceText": return Object.freeze({ ...step, ...(step.marks === undefined ? {} : { marks: Object.freeze(step.marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) }))) }) });
-		case "insertNode": return Object.freeze({ ...step });
-		case "deleteNode": return Object.freeze({ ...step });
-		case "moveNode": return Object.freeze({ ...step });
-		case "setNodeAttributes": return Object.freeze({ ...step, attrs: Object.freeze({ ...step.attrs }) });
-		case "setNodeMarks": return Object.freeze({ ...step, marks: Object.freeze(step.marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) }))) });
-		case "setNodeType": return Object.freeze({ ...step, attrs: Object.freeze({ ...step.attrs }) });
+		case 'replaceText': return Object.freeze({ ...step, ...(step.marks === undefined ? {} : { marks: Object.freeze(step.marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) }))) }) });
+		case 'insertNode': return Object.freeze({ ...step });
+		case 'deleteNode': return Object.freeze({ ...step });
+		case 'moveNode': return Object.freeze({ ...step });
+		case 'setNodeAttributes': return Object.freeze({ ...step, attrs: Object.freeze({ ...step.attrs }) });
+		case 'setNodeMarks': return Object.freeze({ ...step, marks: Object.freeze(step.marks.map(mark => Object.freeze({ type: mark.type, attrs: Object.freeze({ ...(mark.attrs ?? {}) }) }))) });
+		case 'setNodeType': return Object.freeze({ ...step, attrs: Object.freeze({ ...step.attrs }) });
 	}
 }
 
 function normalizeText(text: string): string {
-	return text.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+	return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 }
 
 function cloneMarks(marks: readonly DocumentMark[]): readonly DocumentMark[] {
@@ -446,5 +446,5 @@ function normalizeMetadata(metadata: readonly DocumentTransactionMetaEntry[] | u
 }
 
 function validateMetaKey(key: DocumentTransactionMetaKey): void {
-	if ((typeof key !== "string" && typeof key !== "symbol") || (typeof key === "string" && key.length === 0)) throw new TypeError("Document transaction metadata keys require a non-empty string or symbol");
+	if ((typeof key !== 'string' && typeof key !== 'symbol') || (typeof key === 'string' && key.length === 0)) throw new TypeError('Document transaction metadata keys require a non-empty string or symbol');
 }

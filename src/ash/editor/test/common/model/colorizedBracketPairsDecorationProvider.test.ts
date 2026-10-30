@@ -10,9 +10,9 @@ import { registerTestTokens } from '../../common/testTokenization.js';
 
 test('Bracket colorization follows model nesting and excludes brackets in strings', async () => {
 	using configurations = new TestLanguageConfigurationService();
-	using model = new TextModel("{\n  (\"}\")\n}", { languageId: "typescript", languageConfigurationService: configurations });
-	using registration = configurations.register("typescript", {
-		brackets: [["{", "}"], ["(", ")"]],
+	using model = new TextModel('{\n  ("}")\n}', { languageId: 'typescript', languageConfigurationService: configurations });
+	using registration = configurations.register('typescript', {
+		brackets: [['{', '}'], ['(', ')']],
 	});
 	using tokens = registerTestTokens(new Map([
 		['  ("}")', [{ offset: 0, type: '' }, { offset: 3, type: 'string' }, { offset: 6, type: '' }]],
@@ -36,8 +36,8 @@ test('Bracket colorization follows model nesting and excludes brackets in string
 
 test('Bracket colorization invalidates its cached nesting after model edits', () => {
 	using configurations = new TestLanguageConfigurationService();
-	using model = new TextModel("{\n}", { languageId: "typescript", languageConfigurationService: configurations });
-	using registration = configurations.register("typescript", { brackets: [["{", "}"]] });
+	using model = new TextModel('{\n}', { languageId: 'typescript', languageConfigurationService: configurations });
+	using registration = configurations.register('typescript', { brackets: [['{', '}']] });
 	const colors = {
 		getLineBrackets: (lineIndex: number) => model.getLineDecorations(lineIndex + 1).map(decoration => ({
 			startColumn: decoration.range.startColumn - 1,
@@ -46,7 +46,7 @@ test('Bracket colorization invalidates its cached nesting after model edits', ()
 		})),
 	};
 	assert.deepEqual(colors.getLineBrackets(1), [{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-1' }]);
-	model.applyEdits([{ range: Range.fromPositions(model.positionAt(0)), text: "{\n" }]);
+	model.applyEdits([{ range: Range.fromPositions(model.positionAt(0)), text: '{\n' }]);
 	assert.deepEqual(colors.getLineBrackets(2), [{ startColumn: 0, endColumn: 1, className: 'stanza-editor-bracket-level-2' }]);
 });
 

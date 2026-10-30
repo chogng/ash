@@ -5,6 +5,7 @@
   ],
   "publisher": "ash",
   "version": "1.0.0",
+  "icon": "media/icon.png",
   "license": "MIT",
   "displayName": "%displayName%",
   "description": "%description%",

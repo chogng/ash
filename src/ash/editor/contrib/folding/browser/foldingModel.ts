@@ -1,11 +1,11 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { hash } from "../../../../base/common/hash.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Position } from "../../../common/core/position.js";
-import { Range } from "../../../common/core/range.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { type TrackedRange } from "../../../common/model/trackedRange.js";
-import { EditorFoldingRangeSource, editorFoldingRangeKey, normalizeEditorFoldingRanges, validateEditorFoldingLineIndex, type EditorFoldingRange, type EditorFoldingRegion } from "./foldingRanges.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { hash } from '../../../../base/common/hash.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Position } from '../../../common/core/position.js';
+import { Range } from '../../../common/core/range.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+import { type TrackedRange } from '../../../common/model/trackedRange.js';
+import { EditorFoldingRangeSource, editorFoldingRangeKey, normalizeEditorFoldingRanges, validateEditorFoldingLineIndex, type EditorFoldingRange, type EditorFoldingRegion } from './foldingRanges.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import type { IModelDecorationOptions, IModelDecorationsChangeAccessor } from '../../../common/model.js';
 
@@ -135,7 +135,7 @@ export class EditorFoldingModel extends Disposable {
 
 	/** Replaces provider ranges while retaining manual ranges and matching collapsed state. */
 	setProviderRanges(ranges: readonly EditorFoldingRange[]): void {
-		if (!Array.isArray(ranges)) throw new TypeError("Folding ranges must be an array");
+		if (!Array.isArray(ranges)) throw new TypeError('Folding ranges must be an array');
 		const current = this.regions;
 		const providers = current.filter(region => region.source === EditorFoldingRangeSource.Provider);
 		// Most edits change syntax inside existing folds. Preserve their tracked
@@ -186,7 +186,7 @@ export class EditorFoldingModel extends Disposable {
 		collapsed: boolean,
 		options?: { levels: number; direction: 'up' | 'down'; },
 	): void {
-		if (typeof collapsed !== "boolean") throw new TypeError("Folding collapse state must be boolean");
+		if (typeof collapsed !== 'boolean') throw new TypeError('Folding collapse state must be boolean');
 		const targets = new Set<EditorFoldingRegionRecord>();
 		const levels = options?.levels ?? 1;
 		const depths = options?.direction === 'down' && levels > 1
@@ -304,7 +304,7 @@ export class EditorFoldingModel extends Disposable {
 
 	/** Sets the collapse state of every current range. */
 	setAllCollapsed(collapsed: boolean): boolean {
-		if (typeof collapsed !== "boolean") throw new TypeError("Folding collapse state must be boolean");
+		if (typeof collapsed !== 'boolean') throw new TypeError('Folding collapse state must be boolean');
 		let changed = false;
 		for (const record of this.records) {
 			if (record.collapsed === collapsed) continue;
@@ -317,7 +317,7 @@ export class EditorFoldingModel extends Disposable {
 
 	/** Collapses one nesting level, preserving other levels and ranges containing a selected line. */
 	collapseToLevel(level: number, selectedLineIndexes: readonly number[] = []): boolean {
-		if (!Number.isSafeInteger(level) || level < 1) throw new RangeError("Folding level must be a positive safe integer");
+		if (!Number.isSafeInteger(level) || level < 1) throw new RangeError('Folding level must be a positive safe integer');
 		let changed = false;
 		for (const record of this.records) {
 			const range = record.range.range;

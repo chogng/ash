@@ -41,7 +41,7 @@ class Client {
 	}
 
 	public async request(method: { readonly method: string; }, params: { readonly resourceId: string; readonly backend?: unknown; }): Promise<unknown> {
-		if (method.method === "dictation/model/list") { await this.cacheBarrier?.p; return { models: [], cacheDirectory: "C:/models", packageVersion: 1 }; }
+		if (method.method === 'dictation/model/list') { await this.cacheBarrier?.p; return { models: [], cacheDirectory: 'C:/models', packageVersion: 1 }; }
 		this.requests.push({ method: method.method, ...params });
 		if (method.method === 'dictation/cancel') { await this.cancelled.complete(); await this.cancelBarrier?.p; return null; }
 		if (method.method === 'dictation/audio') { await this.audioBarrier?.p; return null; }
@@ -126,7 +126,7 @@ suite('LocalTranscriptionService', () => {
 	});
 	test('stop drains queued renderer audio before releasing the inference session', async () => {
 		using fixture = new Fixture();
-		await fixture.service.start({ cacheDir: "C:/models", model: 'selected-model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'selected-model' });
 		fixture.client.audioBarrier = new DeferredPromise<void>();
 		const packet = fixture.service.pushAudio(VSBuffer.wrap(new Uint8Array([0, 1])));
 		const stopping = fixture.service.stop();
@@ -138,14 +138,14 @@ suite('LocalTranscriptionService', () => {
 
 	test('failed audio rejects stop after releasing the backend and allows a later session', async () => {
 		using fixture = new Fixture();
-		await fixture.service.start({ cacheDir: "C:/models", model: 'selected-model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'selected-model' });
 		fixture.client.audioBarrier = new DeferredPromise<void>();
 		const packet = assert.rejects(fixture.service.pushAudio(VSBuffer.wrap(new Uint8Array([0, 1]))), /audio failed/);
 		const stopped = assert.rejects(fixture.service.stop(), /audio failed/);
 		await fixture.client.audioBarrier.error(new Error('audio failed'));
 		await Promise.all([packet, stopped]);
 		assert.equal(fixture.client.requests.at(-1)?.method, 'dictation/stop');
-		await fixture.service.start({ cacheDir: "C:/models", model: 'selected-model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'selected-model' });
 		await fixture.service.cancel();
 	});
 	test('window disposal detaches preparation without sending a backend cancel', async () => {
@@ -210,7 +210,7 @@ suite('LocalTranscriptionService', () => {
 		using fixture = new Fixture();
 		const progress: unknown[] = [];
 		using listener = fixture.service.onDidChangeModelStatus(status => progress.push(status));
-		await fixture.service.start({ cacheDir: "C:/models", model: 'selected-model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'selected-model' });
 		fixture.modelProgress({ type: 'checking' }, 'other');
 		fixture.modelProgress({ type: 'loading' });
 		await fixture.service.cancel();
@@ -226,7 +226,7 @@ suite('LocalTranscriptionService', () => {
 		using fixture = new Fixture();
 		const results: ILocalTranscriptionResult[] = [];
 		using listener = fixture.service.onDidTranscribe(result => results.push(result));
-		await fixture.service.start({ cacheDir: "C:/models", model: 'selected-model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'selected-model' });
 		fixture.transcript('other input', false, 'another-window');
 		fixture.transcript('interim', false);
 		assert.equal(await fixture.service.stop(), 'final text');
@@ -244,7 +244,7 @@ suite('LocalTranscriptionService', () => {
 		using fixture = new Fixture();
 		const results: ILocalTranscriptionResult[] = [];
 		using listener = fixture.service.onDidTranscribe(result => results.push(result));
-		await fixture.service.start({ cacheDir: "C:/models", model: 'model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
 		fixture.client.beforeStop = () => {
 			fixture.transcript('final text', true);
 			fixture.client.emit({ method: 'dictation/ended', params: { resourceId: fixture.resourceId, error: null } });
@@ -258,7 +258,7 @@ suite('LocalTranscriptionService', () => {
 		fixture.client.startBarrier = new DeferredPromise<void>();
 		const results: ILocalTranscriptionResult[] = [];
 		using listener = fixture.service.onDidTranscribe(result => results.push(result));
-		const started = fixture.service.start({ cacheDir: "C:/models", model: 'model' });
+		const started = fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
 		await fixture.client.accepted.p;
 		const cancelled = fixture.service.cancel();
 		assert.equal(fixture.client.requests.length, 1);
@@ -271,7 +271,7 @@ suite('LocalTranscriptionService', () => {
 	test('concurrent stop calls share one backend release', async () => {
 		using fixture = new Fixture();
 		fixture.client.stopBarrier = new DeferredPromise<void>();
-		await fixture.service.start({ cacheDir: "C:/models", model: 'model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
 		const first = fixture.service.stop();
 		const second = fixture.service.stop();
 		assert.equal(first, second);
@@ -285,7 +285,7 @@ suite('LocalTranscriptionService', () => {
 		using fixture = new Fixture();
 		const completed = new DeferredPromise<{ readonly error?: string; }>();
 		using listener = fixture.service.onDidChangeModelStatus(result => { if (result.state === LocalTranscriptionModelState.Error) void completed.complete({ error: result.error }); });
-		await fixture.service.start({ cacheDir: "C:/models", model: 'missing-model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'missing-model' });
 		fixture.client.emit({ method: 'dictation/ended', params: { resourceId: fixture.resourceId, error: 'Model preparation failed' } });
 		assert.deepEqual(await completed.p, { error: 'Model preparation failed' });
 		assert.equal(fixture.client.requests[1]!.method, 'dictation/stop');
@@ -298,7 +298,7 @@ suite('LocalTranscriptionService', () => {
 		const endings: { readonly error?: string; }[] = [];
 		using transcript = fixture.service.onDidTranscribe(result => results.push(result));
 		using ended = fixture.service.onDidChangeModelStatus(result => { if (result.state === LocalTranscriptionModelState.Error) endings.push({ error: result.error }); });
-		await fixture.service.start({ cacheDir: "C:/models", model: 'model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
 		const stop = fixture.service.stop();
 		await fixture.client.stopped.p;
 		fixture.client.disconnect();
@@ -311,14 +311,14 @@ suite('LocalTranscriptionService', () => {
 	test('disposal during startup releases capture after acceptance and removes listeners', async () => {
 		using fixture = new Fixture();
 		fixture.client.startBarrier = new DeferredPromise<void>();
-		const started = fixture.service.start({ cacheDir: "C:/models", model: 'model' });
+		const started = fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
 		await fixture.client.accepted.p;
 		fixture.service.dispose();
 		await fixture.client.startBarrier.complete();
 		await started;
 		await fixture.client.cancelled.p;
 		assert.deepEqual({ methods: fixture.client.requests.map(request => request.method), subscriptions: fixture.client.notifications.size + fixture.client.states.size }, { methods: ['dictation/start', 'dictation/cancel'], subscriptions: 0 });
-		await assert.rejects(fixture.service.start({ cacheDir: "C:/models", model: 'model' }));
+		await assert.rejects(fixture.service.start({ cacheDir: 'C:/models', model: 'model' }));
 	});
 
 	for (const blocked of ['audio', 'stop'] as const) {
@@ -379,13 +379,13 @@ suite('LocalTranscriptionService', () => {
 	test('a rejected start permits a later session and duplicate start is rejected', async () => {
 		using fixture = new Fixture();
 		fixture.client.startBarrier = new DeferredPromise<void>();
-		const started = fixture.service.start({ cacheDir: "C:/models", model: 'model' });
+		const started = fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
 		await fixture.client.accepted.p;
-		await assert.rejects(fixture.service.start({ cacheDir: "C:/models", model: 'other' }), /already active/);
+		await assert.rejects(fixture.service.start({ cacheDir: 'C:/models', model: 'other' }), /already active/);
 		await fixture.client.startBarrier.error(new Error('Permission denied'));
 		await assert.rejects(started, /Permission denied/);
 		fixture.client.startBarrier = undefined;
-		await fixture.service.start({ cacheDir: "C:/models", model: 'model' });
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
 		await fixture.service.stop();
 	});
 

@@ -222,10 +222,9 @@ Text styles are **roles**, not arbitrary sizes: `heading1–3`, `body1–2`, `la
 - **Serves:** *One thing leads* (4), *Sameness signals sameness* (6).
 
 <a id="icon-sizes"></a>
-### Icon sizes - three sizes, chosen by context
+### Icon sizes - chosen by context
 
-Lxicons are **20px (large)**, **16px (base)** or **12px (compact)** - nothing in between; `14px` is always a bug. At the large or compact size, also swap to the `*Large` or `*Compact` glyph (`Lxicon.close` → `Lxicon.closeLarge` or `Lxicon.closeCompact`) so the icon is *optically* tuned, not just scaled.
-- **Decision rule:** size tracks the **density and rank of the context**. Use **large (20px)** in agent window. Use **base (16px)** for standalone or primary actions and comfortable click targets in IDE; use **compact (12px)** for dense rows, inline glyphs, and secondary chrome where the icon rides alongside text in IDE. So the answer to "16 or 12?" is *"what is this icon's role here?"* - not a taste call. Say *"this icon should be compact,"* not *"shrink it a bit."*， As for the agent window, the answer is always *"large."*
+- **Decision rule:** size tracks the **density and rank of the context**. Use the base size for standalone or primary actions in IDE; use compact icons for dense rows, inline glyphs, and secondary chrome alongside text. Agent Window follows its own window assignments. Choose by the icon's role, and evaluate optical weight and legibility at its actual display size.
 - **Serves:** *One thing leads* (4), *Sameness signals sameness* (6).
 
 <a id="one-stroke"></a>
@@ -245,9 +244,9 @@ Every color is a `--ash-*` theme token, so the UI tracks the active theme and hi
 <a id="reveal-on-intent"></a>
 ### Reveal-on-intent behaviors
 
-Chrome that used to carry a permanent fill now reads transparent at rest and only reveals on interaction. Each behavior also *does a job*, so they pull double duty:
+Secondary chrome can recede at rest and reveal on interaction; choose the treatment by component role so controls remain recognizable before interaction:
 
-- `commandCenter` - transparent at rest; shows its background/border on hover, so a pointer *confirms* the thing it's over.
+- `commandCenter` - keep the titlebar search entry's theme background (`--ash-commandCenter-background`) and one-stroke border (`--ash-strokeThickness`, `--ash-commandCenter-border`) visible at rest; strengthen feedback on hover and preserve keyboard focus. Theme colors may include alpha; do not replace them with literal `transparent` under the quiet-chrome rule or let generic button styles override them. Verify resting, hover, focus, and restoration after picker dismissal in light, dark, and high-contrast themes.
 - `statusBar` - neutralized to the window; only the **background** changes on hover, the foreground stays put.
 - `keyboardFocusOnly` - the focus ring appears for **keyboard** focus (`:focus-visible`), not on mouse click, so the affordance shows exactly when it's useful.
 - `scrollShadows` - content *fades* under a surface edge instead of being cut at a hard line, so you feel there's *more* beyond the fold.
@@ -304,7 +303,7 @@ Lead with the **role / tier / ramp**, not the number - then name the principle s
 | "this icon is 14px" | "this icon has no scoped size exception - use **base (16px)** or **compact (12px)**" | 6 · Sameness |
 | "this ordinary border is too thick" | "standard borders are **one stroke (1px)** - this should/shouldn't have one; preserve thicker focus/semantic strokes" | 1 · Quiet at rest |
 | "change this grey hex" | "this is the **wrong theme token** / it **vanishes in light/HC**" | 6 · Sameness |
-| "the command center has a box around it" | "chrome should be **quiet at rest, reveal on hover**" | 1 · Quiet at rest |
+| "ordinary toolbar actions look boxed in at rest" | "secondary chrome should be **quiet at rest, reveal on hover**" | 1 · Quiet at rest |
 | "the focus outline shows when I click" | "the ring is **keyboard-focus only** (`:focus-visible`)" | 1 · Quiet at rest |
 | "the list is cut off at the bottom" | "the surface is **missing its scroll-shadow fade**" | 7 · Delight / 5 · Elevation |
 

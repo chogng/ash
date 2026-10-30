@@ -7,6 +7,20 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { AccessibilitySignal } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Hover,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') { throw new TypeError(localize('hover.verbosityInvalid', 'Hover accessibility verbosity must be boolean.')); }
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('hover.verbosityTitle', 'Hover accessibility help'); },
+		get description() { return localize('hover.verbosityDescription', 'Announce how to open accessibility help when reading hover content.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.InlayHints,
 	defaultValue: true,
 	parse(value: unknown): boolean {
@@ -360,7 +374,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	setting: {
 		valueType: 'boolean',
 		title: localize('accessibility.chatModelConfigurationVerbosityTitle', 'Chat model configuration accessibility help'),
-		description: localize('accessibility.chatModelConfigurationVerbosityDescription', 'Announce how to open accessibility help when model controls or Language Models management receive focus.'),
+		description: localize('accessibility.chatModelConfigurationVerbosityDescription', 'Announce how to open accessibility help when model controls or Models settings receive focus.'),
 	},
 });
 

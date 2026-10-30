@@ -44,4 +44,3 @@ export class CharacterPairSupport {
 		return this._surroundingPairs;
 	}
 }
-

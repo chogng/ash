@@ -2600,9 +2600,12 @@ fn configured_model_summary() -> ModelSummary {
         model: "claude-sonnet".into(),
     };
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                source: None,
+                pricing: Vec::new(),
                 retirement: None,
                 description: None,
                 discovered: None,
@@ -2736,9 +2739,12 @@ fn custom_model_choices(
         .map(|config| (config.provider.clone(), config.connection.clone()))
         .collect();
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                source: None,
+                pricing: Vec::new(),
                 retirement: None,
                 description: None,
                 discovered: None,
@@ -2851,6 +2857,7 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_in_one_chinese_list() {
     app.update(ModelEvent::PickerOpened(
         crate::models::model_choices(
             &ModelListResult {
+                catalog_statuses: Vec::new(),
                 catalog_scopes: None,
                 models,
             },
@@ -2888,6 +2895,7 @@ fn model_picker_without_configured_connections_shows_builtin_models() {
         ash_protocol::ModelId::new("gpt-unconfigured").unwrap(),
     );
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
@@ -2959,6 +2967,7 @@ fn model_pins_preserve_catalog_order_and_focus_in_both_screen_modes() {
     use ash_app_server_protocol::protocol::model::ModelListResult;
 
     let catalog = ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: ["first", "second", "third", "fourth"]
             .into_iter()
@@ -3173,6 +3182,7 @@ fn model_picker_cycles_supported_effort_in_place_and_commits_on_enter() {
     ];
     info.default_reasoning_effort = Some(ReasoningEffort::Medium);
     let catalog = ash_app_server_protocol::protocol::model::ModelListResult {
+        catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(model, &info),

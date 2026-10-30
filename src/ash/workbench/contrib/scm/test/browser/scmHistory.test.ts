@@ -19,7 +19,6 @@ import { URI } from '../../../../../base/common/uri.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 
-
 async function expectSelectionColor(row: Locator, token: string): Promise<void> {
 	await expect.poll(() => row.evaluate((element, token) => {
 		const probe = element.ownerDocument.createElement('span');
@@ -32,6 +31,61 @@ async function expectSelectionColor(row: Locator, token: string): Promise<void> 
 }
 
 suite('SCM history graph', () => {
+	for (const remoteIsRoot of [false, true]) test(`changes color at the upstream reference in a linear history${remoteIsRoot ? ' ending at that reference' : ''}`, () => {
+		const remote = { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'remote', category: 'remoteBranch' };
+		const history: ISCMHistoryItem[] = [
+			{ id: 'local', parentIds: ['remote'], subject: 'Local change', message: '' },
+			{ id: 'remote', parentIds: remoteIsRoot ? [] : ['root'], subject: 'Pushed change', message: '', references: [remote] },
+			...remoteIsRoot ? [] : [{ id: 'root', parentIds: [], subject: 'Shared root', message: '' }],
+		];
+		const rows = toISCMHistoryItemViewModelArray(history, new Map(), { id: 'refs/heads/main', name: 'main', revision: 'local' });
+		const localColor = rows[0].color;
+		const remoteColor = rows[1].color;
+		assert.notEqual(localColor, undefined);
+		assert.notEqual(remoteColor, undefined);
+		assert.notEqual(localColor, remoteColor);
+		assert.equal(rows[0].outputSwimlanes[0].color, localColor);
+		assert.equal(rows[1].inputSwimlanes[0].color, localColor);
+		const environment = new JSDOM();
+		try {
+			const graph = renderSCMHistoryItemGraph(rows[1], 22, environment.window.document);
+			assert.equal(graph.querySelector('path[d="M 11 0 V 11"]')?.getAttribute('data-lane-color'), String(localColor));
+			assert.equal(graph.querySelector('circle')?.getAttribute('data-lane-color'), String(remoteColor));
+			if (!remoteIsRoot) {
+				assert.equal(graph.querySelector('path[d="M 11 11 V 22"]')?.getAttribute('data-lane-color'), String(remoteColor));
+				const child = renderSCMHistoryGraphPlaceholder(rows[1].outputSwimlanes, environment.window.document);
+				assert.equal(child.querySelector('path')?.getAttribute('data-lane-color'), String(remoteColor));
+				assert.equal(rows[2].inputSwimlanes[0].color, remoteColor);
+			}
+		} finally { environment.window.close(); }
+	});
+
+	test('keeps the current reference color when local and upstream point to the same commit', () => {
+		const current = { id: 'refs/heads/main', name: 'main', revision: 'tip', category: 'localBranch' };
+		const remote = { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'tip', category: 'remoteBranch' };
+		const history = [
+			{ id: 'tip', parentIds: ['root'], subject: 'Synced change', message: '', references: [remote, current] },
+			{ id: 'root', parentIds: [], subject: 'Shared root', message: '' },
+		];
+		const synced = toISCMHistoryItemViewModelArray(history, new Map(), current);
+		const local = toISCMHistoryItemViewModelArray([{ ...history[0], references: [current] }, history[1]], new Map(), current);
+		assert.equal(synced[0].kind, 'HEAD');
+		assert.equal(synced[0].color, local[0].color);
+		assert.deepEqual(synced[0].outputSwimlanes, local[0].outputSwimlanes);
+		assert.equal(synced[1].inputSwimlanes[0].color, synced[0].color);
+	});
+
+	test('preserves explicit reference colors supplied by the caller', () => {
+		const current = { id: 'refs/heads/main', name: 'main', revision: 'tip', category: 'localBranch' };
+		const rows = toISCMHistoryItemViewModelArray([
+			{ id: 'tip', parentIds: [], subject: 'Root', message: '', references: [current] },
+		], new Map([[current.id, 3]]), current);
+		const environment = new JSDOM();
+		try {
+			assert.equal(renderSCMHistoryItemGraph(rows[0], 22, environment.window.document).querySelector('circle')?.getAttribute('data-lane-color'), '3');
+		} finally { environment.window.close(); }
+	});
+
 	test('child rows continue both outgoing merge lanes without drawing another commit', () => {
 		const environment = new JSDOM();
 		try {
@@ -80,6 +134,30 @@ suite('SCM history graph', () => {
 			environment.window.close();
 		}
 	});
+
+	for (const incoming of [false, true]) test(`connects a remote merge to its own parent lane with incoming changes ${incoming ? 'shown' : 'hidden'}`, () => {
+		const history: ISCMHistoryItem[] = [
+			{ id: 'local', parentIds: ['base'], subject: 'local', message: 'local' },
+			{ id: 'remote', parentIds: ['topic', 'base'], subject: 'remote merge', message: 'remote merge' },
+			{ id: 'base', parentIds: ['root'], subject: 'base', message: 'base' },
+			{ id: 'topic', parentIds: ['root'], subject: 'topic', message: 'topic' },
+			{ id: 'root', parentIds: [], subject: 'root', message: 'root' },
+		];
+		const rows = toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
+			remote: { id: 'origin/main', name: 'origin/main', revision: 'remote' }, base: 'base', incoming, outgoing: true,
+		});
+		const environment = new JSDOM();
+		try {
+			const merge = rows.find(row => row.historyItem.id === 'remote')!;
+			const graph = renderSCMHistoryItemGraph(merge, 22, environment.window.document);
+			assert.deepEqual(merge.historyItem.parentIds, ['topic', 'base']);
+			assert.equal(graph.querySelectorAll('path[d="M 22 11 A 11 11 0 0 1 33 22"]').length, 1, 'The second parent must enter the third lane, including when projected through Incoming Changes.');
+			assert.equal(graph.querySelectorAll('path[d="M 22 11 H 22"]').length, 1, 'The merge edge must start at its own node.');
+			assert.equal(graph.querySelectorAll('path[d="M 0 11 A 11 11 0 0 1 11 22"]').length, 0, 'The merge must not hook into the unrelated local branch.');
+		} finally {
+			environment.window.close();
+		}
+	});
 });
 
 test('summary nodes compare captured branch revisions without changing commit parents', () => {
@@ -94,6 +172,9 @@ test('summary nodes compare captured branch revisions without changing commit pa
 	assert.deepEqual(rows.map(row => row.kind), ['outgoing-changes', 'HEAD', 'node', 'incoming-changes', 'node']);
 	assert.deepEqual(rows[0].historyItem.comparison, { revision: 'local', baseRevision: 'base' });
 	assert.deepEqual(rows[3].historyItem.comparison, { revision: 'remote', baseRevision: 'base' });
+	assert.equal(rows[0].color, rows[1].color, 'Outgoing changes share the local reference color.');
+	assert.equal(rows[2].color, rows[3].color, 'Incoming changes share the upstream reference color.');
+	assert.notEqual(rows[1].color, rows[2].color, 'Diverged local and upstream lanes have distinct reference colors.');
 	assert.deepEqual(rows[2].historyItem.parentIds, ['base']);
 	assert.deepEqual(history[1].parentIds, ['base']);
 	assert.equal(toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {
@@ -113,6 +194,7 @@ suite('SCM attachment source commands', () => {
 		const change = { path: 'src/name:中文.ts', uri: URI.file('/working/name.ts'), modifiedUri: revisionUris ? URI.parse('git:/captured/name.ts?revision=tip') : undefined, status: 'modified' };
 		const repository = {
 			id: 'repo:original', provider: {
+				rootUri: URI.file('/working'),
 				historyProvider: {
 					provideHistoryItemChanges: async (...args: unknown[]) => { calls.push(args); return [change]; },
 					resolveHistoryItemChangeContents: async (...args: unknown[]) => { calls.push(args); return { original: { kind: 'text', text: 'Before' }, modified: { kind: 'text', text: 'Captured after' } }; },
@@ -129,6 +211,7 @@ suite('SCM attachment source commands', () => {
 		const [input, options] = opened[0] as [import('../../../../common/editor.js').IResourceEditorInput, unknown];
 		assert.deepEqual(options, { pinned: true });
 		if (changeSource) {
+			assert.equal(input.preferredResource?.path, '/working/src/name:中文.ts');
 			if (change.modifiedUri) assert.equal(input.resource.toString(), change.modifiedUri.toString());
 			else {
 				assert.notEqual(input.resource.toString(), change.uri.toString());
@@ -141,6 +224,7 @@ suite('SCM attachment source commands', () => {
 			assert.equal(input.label, 'Captured label');
 			assert.equal(input.items[0].modified.initialText, 'Captured after');
 			assert.equal(input.items[0].modified.readOnly, true);
+			assert.equal(input.items[0].modified.preferredResource?.path, '/working/src/name:中文.ts');
 			assert.notEqual(input.items[0].original.resource.toString(), input.items[0].modified.resource.toString());
 		}
 	});
@@ -442,6 +526,91 @@ suite('scmHistory browser component', () => {
 		});
 	}
 
+	for (const locale of ['en', 'zh-CN']) {
+		for (const silent of [false, true]) {
+			for (const scrolled of [false, true]) {
+				test(`${silent ? 'background fetch' : 'active history changes'} ${scrolled && silent ? 'retain the visible history' : 'return to the top'} (${locale}, scrolled=${scrolled})`, async function () {
+					const { page } = browserTests;
+					await page.goto(`/scmHistory.html?paging&manual&locale=${locale}`);
+					const graph = page.locator('.ash-scm-graph');
+					const tree = graph.locator('.ash-scm-graph-tree');
+					const viewport = graph.locator('.ash-scrollbar-viewport');
+					await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '81');
+					await tree.focus();
+					await tree.press('Home');
+					if (scrolled) {
+						await viewport.evaluate(element => {
+							element.scrollTop = 447;
+							element.dispatchEvent(new Event('scroll'));
+						});
+					}
+					const position = await viewport.evaluate(element => {
+						const top = element.getBoundingClientRect().top;
+						const anchor = [...element.querySelectorAll<HTMLElement>('.ash-list-row')].find(row => row.getBoundingClientRect().bottom > top)!;
+						return { scrollTop: element.scrollTop, anchorId: anchor.id, anchorTop: anchor.getBoundingClientRect().top };
+					});
+					const reads = await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length);
+					await page.evaluate(silent => window.ashSCMHistoryIntegration.prependHistoryItem('new-tip', silent), silent);
+					if (scrolled && silent) {
+						await expect(page.locator('.ash-view-pane-header-description')).toHaveText(locale === 'en' ? 'Outdated' : '有更新');
+						expect(await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(reads);
+						expect(await viewport.evaluate(element => element.scrollTop)).toBe(position.scrollTop);
+						const anchor = page.locator(`[id="${position.anchorId}"]`);
+						expect(await anchor.evaluate(element => element.getBoundingClientRect().top)).toBeCloseTo(position.anchorTop, 1);
+						await expect(tree).toBeFocused();
+						await page.evaluate(() => window.ashSCMHistoryIntegration.manualRefresh());
+					}
+					await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '82');
+					await expect(graph).toHaveAttribute('aria-busy', 'false');
+					expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+					await expect(tree.locator('[data-history-item-id="new-tip"]')).toBeInViewport();
+					await expect(page.locator('.ash-view-pane-header-description')).toBeHidden();
+				});
+			}
+		}
+		test(`manual history refresh returns to the top without new commits (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/scmHistory.html?paging&manual&locale=${locale}`);
+			const tree = page.locator('.ash-scm-graph-tree');
+			const viewport = page.locator('.ash-scm-graph .ash-scrollbar-viewport');
+			await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '81');
+			await viewport.evaluate(element => {
+				element.scrollTop = 447;
+				element.dispatchEvent(new Event('scroll'));
+			});
+			await page.evaluate(() => window.ashSCMHistoryIntegration.manualRefresh());
+			expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+			await expect(tree.locator('[data-history-item-id="paging-0"]')).toBeInViewport();
+		});
+	}
+
+	test('automatic fetch during an active refresh retains the request to return to the top', async function () {
+		const { page } = browserTests;
+		await page.goto('/scmHistory.html?paging&manual');
+		const graph = page.locator('.ash-scm-graph');
+		const tree = graph.locator('.ash-scm-graph-tree');
+		const viewport = graph.locator('.ash-scrollbar-viewport');
+		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '81');
+		await viewport.evaluate(element => {
+			element.scrollTop = 447;
+			element.dispatchEvent(new Event('scroll'));
+		});
+		const reads = await page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length);
+		await page.evaluate(() => {
+			window.ashSCMHistoryIntegration.holdNextHistoryPage();
+			void window.ashSCMHistoryIntegration.manualRefresh();
+		});
+		await expect(graph).toHaveAttribute('aria-busy', 'true');
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(reads + 1);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.prependHistoryItem('new-tip', true));
+		await expect.poll(() => page.evaluate(() => window.ashSCMHistoryIntegration.historyReads.length)).toBe(reads + 2);
+		await page.evaluate(() => window.ashSCMHistoryIntegration.finishHistoryRead());
+		await expect(graph).toHaveAttribute('aria-busy', 'false');
+		expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+		await expect(tree.locator('[data-history-item-id="new-tip"]')).toBeInViewport();
+		await expect(page.locator('.ash-view-pane-header-description')).toBeHidden();
+	});
+
 	test('automatic paging failures retain the graph and wait for keyboard retry', async function () {
 		const { page } = browserTests;
 		await page.goto('/scmHistory.html?paging');
@@ -689,6 +858,11 @@ suite('scmHistory browser component', () => {
 		await expect(last).toHaveAttribute('aria-setsize', '200');
 		expect(await tree.getByRole('treeitem').count()).toBeLessThan(100);
 		await page.evaluate(() => window.ashSCMHistoryIntegration.refresh());
+		const viewport = page.locator('.ash-scm-graph .ash-scrollbar-viewport');
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
+		await tree.press('ArrowUp');
+		await expect(tree.getByRole('treeitem', { name: /file-198.ts/u })).toHaveAttribute('aria-selected', 'true');
+		await tree.press('ArrowDown');
 		await expect(last).toHaveAttribute('aria-selected', 'true');
 		await expect(last).toBeVisible();
 		expect(await page.evaluate(() => window.ashSCMHistoryIntegration.changeReads)).toBe(1);

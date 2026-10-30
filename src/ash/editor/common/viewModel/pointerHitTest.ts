@@ -1,8 +1,8 @@
-import { Position } from "../core/position.js";
-import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
-import { type TextModel } from "../model/textModel.js";
-import { type InjectedText } from "../modelLineProjectionData.js";
-import { type EditorVisualLineProjection } from "./modelLineProjection.js";
+import { Position } from '../core/position.js';
+import { getTextGraphemeBoundaries } from '../core/textSegmentation.js';
+import { type TextModel } from '../model/textModel.js';
+import { type InjectedText } from '../modelLineProjectionData.js';
+import { type EditorVisualLineProjection } from './modelLineProjection.js';
 import { type EditorScrollPosition, type TextMeasurer } from '../viewModel.js';
 
 export interface ClientPoint {
@@ -32,10 +32,10 @@ export interface HitTestMetrics {
 }
 
 export enum EditorHitTargetKind {
-	Gutter = "gutter",
-	Text = "text",
-	EmptyContent = "emptyContent",
-	AfterLines = "afterLines",
+	Gutter = 'gutter',
+	Text = 'text',
+	EmptyContent = 'emptyContent',
+	AfterLines = 'afterLines',
 }
 
 export interface EditorHitTarget {
@@ -51,7 +51,7 @@ export function hitTestStanzaVisualEditorPoint(model: TextModel, projection: Edi
 	validateLayout(layout);
 	validateMetrics(metrics);
 	if (projection.modelVersion !== model.version) {
-		throw new Error("Stanza visual hit testing requires the current text model projection");
+		throw new Error('Stanza visual hit testing requires the current text model projection');
 	}
 	if (
 		point.left < 0 ||
@@ -136,7 +136,7 @@ function validatePoint(point: ViewportPoint): void {
 		!Number.isFinite(point.left) ||
 		!Number.isFinite(point.top)
 	) {
-		throw new RangeError("Stanza hit-test point must contain finite coordinates");
+		throw new RangeError('Stanza hit-test point must contain finite coordinates');
 	}
 }
 
@@ -156,7 +156,7 @@ function validateLayout(layout: HitTestLayout): void {
 		!Number.isFinite(layout.scrollPosition.top) ||
 		layout.scrollPosition.top < 0
 	) {
-		throw new RangeError("Stanza hit-test layout is invalid");
+		throw new RangeError('Stanza hit-test layout is invalid');
 	}
 }
 
@@ -170,6 +170,6 @@ function validateMetrics(metrics: HitTestMetrics): void {
 		!Number.isFinite(metrics.paddingTop ?? 0) ||
 		(metrics.paddingTop ?? 0) < 0
 	) {
-		throw new RangeError("Stanza hit-test metrics are invalid");
+		throw new RangeError('Stanza hit-test metrics are invalid');
 	}
 }

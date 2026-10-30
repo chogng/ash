@@ -1,4 +1,4 @@
-import { registerCodeEditorServices } from "../../../../../editor/test/browser/testCodeEditor.js";
+import { registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';

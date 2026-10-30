@@ -284,6 +284,17 @@ export interface IDiffEditor {
 	getModifiedEditor(): ICodeEditor;
 }
 
+/** Language features describe the modified document when the pane is a diff. */
+export function getCodeEditor(control: unknown): ICodeEditor | null {
+	if (!control || typeof control !== 'object') return null;
+	if ('getModifiedEditor' in control && typeof control.getModifiedEditor === 'function') {
+		return getCodeEditor(control.getModifiedEditor());
+	}
+	return 'getModel' in control && typeof control.getModel === 'function'
+		&& 'getContribution' in control && typeof control.getContribution === 'function'
+		? control as ICodeEditor : null;
+}
+
 export interface IViewZone {
 	afterLineNumber: number;
 	afterColumn?: number;

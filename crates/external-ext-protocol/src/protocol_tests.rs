@@ -1235,6 +1235,17 @@ fn dynamic_speech_frames_reject_other_registrations_and_invalid_fences() {
 }
 
 #[test]
+fn dynamic_canvas_frames_only_admit_the_versioned_canvas_channel() {
+    let mut value = json!({"context":{"protocolVersion":1,"incarnation":2,"activationGeneration":3},"revision":1,"speechProviders":[],"canvasProviders":[{"registrationId":"canvas.1","kind":"dataChannel","channelId":"canvas.provider.v1"}]});
+    let event: super::ExtensionHostRegistrationEvent =
+        serde_json::from_value(value.clone()).unwrap();
+    event.validate(&ProtocolLimits::default()).unwrap();
+    value["canvasProviders"][0]["channelId"] = json!("unrelated.channel");
+    let invalid: super::ExtensionHostRegistrationEvent = serde_json::from_value(value).unwrap();
+    assert!(invalid.validate(&ProtocolLimits::default()).is_err());
+}
+
+#[test]
 fn terminal_completion_and_quick_fix_registrations_require_distinct_capabilities() {
     for (value, capability) in [
         (

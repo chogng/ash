@@ -1,26 +1,26 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { Button } from "../../../../base/browser/ui/button/button.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import { ViewPane } from "../../../browser/parts/views/viewPane.js";
-import { h } from "../../../../base/browser/dom.js";
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import type { IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
+import { ViewPane } from '../../../browser/parts/views/viewPane.js';
+import { h } from '../../../../base/browser/dom.js';
 
 /** Projection point for review findings produced by an agent session. */
 export class ScmAgentReviewViewPane extends ViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions) {
 		super(container, options);
-		this.contentElement.classList.add("ash-scm-secondary-pane");
-		const empty = h(container.ownerDocument, "p");
-		empty.className = "ash-scm-empty";
-		empty.textContent = "No agent changes to review.";
+		this.contentElement.classList.add('ash-scm-secondary-pane');
+		const empty = h(container.ownerDocument, 'p');
+		empty.className = 'ash-scm-empty';
+		empty.textContent = 'No agent changes to review.';
 		const findIssues = this._register(new Button(this.contentElement, {
 			...defaultButtonStyles,
-			label: "Find Issues",
+			label: 'Find Issues',
 			icon: Lxicon.codeReview,
-			contentAlignment: "labelCentered",
-			title: "Find Issues",
+			contentAlignment: 'labelCentered',
+			title: 'Find Issues',
 		}));
-		findIssues.toggleClassName("ash-scm-find-issues", true);
+		findIssues.toggleClassName('ash-scm-find-issues', true);
 		this.contentElement.append(empty, findIssues.domNode);
 	}
 }

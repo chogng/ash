@@ -22,7 +22,7 @@
 
 上游 Node 执行、state／meta 与生成类型的对应是上述领域职责分流，不是逐文件移植。具体协议源位于 `crates/app-server-protocol/src/protocol/{session,turn,queue,interaction,search,git,host_resource}.rs` 和 registry；前端 transport DTO 仅留在 adapters，产品消费者使用领域契约。现有 Local／SSH／Dev Container provider 沿原 admission／extension owner；Terminal 的并行工作不计入本批。
 
-保留的产品差异：synced OpenPlugin customization／active-client 分发需要独立 producer 与运行策略，当前没有对应执行链；不创建空内存文件系统或通用 live-file broker。SDK 下载／重载、Codex→Copilot 续接、本地模型 lifecycle、独立 Web 启用、Cloud Sandbox、Tunnel／WSL、Mission Control 仍在根 TODO。真实外部账号、跨机器／跨平台和系统休眠验收也继续保留，受控回归不作为这些环境已验收的证据。
+保留的产品差异：synced OpenPlugin customization／active-client 分发需要独立 producer 与运行策略，当前没有对应执行链；不创建空内存文件系统或通用 live-file broker。SDK 下载／重载、Codex→Copilot 续接、本地模型 lifecycle、独立 Web 启用、Cloud Sandbox、Tunnel／WSL、Mission Control 仍在根 TODO。跨机器／跨平台验收继续保留；本地 macOS 系统休眠补验与真实外部 Kimi 验收的取舍见后文，受控回归不作为其他真实环境已验收的证据。
 
 验证（macOS，证据目录 `.build/agenthost-complete-20261018/`）：
 
@@ -253,6 +253,49 @@ Ash 的 `SessionsProvidersService` 现已接入独立 SSH Provider，Automation 
 
 2026-10-18 本机补验 B2 GUI 长周期：先在隔离 HOME、OS 拒绝出站网络的环境验证已安装 `codex-cli 0.163.0-alpha.10.2` 的缓存身份与 schema，再用真实 Rust observer 和认证 Web App Server 驱动已打开的 Code／Cowork picker。正常五分钟调度的 metadata 更新和下一周期 invalidResponse 均通过，目录重读、账号范围不变、手动选择／Code Auto、推理级别及失败保留断言全部成立；完整 smoke 为 1 passed（10.2m），日志 `.build/todo-subscription-browser-final.log`。Electron 字节流 observer 现按端口处理 UTF-8／换行分片；headless Browser 的合成 key 通过产品确认切换到隔离 profile 的文件存储。该结果使用合成账号与版本校验的本地缓存，不代表真实外部账号或 TUI 验收。此前桌面交互干扰和 Browser 启动／存储失败证据单独保留。
 
+### 2026-10-29 macOS 进程补验
+
+在本检出 `3d1fee43f`、macOS arm64、Node 24.21.0 上执行
+`just test-processes ash-app-server --test mcp_restart --profile ci-test --locked`，1 项通过。
+回归使用隔离 profile 和真实 loopback MCP 握手：临时连接发现工具，第二个进程保持禁用且工具数为零、没有新握手，第三个进程显式连接成功。
+日志为 `.build/macos-todo-20261029/mcp-restart.log`。它不证明 hosted CI 已执行；该远端覆盖缺口合并到根 TODO 的完整 CI 项，不再保留重复的 AgentHost 待办。
+
+### 2026-10-29 macOS 模型补验
+
+Settings 首败最终定位到生产 Canvas contribution 注册的 `chat.canvases.enabled` 未纳入 Settings 分类表，完整性检查中止窗口创建。补齐分类，并让 Settings 单测加载真实 Canvas 注册；先复现同一异常，修复后 Settings 49 项与模型目录服务 50 项单测通过。正常 Desktop 构建和 Automation 3,076 文件类型检查通过。初次入口失败仍保留于 `.build/macos-todo-20261029/`，本轮诊断、红绿结果及当前产物哈希位于 `.build/macos-model-acceptance-20261029/`；临时诊断 spec 已移出测试目录。
+
+先在隔离 HOME、OS 拒绝网络的环境核对实际 `codex-cli 0.165.0-alpha.1.2`：`0.165.0` 缓存 schema、身份摘要、有效与无效行均按夹具预期读取，错误身份缓存不复用，再更新严格版本守卫。真实 Rust observer 保持正常五分钟调度，Mac Electron 的 B2 场景完整通过（10.0m）：两个已打开的 Code／Cowork picker 更新模型及 Medium→High 元数据，重读权威目录，保留手选／Code Auto、账号范围和默认配置；下一周期 `invalidResponse` 后仍保留上次有效模型与推理选项。最终通知分别记录于 18:02:09 UTC 和 18:07:09 UTC。合成账号与本地缓存不作为真实外部账号验收。
+
+Mac 图形场景共 6 项通过：根会话／子线程模型、手选与 Auto、Code／Cowork 切换和窗口重开 1 项；上述 B2 1 项；中英文模型、推理、Advisor 与权限默认值抵达重开后的真实 Turn 2 项；模型可见性跨窗口共享、重启保存和中文帮助 2 项。夹具改用当前 Code／Collab 导航及公共历史选择器，Code 输入框按当前产品交互使用 Enter 提交；保留 HTTP、SQLite、Turn 与配置断言，没有放宽业务条件。旧导航及已移除发送按钮造成的首败单独留档；长周期所在首轮命令为 1 passed、1 failed、1 did not run，后续只补跑未通过项，不将首轮写成全绿。TUI 的受控完整订阅链、本地 OS sleep／wake 补验和真实外部身份的取舍见后文。
+
+另经 `just test-tui actual_tui_provider_autosaves_and_tests_without_fetching_models -- --test-threads=1` 构建匹配的服务程序和 CLI，真实 PTY 场景 1 项通过（12.15s）：模型固定、Provider 配置保存／取消、连接测试成功及认证失败反馈均成立，无新增待接受快照。日志为同目录 `tui-model-provider.log`；此用例不验证订阅通知到已打开 TUI picker 的完整链路。
+
+### 2026-10-29 macOS TUI 订阅补验
+
+补验发现 `AppDriver` 将订阅事件送到了配置页，却未让全局模型目录失效，已打开的 `/model` 因此可能保留旧数据。现沿既有 Config／`model/list` 读取路径刷新选择器；新通知到来时，丢弃仍在途的旧读取结果并保留下一次重读，避免重新显示旧身份的目录。定向回归先复现失败，修复后通过；进程内门控测试另验证读取中收到身份通知时旧结果不会生效。`just verify ash-tui --lib --features in-process-tests --filter app::driver::tests` 的 17 项和 `just verify ash-cli --test tui_real_scenarios --filter config::actual_tui_provider_autosaves_and_tests_without_fetching_models` 的 1 项回归、两包 check 与全目标告警检查均通过，7 文件格式检查通过。
+
+新增可显式运行的 Mac PTY 场景 `actual_tui_subscription_catalog_updates_open_picker_across_account_changes`，使用真实 CLI、managed App Server、安装的 `codex-cli 0.165.0-alpha.1.2` 及严格匹配的本地缓存。仅外部账号／目录输入为合成夹具；HOME、XDG 配置、Ash profile 和 Codex home 均隔离，断言账号列表只含 A 或 B。正常 60 秒身份核对与五分钟目录刷新间隔保持不变，未注入通知或缩短计时。初次夹具继承 HOME 的试跑已停止并清理，日志中的非夹具账号标识已去除，不计入验收。
+
+首次完整运行 907.51s，五个业务阶段全部完成：保持模型选择器及搜索打开，A 的 Medium／Low 更新为 High／Low；A 的 `invalidResponse` 保留有效目录及推理选项；切到 B 且发现失败时移除 A 的目录；随后 B 的有效目录恢复到同一选择器并提供 Medium／Low。目录／账号读取与 UI 同时断言，查看全过程不改变模型、推理默认值、GUI／TUI 配置或配置 revision，也未启动 Turn。首次命令因新增终端快照尚无基线而失败，快照逐行审阅后已接受；同命令正常计时复跑 **1 passed，906.77s**，五阶段和终端基线均通过，无新增待接受快照。完整结果记录在 `.build/macos-tui-subscription-20261029/validation.json`，终端帧、通知与日志见同目录 `report.html`。
+
+复跑命令为 `just test-tui actual_tui_subscription_catalog_updates_open_picker_across_account_changes -- --ignored --nocapture --test-threads=1`。该受控链路不代替真实外部 Kimi Desktop／CLI 身份和 token 轮换，也不覆盖 OS sleep／wake 或其他平台。
+
+### 2026-10-29 真实外部 Kimi 验收取舍
+
+本轮在标准应用目录、PATH 和生产凭据路径未找到 Kimi Desktop／CLI 安装及登录配置。用户确认准备两个专用账号困难，明确决定跳过这项真实外部验收；已从根 TODO 撤除，不再作为当前收尾门槛。身份切换、同身份 token 轮换、旧结果隔离和发现失败的真实外部场景均未执行、未验收，既有合成账号／scope 结果不扩大为这些场景通过。本轮仅核对环境是否存在，没有安装客户端、发起登录或修改外部凭据。
+
+### 2026-10-29 macOS 系统休眠补验
+
+在当前检出 `4a221771c` 加工作树改动、macOS 27.0.1 arm64、Electron 44.4.5 上，以隔离 HOME、profile 和合成工作目录运行真实 Ash Desktop。正常 backend／Desktop preparation 和 Automation 3,076 文件类型检查通过。用户配合手动唤醒，没有设置自动唤醒、修改系统电源策略或接入个人凭据。
+
+最终完整场景 **1 passed（2.8m）**。`pmset sleepnow` 触发原生 suspend／resume；内核记录 19:03:49 进入休眠、19:05:41 唤醒，实际约 112.9 秒，Sleep Count 从 16 增至 17。时间均为本地 America/Los_Angeles。原连接唤醒后仍为 ready，acquire／initialize 计数不变；真实文件读取、原生 EditContext 输入状态及后台 Session 改名抵达已打开窗口。随后单独终止该窗口的测试 carrier，自动重新 acquire／initialize，计数从 2 增至 3；新的 `env/dirs/set` 重新绑定原只读目录，`session/catalog/subscribe` 与 `session/subscribe` 重建，第二次后台改名继续抵达同一窗口。daemon PID／instanceId 保持不变。
+
+本地鉴权检查使用 Desktop 的可信 IPC 连接租约：新 nonce 握手成功，旧 nonce 的 initialized 请求被明确拒绝为 `Connection initialization superseded`。文件和终端探针使用同一隔离 profile 的独立真实协议连接及 config 目录授权；休眠前、唤醒并重连后，读取成功，写入和终端创建被阻断，拒绝写入的文件不存在。显式授予写入／执行后，实际写入内容与 `/bin/zsh` 子进程创建均成功；撤权后再次拒绝，越界路径也不可读取。Renderer 新连接返回的目录权限另断言不含 writeFiles／executeCommands。该结果覆盖本地 Desktop 链路，不扩大为外部账号 OAuth／token 刷新、SSH 网络恢复或其他平台通过；真实外部 Kimi 仍按用户决定跳过。
+
+前两次实际尝试分别因未进入内核休眠，以及休眠后 Playwright 页面通道丢失而失败，均单独留档；第二次内核确实休眠约 160 秒，但完整场景未通过。最终改用同一原生 BrowserWindow 的 `webContents.executeJavaScript` 被动检查 DOM／协议记录和 `capturePage` 截图，窗口 ID、renderer PID 及生命周期记录确认窗口未关闭或崩溃。Playwright 在唤醒后返回空 windows 列表，最终视频仅录到休眠前 17.2 秒，trace 未完成；不将它们作为完整流程录像，唤醒后以原生截图、协议与内核记录取证。
+
+完整证据为 `.build/macos-sleep-wake-20261029/report.html`、`validation.json` 和 `actual-passed-results/`，包含校准失败、真实休眠日志、五阶段截图、实际执行源码与产物哈希。临时验收 spec 已移出 smoke 目录，避免普通测试触发系统休眠；18 个测试 profile／临时目录和记录的 21 个进程均确认退出或移除。根 TODO 的系统休眠验收项已撤除，本轮没有修改产品行为。
+
 ### 2026-10-08 后续凭证范围修复
 
 1. **Kimi subscription 重登录已修复。** 账户 ID 由 Kimi owner 对私有 device ID 做单向摘要；新登录改变 ID，token 轮换保持 ID。新旧 revision 同为 1 的重登录也会退役旧目录。过期账户的查询、资料刷新和登出不能操作新账户。
@@ -276,7 +319,7 @@ Ash 的 `SessionsProvidersService` 现已接入独立 SSH Provider，Automation 
 
 交付源码补丁为 `agenthost-b1.patch`，40,113 bytes，SHA256 `fa94415673aa83fb054856e41a3f17c5a92c6683efa4066879e29a0d671032b3`。它只包含本批六个实现/测试文件；完整 todo 单独交付，不把其他规划文件混入补丁。
 
-剩余验收是实际 picker DOM、pane/profile 关闭重开、Code/Cowork、多窗口和 Web/Electron 运行时。模型/DI 至 inputState/startTurn 的单测通过不等于这些交互已通过。锁定 Chromium 下载曾收到截断 ZIP，随后安装调用的 approval review 被取消；已停止此步骤，未改用系统 Chromium。云端没有就绪的 Electron binary/display，Mac 需消费完整补丁与本文件后验证。
+本批交付时尚缺实际 picker DOM、pane/profile 关闭重开、Code/Cowork、多窗口和 Web/Electron 运行时；模型/DI 至 inputState/startTurn 的单测不能代替这些交互。截断 Chromium ZIP、安装 review 取消及云端缺 Electron/display 是当时的环境限制，不再作为当前 Mac 的阻塞。源码集成已由上面的 2026-10-18 复核确认；当前验收缺口统一见根 TODO。
 
 ### 第二批历史验证
 
@@ -295,7 +338,7 @@ Ash 的 `SessionsProvidersService` 现已接入独立 SSH Provider，Automation 
 
 独立源码补丁为 `agenthost-b2.patch`，35,119 bytes，SHA256 `682821e7a3a691d5746af0d341d60fe5c8dc7ac414f7b722fc12e82ee85875d7`。只含本批两文件；本文件、后续只读契约方案与证据单独交付。先保存第一批本地 checkpoint，再消费第二批，保持两片可独立审阅与提交。
 
-尚需统一 Mac 验收：已打开的 Code/Cowork picker 收到真实 provider notification 后更新；失败/Empty/账户变化行为可解释；模型、能力和 thinking 选项反映权威目录；手选、显式 Auto、隐藏模型与 profile 默认保持各自 owner；pane/profile 重开、重连和多窗口验证。Kimi 两类身份未闭环不能因这些常规用例通过而标成完成。
+本批当时列出的 Mac 验收范围为：已打开的 Code/Cowork picker 收到 provider notification 后更新；失败/Empty/账户变化、模型能力和 thinking 元数据、手选/Auto/隐藏模型/profile 默认，以及 pane/profile 重开、重连和多窗口。受控 Web、Mac 图形与 TUI 完整订阅链结果，以及真实 Kimi 验收取舍见上方记录；系统休眠仍见根 TODO，受控结果不扩大为真实环境验收通过。
 
 ## 现有能力与演进方向
 
@@ -394,7 +437,7 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 - [x] 将 connection generation、dispose、并发刷新与“刷新期间又有新通知”的责任闭合在该 service。旧 load 完成不得覆盖新连接目录；合并通知后仍至少完成一次涵盖最新失效的刷新。
 - [x] 在 `src/ash/workbench/contrib/chat/test/common/languageModels.test.ts` 增加 Models、Empty、Failed、公开账户切换、连续通知、迟到结果、消费者赋值与零选择/配置写入回归；实际 picker 手选/Auto 验收仍属下一项。
 - [x] 只读核对 `crates/app-server/src/server/subscription_adapter_tests.rs`、`crates/subscriptions/src/subscription_tests.rs` 和 `crates/models-manager/src/manager_tests.rs` 的既有 Models/Empty/Failed 语义。本片没有修改或重跑 Rust；确有目录身份缺口已单列后续契约方案，不能为凑跨端 diff 修改 Rust。subscription adapter 自身 Empty 覆盖的补齐随后续协议批次安排。
-- [ ] 通过 Code/Cowork 的真实模型选择器验证目录、能力、thinking 选项和非默认语言。仅在确有缺口时登记相关 pane 路径。
+- [x] 通过 Code/Cowork 的真实模型选择器验证受控目录、能力、thinking 选项和非默认语言；2026-10-29 Mac 图形补验及其真实账号／TUI 边界见上方记录。
 
 **结果语义不可照搬上游：** Ash `ProviderModelsListResult` 明确区分成功 Models、成功 Empty 和 Failed。成功空发现会更新 backend 最新发现集；失败保留已有 metadata，认证/权限失败会降级可用性。账户、organization 或 plan 改变时旧结果由 subscription owner 丢弃。禁止统一忽略 Empty，也禁止保留上一个账户的可选模型。Frontend 以当前 backend 查询为权威。
 
@@ -460,7 +503,7 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 - 按仓库脚本准备工具链后串行运行 `just verify ash-state` 和定向前端测试。Rust 初次冷构建先评估依赖图、V8/其他资源与磁盘，限制并发；不直接启动全 workspace build。
 - 第三批需 `just generate-protocol`、`just verify ash-protocol`、`just verify ash-app-server-protocol`、受影响 `ash-state`/`ash-core`/`ash-app-server` 检查、`pnpm typecheck:protocol` 和 renderer/build 验证。依据实际变动范围缩小 package，不并行争抢同一 Cargo cache。
 - Web 和 Linux Electron 的真实协议/UI行为在相应环境可验证；macOS 的真实系统菜单、OS sleep/wake 和 macOS daemon/窗口边界需在连接的 Mac 上验证。云端 Linux 通过不能标记为 macOS 通过。
-- 方案、第一/第二批独立源码补丁和验证证据在云端交付。本地先保存第一批 checkpoint，再按完整补丁与 todo 消费第二批，统一完成 Mac 运行时验收；其余批次和新增身份契约仍需确认。不私自提交、push、开 PR 或修改公共规则。
+- 第一/第二批最初以独立源码补丁和证据从云端交付，2026-10-18 已确认集成，不再要求当前 Mac 重放补丁或创建旧 checkpoint。运行时及新增身份契约的剩余验收统一见根 TODO；不私自提交、push、开 PR 或修改公共规则。
 
 ## 非目标与后续规范建议
 

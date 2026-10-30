@@ -137,7 +137,7 @@ test.extend({
 		const folder = join(testWorkspace.directory, 'launch-folder');
 		await mkdir(folder);
 		await launch(['--reuse-window', '--folder', folder]);
-		await newPage.getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+		await newPage.getByRole('button', { name: 'Trust Folder', exact: true }).click();
 		try {
 			await expect.poll(() => newPage.evaluate(() => {
 				const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<{ folders: { uri: string; }[]; }>; }; }; }).ash.ipcRenderer;

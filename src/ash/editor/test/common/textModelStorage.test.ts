@@ -1,16 +1,16 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { toDisposable } from "../../../base/common/lifecycle.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { toDisposable } from '../../../base/common/lifecycle.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
 
-test("TextModel snapshots remain immutable across edits and disposal", () => {
-	const model = new TextModel("alpha\nbeta");
+test('TextModel snapshots remain immutable across edits and disposal', () => {
+	const model = new TextModel('alpha\nbeta');
 	const snapshot = model.createVersionedSnapshot();
 
 	model.applyOperations([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(5)),
-		text: "ALPHA",
+		text: 'ALPHA',
 	}]);
 	model.undo();
 	model.dispose();
@@ -27,8 +27,8 @@ test("TextModel snapshots remain immutable across edits and disposal", () => {
 		version: 1,
 		length: 10,
 		lineCount: 2,
-		text: "alpha\nbeta",
-		range: "pha\nbe",
+		text: 'alpha\nbeta',
+		range: 'pha\nbe',
 	});
 	assert.throws(
 		() => snapshot.getTextBetweenOffsets(-1, 2),
@@ -36,15 +36,15 @@ test("TextModel snapshots remain immutable across edits and disposal", () => {
 	);
 });
 
-test("TextModel bounds history by transaction count", () => {
-	using model = new TextModel("", {
+test('TextModel bounds history by transaction count', () => {
+	using model = new TextModel('', {
 		historyLimit: {
 			transactions: 2,
 			textUnits: 100,
 		},
 	});
 
-	for (const character of "abc") {
+	for (const character of 'abc') {
 		const end = model.positionAt(model.getText().length);
 		model.applyOperations([{
 			range: Range.fromPositions(end),
@@ -59,18 +59,18 @@ test("TextModel bounds history by transaction count", () => {
 		canUndo: model.canUndo(),
 		canRedo: model.canRedo(),
 	}, {
-		text: "a",
+		text: 'a',
 		canUndo: false,
 		canRedo: true,
 	});
 
 	model.redo();
 	model.redo();
-	assert.equal(model.getText(), "abc");
+	assert.equal(model.getText(), 'abc');
 });
 
-test("TextModel drops history that exceeds the text-unit budget", () => {
-	using replacement = new TextModel("abcdef", {
+test('TextModel drops history that exceeds the text-unit budget', () => {
+	using replacement = new TextModel('abcdef', {
 		historyLimit: {
 			transactions: 10,
 			textUnits: 3,
@@ -81,17 +81,17 @@ test("TextModel drops history that exceeds the text-unit budget", () => {
 			replacement.positionAt(0),
 			replacement.positionAt(6),
 		),
-		text: "x",
+		text: 'x',
 	}]);
 	assert.deepEqual({
 		text: replacement.getText(),
 		canUndo: replacement.canUndo(),
 	}, {
-		text: "x",
+		text: 'x',
 		canUndo: false,
 	});
 
-	using insertion = new TextModel("", {
+	using insertion = new TextModel('', {
 		historyLimit: {
 			transactions: 10,
 			textUnits: 3,
@@ -99,7 +99,7 @@ test("TextModel drops history that exceeds the text-unit budget", () => {
 	});
 	insertion.applyOperations([{
 		range: Range.fromPositions(insertion.positionAt(0)),
-		text: "abcdef",
+		text: 'abcdef',
 	}]);
 	assert.equal(insertion.canUndo(), true);
 	insertion.undo();
@@ -107,14 +107,14 @@ test("TextModel drops history that exceeds the text-unit budget", () => {
 		text: insertion.getText(),
 		canRedo: insertion.canRedo(),
 	}, {
-		text: "",
+		text: '',
 		canRedo: false,
 	});
 });
 
-test("TextModel validates explicit history limits", () => {
+test('TextModel validates explicit history limits', () => {
 	assert.throws(
-		() => new TextModel("", {
+		() => new TextModel('', {
 			historyLimit: {
 				transactions: -1,
 			},
@@ -122,7 +122,7 @@ test("TextModel validates explicit history limits", () => {
 		/historyLimit.transactions/,
 	);
 	assert.throws(
-		() => new TextModel("", {
+		() => new TextModel('', {
 			historyLimit: {
 				textUnits: Number.POSITIVE_INFINITY,
 			},
@@ -131,11 +131,11 @@ test("TextModel validates explicit history limits", () => {
 	);
 });
 
-test("TextModel compaction remains transparent to snapshots and history", () => {
-	using model = new TextModel("");
+test('TextModel compaction remains transparent to snapshots and history', () => {
+	using model = new TextModel('');
 	let eventCount = 0;
 	using listener = model.onDidChangeContent(() => eventCount += 1);
-	const insertedText = "0123456789".repeat(10_000);
+	const insertedText = '0123456789'.repeat(10_000);
 	const retainedText = insertedText.slice(-10_000);
 
 	model.applyOperations([{
@@ -148,7 +148,7 @@ test("TextModel compaction remains transparent to snapshots and history", () => 
 			model.positionAt(0),
 			model.positionAt(insertedText.length - retainedText.length),
 		),
-		text: "",
+		text: '',
 	}]);
 
 	assert.equal(model.getText(), retainedText);
@@ -170,9 +170,9 @@ test("TextModel compaction remains transparent to snapshots and history", () => 
 	});
 });
 
-test("TextModel defers reclaiming piece-tree storage through product-owned maintenance", () => {
+test('TextModel defers reclaiming piece-tree storage through product-owned maintenance', () => {
 	const scheduled: (() => void)[] = [];
-	const model = new TextModel("", {
+	const model = new TextModel('', {
 		maintenance: {
 			schedule: callback => {
 				scheduled.push(callback);
@@ -183,7 +183,7 @@ test("TextModel defers reclaiming piece-tree storage through product-owned maint
 			},
 		},
 	});
-	const insertedText = "0123456789".repeat(10_000);
+	const insertedText = '0123456789'.repeat(10_000);
 	const retainedText = insertedText.slice(-10_000);
 	model.applyOperations([{
 		range: Range.fromPositions(model.positionAt(0)),
@@ -192,7 +192,7 @@ test("TextModel defers reclaiming piece-tree storage through product-owned maint
 	const snapshot = model.createVersionedSnapshot();
 	model.applyOperations([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(insertedText.length - retainedText.length)),
-		text: "",
+		text: '',
 	}]);
 
 	assert.equal(scheduled.length, 1);
@@ -207,9 +207,9 @@ test("TextModel defers reclaiming piece-tree storage through product-owned maint
 	model.dispose();
 });
 
-test("TextModel cancels queued maintenance when disposed", () => {
+test('TextModel cancels queued maintenance when disposed', () => {
 	const scheduled: (() => void)[] = [];
-	const model = new TextModel("", {
+	const model = new TextModel('', {
 		maintenance: {
 			schedule: callback => {
 				scheduled.push(callback);
@@ -220,11 +220,11 @@ test("TextModel cancels queued maintenance when disposed", () => {
 			},
 		},
 	});
-	const insertedText = "0123456789".repeat(10_000);
+	const insertedText = '0123456789'.repeat(10_000);
 	model.applyOperations([{ range: Range.fromPositions(model.positionAt(0)), text: insertedText }]);
 	model.applyOperations([{
 		range: Range.fromPositions(model.positionAt(0), model.positionAt(90_000)),
-		text: "",
+		text: '',
 	}]);
 
 	assert.equal(scheduled.length, 1);

@@ -1,0 +1,162 @@
+.ash-code-card-managed
+	> .ash-workbench-part-title
+	> .ash-pane-composite-title-actions
+	> .ash-pane-composite-title-part-actions {
+	display: none;
+}
+
+.ash-code-card-controls {
+	display: flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: var(--ash-spacing-size20);
+	margin-inline-start: auto;
+}
+
+.ash-code-card-controls[hidden] {
+	display: none;
+}
+
+.ash-code-card-managed > .ash-code-card-draggable {
+	cursor: grab;
+	touch-action: none;
+}
+
+.ash-code-card-dragging,
+.ash-code-card-dragging * {
+	cursor: grabbing;
+	user-select: none;
+}
+
+.ash-code-card-drop-preview {
+	position: fixed;
+	z-index: 10000;
+	pointer-events: none;
+	box-sizing: border-box;
+	border: 2px solid var(--ash-focusBorder);
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-selectionBackground);
+}
+
+.ash-code-card-drop-preview[hidden] {
+	display: none;
+}
+
+.ash-code-information-card,
+.ash-code-files-card {
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-sideBar-background);
+	color: var(--ash-foreground);
+	box-shadow: 0 var(--ash-spacing-size20) var(--ash-spacing-size40)
+		var(--ash-widget-shadow);
+}
+
+.ash-code-card-header {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	min-height: 36px;
+	padding-inline: var(--ash-spacing-size80);
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-code-card-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-code-information-body {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+}
+
+.ash-code-information-body > .ash-session-info.managed {
+	width: auto;
+	margin: 0;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+.ash-session-info-close[hidden] {
+	display: none;
+}
+
+.ash-code-card-window {
+	display: flex;
+	flex-direction: column;
+	background: var(--ash-sideBar-background);
+	color: var(--ash-foreground);
+}
+
+.ash-code-card-window > :is(.ash-workbench-part, .ash-code-information-card) {
+	flex: 1;
+	min-height: 0;
+}
+
+.ash-code-card-window-titlebar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-shrink: 0;
+	height: 36px;
+	padding-inline: var(--ash-spacing-size120);
+	app-region: drag;
+}
+
+.ash-code-card-window-titlebar button {
+	app-region: no-drag;
+}
+
+:is(.hc-black, .hc-light) .ash-code-information-card {
+	box-shadow: none;
+}
+
+.ash-code-card-header[hidden] {
+	display: none;
+}
+
+.ash-code-files-frame {
+	padding: var(--ash-spacing-size40);
+}
+
+.ash-code-files-card[hidden] {
+	display: none;
+}
+
+.ash-code-files-body {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.ash-code-files-body > .ash-grid {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-code-files-card .ash-workbench-part-title[hidden] {
+	display: none;
+}
+
+.ash-code-card-window > .ash-code-files-card {
+	flex: 1;
+	min-height: 0;
+}
+
+:is(.hc-black, .hc-light) .ash-code-files-card {
+	box-shadow: none;
+}

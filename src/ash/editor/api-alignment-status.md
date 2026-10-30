@@ -8,4 +8,4 @@
 git show d55c1bed4d8f23a54ead7f0cc186973566298642:src/ash/editor/api-alignment-status.md
 ```
 
-当前所有权与装配见 [Editor](README.md)，机制见[文本引擎](text-engine.md)，跨宿主边界与验证范围见[编辑器架构](../../../docs/editor-architecture.md)。未完成工作只维护于[根 TODO](../../../TODO.md#stanza-编辑器--todo)，不恢复 API 数量台账。
+当前所有权与装配见 [Editor](README.md)，机制见[文本引擎](text-engine.md)，跨宿主边界与验证范围见[编辑器架构](../../../docs/editor-architecture.md)。未完成工作只维护于[根 TODO](../../../TODO.md)，不恢复 API 数量台账。

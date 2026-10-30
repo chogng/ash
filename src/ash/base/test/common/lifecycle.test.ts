@@ -1,5 +1,5 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
 import {
 	AbstractDisposable,
 	AsyncDisposableStore,
@@ -13,7 +13,7 @@ import {
 	isDisposable,
 	noneDisposable,
 	toDisposable,
-} from "../../common/lifecycle.js";
+} from '../../common/lifecycle.js';
 
 test('dispose releases complete collections and aggregates failures', () => {
 	const calls: string[] = [];
@@ -28,14 +28,14 @@ test('dispose releases complete collections and aggregates failures', () => {
 	]), AggregateError);
 });
 
-test("noneDisposable is a reusable no-op", () => {
+test('noneDisposable is a reusable no-op', () => {
 	assert.equal(Disposable.None, noneDisposable);
 	noneDisposable.dispose();
 	noneDisposable[Symbol.dispose]();
 	assert.equal(Object.isFrozen(noneDisposable), true);
 });
 
-test("AsyncDisposableStore shares one cleanup operation", async () => {
+test('AsyncDisposableStore shares one cleanup operation', async () => {
 	let release!: () => void;
 	const gate = new Promise<void>(resolve => {
 		release = resolve;
@@ -56,7 +56,7 @@ test("AsyncDisposableStore shares one cleanup operation", async () => {
 	assert.equal(cleanupCalls, 1);
 });
 
-test("AbstractDisposable runs leaf cleanup once", () => {
+test('AbstractDisposable runs leaf cleanup once', () => {
 	class Resource extends AbstractDisposable {
 		public cleanupCalls = 0;
 
@@ -72,7 +72,7 @@ test("AbstractDisposable runs leaf cleanup once", () => {
 	assert.equal(resource.cleanupCalls, 1);
 });
 
-test("project disposables support explicit disposal and using", () => {
+test('project disposables support explicit disposal and using', () => {
 	let calls = 0;
 
 	{
@@ -85,7 +85,7 @@ test("project disposables support explicit disposal and using", () => {
 	assert.equal(calls, 1);
 });
 
-test("DisposableStore releases resources in LIFO order and is idempotent", () => {
+test('DisposableStore releases resources in LIFO order and is idempotent', () => {
 	const released: number[] = [];
 	const store = new DisposableStore();
 	store.add(toDisposable(() => released.push(1)));
@@ -99,7 +99,7 @@ test("DisposableStore releases resources in LIFO order and is idempotent", () =>
 	assert.deepEqual(released, [2, 1]);
 });
 
-test("a disposed store rejects resources without taking ownership", () => {
+test('a disposed store rejects resources without taking ownership', () => {
 	const store = new DisposableStore();
 	store.dispose();
 	let disposed = false;
@@ -112,67 +112,67 @@ test("a disposed store rejects resources without taking ownership", () => {
 	resource.dispose();
 });
 
-test("DisposableStore owns callback cleanup through toDisposable", () => {
+test('DisposableStore owns callback cleanup through toDisposable', () => {
 	const released: string[] = [];
 	const store = new DisposableStore();
-	store.add(toDisposable(() => released.push("value")));
-	store.add(toDisposable(() => released.push("deferred")));
+	store.add(toDisposable(() => released.push('value')));
+	store.add(toDisposable(() => released.push('deferred')));
 
 	store.dispose();
-	assert.deepEqual(released, ["deferred", "value"]);
+	assert.deepEqual(released, ['deferred', 'value']);
 });
 
-test("DisposableStore delete transfers a resource without disposing it", () => {
+test('DisposableStore delete transfers a resource without disposing it', () => {
 	const calls: string[] = [];
 	const store = new DisposableStore();
-	const first = store.add(toDisposable(() => calls.push("first")));
-	store.add(toDisposable(() => calls.push("second")));
+	const first = store.add(toDisposable(() => calls.push('first')));
+	store.add(toDisposable(() => calls.push('second')));
 
 	assert.equal(store.delete(first), true);
 	assert.equal(store.delete(first), false);
 	store.dispose();
-	assert.deepEqual(calls, ["second"]);
+	assert.deepEqual(calls, ['second']);
 	first.dispose();
-	assert.deepEqual(calls, ["second", "first"]);
+	assert.deepEqual(calls, ['second', 'first']);
 });
 
-test("DisposableMap replaces, removes, leaks, and disposes keyed resources", () => {
+test('DisposableMap replaces, removes, leaks, and disposes keyed resources', () => {
 	const released: string[] = [];
 	const resources = new DisposableMap<string>();
-	resources.set("first", toDisposable(() => released.push("first:old")));
-	const replacement = resources.set("first", toDisposable(() => released.push("first:new")));
-	assert.equal(resources.get("first"), replacement);
-	resources.set("second", toDisposable(() => released.push("second")));
-	resources.set("third", toDisposable(() => released.push("third")));
+	resources.set('first', toDisposable(() => released.push('first:old')));
+	const replacement = resources.set('first', toDisposable(() => released.push('first:new')));
+	assert.equal(resources.get('first'), replacement);
+	resources.set('second', toDisposable(() => released.push('second')));
+	resources.set('third', toDisposable(() => released.push('third')));
 
-	assert.deepEqual(released, ["first:old"]);
-	assert.equal(resources.deleteAndDispose("first"), true);
-	assert.equal(resources.get("first"), undefined);
-	assert.equal(resources.deleteAndDispose("missing"), false);
-	const leaked = resources.set("leaked", toDisposable(() => released.push("leaked")));
-	assert.equal(resources.deleteAndLeak("leaked"), leaked);
-	assert.equal(resources.get("leaked"), undefined);
+	assert.deepEqual(released, ['first:old']);
+	assert.equal(resources.deleteAndDispose('first'), true);
+	assert.equal(resources.get('first'), undefined);
+	assert.equal(resources.deleteAndDispose('missing'), false);
+	const leaked = resources.set('leaked', toDisposable(() => released.push('leaked')));
+	assert.equal(resources.deleteAndLeak('leaked'), leaked);
+	assert.equal(resources.get('leaked'), undefined);
 	resources.dispose();
 	resources.dispose();
-	assert.deepEqual(released, ["first:old", "first:new", "third", "second"]);
+	assert.deepEqual(released, ['first:old', 'first:new', 'third', 'second']);
 	leaked[Symbol.dispose]();
-	assert.deepEqual(released, ["first:old", "first:new", "third", "second", "leaked"]);
+	assert.deepEqual(released, ['first:old', 'first:new', 'third', 'second', 'leaked']);
 
-	const rejected = toDisposable(() => released.push("rejected"));
-	assert.throws(() => resources.set("rejected", rejected), ReferenceError);
+	const rejected = toDisposable(() => released.push('rejected'));
+	assert.throws(() => resources.set('rejected', rejected), ReferenceError);
 	rejected.dispose();
 });
 
-test("DisposableStore attempts every cleanup and preserves suppressed errors", () => {
+test('DisposableStore attempts every cleanup and preserves suppressed errors', () => {
 	const released: number[] = [];
 	const store = new DisposableStore();
 	store.add(toDisposable(() => {
 		released.push(1);
-		throw new Error("first cleanup failed");
+		throw new Error('first cleanup failed');
 	}));
 	store.add(toDisposable(() => {
 		released.push(2);
-		throw new Error("second cleanup failed");
+		throw new Error('second cleanup failed');
 	}));
 
 	assert.throws(
@@ -183,7 +183,7 @@ test("DisposableStore attempts every cleanup and preserves suppressed errors", (
 	assert.equal(store.isDisposed, true);
 });
 
-test("Disposable owns standard Disposable resources", () => {
+test('Disposable owns standard Disposable resources', () => {
 	class Owner extends Disposable {
 		take<T extends IDisposable>(resource: T): T {
 			return this._register(resource);
@@ -208,7 +208,7 @@ test("Disposable owns standard Disposable resources", () => {
 	rejected.dispose();
 });
 
-test("MutableDisposable releases replaced and current values", () => {
+test('MutableDisposable releases replaced and current values', () => {
 	const released: number[] = [];
 	const slot = new MutableDisposable();
 	slot.value = toDisposable(() => released.push(1));
@@ -219,7 +219,7 @@ test("MutableDisposable releases replaced and current values", () => {
 	assert.deepEqual(released, [1, 2]);
 });
 
-test("a disposed MutableDisposable ignores values without taking ownership", () => {
+test('a disposed MutableDisposable ignores values without taking ownership', () => {
 	const slot = new MutableDisposable();
 	slot.dispose();
 	let disposed = false;
@@ -232,7 +232,7 @@ test("a disposed MutableDisposable ignores values without taking ownership", () 
 	resource.dispose();
 });
 
-test("MutableDisposable can leak its current value without disposing it", () => {
+test('MutableDisposable can leak its current value without disposing it', () => {
 	let disposed = false;
 	const slot = new MutableDisposable();
 	const resource = toDisposable(() => {
@@ -247,7 +247,7 @@ test("MutableDisposable can leak its current value without disposing it", () => 
 	assert.equal(disposed, true);
 });
 
-test("MutableDisposable clears its value and releases it only once", () => {
+test('MutableDisposable clears its value and releases it only once', () => {
 	let cleanupCalls = 0;
 	const slot = new MutableDisposable();
 	const resource = toDisposable(() => {
@@ -265,7 +265,7 @@ test("MutableDisposable clears its value and releases it only once", () => {
 	assert.equal(cleanupCalls, 1);
 });
 
-test("DisposableStore clears, rebuilds, and then closes", () => {
+test('DisposableStore clears, rebuilds, and then closes', () => {
 	const released: number[] = [];
 	const group = new DisposableStore();
 	group.add(toDisposable(() => released.push(1)));
@@ -280,7 +280,7 @@ test("DisposableStore clears, rebuilds, and then closes", () => {
 	);
 });
 
-test("AsyncDisposableStore owns sync and async resources in LIFO order", async () => {
+test('AsyncDisposableStore owns sync and async resources in LIFO order', async () => {
 	const released: number[] = [];
 
 	await (async () => {
@@ -297,7 +297,7 @@ test("AsyncDisposableStore owns sync and async resources in LIFO order", async (
 	assert.deepEqual(released, [2, 1]);
 });
 
-test("AsyncDisposableStore closes registration when disposal starts", async () => {
+test('AsyncDisposableStore closes registration when disposal starts', async () => {
 	const store = new AsyncDisposableStore();
 	const disposal = store.disposeAsync();
 	const rejected = toDisposable(() => undefined);
@@ -308,7 +308,7 @@ test("AsyncDisposableStore closes registration when disposal starts", async () =
 	await disposal;
 });
 
-test("disposable guards and borrowed references keep ownership explicit", () => {
+test('disposable guards and borrowed references keep ownership explicit', () => {
 	const borrowed = { value: 1 };
 	const reference = new ImmortalReference(borrowed);
 	assert.equal(reference.object, borrowed);

@@ -1,19 +1,19 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { CharCode } from "../../../../../base/common/charCode.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { CharCode } from '../../../../../base/common/charCode.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { PieceNode } from "../../../../common/model/pieceTreeTextBuffer/pieceTreeBase.js";
-import { NodeColor } from "../../../../common/model/pieceTreeTextBuffer/rbTreeBase.js";
-import { PieceTreeTextBuffer } from "../../../../common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.js";
-import { PieceTreeTextBufferBuilder } from "../../../../common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js";
+import { PieceNode } from '../../../../common/model/pieceTreeTextBuffer/pieceTreeBase.js';
+import { NodeColor } from '../../../../common/model/pieceTreeTextBuffer/rbTreeBase.js';
+import { PieceTreeTextBuffer } from '../../../../common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.js';
+import { PieceTreeTextBufferBuilder } from '../../../../common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 import { DefaultEndOfLine, FindMatch, SearchData, ValidAnnotatedEditOperation } from '../../../../common/model.js';
 
-test("PieceTreeTextBuffer matches a string oracle and red-black invariants across deterministic edits", () => {
+test('PieceTreeTextBuffer matches a string oracle and red-black invariants across deterministic edits', () => {
 	const random = createRandom(0x71ece);
-	const buffer = new PieceTreeTextBuffer("seed\n😀text");
-	let oracle = "seed\n😀text";
-	const insertions = ["", "a", "XYZ", "\n", "x\ny", "😀"];
+	const buffer = new PieceTreeTextBuffer('seed\n😀text');
+	let oracle = 'seed\n😀text';
+	const insertions = ['', 'a', 'XYZ', '\n', 'x\ny', '😀'];
 	assertTreeInvariants(buffer);
 
 	for (let iteration = 0; iteration < 1_000; iteration += 1) {
@@ -63,11 +63,11 @@ test("PieceTreeTextBuffer matches a string oracle and red-black invariants acros
 	}
 });
 
-test("PieceTreeTextBufferBuilder constructs one buffer from ordered chunks", () => {
+test('PieceTreeTextBufferBuilder constructs one buffer from ordered chunks', () => {
 	const builder = new PieceTreeTextBufferBuilder();
-	builder.acceptChunk("first\n");
-	builder.acceptChunk("");
-	builder.acceptChunk("second😀");
+	builder.acceptChunk('first\n');
+	builder.acceptChunk('');
+	builder.acceptChunk('second😀');
 	const factory = builder.finish();
 	const { textBuffer: buffer } = factory.create(DefaultEndOfLine.LF);
 
@@ -76,7 +76,7 @@ test("PieceTreeTextBufferBuilder constructs one buffer from ordered chunks", () 
 		lineCount: buffer.getLineCount(),
 		position: buffer.getPositionAt(8),
 	}, {
-		text: "first\nsecond😀",
+		text: 'first\nsecond😀',
 		lineCount: 2,
 		position: new Position(2, 3),
 	});
@@ -206,9 +206,9 @@ test('PieceTreeTextBuffer applies one atomic edit batch and returns inverse edit
 	assert.equal(changeEvents, 2);
 });
 
-test("PieceTreeTextBuffer coalesces contiguous source pieces", () => {
-	const typed = new PieceTreeTextBuffer("");
-	for (const character of "continuous") {
+test('PieceTreeTextBuffer coalesces contiguous source pieces', () => {
+	const typed = new PieceTreeTextBuffer('');
+	for (const character of 'continuous') {
 		applyOffsetEdit(typed, typed.getLength(), typed.getLength(), character);
 		assertTreeInvariants(typed);
 	}
@@ -216,33 +216,33 @@ test("PieceTreeTextBuffer coalesces contiguous source pieces", () => {
 		text: typed.createSnapshot().getText(),
 		pieceCount: typed.pieceCount,
 	}, {
-		text: "continuous",
+		text: 'continuous',
 		pieceCount: 1,
 	});
 
-	const restoredOriginal = new PieceTreeTextBuffer("abcdef");
-	applyOffsetEdit(restoredOriginal, 3, 3, "X");
+	const restoredOriginal = new PieceTreeTextBuffer('abcdef');
+	applyOffsetEdit(restoredOriginal, 3, 3, 'X');
 	assertTreeInvariants(restoredOriginal);
 	assert.equal(restoredOriginal.pieceCount, 3);
-	applyOffsetEdit(restoredOriginal, 3, 4, "");
+	applyOffsetEdit(restoredOriginal, 3, 4, '');
 	assertTreeInvariants(restoredOriginal);
 	assert.deepEqual({
 		text: restoredOriginal.createSnapshot().getText(),
 		pieceCount: restoredOriginal.pieceCount,
 	}, {
-		text: "abcdef",
+		text: 'abcdef',
 		pieceCount: 1,
 	});
 });
 
-test("PieceTreeTextBuffer compaction preserves captured sources", () => {
-	const insertedText = "line\n".repeat(20_000);
+test('PieceTreeTextBuffer compaction preserves captured sources', () => {
+	const insertedText = 'line\n'.repeat(20_000);
 	const retainedText = insertedText.slice(-10_000);
-	const buffer = new PieceTreeTextBuffer("");
+	const buffer = new PieceTreeTextBuffer('');
 	applyOffsetEdit(buffer, 0, 0, insertedText);
 	assertTreeInvariants(buffer);
 	const snapshot = buffer.createSnapshot();
-	applyOffsetEdit(buffer, 0, insertedText.length - retainedText.length, "");
+	applyOffsetEdit(buffer, 0, insertedText.length - retainedText.length, '');
 	assertTreeInvariants(buffer);
 
 	const before = buffer.getStatistics();
@@ -281,8 +281,8 @@ test("PieceTreeTextBuffer compaction preserves captured sources", () => {
 function assertTreeInvariants(buffer: PieceTreeTextBuffer): void {
 	const root = (buffer as unknown as PieceTreeTextBufferInternals).root;
 	if (root) {
-		assert.equal(root.color, NodeColor.Black, "red-black root must be black");
-		assert.equal(root.parent, undefined, "red-black root must not have a parent");
+		assert.equal(root.color, NodeColor.Black, 'red-black root must be black');
+		assert.equal(root.parent, undefined, 'red-black root must not have a parent');
 	}
 	const aggregate = assertNode(root, undefined);
 	assert.deepEqual({
@@ -298,24 +298,24 @@ function assertTreeInvariants(buffer: PieceTreeTextBuffer): void {
 
 function assertNode(node: PieceNode | undefined, parent: PieceNode | undefined): TreeAggregate {
 	if (!node) return { length: 0, lineFeeds: 0, pieces: 0, blackHeight: 1 };
-	assert.equal(node.parent, parent, "red-black parent pointer must match its owner");
+	assert.equal(node.parent, parent, 'red-black parent pointer must match its owner');
 	const left = assertNode(node.left, node);
 	const right = assertNode(node.right, node);
-	assert.equal(left.blackHeight, right.blackHeight, "red-black paths must have equal black height");
+	assert.equal(left.blackHeight, right.blackHeight, 'red-black paths must have equal black height');
 	if (node.color === NodeColor.Red) {
-		assert.equal(node.left?.color ?? NodeColor.Black, NodeColor.Black, "a red node cannot have a red left child");
-		assert.equal(node.right?.color ?? NodeColor.Black, NodeColor.Black, "a red node cannot have a red right child");
+		assert.equal(node.left?.color ?? NodeColor.Black, NodeColor.Black, 'a red node cannot have a red left child');
+		assert.equal(node.right?.color ?? NodeColor.Black, NodeColor.Black, 'a red node cannot have a red right child');
 	}
-	assert.ok(node.piece.length > 0, "piece-tree nodes must not retain empty pieces");
+	assert.ok(node.piece.length > 0, 'piece-tree nodes must not retain empty pieces');
 	const aggregate = {
 		length: left.length + node.piece.length + right.length,
 		lineFeeds: left.lineFeeds + node.piece.lineFeedOffsets.length + right.lineFeeds,
 		pieces: left.pieces + 1 + right.pieces,
 		blackHeight: left.blackHeight + (node.color === NodeColor.Black ? 1 : 0),
 	};
-	assert.equal(node.totalLength, aggregate.length, "node text-length aggregate must match its subtree");
-	assert.equal(node.totalLineFeeds, aggregate.lineFeeds, "node line-feed aggregate must match its subtree");
-	assert.equal(node.totalPieces, aggregate.pieces, "node piece-count aggregate must match its subtree");
+	assert.equal(node.totalLength, aggregate.length, 'node text-length aggregate must match its subtree');
+	assert.equal(node.totalLineFeeds, aggregate.lineFeeds, 'node line-feed aggregate must match its subtree');
+	assert.equal(node.totalPieces, aggregate.pieces, 'node piece-count aggregate must match its subtree');
 	return aggregate;
 }
 

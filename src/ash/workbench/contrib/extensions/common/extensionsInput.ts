@@ -1,5 +1,9 @@
 import { Schemas } from '../../../../base/common/network.js';
 import { URI } from '../../../../base/common/uri.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import type { ThemeIcon } from '../../../../base/common/themables.js';
+import { encodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import type { ExtensionsPackageSummary } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { EditorInputSerializers, requireRecord, requireString, optionalString } from '../../../services/editor/common/editorInputSerializer.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
@@ -10,11 +14,28 @@ export enum ExtensionsInputSource {
 	Local = 'local',
 }
 
+/** Built-ins without licensed artwork use Ash monograms, never file-theme brand guesses. */
+export function getExtensionFallbackIcon(id: string, source = ExtensionsInputSource.Registry): ThemeIcon | URI {
+	if (source !== ExtensionsInputSource.BuiltIn) { return Lxicon.extensions; }
+	const name = id.split('.').at(-1) ?? id;
+	const abbreviations: Record<string, string> = { clojure: 'CLJ', coffeescript: 'COF', javascript: 'JS', typescript: 'TS' };
+	const words = name.split('-');
+	const abbreviation = Object.hasOwn(abbreviations, name) ? abbreviations[name] : undefined;
+	const letters = (abbreviation ?? (words.length > 1 ? words.map(word => word[0]).join('') : name.slice(0, 4))).replace(/[^a-z0-9]/giu, '').toUpperCase();
+	const artwork = name === 'bazel'
+		? '<path d="m24 72 34-34m-9-12 21 21m-25-13 9-9 17 17-9 9" fill="none" stroke="GrayText" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>'
+		: `<text x="48" y="50" fill="GrayText" font-family="monospace" font-size="${letters.length > 3 ? 32 : 40}" font-weight="600" text-anchor="middle" dominant-baseline="middle">${letters}</text>`;
+	return URI.from({ scheme: 'data', path: `image/svg+xml;base64,${encodeBase64(VSBuffer.fromString(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">${artwork}</svg>`))}` });
+}
+
 /** An installed version has a separate identity so actions always target the reviewed installation. */
 export class ExtensionsInput extends EditorInput {
 	public readonly typeId = 'ash.extensions.input';
 	public override readonly editorId = 'ash.extensions.editor';
-	public readonly onDidChangeLabel = undefined;
+	private readonly labelChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeLabel = this.labelChanged.event;
+	private icon: URI | undefined;
+	private readonly fallbackIcon: ThemeIcon | URI;
 	public readonly readOnly = true;
 	public readonly showBreadcrumbs = false;
 	public readonly resource: URI;
@@ -22,9 +43,18 @@ export class ExtensionsInput extends EditorInput {
 	constructor(public readonly summary: ExtensionsPackageSummary, public readonly installationId?: string, public readonly source = ExtensionsInputSource.Registry) {
 		super();
 		this.resource = URI.from({ scheme: Schemas.ashExtension, path: `/${source}/${installationId ?? summary.id}`, query: summary.version });
+		this.fallbackIcon = getExtensionFallbackIcon(summary.id, source);
 	}
 
 	public getName(): string { return this.summary.displayName; }
+	public getIcon(): ThemeIcon | URI { return this.icon ?? this.fallbackIcon; }
+
+	/** The retained pane publishes its live icon, then resets it before releasing the image URL. */
+	public setIcon(icon: URI | undefined): void {
+		if (this.isDisposed || this.icon === icon) { return; }
+		this.icon = icon;
+		this.labelChanged.fire();
+	}
 }
 
 // Persist identity and inert metadata, then resolve the installation from the backend on restore.

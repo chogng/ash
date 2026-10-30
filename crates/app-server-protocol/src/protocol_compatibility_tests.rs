@@ -13,6 +13,19 @@ use crate::protocol::initialize::ServerCapabilities;
 use crate::protocol::initialize::ensure_protocol_compatible;
 
 #[test]
+fn git_upstream_commit_is_optional_and_preserved_when_available() {
+    use crate::protocol::git::GitUpstreamDto;
+    for value in [
+        serde_json::json!({"name":"origin/main","ahead":0,"behind":0}),
+        serde_json::json!({"name":"origin/main","objectId":"upstream-tip","ahead":1,"behind":2}),
+    ] {
+        let decoded: GitUpstreamDto = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(decoded.object_id.as_deref(), value["objectId"].as_str());
+        assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+    }
+}
+
+#[test]
 fn language_server_configuration_preserves_generic_json_and_legacy_defaults() {
     use crate::protocol::config::LanguageServerConfigDto;
     let legacy = serde_json::json!({"mode":"enabled"});

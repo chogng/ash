@@ -61,7 +61,7 @@ test('typeahead keeps unconfirmed and no-echo input hidden, and predicts only af
 	assert.equal(text(), '', 'a new prompt must not inherit echo confirmation');
 });
 
-test('typeahead discards echo confirmation on control output and ignores a previous prompt\'s late commit', async () => {
+test("typeahead discards echo confirmation on control output and ignores a previous prompt's late commit", async () => {
 	using resources = new DisposableStore();
 	const { key, write, text, prompt } = fixture(resources);
 	key.fire({ key: 'a' }); write.fire({ data: 'a', trackCommit: true }); await Promise.resolve();

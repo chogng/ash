@@ -1,6 +1,6 @@
-import { AbstractDisposable, DisposableStore, setDisposableOwner, type IDisposable } from "../common/lifecycle.js";
-import { autorun, type IObservable, type IReader, isObservable } from "../common/observable.js";
-import type { DomElementProperties } from "./dom.js";
+import { AbstractDisposable, DisposableStore, setDisposableOwner, type IDisposable } from '../common/lifecycle.js';
+import { autorun, type IObservable, type IReader, isObservable } from '../common/observable.js';
+import type { DomElementProperties } from './dom.js';
 
 type ReactiveValue<T> = T | IObservable<T>;
 type ReactiveValueList<T> = ReactiveValue<T> | readonly ReactiveValueList<T>[];
@@ -76,14 +76,14 @@ export function createReactiveDom(ownerDocument: Document): ReactiveDomFactory {
 	return {
 		document: ownerDocument,
 		div: (options = {}, children) =>
-			new ReactiveElement(ownerDocument, "div", undefined, options, children),
+			new ReactiveElement(ownerDocument, 'div', undefined, options, children),
 		elem: (tag, options = {}, children) =>
 			new ReactiveElement(ownerDocument, tag, undefined, options, children),
 		svg: (options = {}, children) =>
 			new ReactiveElement(
 				ownerDocument,
-				"svg",
-				"http://www.w3.org/2000/svg",
+				'svg',
+				'http://www.w3.org/2000/svg',
 				options,
 				children,
 			),
@@ -91,7 +91,7 @@ export function createReactiveDom(ownerDocument: Document): ReactiveDomFactory {
 			new ReactiveElement(
 				ownerDocument,
 				tag,
-				"http://www.w3.org/2000/svg",
+				'http://www.w3.org/2000/svg',
 				options,
 				children,
 			),
@@ -197,7 +197,7 @@ function resolveClassName(
 	resolveValues(value, reader, resolved => {
 		if (resolved) names.push(resolved);
 	});
-	return names.join(" ");
+	return names.join(' ');
 }
 
 function resolveValues<T>(
@@ -227,16 +227,16 @@ function resolveChildren(
 		child.update(reader);
 		result.push(child.element);
 	} else if (child !== false && child !== null && child !== undefined) {
-		result.push(typeof child === "number" ? String(child) : child);
+		result.push(typeof child === 'number' ? String(child) : child);
 	}
 }
 
 function setClassName(element: HTMLElement | SVGElement, className: string): void {
-	element.setAttribute("class", className);
+	element.setAttribute('class', className);
 }
 
 function toCssPropertyName(name: string): string {
-	return name.startsWith("--") ? name : name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
+	return name.startsWith('--') ? name : name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
 }
 
 function setOrRemoveAttribute(

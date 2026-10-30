@@ -44,8 +44,13 @@ pub fn run_command(
     };
     let role = match std::env::var("ASH_APP_SERVER_CONNECTION_ROLE").as_deref() {
         Ok("agents") => crate::ConnectionRole::Agents,
+        Ok("credentials") => crate::ConnectionRole::Credentials,
         Err(std::env::VarError::NotPresent) => crate::ConnectionRole::Workbench,
-        _ => return Err("ASH_APP_SERVER_CONNECTION_ROLE must be agents when set".into()),
+        _ => {
+            return Err(
+                "ASH_APP_SERVER_CONNECTION_ROLE must be agents or credentials when set".into(),
+            );
+        }
     };
     let mut options = ConnectionOptions::new(
         ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,

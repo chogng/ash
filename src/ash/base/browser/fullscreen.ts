@@ -1,7 +1,7 @@
-import type { IDisposable } from "../common/lifecycle.js";
-import { addDisposableListener } from "./dom.js";
+import type { IDisposable } from '../common/lifecycle.js';
+import { addDisposableListener } from './dom.js';
 
-export type FullscreenMode = "native" | "browser";
+export type FullscreenMode = 'native' | 'browser';
 
 export interface FullscreenState {
 	readonly mode: FullscreenMode;
@@ -12,13 +12,13 @@ export function getFullscreenState(
 	targetWindow: Window,
 ): FullscreenState | undefined {
 	const element = targetWindow.document.fullscreenElement;
-	if (element) return { mode: "native", element };
+	if (element) return { mode: 'native', element };
 
 	const screen = targetWindow.screen;
 	const browserFullscreen =
 		Math.abs(targetWindow.innerWidth - screen.width) <= 1 &&
 		Math.abs(targetWindow.innerHeight - screen.height) <= 1;
-	return browserFullscreen ? { mode: "browser" } : undefined;
+	return browserFullscreen ? { mode: 'browser' } : undefined;
 }
 
 export async function requestFullscreen(element: Element): Promise<void> {
@@ -39,7 +39,7 @@ export function onDidChangeFullscreen(
 ): IDisposable {
 	return addDisposableListener(
 		targetDocument,
-		"fullscreenchange",
+		'fullscreenchange',
 		listener,
 	);
 }

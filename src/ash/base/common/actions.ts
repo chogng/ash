@@ -1,6 +1,6 @@
-import type { Icon } from "./icon.js";
-import { Emitter, type Event } from "./event.js";
-import { Disposable } from "./lifecycle.js";
+import type { Icon } from './icon.js';
+import { Emitter, type Event } from './event.js';
+import { Disposable } from './lifecycle.js';
 
 /** A resolved action that can be presented by menus, toolbars, and buttons. */
 export interface IAction {
@@ -55,7 +55,7 @@ export class ActionRunner extends Disposable implements IActionRunner {
 
 /** A non-interactive separator between groups of actions. */
 export class Separator implements IAction {
-	static readonly ID = "ash.actions.separator";
+	static readonly ID = 'ash.actions.separator';
 
 	static join(...actionLists: readonly IAction[][]): IAction[] {
 		const result: IAction[] = [];
@@ -68,8 +68,8 @@ export class Separator implements IAction {
 	}
 
 	readonly id = Separator.ID;
-	readonly label = "";
-	readonly tooltip = "";
+	readonly label = '';
+	readonly tooltip = '';
 	readonly enabled = false;
 	readonly checked = undefined;
 
@@ -80,7 +80,7 @@ export class Separator implements IAction {
 export class SubmenuAction implements IAction {
 	readonly enabled = true;
 	readonly checked = undefined;
-	readonly tooltip = "";
+	readonly tooltip = '';
 
 	constructor(
 		readonly id: string,

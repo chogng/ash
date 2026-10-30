@@ -134,7 +134,7 @@ export class DebugStorage extends Disposable {
 		const id = this.workspace.getWorkspace().id;
 		const legacy = this.storage.get(LEGACY_KEY, StorageScope.WORKSPACE);
 		const decoded: unknown = legacy === undefined ? undefined : JSON.parse(legacy);
-		const state = decoded === undefined || decoded && typeof decoded === "object" && !Array.isArray(decoded) && Object.keys(decoded).length === 0 ? EMPTY_STATE : parsePersistedDebugState(decoded);
+		const state = decoded === undefined || decoded && typeof decoded === 'object' && !Array.isArray(decoded) && Object.keys(decoded).length === 0 ? EMPTY_STATE : parsePersistedDebugState(decoded);
 		const current: WorkspaceRead = { id, state, snapshot: undefined, queue: Promise.resolve(), edits: 0, blocked: false, pending: 0 };
 		// An explicitly unavailable host may display legacy values, but cannot
 		// migrate them or own pending writes to the backend document.
@@ -191,14 +191,14 @@ function changes(before: DebugWorkspaceState, after: DebugWorkspaceState): Debug
 }
 
 function parsePersistedDebugState(value: unknown): PersistedDebugState {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Debug workspace state must be an object");
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Debug workspace state must be an object');
 	const input = value as Record<string, unknown>;
-	if (input.version !== 1 && input.version !== 2) throw new TypeError("Debug workspace state version is unsupported");
-	if (!Array.isArray(input.breakpoints) || !Array.isArray(input.watchExpressions) || !input.exceptionBreakpoints || typeof input.exceptionBreakpoints !== "object" || Array.isArray(input.exceptionBreakpoints)) throw new TypeError("Debug workspace state is malformed");
+	if (input.version !== 1 && input.version !== 2) throw new TypeError('Debug workspace state version is unsupported');
+	if (!Array.isArray(input.breakpoints) || !Array.isArray(input.watchExpressions) || !input.exceptionBreakpoints || typeof input.exceptionBreakpoints !== 'object' || Array.isArray(input.exceptionBreakpoints)) throw new TypeError('Debug workspace state is malformed');
 	const breakpoints = Object.freeze(input.breakpoints.map((candidate, index) => parsePersistedBreakpoint(candidate, index)));
 	const watchExpressions = Object.freeze(input.watchExpressions.map((candidate, index) => normalizePersistedString(candidate, `watchExpressions[${index}]`, 32_768)));
 	const exceptionBreakpoints = Object.freeze(Object.fromEntries(Object.entries(input.exceptionBreakpoints as Record<string, unknown>).map(([type, filters]) => {
-		if (!type || type.length > 128 || !Array.isArray(filters)) throw new TypeError("Debug exception breakpoint state is malformed");
+		if (!type || type.length > 128 || !Array.isArray(filters)) throw new TypeError('Debug exception breakpoint state is malformed');
 		return [type, Object.freeze(filters.map((filter, index) => normalizePersistedString(filter, `exceptionBreakpoints.${type}[${index}]`, 256)))];
 	})));
 	// Version 1 only stored source breakpoints. Normalize both legacy shapes
@@ -206,7 +206,7 @@ function parsePersistedDebugState(value: unknown): PersistedDebugState {
 	let functionBreakpoints: readonly IFunctionBreakpoint[] = Object.freeze([]);
 	let dataBreakpoints: readonly IDataBreakpoint[] = Object.freeze([]);
 	if (input.version === 2) {
-		if (!Array.isArray(input.functionBreakpoints) || !Array.isArray(input.dataBreakpoints)) throw new TypeError("Debug breakpoint state is malformed");
+		if (!Array.isArray(input.functionBreakpoints) || !Array.isArray(input.dataBreakpoints)) throw new TypeError('Debug breakpoint state is malformed');
 		functionBreakpoints = Object.freeze(input.functionBreakpoints.map(parsePersistedFunctionBreakpoint));
 		dataBreakpoints = Object.freeze(input.dataBreakpoints.map(parsePersistedDataBreakpoint));
 	}
@@ -215,49 +215,49 @@ function parsePersistedDebugState(value: unknown): PersistedDebugState {
 
 function parsePersistedFunctionBreakpoint(value: unknown): IFunctionBreakpoint {
 	const point = parsePersistedBreakpointState(value);
-	if (point.input.logMessage !== undefined && typeof point.input.logMessage !== "string") { throw new TypeError("logMessage must be a string"); }
-	return Object.freeze({ ...point.state, kind: "function", name: normalizePersistedString(point.input.name, "function breakpoint name", 32_768), ...(point.input.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.input.logMessage, "logMessage") }) });
+	if (point.input.logMessage !== undefined && typeof point.input.logMessage !== 'string') { throw new TypeError('logMessage must be a string'); }
+	return Object.freeze({ ...point.state, kind: 'function', name: normalizePersistedString(point.input.name, 'function breakpoint name', 32_768), ...(point.input.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.input.logMessage, 'logMessage') }) });
 }
 
 function parsePersistedDataBreakpoint(value: unknown): IDataBreakpoint {
 	const point = parsePersistedBreakpointState(value);
 	const input = point.input;
-	if (typeof input.description !== "string") throw new TypeError("Data breakpoint description must be a string");
-	if (input.canPersist !== true || !Array.isArray(input.accessTypes) || !input.accessTypes.every(type => type === "read" || type === "write" || type === "readWrite") || !input.accessTypes.includes(input.accessType)) throw new TypeError("Persistent data breakpoint is malformed");
+	if (typeof input.description !== 'string') throw new TypeError('Data breakpoint description must be a string');
+	if (input.canPersist !== true || !Array.isArray(input.accessTypes) || !input.accessTypes.every(type => type === 'read' || type === 'write' || type === 'readWrite') || !input.accessTypes.includes(input.accessType)) throw new TypeError('Persistent data breakpoint is malformed');
 	return Object.freeze({
 		...point.state,
-		kind: "data",
-		dataId: normalizeBreakpointReference(input.dataId, "dataId"),
+		kind: 'data',
+		dataId: normalizeBreakpointReference(input.dataId, 'dataId'),
 		description: input.description,
-		adapterType: normalizePersistedString(input.adapterType, "adapterType", 256),
+		adapterType: normalizePersistedString(input.adapterType, 'adapterType', 256),
 		canPersist: true,
-		accessTypes: Object.freeze(input.accessTypes as IDataBreakpoint["accessTypes"]),
-		accessType: input.accessType as IDataBreakpoint["accessType"],
+		accessTypes: Object.freeze(input.accessTypes as IDataBreakpoint['accessTypes']),
+		accessType: input.accessType as IDataBreakpoint['accessType'],
 	});
 }
 
 function parsePersistedBreakpointState(value: unknown): { input: Record<string, unknown>; state: IBaseBreakpoint; } {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Breakpoint state must be an object");
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Breakpoint state must be an object');
 	const input = value as Record<string, unknown>;
-	if (typeof input.enabled !== "boolean") throw new TypeError("Breakpoint enabled state must be a boolean");
+	if (typeof input.enabled !== 'boolean') throw new TypeError('Breakpoint enabled state must be a boolean');
 	const expressions: { condition?: string; hitCondition?: string; } = {};
-	for (const field of ["condition", "hitCondition"] as const) {
+	for (const field of ['condition', 'hitCondition'] as const) {
 		if (input[field] === undefined) continue;
-		if (typeof input[field] !== "string") throw new TypeError(`${field} must be a string`);
+		if (typeof input[field] !== 'string') throw new TypeError(`${field} must be a string`);
 		expressions[field] = normalizeBreakpointExpression(input[field], field);
 	}
-	return { input, state: { id: normalizePersistedString(input.id, "id", 32768), enabled: input.enabled, verified: false, ...expressions } };
+	return { input, state: { id: normalizePersistedString(input.id, 'id', 32768), enabled: input.enabled, verified: false, ...expressions } };
 }
 
 function parsePersistedBreakpoint(value: unknown, index: number): PersistedBreakpoint {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`breakpoints[${index}] must be an object`);
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`breakpoints[${index}] must be an object`);
 	const input = value as Record<string, unknown>;
 	const resource = URI.parse(normalizePersistedString(input.resource, `breakpoints[${index}].resource`, 16_384)).toString();
-	if (!Number.isSafeInteger(input.lineNumber) || (input.lineNumber as number) <= 0 || typeof input.enabled !== "boolean") throw new TypeError(`breakpoints[${index}] is malformed`);
+	if (!Number.isSafeInteger(input.lineNumber) || (input.lineNumber as number) <= 0 || typeof input.enabled !== 'boolean') throw new TypeError(`breakpoints[${index}] is malformed`);
 	const expressions: { condition?: string; hitCondition?: string; logMessage?: string; } = {};
-	for (const field of ["condition", "hitCondition", "logMessage"] as const) {
+	for (const field of ['condition', 'hitCondition', 'logMessage'] as const) {
 		if (input[field] === undefined) continue;
-		if (typeof input[field] !== "string") throw new TypeError(`breakpoints[${index}].${field} must be a string`);
+		if (typeof input[field] !== 'string') throw new TypeError(`breakpoints[${index}].${field} must be a string`);
 		expressions[field] = normalizeBreakpointExpression(input[field], field);
 	}
 	if (input.columnNumber !== undefined && (!Number.isSafeInteger(input.columnNumber) || (input.columnNumber as number) < 1)) throw new TypeError('Debug breakpoint column must be a positive integer');
@@ -270,15 +270,15 @@ function parsePersistedBreakpoint(value: unknown, index: number): PersistedBreak
 }
 
 function normalizePersistedString(value: unknown, path: string, maximum: number): string {
-	if (typeof value !== "string" || !value.trim() || value.length > maximum || value.includes("\0")) throw new TypeError(`${path} must contain 1 to ${maximum} characters`);
+	if (typeof value !== 'string' || !value.trim() || value.length > maximum || value.includes('\0')) throw new TypeError(`${path} must contain 1 to ${maximum} characters`);
 	return value.trim();
 }
 
 function normalizeBreakpointExpression(value: string, field: string): string | undefined {
-	if (value.length > 32_768 || value.includes("\0")) throw new TypeError(`${field} must contain at most 32768 characters and no null characters`);
+	if (value.length > 32_768 || value.includes('\0')) throw new TypeError(`${field} must contain at most 32768 characters and no null characters`);
 	return value.trim() ? value : undefined;
 }
-function breakpointExpressions(value: Pick<IDebugBreakpoint, "condition" | "hitCondition" | "logMessage">) {
+function breakpointExpressions(value: Pick<IDebugBreakpoint, 'condition' | 'hitCondition' | 'logMessage'>) {
 	return {
 		...(value.condition === undefined ? {} : { condition: value.condition }),
 		...(value.hitCondition === undefined ? {} : { hitCondition: value.hitCondition }),
@@ -288,6 +288,6 @@ function breakpointExpressions(value: Pick<IDebugBreakpoint, "condition" | "hitC
 
 function normalizeBreakpointReference(value: unknown, field: string): string {
 	// DAP references are opaque adapter identifiers; whitespace is part of their identity.
-	if (typeof value !== "string" || !value.trim() || value.length > 32_768 || value.includes("\0")) throw new TypeError(`${field} must contain 1 to 32768 characters`);
+	if (typeof value !== 'string' || !value.trim() || value.length > 32_768 || value.includes('\0')) throw new TypeError(`${field} must contain 1 to 32768 characters`);
 	return value;
 }

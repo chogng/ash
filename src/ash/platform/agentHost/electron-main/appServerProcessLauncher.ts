@@ -1,4 +1,4 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 
 /** Creates the process carrying one App Server JSONL connection. */
 export interface IAppServerProcessLauncher {

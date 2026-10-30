@@ -1,14 +1,14 @@
-import { Emitter, type Event } from "../../base/common/event.js";
-import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Emitter, type Event } from '../../base/common/event.js';
+import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import {
 	type DialogRequest,
 	DialogResult,
 	type IDialogHandler,
 	type IDialogOutcome,
-} from "../../platform/dialogs/common/dialogs.js";
+} from '../../platform/dialogs/common/dialogs.js';
 import {
 	createServiceIdentifier,
-} from "../../platform/instantiation/common/instantiation.js";
+} from '../../platform/instantiation/common/instantiation.js';
 
 /** One dialog exposed to a workbench dialog renderer. */
 export interface IDialogViewItem {
@@ -28,12 +28,12 @@ export interface IDialogHandle {
 /** Change emitted after one dialog leaves the model. */
 export type IDialogCloseEvent =
 	| {
-		readonly kind: "result";
+		readonly kind: 'result';
 		readonly item: IDialogViewItem;
 		readonly result: IDialogOutcome;
 	}
 	| {
-		readonly kind: "error";
+		readonly kind: 'error';
 		readonly item: IDialogViewItem;
 		readonly error: unknown;
 	};
@@ -51,11 +51,11 @@ export interface IDialogsModel {
 
 /** Window-scoped dialog model owned by the workbench dialog service. */
 export const IDialogsModel =
-	createServiceIdentifier<IDialogsModel>("dialogsModel");
+	createServiceIdentifier<IDialogsModel>('dialogsModel');
 
 /** Host-specific dialog renderer consumed by the dialog contribution. */
 export const IWorkbenchDialogHandler =
-	createServiceIdentifier<IDialogHandler>("workbenchDialogHandler");
+	createServiceIdentifier<IDialogHandler>('workbenchDialogHandler');
 
 /**
  * Owns pending workbench dialogs without depending on browser presentation.
@@ -85,7 +85,7 @@ export class DialogsModel
 
 	show(request: DialogRequest): IDialogHandle {
 		if (this.isDisposed) {
-			throw new ReferenceError("DialogsModel is already disposed");
+			throw new ReferenceError('DialogsModel is already disposed');
 		}
 
 		let resolveResult!: (result: IDialogOutcome) => void;
@@ -104,7 +104,7 @@ export class DialogsModel
 				this.remove(item);
 				resolveResult(dialogResult);
 				this._onDidCloseDialog.fire({
-					kind: "result",
+					kind: 'result',
 					item,
 					result: dialogResult,
 				});
@@ -115,7 +115,7 @@ export class DialogsModel
 				settled = true;
 				this.remove(item);
 				rejectResult(error);
-				this._onDidCloseDialog.fire({ kind: "error", item, error });
+				this._onDidCloseDialog.fire({ kind: 'error', item, error });
 			},
 		};
 		this._dialogs.push(item);

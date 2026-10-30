@@ -8,15 +8,15 @@ import { editorWorkerWireCodec, EditorWorker } from '../../common/services/edito
 import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
 import { type DocumentFormattingEditProvider, type OnTypeFormattingEditProvider } from '../../common/languages.js';
 import { TextModel } from '../../common/model/textModel.js';
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
 import { test, suiteTeardown, suite, teardown } from 'mocha';
-import { JSDOM } from "jsdom";
-import { URI } from "../../../base/common/uri.js";
+import { JSDOM } from 'jsdom';
+import { URI } from '../../../base/common/uri.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { AbstractDisposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
+import { lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
-import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
+import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IMarkdownRendererService } from '../../../platform/markdown/browser/markdownRenderer.js';
@@ -25,7 +25,7 @@ import { IQuickInputService } from '../../../platform/quickinput/common/quickInp
 import { ILanguageService } from '../../common/languages/language.js';
 import { EditorContributionInstantiation } from '../../browser/editorExtensions.js';
 import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
-import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
+import { StandaloneServiceCollection, StandaloneServices } from '../../standalone/browser/standaloneServices.js';
 import { WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
 import type { IMonarchLanguage } from '../../editor.api.js';
 import { installEditorTestDom } from './editorTestGlobals.js';
@@ -38,17 +38,17 @@ function createTestDom(markup: string): JSDOM {
 	return dom;
 }
 
-const browserEnvironment = createTestDom("<!doctype html><body></body>");
+const browserEnvironment = createTestDom('<!doctype html><body></body>');
 const forcedColors = new browserEnvironment.window.EventTarget();
 Object.defineProperties(forcedColors, {
 	matches: { configurable: true, value: false, writable: true },
-	media: { configurable: true, value: "(forced-colors: active)" },
+	media: { configurable: true, value: '(forced-colors: active)' },
 });
-Object.defineProperty(browserEnvironment.window, "matchMedia", {
+Object.defineProperty(browserEnvironment.window, 'matchMedia', {
 	configurable: true,
 	value: (query: string) => {
-		if (query === "(forced-colors: active)") return forcedColors;
-		assert.ok(["(prefers-reduced-motion: reduce)", "(prefers-reduced-transparency: reduce)"].includes(query) || /^\(resolution: [\d.]+dppx\)$/u.test(query));
+		if (query === '(forced-colors: active)') return forcedColors;
+		assert.ok(['(prefers-reduced-motion: reduce)', '(prefers-reduced-transparency: reduce)'].includes(query) || /^\(resolution: [\d.]+dppx\)$/u.test(query));
 		return Object.assign(new browserEnvironment.window.EventTarget(), { matches: false, media: query });
 	},
 });
@@ -88,14 +88,14 @@ const installedGlobals = installEditorTestDom(browserEnvironment, [
 	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent',
 ], { ResizeObserver: TestResizeObserver, Worker: TestWorker });
 
-const stanza = await import("../../editor.main.js");
+const stanza = await import('../../editor.main.js');
 
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	browserEnvironment.window.close();
 });
 
-test("standalone service collection honors explicit first-scope overrides", () => {
+test('standalone service collection honors explicit first-scope overrides', () => {
 	const languageConfigurations = new TestLanguageConfigurationService();
 	const languages = new LanguageFeaturesService();
 	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
@@ -294,27 +294,27 @@ test('standalone Markdown service highlights an alias in the output document wit
 	}
 });
 
-test("standalone theme APIs register, select, and project a named theme", () => {
-	const dom = createTestDom("<!doctype html><body><main></main></body>");
+test('standalone theme APIs register, select, and project a named theme', () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	stanza.editor.defineNamedTheme("standalone-test", {
-		label: "Standalone Test",
+	stanza.editor.defineNamedTheme('standalone-test', {
+		label: 'Standalone Test',
 		colorScheme: stanza.ColorScheme.Dark,
-		colors: { "editor.background": "#101010" },
+		colors: { 'editor.background': '#101010' },
 	});
-	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	const editor = stanza.editor.create(container, { value: "theme", theme: "standalone-test" });
-	assert.equal(container.getAttribute("data-color-theme"), "standalone-test");
-	assert.equal(dom.window.getComputedStyle(dom.window.document.documentElement).getPropertyValue("--ash-editor-background"), "#101010");
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	const editor = stanza.editor.create(container, { value: 'theme', theme: 'standalone-test' });
+	assert.equal(container.getAttribute('data-color-theme'), 'standalone-test');
+	assert.equal(dom.window.getComputedStyle(dom.window.document.documentElement).getPropertyValue('--ash-editor-background'), '#101010');
 
-	stanza.editor.setTheme("ash-light");
-	assert.equal(container.getAttribute("data-color-theme"), "ash-light");
+	stanza.editor.setTheme('ash-light');
+	assert.equal(container.getAttribute('data-color-theme'), 'ash-light');
 	editor.dispose();
 	dom.window.close();
 });
 
-test("standalone public API keeps compiled theme snapshots internal", () => {
-	for (const exportName of ["lightColorTheme", "darkColorTheme", "highContrastLightColorTheme", "highContrastDarkColorTheme"]) {
+test('standalone public API keeps compiled theme snapshots internal', () => {
+	for (const exportName of ['lightColorTheme', 'darkColorTheme', 'highContrastLightColorTheme', 'highContrastDarkColorTheme']) {
 		assert.equal(exportName in stanza, false);
 	}
 	assert.equal(stanza.editor.ContentWidgetPositionPreference.EXACT, stanza.ContentWidgetPositionPreference.EXACT);
@@ -373,7 +373,7 @@ test('standalone updateOptions changes the window theme and forced-color prefere
 	}
 });
 
-test("standalone languages API exposes provider value types", () => {
+test('standalone languages API exposes provider value types', () => {
 	assert.equal(stanza.languages.LanguageCompletionItemKind, stanza.LanguageCompletionItemKind);
 	assert.equal(stanza.languages.LanguageCompletionInsertTextFormat, stanza.LanguageCompletionInsertTextFormat);
 	assert.equal(stanza.languages.LanguageCompletionTriggerKind, stanza.LanguageCompletionTriggerKind);
@@ -453,7 +453,7 @@ test('standalone languages API replaces provider batches atomically', () => {
 	assert.deepEqual(providers.ordered(model), [second]);
 });
 
-test("standalone languages API feeds the shared editor registries", async () => {
+test('standalone languages API feeds the shared editor registries', async () => {
 	stanza.languages.register({ id: 'stanza-public-test', extensions: ['.stanza-public'] });
 	using configuration = stanza.languages.setLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });
 	using provider = stanza.languages.registerHoverProvider('stanza-public-test', {
@@ -469,31 +469,31 @@ test("standalone languages API feeds the shared editor registries", async () => 
 	assert.deepEqual(await services.languageFeaturesService.hoverProvider.ordered(model)[0]!.provideHover({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), position: new stanza.Position(1, 2) }, signal), { contents: ['Public hover'] });
 });
 
-test("standalone completion providers execute in a live editor", async () => {
-	const dom = createTestDom("<!doctype html><body><main></main></body>");
+test('standalone completion providers execute in a live editor', async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	let requests = 0;
-	stanza.languages.register({ id: "stanza-completion-test" });
+	stanza.languages.register({ id: 'stanza-completion-test' });
 	using provider = stanza.languages.registerCompletionItemProvider('stanza-completion-test', {
-		id: "standalone.test",
+		id: 'standalone.test',
 		provideCompletions: request => {
 			requests += 1;
 			assert.equal(request.context.kind, stanza.languages.LanguageCompletionTriggerKind.Invoke);
 			return {
 				items: [{
-					id: "standalone-result",
-					label: "standaloneResult",
+					id: 'standalone-result',
+					label: 'standaloneResult',
 					kind: stanza.languages.LanguageCompletionItemKind.Text,
 					range: stanza.Range.fromPositions(request.position),
-					insertText: "standaloneResult",
+					insertText: 'standaloneResult',
 					insertTextFormat: stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
 				}],
 				isIncomplete: false,
 			};
 		},
 	});
-	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	using editor = stanza.editor.create(container, { language: "stanza-completion-test" });
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using editor = stanza.editor.create(container, { language: 'stanza-completion-test' });
 
 	editor.focus();
 	await editor.getAction('editor.action.triggerSuggest')!.run();
@@ -501,17 +501,17 @@ test("standalone completion providers execute in a live editor", async () => {
 	await new Promise<void>(resolve => setImmediate(resolve));
 
 	assert.equal(requests, 1);
-	assert.equal(container.querySelector(".stanza-editor-completion-option")?.textContent, "TextstandaloneResult");
+	assert.equal(container.querySelector('.stanza-editor-completion-option')?.textContent, 'TextstandaloneResult');
 	editor.dispose();
 	dom.window.close();
 });
 
-test("standalone API registers URI and language identity with model lifecycle events", () => {
+test('standalone API registers URI and language identity with model lifecycle events', () => {
 	using descriptions = stanza.languages.registerLanguages([
 		{ description: { id: 'typescript', extensions: ['.ts'] } },
 		{ description: { id: 'javascript', extensions: ['.js'] } },
 	]);
-	const resource = URI.parse("inmemory://stanza/registry.ts");
+	const resource = URI.parse('inmemory://stanza/registry.ts');
 	const created: string[] = [];
 	const disposed: string[] = [];
 	const languages: string[] = [];
@@ -519,65 +519,65 @@ test("standalone API registers URI and language identity with model lifecycle ev
 	using disposeListener = stanza.editor.onWillDisposeModel(model => disposed.push(model.uri.toString()));
 	using languageListener = stanza.editor.onDidChangeModelLanguage(event => languages.push(`${event.oldLanguage}->${event.model.getLanguageId()}`));
 
-	const model = stanza.editor.createModel("const value = 1;", "typescript", resource);
+	const model = stanza.editor.createModel('const value = 1;', 'typescript', resource);
 	assert.equal(stanza.editor.getModel(resource), model);
-	assert.equal(model.getLanguageId(), "typescript");
+	assert.equal(model.getLanguageId(), 'typescript');
 	assert.deepEqual(created, [resource.toString()]);
-	assert.throws(() => stanza.editor.createModel("duplicate", "typescript", resource), /already exists/);
+	assert.throws(() => stanza.editor.createModel('duplicate', 'typescript', resource), /already exists/);
 
-	stanza.editor.setModelLanguage(model, "javascript");
-	assert.deepEqual(languages, ["typescript->javascript"]);
+	stanza.editor.setModelLanguage(model, 'javascript');
+	assert.deepEqual(languages, ['typescript->javascript']);
 	model.dispose();
 	assert.equal(stanza.editor.getModel(resource), null);
 	assert.deepEqual(disposed, [resource.toString()]);
 });
 
-test("standalone createModel infers language from URI or first line unless language is explicit", () => {
+test('standalone createModel infers language from URI or first line unless language is explicit', () => {
 	using descriptions = stanza.languages.registerLanguages([
-		{ description: { id: "stanza-uri-inferred", extensions: [".stanza-inferred"] } },
-		{ description: { id: "stanza-first-line-inferred", firstLine: "^#!.*\\bstanza-inferred\\b" } },
+		{ description: { id: 'stanza-uri-inferred', extensions: ['.stanza-inferred'] } },
+		{ description: { id: 'stanza-first-line-inferred', firstLine: '^#!.*\\bstanza-inferred\\b' } },
 	]);
 	using uriModel = stanza.editor.createModel(
-		"plain content",
+		'plain content',
 		undefined,
-		URI.parse("inmemory://stanza/model.stanza-inferred"),
+		URI.parse('inmemory://stanza/model.stanza-inferred'),
 	);
 	using firstLineModel = stanza.editor.createModel(
-		"#!/usr/bin/env stanza-inferred\nplain content",
+		'#!/usr/bin/env stanza-inferred\nplain content',
 		undefined,
-		URI.parse("inmemory://stanza/script"),
+		URI.parse('inmemory://stanza/script'),
 	);
 	using explicitModel = stanza.editor.createModel(
-		"#!/usr/bin/env stanza-inferred",
-		"plaintext",
-		URI.parse("inmemory://stanza/explicit.stanza-inferred"),
+		'#!/usr/bin/env stanza-inferred',
+		'plaintext',
+		URI.parse('inmemory://stanza/explicit.stanza-inferred'),
 	);
 
-	assert.equal(uriModel.getLanguageId(), "stanza-uri-inferred");
-	assert.equal(firstLineModel.getLanguageId(), "stanza-first-line-inferred");
-	assert.equal(explicitModel.getLanguageId(), "plaintext");
+	assert.equal(uriModel.getLanguageId(), 'stanza-uri-inferred');
+	assert.equal(firstLineModel.getLanguageId(), 'stanza-first-line-inferred');
+	assert.equal(explicitModel.getLanguageId(), 'plaintext');
 });
 
-test("standalone editors share caller-owned models and dispose independently", () => {
-	const dom = createTestDom("<!doctype html><body><main></main><aside></aside></body>");
+test('standalone editors share caller-owned models and dispose independently', () => {
+	const dom = createTestDom('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const model = stanza.editor.createModel("shared", "plaintext", URI.parse("inmemory://stanza/shared.txt"));
+	const model = stanza.editor.createModel('shared', 'plaintext', URI.parse('inmemory://stanza/shared.txt'));
 	const createdEditors: unknown[] = [];
 	using listener = stanza.editor.onDidCreateEditor(editor => createdEditors.push(editor));
-	const first = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model });
-	const second = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("aside")!, { model });
+	const first = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, { model });
+	const second = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('aside')!, { model });
 
 	assert.deepEqual(createdEditors, [first, second]);
 	assert.equal(stanza.editor.getEditors().includes(first), true);
 	assert.equal(stanza.editor.getEditors().includes(second), true);
-	first.setValue("shared model");
-	assert.equal(second.getValue(), "shared model");
+	first.setValue('shared model');
+	assert.equal(second.getValue(), 'shared model');
 	first.dispose();
-	assert.equal(model.getValue(), "shared model");
+	assert.equal(model.getValue(), 'shared model');
 	assert.equal(stanza.editor.getEditors().includes(first), false);
 
 	second.dispose();
-	assert.equal(model.getValue(), "shared model");
+	assert.equal(model.getValue(), 'shared model');
 	model.dispose();
 	dom.window.close();
 });
@@ -726,13 +726,13 @@ test('standalone editor releases its eager contribution with the editor', () => 
 	dom.window.close();
 });
 
-test("standalone editor owns only the implicit model it creates", () => {
-	const dom = createTestDom("<!doctype html><body><main></main></body>");
+test('standalone editor owns only the implicit model it creates', () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const editor = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {
-		value: "owned",
-		language: "plaintext",
-		resource: URI.parse("inmemory://stanza/owned.txt"),
+	const editor = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, {
+		value: 'owned',
+		language: 'plaintext',
+		resource: URI.parse('inmemory://stanza/owned.txt'),
 	});
 	const model = editor.getModel();
 	assert.ok(model);
@@ -740,7 +740,7 @@ test("standalone editor owns only the implicit model it creates", () => {
 	editor.dispose();
 	assert.equal(model.isDisposed(), true);
 	assert.equal(createdWorkerCount, terminatedWorkerCount);
-	assert.equal(stanza.editor.getModel(URI.parse("inmemory://stanza/owned.txt")), null);
+	assert.equal(stanza.editor.getModel(URI.parse('inmemory://stanza/owned.txt')), null);
 	dom.window.close();
 });
 
@@ -845,18 +845,18 @@ test('standalone editors keep caller-owned models and selections isolated when o
 	}
 });
 
-test("standalone editor rejects unregistered models and conflicting model options", () => {
-	const dom = createTestDom("<!doctype html><body><main></main></body>");
-	const model = new stanza.TextModel("unregistered");
-	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model }), /not registered/);
+test('standalone editor rejects unregistered models and conflicting model options', () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	const model = new stanza.TextModel('unregistered');
+	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, { model }), /not registered/);
 	model.dispose();
 
-	const registered = stanza.editor.createModel("registered", "plaintext", URI.parse("inmemory://stanza/conflict.txt"));
-	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model: registered, value: "conflict" }), /cannot be combined/);
+	const registered = stanza.editor.createModel('registered', 'plaintext', URI.parse('inmemory://stanza/conflict.txt'));
+	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, { model: registered, value: 'conflict' }), /cannot be combined/);
 	registered.dispose();
 	const lateConfigurations = new TestLanguageConfigurationService();
 	const lateOverride = new LanguageFeaturesService();
-	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
+	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
 	lateOverride.dispose();
 	lateConfigurations.dispose();
 	dom.window.close();
@@ -5714,6 +5714,85 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
+	for (const overlap of [false, true]) {
+		test(`find match highlights follow themes and navigation with overlapping matches ${overlap}`, async function () {
+			const { page } = browserTests;
+
+			await page.goto('/standalone.html');
+			try {
+				await page.evaluate(overlap => {
+					window.ashStandaloneIntegration.prepareFindHighlights(overlap);
+					window.ashStandaloneIntegration.invokeLanguageAction('actions.find');
+				}, overlap);
+				const find = page.locator('#caller .stanza-editor-find-widget');
+				const search = find.getByRole('textbox', { name: 'Find', exact: true });
+				const result = find.locator('.stanza-editor-find-result');
+				const ordinary = page.locator('#caller .view-overlays .cdr.findMatch');
+				const current = page.locator('#caller .view-overlays .cdr.currentFindMatch');
+				await search.fill('alpha');
+				await expect(result).toHaveText('1 of 2');
+				await expect(ordinary).toHaveCount(overlap ? 2 : 1);
+				await expect(current).toHaveCount(1);
+				const first = (await current.boundingBox())!;
+				expect(first.width).toBeGreaterThan(0);
+				if (overlap) {
+					expect(await ordinary.first().boundingBox()).toEqual(first);
+				}
+				for (const [theme, background, activeBackground, outline] of [
+					['find-test-light', 'rgb(255, 0, 0)', 'color(srgb 0.7 0 0.3)', 'rgb(0, 0, 255)'],
+					['find-test-dark', 'rgb(0, 255, 0)', 'color(srgb 0.3 0.7 0)', 'rgb(255, 0, 0)'],
+					['find-test-hc-dark', 'rgb(255, 0, 0)', 'color(srgb 0.7 0 0.3)', 'rgb(0, 0, 255)'],
+					['find-test-hc-light', 'rgb(0, 255, 0)', 'color(srgb 0.3 0.7 0)', 'rgb(255, 0, 0)'],
+				]) {
+					await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), theme);
+					await expect(ordinary.first()).toHaveCSS('background-color', background);
+					await expect(current).toHaveCSS('background-color', activeBackground);
+					await expect(current).toHaveCSS('outline-color', outline);
+					await expect(current).toHaveCSS('outline-style', 'solid');
+					if (overlap) {
+						// These absolute siblings share a stacking context; the last one paints on top.
+						await expect(current).toHaveCSS('z-index', 'auto');
+						await expect(ordinary.first()).toHaveCSS('z-index', 'auto');
+						await expect(page.locator('#caller .view-overlays .cdr').last()).toHaveClass(/\bcurrentFindMatch\b/);
+					}
+					await search.press('Enter');
+					await expect(result).toHaveText('2 of 2');
+					await expect.poll(async () => (await current.boundingBox())?.x ?? first.x).toBeGreaterThan(first.x);
+					await expect(current).toHaveCSS('background-color', activeBackground);
+					await search.press('Shift+Enter');
+					await expect(result).toHaveText('1 of 2');
+					await expect.poll(() => current.boundingBox()).toEqual(first);
+				}
+				await search.press('Escape');
+				await expect(current).toHaveCount(0);
+				await expect(ordinary).toHaveCount(overlap ? 2 : 0);
+			} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
+		});
+	}
+
+	test('find match highlights retain visible outlines in forced colors', async function () {
+		const { page } = browserTests;
+
+		await page.emulateMedia({ forcedColors: 'active' });
+		await page.goto('/standalone.html');
+		try {
+			await page.evaluate(() => {
+				window.ashStandaloneIntegration.prepareFindHighlights(false);
+				window.ashStandaloneIntegration.invokeLanguageAction('actions.find');
+			});
+			const search = page.locator('#caller .stanza-editor-find-widget').getByRole('textbox', { name: 'Find', exact: true });
+			await search.fill('alpha');
+			for (const className of ['findMatch', 'currentFindMatch']) {
+				const highlight = page.locator(`#caller .view-overlays .cdr.${className}`);
+				await expect(highlight).toHaveCount(1);
+				await expect(highlight).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(highlight).toHaveCSS('outline-style', 'solid');
+				await expect(highlight).toHaveCSS('outline-width', '1px');
+				await expect(highlight).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+			}
+		} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
+	});
+
 	test('standard contribution commands operate the existing find, fold and goto widgets', async function () {
 		const { page } = browserTests;
 
@@ -6040,6 +6119,21 @@ suite('standalone browser component', () => {
 		for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
 			await expect(page.locator('html')).toHaveAttribute('data-color-theme', theme);
+			for (const fontSize of [10, 14, 20]) {
+				await page.evaluate(fontSize => window.ashStandaloneIntegration.updateContributionOptions({ fontSize }), fontSize);
+				const geometry = await page.locator('#caller .colorpicker-color-decoration').evaluate(element => {
+					const style = getComputedStyle(element);
+					const bounds = element.getBoundingClientRect();
+					return {
+						width: bounds.width,
+						height: bounds.height,
+						outerWidth: bounds.width + parseFloat(style.marginLeft) + parseFloat(style.marginRight),
+					};
+				});
+				expect(geometry.width).toBeCloseTo(geometry.height, 1);
+				expect(geometry.height).toBeCloseTo(fontSize * 0.8, 1);
+				expect(geometry.outerWidth).toBeCloseTo(fontSize * 1.2, 1);
+			}
 			const background = await picker.evaluate(element => {
 				const probe = document.createElement('span');
 				probe.style.color = 'var(--ash-editor-widgetBackground)';
@@ -6570,23 +6664,28 @@ suite('standalone browser component', () => {
 			for (let index = 0; index < requests.length; index++) await window.ashStandaloneIntegration.finishContributionRequest(index);
 		});
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).every(request => request.aborted)).toBe(true);
-		await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('first\n  child\nsecond\n  child\nthird\n  child'));
-		const controls = page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded');
-		await expect(controls).toHaveCount(3);
-		await controls.last().click();
-		await expect(page.locator('#caller .view-line[data-logical-line-index="5"]')).toHaveCount(0);
-		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 1 }));
-		await expect(controls).toHaveCount(1);
-		await expect(page.locator('#caller .view-line[data-logical-line-index="5"]')).toHaveCount(1);
-		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 3 }));
-		await expect(controls).toHaveCount(3);
 		await page.evaluate(() => {
-			window.ashStandaloneIntegration.prepareClipboard('first\n  inner\n    child\nsecond\n  child');
-			window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 2 });
+			document.getElementById('caller')!.style.height = '600px';
+			window.ashStandaloneIntegration.layoutContribution(640, 600);
+			window.ashStandaloneIntegration.prepareClipboard(Array.from({ length: 12 }, (_, index) => `section${index}\n  child`).join('\n'));
 		});
-		await expect(controls).toHaveCount(2);
+		const controls = page.locator('#caller .stanza-editor-line-decoration.ash-icon-folding-expanded');
+		await expect(controls).toHaveCount(12);
 		await controls.last().click();
-		await expect(page.locator('#caller .view-line[data-logical-line-index="4"]')).toHaveCount(0);
+		await expect(page.locator('#caller .view-line[data-logical-line-index="23"]')).toHaveCount(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 1 }));
+		await expect(controls).toHaveCount(10);
+		await expect(page.locator('#caller .view-line[data-logical-line-index="23"]')).toHaveCount(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 12 }));
+		await expect(controls).toHaveCount(12);
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareClipboard('first\n  inner\n    child\n'
+				+ Array.from({ length: 10 }, (_, index) => `section${index}\n  child`).join('\n'));
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 11 });
+		});
+		await expect(controls).toHaveCount(11);
+		await controls.last().click();
+		await expect(page.locator('#caller .view-line[data-logical-line-index="22"]')).toHaveCount(0);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 

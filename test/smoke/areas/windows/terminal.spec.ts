@@ -74,7 +74,7 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal profile d
 		await expect(menu).toHaveCount(0);
 		await expect(workbench.terminal.instances).toHaveCount(2);
 		await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
-		await workbench.terminal.runCommand('node -e "require(\'fs\').writeFileSync(\'agent-profile.txt\', process.env.ASH_AGENT_PROFILE)"');
+		await workbench.terminal.runCommand("node -e \"require('fs').writeFileSync('agent-profile.txt', process.env.ASH_AGENT_PROFILE)\"");
 		await expect.poll(() => readFile(join(testWorkspace.directory, 'agent-profile.txt'), 'utf8').catch(() => '')).toBe('agent-shell');
 		expect(driver.diagnostics.errors).toEqual([]);
 	});
@@ -582,7 +582,7 @@ test('terminal relaunches an exited shell and accepts new commands', { tag: ['@b
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');
 	await terminal.runCommand('exit 17');
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'exited');
-	await expect(terminal.activeInstance.locator('.xterm-rows')).toContainText('[process exited with code 17]');
+	await expect(terminal.activeInstance.locator('.xterm-rows')).toContainText('The terminal process terminated with exit code: 17.');
 	await workbench.menus.select(application, () => workbench.page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: 'More Actions', exact: true }).click(), ['Relaunch Terminal']);
 	await expect(terminal.instances).toHaveCount(1);
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');
@@ -725,7 +725,8 @@ test('terminal panel reopening retains split output, pending input, focus and co
 		await expect(panes.nth(index).locator('.xterm-rows > div').filter({ hasText: new RegExp(`^pending-${cycle}\\s*$`) })).toBeVisible();
 		for (const other of [0, 1, 2]) {
 			// Long shell prompts can scroll earlier output beyond the rendered rows.
-			await panes.nth(other).locator('.xterm-screen').click({ position: { x: 12, y: 12 } });
+			// Focus the input directly; a command hover can cover the screen's first row.
+			await panes.nth(other).locator('.xterm-helper-textarea').focus();
 			await page.keyboard.press('ControlOrMeta+f');
 			const find = panes.nth(other).getByRole('region', { name: 'Find in terminal' });
 			const input = find.getByRole('textbox', { name: 'Find', exact: true });
@@ -856,7 +857,15 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal close pro
 		const old = JSON.parse(await readFile(join(testWorkspace.directory, 'before-replacement.json'), 'utf8')) as { pid: number; count: number; };
 		const window = await application.browserWindow(page);
 		await window.evaluate(window => window.webContents.send('ash:terminal:prepareReplacement'));
-		await expect(pane.locator('.xterm-rows')).toContainText(zh ? '[终端操作失败]' : '[terminal operation failed]');
+		await expect(pane.locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'error');
+		const title = page.locator('.ash-terminal-active-action button');
+		await title.focus();
+		await title.press('Alt+ArrowDown');
+		const hover = page.locator('.ash-terminal-instance-hover');
+		await expect(hover.locator('[data-severity="error"]')).toContainText(zh ? '与进程的连接已断开' : 'Lost connection to process');
+		await title.press('Escape');
+		await expect(hover).toHaveCount(0);
+		await expect(pane.locator('.xterm-rows')).not.toContainText(zh ? '[终端操作失败]' : '[terminal operation failed]');
 		await expect(pane.locator('.xterm-rows')).toContainText('BEFORE_REPLACEMENT:');
 		await expect(page.locator('.ash-terminal-active-action')).toHaveAttribute('data-state', 'error');
 		await expect(page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: zh ? '拆分终端' : 'Split Terminal', exact: true })).toBeDisabled();
@@ -1030,7 +1039,7 @@ test('terminal Panel position commands rotate real splits while preserving sizes
 	for (const index of [0, 1]) shellPids.push(await recordShell(index, 'before'));
 	const input = panes.nth(1).locator('.xterm-helper-textarea');
 	await input.focus();
-	await input.pressSequentially('node -e "console.log([\'PANEL\',');
+	await input.pressSequentially("node -e \"console.log(['PANEL',");
 	const sash = page.locator('.ash-terminal-group:visible > .ash-sash').first();
 	await expect(sash).toBeVisible();
 	const sashBounds = (await sash.boundingBox())!;
@@ -1063,7 +1072,7 @@ test('terminal Panel position commands rotate real splits while preserving sizes
 			}
 		}).toBe(true);
 	}
-	await input.pressSequentially('\'READY\'].join(\'_\'))"');
+	await input.pressSequentially("'READY'].join('_'))\"");
 	await input.press('Enter');
 	await expect(panes.nth(1).locator('.xterm-rows > div').filter({ hasText: /^PANEL_READY\s*$/u })).toBeVisible();
 	for (const index of [0, 1]) expect(await recordShell(index, 'after')).toBe(shellPids[index]);
@@ -1126,6 +1135,46 @@ test('moving a terminal to a real desktop window retains its shell PID, cwd, out
 
 for (const reason of ['quit', 'windowClose'] as const) test.describe(`terminal process revival after ${reason}`, () => {
 	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'terminal.integrated.persistentSessionReviveProcess': reason === 'quit' ? 'onExit' : 'onExitAndWindowClose' } });
+	test('replaces the idle zsh prompt while retaining history across repeated revival', { tag: ['@electron-app-server'] }, async ({ workbench, runningApplication, testWorkspace }, testInfo) => {
+		test.skip(process.platform !== 'darwin', 'Exercises the macOS zsh startup prompt.');
+		test.setTimeout(90_000);
+		await writeFile(join(testWorkspace.directory, '.zshrc'), "PS1='ASH_PROMPT_HEADER\nASH_PROMPT> '\n");
+		const settings = await readUserSettings(workbench.page);
+		await writeUserSettings(workbench.page, JSON.stringify({
+			...JSON.parse(settings.content),
+			'terminal.integrated.profiles.osx': { 'Revival Zsh': { path: '/bin/zsh', args: ['-i'], env: { ZDOTDIR: testWorkspace.directory } } },
+			'terminal.integrated.defaultProfile.osx': 'Revival Zsh',
+		}), settings.revision);
+		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+		await expect(workbench.terminal.activeInstance.locator('.ash-terminal-command-status.pending')).toBeVisible();
+		await workbench.terminal.runCommand("printf 'RETAINED_%s\\n' HISTORY");
+		await expect(workbench.terminal.activeInstance.locator('.xterm-rows > div').filter({ hasText: /^RETAINED_HISTORY\s*$/u })).toBeVisible();
+		await expect(workbench.terminal.activeInstance.locator('.ash-terminal-command-status.succeeded')).toHaveCount(1);
+		for (let restart = 0; restart < 2; restart++) {
+			const previousInput = runningApplication.driver.workbench.terminal.activeInstance.locator('.xterm-helper-textarea');
+			await previousInput.focus();
+			await previousInput.pressSequentially('echo UNEXECUTED_DRAFT');
+			const restored = (await runningApplication.reload(reason)).workbench;
+			const terminal = restored.terminal.activeInstance;
+			await expect(terminal.locator('.ash-terminal-command-status.pending')).toBeVisible();
+			const rows = terminal.locator('.xterm-rows > div');
+			// The completed command keeps its historical prompt; exactly one idle
+			// prompt follows the retained output, even after a second restart.
+			await expect(rows.filter({ hasText: /^ASH_PROMPT_HEADER\s*$/u })).toHaveCount(2);
+			await expect(rows.filter({ hasText: /^ASH_PROMPT>\s*$/u })).toHaveCount(1);
+			await expect(rows.filter({ hasText: /^RETAINED_HISTORY\s*$/u })).toHaveCount(1);
+			await expect(rows.filter({ hasText: 'UNEXECUTED_DRAFT' })).toHaveCount(0);
+			const input = terminal.locator('.xterm-helper-textarea');
+			await input.focus();
+			await expect(input).toBeFocused();
+			await restored.page.screenshot({ path: testInfo.outputPath(`terminal-idle-prompt-${reason}-${restart}.png`) });
+		}
+		const restored = runningApplication.driver.workbench;
+		await restored.terminal.runCommand("printf 'RESTORED_%s\\n' INPUT");
+		await expect(restored.terminal.activeInstance.locator('.xterm-rows > div').filter({ hasText: /^RESTORED_INPUT\s*$/u })).toBeVisible();
+		expect(runningApplication.diagnostics.errors).toEqual([]);
+	});
+
 	test('restores output, cwd and split layout with fresh shells without replaying commands', { tag: ['@electron-app-server'] }, async ({ workbench, runningApplication, testWorkspace }, testInfo) => {
 		test.setTimeout(90_000);
 		const directory = join(testWorkspace.directory, 'revived-cwd');
@@ -1419,7 +1468,7 @@ test.describe('terminal contributions execution chain', () => {
 		test.skip(process.platform === 'win32', 'The ConPTY backend explicitly reports process signals as unsupported.');
 		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
 		await expect(workbench.terminal.activeInstance).toBeVisible();
-		await workbench.terminal.runCommand('node -e "require(\'fs\').writeFileSync(\'signal-ready.txt\',\'ready\');process.on(\'SIGTERM\',()=>{require(\'fs\').writeFileSync(\'signal-result.txt\',\'terminated\');process.exit(0)});setInterval(()=>{},1000)"');
+		await workbench.terminal.runCommand("node -e \"require('fs').writeFileSync('signal-ready.txt','ready');process.on('SIGTERM',()=>{require('fs').writeFileSync('signal-result.txt','terminated');process.exit(0)});setInterval(()=>{},1000)\"");
 		await expect.poll(() => readFile(join(testWorkspace.directory, 'signal-ready.txt'), 'utf8').catch(() => '')).toBe('ready');
 		await workbench.quickaccess.runCommand('workbench.action.terminal.sendSignal');
 		await workbench.page.getByRole('option', { name: /SIGTERM/ }).click();
@@ -1430,7 +1479,14 @@ test.describe('terminal contributions execution chain', () => {
 });
 
 interface LifetimeIdentity { pid: number; shell: number; child: number; count: number; }
-const lifetimePidAlive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const lifetimePidAlive = (pid: number): boolean => {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+};
 
 async function readTerminalHeartbeat<T>(path: string): Promise<T> {
 	// Append complete records instead of replacing a file while Windows readers

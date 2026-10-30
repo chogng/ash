@@ -531,7 +531,7 @@ App 可预装并按认证请求激活 GitHub 扩展；TUI 默认不加载、不�
 仓库已经有 [`IGitHubService`](../src/ash/platform/github/common/githubService.ts) 和
 [`AppServerGitHubService`](../src/ash/platform/github/browser/appServerGitHubService.ts)，
 后者通过生成协议调用 [`App Server GitHub processor`](../crates/app-server/src/server/request_processors/github.rs)
-和 [`crates/github`](../crates/github/README.md) 的领域消费者代理。认证由根 [`extensions/github-authentication`](../extensions/github-authentication/README.md) 的独立 Rust executable 拥有；REST／GraphQL API 已迁到 [`extensions/github`](../extensions/github/README.md) 的 `github.api.v1` 能力，API processor 仅做产品协议转换。试点复用 `ash-external-ext-sdk` 的 typed DataChannel／核心 Services 和 `ExtensionHostSupervisor`，App 的领域接口与账号 RPC 保持不变。profile runtime 为认证和 API 各持有一个监管器，API 按需启动；目录代理映射交互 ID，核心把完成通知送至发起连接，并同步脱敏账号视图。断连取消该连接的在途登录，保留 profile 共享账号。默认 TUI 组合没有此 Provider。
+和 [`crates/github`](../crates/github/README.md) 的领域消费者代理。认证由根 [`extensions/github-authentication`](../extensions/github-authentication/README.md) 的独立 Rust executable 拥有；REST／GraphQL API 已迁到 [`extensions/github`](../extensions/github/README.md) 的 `github.api.v2` 能力，API processor 仅做产品协议转换。试点复用 `ash-external-ext-sdk` 的 typed DataChannel／核心 Services 和 `ExtensionHostSupervisor`，App 的领域接口隔离传输类型，托管设置快照随 v2 契约接入。profile runtime 为认证和 API 各持有一个监管器，API 按需启动；目录代理映射交互 ID，核心把完成通知送至发起连接，并同步脱敏账号视图。断连取消该连接的在途登录，保留 profile 共享账号。默认 TUI 组合没有此 Provider。
 
 产品打包包含独立 executable 和根扩展 manifest。产品 launcher 只接受安装目录中选定的 executable，不把受信任产品程序宣称为已受 OS 沙箱隔离的第三方包。通用第三方 Rust 安装／授权、TS 共享认证与公共账号／scope 授权仍未完成；旧 `AuthenticationSession.accessToken` 兼容桥已退出目标。
 
@@ -1018,6 +1018,12 @@ filesystem/network access 也不属于 v1 provider bridge；授权 Node 包自�
 
 按受影响的 owner 选择检查，以下入口用于定位已有回归覆盖。新增能力还须通过真实扩展包或独立 Rust 程序，验证第 0 节的权限、取消和生命周期行为；测试文件存在、类型检查通过或共享 API 实现均不能代替当次运行结果。
 
+2026-10-30 在 Windows x64 按代码与测试收口文档扩展及共享宿主：Academy、引用库、模块准入和文档协作 10 文件 94 项，以及 PDF pane／批注 4 文件 13 项通过；覆盖共享模型与工作副本、版本冲突、保存／恢复、组合输入、撤权／取消、远端协作 adapter、可访问视图、DOCX 标准部件与 codec。Academy、Reference Manager、PDF Viewer 的真实 SDK 进程各 1 项通过，精确制品授权／禁用持久化 7 项及注册表 HTTPS／信任绑定 3 项通过。Reference Manager 首次失败是夹具使用 `u64::MAX` 截止时间，被 Windows SDK 正确拒绝；两个资源扩展夹具改为 60 秒的有限截止时间后，`just verify ash-reference-manager` 和 `just verify ash-pdf-viewer` 均通过 check、测试及 all-target warnings。Academy profile 的首次准备命令失败保留于 `.build/todo-code-audit-document-host.log`；独立构建及原文件 4 项复验随后通过，没有据此推断首次构建的根因。
+
+并行合入 `d31d150749` 后，首次完整 `tsconfig.test.json` 编译因 Quick Access 与 Terminal 两处夹具缺少 `ISearchService.registerSearchResultProvider` 失败，日志为 `.build/todo-code-audit-voice-document-final.log`。按相同编译选项、隔离增量缓存并限定本轮 20 个测试根后，文档与语音合计 167 项全部通过；配置和结果为 `.build/todo-code-audit-voice-document.tsconfig.json`、`.build/todo-code-audit-voice-document-scoped.log`。随后补齐两处夹具接口并明确拒绝范围外的 provider 注册，完整测试编译已恢复通过。提交前另有 7 文件 282 项定向回归通过：Chat 的旧 split-button 选择器按共享组件更新后，174 项复验通过，其余 6 文件 108 项复用通过结果；自动化代码 3,086 文件类型检查也通过。日志为 `.build/todo-commit-validation.log`、`.build/todo-commit-chat-retest.log` 与 `.build/todo-commit-automation-check.log`。Rust 进程／授权／信任结果分别见 `.build/todo-code-audit-{academy-runtime,reference-runtime-verify,pdf-runtime-verify,editor-admission-policy,editor-registry-trust}.log`。
+
+原文档扩展／共享宿主待办按本轮代码验收口径消项。上述结果没有新增签名分发包的完整安装、真实 Electron 多窗口／远端、物理输入法／屏幕阅读器或 Word 应用内往返证据；这些环境和目标应用的覆盖边界继续由各扩展文档注明。TS 作者迁移、Agent 结构化编辑领域入口和 Academy 的产品装配收敛仍是独立未完成工作。
+
 | 验证范围                            | 入口与证据边界                                                                                                                                                                                                                                                                                              |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | TS 作者类型与共享 JS 宿主           | [Node 进程契约](../resources/extension-host/node.test.mjs)、[仓库外 SDK 安装／严格编译](../build/builtin/typescriptSdk.test.ts)、[浏览器打包](../build/builtin/extensions.test.ts)；打包模块执行不等于独立 Worker 或完整 UI 验收                                                                            |
@@ -1056,6 +1062,7 @@ PR/Issue 业务由独立的 [`github`](../extensions/github/README.md) Rust 扩�
 精确提交对象、编辑器版本与 activation 身份绑定操作，退役会取消回调、辅助进程和贡献。
 Git 自动获取仍持久化到共享配置 owner，旧用户配置经版本检查写入并回读确认后迁移。
 `ash.scm` 使用已接入的Ash Provider契约，没有旧兼容对象或通用后端请求入口。
+Git 状态的 `historyChangeSilent` 随最后一次 `historyRevision` 保留，仅由共享后台自动 fetch 设置；扩展快照原样传递，前端历史事件映射为 `silent`。扩展的 `historyOperationRevision` 记录主动同步类操作的完成，即使状态发布合并或没有新提交也不会丢失。主动历史更新和手动刷新回到图表顶部，浏览旧历史时的静默更新保留视口并显示更新提示。
 
 [`build/builtin`](../build/builtin) 打包 manifest、消息与资源，Cargo/Bazel 构建独立 Git
 可执行文件，后端包布局与签名包含它。Rust 源码、Cargo 输入和旧 TS 实现不进入资源包。

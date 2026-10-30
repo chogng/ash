@@ -10,6 +10,7 @@ use ash_file_access::Authorization;
 
 use super::source::EditorExtensionDeployment;
 use super::source::EditorExtensionScope;
+use super::source::WorkspaceTrustRequirement;
 
 pub(super) struct PreparedExtension {
     pub(super) command: ExtensionLaunchCommand,
@@ -24,20 +25,21 @@ pub(super) fn prepare_extension(
     if !deployment.authority.authorizes() {
         return Err(ExtensionHostError::AuthorityDenied);
     }
-    let authority: Arc<dyn ActivationAuthority> = match deployment.scope {
-        EditorExtensionScope::Product
-        | EditorExtensionScope::ProductPackage
-        | EditorExtensionScope::Profile => Arc::clone(&deployment.authority),
-        EditorExtensionScope::Workspace => {
-            let authorization = authorization.ok_or(ExtensionHostError::AuthorityDenied)?;
-            authorization
-                .ensure_active()
-                .map_err(|_| ExtensionHostError::AuthorityDenied)?;
-            Arc::new(DirActivationAuthority {
-                source: Arc::clone(&deployment.authority),
-                authorization: authorization.clone(),
-            })
-        }
+    // Release provenance authorizes the package, not code execution in this directory.
+    // Bind trust-requiring product hosts to the same revocable directory lease as plugins.
+    let requires_directory = deployment.scope == EditorExtensionScope::Workspace
+        || deployment.workspace_trust == WorkspaceTrustRequirement::Required;
+    let authority: Arc<dyn ActivationAuthority> = if requires_directory {
+        let authorization = authorization.ok_or(ExtensionHostError::AuthorityDenied)?;
+        authorization
+            .ensure_active()
+            .map_err(|_| ExtensionHostError::AuthorityDenied)?;
+        Arc::new(DirActivationAuthority {
+            source: Arc::clone(&deployment.authority),
+            authorization: authorization.clone(),
+        })
+    } else {
+        Arc::clone(&deployment.authority)
     };
     Ok(PreparedExtension {
         command: deployment.command.clone(),

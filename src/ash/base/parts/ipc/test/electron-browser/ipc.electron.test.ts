@@ -49,7 +49,7 @@ suite('Electron IPC channels', () => {
 			},
 		},
 		ipcMessagePort: { acquire: () => { throw new Error('Main channels must not acquire a port'); } },
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 

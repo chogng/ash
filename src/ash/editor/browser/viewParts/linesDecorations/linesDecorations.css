@@ -11,4 +11,6 @@
 .stanza-editor .margin-view-overlays .cldr {
 	position: absolute;
 	height: 100%;
+	/* Semantic icon classes ignore pointer input; the decoration owns the hit target. */
+	pointer-events: auto;
 }

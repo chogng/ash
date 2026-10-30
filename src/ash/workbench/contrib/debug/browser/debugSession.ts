@@ -5,18 +5,18 @@ import type { Position } from '../../../../editor/common/core/position.js';
 import { RawDebugSession } from './rawDebugSession.js';
 import type { IDebugCompletionItem, IDebugCompletionsResponse, IDebugScopeInspection, IDebugStackInspection, IDebugWatchResult, DebugBreakpoint, DebugEvaluateContext, DebugSessionState, DebugSteppingGranularity, IDisassembledInstruction, IBaseBreakpoint, IDataBreakpointInfoResponse, DataBreakpointAccessType, IDebugBreakpoint, IDebugConfiguration, IDebugEvaluateResult, IDebugScope, IDebugSession, IDebugSessionOptions, IDebugSessionCapabilities, IDebugSource, IDebugSourceContent, IDebugStackFrame, IDebugThread, IDebugVariable, IDebugAdapterTracker } from '../common/debug.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import { TaskQueue, timeout, raceCancellation } from "../../../../base/common/async.js";
-import { CancellationError, getErrorMessage } from "../../../../base/common/errors.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { URI } from "../../../../base/common/uri.js";
+import { TaskQueue, timeout, raceCancellation } from '../../../../base/common/async.js';
+import { CancellationError, getErrorMessage } from '../../../../base/common/errors.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
 import { Schemas } from '../../../../base/common/network.js';
-import { localize } from "../../../../nls.js";
-import { type DebugExceptionsSnapshot, type DebugBreakpointIntent, type DebugBreakpointsSnapshot, type DebugBreakpointUnsupported, type DebugConsoleSnapshot, type DebugSessionSnapshot, type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
-import { getRemoteWorkspacePath, isRemoteResource, withRemoteWorkspacePath } from "../../../../platform/remote/common/remote.js";
+import { localize } from '../../../../nls.js';
+import { type DebugExceptionsSnapshot, type DebugBreakpointIntent, type DebugBreakpointsSnapshot, type DebugBreakpointUnsupported, type DebugConsoleSnapshot, type DebugSessionSnapshot, type IDebugAdapterProcessService } from '../../../../platform/debug/common/debugAdapterProcessService.js';
+import { getRemoteWorkspacePath, isRemoteResource, withRemoteWorkspacePath } from '../../../../platform/remote/common/remote.js';
 
-interface DapResponse { readonly seq: number; readonly type: "response"; readonly request_seq: number; readonly success: boolean; readonly command: string; readonly message?: string; readonly body?: unknown; }
-interface DapEvent { readonly seq: number; readonly type: "event"; readonly event: string; readonly body?: unknown; }
+interface DapResponse { readonly seq: number; readonly type: 'response'; readonly request_seq: number; readonly success: boolean; readonly command: string; readonly message?: string; readonly body?: unknown; }
+interface DapEvent { readonly seq: number; readonly type: 'event'; readonly event: string; readonly body?: unknown; }
 
 const POLL_DELAY_MS = 40;
 const TRACKER_CALLBACK_TIMEOUT_MS = 1_000;
@@ -28,6 +28,7 @@ export interface DebugSessionStartOptions {
 	readonly createDebugAdapterDescriptor?: (session: IDebugSession) => PromiseLike<IDebugConfiguration['adapter'] | null>;
 	readonly configuration: IDebugConfiguration;
 	readonly sessionOptions?: IDebugSessionOptions;
+	readonly signal?: AbortSignal;
 	readonly onWillStart?: (session: IDebugSession) => void;
 	/** Execution data is resolved by DebugService; the source configuration remains available for restart. */
 	readonly resolvedConfiguration: Pick<IDebugConfiguration, 'adapter' | 'arguments'>;
@@ -113,7 +114,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	get exceptionBreakpoints(): readonly string[] { return this.exceptions.appliedFilters; }
 	private readonly outputEmitter = this._register(new Emitter<void>());
 	private consoleSnapshot: DebugConsoleSnapshot = { revision: 0, entries: [] };
-	private consoleId = "";
+	private consoleId = '';
 	private retainedConsoles: readonly string[] = [];
 	private retentionRevision = 0;
 	private processService!: IDebugAdapterProcessService;
@@ -134,12 +135,13 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private trackersEnded = false;
 	private trackersStopping = false;
 	private trackerErrorReported = false;
-	private _state: DebugSessionState = "starting";
+	private _state: DebugSessionState = 'starting';
 	private _reason: string | undefined;
 	private _threadId: number | undefined;
 	private readonly threadEmitter = this._register(new Emitter<number | undefined>());
 	readonly onDidChangeThread = this.threadEmitter.event;
 	private runtime: DebugSessionSnapshot | undefined;
+	private stackInspection: { revision: number; threadId: number | undefined; result: Promise<IDebugStackInspection>; } | undefined;
 	get inspectionRevision(): number { return this.runtime?.inspectionRevision ?? 0; }
 	private readonly nameEmitter = this._register(new Emitter<string>());
 	private sessionName: string;
@@ -170,8 +172,8 @@ export class DebugSession extends Disposable implements IDebugSession {
 	async customRequest(command: string, args?: unknown): Promise<unknown> {
 		this.assertNotDisposed();
 		if (this.processClose) throw new CancellationError();
-		if (this.state === "terminated" || this.state === "error") throw new Error("Debug session has ended");
-		if (!command || command.length > 256 || command.includes("\0")) throw new TypeError("Invalid Debug Adapter command");
+		if (this.state === 'terminated' || this.state === 'error') throw new Error('Debug session has ended');
+		if (!command || command.length > 256 || command.includes('\0')) throw new TypeError('Invalid Debug Adapter command');
 		return (await this.request(command, args)).body;
 	}
 	get output(): string { return this.consoleSnapshot.entries.map(entry => entry.output).join(''); }
@@ -192,14 +194,14 @@ export class DebugSession extends Disposable implements IDebugSession {
 		readonly id: string,
 		private readonly breakpoints: () => readonly IDebugBreakpoint[],
 		private readonly workspace: URI | undefined,
-		private readonly runInTerminal: DebugSessionStartOptions["runInTerminal"],
+		private readonly runInTerminal: DebugSessionStartOptions['runInTerminal'],
 		private readonly startDebugging: DebugSessionStartOptions['startDebugging'],
-		private readonly updateBreakpoints: DebugSessionStartOptions["updateBreakpoints"],
+		private readonly updateBreakpoints: DebugSessionStartOptions['updateBreakpoints'],
 		private readonly addBreakpoint: DebugSessionStartOptions['addBreakpoint'],
 		private readonly removeBreakpoint: DebugSessionStartOptions['removeBreakpoint'],
-		private readonly initialExceptionBreakpoints: DebugSessionStartOptions["exceptionBreakpoints"],
-		private readonly additionalBreakpoints: DebugSessionStartOptions["additionalBreakpoints"],
-		resolvedConfiguration: DebugSessionStartOptions["resolvedConfiguration"],
+		private readonly initialExceptionBreakpoints: DebugSessionStartOptions['exceptionBreakpoints'],
+		private readonly additionalBreakpoints: DebugSessionStartOptions['additionalBreakpoints'],
+		resolvedConfiguration: DebugSessionStartOptions['resolvedConfiguration'],
 		readonly sessionOptions: IDebugSessionOptions,
 	) {
 		super();
@@ -236,6 +238,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			session.retainedConsoles = prepared.consoleIds;
 			session.retentionRevision = prepared.consoleCatalogRevision;
 			options.onWillStart?.(session);
+			if (session.isDisposed || options.signal?.aborted) { throw new CancellationError(); }
 			let adapter = options.resolvedConfiguration.adapter;
 			if (!adapter) {
 				if (!options.createDebugAdapterDescriptor) throw new Error(localize('debug.adapterDescriptorUnavailable', 'The Debug Adapter factory did not provide an adapter.'));
@@ -244,20 +247,20 @@ export class DebugSession extends Disposable implements IDebugSession {
 				session._resolvedConfiguration = Object.freeze({ ...session.resolvedConfiguration, adapter });
 			}
 			session.transport = new RawDebugSession(options.processService, adapter.inline);
-			if (session.isDisposed) { throw new CancellationError(); }
+			if (session.isDisposed || options.signal?.aborted) { throw new CancellationError(); }
 			const trackers = await options.createDebugAdapterTrackers?.(session) ?? [];
-			if (session.isDisposed) {
+			if (session.isDisposed || options.signal?.aborted) {
 				for (const tracker of trackers) { tracker.dispose(); }
 				throw new CancellationError();
 			}
 			session.trackers = trackers;
 			for (const tracker of trackers) session.trackerDisposables.set(tracker, session._register(toDisposable(() => tracker.dispose())));
 			await session.callTrackers(tracker => tracker.onWillStartSession?.());
-			if (session.isDisposed) { throw new CancellationError(); }
+			if (session.isDisposed || options.signal?.aborted) { throw new CancellationError(); }
 			await session.transport.start(adapter.inline
 				? { arguments: [], connection: { type: 'client' }, ...(options.configuration.dirId ? { dirId: options.configuration.dirId } : {}) }
 				: { ...adapter, ...(options.configuration.dirId ? { dirId: options.configuration.dirId } : {}) });
-			if (session.isDisposed) { throw new CancellationError(); }
+			if (session.isDisposed || options.signal?.aborted) { throw new CancellationError(); }
 			session.adapterStarted = true;
 			session.polling = true;
 			void session.poll();
@@ -267,7 +270,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			session.retentionRevision = completed.consoleCatalogRevision;
 			return session;
 		} catch (error) {
-			const cancelled = session.isDisposed;
+			const cancelled = session.isDisposed || options.signal?.aborted;
 			if (!cancelled) { await session.reportTrackerError(error); }
 			await session.closeProcess();
 			await session.stopTrackers();
@@ -283,29 +286,53 @@ export class DebugSession extends Disposable implements IDebugSession {
 	get threadId() { return this._threadId; }
 	get capabilities() { return this._capabilities; }
 
-	continue(): Promise<void> { return this.threadCommand("continue"); }
-	pause(): Promise<void> { return this.threadCommand("pause"); }
-	stepOver(granularity?: DebugSteppingGranularity): Promise<void> { return this.threadCommand("next", granularity); }
-	stepInto(granularity?: DebugSteppingGranularity): Promise<void> { return this.threadCommand("stepIn", granularity); }
-	stepOut(granularity?: DebugSteppingGranularity): Promise<void> { return this.threadCommand("stepOut", granularity); }
+	continue(): Promise<void> { return this.threadCommand('continue'); }
+	pause(): Promise<void> { return this.threadCommand('pause'); }
+	stepOver(granularity?: DebugSteppingGranularity): Promise<void> { return this.threadCommand('next', granularity); }
+	stepInto(granularity?: DebugSteppingGranularity): Promise<void> { return this.threadCommand('stepIn', granularity); }
+	stepOut(granularity?: DebugSteppingGranularity): Promise<void> { return this.threadCommand('stepOut', granularity); }
 
 	async restart(): Promise<void> {
-		if (!this._capabilities.supportsRestart) throw new Error("The Debug Adapter does not support restart requests");
-		await this.request("restart");
+		if (!this._capabilities.supportsRestart) throw new Error('The Debug Adapter does not support restart requests');
+		await this.request('restart');
 	}
 
 	async inspectStack(threadId?: number): Promise<IDebugStackInspection> {
-		const result = await this.transport!.inspect({ kind: 'stack', ...(threadId === undefined ? {} : { threadId: integer(threadId, 'threadId') }) }, this.runtime?.inspectionRevision ?? 0);
-		if (result.kind !== 'stack') throw new TypeError('Invalid stack inspection result');
-		const threads = result.threads.map(thread);
-		const selectedThread = result.threadId ?? undefined;
-		return { threads, frames: result.frames.map((value, index) => ({ ...stackFrame(value, index, this.workspace), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) })), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) };
+		this.assertNotDisposed();
+		const revision = this.inspectionRevision;
+		threadId ??= this.threadId;
+		if (threadId !== undefined) threadId = integer(threadId, 'threadId');
+		if (this.stackInspection?.revision === revision && this.stackInspection.threadId === threadId) return this.stackInspection.result;
+		// Adapters can allocate fresh frame IDs for every stackTrace. The editor
+		// and Call Stack must share one observation of the selected paused thread.
+		const result = this.transport!.inspect({ kind: 'stack', ...(threadId === undefined ? {} : { threadId }) }, revision).then(result => {
+			if (result.kind !== 'stack') throw new TypeError('Invalid stack inspection result');
+			const threads = result.threads.map(thread);
+			const selectedThread = result.threadId ?? undefined;
+			return { threads, frames: result.frames.map((value, index) => ({ ...stackFrame(value, index, this.workspace), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) })), ...(selectedThread === undefined ? {} : { threadId: selectedThread }) };
+		}).catch(error => {
+			if (this.stackInspection?.result === result) this.stackInspection = undefined;
+			throw error;
+		});
+		this.stackInspection = { revision, threadId, result };
+		return result;
 	}
 
-	async inspectFrame(frameId: number): Promise<readonly IDebugScopeInspection[]> {
-		const result = await this.transport!.inspect({ kind: 'frame', frameId: integer(frameId, 'frameId') }, this.runtime?.inspectionRevision ?? 0);
+	async inspectFrame(frameId: number, scopes: 'initial' | 'all' = 'initial'): Promise<readonly IDebugScopeInspection[]> {
+		const revision = this.runtime?.inspectionRevision ?? 0;
+		const result = await this.transport!.inspect({ kind: 'frame', frameId: integer(frameId, 'frameId') }, revision);
 		if (result.kind !== 'frame') throw new TypeError('Invalid frame inspection result');
-		return result.scopes.map((entry, index) => ({ scope: scope(entry.scope, index), variables: entry.variables.map(variable), ...(entry.error === null ? {} : { error: entry.error }) }));
+		const inspections: IDebugScopeInspection[] = [];
+		for (const [index, entry] of result.scopes.entries()) {
+			const descriptor = scope(entry.scope, index);
+			const load = scopes === 'all' && !entry.variablesLoaded && descriptor.variablesReference > 0;
+			try {
+				inspections.push({ scope: descriptor, variables: load ? await this.variables(descriptor.variablesReference, revision) : entry.variables.map(variable), variablesLoaded: entry.variablesLoaded || load, ...(entry.error === null ? {} : { error: entry.error }) });
+			} catch (error) {
+				inspections.push({ scope: descriptor, variables: [], variablesLoaded: true, error: getErrorMessage(error) });
+			}
+		}
+		return inspections;
 	}
 
 	async evaluateWatchExpressions(expressions: readonly string[], frameId?: number): Promise<readonly IDebugWatchResult[]> {
@@ -320,12 +347,12 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	async threads(): Promise<readonly IDebugThread[]> {
-		const body = record((await this.request("threads")).body, "threads body");
-		return Object.freeze(array(body.threads, "threads").map((value, index) => thread(value, index)));
+		const body = record((await this.request('threads')).body, 'threads body');
+		return Object.freeze(array(body.threads, 'threads').map((value, index) => thread(value, index)));
 	}
 
 	selectThread(threadId: number): void {
-		this.setSelectedThread(integer(threadId, "threadId"));
+		this.setSelectedThread(integer(threadId, 'threadId'));
 	}
 
 	private setSelectedThread(threadId: number | undefined): void {
@@ -335,15 +362,15 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	async stackTrace(threadId?: number): Promise<readonly IDebugStackFrame[]> {
-		const selectedThreadId = threadId === undefined ? await this.requireThreadId() : integer(threadId, "threadId");
+		const selectedThreadId = threadId === undefined ? await this.requireThreadId() : integer(threadId, 'threadId');
 		this.setSelectedThread(selectedThreadId);
-		const body = record((await this.request("stackTrace", { threadId: selectedThreadId, startFrame: 0, levels: 100 })).body, "stackTrace body");
-		return array(body.stackFrames, "stackFrames").map((value, index) => ({ ...stackFrame(value, index, this.workspace), threadId: selectedThreadId }));
+		const body = record((await this.request('stackTrace', { threadId: selectedThreadId, startFrame: 0, levels: 100 })).body, 'stackTrace body');
+		return array(body.stackFrames, 'stackFrames').map((value, index) => ({ ...stackFrame(value, index, this.workspace), threadId: selectedThreadId }));
 	}
 
 	async scopes(frameId: number): Promise<readonly IDebugScope[]> {
-		const body = record((await this.request("scopes", { frameId: integer(frameId, 'frameId') })).body, "scopes body");
-		return array(body.scopes, "scopes").map((value, index) => scope(value, index));
+		const body = record((await this.request('scopes', { frameId: integer(frameId, 'frameId') })).body, 'scopes body');
+		return array(body.scopes, 'scopes').map((value, index) => scope(value, index));
 	}
 
 	async variables(reference: number, inspectionRevision?: number): Promise<readonly IDebugVariable[]> {
@@ -354,25 +381,25 @@ export class DebugSession extends Disposable implements IDebugSession {
 
 	async setVariable(variablesReference: number, name: string, value: string): Promise<IDebugVariable> {
 		if (!this._capabilities.supportsSetVariable) {
-			throw new Error(localize("debug.setVariableUnsupported", "The debug adapter does not support changing variables."));
+			throw new Error(localize('debug.setVariableUnsupported', 'The debug adapter does not support changing variables.'));
 		}
-		if (this._state !== "stopped") {
-			throw new Error(localize("debug.setVariableNotStopped", "Pause execution before changing a variable."));
+		if (this._state !== 'stopped') {
+			throw new Error(localize('debug.setVariableNotStopped', 'Pause execution before changing a variable.'));
 		}
-		if (value.length > 32_768 || value.includes("\0")) {
-			throw new TypeError(localize("debug.invalidVariableValue", "The variable value must contain at most 32768 characters and no null characters."));
+		if (value.length > 32_768 || value.includes('\0')) {
+			throw new TypeError(localize('debug.invalidVariableValue', 'The variable value must contain at most 32768 characters and no null characters.'));
 		}
-		const body = record((await this.request("setVariable", { variablesReference: positiveInteger(variablesReference, "variablesReference"), name, value })).body, "setVariable body");
+		const body = record((await this.request('setVariable', { variablesReference: positiveInteger(variablesReference, 'variablesReference'), name, value })).body, 'setVariable body');
 		// In a setVariable response an omitted child reference denotes a scalar.
 		return variable({ ...body, name, variablesReference: body.variablesReference === undefined ? 0 : body.variablesReference }, 0);
 	}
 
 	async evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult> {
 		const normalized = expression.trim();
-		if (!normalized || normalized.length > 32_768 || normalized.includes("\0")) throw new TypeError("Debug expression must contain 1 to 32768 characters");
-		const body = record((await this.request("evaluate", { expression: normalized, context, ...(frameId === undefined ? {} : { frameId: integer(frameId, "frameId") }) })).body, "evaluate body");
+		if (!normalized || normalized.length > 32_768 || normalized.includes('\0')) throw new TypeError('Debug expression must contain 1 to 32768 characters');
+		const body = record((await this.request('evaluate', { expression: normalized, context, ...(frameId === undefined ? {} : { frameId: integer(frameId, 'frameId') }) })).body, 'evaluate body');
 		if (context === 'repl') this.acceptConsole(await this.processService.readConsole(this.id));
-		return Object.freeze({ result: string(body.result, "evaluate result"), variablesReference: positiveInteger(body.variablesReference, "evaluate variablesReference", true), ...(typeof body.type === "string" ? { type: body.type } : {}) });
+		return Object.freeze({ result: string(body.result, 'evaluate result'), variablesReference: positiveInteger(body.variablesReference, 'evaluate variablesReference', true), ...(typeof body.type === 'string' ? { type: body.type } : {}) });
 	}
 
 	async completions(frameId: number | undefined, threadId: number, text: string, position: Position, token: CancellationToken): Promise<IDebugCompletionsResponse | undefined> {
@@ -408,9 +435,9 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	async source(sourceValue: IDebugSource): Promise<IDebugSourceContent> {
-		const sourceReference = positiveInteger(sourceValue.sourceReference, "sourceReference");
-		const body = record((await this.request("source", { source: sourceValue, sourceReference })).body, "source body");
-		return Object.freeze({ content: string(body.content, "source content"), ...(typeof body.mimeType === "string" ? { mimeType: body.mimeType } : {}) });
+		const sourceReference = positiveInteger(sourceValue.sourceReference, 'sourceReference');
+		const body = record((await this.request('source', { source: sourceValue, sourceReference })).body, 'source body');
+		return Object.freeze({ content: string(body.content, 'source content'), ...(typeof body.mimeType === 'string' ? { mimeType: body.mimeType } : {}) });
 	}
 
 	async setExceptionBreakpoints(filters: readonly string[]): Promise<void> {
@@ -418,54 +445,54 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	async dataBreakpointInfo(name: string, variablesReference?: number, frameId?: number): Promise<IDataBreakpointInfoResponse> {
-		if (!this._capabilities.supportsDataBreakpoints) throw new Error(localize("debug.unsupportedDataBreakpoints", "Debug Adapter does not support data breakpoints"));
-		if (this._state !== "stopped") throw new Error(localize("debug.dataRequiresPause", "Data breakpoints require the paused session that identified the variable."));
-		const argumentsValue: Record<string, unknown> = { name: string(name, "data breakpoint name") };
-		if (variablesReference !== undefined) argumentsValue.variablesReference = positiveInteger(variablesReference, "variablesReference");
-		if (frameId !== undefined) argumentsValue.frameId = integer(frameId, "frameId");
-		const response = await this.request("dataBreakpointInfo", argumentsValue);
-		const body = record(response.body, "dataBreakpointInfo");
-		const dataId = body.dataId === null ? null : string(body.dataId, "dataId");
-		const accessTypes = body.accessTypes === undefined ? ["write"] : array(body.accessTypes, "accessTypes");
-		if (!accessTypes.every(type => type === "read" || type === "write" || type === "readWrite")) throw new TypeError("Invalid data breakpoint access types");
-		return { dataId, description: string(body.description, "description"), canPersist: body.canPersist === true, accessTypes: Object.freeze(accessTypes as DataBreakpointAccessType[]) };
+		if (!this._capabilities.supportsDataBreakpoints) throw new Error(localize('debug.unsupportedDataBreakpoints', 'Debug Adapter does not support data breakpoints'));
+		if (this._state !== 'stopped') throw new Error(localize('debug.dataRequiresPause', 'Data breakpoints require the paused session that identified the variable.'));
+		const argumentsValue: Record<string, unknown> = { name: string(name, 'data breakpoint name') };
+		if (variablesReference !== undefined) argumentsValue.variablesReference = positiveInteger(variablesReference, 'variablesReference');
+		if (frameId !== undefined) argumentsValue.frameId = integer(frameId, 'frameId');
+		const response = await this.request('dataBreakpointInfo', argumentsValue);
+		const body = record(response.body, 'dataBreakpointInfo');
+		const dataId = body.dataId === null ? null : string(body.dataId, 'dataId');
+		const accessTypes = body.accessTypes === undefined ? ['write'] : array(body.accessTypes, 'accessTypes');
+		if (!accessTypes.every(type => type === 'read' || type === 'write' || type === 'readWrite')) throw new TypeError('Invalid data breakpoint access types');
+		return { dataId, description: string(body.description, 'description'), canPersist: body.canPersist === true, accessTypes: Object.freeze(accessTypes as DataBreakpointAccessType[]) };
 	}
 
 	async disassemble(memoryReference: string, offset: number, instructionOffset: number, instructionCount: number): Promise<readonly IDisassembledInstruction[]> {
 		if (!this._capabilities.supportsDisassembleRequest) {
-			throw new Error(localize("debug.disassemblyUnsupported", "The debug adapter does not support disassembly."));
+			throw new Error(localize('debug.disassemblyUnsupported', 'The debug adapter does not support disassembly.'));
 		}
-		if (this._state !== "stopped") {
-			throw new Error(localize("debug.disassemblyRequiresPause", "Pause debugging to view disassembly."));
+		if (this._state !== 'stopped') {
+			throw new Error(localize('debug.disassemblyRequiresPause', 'Pause debugging to view disassembly.'));
 		}
-		if (!memoryReference.trim() || memoryReference.includes("\0") || memoryReference.length > 32_768) {
-			throw new TypeError("Invalid disassembly memory reference");
+		if (!memoryReference.trim() || memoryReference.includes('\0') || memoryReference.length > 32_768) {
+			throw new TypeError('Invalid disassembly memory reference');
 		}
 		if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(instructionOffset) || !Number.isSafeInteger(instructionCount) || instructionCount <= 0 || instructionCount > 200) {
-			throw new TypeError("Disassembly offsets must be integers and instruction count must be between 1 and 200");
+			throw new TypeError('Disassembly offsets must be integers and instruction count must be between 1 and 200');
 		}
-		const response = await this.request("disassemble", { memoryReference, offset, instructionOffset, instructionCount, resolveSymbols: true });
-		const instructions = array(record(response.body, "disassemble").instructions, "instructions");
-		if (instructions.length > instructionCount) { throw new TypeError("Disassembly returned more instructions than requested"); }
+		const response = await this.request('disassemble', { memoryReference, offset, instructionOffset, instructionCount, resolveSymbols: true });
+		const instructions = array(record(response.body, 'disassemble').instructions, 'instructions');
+		if (instructions.length > instructionCount) { throw new TypeError('Disassembly returned more instructions than requested'); }
 		let location: IDebugSource | undefined;
 		return Object.freeze(instructions.map((value, index) => {
 			const item = record(value, `instructions[${index}]`);
 			const instruction: { -readonly [K in keyof IDisassembledInstruction]: IDisassembledInstruction[K] } = {
-				address: string(item.address, "instruction address"),
-				instruction: string(item.instruction, "instruction"),
+				address: string(item.address, 'instruction address'),
+				instruction: string(item.instruction, 'instruction'),
 			};
-			if (!instruction.address) { throw new TypeError("Instruction address must not be empty"); }
-			if (item.instructionBytes !== undefined) { instruction.instructionBytes = string(item.instructionBytes, "instructionBytes"); }
-			if (item.symbol !== undefined) { instruction.symbol = string(item.symbol, "symbol"); }
+			if (!instruction.address) { throw new TypeError('Instruction address must not be empty'); }
+			if (item.instructionBytes !== undefined) { instruction.instructionBytes = string(item.instructionBytes, 'instructionBytes'); }
+			if (item.symbol !== undefined) { instruction.symbol = string(item.symbol, 'symbol'); }
 			// DAP permits the source to be omitted when adjacent instructions share a file.
-			if (item.location !== undefined) { location = source(item.location, "instruction location", this.workspace); }
+			if (item.location !== undefined) { location = source(item.location, 'instruction location', this.workspace); }
 			if (location) { instruction.location = location; }
-			if (item.line !== undefined) { instruction.line = positiveInteger(item.line, "instruction line", true); }
-			if (item.column !== undefined) { instruction.column = positiveInteger(item.column, "instruction column", true); }
-			if (item.endLine !== undefined) { instruction.endLine = positiveInteger(item.endLine, "instruction end line", true); }
-			if (item.endColumn !== undefined) { instruction.endColumn = positiveInteger(item.endColumn, "instruction end column", true); }
+			if (item.line !== undefined) { instruction.line = positiveInteger(item.line, 'instruction line', true); }
+			if (item.column !== undefined) { instruction.column = positiveInteger(item.column, 'instruction column', true); }
+			if (item.endLine !== undefined) { instruction.endLine = positiveInteger(item.endLine, 'instruction end line', true); }
+			if (item.endColumn !== undefined) { instruction.endColumn = positiveInteger(item.endColumn, 'instruction end column', true); }
 			if (item.presentationHint !== undefined) {
-				if (item.presentationHint !== "normal" && item.presentationHint !== "invalid") { throw new TypeError("Invalid instruction presentation hint"); }
+				if (item.presentationHint !== 'normal' && item.presentationHint !== 'invalid') { throw new TypeError('Invalid instruction presentation hint'); }
 				instruction.presentationHint = item.presentationHint;
 			}
 			return Object.freeze(instruction);
@@ -547,11 +574,11 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	private async disconnectOnce(): Promise<void> {
-		if (!this.isDisposed && this._state !== "terminated" && this._state !== "error" && !(await this.processService.manageSession(this.id, 'read').catch(() => undefined))?.ended) {
-			try { await this.request("disconnect", { restart: false, ...(this._capabilities.supportsTerminate ? { terminateDebuggee: this.configuration.request === 'launch' } : {}) }); } catch (error) { this.emitOutput(`Debug disconnect failed: ${getErrorMessage(error)}\n`); }
+		if (!this.isDisposed && this._state !== 'terminated' && this._state !== 'error' && !(await this.processService.manageSession(this.id, 'read').catch(() => undefined))?.ended) {
+			try { await this.request('disconnect', { restart: false, ...(this._capabilities.supportsTerminate ? { terminateDebuggee: this.configuration.request === 'launch' } : {}) }); } catch (error) { this.emitOutput(`Debug disconnect failed: ${getErrorMessage(error)}\n`); }
 		}
 		await this.closeProcess();
-		this.setState("terminated");
+		this.setState('terminated');
 		this.dispose();
 	}
 
@@ -579,7 +606,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 
 	private async threadCommand(command: string, granularity?: DebugSteppingGranularity): Promise<void> {
 		if (granularity && !this._capabilities.supportsSteppingGranularity) {
-			throw new Error(localize("debug.instructionStepUnsupported", "The debug adapter does not support instruction stepping."));
+			throw new Error(localize('debug.instructionStepUnsupported', 'The debug adapter does not support instruction stepping.'));
 		}
 		await this.request(command, { threadId: await this.requireThreadId(), ...(granularity ? { granularity } : {}) });
 	}
@@ -594,6 +621,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private acceptRuntime(snapshot: DebugSessionSnapshot): void {
 		if (this.runtime && snapshot.revision <= this.runtime.revision) return;
 		const previous = this.runtime;
+		if (previous?.inspectionRevision !== snapshot.inspectionRevision || snapshot.state !== 'stopped') this.stackInspection = undefined;
 		this.runtime = snapshot;
 		this._capabilities = Object.freeze(snapshot.capabilities);
 		this._reason = snapshot.reason ?? undefined;
@@ -609,17 +637,17 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private async requireThreadId(): Promise<number> {
 		if (this._threadId !== undefined) return this._threadId;
 		const first = (await this.threads())[0];
-		if (!first) throw new Error("The Debug Adapter did not report any threads");
+		if (!first) throw new Error('The Debug Adapter did not report any threads');
 		this.setSelectedThread(first.id);
 		return first.id;
 	}
 
 	private async request(command: string, args?: unknown): Promise<DapResponse> {
 		if (this.processClose) throw new CancellationError();
-		if (!this.transport || !this.adapterStarted) throw new Error("Debug Adapter has not started");
+		if (!this.transport || !this.adapterStarted) throw new Error('Debug Adapter has not started');
 		const value = response(record(await this.transport.request(command, args), 'DAP response'));
 		// Publish the backend model before callers act on a successful control request.
-		if (!this.processClose && ["continue", "next", "stepIn", "stepOut", "restart", "disconnect", "terminate"].includes(command)) await this.readAdapterPage(true);
+		if (!this.processClose && ['continue', 'next', 'stepIn', 'stepOut', 'restart', 'disconnect', 'terminate'].includes(command)) await this.readAdapterPage(true);
 		if (!value.success) throw new Error(value.message || `Debug Adapter '${value.command}' request failed`);
 		return value;
 	}
@@ -716,7 +744,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 			try {
 				const read = await this.readAdapterPage(true);
 				if (this.isDisposed || !this.polling) return;
-				if (read.outputGap) throw new Error("Debug Adapter output exceeded the retained buffer");
+				if (read.outputGap) throw new Error('Debug Adapter output exceeded the retained buffer');
 
 				if (read.protocolError) throw new Error(read.protocolError);
 				// Read every retained observation before publishing the backend's
@@ -727,10 +755,13 @@ export class DebugSession extends Disposable implements IDebugSession {
 					this.adapterExitCode = read.exitCode ?? undefined;
 					break;
 				}
+				// Source catalogs can deliver thousands of small notifications on
+				// browser attach. Drain full pages before polling an idle adapter again.
+				if (read.messages.length === 128) continue;
 			} catch (error) {
 				this._reason = getErrorMessage(error);
 				void this.reportTrackerError(error);
-				this.setState("error");
+				this.setState('error');
 				break;
 			}
 			await timeout(POLL_DELAY_MS);
@@ -765,17 +796,17 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	private acceptMessage(value: unknown): void {
-		const messageValue = record(value, "DAP message");
-		const kind = string(messageValue.type, "DAP message type");
-		if (kind === "response") return;
-		if (kind === "event") { this.acceptEvent(event(messageValue)); return; }
-		if (kind === "request") void this.answerReverseRequest(messageValue);
+		const messageValue = record(value, 'DAP message');
+		const kind = string(messageValue.type, 'DAP message type');
+		if (kind === 'response') return;
+		if (kind === 'event') { this.acceptEvent(event(messageValue)); return; }
+		if (kind === 'request') void this.answerReverseRequest(messageValue);
 	}
 
 
 	private acceptEvent(eventValue: DapEvent): void {
-		const body = eventValue.body && typeof eventValue.body === "object" ? eventValue.body as Record<string, unknown> : {};
-		if (eventValue.event === "output") return;
+		const body = eventValue.body && typeof eventValue.body === 'object' ? eventValue.body as Record<string, unknown> : {};
+		if (eventValue.event === 'output') return;
 		if (eventValue.event === 'progressStart' || eventValue.event === 'progressUpdate' || eventValue.event === 'progressEnd') {
 			const progressId = string(body.progressId, 'progress id');
 			if (!progressId || progressId.length > 256) throw new TypeError(localize('debug.invalidProgressId', 'Invalid debug progress ID.'));
@@ -799,23 +830,23 @@ export class DebugSession extends Disposable implements IDebugSession {
 			return;
 		}
 
-		if (["initialized", "capabilities", "stopped", "continued", "terminated", "exited"].includes(eventValue.event)) return;
+		if (['initialized', 'capabilities', 'stopped', 'continued', 'terminated', 'exited'].includes(eventValue.event)) return;
 		if (eventValue.event === 'breakpoint') return;
-		if (["thread", "process", "module", "invalidated"].includes(eventValue.event)) return;
+		if (['thread', 'process', 'module', 'invalidated'].includes(eventValue.event)) return;
 		this.customEventEmitter.fire({ event: eventValue.event, ...(eventValue.body === undefined ? {} : { body: eventValue.body }) });
 	}
 
 	private async answerReverseRequest(request: Record<string, unknown>): Promise<void> {
-		const sequence = positiveInteger(request.seq, "reverse request seq", true);
-		const command = string(request.command, "reverse request command");
+		const sequence = positiveInteger(request.seq, 'reverse request seq', true);
+		const command = string(request.command, 'reverse request command');
 		try {
 			let body: Readonly<Record<string, unknown>> | undefined;
 			if (command === 'runInTerminal' && this.runInTerminal) body = await this.runInTerminal(request.arguments);
 			else if (command === 'startDebugging' && this.startDebugging) await this.startDebugging(request.arguments);
 			else throw new Error(`Ash does not support Debug Adapter reverse request '${command}'`);
-			await this.sendMessage({ type: "response", request_seq: sequence, success: true, command, ...(body === undefined ? {} : { body }) });
+			await this.sendMessage({ type: 'response', request_seq: sequence, success: true, command, ...(body === undefined ? {} : { body }) });
 		} catch (error) {
-			await this.sendMessage({ type: "response", request_seq: sequence, success: false, command, message: getErrorMessage(error) }).catch(sendError => this.emitOutput(`Could not answer Debug Adapter request: ${getErrorMessage(sendError)}\n`));
+			await this.sendMessage({ type: 'response', request_seq: sequence, success: false, command, message: getErrorMessage(error) }).catch(sendError => this.emitOutput(`Could not answer Debug Adapter request: ${getErrorMessage(sendError)}\n`));
 		}
 	}
 
@@ -825,10 +856,11 @@ export class DebugSession extends Disposable implements IDebugSession {
 	}
 
 	private setState(state: DebugSessionState): void {
+		if (state !== 'stopped') this.stackInspection = undefined;
 		if (state === this._state) return;
 		this._state = state;
 		this.stateEmitter.fire(state);
-		if (state === "terminated" || state === "error") {
+		if (state === 'terminated' || state === 'error') {
 			void this.closeProcess();
 		}
 	}
@@ -858,16 +890,16 @@ export class DebugSession extends Disposable implements IDebugSession {
 }
 
 function response(value: Record<string, unknown>): DapResponse {
-	return { seq: positiveInteger(value.seq, "response seq", true), type: "response", request_seq: positiveInteger(value.request_seq, "response request_seq"), success: boolean(value.success, "response success"), command: string(value.command, "response command"), ...(typeof value.message === "string" ? { message: value.message } : {}), ...(value.body === undefined ? {} : { body: value.body }) };
+	return { seq: positiveInteger(value.seq, 'response seq', true), type: 'response', request_seq: positiveInteger(value.request_seq, 'response request_seq'), success: boolean(value.success, 'response success'), command: string(value.command, 'response command'), ...(typeof value.message === 'string' ? { message: value.message } : {}), ...(value.body === undefined ? {} : { body: value.body }) };
 }
 
 function event(value: Record<string, unknown>): DapEvent {
-	return { seq: positiveInteger(value.seq, "event seq", true), type: "event", event: string(value.event, "event name"), ...(value.body === undefined ? {} : { body: value.body }) };
+	return { seq: positiveInteger(value.seq, 'event seq', true), type: 'event', event: string(value.event, 'event name'), ...(value.body === undefined ? {} : { body: value.body }) };
 }
 
 function stackFrame(value: unknown, index: number, workspace: URI | undefined): IDebugStackFrame {
 	const frame = record(value, `stackFrames[${index}]`);
-	return { id: integer(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`, true), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`, true), ...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`, workspace) }), ...(frame.instructionPointerReference === undefined ? {} : { instructionPointerReference: string(frame.instructionPointerReference, "instructionPointerReference") }) };
+	return { id: integer(frame.id, `stackFrames[${index}].id`), name: string(frame.name, `stackFrames[${index}].name`), lineNumber: positiveInteger(frame.line, `stackFrames[${index}].line`, true), columnNumber: positiveInteger(frame.column, `stackFrames[${index}].column`, true), ...(frame.source === undefined ? {} : { source: source(frame.source, `stackFrames[${index}].source`, workspace) }), ...(frame.instructionPointerReference === undefined ? {} : { instructionPointerReference: string(frame.instructionPointerReference, 'instructionPointerReference') }) };
 }
 
 function thread(value: unknown, index: number): IDebugThread {
@@ -875,16 +907,16 @@ function thread(value: unknown, index: number): IDebugThread {
 	return Object.freeze({ id: integer(input.id, `threads[${index}].id`), name: string(input.name, `threads[${index}].name`) });
 }
 
-function source(value: unknown, path: string, workspace: URI | undefined): IDebugStackFrame["source"] {
+function source(value: unknown, path: string, workspace: URI | undefined): IDebugStackFrame['source'] {
 	const input = record(value, path);
-	const adapterPath = typeof input.path === "string" ? input.path : undefined;
+	const adapterPath = typeof input.path === 'string' ? input.path : undefined;
 	const resource = adapterPath ? sourceResource(workspace, adapterPath) : undefined;
-	return { ...(typeof input.name === "string" ? { name: input.name } : {}), ...(adapterPath ? { path: adapterPath } : {}), ...(resource ? { resource } : {}), ...(Number.isSafeInteger(input.sourceReference) ? { sourceReference: input.sourceReference as number } : {}) };
+	return { ...(typeof input.name === 'string' ? { name: input.name } : {}), ...(adapterPath ? { path: adapterPath } : {}), ...(resource ? { resource } : {}), ...(Number.isSafeInteger(input.sourceReference) ? { sourceReference: input.sourceReference as number } : {}) };
 }
 
 function scope(value: unknown, index: number): IDebugScope {
 	const input = record(value, `scopes[${index}]`);
-	return { name: string(input.name, `scopes[${index}].name`), variablesReference: positiveInteger(input.variablesReference, `scopes[${index}].variablesReference`, true), expensive: typeof input.expensive === "boolean" ? input.expensive : false };
+	return { name: string(input.name, `scopes[${index}].name`), variablesReference: positiveInteger(input.variablesReference, `scopes[${index}].variablesReference`, true), expensive: typeof input.expensive === 'boolean' ? input.expensive : false };
 }
 
 function variable(value: unknown, index: number): IDebugVariable {
@@ -894,27 +926,27 @@ function variable(value: unknown, index: number): IDebugVariable {
 		name: string(input.name, `variables[${index}].name`),
 		value: string(input.value, `variables[${index}].value`),
 		variablesReference: positiveInteger(input.variablesReference, `variables[${index}].variablesReference`, true),
-		...(typeof input.type === "string" ? { type: input.type } : {}),
+		...(typeof input.type === 'string' ? { type: input.type } : {}),
 		...(typeof input.memoryReference === 'string' ? { memoryReference: input.memoryReference } : {}),
 		...(hint ? {
 			presentationHint: {
-				...(hint.attributes === undefined ? {} : { attributes: array(hint.attributes, "presentationHint.attributes").map(attribute => string(attribute, "presentationHint attribute")) }),
-				...(hint.lazy === undefined ? {} : { lazy: boolean(hint.lazy, "presentationHint.lazy") }),
+				...(hint.attributes === undefined ? {} : { attributes: array(hint.attributes, 'presentationHint.attributes').map(attribute => string(attribute, 'presentationHint attribute')) }),
+				...(hint.lazy === undefined ? {} : { lazy: boolean(hint.lazy, 'presentationHint.lazy') }),
 			}
 		} : {}),
 	};
 }
 
 
-function record(value: unknown, path: string): Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${path} must be an object`); return value as Record<string, unknown>; }
+function record(value: unknown, path: string): Record<string, unknown> { if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${path} must be an object`); return value as Record<string, unknown>; }
 function array(value: unknown, path: string): readonly unknown[] { if (!Array.isArray(value)) throw new TypeError(`${path} must be an array`); return value; }
-function string(value: unknown, path: string): string { if (typeof value !== "string") throw new TypeError(`${path} must be a string`); return value; }
-function boolean(value: unknown, path: string): boolean { if (typeof value !== "boolean") throw new TypeError(`${path} must be a boolean`); return value; }
-function positiveInteger(value: unknown, path: string, allowZero = false): number { if (!Number.isSafeInteger(value) || (allowZero ? (value as number) < 0 : (value as number) <= 0)) throw new TypeError(`${path} must be ${allowZero ? "non-negative" : "positive"}`); return value as number; }
+function string(value: unknown, path: string): string { if (typeof value !== 'string') throw new TypeError(`${path} must be a string`); return value; }
+function boolean(value: unknown, path: string): boolean { if (typeof value !== 'boolean') throw new TypeError(`${path} must be a boolean`); return value; }
+function positiveInteger(value: unknown, path: string, allowZero = false): number { if (!Number.isSafeInteger(value) || (allowZero ? (value as number) < 0 : (value as number) <= 0)) throw new TypeError(`${path} must be ${allowZero ? 'non-negative' : 'positive'}`); return value as number; }
 function integer(value: unknown, path: string): number { if (!Number.isSafeInteger(value)) throw new TypeError(localize('debug.invalidIdentifier', '{0} must be an integer.', path)); return value as number; }
 
 function sourceResource(workspace: URI | undefined, adapterPath: string): URI | undefined {
-	if (!workspace || workspace.scheme === "file") {
+	if (!workspace || workspace.scheme === 'file') {
 		try {
 			return adapterPath.startsWith('/') && !adapterPath.startsWith('//')
 				? URI.from({ scheme: Schemas.file, path: adapterPath })
@@ -931,12 +963,12 @@ function sourceResource(workspace: URI | undefined, adapterPath: string): URI | 
 
 function unsupportedBreakpoint(reason: DebugBreakpointUnsupported): string {
 	switch (reason) {
-		case 'conditional': return localize("debug.unsupportedConditionalBreakpoints", "Debug Adapter does not support conditional breakpoints");
-		case 'hitConditional': return localize("debug.unsupportedHitConditions", "Debug Adapter does not support hit conditions");
-		case 'logPoint': return localize("debug.unsupportedLogpoints", "Debug Adapter does not support logpoints");
-		case 'function': return localize("debug.unsupportedFunctionBreakpoints", "Debug Adapter does not support function breakpoints");
-		case 'data': return localize("debug.unsupportedDataBreakpoints", "Debug Adapter does not support data breakpoints");
-		case 'instruction': return localize("debug.unsupportedInstructionBreakpoints", "Debug Adapter does not support instruction breakpoints");
+		case 'conditional': return localize('debug.unsupportedConditionalBreakpoints', 'Debug Adapter does not support conditional breakpoints');
+		case 'hitConditional': return localize('debug.unsupportedHitConditions', 'Debug Adapter does not support hit conditions');
+		case 'logPoint': return localize('debug.unsupportedLogpoints', 'Debug Adapter does not support logpoints');
+		case 'function': return localize('debug.unsupportedFunctionBreakpoints', 'Debug Adapter does not support function breakpoints');
+		case 'data': return localize('debug.unsupportedDataBreakpoints', 'Debug Adapter does not support data breakpoints');
+		case 'instruction': return localize('debug.unsupportedInstructionBreakpoints', 'Debug Adapter does not support instruction breakpoints');
 	}
 }
 

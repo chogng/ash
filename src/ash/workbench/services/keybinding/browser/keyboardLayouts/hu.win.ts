@@ -33,7 +33,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		KeyX: ['x', 'X', '#', '', 0, 'VK_X'],
 		KeyY: ['z', 'Z', '', '', 0, 'VK_Z'],
 		KeyZ: ['y', 'Y', '>', '', 0, 'VK_Y'],
-		Digit1: ['1', '\'', '~', '', 0, 'VK_1'],
+		Digit1: ['1', "'", '~', '', 0, 'VK_1'],
 		Digit2: ['2', '"', 'ˇ', '', 0, 'VK_2'],
 		Digit3: ['3', '+', '^', '', 0, 'VK_3'],
 		Digit4: ['4', '!', '˘', '', 0, 'VK_4'],
@@ -162,4 +162,3 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BrowserFavorites: []
 	}
 });
-

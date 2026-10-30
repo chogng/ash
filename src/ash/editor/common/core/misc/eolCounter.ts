@@ -1,4 +1,4 @@
-import { CharCode } from "../../../../base/common/charCode.js";
+import { CharCode } from '../../../../base/common/charCode.js';
 
 export enum StringEOL {
 	Unknown = 0,

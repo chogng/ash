@@ -2,6 +2,35 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
 import { ExtensionsInput, ExtensionsCapabilityInput, ExtensionsInputSource } from '../../common/extensionsInput.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+
+test('Extension tabs publish pane icon changes without persisting temporary image URLs', () => {
+	const summary = { id: 'ash.bat', version: '1.0.0', displayName: 'Batch', description: '', packageType: 'editorExtension' };
+	using input = new ExtensionsInput(summary, undefined, ExtensionsInputSource.BuiltIn);
+	const fallback = input.getIcon();
+	assert.ok(fallback instanceof URI);
+	assert.equal(fallback.scheme, 'data');
+	let changes = 0;
+	using listener = input.onDidChangeLabel(() => { changes++; });
+	const first = URI.parse('blob:first-icon');
+	input.setIcon(first);
+	assert.equal(input.getIcon(), first);
+	const saved = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
+	assert.equal(JSON.stringify(saved).includes('blob:'), false);
+	using restored = EditorInputSerializers.deserialize(saved) as ExtensionsInput;
+	assert.equal(restored.getIcon().toString(), fallback.toString());
+	input.setIcon(URI.parse('blob:second-icon'));
+	input.setIcon(undefined);
+	assert.equal(input.getIcon(), fallback);
+	input.setIcon(first);
+	assert.equal(changes, 4);
+	input.dispose();
+	input.setIcon(undefined);
+	assert.equal(changes, 4);
+	using external = new ExtensionsInput(summary);
+	assert.equal(external.getIcon(), Lxicon.extensions);
+});
 
 test('Extensions tabs restore the selected installation without persisting capability authority', () => {
 	const summary = { id: 'demo@vendor', version: '1.2.3', displayName: 'Demo', description: 'A skill bundle', packageType: 'plugin' };

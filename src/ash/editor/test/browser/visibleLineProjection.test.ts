@@ -1,16 +1,16 @@
 import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { EditorLineWrapping } from "../../common/config/editorOptions.js";
-import { FontInfo } from "../../common/config/fontInfo.js";
-import { ViewModelLinesFromProjectedModel } from "../../common/viewModel/viewModelLines.js";
-import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
-import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
-import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { EditorLineWrapping } from '../../common/config/editorOptions.js';
+import { FontInfo } from '../../common/config/fontInfo.js';
+import { ViewModelLinesFromProjectedModel } from '../../common/viewModel/viewModelLines.js';
+import { DOMLineBreaksComputerFactory } from '../../browser/view/domLineBreaksComputer.js';
+import { EditorFoldingModel } from '../../contrib/folding/browser/foldingModel.js';
+import { EditorHiddenRangeModel } from '../../contrib/folding/browser/hiddenRangeModel.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
 test('Hidden lines and single-line coordinate queries do not materialize the full unwrapped document', () => {
@@ -60,8 +60,8 @@ test('Hidden lines retain a cursor row when the model shrinks to an empty docume
 	assert.equal(lines.getViewLineContent(1), '');
 });
 
-test("Visible visual-line projection removes hidden bodies while preserving wrapped header rows", () => {
-	using model = new TextModel("header\ninside\nend\nlast");
+test('Visible visual-line projection removes hidden bodies while preserving wrapped header rows', () => {
+	using model = new TextModel('header\ninside\nend\nlast');
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	using projection = createViewModelLines(model, {
@@ -92,8 +92,8 @@ test("Visible visual-line projection removes hidden bodies while preserving wrap
 	assert.deepEqual([1, 2, 3, 4].map(line => converter.getModelLineViewLineCount(line)), [3, 1, 1, 2]);
 });
 
-test("Visible visual-line projection refreshes the source before collapsed ranges observe a shrinking model", () => {
-	using model = new TextModel("header\ninside\nend");
+test('Visible visual-line projection refreshes the source before collapsed ranges observe a shrinking model', () => {
+	using model = new TextModel('header\ninside\nend');
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	using projection = createViewModelLines(model, {
@@ -103,26 +103,26 @@ test("Visible visual-line projection refreshes the source before collapsed range
 
 	assert.doesNotThrow(() => model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), model.positionAt(model.length)),
-		text: "x",
+		text: 'x',
 	}]));
 	assert.equal(projection.projection.logicalLineCount, 1);
 	assert.equal(projection.projection.lines.length, 1);
 	assert.equal(projection.projection.lineAt(0)?.logicalLineIndex, 0);
 });
 
-test("View-model lines keep the wrapping projection path when no visibility filter is installed", () => {
-	using model = new TextModel("first\nsecond");
+test('View-model lines keep the wrapping projection path when no visibility filter is installed', () => {
+	using model = new TextModel('first\nsecond');
 	using projection = createViewModelLines(model);
 
 	const initialProjection = projection.projection;
-	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (0) + 1)), text: "x" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (0) + 1)), text: 'x' }]);
 	assert.notEqual(projection.projection, initialProjection);
 	assert.equal(projection.projection.visualLineCount, 2);
 });
 
 for (const wrapWidth of [20, 200]) {
 	test(`Hidden positions resolve to the fold header end at wrap width ${wrapWidth}`, () => {
-		using model = new TextModel("header\nx\nlong hidden body\nlast");
+		using model = new TextModel('header\nx\nlong hidden body\nlast');
 		using folding = new EditorFoldingModel(model);
 		using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 		using lines = createViewModelLines(model, {

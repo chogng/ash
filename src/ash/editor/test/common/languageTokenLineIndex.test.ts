@@ -1,15 +1,15 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
 import { SYNTAX_TOKEN_LANE, type SyntaxResult } from '../../common/languages.js';
 import { testTokens } from './testSyntaxProvider.js';
 import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from '../../common/model/languageResultStore.js';
-import { LanguageTokenLineIndex, StyledTokenSource } from "../../common/tokens/languageTokenLineIndex.js";
+import { LanguageTokenLineIndex, StyledTokenSource } from '../../common/tokens/languageTokenLineIndex.js';
 import { Emitter } from '../../../base/common/event.js';
 import { syntaxWireCodec, attachLanguageTokenResultDelta } from '../../common/services/semanticTokensDto.js';
 import { createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken, type SemanticTokenModelSource } from '../../common/tokens/languageTokens.js';
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
 import { type WorkerTextModelResult } from '../../common/services/textModelSync/textModelSync.protocol.js';
 
 for (const kind of ['syntax', 'semantic'] as const) {
@@ -68,21 +68,26 @@ for (const retainedAtStart of [true, false]) {
 			}],
 		});
 
-		assert.equal(store.accept({ requestId: 2, textModel: model, modelVersion: model.version, value: result }), LanguageResultAcceptance.Applied);
+		assert.equal(store.accept({
+			requestId: 2,
+			textModel: model,
+			modelVersion: model.version,
+			value: result
+		}), LanguageResultAcceptance.Applied);
 		assert.deepEqual(index.lines.map(line => line.tokens[0]), tokens);
 		assert.equal(index.getLineTokens(retainedLine), retained);
 	});
 }
 
-test("Token line index groups sparse lines and answers constant-time line queries", () => {
-	using model = new TextModel("const one = 1;\n\nreturn one;");
+test('Token line index groups sparse lines and answers constant-time line queries', () => {
+	using model = new TextModel('const one = 1;\n\nreturn one;');
 	using store = createLanguageTokenStore(model);
 	acceptTokens(store, model, 1, [
-		token(0, 0, 5, "keyword"),
-		token(0, 6, 9, "variable"),
-		token(0, 12, 13, "number"),
-		token(2, 0, 6, "keyword"),
-		token(2, 7, 10, "variable"),
+		token(0, 0, 5, 'keyword'),
+		token(0, 6, 9, 'variable'),
+		token(0, 12, 13, 'number'),
+		token(2, 0, 6, 'keyword'),
+		token(2, 7, 10, 'variable'),
 	]);
 	using index = new LanguageTokenLineIndex(store);
 
@@ -94,26 +99,26 @@ test("Token line index groups sparse lines and answers constant-time line querie
 		lineIndex: line.lineIndex,
 		tokenTypes: line.tokens.map(entry => entry.tokenType),
 	})), [
-		{ lineIndex: 0, tokenTypes: ["keyword", "variable", "number"] },
-		{ lineIndex: 2, tokenTypes: ["keyword", "variable"] },
+		{ lineIndex: 0, tokenTypes: ['keyword', 'variable', 'number'] },
+		{ lineIndex: 2, tokenTypes: ['keyword', 'variable'] },
 	]);
 	assert.equal(index.getLineTokens(0), index.lines[0]!.tokens);
 	assert.deepEqual(index.getLineTokens(1), []);
 	assert.equal(index.getLineTokens(2), index.lines[1]!.tokens);
 });
 
-test("Token line index replaces same-version results atomically", () => {
-	using model = new TextModel("abc\ndef");
+test('Token line index replaces same-version results atomically', () => {
+	using model = new TextModel('abc\ndef');
 	using store = createLanguageTokenStore(model);
 	using index = new LanguageTokenLineIndex(store);
 	const events: unknown[] = [];
 	using listener = index.onDidChange(event => events.push(event));
 
-	acceptTokens(store, model, 1, [token(0, 0, 1, "first")]);
-	acceptTokens(store, model, 2, [token(1, 1, 3, "second")]);
+	acceptTokens(store, model, 1, [token(0, 0, 1, 'first')]);
+	acceptTokens(store, model, 2, [token(1, 1, 3, 'second')]);
 
 	assert.deepEqual(index.getLineTokens(0), []);
-	assert.deepEqual(index.getLineTokens(1).map(entry => entry.tokenType), ["second"]);
+	assert.deepEqual(index.getLineTokens(1).map(entry => entry.tokenType), ['second']);
 	assert.deepEqual(events, [{
 		reason: LanguageResultStoreChangeReason.Result,
 		modelVersion: 1,
@@ -131,10 +136,10 @@ test("Token line index replaces same-version results atomically", () => {
 	}]);
 });
 
-test("Model changes invalidate token lines before consumers observe new text", () => {
-	using model = new TextModel("abc");
+test('Model changes invalidate token lines before consumers observe new text', () => {
+	using model = new TextModel('abc');
 	using store = createLanguageTokenStore(model);
-	acceptTokens(store, model, 1, [token(0, 0, 3, "word")]);
+	acceptTokens(store, model, 1, [token(0, 0, 3, 'word')]);
 	using index = new LanguageTokenLineIndex(store);
 	const events: unknown[] = [];
 	using listener = index.onDidChange(event => events.push({
@@ -145,7 +150,7 @@ test("Model changes invalidate token lines before consumers observe new text", (
 
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1)),
-		text: "X",
+		text: 'X',
 	}]);
 
 	assert.equal(store.result, undefined);
@@ -162,18 +167,18 @@ test("Model changes invalidate token lines before consumers observe new text", (
 			rebuiltLineCount: 0,
 			reusedLineCount: 0,
 		},
-		text: "Xabc",
+		text: 'Xabc',
 		tokens: [],
 	}]);
 });
 
-test("Model changes preserve unaffected token lines and shift later lines", () => {
-	using model = new TextModel("alpha\nmiddle\nomega");
+test('Model changes preserve unaffected token lines and shift later lines', () => {
+	using model = new TextModel('alpha\nmiddle\nomega');
 	using store = createLanguageTokenStore(model);
 	acceptTokens(store, model, 1, [
-		token(0, 0, 5, "first"),
-		token(1, 0, 6, "changed"),
-		token(2, 0, 5, "last"),
+		token(0, 0, 5, 'first'),
+		token(1, 0, 6, 'changed'),
+		token(2, 0, 5, 'last'),
 	]);
 	using index = new LanguageTokenLineIndex(store);
 	const firstLine = index.lines[0];
@@ -182,11 +187,11 @@ test("Model changes preserve unaffected token lines and shift later lines", () =
 
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (6) + 1)),
-		text: "changed\ninserted",
+		text: 'changed\ninserted',
 	}]);
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((2) + 1, (8) + 1)),
-		text: "\n",
+		text: '\n',
 	}]);
 
 	assert.equal(store.result, undefined);
@@ -195,9 +200,9 @@ test("Model changes preserve unaffected token lines and shift later lines", () =
 	assert.equal(index.tokenCount, 2);
 	assert.equal(index.lines[0], firstLine);
 	assert.deepEqual(index.lines.map(line => line.lineIndex), [0, 4]);
-	assert.deepEqual(index.getLineTokens(0).map(entry => entry.tokenType), ["first"]);
+	assert.deepEqual(index.getLineTokens(0).map(entry => entry.tokenType), ['first']);
 	assert.deepEqual(index.getLineTokens(1), []);
-	assert.deepEqual(index.getLineTokens(4).map(entry => entry.tokenType), ["last"]);
+	assert.deepEqual(index.getLineTokens(4).map(entry => entry.tokenType), ['last']);
 	assert.deepEqual(events.map(event => ({
 		reason: (event as { readonly reason: LanguageResultStoreChangeReason; }).reason,
 		tokenCount: (event as { readonly tokenCount: number; }).tokenCount,
@@ -213,8 +218,8 @@ test("Model changes preserve unaffected token lines and shift later lines", () =
 	}]);
 });
 
-test("Token line index validates queries and owns neither store nor model", () => {
-	using model = new TextModel("abc");
+test('Token line index validates queries and owns neither store nor model', () => {
+	using model = new TextModel('abc');
 	using store = createLanguageTokenStore(model);
 	const index = new LanguageTokenLineIndex(store);
 
@@ -223,20 +228,20 @@ test("Token line index validates queries and owns neither store nor model", () =
 	index.dispose();
 	assert.throws(() => index.lines, /already disposed/);
 
-	acceptTokens(store, model, 1, [token(0, 0, 1, "word")]);
+	acceptTokens(store, model, 1, [token(0, 0, 1, 'word')]);
 	assert.equal(store.result!.value.tokens.length, 1);
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (3) + 1)),
-		text: "!",
+		text: '!',
 	}]);
-	assert.equal(model.getText(), "abc!");
+	assert.equal(model.getText(), 'abc!');
 });
 
-test("Token line index reuses unchanged sparse lines from a confirmed delta", () => {
+test('Token line index reuses unchanged sparse lines from a confirmed delta', () => {
 	const lines = Array.from({ length: 1_000 }, (_, index) => `value${index}`);
-	using model = new TextModel(lines.join("\n"));
+	using model = new TextModel(lines.join('\n'));
 	using store = createLanguageTokenStore(model);
-	const initialTokens = lines.map((line, lineIndex) => token(lineIndex, 0, line.length, "variable"));
+	const initialTokens = lines.map((line, lineIndex) => token(lineIndex, 0, line.length, 'variable'));
 	acceptTokens(store, model, 1, initialTokens);
 	using index = new LanguageTokenLineIndex(store);
 	const originalLines = index.lines;
@@ -247,10 +252,10 @@ test("Token line index reuses unchanged sparse lines from a confirmed delta", ()
 	const lineOffset = lines.slice(0, changedLine).reduce((offset, line) => offset + line.length + 1, 0);
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(lineOffset), model.positionAt(lineOffset + oldLine.length)),
-		text: "changed",
+		text: 'changed',
 	}]);
 	const currentTokens = initialTokens.map((entry, lineIndex) => (
-		lineIndex === changedLine ? token(changedLine, 0, 7, "keyword") : entry
+		lineIndex === changedLine ? token(changedLine, 0, 7, 'keyword') : entry
 	));
 	const result = createLanguageTokenSnapshotNormalizer(model.createVersionedSnapshot())({ tokens: currentTokens });
 	attachLanguageTokenResultDelta(result, {
@@ -275,16 +280,16 @@ test("Token line index reuses unchanged sparse lines from a confirmed delta", ()
 	assert.equal(index.lines[0], originalLines[0]);
 	assert.notEqual(index.lines[changedLine], originalLines[changedLine]);
 	assert.equal(index.lines[999], originalLines[999]);
-	assert.deepEqual(index.getLineTokens(changedLine).map(entry => entry.tokenType), ["keyword"]);
+	assert.deepEqual(index.getLineTokens(changedLine).map(entry => entry.tokenType), ['keyword']);
 	assert.equal(events.at(-1)?.rebuiltLineCount, 1);
 	assert.equal(events.at(-1)?.reusedLineCount, 999);
 });
 
-test("Token line index rebuilds only two disjoint splice lines", () => {
+test('Token line index rebuilds only two disjoint splice lines', () => {
 	const lines = Array.from({ length: 1_000 }, (_, index) => `value${index}`);
-	using model = new TextModel(lines.join("\n"));
+	using model = new TextModel(lines.join('\n'));
 	using store = createLanguageTokenStore(model);
-	const initialTokens = lines.map((line, lineIndex) => token(lineIndex, 0, line.length, "variable"));
+	const initialTokens = lines.map((line, lineIndex) => token(lineIndex, 0, line.length, 'variable'));
 	acceptTokens(store, model, 1, initialTokens);
 	using index = new LanguageTokenLineIndex(store);
 	const originalLines = index.lines;
@@ -292,13 +297,13 @@ test("Token line index rebuilds only two disjoint splice lines", () => {
 	using listener = index.onDidChange(event => events.push(event));
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((100) + 1, (0) + 1), new Position((100) + 1, (lines[100]!.length) + 1)),
-		text: "changed100",
+		text: 'changed100',
 	}, {
 		range: Range.fromPositions(new Position((900) + 1, (0) + 1), new Position((900) + 1, (lines[900]!.length) + 1)),
-		text: "changed900",
+		text: 'changed900',
 	}]);
 	const currentTokens = initialTokens.map((entry, lineIndex) => (
-		lineIndex === 100 || lineIndex === 900 ? token(lineIndex, 0, 10, "keyword") : entry
+		lineIndex === 100 || lineIndex === 900 ? token(lineIndex, 0, 10, 'keyword') : entry
 	));
 	const result = createLanguageTokenSnapshotNormalizer(model.createVersionedSnapshot())({ tokens: currentTokens });
 	attachLanguageTokenResultDelta(result, {
@@ -329,9 +334,9 @@ test("Token line index rebuilds only two disjoint splice lines", () => {
 	assert.equal(events.at(-1)?.reusedLineCount, 998);
 });
 
-test("Token line index reuses relative suffix payloads across line insertion", () => {
+test('Token line index reuses relative suffix payloads across line insertion', () => {
 	const lines = Array.from({ length: 1_000 }, (_, index) => `value${index}`);
-	using model = new TextModel(lines.join("\n"));
+	using model = new TextModel(lines.join('\n'));
 	using store = createLanguageTokenStore(model);
 	using index = new LanguageTokenLineIndex(store);
 	const firstSnapshot = model.createVersionedSnapshot();
@@ -359,7 +364,7 @@ test("Token line index reuses relative suffix payloads across line insertion", (
 	const insertionOffset = lines.slice(0, insertionLine).reduce((offset, line) => offset + line.length + 1, 0);
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(insertionOffset)),
-		text: "inserted\n",
+		text: 'inserted\n',
 	}]);
 	const snapshot = model.createVersionedSnapshot();
 	const currentResult: SyntaxResult = Object.freeze({
@@ -382,16 +387,16 @@ test("Token line index reuses relative suffix payloads across line insertion", (
 	assert.equal(index.lines[0], originalLines[0]);
 	assert.equal(index.lines[insertionLine]!.lineIndex, insertionLine);
 	assert.equal(index.lines[insertionLine + 1]!.lineIndex, insertionLine + 1);
-	assert.deepEqual(index.getLineTokens(insertionLine + 1).map(entry => entry.tokenType), ["value100"]);
+	assert.deepEqual(index.getLineTokens(insertionLine + 1).map(entry => entry.tokenType), ['value100']);
 	assert.equal(events.at(-1)?.rebuiltLineCount, 1);
 	assert.equal(events.at(-1)?.reusedLineCount, 1_000);
 });
 
-test("Token line index matches full results across random wire deltas", () => {
-	using model = new TextModel("const value = `start\nmiddle\nend`;\nif (value) {\n  return 1;\n}");
+test('Token line index matches full results across random wire deltas', () => {
+	using model = new TextModel('const value = `start\nmiddle\nend`;\nif (value) {\n  return 1;\n}');
 	using store = createLanguageTokenStore(model);
 	using index = new LanguageTokenLineIndex(store);
-	const insertions = ["x", " ", "\n", "/*", "*/", "`", "'", "(", ")", "const"];
+	const insertions = ['x', ' ', '\n', '/*', '*/', '`', "'", '(', ')', 'const'];
 	let serverState: WorkerTextModelResult<SyntaxResult> | undefined;
 	let clientState: WorkerTextModelResult<SyntaxResult> | undefined;
 	let seed = 0x3511de;

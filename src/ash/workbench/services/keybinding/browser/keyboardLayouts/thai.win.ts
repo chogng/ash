@@ -161,4 +161,3 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BrowserFavorites: []
 	}
 });
-

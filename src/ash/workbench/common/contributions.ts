@@ -2,10 +2,10 @@ import {
 	Disposable,
 	type IDisposable,
 	toDisposable,
-} from "../../base/common/lifecycle.js";
+} from '../../base/common/lifecycle.js';
 import type {
 	ServicesAccessor,
-} from "../../platform/instantiation/common/instantiation.js";
+} from '../../platform/instantiation/common/instantiation.js';
 
 /** Startup point at which a workbench contribution is instantiated. */
 export enum WorkbenchPhase {
@@ -155,7 +155,7 @@ export class WorkbenchContributionHost extends Disposable {
 	advance(phase: WorkbenchPhase): void {
 		validateWorkbenchPhase(phase);
 		if (phase < this._phase) {
-			throw new Error("Workbench contribution phases cannot move backwards");
+			throw new Error('Workbench contribution phases cannot move backwards');
 		}
 		if (phase === this._phase) return;
 		this._phase = phase;

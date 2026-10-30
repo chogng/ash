@@ -1,10 +1,10 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import { LocalSelectionTransfer } from "../../../../platform/dnd/browser/dnd.js";
-import type { EditorGroupView } from "./editorGroupView.js";
-import type { Direction } from "../../../../base/browser/ui/grid/grid.js";
+import { LocalSelectionTransfer } from '../../../../platform/dnd/browser/dnd.js';
+import type { EditorGroupView } from './editorGroupView.js';
+import type { Direction } from '../../../../base/browser/ui/grid/grid.js';
 
 /** The side of a tab at which an Editor drop will insert its source. */
-export type EditorTabDropPosition = "before" | "after";
+export type EditorTabDropPosition = 'before' | 'after';
 
 /**
  * Coordinates one local Editor tab drag across Editor groups.
@@ -69,7 +69,7 @@ export class EditorTabDragAndDropController implements IEditorTabDragAndDrop {
 			target,
 			targetInput,
 			position,
-			...(splitDirection ? { splitDirection } : {}),
+			...(splitDirection !== undefined ? { splitDirection } : {}),
 		});
 	}
 

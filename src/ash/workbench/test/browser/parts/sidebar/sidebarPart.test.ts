@@ -1,3 +1,4 @@
+import { Orientation } from '../../../../../base/browser/ui/sash/sash.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -49,9 +50,9 @@ suite('SidebarPart boundary sashes', () => {
 		const sidebar = resources.add(services.createInstance(SidebarPart, container, {
 			viewDescriptorService: descriptors, openComposite: async () => null,
 		}));
-		const left = resources.add(new Sash(container, 'vertical'));
-		const right = resources.add(new Sash(container, 'vertical'));
-		const replacement = resources.add(new Sash(container, 'vertical'));
+		const left = resources.add(new Sash(container, { getVerticalSashLeft: () => 0 }, { orientation: Orientation.VERTICAL }));
+		const right = resources.add(new Sash(container, { getVerticalSashLeft: () => 0 }, { orientation: Orientation.VERTICAL }));
+		const replacement = resources.add(new Sash(container, { getVerticalSashLeft: () => 0 }, { orientation: Orientation.VERTICAL }));
 		const states: boolean[][] = [];
 		const record = () => states.push([left, right, replacement].map(sash => sash.element.classList.contains('ash-primary-sidebar-sash')));
 		sidebar.setBoundarySashes({ left, right });
@@ -84,7 +85,7 @@ suite('SidebarPart boundary sashes', () => {
 			id: 'agentSidebar', location: ViewContainerLocation.AgentSidebar,
 			viewDescriptorService: descriptors, openComposite: async () => null,
 		}));
-		const sash = resources.add(new Sash(container, 'vertical'));
+		const sash = resources.add(new Sash(container, { getVerticalSashLeft: () => 0 }, { orientation: Orientation.VERTICAL }));
 		sidebar.setBoundarySashes({ right: sash });
 		assert.equal(sash.element.classList.contains('ash-primary-sidebar-sash'), false);
 	});

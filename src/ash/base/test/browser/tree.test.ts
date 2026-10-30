@@ -1,19 +1,79 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { DragAndDropDataKind } from "../../browser/ui/dnd/dnd.js";
-import { AbstractTree } from "../../browser/ui/tree/abstractTree.js";
-import { AsyncDataTree, CompressibleAsyncDataTree } from "../../browser/ui/tree/asyncDataTree.js";
-import { CompressibleObjectTreeModel, compressTreeElement, decompressTreeElement } from "../../browser/ui/tree/compressedObjectTreeModel.js";
-import { DataTree } from "../../browser/ui/tree/dataTree.js";
-import { IndexTree } from "../../browser/ui/tree/indexTree.js";
-import { IndexTreeModel } from "../../browser/ui/tree/indexTreeModel.js";
-import { CompressibleObjectTree, ObjectTree } from "../../browser/ui/tree/objectTree.js";
-import { ObjectTreeModel } from "../../browser/ui/tree/objectTreeModel.js";
-import { TreeVisibility } from "../../browser/ui/tree/tree.js";
-import { h, svg } from "../../browser/dom.js";
-import { isMacintosh } from "../../common/platform.js";
-import { DeferredPromise } from "../../common/async.js";
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { DragAndDropDataKind } from '../../browser/ui/dnd/dnd.js';
+import { AbstractTree } from '../../browser/ui/tree/abstractTree.js';
+import { AsyncDataTree, CompressibleAsyncDataTree } from '../../browser/ui/tree/asyncDataTree.js';
+import { CompressibleObjectTreeModel, compressTreeElement, decompressTreeElement } from '../../browser/ui/tree/compressedObjectTreeModel.js';
+import { DataTree } from '../../browser/ui/tree/dataTree.js';
+import { IndexTree } from '../../browser/ui/tree/indexTree.js';
+import { IndexTreeModel } from '../../browser/ui/tree/indexTreeModel.js';
+import { CompressibleObjectTree, ObjectTree } from '../../browser/ui/tree/objectTree.js';
+import { ObjectTreeModel } from '../../browser/ui/tree/objectTreeModel.js';
+import { TreeVisibility } from '../../browser/ui/tree/tree.js';
+import { h, svg } from '../../browser/dom.js';
+import { isMacintosh } from '../../common/platform.js';
+import { DeferredPromise } from '../../common/async.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
+
+suite('ObjectTree partial update lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('ObjectTree refilter with unchanged visibility retains focused selected rows without DOM writes', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tree = new ObjectTree<{ id: string; }>(dom.window.document.body, {
+				modelOptions: { identityProvider: { getId: item => item.id } },
+				renderElement: item => h(dom.window.document, 'button', undefined, item.id),
+			});
+			tree.setChildren([{ element: { id: 'folder' }, children: [{ element: { id: 'child' } }] }]);
+			tree.setSelection(['child']);
+			const row = tree.element.querySelector<HTMLElement>('[data-tree-id="child"]')!;
+			const button = row.querySelector('button')!;
+			button.focus();
+			const observer = new dom.window.MutationObserver(() => { });
+			observer.observe(tree.element, { attributes: true, childList: true, subtree: true });
+			try {
+				tree.model.refilter();
+				assert.equal(observer.takeRecords().length, 0);
+				assert.equal(dom.window.document.activeElement, button);
+				assert.equal(row.getAttribute('aria-selected'), 'true');
+				assert.equal(row.getAttribute('aria-level'), '2');
+			} finally { observer.disconnect(); }
+		} finally { dom.window.close(); }
+	});
+
+	test('ObjectTree local updates preserve unrelated row controls and refresh retained node payloads', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using tree = new ObjectTree<{ id: string; label: string; }>(dom.window.document.body, {
+				modelOptions: { identityProvider: { getId: item => item.id } },
+				dnd: { getDragURI: item => item.label === 'Sibling' ? item.id : undefined, onDragOver: () => false, drop: () => { } },
+				renderElement: item => h(dom.window.document, 'button', undefined, item.label),
+			});
+			const folder = { id: 'folder', label: 'Folder' };
+			const sibling = { id: 'sibling', label: 'Sibling' };
+			tree.setChildren([{ element: folder, collapsed: true, children: [{ element: { id: 'child', label: 'Child' } }] }, { element: sibling }]);
+			const folderRow = tree.element.querySelector<HTMLElement>('[data-tree-id="folder"]')!;
+			const siblingRow = tree.element.querySelector<HTMLElement>('[data-tree-id="sibling"]')!;
+			const control = siblingRow.querySelector('button')!;
+			assert.equal(siblingRow.draggable, true);
+			control.focus();
+			tree.expand('folder');
+			assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
+			assert.equal(dom.window.document.activeElement, control);
+			assert.equal(folderRow.getAttribute('aria-expanded'), 'true');
+			tree.collapse('folder');
+			assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
+			assert.equal(folderRow.getAttribute('aria-expanded'), 'false');
+			tree.setChildren([{ element: folder, collapsed: true, children: [{ element: { id: 'child', label: 'Child' } }] }, { element: { id: 'sibling', label: 'Updated sibling' } }]);
+			assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
+			assert.equal(siblingRow.textContent, 'Updated sibling');
+			assert.equal(siblingRow.getAttribute('aria-posinset'), '2');
+			assert.equal(siblingRow.draggable, false, 'retained model nodes project drag capability from their updated payload');
+		} finally { dom.window.close(); }
+	});
+});
 
 test('Compact async reads stay bounded and release capacity after failures', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -249,105 +309,108 @@ test('Compact async chains retain selection and loaded expansion across branchin
 	} finally { dom.window.close(); }
 });
 
-test("IndexTreeModel owns index locations and atomic splice", () => {
-	const model = new IndexTreeModel<TestNode>({ id: "root", label: "Root", expanded: true });
+test('IndexTreeModel owns index locations and atomic splice', () => {
+	const model = new IndexTreeModel<TestNode>({ id: 'root', label: 'Root', expanded: true });
 	model.setChildren([
-		{ element: { id: "parent", label: "Parent", expanded: false }, children: [{ element: { id: "child", label: "Child", expanded: false } }] },
-		{ element: { id: "sibling", label: "Sibling", expanded: false } },
+		{
+			element: { id: 'parent', label: 'Parent', expanded: false },
+			children: [{ element: { id: 'child', label: 'Child', expanded: false } }]
+		},
+		{ element: { id: 'sibling', label: 'Sibling', expanded: false } },
 	]);
-	assert.equal(model.getNode([0]).element.id, "parent");
-	assert.equal(model.getNode([0, 0]).element.id, "child");
+	assert.equal(model.getNode([0]).element.id, 'parent');
+	assert.equal(model.getNode([0, 0]).element.id, 'child');
 	assert.deepEqual(model.getNode([0, 0]).location, [0, 0]);
-	model.splice([1], 0, [{ element: { id: "inserted", label: "Inserted", expanded: false } }]);
-	assert.deepEqual(model.rootNodes.map((node) => node.element.id), ["parent", "inserted", "sibling"]);
+	model.splice([1], 0, [{ element: { id: 'inserted', label: 'Inserted', expanded: false } }]);
+	assert.deepEqual(model.rootNodes.map((node) => node.element.id), ['parent', 'inserted', 'sibling']);
 	assert.deepEqual(model.getNode([2]).location, [2]);
 	assert.equal(model.collapse([0]), true);
-	assert.deepEqual(model.visibleNodes.map((node) => node.element.id), ["parent", "inserted", "sibling"]);
+	assert.deepEqual(model.visibleNodes.map((node) => node.element.id), ['parent', 'inserted', 'sibling']);
 	assert.throws(() => model.splice([], 0), /child position/);
-	assert.equal(model.getNode([2]).element.id, "sibling");
+	assert.equal(model.getNode([2]).element.id, 'sibling');
 	model.dispose();
 });
 
-test("IndexTreeModel reports the changed visible range and keeps unrelated branches intact", () => {
-	const model = new IndexTreeModel<TestNode>({ id: "root", label: "Root", expanded: true }, {
+test('IndexTreeModel reports the changed visible range and keeps unrelated branches intact', () => {
+	const model = new IndexTreeModel<TestNode>({ id: 'root', label: 'Root', expanded: true }, {
 		identityProvider: { getId: node => node.id },
 		preserveCollapseStateByIdentity: true,
 	});
 	model.setChildren([
-		{ element: { id: "left", label: "Left", expanded: false }, children: [{ element: { id: "child", label: "Child", expanded: false } }] },
-		{ element: { id: "right", label: "Right", expanded: false }, children: [{ element: { id: "stable", label: "Stable", expanded: false } }] },
+		{ element: { id: 'left', label: 'Left', expanded: false }, children: [{ element: { id: 'child', label: 'Child', expanded: false } }] },
+		{ element: { id: 'right', label: 'Right', expanded: false }, children: [{ element: { id: 'stable', label: 'Stable', expanded: false } }] },
 	]);
-	const stable = model.getNodeById("stable");
+	const stable = model.getNodeById('stable');
 	const changes: Array<{ start: number; deleteCount: number; ids: string[]; }> = [];
 	model.onDidChange(({ visibleSplice }) => {
 		if (visibleSplice) changes.push({ start: visibleSplice.start, deleteCount: visibleSplice.deleteCount, ids: visibleSplice.elements.map(node => node.id) });
 	});
 	model.setNodeChildren([0], [{
-		element: { id: "wrapper", label: "Wrapper", expanded: false },
-		children: [{ element: { id: "child", label: "Child", expanded: false } }],
+		element: { id: 'wrapper', label: 'Wrapper', expanded: false },
+		children: [{ element: { id: 'child', label: 'Child', expanded: false } }],
 	}]);
-	assert.deepEqual(changes, [{ start: 1, deleteCount: 1, ids: ["wrapper", "child"] }]);
-	assert.deepEqual(model.getNodeById("child")?.location, [0, 0, 0]);
-	assert.equal(model.getNodeById("stable"), stable);
-	assert.deepEqual(model.getNodeById("stable")?.location, [1, 0]);
+	assert.deepEqual(changes, [{ start: 1, deleteCount: 1, ids: ['wrapper', 'child'] }]);
+	assert.deepEqual(model.getNodeById('child')?.location, [0, 0, 0]);
+	assert.equal(model.getNodeById('stable'), stable);
+	assert.deepEqual(model.getNodeById('stable')?.location, [1, 0]);
 	model.collapse([0]);
 	assert.deepEqual(changes.at(-1), { start: 1, deleteCount: 2, ids: [] });
 	model.expand([0]);
-	assert.deepEqual(changes.at(-1), { start: 1, deleteCount: 0, ids: ["wrapper", "child"] });
-	assert.deepEqual(model.visibleNodes.map(node => node.id), ["left", "wrapper", "child", "right", "stable"]);
+	assert.deepEqual(changes.at(-1), { start: 1, deleteCount: 0, ids: ['wrapper', 'child'] });
+	assert.deepEqual(model.visibleNodes.map(node => node.id), ['left', 'wrapper', 'child', 'right', 'stable']);
 	model.dispose();
 });
 
-test("IndexTreeModel preserves filtered visibility while toggling collapsed branches", () => {
+test('IndexTreeModel preserves filtered visibility while toggling collapsed branches', () => {
 	let filterCalls = 0;
-	const model = new IndexTreeModel<TestNode>({ id: "root", label: "Root", expanded: true }, {
+	const model = new IndexTreeModel<TestNode>({ id: 'root', label: 'Root', expanded: true }, {
 		filter: { filter: () => { filterCalls += 1; return TreeVisibility.Visible; } },
 	});
 	model.setChildren([{
-		element: { id: "folder", label: "Folder", expanded: false },
+		element: { id: 'folder', label: 'Folder', expanded: false },
 		children: [{
-			element: { id: "nested", label: "Nested", expanded: false },
-			children: [{ element: { id: "file", label: "File", expanded: false } }],
+			element: { id: 'nested', label: 'Nested', expanded: false },
+			children: [{ element: { id: 'file', label: 'File', expanded: false } }],
 		}],
-	}, { element: { id: "sibling", label: "Sibling", expanded: false } }]);
+	}, { element: { id: 'sibling', label: 'Sibling', expanded: false } }]);
 	const callsAfterStructure = filterCalls;
 
 	assert.equal(model.collapseRecursive([0]), true);
-	assert.deepEqual(model.visibleNodes.map(node => node.element.id), ["folder", "sibling"]);
+	assert.deepEqual(model.visibleNodes.map(node => node.element.id), ['folder', 'sibling']);
 	assert.equal(model.expandTo([0, 0, 0]), true);
-	assert.deepEqual(model.visibleNodes.map(node => node.element.id), ["folder", "nested", "file", "sibling"]);
+	assert.deepEqual(model.visibleNodes.map(node => node.element.id), ['folder', 'nested', 'file', 'sibling']);
 	assert.equal(model.collapse([0]), true);
 	assert.equal(model.expand([0]), true);
-	assert.deepEqual(model.visibleNodes.map(node => node.element.id), ["folder", "nested", "file", "sibling"]);
+	assert.deepEqual(model.visibleNodes.map(node => node.element.id), ['folder', 'nested', 'file', 'sibling']);
 	assert.equal(filterCalls, callsAfterStructure);
 	model.refilter();
 	assert.ok(filterCalls > callsAfterStructure);
 	model.dispose();
 });
 
-test("IndexTree renders splice results through the shared flat AbstractTree", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const tree = new IndexTree<TestNode>(dom.window.document.body, { id: "root", label: "Root", expanded: true }, {
-		ariaLabel: "Index tree",
+test('IndexTree renders splice results through the shared flat AbstractTree', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const tree = new IndexTree<TestNode>(dom.window.document.body, { id: 'root', label: 'Root', expanded: true }, {
+		ariaLabel: 'Index tree',
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
 	});
-	tree.splice([0], 0, [{ element: { id: "first", label: "First", expanded: false } }]);
-	tree.splice([1], 0, [{ element: { id: "second", label: "Second", expanded: false } }]);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.textContent), ["First", "Second"]);
-	assert.equal(tree.element.querySelector(".ash-tree-row")?.getAttribute("aria-posinset"), "1");
+	tree.splice([0], 0, [{ element: { id: 'first', label: 'First', expanded: false } }]);
+	tree.splice([1], 0, [{ element: { id: 'second', label: 'Second', expanded: false } }]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map((row) => row.textContent), ['First', 'Second']);
+	assert.equal(tree.element.querySelector('.ash-tree-row')?.getAttribute('aria-posinset'), '1');
 	tree.dispose();
 	dom.window.close();
 });
 
-test("AbstractTree loads collapsed find candidates only while searching", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('AbstractTree loads collapsed find candidates only while searching', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const node = {
-		id: "item",
-		element: { id: "item", label: "Item", expanded: false },
+		id: 'item',
+		element: { id: 'item', label: 'Item', expanded: false },
 		parent: undefined,
 		children: [],
 		depth: 1,
@@ -360,7 +423,7 @@ test("AbstractTree loads collapsed find candidates only while searching", () => 
 	const tree = new AbstractTree<TestNode, typeof node>(dom.window.document.body, {
 		keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: element => element.label },
 		renderElement: element => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.element.label;
 			return label;
 		},
@@ -369,7 +432,7 @@ test("AbstractTree loads collapsed find candidates only while searching", () => 
 	tree.setFindCandidates(() => { candidateReads += 1; return [node]; });
 	tree.items = [node];
 	assert.equal(candidateReads, 0);
-	tree.setFindPattern("Item");
+	tree.setFindPattern('Item');
 	assert.equal(tree.findNext(), node);
 	assert.equal(candidateReads, 1);
 	tree.clearFind();
@@ -379,12 +442,12 @@ test("AbstractTree loads collapsed find candidates only while searching", () => 
 	dom.window.close();
 });
 
-test("DataTree materializes and refreshes a synchronous data source", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const root: TestNode = { id: "root", label: "Root", expanded: true };
-	const group: TestNode = { id: "group", label: "Group", expanded: false };
-	const first: TestNode = { id: "first", label: "First", expanded: false };
-	const second: TestNode = { id: "second", label: "Second", expanded: false };
+test('DataTree materializes and refreshes a synchronous data source', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const first: TestNode = { id: 'first', label: 'First', expanded: false };
+	const second: TestNode = { id: 'second', label: 'Second', expanded: false };
 	const children = new Map<TestNode, readonly TestNode[]>([[root, [group]], [group, [first]], [first, []], [second, []]]);
 	const tree = new DataTree<TestNode, TestNode>(dom.window.document.body, {
 		hasChildren: (element) => (children.get(element as TestNode)?.length ?? 0) > 0,
@@ -393,18 +456,18 @@ test("DataTree materializes and refreshes a synchronous data source", () => {
 		identityProvider: { getId: (element) => element.id },
 		collapseByDefault: (element) => element === group,
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
 	});
 	tree.setInput(root);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>('.ash-tree-row')].map((row) => row.textContent), ['Group']);
 	tree.expand(group);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "First"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>('.ash-tree-row')].map((row) => row.textContent), ['Group', 'First']);
 	children.set(group, [second]);
 	tree.updateChildren(group);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Second"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>('.ash-tree-row')].map((row) => row.textContent), ['Group', 'Second']);
 	tree.dispose();
 	dom.window.close();
 });
@@ -591,12 +654,12 @@ test('AsyncDataTree discards a pending read invalidated while folded', async () 
 	}
 });
 
-test("AsyncDataTree loads on expansion and coalesces refresh requests", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const root: TestNode = { id: "root", label: "Root", expanded: true };
-	const group: TestNode = { id: "group", label: "Group", expanded: false };
-	const sibling: TestNode = { id: "sibling", label: "Sibling", expanded: false };
-	const child: TestNode = { id: "child", label: "Child", expanded: false };
+test('AsyncDataTree loads on expansion and coalesces refresh requests', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const sibling: TestNode = { id: 'sibling', label: 'Sibling', expanded: false };
+	const child: TestNode = { id: 'child', label: 'Child', expanded: false };
 	const pending: Array<(children: readonly TestNode[]) => void> = [];
 	const twistieRenders: string[] = [];
 	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
@@ -613,7 +676,7 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 			container.dataset.loading = String(state.loading);
 		},
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
@@ -631,9 +694,9 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 	const expansion = tree.expand(group);
 	assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
-	assert.equal(tree.element.getAttribute("aria-busy"), "true");
-	assert.equal(groupRow?.querySelector<HTMLElement>(".ash-tree-twistie")?.dataset.loading, "true");
-	assert.equal(twistieRenders.includes("sibling"), false);
+	assert.equal(tree.element.getAttribute('aria-busy'), 'true');
+	assert.equal(groupRow?.querySelector<HTMLElement>('.ash-tree-twistie')?.dataset.loading, 'true');
+	assert.equal(twistieRenders.includes('sibling'), false);
 	await Promise.resolve();
 	assert.equal(pending.length, 1);
 	const latest = tree.updateChildren(group);
@@ -642,8 +705,8 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 	pending[0]!([child]);
 	await latest;
 	assert.equal(await expansion, true);
-	assert.equal(tree.element.getAttribute("aria-busy"), "false");
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Child", "Sibling"]);
+	assert.equal(tree.element.getAttribute('aria-busy'), 'false');
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>('.ash-tree-row')].map((row) => row.textContent), ['Group', 'Child', 'Sibling']);
 	assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
 	assert.equal(tree.collapse(group), true);
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
@@ -656,8 +719,8 @@ test("AsyncDataTree loads on expansion and coalesces refresh requests", async ()
 	dom.window.close();
 });
 
-test("AsyncDataTree discards an old child load when a branch becomes a leaf", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('AsyncDataTree discards an old child load when a branch becomes a leaf', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
 	const folder: TestNode = { id: 'folder', label: 'Folder', expanded: false };
 	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
@@ -698,11 +761,11 @@ test("AsyncDataTree discards an old child load when a branch becomes a leaf", as
 	}
 });
 
-test("AsyncDataTree does not restart a lazy load when a node is collapsed and expanded", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const root: TestNode = { id: "root", label: "Root", expanded: true };
-	const group: TestNode = { id: "group", label: "Group", expanded: false };
-	const child: TestNode = { id: "child", label: "Child", expanded: false };
+test('AsyncDataTree does not restart a lazy load when a node is collapsed and expanded', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const child: TestNode = { id: 'child', label: 'Child', expanded: false };
 	let reads = 0;
 	let resolveChildren: ((children: readonly TestNode[]) => void) | undefined;
 	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
@@ -715,7 +778,7 @@ test("AsyncDataTree does not restart a lazy load when a node is collapsed and ex
 	}, {
 		identityProvider: { getId: (element) => element.id },
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
@@ -737,7 +800,7 @@ test("AsyncDataTree does not restart a lazy load when a node is collapsed and ex
 	resolveChildren?.([child]);
 	await loaded;
 	assert.deepEqual(await Promise.all([firstExpansion, secondExpansion]), [true, true]);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Child"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>('.ash-tree-row')].map((row) => row.textContent), ['Group', 'Child']);
 	tree.collapse(group);
 	assert.equal(await tree.expand(group), true);
 	assert.equal(reads, 1);
@@ -747,27 +810,27 @@ test("AsyncDataTree does not restart a lazy load when a node is collapsed and ex
 	dom.window.close();
 });
 
-test("AsyncDataTree refreshes expanded descendants while preserving rows", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const root: TestNode = { id: "root", label: "Root", expanded: true };
-	const firstGroup: TestNode = { id: "group", label: "Group", expanded: false };
-	const refreshedGroup: TestNode = { id: "group", label: "Refreshed group", expanded: false };
-	const child: TestNode = { id: "child", label: "Child", expanded: false };
+test('AsyncDataTree refreshes expanded descendants while preserving rows', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const firstGroup: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const refreshedGroup: TestNode = { id: 'group', label: 'Refreshed group', expanded: false };
+	const child: TestNode = { id: 'child', label: 'Child', expanded: false };
 	let rootChildren: readonly TestNode[] = [firstGroup];
 	let groupReads = 0;
 	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
-		hasChildren: (element) => element.id === "root" || element.id === "group",
+		hasChildren: (element) => element.id === 'root' || element.id === 'group',
 		getChildren: (element) => {
-			if (element.id === "root") return rootChildren;
+			if (element.id === 'root') return rootChildren;
 			groupReads += 1;
 			return [child];
 		},
 	}, {
 		identityProvider: { getId: (element) => element.id },
 		reuseRows: true,
-		collapseByDefault: (element) => element.id === "group",
+		collapseByDefault: (element) => element.id === 'group',
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
@@ -776,7 +839,7 @@ test("AsyncDataTree refreshes expanded descendants while preserving rows", async
 	tree.expand(firstGroup);
 	await new Promise<void>((resolve) => {
 		const listener = tree.onDidChangeLoadState(({ element, loading }) => {
-			if (element?.id !== "group" || loading) return;
+			if (element?.id !== 'group' || loading) return;
 			listener.dispose();
 			resolve();
 		});
@@ -786,8 +849,8 @@ test("AsyncDataTree refreshes expanded descendants while preserving rows", async
 	rootChildren = [refreshedGroup];
 	await tree.updateChildren(root);
 	assert.deepEqual(
-		[...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent),
-		["Refreshed group", "Child"],
+		[...tree.element.querySelectorAll<HTMLElement>('.ash-tree-row')].map((row) => row.textContent),
+		['Refreshed group', 'Child'],
 	);
 	assert.equal(tree.element.querySelector('[data-tree-id="group"]'), groupRow);
 	assert.equal(tree.element.querySelector('[data-tree-id="child"]'), childRow);
@@ -796,10 +859,10 @@ test("AsyncDataTree refreshes expanded descendants while preserving rows", async
 	dom.window.close();
 });
 
-test("AsyncDataTree preserves loaded children after an invalid refresh", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const root: TestNode = { id: "root", label: "Root", expanded: true };
-	const child: TestNode = { id: "child", label: "Child", expanded: false };
+test('AsyncDataTree preserves loaded children after an invalid refresh', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const child: TestNode = { id: 'child', label: 'Child', expanded: false };
 	let children: readonly TestNode[] = [child];
 	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
 		hasChildren: element => element === root,
@@ -807,7 +870,7 @@ test("AsyncDataTree preserves loaded children after an invalid refresh", async (
 	}, {
 		identityProvider: { getId: element => element.id },
 		renderElement: element => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
@@ -815,33 +878,33 @@ test("AsyncDataTree preserves loaded children after an invalid refresh", async (
 	await tree.setInput(root);
 	children = [child, child];
 	await assert.rejects(tree.updateChildren(root), /Duplicate tree node ID/);
-	assert.deepEqual(tree.getVisibleElements().map(element => element.id), ["child"]);
-	children = [{ id: "replacement", label: "Replacement", expanded: false }];
+	assert.deepEqual(tree.getVisibleElements().map(element => element.id), ['child']);
+	children = [{ id: 'replacement', label: 'Replacement', expanded: false }];
 	await tree.updateChildren(root);
-	assert.deepEqual(tree.getVisibleElements().map(element => element.id), ["replacement"]);
+	assert.deepEqual(tree.getVisibleElements().map(element => element.id), ['replacement']);
 	tree.dispose();
 	dom.window.close();
 });
 
-test("AsyncDataTree collapses a failed expansion and can retry it", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const root: TestNode = { id: "root", label: "Root", expanded: true };
-	const group: TestNode = { id: "group", label: "Group", expanded: false };
-	const child: TestNode = { id: "child", label: "Child", expanded: false };
+test('AsyncDataTree collapses a failed expansion and can retry it', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: true };
+	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const child: TestNode = { id: 'child', label: 'Child', expanded: false };
 	let reads = 0;
 	const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
 		hasChildren: (element) => element === root || element === group,
 		getChildren: (element) => {
 			if (element === root) return [group];
 			reads += 1;
-			if (reads === 1) throw new Error("Directory unavailable");
+			if (reads === 1) throw new Error('Directory unavailable');
 			return [child];
 		},
 	}, {
 		identityProvider: { getId: (element) => element.id },
 		collapseByDefault: (element) => element === group,
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
@@ -855,7 +918,7 @@ test("AsyncDataTree collapses a failed expansion and can retry it", async () => 
 	});
 	await assert.rejects(tree.expand(group), /Directory unavailable/);
 	await failed;
-	assert.equal(tree.element.querySelector('[data-tree-id="group"]')?.getAttribute("aria-expanded"), "false");
+	assert.equal(tree.element.querySelector('[data-tree-id="group"]')?.getAttribute('aria-expanded'), 'false');
 	const loaded = new Promise<void>((resolve) => {
 		const listener = tree.onDidChangeLoadState(({ element, loading }) => {
 			if (element !== group || loading) return;
@@ -865,21 +928,21 @@ test("AsyncDataTree collapses a failed expansion and can retry it", async () => 
 	});
 	tree.expand(group);
 	await loaded;
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-row")].map((row) => row.textContent), ["Group", "Child"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>('.ash-tree-row')].map((row) => row.textContent), ['Group', 'Child']);
 	assert.equal(reads, 2);
 	tree.dispose();
 	dom.window.close();
 });
 
-test("CompressibleObjectTreeModel round-trips chains and honors incompressible boundaries", () => {
-	const leaf: TestNode = { id: "leaf", label: "Leaf", expanded: false };
-	const boundary: TestNode = { id: "boundary", label: "Boundary", expanded: false };
-	const middle: TestNode = { id: "middle", label: "Middle", expanded: false };
-	const root: TestNode = { id: "root", label: "Root", expanded: false };
+test('CompressibleObjectTreeModel round-trips chains and honors incompressible boundaries', () => {
+	const leaf: TestNode = { id: 'leaf', label: 'Leaf', expanded: false };
+	const boundary: TestNode = { id: 'boundary', label: 'Boundary', expanded: false };
+	const middle: TestNode = { id: 'middle', label: 'Middle', expanded: false };
+	const root: TestNode = { id: 'root', label: 'Root', expanded: false };
 	const source = { element: root, children: [{ element: middle, children: [{ element: boundary, incompressible: true, children: [{ element: leaf }] }] }] };
 	const compressed = compressTreeElement(source);
-	assert.deepEqual(compressed.element.elements.map((node) => node.id), ["root", "middle"]);
-	assert.deepEqual(compressed.children?.[0]?.element.elements.map((node) => node.id), ["boundary", "leaf"]);
+	assert.deepEqual(compressed.element.elements.map((node) => node.id), ['root', 'middle']);
+	assert.deepEqual(compressed.children?.[0]?.element.elements.map((node) => node.id), ['boundary', 'leaf']);
 	const decompressed = decompressTreeElement(compressed);
 	assert.equal(decompressed.element, root);
 	assert.equal(decompressed.children?.[0]?.element, middle);
@@ -889,40 +952,40 @@ test("CompressibleObjectTreeModel round-trips chains and honors incompressible b
 
 	const model = new CompressibleObjectTreeModel<TestNode>({ identityProvider: { getId: (node) => node.id } });
 	model.setChildren([source]);
-	assert.deepEqual(model.visibleNodes.map((node) => node.element.elements.map((element) => element.id)), [["root", "middle"], ["boundary", "leaf"]]);
+	assert.deepEqual(model.visibleNodes.map((node) => node.element.elements.map((element) => element.id)), [['root', 'middle'], ['boundary', 'leaf']]);
 	assert.equal(model.getCompressedNode(root), model.getCompressedNode(middle));
 	model.setCompressionEnabled(false);
-	assert.deepEqual(model.visibleNodes.map((node) => node.element.elements.map((element) => element.id)), [["root"], ["middle"], ["boundary"], ["leaf"]]);
+	assert.deepEqual(model.visibleNodes.map((node) => node.element.elements.map((element) => element.id)), [['root'], ['middle'], ['boundary'], ['leaf']]);
 	model.dispose();
 });
 
-test("CompressibleObjectTree renders one row per compressed chain", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const root: TestNode = { id: "root", label: "Root", expanded: false };
-	const middle: TestNode = { id: "middle", label: "Middle", expanded: false };
-	const leaf: TestNode = { id: "leaf", label: "Leaf", expanded: false };
+test('CompressibleObjectTree renders one row per compressed chain', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: false };
+	const middle: TestNode = { id: 'middle', label: 'Middle', expanded: false };
+	const leaf: TestNode = { id: 'leaf', label: 'Leaf', expanded: false };
 	const tree = new CompressibleObjectTree<TestNode>(dom.window.document.body, {
 		modelOptions: { identityProvider: { getId: (node) => node.id } },
 		renderCompressedElements: (elements) => {
-			const label = h(dom.window.document, "span");
-			label.textContent = elements.map((element) => element.label).join(" / ");
+			const label = h(dom.window.document, 'span');
+			label.textContent = elements.map((element) => element.label).join(' / ');
 			return label;
 		},
 	});
 	tree.setChildren([{ element: root, children: [{ element: middle, children: [{ element: leaf }] }] }]);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.textContent), ["Root / Middle / Leaf"]);
-	assert.deepEqual(tree.getCompressedTreeNode(middle)?.elements.map((element) => element.id), ["root", "middle", "leaf"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map((row) => row.textContent), ['Root / Middle / Leaf']);
+	assert.deepEqual(tree.getCompressedTreeNode(middle)?.elements.map((element) => element.id), ['root', 'middle', 'leaf']);
 	tree.dispose();
 	dom.window.close();
 });
 
-test("CompressibleAsyncDataTree lazily expands compressed branches", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const root: TestNode = { id: "root", label: "Root", expanded: false };
-	const first: TestNode = { id: "first", label: "First", expanded: false };
-	const middle: TestNode = { id: "middle", label: "Middle", expanded: false };
-	const left: TestNode = { id: "left", label: "Left", expanded: false };
-	const right: TestNode = { id: "right", label: "Right", expanded: false };
+test('CompressibleAsyncDataTree lazily expands compressed branches', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const root: TestNode = { id: 'root', label: 'Root', expanded: false };
+	const first: TestNode = { id: 'first', label: 'First', expanded: false };
+	const middle: TestNode = { id: 'middle', label: 'Middle', expanded: false };
+	const left: TestNode = { id: 'left', label: 'Left', expanded: false };
+	const right: TestNode = { id: 'right', label: 'Right', expanded: false };
 	const children = new Map<TestNode, readonly TestNode[]>([[root, [first]], [first, [middle]], [middle, [left, right]], [left, []], [right, []]]);
 	const tree = new CompressibleAsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
 		hasChildren: (element) => (children.get(element as TestNode)?.length ?? 0) > 0,
@@ -930,30 +993,30 @@ test("CompressibleAsyncDataTree lazily expands compressed branches", async () =>
 	}, {
 		identityProvider: { getId: (node) => node.id },
 		renderCompressedElements: (elements) => {
-			const label = h(dom.window.document, "span");
-			label.textContent = elements.map((element) => element.label).join(" / ");
+			const label = h(dom.window.document, 'span');
+			label.textContent = elements.map((element) => element.label).join(' / ');
 			return label;
 		},
 	});
 	const pointers: string[] = [];
-	tree.onPointer(({ element, elements }) => pointers.push(`${element.id}:${elements.map((candidate) => candidate.id).join("/")}`));
+	tree.onPointer(({ element, elements }) => pointers.push(`${element.id}:${elements.map((candidate) => candidate.id).join('/')}`));
 	await tree.setInput(root);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.textContent), ["First"]);
-	tree.element.querySelector<HTMLElement>(":scope > .ash-tree-row")?.click();
-	assert.deepEqual(pointers, ["first:first"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map((row) => row.textContent), ['First']);
+	tree.element.querySelector<HTMLElement>(':scope > .ash-tree-row')?.click();
+	assert.deepEqual(pointers, ['first:first']);
 	assert.equal(await tree.expand(first), true);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.textContent), ["First / Middle"]);
-	tree.element.querySelector<HTMLElement>(":scope > .ash-tree-row")?.click();
-	assert.deepEqual(pointers, ["first:first", "middle:first/middle"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map((row) => row.textContent), ['First / Middle']);
+	tree.element.querySelector<HTMLElement>(':scope > .ash-tree-row')?.click();
+	assert.deepEqual(pointers, ['first:first', 'middle:first/middle']);
 	assert.equal(await tree.expand(middle), true);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.textContent), ["First / Middle", "Left", "Right"]);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map((row) => row.textContent), ['First / Middle', 'Left', 'Right']);
 	tree.dispose();
 	dom.window.close();
 });
 
-test("ObjectTreeModel owns hierarchy, local replacement, and collapse state", () => {
-	const child: TestNode = { id: "child", label: "Child", expanded: false };
-	const parent: TestNode = { id: "parent", label: "Parent", expanded: false, children: [child] };
+test('ObjectTreeModel owns hierarchy, local replacement, and collapse state', () => {
+	const child: TestNode = { id: 'child', label: 'Child', expanded: false };
+	const parent: TestNode = { id: 'parent', label: 'Parent', expanded: false, children: [child] };
 	const model = new ObjectTreeModel<TestNode>({ identityProvider: { getId: (node) => node.id } });
 	const changes: string[] = [];
 	const collapseChanges: string[] = [];
@@ -961,137 +1024,137 @@ test("ObjectTreeModel owns hierarchy, local replacement, and collapse state", ()
 	model.onDidChangeCollapseState(({ node, collapsed }) => collapseChanges.push(`${node.id}:${collapsed}`));
 
 	model.setChildren([{ element: parent, children: [{ element: child }] }]);
-	assert.equal(model.getNode("child")?.element, child);
-	assert.equal(model.getParent("child")?.element, parent);
-	assert.equal(model.getNode("child")?.depth, 2);
-	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["parent", "child"]);
-	assert.equal(model.collapse("parent"), true);
-	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["parent"]);
-	const parentNode = model.getNode("parent");
-	model.setChildren([{ element: { id: "parent", label: "Updated parent", expanded: false }, children: [{ element: child }] }]);
-	assert.equal(model.getNode("parent")?.collapsed, true);
-	assert.equal(model.getNode("parent"), parentNode);
-	model.setNodeChildren("parent", [{ element: { id: "replacement", label: "Replacement", expanded: false } }]);
-	assert.equal(model.getNode("child"), undefined);
-	assert.equal(model.getParent("replacement")?.id, "parent");
+	assert.equal(model.getNode('child')?.element, child);
+	assert.equal(model.getParent('child')?.element, parent);
+	assert.equal(model.getNode('child')?.depth, 2);
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['parent', 'child']);
+	assert.equal(model.collapse('parent'), true);
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['parent']);
+	const parentNode = model.getNode('parent');
+	model.setChildren([{ element: { id: 'parent', label: 'Updated parent', expanded: false }, children: [{ element: child }] }]);
+	assert.equal(model.getNode('parent')?.collapsed, true);
+	assert.equal(model.getNode('parent'), parentNode);
+	model.setNodeChildren('parent', [{ element: { id: 'replacement', label: 'Replacement', expanded: false } }]);
+	assert.equal(model.getNode('child'), undefined);
+	assert.equal(model.getParent('replacement')?.id, 'parent');
 	assert.throws(() => model.setChildren([
-		{ element: { id: "duplicate", label: "First", expanded: false } },
-		{ element: { id: "duplicate", label: "Second", expanded: false } },
+		{ element: { id: 'duplicate', label: 'First', expanded: false } },
+		{ element: { id: 'duplicate', label: 'Second', expanded: false } },
 	]), /Duplicate tree node ID/);
-	assert.equal(model.getNode("replacement")?.element.label, "Replacement");
-	assert.deepEqual(changes, ["structure", "collapse", "structure", "structure"]);
-	assert.deepEqual(collapseChanges, ["parent:true"]);
+	assert.equal(model.getNode('replacement')?.element.label, 'Replacement');
+	assert.deepEqual(changes, ['structure', 'collapse', 'structure', 'structure']);
+	assert.deepEqual(collapseChanges, ['parent:true']);
 	model.dispose();
 });
 
-test("ObjectTreeModel keeps local updates atomic and expands ancestors", () => {
+test('ObjectTreeModel keeps local updates atomic and expands ancestors', () => {
 	const model = new ObjectTreeModel<TestNode>({
-		defaultCollapseState: "collapsed",
+		defaultCollapseState: 'collapsed',
 		identityProvider: { getId: (node) => node.id },
 	});
 	model.setChildren([{
-		element: { id: "root", label: "Root", expanded: false },
+		element: { id: 'root', label: 'Root', expanded: false },
 		children: [{
-			element: { id: "parent", label: "Parent", expanded: false },
-			children: [{ element: { id: "leaf", label: "Leaf", expanded: false } }],
+			element: { id: 'parent', label: 'Parent', expanded: false },
+			children: [{ element: { id: 'leaf', label: 'Leaf', expanded: false } }],
 		}],
 	}]);
 
-	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["root"]);
-	assert.equal(model.expandTo("leaf"), true);
-	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["root", "parent", "leaf"]);
-	assert.equal(model.collapseRecursive("root"), true);
-	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["root"]);
-	assert.throws(() => model.setNodeChildren("parent", [
-		{ element: { id: "duplicate", label: "First", expanded: false } },
-		{ element: { id: "duplicate", label: "Second", expanded: false } },
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['root']);
+	assert.equal(model.expandTo('leaf'), true);
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['root', 'parent', 'leaf']);
+	assert.equal(model.collapseRecursive('root'), true);
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['root']);
+	assert.throws(() => model.setNodeChildren('parent', [
+		{ element: { id: 'duplicate', label: 'First', expanded: false } },
+		{ element: { id: 'duplicate', label: 'Second', expanded: false } },
 	]), /Duplicate tree node ID/);
-	assert.equal(model.getNode("leaf")?.element.label, "Leaf");
+	assert.equal(model.getNode('leaf')?.element.label, 'Leaf');
 	model.dispose();
 });
 
-test("ObjectTreeModel keeps node identity without reindexing on collapse and rerender", () => {
+test('ObjectTreeModel keeps node identity without reindexing on collapse and rerender', () => {
 	let identityReads = 0;
 	const model = new ObjectTreeModel<TestNode>({
 		identityProvider: { getId: (node) => { identityReads++; return node.id; } },
 	});
 	model.setChildren([{
-		element: { id: "parent", label: "Parent", expanded: false },
+		element: { id: 'parent', label: 'Parent', expanded: false },
 		children: Array.from({ length: 100 }, (_, index) => ({ element: { id: `child-${index}`, label: `Child ${index}`, expanded: false } })),
 	}]);
-	const child = model.getNode("child-99");
+	const child = model.getNode('child-99');
 	const readsAfterStructure = identityReads;
 
-	assert.equal(model.collapse("parent"), true);
-	model.rerender("parent");
-	assert.equal(model.expand("parent"), true);
+	assert.equal(model.collapse('parent'), true);
+	model.rerender('parent');
+	assert.equal(model.expand('parent'), true);
 	assert.equal(identityReads, readsAfterStructure);
-	assert.equal(model.getNode("child-99"), child);
+	assert.equal(model.getNode('child-99'), child);
 	model.dispose();
 });
 
-test("ObjectTree avoids remeasuring unchanged children during a directory refresh", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ObjectTree avoids remeasuring unchanged children during a directory refresh', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	let heightReads = 0;
 	const tree = new ObjectTree<TestNode>(dom.window.document.body, {
 		modelOptions: { identityProvider: { getId: node => node.id } },
 		getHeight: () => { heightReads += 1; return 22; },
 		reuseRows: true,
 		renderElement: element => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
 	});
 	const children = Array.from({ length: 100 }, (_, index) => ({ element: { id: `child-${index}`, label: `Child ${index}`, expanded: false } }));
-	tree.setChildren([{ element: { id: "folder", label: "Folder", expanded: false }, children }]);
+	tree.setChildren([{ element: { id: 'folder', label: 'Folder', expanded: false }, children }]);
 	const firstRow = tree.element.querySelector('[data-tree-id="child-0"]');
 	heightReads = 0;
-	tree.setNodeChildren("folder", children);
+	tree.setNodeChildren('folder', children);
 	assert.ok(heightReads < 10);
 	assert.equal(tree.element.querySelector('[data-tree-id="child-0"]'), firstRow);
 	tree.dispose();
 	dom.window.close();
 });
 
-test("ObjectTreeModel filters recursively and sorts every level", () => {
+test('ObjectTreeModel filters recursively and sorts every level', () => {
 	const model = new ObjectTreeModel<TestNode>({
 		identityProvider: { getId: (node) => node.id },
 		sorter: { compare: (left, right) => left.label.localeCompare(right.label) },
 		filter: {
-			filter: (node) => node.id.endsWith("-group") ? TreeVisibility.Recurse : node.label.includes("Match"),
+			filter: (node) => node.id.endsWith('-group') ? TreeVisibility.Recurse : node.label.includes('Match'),
 		},
 	});
 	model.setChildren([
-		{ element: { id: "z-group", label: "Z group", expanded: false }, children: [{ element: { id: "match-b", label: "Match B", expanded: false } }] },
-		{ element: { id: "a-group", label: "A group", expanded: false }, children: [{ element: { id: "hidden", label: "Hidden", expanded: false } }, { element: { id: "match-a", label: "Match A", expanded: false } }] },
+		{ element: { id: 'z-group', label: 'Z group', expanded: false }, children: [{ element: { id: 'match-b', label: 'Match B', expanded: false } }] },
+		{ element: { id: 'a-group', label: 'A group', expanded: false }, children: [{ element: { id: 'hidden', label: 'Hidden', expanded: false } }, { element: { id: 'match-a', label: 'Match A', expanded: false } }] },
 	]);
 
-	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["a-group", "match-a", "z-group", "match-b"]);
-	assert.equal(model.getNode("hidden")?.visible, false);
-	assert.equal(model.getNode("hidden")?.visibleChildIndex, -1);
-	assert.equal(model.getNode("hidden")?.visibleChildrenCount, 1);
-	assert.equal(model.getNode("match-a")?.visibleChildIndex, 0);
-	assert.equal(model.getNode("match-a")?.visibleChildrenCount, 1);
-	model.setNodeChildren("a-group", [
-		{ element: { id: "hidden", label: "Hidden", expanded: false } },
-		{ element: { id: "match-a", label: "Match A", expanded: false } },
-		{ element: { id: "match-new", label: "Match new", expanded: false } },
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['a-group', 'match-a', 'z-group', 'match-b']);
+	assert.equal(model.getNode('hidden')?.visible, false);
+	assert.equal(model.getNode('hidden')?.visibleChildIndex, -1);
+	assert.equal(model.getNode('hidden')?.visibleChildrenCount, 1);
+	assert.equal(model.getNode('match-a')?.visibleChildIndex, 0);
+	assert.equal(model.getNode('match-a')?.visibleChildrenCount, 1);
+	model.setNodeChildren('a-group', [
+		{ element: { id: 'hidden', label: 'Hidden', expanded: false } },
+		{ element: { id: 'match-a', label: 'Match A', expanded: false } },
+		{ element: { id: 'match-new', label: 'Match new', expanded: false } },
 	]);
-	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["a-group", "match-a", "match-new", "z-group", "match-b"]);
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['a-group', 'match-a', 'match-new', 'z-group', 'match-b']);
 	model.setFilter(undefined);
-	assert.deepEqual(model.visibleNodes.map((node) => node.id), ["a-group", "hidden", "match-a", "match-new", "z-group", "match-b"]);
+	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['a-group', 'hidden', 'match-a', 'match-new', 'z-group', 'match-b']);
 	model.dispose();
 });
 
-test("ObjectTree projects the model as flat list rows with tree ARIA", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ObjectTree projects the model as flat list rows with tree ARIA', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const tree = new ObjectTree<TestNode>(dom.window.document.body, {
-		ariaLabel: "Object tree",
-		scrolling: "external",
+		ariaLabel: 'Object tree',
+		scrolling: 'external',
 		modelOptions: { identityProvider: { getId: (node) => node.id } },
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
@@ -1103,137 +1166,137 @@ test("ObjectTree projects the model as flat list rows with tree ARIA", () => {
 	tree.onPointer(({ element, target }) => pointers.push(`${element.id}:${target}`));
 	tree.onDidChangeCollapseState(({ element, collapsed: isCollapsed }) => collapsed.push(`${element.id}:${isCollapsed}`));
 	tree.setChildren([{
-		element: { id: "parent", label: "Parent", expanded: false },
+		element: { id: 'parent', label: 'Parent', expanded: false },
 		collapsed: true,
-		children: [{ element: { id: "child", label: "Child", expanded: false } }],
-	}, { element: { id: "sibling", label: "Sibling", expanded: false } }]);
+		children: [{ element: { id: 'child', label: 'Child', expanded: false } }],
+	}, { element: { id: 'sibling', label: 'Sibling', expanded: false } }]);
 
-	assert.equal(tree.element.tagName, "DIV");
-	assert.equal(tree.element.getAttribute("role"), "tree");
-	assert.equal(tree.element.getAttribute("aria-label"), "Object tree");
-	assert.equal(tree.element.style.overflow, "visible");
-	assert.equal(tree.element.classList.contains("ash-tree-selection-active"), true);
+	assert.equal(tree.element.tagName, 'DIV');
+	assert.equal(tree.element.getAttribute('role'), 'tree');
+	assert.equal(tree.element.getAttribute('aria-label'), 'Object tree');
+	assert.equal(tree.element.style.overflow, 'visible');
+	assert.equal(tree.element.classList.contains('ash-tree-selection-active'), true);
 	assert.equal(tree.element.tabIndex, 0);
-	assert.equal(tree.element.querySelectorAll(".ash-tree-group, .ash-tree-node").length, 0);
-	assert.equal(tree.element.querySelectorAll(":scope > .ash-tree-row").length, 2);
+	assert.equal(tree.element.querySelectorAll('.ash-tree-group, .ash-tree-node').length, 0);
+	assert.equal(tree.element.querySelectorAll(':scope > .ash-tree-row').length, 2);
 	const parent = tree.element.querySelector<HTMLElement>("[data-tree-id='parent']");
 	const sibling = tree.element.querySelector<HTMLElement>("[data-tree-id='sibling']");
 	assert.ok(parent);
 	assert.ok(sibling);
-	assert.equal(parent.getAttribute("role"), "treeitem");
-	assert.equal(parent.getAttribute("aria-level"), "1");
-	assert.equal(parent.getAttribute("aria-posinset"), "1");
-	assert.equal(parent.getAttribute("aria-setsize"), "2");
-	assert.equal(parent.getAttribute("aria-expanded"), "false");
-	assert.equal(parent.querySelectorAll(".ash-tree-twistie .ash-icon").length, 1);
-	assert.equal(sibling.getAttribute("aria-posinset"), "2");
-	assert.equal(tree.expand("parent"), true);
-	assert.deepEqual(collapsed, ["parent:false"]);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.dataset.treeId), ["parent", "child", "sibling"]);
+	assert.equal(parent.getAttribute('role'), 'treeitem');
+	assert.equal(parent.getAttribute('aria-level'), '1');
+	assert.equal(parent.getAttribute('aria-posinset'), '1');
+	assert.equal(parent.getAttribute('aria-setsize'), '2');
+	assert.equal(parent.getAttribute('aria-expanded'), 'false');
+	assert.equal(parent.querySelectorAll('.ash-tree-twistie .ash-icon').length, 1);
+	assert.equal(sibling.getAttribute('aria-posinset'), '2');
+	assert.equal(tree.expand('parent'), true);
+	assert.deepEqual(collapsed, ['parent:false']);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map((row) => row.dataset.treeId), ['parent', 'child', 'sibling']);
 	const child = tree.element.querySelector<HTMLElement>("[data-tree-id='child']");
-	assert.equal(child?.getAttribute("aria-level"), "2");
-	assert.equal(child?.getAttribute("aria-posinset"), "1");
-	assert.equal(child?.getAttribute("aria-setsize"), "1");
-	assert.equal(child?.querySelectorAll(".ash-tree-indent-guide").length, 1);
+	assert.equal(child?.getAttribute('aria-level'), '2');
+	assert.equal(child?.getAttribute('aria-posinset'), '1');
+	assert.equal(child?.getAttribute('aria-setsize'), '1');
+	assert.equal(child?.querySelectorAll('.ash-tree-indent-guide').length, 1);
 	tree.element.querySelector<HTMLElement>("[data-tree-id='parent'] .ash-tree-twistie")?.click();
-	assert.deepEqual(collapsed, ["parent:false", "parent:true"]);
-	assert.equal(tree.element.querySelectorAll(".ash-tree-row").length, 2);
-	tree.expand("parent");
-	assert.deepEqual(collapsed, ["parent:false", "parent:true", "parent:false"]);
+	assert.deepEqual(collapsed, ['parent:false', 'parent:true']);
+	assert.equal(tree.element.querySelectorAll('.ash-tree-row').length, 2);
+	tree.expand('parent');
+	assert.deepEqual(collapsed, ['parent:false', 'parent:true', 'parent:false']);
 	const parentRow = tree.element.querySelector<HTMLElement>("[data-tree-id='parent']");
 	assert.ok(parentRow);
-	const parentIcon = svg(dom.window.document, "svg");
-	const parentIconPath = svg(dom.window.document, "path");
+	const parentIcon = svg(dom.window.document, 'svg');
+	const parentIconPath = svg(dom.window.document, 'path');
 	parentIcon.append(parentIconPath);
-	parentRow.querySelector(".ash-tree-contents")?.prepend(parentIcon);
-	parentIconPath.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
-	assert.deepEqual(activated, ["parent"]);
-	assert.deepEqual(pointers, ["parent:contents"]);
-	assert.deepEqual(collapsed, ["parent:false", "parent:true", "parent:false"]);
-	assert.equal(tree.element.querySelectorAll(".ash-tree-row").length, 3);
+	parentRow.querySelector('.ash-tree-contents')?.prepend(parentIcon);
+	parentIconPath.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+	assert.deepEqual(activated, ['parent']);
+	assert.deepEqual(pointers, ['parent:contents']);
+	assert.deepEqual(collapsed, ['parent:false', 'parent:true', 'parent:false']);
+	assert.equal(tree.element.querySelectorAll('.ash-tree-row').length, 3);
 
 	tree.dispose();
 	dom.window.close();
 });
 
-test("ObjectTree applies double-click expansion policy to row contents", () => {
+test('ObjectTree applies double-click expansion policy to row contents', () => {
 	for (const scenario of [
-		{ name: "default", expandOnlyOnTwistieClick: false, expandOnDoubleClick: undefined, expected: [false, true] },
-		{ name: "disabled", expandOnlyOnTwistieClick: false, expandOnDoubleClick: false, expected: [false] },
-		{ name: "twistie only", expandOnlyOnTwistieClick: true, expandOnDoubleClick: undefined, expected: [false] },
-		{ name: "twistie only and disabled", expandOnlyOnTwistieClick: true, expandOnDoubleClick: false, expected: [] },
+		{ name: 'default', expandOnlyOnTwistieClick: false, expandOnDoubleClick: undefined, expected: [false, true] },
+		{ name: 'disabled', expandOnlyOnTwistieClick: false, expandOnDoubleClick: false, expected: [false] },
+		{ name: 'twistie only', expandOnlyOnTwistieClick: true, expandOnDoubleClick: undefined, expected: [false] },
+		{ name: 'twistie only and disabled', expandOnlyOnTwistieClick: true, expandOnDoubleClick: false, expected: [] },
 	]) {
-		const dom = new JSDOM("<!doctype html><body></body>");
+		const dom = new JSDOM('<!doctype html><body></body>');
 		const tree = new ObjectTree<TestNode>(dom.window.document.body, {
 			expandOnDoubleClick: scenario.expandOnDoubleClick,
 			expandOnlyOnTwistieClick: scenario.expandOnlyOnTwistieClick,
 			modelOptions: { identityProvider: { getId: node => node.id } },
 			renderElement: element => {
-				const label = h(dom.window.document, "span");
+				const label = h(dom.window.document, 'span');
 				label.textContent = element.label;
 				return label;
 			},
 		});
 		tree.setChildren([{
-			element: { id: "folder", label: "Folder", expanded: false },
+			element: { id: 'folder', label: 'Folder', expanded: false },
 			collapsed: true,
-			children: [{ element: { id: "child", label: "Child", expanded: false } }],
+			children: [{ element: { id: 'child', label: 'Child', expanded: false } }],
 		}]);
 		const collapsed: boolean[] = [];
 		tree.onDidChangeCollapseState(event => collapsed.push(event.collapsed));
 		for (const detail of [1, 2]) {
 			const folder = tree.element.querySelector<HTMLElement>("[data-tree-id='folder'] .ash-tree-contents");
 			assert.ok(folder);
-			folder.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true, button: 0, detail }));
+			folder.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, button: 0, detail }));
 		}
 		const folder = tree.element.querySelector<HTMLElement>("[data-tree-id='folder'] .ash-tree-contents");
 		assert.ok(folder);
-		folder.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true, button: 0, detail: 2 }));
+		folder.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true, button: 0, detail: 2 }));
 		assert.deepEqual(collapsed, scenario.expected, scenario.name);
 		tree.dispose();
 		dom.window.close();
 	}
 });
 
-test("ObjectTree releases hidden rows when its hierarchy is replaced", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ObjectTree releases hidden rows when its hierarchy is replaced', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const removed: string[] = [];
 	const tree = new ObjectTree<TestNode>(dom.window.document.body, {
 		modelOptions: { identityProvider: { getId: node => node.id } },
 		reuseRows: true,
 		onDidRemoveRow: row => removed.push(row.dataset.treeId!),
 		renderElement: element => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
 	});
 	tree.setChildren([{
-		element: { id: "folder", label: "Folder", expanded: false }, children: [
-			{ element: { id: "child", label: "Child", expanded: false } },
+		element: { id: 'folder', label: 'Folder', expanded: false }, children: [
+			{ element: { id: 'child', label: 'Child', expanded: false } },
 		]
 	}]);
-	tree.collapse("folder");
+	tree.collapse('folder');
 	assert.deepEqual(removed, []);
-	tree.setChildren([{ element: { id: "replacement", label: "Replacement", expanded: false } }]);
-	assert.deepEqual(removed.sort(), ["child", "folder"]);
+	tree.setChildren([{ element: { id: 'replacement', label: 'Replacement', expanded: false } }]);
+	assert.deepEqual(removed.sort(), ['child', 'folder']);
 	tree.dispose();
-	assert.deepEqual(removed.sort(), ["child", "folder", "replacement"]);
+	assert.deepEqual(removed.sort(), ['child', 'folder', 'replacement']);
 	dom.window.close();
 });
 
-test("ObjectTree delegates focus, selection, and keyboard navigation to List", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ObjectTree delegates focus, selection, and keyboard navigation to List', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const tree = createObjectTree(dom);
 	tree.setChildren([
-		{ element: { id: "first", label: "First", expanded: false } },
-		{ element: { id: "second", label: "Second", expanded: false } },
+		{ element: { id: 'first', label: 'First', expanded: false } },
+		{ element: { id: 'second', label: 'Second', expanded: false } },
 	]);
 	const focusChanges: string[] = [];
 	const selectionChanges: string[] = [];
 	const accepted: string[] = [];
-	tree.onDidChangeFocus(({ element }) => focusChanges.push(element?.id ?? "none"));
-	tree.onDidChangeSelection(({ elements }) => selectionChanges.push(elements.map((element) => element.id).join(",")));
+	tree.onDidChangeFocus(({ element }) => focusChanges.push(element?.id ?? 'none'));
+	tree.onDidChangeSelection(({ elements }) => selectionChanges.push(elements.map((element) => element.id).join(',')));
 	tree.onDidAccept(({ element }) => accepted.push(element.id));
 	dom.window.document.body.append(tree.element);
 	const firstRow = tree.element.querySelector<HTMLElement>("[data-tree-id='first']");
@@ -1245,44 +1308,44 @@ test("ObjectTree delegates focus, selection, and keyboard navigation to List", (
 	assert.equal(secondRow.tabIndex, -1);
 
 	tree.domFocus();
-	tree.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" }));
+	tree.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }));
 	assert.equal(dom.window.document.activeElement, tree.element);
-	assert.equal(tree.focus?.id, "second");
-	assert.deepEqual(tree.selection.map((element) => element.id), ["second"]);
-	assert.equal(tree.element.getAttribute("aria-activedescendant"), secondRow.id);
-	assert.equal(secondRow.getAttribute("aria-selected"), "true");
-	assert.ok(secondRow.classList.contains("selected"));
+	assert.equal(tree.focus?.id, 'second');
+	assert.deepEqual(tree.selection.map((element) => element.id), ['second']);
+	assert.equal(tree.element.getAttribute('aria-activedescendant'), secondRow.id);
+	assert.equal(secondRow.getAttribute('aria-selected'), 'true');
+	assert.ok(secondRow.classList.contains('selected'));
 
-	tree.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "Home" }));
-	tree.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
-	assert.deepEqual(focusChanges, ["second", "first"]);
-	assert.deepEqual(selectionChanges, ["second", "first"]);
-	assert.deepEqual(accepted, ["first"]);
+	tree.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Home' }));
+	tree.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+	assert.deepEqual(focusChanges, ['second', 'first']);
+	assert.deepEqual(selectionChanges, ['second', 'first']);
+	assert.deepEqual(accepted, ['first']);
 
 	tree.dispose();
 	dom.window.close();
 });
 
-test("ObjectTree keyboard expansion operates on model nodes", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ObjectTree keyboard expansion operates on model nodes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const tree = createObjectTree(dom);
 	tree.setChildren([{
-		element: { id: "parent", label: "Parent", expanded: false },
+		element: { id: 'parent', label: 'Parent', expanded: false },
 		collapsed: true,
-		children: [{ element: { id: "child", label: "Child", expanded: false } }],
+		children: [{ element: { id: 'child', label: 'Child', expanded: false } }],
 	}]);
 	const collapseChanges: string[] = [];
 	tree.onDidChangeCollapseState(({ element, collapsed }) => collapseChanges.push(`${element.id}:${collapsed}`));
-	tree.setFocus("parent");
-	tree.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }));
-	assert.deepEqual(tree.model.visibleNodes.map((node) => node.id), ["parent", "child"]);
-	tree.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }));
-	assert.equal(tree.focus?.id, "child");
-	tree.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "ArrowLeft" }));
-	assert.equal(tree.focus?.id, "parent");
-	tree.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "ArrowLeft" }));
-	assert.deepEqual(tree.model.visibleNodes.map((node) => node.id), ["parent"]);
-	assert.deepEqual(collapseChanges, ["parent:false", "parent:true"]);
+	tree.setFocus('parent');
+	tree.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+	assert.deepEqual(tree.model.visibleNodes.map((node) => node.id), ['parent', 'child']);
+	tree.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+	assert.equal(tree.focus?.id, 'child');
+	tree.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowLeft' }));
+	assert.equal(tree.focus?.id, 'parent');
+	tree.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'ArrowLeft' }));
+	assert.deepEqual(tree.model.visibleNodes.map((node) => node.id), ['parent']);
+	assert.deepEqual(collapseChanges, ['parent:false', 'parent:true']);
 	tree.dispose();
 	dom.window.close();
 });
@@ -1328,37 +1391,37 @@ test('ObjectTree find preserves subsequence order, contiguous matching and Unico
 	}
 });
 
-test("ObjectTree find filters with ancestors and supports dynamic heights and sticky rows", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const group: TestNode = { id: "group", label: "Group", expanded: false };
-	const needle: TestNode = { id: "needle", label: "Needle", expanded: false };
-	const other: TestNode = { id: "other", label: "Other", expanded: false };
+test('ObjectTree find filters with ancestors and supports dynamic heights and sticky rows', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const group: TestNode = { id: 'group', label: 'Group', expanded: false };
+	const needle: TestNode = { id: 'needle', label: 'Needle', expanded: false };
+	const other: TestNode = { id: 'other', label: 'Other', expanded: false };
 	const tree = new ObjectTree<TestNode>(dom.window.document.body, {
 		enableStickyScroll: true,
 		keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: (element) => element.label },
-		findMode: "filter",
+		findMode: 'filter',
 		modelOptions: { identityProvider: { getId: (node) => node.id } },
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
 	});
 	tree.setChildren([{ element: group, collapsed: true, children: [{ element: needle }] }, { element: other }]);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.dataset.treeId), ["group", "other"]);
-	tree.setFindPattern("ndl");
-	tree.updateElementHeight("group", 30);
-	tree.updateElementHeight("needle", 40);
-	assert.equal(tree.getElementTop("needle"), 30);
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map((row) => row.dataset.treeId), ["group", "needle"]);
-	assert.equal(tree.element.querySelector("[data-tree-id='group']")?.getAttribute("aria-expanded"), "true");
-	assert.equal(tree.element.querySelector("[data-tree-id='needle']")?.classList.contains("find-match"), true);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map((row) => row.dataset.treeId), ['group', 'other']);
+	tree.setFindPattern('ndl');
+	tree.updateElementHeight('group', 30);
+	tree.updateElementHeight('needle', 40);
+	assert.equal(tree.getElementTop('needle'), 30);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map((row) => row.dataset.treeId), ['group', 'needle']);
+	assert.equal(tree.element.querySelector("[data-tree-id='group']")?.getAttribute('aria-expanded'), 'true');
+	assert.equal(tree.element.querySelector("[data-tree-id='needle']")?.classList.contains('find-match'), true);
 	tree.findMode = 'highlight';
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map(row => row.dataset.treeId), ['group', 'other']);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map(row => row.dataset.treeId), ['group', 'other']);
 	tree.findMode = 'filter';
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .ash-tree-row")].map(row => row.dataset.treeId), ['group', 'needle']);
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map(row => row.dataset.treeId), ['group', 'needle']);
 	tree.clearFind();
-	assert.equal(tree.element.querySelectorAll(":scope > .ash-tree-row").length, 2);
+	assert.equal(tree.element.querySelectorAll(':scope > .ash-tree-row').length, 2);
 	tree.openFind();
 	const input = tree.element.querySelector<HTMLInputElement>('input[type="search"]')!;
 	assert.equal(dom.window.document.activeElement, input);
@@ -1370,50 +1433,53 @@ test("ObjectTree find filters with ancestors and supports dynamic heights and st
 	assert.equal(dom.window.document.activeElement, tree.element);
 	assert.equal(tree.element.querySelector<HTMLElement>('.ash-tree-find-widget')?.hidden, true);
 	assert.equal(tree.element.querySelectorAll(':scope > .ash-tree-row').length, 2);
-	tree.expand("group");
+	tree.expand('group');
 	tree.element.scrollTop = 31;
-	tree.element.dispatchEvent(new dom.window.Event("scroll"));
-	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".ash-tree-sticky-row")].map((row) => row.dataset.treeId), ["group"]);
+	tree.element.dispatchEvent(new dom.window.Event('scroll'));
+	assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>('.ash-tree-sticky-row')].map((row) => row.dataset.treeId), ['group']);
 	tree.dispose();
 	dom.window.close();
 });
 
-test("ObjectTree routes HTML drag and drop through hierarchy-aware policy", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ObjectTree routes HTML drag and drop through hierarchy-aware policy', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const events: string[] = [];
 	const tree = new ObjectTree<TestNode>(dom.window.document.body, {
 		modelOptions: { identityProvider: { getId: (node) => node.id } },
 		dnd: {
 			getDragURI: (element) => `ash://${element.id}`,
-			onDragStart: ({ elements }) => events.push(`start:${elements.map((element) => element.id).join(",")}`),
+			onDragStart: ({ elements }) => events.push(`start:${elements.map((element) => element.id).join(',')}`),
 			onDragOver: (_data, target) => {
-				events.push(`over:${target?.id ?? "root"}`);
-				return { accept: true, effect: "move" };
+				events.push(`over:${target?.id ?? 'root'}`);
+				return { accept: true, effect: 'move' };
 			},
 			drop: ({ elements }, target) => events.push(`drop:${elements[0]?.id}->${target?.id}`),
-			onDragEnd: () => events.push("end"),
+			onDragEnd: () => events.push('end'),
 		},
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
 	});
-	tree.setChildren([{ element: { id: "first", label: "First", expanded: false } }, { element: { id: "second", label: "Second", expanded: false } }]);
+	tree.setChildren([
+		{ element: { id: 'first', label: 'First', expanded: false } },
+		{ element: { id: 'second', label: 'Second', expanded: false } }
+	]);
 	const first = tree.element.querySelector<HTMLElement>("[data-tree-id='first']")!;
 	const second = tree.element.querySelector<HTMLElement>("[data-tree-id='second']")!;
 	assert.equal(first.draggable, true);
-	first.dispatchEvent(new dom.window.Event("dragstart", { bubbles: true, cancelable: true }));
-	second.dispatchEvent(new dom.window.Event("dragover", { bubbles: true, cancelable: true }));
-	second.dispatchEvent(new dom.window.Event("drop", { bubbles: true, cancelable: true }));
-	first.dispatchEvent(new dom.window.Event("dragend", { bubbles: true }));
-	assert.deepEqual(events, ["start:first", "over:second", "drop:first->second", "end"]);
+	first.dispatchEvent(new dom.window.Event('dragstart', { bubbles: true, cancelable: true }));
+	second.dispatchEvent(new dom.window.Event('dragover', { bubbles: true, cancelable: true }));
+	second.dispatchEvent(new dom.window.Event('drop', { bubbles: true, cancelable: true }));
+	first.dispatchEvent(new dom.window.Event('dragend', { bubbles: true }));
+	assert.deepEqual(events, ['start:first', 'over:second', 'drop:first->second', 'end']);
 	tree.dispose();
 	dom.window.close();
 });
 
-test("ObjectTree drag feedback bubbles up without changing the raw drop target", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ObjectTree drag feedback bubbles up without changing the raw drop target', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const events: string[] = [];
 	const tree = new ObjectTree<TestNode>(dom.window.document.body, {
 		modelOptions: { identityProvider: { getId: (node) => node.id } },
@@ -1421,38 +1487,38 @@ test("ObjectTree drag feedback bubbles up without changing the raw drop target",
 			getDragURI: (element) => `ash://${element.id}`,
 			onDragOver: (_data, target) => {
 				events.push(`over:${target?.id}`);
-				return target?.id === "child" ? { accept: true, bubble: "up" } : { accept: true, effect: "move" };
+				return target?.id === 'child' ? { accept: true, bubble: 'up' } : { accept: true, effect: 'move' };
 			},
 			drop: (_data, target) => events.push(`drop:${target?.id}`),
 		},
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},
 	});
-	tree.setChildren([{ element: { id: "source", label: "Source", expanded: false } }, {
-		element: { id: "parent", label: "Parent", expanded: false },
-		children: [{ element: { id: "child", label: "Child", expanded: false } }],
+	tree.setChildren([{ element: { id: 'source', label: 'Source', expanded: false } }, {
+		element: { id: 'parent', label: 'Parent', expanded: false },
+		children: [{ element: { id: 'child', label: 'Child', expanded: false } }],
 	}]);
 	const source = tree.element.querySelector<HTMLElement>("[data-tree-id='source']")!;
 	const parent = tree.element.querySelector<HTMLElement>("[data-tree-id='parent']")!;
 	const child = tree.element.querySelector<HTMLElement>("[data-tree-id='child']")!;
-	source.dispatchEvent(new dom.window.Event("dragstart", { bubbles: true }));
-	child.dispatchEvent(new dom.window.Event("dragover", { bubbles: true, cancelable: true }));
-	assert.equal(parent.classList.contains("drag-over"), true);
-	assert.equal(child.classList.contains("drag-over"), false);
-	child.dispatchEvent(new dom.window.Event("drop", { bubbles: true }));
-	assert.deepEqual(events, ["over:child", "over:parent", "drop:child"]);
+	source.dispatchEvent(new dom.window.Event('dragstart', { bubbles: true }));
+	child.dispatchEvent(new dom.window.Event('dragover', { bubbles: true, cancelable: true }));
+	assert.equal(parent.classList.contains('drag-over'), true);
+	assert.equal(child.classList.contains('drag-over'), false);
+	child.dispatchEvent(new dom.window.Event('drop', { bubbles: true }));
+	assert.deepEqual(events, ['over:child', 'over:parent', 'drop:child']);
 	tree.dispose();
 	dom.window.close();
 });
 
-test("ObjectTree preserves cross-tree drag origin while projecting domain elements", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ObjectTree preserves cross-tree drag origin while projecting domain elements', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const observed: string[] = [];
 	const renderElement = (element: TestNode) => {
-		const label = h(dom.window.document, "span");
+		const label = h(dom.window.document, 'span');
 		label.textContent = element.label;
 		return label;
 	};
@@ -1473,14 +1539,14 @@ test("ObjectTree preserves cross-tree drag origin while projecting domain elemen
 		},
 		renderElement,
 	});
-	source.setChildren([{ element: { id: "source", label: "Source", expanded: false } }]);
-	target.setChildren([{ element: { id: "target", label: "Target", expanded: false } }]);
+	source.setChildren([{ element: { id: 'source', label: 'Source', expanded: false } }]);
+	target.setChildren([{ element: { id: 'target', label: 'Target', expanded: false } }]);
 	const sourceRow = source.element.querySelector<HTMLElement>("[data-tree-id='source']")!;
 	const targetRow = target.element.querySelector<HTMLElement>("[data-tree-id='target']")!;
-	sourceRow.dispatchEvent(new dom.window.Event("dragstart", { bubbles: true }));
-	targetRow.dispatchEvent(new dom.window.Event("dragover", { bubbles: true, cancelable: true }));
-	targetRow.dispatchEvent(new dom.window.Event("drop", { bubbles: true, cancelable: true }));
-	sourceRow.dispatchEvent(new dom.window.Event("dragend", { bubbles: true }));
+	sourceRow.dispatchEvent(new dom.window.Event('dragstart', { bubbles: true }));
+	targetRow.dispatchEvent(new dom.window.Event('dragover', { bubbles: true, cancelable: true }));
+	targetRow.dispatchEvent(new dom.window.Event('drop', { bubbles: true, cancelable: true }));
+	sourceRow.dispatchEvent(new dom.window.Event('dragend', { bubbles: true }));
 	assert.deepEqual(observed, [
 		`over:${DragAndDropDataKind.External}:source:target`,
 		`drop:${DragAndDropDataKind.External}:source:target`,
@@ -1492,11 +1558,11 @@ test("ObjectTree preserves cross-tree drag origin while projecting domain elemen
 
 function createObjectTree(dom: JSDOM): ObjectTree<TestNode> {
 	return new ObjectTree<TestNode>(dom.window.document.body, {
-		ariaLabel: "Test tree",
-		indentGuides: "always",
+		ariaLabel: 'Test tree',
+		indentGuides: 'always',
 		modelOptions: { identityProvider: { getId: (node) => node.id } },
 		renderElement: (element) => {
-			const label = h(dom.window.document, "span");
+			const label = h(dom.window.document, 'span');
 			label.textContent = element.label;
 			return label;
 		},

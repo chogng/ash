@@ -1,5 +1,5 @@
-import type { CodebaseSymbolsSearchParams, CodebaseSymbolsSearchResult, CodebaseSymbolsStatusResult, DocumentOverlayCloseParams, DocumentOverlayStatusResult, DocumentOverlaySynchronizeParams } from "../../../../../.build/protocol/typescript/index.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import type { CodebaseSymbolsSearchParams, CodebaseSymbolsSearchResult, CodebaseSymbolsStatusResult, DocumentOverlayCloseParams, DocumentOverlayStatusResult, DocumentOverlaySynchronizeParams } from '../../../../../.build/protocol/typescript/index.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 /** Transport-only codebase-symbols operations. Product consumers use ICodebaseSymbolsService. */
 export interface ICodebaseSymbolsApi {
@@ -9,4 +9,4 @@ export interface ICodebaseSymbolsApi {
 	close(params: DocumentOverlayCloseParams): Promise<DocumentOverlayStatusResult>;
 }
 
-export const ICodebaseSymbolsApi = createServiceIdentifier<ICodebaseSymbolsApi>("codebaseSymbolsApi");
+export const ICodebaseSymbolsApi = createServiceIdentifier<ICodebaseSymbolsApi>('codebaseSymbolsApi');

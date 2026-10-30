@@ -13,56 +13,84 @@ import { EditorInputCapabilities, type IResourceEditorInput } from '../../../../
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
+import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
 import { DesktopDockedTabsCoordinator } from '../../browser/desktop/desktopDockedTabsCoordinator.js';
 
 suite('DesktopDockedTabsCoordinator', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('retained product pages neither suppress defaults nor receive managed Code tabs', async () => {
+	test('empty sessions do not create Files or Changes tabs in either editor presentation', async () => {
 		using fixture = new TabsFixture();
 		await fixture.coordinator.reconcile(fixture.selection, true);
-		assert.deepEqual(fixture.documents.inputs.map(input => input.resource.scheme), ['ash-sessions-files', 'ash-session-changes']);
+		await fixture.coordinator.reconcile(fixture.selection, false);
+		assert.deepEqual(fixture.documents.inputs, []);
 		assert.deepEqual(fixture.pages.inputs.map(input => input.resource.scheme), ['ash-trace']);
-		assert.ok(fixture.opened.every(open => open.target === fixture.documents.id));
-		assert.ok(fixture.documents.inputs.every(input => input.capabilities === (EditorInputCapabilities.CannotClose | EditorInputCapabilities.ExcludeFromEditorLimit)));
+		assert.deepEqual(fixture.opened, []);
 	});
 
-	test('disposing during the first managed open prevents subsequent opens', async () => {
+	test('removes restored Files landing tabs while retaining documents and product pages', async () => {
 		using fixture = new TabsFixture();
+		const file = { resource: URI.file('/sample.ts'), label: 'sample.ts' };
+		fixture.documents.inputs.push(new EmptyFileEditorInput(), file);
+		await fixture.coordinator.removeRestoredDetailTabs();
+		await fixture.coordinator.reconcile(fixture.selection, true);
+		assert.deepEqual(fixture.documents.inputs, [file]);
+		assert.deepEqual(fixture.pages.inputs.map(input => input.resource.scheme), ['ash-trace']);
+		assert.deepEqual(fixture.opened, []);
+	});
+
+	test('retained Changes tabs still follow the selected session and editor presentation', async () => {
+		using fixture = new TabsFixture();
+		fixture.documents.inputs.push(new SessionChangesEditorInput(selection('outgoing')));
+		await fixture.coordinator.removeRestoredDetailTabs();
+		await fixture.coordinator.reconcile(fixture.selection, true);
+		assert.equal(fixture.documents.inputs[0]?.resource.path, '/current');
+		assert.equal(fixture.documents.inputs[0]?.capabilities, EditorInputCapabilities.CannotClose | EditorInputCapabilities.ExcludeFromEditorLimit);
+		await fixture.coordinator.reconcile(fixture.selection, false);
+		assert.equal(fixture.documents.inputs[0]?.capabilities, EditorInputCapabilities.ExcludeFromEditorLimit);
+		assert.ok(fixture.opened.every(open => open.target === fixture.documents.id));
+	});
+
+	test('disposal during a landing tab close stops further cleanup', async () => {
+		using fixture = new TabsFixture();
+		fixture.documents.inputs.push(new EmptyFileEditorInput(), new EmptyFileEditorInput());
 		const gate = new DeferredPromise<void>();
-		fixture.openGate = gate.p;
-		const pending = fixture.coordinator.reconcile(fixture.selection, true);
-		await fixture.openStarted.p;
+		fixture.closeGate = gate.p;
+		const pending = fixture.coordinator.removeRestoredDetailTabs();
+		await fixture.closeStarted.p;
 		fixture.coordinator.dispose();
 		await gate.complete();
 		await pending;
-		assert.deepEqual(fixture.opened.map(open => open.input.resource.scheme), ['ash-sessions-files']);
+		assert.equal(fixture.documents.inputs.length, 1);
 	});
 
-	test('a session switch during a managed open stops the outgoing Changes tab', async () => {
+	test('a session switch during replacement stops outgoing tab updates', async () => {
 		using fixture = new TabsFixture();
+		fixture.documents.inputs.push(new SessionChangesEditorInput(selection('outgoing')));
 		const gate = new DeferredPromise<void>();
-		fixture.openGate = gate.p;
+		fixture.replaceGate = gate.p;
 		const outgoing = fixture.coordinator.reconcile(fixture.selection, true);
-		await fixture.openStarted.p;
+		await fixture.replaceStarted.p;
 		fixture.selection = selection('incoming');
 		await gate.complete();
 		await outgoing;
+		assert.deepEqual(fixture.opened, []);
 		await fixture.coordinator.reconcile(fixture.selection, true);
 		assert.equal(fixture.documents.inputs.filter(input => input.resource.scheme === 'ash-session-changes').length, 1);
 		assert.equal(fixture.documents.inputs.find(input => input.resource.scheme === 'ash-session-changes')?.resource.path, '/incoming');
 	});
 
-	test('closing a target group while an open waits does not recreate its tabs elsewhere', async () => {
+	test('closing a target group during replacement does not recreate its tabs elsewhere', async () => {
 		using fixture = new TabsFixture();
+		fixture.documents.inputs.push(new SessionChangesEditorInput(selection('outgoing')));
 		const gate = new DeferredPromise<void>();
-		fixture.openGate = gate.p;
+		fixture.replaceGate = gate.p;
 		const pending = fixture.coordinator.reconcile(fixture.selection, true);
-		await fixture.openStarted.p;
+		await fixture.replaceStarted.p;
 		fixture.groups = [fixture.pages];
 		await gate.complete();
 		await pending;
-		assert.equal(fixture.opened.length, 1);
+		assert.deepEqual(fixture.opened, []);
 		assert.deepEqual(fixture.pages.inputs.map(input => input.resource.scheme), ['ash-trace']);
 	});
 
@@ -94,9 +122,9 @@ function selection(id: string): SessionsViewSelection {
 class TabsFixture extends Disposable {
 	private readonly services = this._register(new InstantiationService());
 	public selection = selection('current');
-	public readonly openStarted = new DeferredPromise<void>();
+	public readonly closeStarted = new DeferredPromise<void>();
 	public readonly replaceStarted = new DeferredPromise<void>();
-	public openGate: Promise<void> | undefined;
+	public closeGate: Promise<void> | undefined;
 	public replaceGate: Promise<void> | undefined;
 	public readonly opened: { input: IResourceEditorInput; target: number | undefined; }[] = [];
 	public readonly documents = this.group(1);
@@ -112,10 +140,6 @@ class TabsFixture extends Disposable {
 			openEditor: async (input: IResourceEditorInput, _options: unknown, target?: EditorOpenTarget) => {
 				const groupId = typeof target === 'object' ? target.groupId : undefined;
 				this.opened.push({ input, target: groupId });
-				if (!this.openStarted.isSettled) { await this.openStarted.complete(); }
-				const gate = this.openGate;
-				this.openGate = undefined;
-				await gate;
 				const group = this.groups.find(group => group.id === groupId);
 				if (group && !group.inputs.includes(input)) { group.inputs.push(input); }
 			},
@@ -128,11 +152,17 @@ class TabsFixture extends Disposable {
 		const inputs: IResourceEditorInput[] = [];
 		return {
 			id, inputs,
+			closeEditor: async (input: IResourceEditorInput) => {
+				if (!this.closeStarted.isSettled) { await this.closeStarted.complete(); }
+				await this.closeGate;
+				inputs.splice(inputs.indexOf(input), 1);
+				return true;
+			},
 			replaceEditor: async (input: IResourceEditorInput, replacement: IResourceEditorInput) => {
 				if (!this.replaceStarted.isSettled) { await this.replaceStarted.complete(); }
 				await this.replaceGate;
 				inputs.splice(inputs.indexOf(input), 1, replacement);
 			},
-		} as Pick<IEditorGroupView, 'id' | 'replaceEditor'> & { inputs: IResourceEditorInput[]; };
+		} as Pick<IEditorGroupView, 'id' | 'replaceEditor' | 'closeEditor'> & { inputs: IResourceEditorInput[]; };
 	}
 }

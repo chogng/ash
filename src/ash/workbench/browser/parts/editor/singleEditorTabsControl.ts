@@ -1,13 +1,13 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import "./media/singleeditortabscontrol.css";
-import type { EditorTabDescriptor, EditorTabsDelegate } from "./editorTabsControl.js";
-import { editorInputKey } from "./editorTabsControl.js";
-import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
+import './media/singleeditortabscontrol.css';
+import type { EditorTabDescriptor, EditorTabsDelegate } from './editorTabsControl.js';
+import { editorInputKey } from './editorTabsControl.js';
+import { MultiEditorTabsControl } from './multiEditorTabsControl.js';
 
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { IResourceLabelService } from "../../labels.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { IResourceLabelService } from '../../labels.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import { ILabelService } from '../../../../platform/label/common/label.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -26,7 +26,7 @@ export class SingleEditorTabsControl extends MultiEditorTabsControl {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, delegate, model, resourceLabels, configurationService, contextKeyService, labelService, workspaceContextService, instantiationService);
-		this.domNode.classList.add("ash-single-editor-tabs-control");
+		this.domNode.classList.add('ash-single-editor-tabs-control');
 	}
 
 	override setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, selectedIds?: ReadonlySet<string>): void {

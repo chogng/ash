@@ -2,9 +2,9 @@ import { createTextModelFeatures } from '../../../../common/model/modelFeatures.
 import { registerTextModelFeatures } from '../../../../common/model/textModelFeatures.js';
 import { after as afterModelFeatures } from 'mocha';
 import { TokenizationRegistry, type IState, type ILanguageIdCodec, type SyntaxRequest, LanguageDiagnosticSeverity, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxResult, type SyntaxWorker, type SyntaxLane } from '../../../../common/languages.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { TextModel } from "../../../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { TextModel } from '../../../../common/model/textModel.js';
 import { SyntaxProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { Range } from '../../../../common/core/range.js';
 import { MetadataConsts, StandardTokenType } from '../../../../common/encodedTokenAttributes.js';
@@ -17,8 +17,8 @@ import { type LanguageWorkerRequest } from '../../../../common/model/languageReq
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 
-test("TextModel owns default line tokens when no syntax provider exists", () => {
-	using model = new TextModel("const value = 1;", { languageId: 'typescript' });
+test('TextModel owns default line tokens when no syntax provider exists', () => {
+	using model = new TextModel('const value = 1;', { languageId: 'typescript' });
 	const lineTokens = model.tokenization.getLineTokens(1);
 	assert.equal(lineTokens.getCount(), 1);
 	assert.equal(lineTokens.getLineContent(), 'const value = 1;');
@@ -133,7 +133,7 @@ test('scoped language tokens expose standard comment, string and regex categorie
 	]);
 });
 
-test("TextModel publishes current provider tokens through the standard and renderer projections", async () => {
+test('TextModel publishes current provider tokens through the standard and renderer projections', async () => {
 	using registry = new SyntaxProviderRegistry();
 	let requests = 0;
 	using registration = registry.register({
@@ -150,7 +150,7 @@ test("TextModel publishes current provider tokens through the standard and rende
 			};
 		},
 	});
-	using model = new TextModel("comment value", {
+	using model = new TextModel('comment value', {
 		languageId: 'typescript',
 		tokenization: { syntaxProviderRegistry: registry, languageIdCodec: codec() },
 	});
@@ -169,7 +169,7 @@ test("TextModel publishes current provider tokens through the standard and rende
 	assert.equal(model.tokenization.getLineTokens(1).getStandardTokenType(0), StandardTokenType.Comment);
 });
 
-test("model edits invalidate accuracy until the new provider result is accepted", async () => {
+test('model edits invalidate accuracy until the new provider result is accepted', async () => {
 	using registry = new SyntaxProviderRegistry();
 	using registration = registry.register({
 		id: 'test.tokens',
@@ -196,8 +196,8 @@ test("model edits invalidate accuracy until the new provider result is accepted"
 	assert.equal(model.tokenization.getLineTokens(1).getStandardTokenType(0), StandardTokenType.Comment);
 });
 
-test("Tokenization renderer projection exposes the model-owned empty index", () => {
-	using model = new TextModel("const value = 1;");
+test('Tokenization renderer projection exposes the model-owned empty index', () => {
+	using model = new TextModel('const value = 1;');
 	const part = model.tokenization.languageTokens;
 	assert.equal(part.textModel, model);
 	assert.deepEqual(part.lines, []);

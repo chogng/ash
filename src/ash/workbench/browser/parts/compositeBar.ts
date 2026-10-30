@@ -1,21 +1,21 @@
 import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
-import "./compositebar/compositebar.css";
-import { IActivityService, NumberBadge } from "../../services/activity/common/activity.js";
-import type { IContextMenuDelegate, IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import type { ActionViewItem } from "../../../base/browser/ui/actionbar/actionViewItems.js";
-import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from "../../../base/browser/ui/actionbar/actionbar.js";
-import { Separator, type IAction } from "../../../base/common/actions.js";
+import './compositebar/compositebar.css';
+import { IActivityService, NumberBadge } from '../../services/activity/common/activity.js';
+import type { IContextMenuDelegate, IContextMenuProvider } from '../../../base/browser/contextmenu.js';
+import type { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from '../../../base/browser/ui/actionbar/actionbar.js';
+import { Separator, type IAction } from '../../../base/common/actions.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import type { IComposite } from '../../common/composite.js';
-import { Disposable, DisposableMap, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 
-import { localize, type ILocalizationService } from "../../services/localization/common/localizationService.js";
+import { localize, type ILocalizationService } from '../../services/localization/common/localizationService.js';
 import { localize as resolveNls } from '../../../nls.js';
-import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
-import type { IViewDescriptorService } from "../../common/views.js";
-import { CompositeBarAction, CompositeActionViewItem, CompositeOverflowActivityAction, CompositeOverflowActivityActionViewItem, type IActivityHoverOptions } from "./compositeBarActions.js";
-import { getWindow, h } from "../../../base/browser/dom.js";
-import { observeResize } from "../../../base/browser/observer.js";
+import { ViewContainerLocation, type IViewContainerDescriptor } from '../../common/views.js';
+import type { IViewDescriptorService } from '../../common/views.js';
+import { CompositeBarAction, CompositeActionViewItem, CompositeOverflowActivityAction, CompositeOverflowActivityActionViewItem, type IActivityHoverOptions } from './compositeBarActions.js';
+import { getWindow, h } from '../../../base/browser/dom.js';
+import { observeResize } from '../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../base/browser/scheduler.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../platform/storage/common/storage.js';
 
@@ -39,7 +39,7 @@ export interface ICompositeBarOptions {
 }
 
 /** Visual density selected by the Part hosting a CompositeBar. */
-export type CompositeBarPresentation = "icon" | "label";
+export type CompositeBarPresentation = 'icon' | 'label';
 
 const HIDDEN_VIEW_CONTAINERS_KEY = 'workbench.activityBar.hiddenViewContainers';
 const DISABLED_BADGES_KEY = 'workbench.activityBar.disabledBadges';
@@ -89,7 +89,7 @@ export class CompositeBar extends Disposable {
 		super();
 		this.openComposite = options.openComposite;
 		this.overflowActionSize = options.overflowActionSize;
-		const presentation = options.presentation ?? "icon";
+		const presentation = options.presentation ?? 'icon';
 		this.activityHoverOptions = options.activityHoverOptions;
 		this.viewDescriptorService = options.viewDescriptorService;
 		this.localizationService = options.localizationService;
@@ -103,18 +103,18 @@ export class CompositeBar extends Disposable {
 		this.restoreContainerOrder();
 		this.overflowEnabled = (presentation === 'label' || this.orientation === 'vertical') && this.contextMenuProvider !== undefined;
 		this.containerFilter = options.containerFilter ?? (() => true);
-		this.domNode = h(container.ownerDocument, "section");
+		this.domNode = h(container.ownerDocument, 'section');
 		this.domNode.className = `ash-composite-bar ash-composite-bar-${presentation}`;
 		this.domNode.classList.toggle('ash-composite-bar-vertical', options.orientation === 'vertical');
 		this.domNode.classList.toggle('ash-composite-bar-horizontal', options.orientation !== 'vertical');
-		this.domNode.setAttribute("aria-label", options.ariaLabel);
+		this.domNode.setAttribute('aria-label', options.ariaLabel);
 		this.domNode.dataset.viewContainerLocation = options.location;
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.actionBar = this._register(new ActionBar(this.domNode, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: options.ariaLabel,
-			ariaRole: "tablist",
+			ariaRole: 'tablist',
 			orientation: options.orientation,
 			actionViewItemProvider: (action): ActionViewItem => {
 				if (action instanceof CompositeBarAction) {
@@ -182,8 +182,8 @@ export class CompositeBar extends Disposable {
 	}
 
 	setAriaLabel(label: string): void {
-		this.domNode.setAttribute("aria-label", label);
-		this.actionBar.element.setAttribute("aria-label", label);
+		this.domNode.setAttribute('aria-label', label);
+		this.actionBar.element.setAttribute('aria-label', label);
 	}
 
 	private getBadge(containerId: string): { readonly count: number; readonly description: string; } | undefined {
@@ -355,8 +355,8 @@ export class CompositeBar extends Disposable {
 
 	private onDragStart(compositeId: string, event: DragEvent): void {
 		this.draggedCompositeId = compositeId;
-		event.dataTransfer?.setData("text/plain", compositeId);
-		if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+		event.dataTransfer?.setData('text/plain', compositeId);
+		if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
 	}
 
 	private onDrop(targetCompositeId: string | undefined, position: ActionBarDropPosition): void {
@@ -399,14 +399,14 @@ export class CompositeBar extends Disposable {
 			}),
 			...(showOverflow ? [this.overflowAction] : []),
 		]);
-		if (this.renderedContainerIds.includes(this._activeCompositeId ?? "")) {
+		if (this.renderedContainerIds.includes(this._activeCompositeId ?? '')) {
 			this.actionBar.setTabStop(this._activeCompositeId!);
 		}
 	}
 
 	private measureTabWidths(): boolean {
 		const actionBar = this.actionBar.element;
-		const tabs = [...actionBar.querySelectorAll<HTMLElement>(":scope > .ash-composite-bar-destination")];
+		const tabs = [...actionBar.querySelectorAll<HTMLElement>(':scope > .ash-composite-bar-destination')];
 		const tabBounds: DOMRect[] = [];
 		let totalTabWidth = 0;
 		for (const tab of tabs) {

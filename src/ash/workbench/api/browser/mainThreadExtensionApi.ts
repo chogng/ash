@@ -1,4 +1,6 @@
 import { MainThreadImageEditors } from './mainThreadImageEditors.js';
+import { MainThreadCanvases } from './mainThreadCanvases.js';
+import { IAgentHostCanvasCollection } from '../../contrib/canvases/common/agentHostCanvas.js';
 import { MainThreadTreeViews } from './mainThreadTreeViews.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 import { canLog, isLogLevel, log, LogLevel } from '../../../platform/log/common/log.js';
@@ -97,7 +99,7 @@ interface ContributionSet extends Omit<ExtensionContributionSet, 'controller' | 
 
 interface ExtensionOutputCursor {
 	readonly incarnation: number | undefined;
-	readonly lifecycle: ExtensionHostRuntime["lifecycle"];
+	readonly lifecycle: ExtensionHostRuntime['lifecycle'];
 	readonly stderrLength: number;
 	readonly failureKey: string;
 }
@@ -132,6 +134,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly namedOutputCursors = new Map<string, ExtensionNamedOutputCursor>();
 	private readonly customEditors: MainThreadCustomEditors;
 	private imageEditors: MainThreadImageEditors | undefined;
+	private canvases: MainThreadCanvases | undefined;
 	private readonly documents: MainThreadDocuments;
 	private readonly diagnostics: MainThreadDiagnostics;
 	private readonly statusbar: MainThreadStatusBar;
@@ -214,10 +217,16 @@ export class MainThreadExtensionApi extends Disposable {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		switch (operation.operation) {
+			case 'createTerminal': case 'readTerminal': case 'disposeTerminal': return this.terminalApi.handle(operation, signal, source);
 			case 'scmUpdate': this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
 			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
 			case 'editorOperation':
+				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'canvasChanged') {
+					if (!this.canvases) { throw new Error('Canvas providers are unavailable'); }
+					await this.canvases.handleChange(operation.payload, source);
+					return { result: 'value', value: null };
+				}
 				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'jsonSchemaContributions') {
 					if (Object.keys(operation.payload).length !== 1) throw new TypeError('Invalid JSON schema contribution request');
 					return { result: 'value', value: this.configurationApi.getJsonSchemaContributions() };
@@ -382,6 +391,9 @@ export class MainThreadExtensionApi extends Disposable {
 		this.projectOutput(snapshot);
 		this.updateOutputLevels(snapshot);
 		this.speechApi.update(snapshot);
+		if (this.instantiation.getOptional(IAgentHostCanvasCollection) && (this.canvases || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'canvas.provider.v1')))) {
+			(this.canvases ??= this._register(this.instantiation.createInstance(MainThreadCanvases, this.invocationTimeoutMillis))).update(snapshot);
+		}
 		this.customEditors.update(snapshot);
 		if (this.imageEditors || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'image.editor.v1'))) (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).update(snapshot);
 		this.diagnostics.update(snapshot);
@@ -389,6 +401,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.configurationApi.update(snapshot);
 		this.workspaceApi.update(snapshot);
 		this.taskApi.update(snapshot);
+		this.terminalApi.update(snapshot);
 		this.debugApi.update(snapshot);
 		this.statusbar.update(snapshot);
 		this.scmApi.update(snapshot);
@@ -408,10 +421,12 @@ export class MainThreadExtensionApi extends Disposable {
 		this.speechApi.clear();
 		this.customEditors.clear();
 		this.imageEditors?.clear();
+		this.canvases?.clear();
 		this.documents.clear();
 		this.configurationApi.clear();
 		this.workspaceApi.clear();
 		this.taskApi.clear();
+		this.terminalApi.clearOwnedTerminals();
 		this.terminalApi.replaceProfiles([]);
 		this.terminalApi.clearPtys();
 		this.terminalApi.replaceEnvironmentProviders([]);
@@ -536,7 +551,7 @@ export class MainThreadExtensionApi extends Disposable {
 		const taskProviders = new Map<string, Map<string, string>>();
 		for (const runtime of snapshot.extensions) {
 			const providers = new Map<string, string>();
-			for (const registration of runtime.registrations) if (registration.kind === "taskProvider") providers.set(registration.registrationId, extensionHostWorkflowProviderId(runtime.id, registration.registrationId));
+			for (const registration of runtime.registrations) if (registration.kind === 'taskProvider') providers.set(registration.registrationId, extensionHostWorkflowProviderId(runtime.id, registration.registrationId));
 			taskProviders.set(runtime.id, providers);
 		}
 		for (const runtime of snapshot.extensions) {
@@ -585,7 +600,7 @@ export class MainThreadExtensionApi extends Disposable {
 					});
 				}
 			}
-			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
+			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
 				if (!ownsExecutableContribution(registration) || registration.kind === 'remoteConnectionResolver') continue;
 				const runtimeId = runtime.id;
@@ -594,7 +609,7 @@ export class MainThreadExtensionApi extends Disposable {
 				const lifetime = oldLifetime?.identity === identity ? oldLifetime : { identity, controller: new AbortController() };
 				registrations.set(registration.registrationId, lifetime);
 				const invoke = this.registrationInvoker(runtime, registration, AbortSignal.any([controller.signal, lifetime.controller.signal]));
-				if (registration.kind === "command") {
+				if (registration.kind === 'command') {
 					commands.push(Object.freeze({
 						id: registration.command, metadata: { description: registration.category ? `${registration.category}: ${registration.title}` : registration.title }, handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
 							if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
@@ -629,7 +644,7 @@ export class MainThreadExtensionApi extends Disposable {
 					}
 					continue;
 				}
-				if (registration.kind === "languageProvider") {
+				if (registration.kind === 'languageProvider') {
 					appendLanguageBatch(languages, createExtensionHostLanguageProviderBatch(registration, runtime.id, extensionHostLanguageProviderId(runtime.id, registration.registrationId), invoke));
 					const unsupported = unsupportedExtensionHostLanguageOperations(registration);
 					if (unsupported.length > 0) issues.push(unsupportedLanguageIssue(runtime, registration, unsupported));
@@ -664,11 +679,11 @@ export class MainThreadExtensionApi extends Disposable {
 					});
 					continue;
 				}
-				if (registration.kind === "taskProvider") {
+				if (registration.kind === 'taskProvider') {
 					tasks.push(createExtensionHostTaskProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace, registration.taskType));
 					continue;
 				}
-				if (registration.kind === "testProfileProvider") {
+				if (registration.kind === 'testProfileProvider') {
 					const localTaskProviders = taskProviders.get(runtime.id)!;
 					tests.push(createExtensionHostTestProfileProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, (taskProviderRegistrationId, taskId) => {
 						const providerId = localTaskProviders.get(taskProviderRegistrationId);
@@ -798,7 +813,7 @@ export class MainThreadExtensionApi extends Disposable {
 				this.terminalApi.replaceQuickFixProviders([]);
 				this.activeContributions = undefined;
 				this.retireContributions(previous, undefined, rollbackError);
-				throw new AggregateError([error, rollbackError], "Extension Host contribution commit and rollback both failed");
+				throw new AggregateError([error, rollbackError], 'Extension Host contribution commit and rollback both failed');
 			}
 			throw error;
 		}
@@ -810,7 +825,7 @@ export class MainThreadExtensionApi extends Disposable {
 		}
 		// Menu declarations belong to the activated package, and disappear with its command authority.
 		this.commandMenus.add(MenusRegistry.appendMenuItems(next.menus));
-		this.retireContributions(previous, next, "Extension Host fleet generation was replaced");
+		this.retireContributions(previous, next, 'Extension Host fleet generation was replaced');
 	}
 
 	private revokeContributions(): void {
@@ -832,7 +847,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.terminalApi.replaceCompletionProviders([]);
 		this.terminalApi.replaceQuickFixProviders([]);
 		this.remoteSources.clear();
-		this.retireContributions(active, undefined, "Extension Host authority was revoked");
+		this.retireContributions(active, undefined, 'Extension Host authority was revoked');
 	}
 
 	private projectOutput(snapshot: ExtensionHostFleetSnapshot): void {
@@ -850,13 +865,13 @@ export class MainThreadExtensionApi extends Disposable {
 			const channel = this.extensionOutput(runtime.id);
 			const previous = this.outputCursors.get(runtime.id);
 			if (!previous || previous.incarnation !== runtime.incarnation || previous.lifecycle !== runtime.lifecycle) {
-				channel.appendLine({ severity: runtimeLifecycleSeverity(runtime.lifecycle), category: "lifecycle", text: runtimeLifecycleMessage(runtime) });
+				channel.appendLine({ severity: runtimeLifecycleSeverity(runtime.lifecycle), category: 'lifecycle', text: runtimeLifecycleMessage(runtime) });
 			}
 			const stderrStart = previous && previous.incarnation === runtime.incarnation && runtime.stderr.length >= previous.stderrLength ? previous.stderrLength : 0;
 			const stderrDelta = runtime.stderr.slice(stderrStart);
-			if (stderrDelta) channel.append({ severity: "log", category: "stderr", text: stderrDelta });
-			const failureKey = runtime.failure ? `${runtime.failure.code}\0${runtime.failure.incarnation ?? ""}\0${runtime.failure.message}` : "";
-			if (runtime.failure && failureKey !== previous?.failureKey) channel.appendLine({ severity: "error", category: "lifecycle", text: `${runtime.failure.code}: ${runtime.failure.message}` });
+			if (stderrDelta) channel.append({ severity: 'log', category: 'stderr', text: stderrDelta });
+			const failureKey = runtime.failure ? `${runtime.failure.code}\0${runtime.failure.incarnation ?? ''}\0${runtime.failure.message}` : '';
+			if (runtime.failure && failureKey !== previous?.failureKey) channel.appendLine({ severity: 'error', category: 'lifecycle', text: `${runtime.failure.code}: ${runtime.failure.message}` });
 			this.outputCursors.set(runtime.id, { incarnation: runtime.incarnation, lifecycle: runtime.lifecycle, stderrLength: runtime.stderr.length, failureKey });
 			if (runtime.lifecycle === 'ready') this.projectNamedOutput(runtime);
 		}
@@ -955,24 +970,24 @@ export class MainThreadExtensionApi extends Disposable {
 			sequence = event.sequence;
 			const operation = event.operation;
 			const key = namedOutputKey(runtime.id, operation.channelId);
-			if (operation.operation === "create") {
+			if (operation.operation === 'create') {
 				const existing = this.namedOutputChannels.get(key);
 				if (existing && existing.label === operation.label && existing.kind === operation.kind) continue;
 				this.namedOutputChannels.deleteAndDispose(key);
-				const channel = this.outputService.createChannel({ id: `extension.${encodeURIComponent(runtime.id)}.${encodeURIComponent(operation.channelId)}`, label: operation.label, kind: operation.kind, source: "extension", extensionId: runtime.id });
+				const channel = this.outputService.createChannel({ id: `extension.${encodeURIComponent(runtime.id)}.${encodeURIComponent(operation.channelId)}`, label: operation.label, kind: operation.kind, source: 'extension', extensionId: runtime.id });
 				this.namedOutputChannels.set(key, channel);
 				continue;
 			}
 			const channel = this.namedOutputChannels.get(key);
 			if (!channel) {
-				this.fleetOutput?.appendLine({ severity: "warning", category: "output", text: `${runtime.id} emitted '${operation.operation}' for unknown Output channel '${operation.channelId}'.` });
+				this.fleetOutput?.appendLine({ severity: 'warning', category: 'output', text: `${runtime.id} emitted '${operation.operation}' for unknown Output channel '${operation.channelId}'.` });
 				continue;
 			}
-			if (operation.operation === "append") channel.append({ text: operation.text, severity: operation.severity, category: operation.category });
-			else if (operation.operation === "replace") channel.replace({ text: operation.text, severity: operation.severity, category: operation.category });
-			else if (operation.operation === "clear") channel.clear();
-			else if (operation.operation === "show") {
-				if (!initial) channel.show({ focus: operation.preserveFocus ? "preserve" : "take" });
+			if (operation.operation === 'append') channel.append({ text: operation.text, severity: operation.severity, category: operation.category });
+			else if (operation.operation === 'replace') channel.replace({ text: operation.text, severity: operation.severity, category: operation.category });
+			else if (operation.operation === 'clear') channel.clear();
+			else if (operation.operation === 'show') {
+				if (!initial) channel.show({ focus: operation.preserveFocus ? 'preserve' : 'take' });
 			} else {
 				this.namedOutputChannels.deleteAndDispose(key);
 			}
@@ -991,7 +1006,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private extensionOutput(extensionId: string): IOutputChannel {
 		const existing = this.extensionOutputs.get(extensionId);
 		if (existing) return existing;
-		const channel = this.outputService.createChannel({ id: `extension-host.${encodeURIComponent(extensionId)}`, label: `${extensionId} (Extension Host)`, kind: "log", source: "extension", extensionId });
+		const channel = this.outputService.createChannel({ id: `extension-host.${encodeURIComponent(extensionId)}`, label: `${extensionId} (Extension Host)`, kind: 'log', source: 'extension', extensionId });
 		this.extensionOutputs.set(extensionId, channel);
 		return channel;
 	}
@@ -1002,19 +1017,19 @@ function namedOutputKey(extensionId: string, channelId: string): string {
 	return `${extensionId}\0${channelId}`;
 }
 
-function runtimeLifecycleSeverity(state: ExtensionHostRuntime["lifecycle"]): OutputEntrySeverity {
-	if (state === "failed" || state === "crashLoop") return "error";
-	if (state === "recovering") return "warning";
-	return state === "ready" ? "information" : "log";
+function runtimeLifecycleSeverity(state: ExtensionHostRuntime['lifecycle']): OutputEntrySeverity {
+	if (state === 'failed' || state === 'crashLoop') return 'error';
+	if (state === 'recovering') return 'warning';
+	return state === 'ready' ? 'information' : 'log';
 }
 
 function runtimeLifecycleMessage(runtime: ExtensionHostRuntime): string {
-	const incarnation = runtime.incarnation === undefined ? "" : ` (incarnation ${runtime.incarnation})`;
+	const incarnation = runtime.incarnation === undefined ? '' : ` (incarnation ${runtime.incarnation})`;
 	return `Extension Host ${runtime.lifecycle}${incarnation}.`;
 }
 
 function unsupportedLanguageIssue(runtime: ExtensionHostRuntime, registration: ExtensionHostLanguageRegistration, operations: readonly string[]): ExtensionApiIssue {
-	return { extensionId: runtime.id, registrationId: registration.registrationId, message: `Language registration '${registration.registrationId}' operation(s) ${operations.join(", ")} were not projected because they do not yet have strict Workbench codecs; supported operations remain active` };
+	return { extensionId: runtime.id, registrationId: registration.registrationId, message: `Language registration '${registration.registrationId}' operation(s) ${operations.join(', ')} were not projected because they do not yet have strict Workbench codecs; supported operations remain active` };
 }
 
 /** Process authority and provider data have separate lifetimes. */
@@ -1137,14 +1152,14 @@ function combineSignals(first: AbortSignal, second: AbortSignal): { readonly sig
 	const abortFirst = (): void => controller.abort(first.reason);
 	const abortSecond = (): void => controller.abort(second.reason);
 	if (first.aborted) abortFirst();
-	else first.addEventListener("abort", abortFirst, { once: true });
+	else first.addEventListener('abort', abortFirst, { once: true });
 	if (second.aborted) abortSecond();
-	else second.addEventListener("abort", abortSecond, { once: true });
+	else second.addEventListener('abort', abortSecond, { once: true });
 	return {
 		signal: controller.signal,
 		dispose: () => {
-			first.removeEventListener("abort", abortFirst);
-			second.removeEventListener("abort", abortSecond);
+			first.removeEventListener('abort', abortFirst);
+			second.removeEventListener('abort', abortSecond);
 		},
 	};
 }

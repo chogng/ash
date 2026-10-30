@@ -221,8 +221,8 @@ export function parseMainProcessArgv(options: MainProcessArgumentsOptions): stri
 			if (executableArguments[index + 1] !== undefined) workspaceArguments.push(executableArguments[++index]!);
 			continue;
 		}
-		if (argument.startsWith("--user-data-dir=")) continue;
-		if (argument === "--user-data-dir") {
+		if (argument.startsWith('--user-data-dir=')) continue;
+		if (argument === '--user-data-dir') {
 			index += 1;
 			continue;
 		}

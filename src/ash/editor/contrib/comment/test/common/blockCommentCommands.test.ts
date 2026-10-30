@@ -1,48 +1,48 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import { BlockCommentCommand } from '../../browser/blockCommentCommand.js';
-import { Selection } from "../../../../common/core/selection.js";
-import { Position } from "../../../../common/core/position.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import { Selection } from '../../../../common/core/selection.js';
+import { Position } from '../../../../common/core/position.js';
+import { TextModel } from '../../../../common/model/textModel.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 
-test("Block comments wrap and unwrap directional selections in isolated undo steps", () => {
-	using model = new TextModel("alpha beta", { languageId: 'typescript' });
+test('Block comments wrap and unwrap directional selections in isolated undo steps', () => {
+	using model = new TextModel('alpha beta', { languageId: 'typescript' });
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (10) + 1), new Position((0) + 1, (6) + 1))]);
 	using configurations = blockCommentConfigurations();
 	executeIsolated(selections, configurations);
-	assert.equal(model.getText(), "alpha /* beta */");
+	assert.equal(model.getText(), 'alpha /* beta */');
 	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(
 		new Position((0) + 1, (13) + 1),
 		new Position((0) + 1, (9) + 1),
 	));
 	executeIsolated(selections, configurations);
-	assert.equal(model.getText(), "alpha beta");
+	assert.equal(model.getText(), 'alpha beta');
 	assert.deepEqual(selections.getSelections()[0]!, Selection.fromPositions(
 		new Position((0) + 1, (10) + 1),
 		new Position((0) + 1, (6) + 1),
 	));
 	selections.context.model.undo();
-	assert.equal(model.getText(), "alpha /* beta */");
+	assert.equal(model.getText(), 'alpha /* beta */');
 });
 
-test("Block comments place collapsed carets inside the generated pair and support independent cursors", () => {
-	using model = new TextModel("one two", { languageId: 'typescript' });
+test('Block comments place collapsed carets inside the generated pair and support independent cursors', () => {
+	using model = new TextModel('one two', { languageId: 'typescript' });
 	using selections = createTestCursorsController(model, primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (4) + 1)),
 	], 1));
 	using configurations = blockCommentConfigurations();
 	executeIsolated(selections, configurations);
-	assert.equal(model.getText(), "/*  */one /*  */two");
+	assert.equal(model.getText(), '/*  */one /*  */two');
 	assert.deepEqual(selections.getSelections(), primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (3) + 1)),
 		Selection.fromPositions(new Position((0) + 1, (13) + 1)),
 	], 1));
 });
 
-test("Block comment command leaves unsupported languages unchanged", () => {
+test('Block comment command leaves unsupported languages unchanged', () => {
 	using model = new TextModel('alpha');
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position(1, 1))]);
 	using configurations = new TestLanguageConfigurationService();

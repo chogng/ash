@@ -1,23 +1,23 @@
 import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { Lxicon } from "../../../../base/common/lxicons.js";
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
-import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
-import { SCMHistoryViewPane } from "./scmHistoryViewPane.js";
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
+import { ScmAgentReviewViewPane } from './scmAgentReviewViewPane.js';
+import { SCMHistoryViewPane } from './scmHistoryViewPane.js';
 import { SCMActiveRepositoryController, ScmStatusContribution } from './activity.js';
-import { ScmViewPane } from "./scmViewPane.js";
-import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { IStorageService } from "../../../../platform/storage/common/storage.js";
-import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
-import { ScmWorkingSetController } from "./workingSet.js";
-import { ScmHistoryChatContextContribution } from "./scmHistoryChatContext.js";
+import { ScmViewPane } from './scmViewPane.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
+import { ScmWorkingSetController } from './workingSet.js';
+import { ScmHistoryChatContextContribution } from './scmHistoryChatContext.js';
 import { SCMViewPaneContainer } from './scmViewPaneContainer.js';
 
-import "./quickDiff.contribution.js";
+import './quickDiff.contribution.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
@@ -295,7 +295,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	});
 }
 
-export const SCM_AGENT_REVIEW_VIEW_ID = "ash.gitAgentReview";
+export const SCM_AGENT_REVIEW_VIEW_ID = 'ash.gitAgentReview';
 export const SCM_HISTORY_VIEW_ID = 'ash.gitGraph';
 
 registerWorkbenchContribution('workbench.contrib.scmActivity', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SCMActiveRepositoryController));
@@ -378,8 +378,8 @@ export function registerSCMViews(
 ): void {
 	registry.registerStaticViewContainer({
 		id: WorkbenchViewContainerId.SourceControl,
-		title: "Source Control",
-		localizationKey: { bundle: "ash.views", key: "sourceControl" },
+		title: 'Source Control',
+		localizationKey: { bundle: 'ash.views', key: 'sourceControl' },
 		location: ViewContainerLocation.Sidebar,
 		ctorDescriptor: new SyncDescriptor(SCMViewPaneContainer),
 		icon: Lxicon.gitBranch,
@@ -398,8 +398,8 @@ export function registerSCMViews(
 		},
 		{
 			id: VIEW_PANE_ID,
-			title: "Changes",
-			localizationKey: { bundle: "ash.views", key: "changes" },
+			title: 'Changes',
+			localizationKey: { bundle: 'ash.views', key: 'changes' },
 			order: 1,
 			canToggleVisibility: true,
 			canMoveView: true,
@@ -407,8 +407,8 @@ export function registerSCMViews(
 		},
 		{
 			id: SCM_AGENT_REVIEW_VIEW_ID,
-			title: "Agent Review",
-			localizationKey: { bundle: "ash.views", key: "agentReview" },
+			title: 'Agent Review',
+			localizationKey: { bundle: 'ash.views', key: 'agentReview' },
 			order: 2,
 			when: ContextKeyExpr.greater('scm.providerCount', 0),
 			collapsed: true,
@@ -418,8 +418,8 @@ export function registerSCMViews(
 		},
 		{
 			id: SCM_HISTORY_VIEW_ID,
-			title: "Graph",
-			localizationKey: { bundle: "ash.views", key: "graph" },
+			title: 'Graph',
+			localizationKey: { bundle: 'ash.views', key: 'graph' },
 			order: 3,
 			when: ContextKeyExpr.greater('scm.historyProviderCount', 0),
 			collapsed: true,
@@ -430,13 +430,13 @@ export function registerSCMViews(
 	]);
 }
 
-registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmStatusContribution));
+registerWorkbenchContribution('workbench.contrib.scmStatus', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmStatusContribution));
 
-registerWorkbenchContribution("workbench.contrib.scmWorkingSets", WorkbenchPhase.BlockRestore, accessor => new ScmWorkingSetController({
+registerWorkbenchContribution('workbench.contrib.scmWorkingSets', WorkbenchPhase.BlockRestore, accessor => new ScmWorkingSetController({
 	configurationService: accessor.get(IConfigurationService),
 	editorPart: accessor.get(IEditorPart),
 	scmViewService: accessor.get(ISCMViewService),
 	storageService: accessor.get(IStorageService),
 }));
 
-registerWorkbenchContribution("workbench.contrib.scmHistoryChatContext", WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmHistoryChatContextContribution));
+registerWorkbenchContribution('workbench.contrib.scmHistoryChatContext', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ScmHistoryChatContextContribution));

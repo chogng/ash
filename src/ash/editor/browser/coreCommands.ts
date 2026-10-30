@@ -1,16 +1,16 @@
-import { addDisposableListener, getActiveElement, isEditableElement, stopEvent } from "../../base/browser/dom.js";
-import { type IDisposable } from "../../base/common/lifecycle.js";
-import { type TextModel } from "../common/model/textModel.js";
+import { addDisposableListener, getActiveElement, isEditableElement, stopEvent } from '../../base/browser/dom.js';
+import { type IDisposable } from '../../base/common/lifecycle.js';
+import { type TextModel } from '../common/model/textModel.js';
 import { CursorMoveCommands } from '../common/cursor/cursorMoveCommands.js';
 import { CursorChangeReason } from '../common/cursorEvents.js';
 import { type IViewModel } from '../common/viewModel.js';
-import { registerEditorContribution, SelectAllCommand, UndoCommand, RedoCommand } from "./editorExtensions.js";
+import { registerEditorContribution, SelectAllCommand, UndoCommand, RedoCommand } from './editorExtensions.js';
 import { EditorOption } from '../common/config/editorOptions.js';
 import { ICodeEditorService } from './services/codeEditorService.js';
-import { type View } from "./view.js";
+import { type View } from './view.js';
 
 export const EditorCoreCommandId = Object.freeze({
-	selectAll: "editor.action.selectAll",
+	selectAll: 'editor.action.selectAll',
 });
 
 SelectAllCommand.addImplementation(100, 'code-editor', accessor => {
@@ -67,7 +67,7 @@ export interface CoreTextEditorCommandContext {
 /** Executes the built-in text-editor Select All command. */
 export function selectAll(context: CoreTextEditorCommandContext): void {
 	if (context.model !== context.viewport.textModel || context.model !== context.viewModel.model) {
-		throw new TypeError("Editor core command dependencies must share one text model");
+		throw new TypeError('Editor core command dependencies must share one text model');
 	}
 	context.viewModel.setCursorStates('keyboard', CursorChangeReason.Explicit, [
 		CursorMoveCommands.selectAll(context.viewModel, context.viewModel.getPrimaryCursorState()),
@@ -82,11 +82,11 @@ export function installCoreTextEditorCommands(
 	viewModel: IViewModel,
 ): IDisposable {
 	if (viewport.textModel !== viewModel.model) {
-		throw new TypeError("Editor core command dependencies must share one text model");
+		throw new TypeError('Editor core command dependencies must share one text model');
 	}
-	return addDisposableListener(input, "keydown", event => {
-		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
-		if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
+	return addDisposableListener(input, 'keydown', event => {
+		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) return;
+		if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'a') {
 			stopEvent(event);
 			selectAll({ model: viewport.textModel, viewport, viewModel });
 		}
@@ -96,7 +96,7 @@ export function installCoreTextEditorCommands(
 registerEditorContribution({
 	id: EditorCoreCommandId.selectAll,
 	install: context => {
-		if (context.kind !== "text") return;
+		if (context.kind !== 'text') return;
 		context.register(installCoreTextEditorCommands(context.controller.element, context.view, context.viewModel));
 	},
 });

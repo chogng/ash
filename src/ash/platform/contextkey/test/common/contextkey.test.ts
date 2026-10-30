@@ -1,8 +1,8 @@
-import assert from "node:assert/strict";
-import { suite, test } from "mocha";
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { ContextKeyExpr, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import { ContextKeyService } from "../../browser/contextKeyService.js";
+import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService } from '../../browser/contextKeyService.js';
 
 test('serialized shortcut conditions retain values, operators and grouping after editing', () => {
 	using context = new ContextKeyService();
@@ -30,10 +30,10 @@ test('serialized shortcut conditions retain values, operators and grouping after
 	}
 });
 
-test("typed context keys reset to their declared default", () => {
+test('typed context keys reset to their declared default', () => {
 	using service = new ContextKeyService();
 	const ready = new RawContextKey<boolean>(
-		"test.ready.typed",
+		'test.ready.typed',
 		false,
 	).bindTo(service);
 
@@ -44,7 +44,7 @@ test("typed context keys reset to their declared default", () => {
 	assert.equal(ready.get(), false);
 });
 
-test("scoped contexts inherit values and override the nearest DOM subtree", () => {
+test('scoped contexts inherit values and override the nearest DOM subtree', () => {
 	using root = new ContextKeyService();
 	const scopeElement = fakeNode();
 	const childElement = fakeNode(scopeElement);
@@ -52,27 +52,27 @@ test("scoped contexts inherit values and override the nearest DOM subtree", () =
 	using scope = root.createScoped(scopeElement as HTMLElement);
 	using nestedScope = root.createScoped(nestedElement as HTMLElement);
 
-	root.setContext("test.language", "global");
-	scope.setContext("test.language", "local");
-	scope.setContext("test.focused", true);
-	nestedScope.setContext("test.nested", true);
+	root.setContext('test.language', 'global');
+	scope.setContext('test.language', 'local');
+	scope.setContext('test.focused', true);
+	nestedScope.setContext('test.nested', true);
 
 	const childContext = root.getContext(childElement);
 	const nestedContext = root.getContext(nestedElement);
-	assert.equal(childContext.getValue("test.language"), "local");
-	assert.equal(childContext.getValue("test.focused"), true);
-	assert.equal(nestedContext.getValue("test.language"), "local");
-	assert.equal(nestedContext.getValue("test.nested"), true);
+	assert.equal(childContext.getValue('test.language'), 'local');
+	assert.equal(childContext.getValue('test.focused'), true);
+	assert.equal(nestedContext.getValue('test.language'), 'local');
+	assert.equal(nestedContext.getValue('test.nested'), true);
 	assert.equal(
 		root.contextMatchesRules(
-			ContextKeyExpr.equals("test.language", "local"),
+			ContextKeyExpr.equals('test.language', 'local'),
 			childElement,
 		),
 		true,
 	);
 
-	scope.removeContext("test.language");
-	assert.equal(childContext.getValue("test.language"), "global");
+	scope.removeContext('test.language');
+	assert.equal(childContext.getValue('test.language'), 'global');
 });
 
 test('context key change buffering publishes one complete change set', () => {

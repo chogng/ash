@@ -25,6 +25,10 @@ macOS 架构支持范围见 [Getting started](../README.md#getting-started)。
 
 准备完整后端包时，macOS 还需要 Go 1.26 和系统 C/C++ 工具链来构建 LiveKit Server，见 [LiveKit Server](../third_party/livekit/README.md)。Linux 的完整后端构建需要 ALSA 开发库；沙箱构建需要 C 编译器和 libcap，见 [共享包构建](../build/README.md)。
 
+源码 Desktop 默认使用 `.build/desktop/dev/profile` 和独立的 `.build/desktop/dev/user-data`；开发 Web 默认使用 `.build/desktop/dev/web-profile`。开发凭据存放在对应 profile 的 `development-secrets/values/` 私有文件中，Unix 目录权限为 `0700`、文件为 `0600`，Windows 使用仅当前账户可访问的 DACL。文件未加密，同一账户运行的应用可以读取。开发后端不自动生成签名证书，也不为默认凭据存储访问系统钥匙串；可在 Models 设置中显式切换加密存储以测试钥匙串集成。
+
+正式 Desktop 继续默认使用系统钥匙串和加密文件。开发版启动不会迁移或覆盖原 `secrets/` 中的加密凭据；已有开发 API Key 需要重新输入到新的开发存储，原加密存储仍可通过原有授权流程恢复。自动化测试仍默认使用内存存储，持久化场景单独启用文件存储。
+
 ### Windows 开发环境
 
 安装下列工具后，使用对应目标架构的 **Visual Studio Developer PowerShell** 构建。已安装的 Ash 产品不依赖这些开发工具。
@@ -112,7 +116,7 @@ Electron Rust watcher 仅把 `crates/app-server-diff/src/` 内的 `.rs` 修改�
 | `just fmt-check --changed <base-ref>`             | 检查相对基准分支共同祖先的提交、暂存、未暂存及未跟踪文件改动               |
 | `just rust-format` / `just rust-format-check`     | 单独格式化或检查 Rust，不需要前端依赖                                      |
 | `pnpm format:ts` / `pnpm format:ts:fix`           | 检查或格式化第一方 TS/JS；可追加文件或目录                                 |
-| `pnpm format:config` / `pnpm format:config:fix`   | 用 Prettier 检查或格式化 JSON、YAML、Markdown、CSS、HTML                   |
+| `pnpm format:config` / `pnpm format:config:fix`   | 用 Bun 检查或格式化 JSON、YAML、Markdown、CSS、HTML                        |
 | `pnpm format` / `pnpm format:fix`                 | 检查或格式化上述前端源码、配置与文档                                       |
 | `pnpm typecheck:build`                            | 检查 TypeScript 构建工具                                                   |
 | `pnpm stylelint`                                  | 只读检查生产 CSS 的变量和选择器，报告文件、行和列；可追加文件、目录或 glob |
@@ -120,9 +124,11 @@ Electron Rust watcher 仅把 `crates/app-server-diff/src/` 内的 `.rs` 修改�
 | `pnpm stylelint:update`                           | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查     |
 | `pnpm clean`                                      | 清理本地产物和 Python 缓存                                                 |
 
-格式化工具按语言选择：TS/JS 使用 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff，配置与文档使用仓库锁定的 `bun fmt`，继续读取 [格式规则](../.prettierrc.toml)；全量、增量与编辑器入口均显式读取 [Git 排除规则](../.gitignore)和[格式化排除规则](../.prettierignore)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
+格式化工具按语言选择：TS/JS、配置与文档使用仓库锁定的 `bun fmt` 和统一的[格式规则](../.prettierrc.toml)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff。TS/JS 使用 tab、单引号、120 列换行及多行尾逗号；`objectWrap = "collapse"` 避免 Bun 1.4.4 保留对象布局时出现第二遍调用链变化。全量、增量与编辑器入口均读取 [Git 排除规则](../.gitignore)和[格式化排除规则](../.prettierignore)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，格式不符时运行对应 `:fix` 命令，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
 
-VS Code 配置与文档的保存格式化使用工作区推荐的 [Simple LSP Client](https://marketplace.visualstudio.com/items?itemName=wdomitrz.simple-lsp-client) 扩展的外部 formatter，以独立参数和 stdin 调用 `node_modules/bun/` 中的原生 Bun，文件名不经过 shell 解释。安装推荐扩展并完成 `pnpm install` 后，编辑器、增量脚本和 CI 使用同一 Bun 版本与规则；Markdown 内嵌代码保持原样，TS/JS 继续使用 TypeScript formatter。`pnpm test:format` 验证编辑器命令与 CI 的 JSON、JSONC、YAML、Markdown、CSS、HTML 输出一致。
+已提交的语言注册表和图标库由生成器在写入前使用相同 Bun 规则格式化，因此重新生成后可直接通过检查，不需要另跑修复命令。`.build/protocol` 中的协议 types 由 Rust 导出器管理，生成缓存保留内容和时间戳未变的文件；这些构建产物保留 Rust 导出格式。
+
+VS Code 的 TS/JS、配置与文档保存格式化使用工作区推荐的 [Simple LSP Client](https://marketplace.visualstudio.com/items?itemName=wdomitrz.simple-lsp-client) 扩展的外部 formatter，以独立参数和 stdin 调用 `node_modules/bun/` 中的原生 Bun，文件名不经过 shell 解释。安装推荐扩展并完成 `pnpm install` 后，编辑器、增量脚本和 CI 使用同一 Bun 版本与规则；Markdown 内嵌代码保持原样。`pnpm test:format` 验证编辑器命令与 CI 的 TS、TSX、JS、JSX、JSON、JSONC、YAML、Markdown、CSS、HTML 输出一致。
 
 真实保存接线由 [`build/formatEditor.test.ts`](../build/formatEditor.test.ts) 验证：使用独立 VS Code profile 打开合成工作区，修改未保存内容后执行保存，并比较编辑器、磁盘与 Bun 的输出，同时验证忽略文件保持原样、空结果和大段中文正确保存，以及带 shell 语法的文件名不会执行命令。先用 VS Code CLI 的 `--extensions-dir <隔离目录> --install-extension wdomitrz.simple-lsp-client@0.1.22` 安装扩展，再设置 `ASH_VSCODE_EXECUTABLE` 为桌面可执行文件、`ASH_FORMATTER_EXTENSIONS` 为该扩展目录，运行 `node --test build/formatEditor.test.ts`。未指定 VS Code 时该测试显式跳过；报告、截图与 trace 写入 `.build/formatter-editor-validation/`。
 
@@ -567,6 +573,16 @@ python -B scripts/check_blob_size.py --head HEAD
 相关文件变更推送到 main 后，性能检查在同一 runner 和工具链下对协议包前后版本各测三轮；耗时中位数同时增加超过 25% 和两秒时失败。具体触发条件和平台分工以工作流为准。
 
 ### 历史测量与适用范围
+
+#### 2026-10-29：macOS 开发包避免相同 LiveKit 产物使缓存失效
+
+macOS 源码构建 LiveKit 后，原先无条件替换缓存程序；连续三次产物 SHA-256 相同，但 mtime 每次变化，导致开发包的第二层输入摘要失效。现在通过既有内容校验发布函数保留相同产物，继续执行 Go 构建、锁定源码校验及最终二进制比较；新产物或损坏的缓存仍会替换。
+
+在 macOS arm64、Rust 1.99.1、Go 1.27.1、`dev-small` 和已有编译缓存下，每轮只触碰 `third_party/livekit/README.md` 的时间戳，再执行 `scripts/.venv/bin/python -B build/prepare.py`，令源码摘要失效但不改变包内资源。修改前耗时为 10.87／8.38／8.21 秒，修改后为 4.58／6.00／5.56 秒，中位数 8.38 → 5.56 秒，减少约 34%。六轮均无 Rust 编译，修改前三轮重新组装开发包，修改后三轮均复用同一包且 LiveKit mtime 不变。此结果只覆盖源码扫描失效而实际打包输入未变的准备阶段，不代表真实 Rust 功能编辑、冷编译或完整窗口启动提速；其他平台未测。日志与测量脚本位于 `.build/build-health/startup-20261029/`。
+
+同日继续消除 LiveKit 的重复链接：Go 仅在输出文件已存在且 build ID 匹配时复用可执行文件，原先每次使用空临时目录，因此即使编译缓存齐全也会重新链接。现在先按上次成功构建的完整 SHA-256 校验缓存程序，再复制到临时输出路径；每次仍执行 Go，让其判断源码、工具链、目标和选项变化。每个目标的构建与校验记录发布使用同一文件锁；缺失、损坏或不匹配的记录不复用，失败不替换上一版本。同时，开发包准备向二进制构建传递已完成的协议准备结果，避免再次检查同一协议；音视频宿主继续使用独立 Cargo feature 组。
+
+在相同 macOS arm64 与工具链下，LiveKit 准备三轮为 3.211／1.743／1.733 秒，建立新校验记录后为 0.499／0.487／0.527 秒，中位数 1.743 → 0.499 秒，减少约 71%，产物 SHA-256 相同。首次建立记录的 3.676 秒单列，不计入复用样本。完整开发包准备的复测遇到并发 Cargo 锁等待和源码编译，已排除，不能据此宣称完整启动提速。真实 Go fixture 验证了源码与 CGO 选项变化重建、保留 build ID 的二进制损坏修复，以及失败保留上一产物和记录；相关 Python 测试 39 项通过，1 项 Windows 专用测试跳过。原始样本、被排除的日志及脚本位于 `.build/build-health/startup-20261029-followup/`。
 
 #### 2026-10-22：客户端测试依赖成本
 

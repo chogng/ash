@@ -253,7 +253,7 @@ impl ServerCapabilities {
         // protocol identity and boolean availability cover the other capabilities.
         if self.github {
             self.contracts
-                .insert("github".into(), CapabilityContract { version: 1 });
+                .insert("github".into(), CapabilityContract { version: 2 });
         }
         if self.extension_management {
             self.contracts.insert(

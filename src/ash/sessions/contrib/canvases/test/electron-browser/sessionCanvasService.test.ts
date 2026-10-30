@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { CanvasesEnabledSettingId } from '../../../../../platform/agentHost/common/agentService.js';
+import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
+import type { ICanvasOwner } from '../../../../../workbench/contrib/canvases/common/canvas.js';
+import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
+import { SessionCanvasContextService } from '../../electron-browser/sessionCanvasService.js';
+import { IAgentHostCanvasCollection } from '../../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
+import { ISessionsLayoutService } from '../../../../services/layout/common/sessionsLayoutService.js';
+import { constObservable } from '../../../../../base/common/observable.js';
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+
+suite('Sessions Canvas ownership', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('uses the selected Session and Thread independently of the visible Chat widget', async () => {
+		using resources = new DisposableStore();
+		const services = resources.add(new InstantiationService());
+		const changed = resources.add(new Emitter<void>());
+		const registry = new ConfigurationRegistry();
+		registry.registerConfiguration({ key: CanvasesEnabledSettingId, defaultValue: true, parse: value => value as boolean });
+		const configuration = resources.add(new InMemoryConfigurationService(registry));
+		const selection = { kind: 'session', active: { session: { sessionId: 'source-session' }, threadId: 'source-thread' } } as SessionsViewSelection;
+		const visibleSelections = [selection];
+		services.registerInstance(ISessionsService, { onDidChange: changed.event, visibleSelections } as unknown as ISessionsService);
+		services.registerInstance(IEditorPart, { groups: [] } as unknown as IEditorPart);
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IAgentHostCanvasCollection, { createContext: (owner: ICanvasOwner) => ({ owner, canvases: constObservable([]) }) } as unknown as IAgentHostCanvasCollection);
+		services.registerInstance(ISessionsLayoutService, { editorWorkingSetState: constObservable({ owner: undefined, restoring: false, applying: false }) } as unknown as ISessionsLayoutService);
+		services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, state: 'loading', sessions: [] } as unknown as ISessionsManagementService);
+		const context = resources.add(services.createInstance(SessionCanvasContextService));
+		const owner: ICanvasOwner = { providerId: 'local-agent-host', session: URI.parse('ash-session:/source-session'), chat: URI.parse('ash-thread:/source-thread') };
+		assert.equal(context.isOwnerVisible(owner), true);
+		assert.equal(context.isOwnerVisible({ ...owner, session: URI.parse('ash-session:/other-session') }), false);
+		assert.equal(context.isOwnerVisible({ ...owner, providerId: 'remote-provider' }), false);
+		assert.equal(context.isOwnerVisible({ ...owner, chat: URI.parse('ash-thread:/other-thread') }), false);
+		let notifications = 0;
+		resources.add(context.onDidChangeVisibility(() => notifications++));
+		visibleSelections.splice(0); changed.fire();
+		assert.equal(context.isOwnerVisible(owner), false);
+		visibleSelections.push(selection); changed.fire();
+		await configuration.updateValue(CanvasesEnabledSettingId, false);
+		assert.equal(context.isOwnerVisible(owner), false);
+		assert.equal(notifications, 3);
+	});
+});

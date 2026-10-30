@@ -71,6 +71,3 @@ function testTokensInRange(model: ITextModel, range: Range, callback: (tokenType
 	}
 	return true;
 }
-
-
-

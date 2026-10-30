@@ -502,6 +502,116 @@ test('activity bar remains visible and reopens a selected sidebar view in the li
 	await expect(search).toHaveAttribute('aria-selected', 'true');
 });
 
+test('activity bar hover waits for a deliberate pause and switches promptly between actions', { tag: ['@electron-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	const activitybar = page.locator('[data-part="activitybar"]');
+	const search = activitybar.getByRole('tab', { name: 'Search', exact: true });
+	const explorer = activitybar.getByRole('tab', { name: 'Explorer', exact: true });
+	const tooltip = page.getByRole('tooltip');
+	const delay = process.platform === 'darwin' ? 1_500 : 500;
+	await page.mouse.move(0, 0);
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+
+	await search.hover();
+	await page.clock.runFor(delay - 1);
+	await expect(tooltip).toHaveCount(0);
+	await page.mouse.move(0, 0);
+	await page.clock.runFor(delay);
+	await expect(tooltip).toHaveCount(0);
+
+	await search.hover();
+	await page.clock.runFor(delay - 1);
+	await expect(tooltip).toHaveCount(0);
+	await page.clock.runFor(1);
+	await expect(tooltip).toHaveText('Search');
+	await expect(search).toHaveAttribute('aria-describedby', await tooltip.getAttribute('id') ?? '');
+
+	await explorer.hover();
+	await page.clock.runFor(1);
+	await expect(tooltip).toHaveText('Explorer');
+	await page.mouse.move(0, 0);
+	await page.clock.runFor(300);
+	await expect(tooltip).toHaveCount(0);
+	await expect(explorer).not.toHaveAttribute('aria-describedby');
+
+	await search.hover();
+	await page.clock.runFor(delay - 1);
+	await expect(tooltip).toHaveCount(0);
+	await page.clock.runFor(1);
+	await expect(tooltip).toHaveText('Search');
+});
+
+test('activity bar hover cancels pending hints and releases Option locks', { tag: ['@electron-ui'] }, async ({ workbench }) => {
+	const page = workbench.page;
+	const trigger = page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search', exact: true });
+	const tooltip = page.getByRole('tooltip');
+	const delay = process.platform === 'darwin' ? 1_500 : 500;
+	await page.mouse.move(0, 0);
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+	await trigger.hover();
+	await page.clock.runFor(100);
+	await page.keyboard.press('Escape');
+	await page.clock.runFor(delay);
+	await expect(tooltip).toHaveCount(0);
+
+	await page.mouse.move(0, 0);
+	await trigger.hover();
+	await page.clock.runFor(delay);
+	await expect(tooltip).toHaveText('Search');
+	await page.keyboard.down('Alt');
+	await page.mouse.move(0, 0);
+	await page.clock.runFor(200);
+	await expect(tooltip).toBeVisible();
+	await page.keyboard.up('Alt');
+	await expect(tooltip).toHaveCount(0);
+
+	await trigger.hover();
+	await page.clock.runFor(delay);
+	await expect(tooltip).toBeVisible();
+	await page.keyboard.press('a');
+	await expect(tooltip).toHaveCount(0);
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Workbench hover keyboard and accessible content (${locale})`, { tag: ['@electron-ui'] }, async ({ workbench, restartWorkbench }) => {
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench } = await restartWorkbench());
+		}
+		const page = workbench.page;
+		const chinese = locale === 'zh-CN';
+		const label = chinese ? '搜索' : 'Search';
+		const trigger = page.locator('[data-part="activitybar"]').getByRole('tab', { name: label, exact: true });
+		await trigger.focus();
+		const modifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+		await page.keyboard.press(`${modifier}+k`);
+		await page.keyboard.press(`${modifier}+i`);
+		const tooltip = page.getByRole('tooltip');
+		await expect(tooltip).toHaveText(label);
+		await expect(tooltip).toBeFocused();
+		await page.keyboard.press('Alt+F2');
+		const view = page.getByRole('dialog', { name: chinese ? '无障碍视图' : 'Accessible View', exact: true });
+		await expect(view.getByRole('textbox')).toHaveValue(label);
+		await page.keyboard.press('Escape');
+		await expect(view).toHaveCount(0);
+		await expect(tooltip).toBeFocused();
+		await page.keyboard.press('Alt+F1');
+		const help = page.getByRole('dialog', { name: chinese ? '无障碍帮助' : 'Accessibility Help', exact: true });
+		await expect(help.getByRole('textbox')).toHaveValue(chinese ? /移动鼠标时按住 Alt 或 Option/u : /Hold Alt or Option while moving the pointer/u);
+		await page.keyboard.press('Escape');
+		await expect(help).toHaveCount(0);
+		await expect(tooltip).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(tooltip).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+	});
+}
+
 test('activity bar hover stays open across its gap and closes outside the shared span', async ({ workbench }) => {
 	const page = workbench.page;
 	const trigger = page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Search', exact: true });
@@ -1111,6 +1221,72 @@ test('macOS sidebar toggle starts at the window control safe area', { tag: ['@el
 	expect(gap).toBeGreaterThanOrEqual(0);
 	expect(gap).toBeLessThanOrEqual(4);
 });
+
+test(
+	'macOS titlebar icons stay anchored during continuous native resize',
+	{ tag: ['@electron-ui', '@electron-app-server', '@darwin'] },
+	async ({ application, workbench }) => {
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const page = workbench.page;
+		await expect(page.locator('.ash-titlebar-left-actions button').first()).toBeVisible();
+		const windowHandle = await application.browserWindow(page);
+		try {
+			const [samples] = await Promise.all([
+				page.evaluate(async () => {
+					const titlebar = document.querySelector<HTMLElement>('.ash-electron-titlebar')!;
+					const left = titlebar.querySelector<HTMLElement>('.ash-titlebar-left-actions button')!;
+					const right = [...titlebar.querySelectorAll<HTMLElement>('.ash-titlebar-actions button')]
+						.filter(button => button.getClientRects().length > 0)
+						.at(-1)!;
+					const samples: {
+						width: number;
+						layoutWidthError: number;
+						left: number;
+						right: number;
+						leftY: number;
+						rightY: number;
+					}[] = [];
+					const started = performance.now();
+					while (performance.now() - started < 2_000) {
+						await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+						const leftBounds = left.getBoundingClientRect();
+						const rightBounds = right.getBoundingClientRect();
+						samples.push({
+							width: innerWidth,
+							layoutWidthError: Math.abs(titlebar.getBoundingClientRect().width - innerWidth),
+							left: leftBounds.left,
+							right: innerWidth - rightBounds.right,
+							leftY: leftBounds.top,
+							rightY: rightBounds.top,
+						});
+					}
+					return samples;
+				}),
+				windowHandle.evaluate(async window => {
+					const bounds = window.getBounds();
+					try {
+						// Small, rapid native resizes expose intermediate overlay and Grid geometry.
+						for (let step = 0; step < 80; step++) {
+							const offset = step < 40 ? step : 79 - step;
+							window.setSize(1_280 - offset * 6, bounds.height, false);
+							await new Promise(resolve => setTimeout(resolve, 12));
+						}
+					} finally {
+						window.setBounds(bounds, false);
+					}
+				}),
+			]);
+			expect(new Set(samples.map(sample => sample.width)).size).toBeGreaterThan(10);
+			expect(Math.max(...samples.map(sample => sample.layoutWidthError))).toBeLessThanOrEqual(1);
+			for (const key of ['left', 'right', 'leftY', 'rightY'] as const) {
+				const values = samples.map(sample => sample[key]);
+				expect(Math.max(...values) - Math.min(...values), key).toBeLessThanOrEqual(1);
+			}
+		} finally {
+			await windowHandle.dispose();
+		}
+	},
+);
 
 test('titlebar navigation moves through editor history beside Quick Access', async ({ workbench }) => {
 	const page = workbench.page;

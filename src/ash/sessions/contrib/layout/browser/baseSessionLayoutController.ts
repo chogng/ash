@@ -2,7 +2,9 @@ import { canceled, isCancellationError } from '../../../../base/common/errors.js
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, constObservable, derived, observableSignalFromEvent } from '../../../../base/common/observable.js';
+import { autorun, constObservable, derived, observableSignalFromEvent, observableValue } from '../../../../base/common/observable.js';
+import type { ISessionEditorWorkingSetState } from '../../../services/layout/common/sessionsLayoutService.js';
+import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Emitter } from '../../../../base/common/event.js';
@@ -28,6 +30,11 @@ const layoutStateKey = 'sessions.singlePane.layoutState';
 
 /** Editor working sets follow the selected session, independently of window geometry. */
 export abstract class BaseLayoutController extends Disposable {
+	readonly editorWorkingSetState = observableValue<ISessionEditorWorkingSetState>(this, { owner: undefined, restoring: false, applying: false });
+	private readonly retainedEditors = new Set<IResourceEditorInput>();
+	protected autoVisibilitySuppressions = 0;
+	public retainEditor(input: IResourceEditorInput) { this.retainedEditors.add(input); return toDisposable(() => this.retainedEditors.delete(input)); }
+	public suppressEditorAutoVisibility() { this.autoVisibilitySuppressions++; return toDisposable(() => this.autoVisibilitySuppressions--); }
 	private readonly workingSets = new Map<string, EditorWorkingSet>();
 	private readonly panelViews = new Map<string, string>();
 	private readonly chatVisibility = new Map<string, { readonly editor: boolean; readonly auxiliarybar: boolean; }>();
@@ -178,6 +185,7 @@ export abstract class BaseLayoutController extends Disposable {
 				this.directoryRestore.abort();
 				this.directoryRestore = new AbortController();
 				this.revision += 1;
+				this.editorWorkingSetState.set({ ...this.editorWorkingSetState.get(), restoring: !!selection, applying: false }, undefined);
 			}
 			workspaceChanged.read(reader);
 			partVisibilityChanged.read(reader);
@@ -189,7 +197,11 @@ export abstract class BaseLayoutController extends Disposable {
 			if (selection && selected.visibleSelections.length === 1 && this.layout.isPartVisible('panel')) {
 				void this.panes.openPaneComposite(this.panelViews.get(this.sessionKey(selection)) ?? WorkbenchViewContainerId.Terminal, ViewContainerLocation.Panel).catch(error => this.notifications.error(String(error)));
 			}
-			if (!selection || selected.visibleSelections.length !== 1 || !this.canRestoreSessionEditors() || this.scheduledRevision === this.revision) {
+			if (!selection || selected.visibleSelections.length !== 1 || !this.canRestoreSessionEditors()) {
+				this.editorWorkingSetState.set({ ...this.editorWorkingSetState.get(), restoring: false, applying: false }, undefined);
+				return;
+			}
+			if (this.scheduledRevision === this.revision) {
 				return;
 			}
 			// Workspace switching precedes editor deserialization; file inputs must use the incoming directory.
@@ -231,6 +243,14 @@ export abstract class BaseLayoutController extends Disposable {
 				if (!this.isDisposed && !isCancellationError(error)) {
 					this.notifications.error(localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session: {0}', String(error)));
 				}
+			}).finally(() => {
+				if (revision === this.revision && !this.isDisposed) {
+					const selectedOwner = selection.kind === 'session' ? {
+						sessionResource: URI.from({ scheme: 'ash-session', path: '/' + selection.active.session.sessionId }),
+						chatResource: this.chatLayoutPresentation.configured !== 'session-shared' ? URI.from({ scheme: 'ash-thread', path: '/' + selection.active.threadId }) : undefined,
+					} : undefined;
+					this.editorWorkingSetState.set({ owner: selectedOwner, restoring: false, applying: false }, undefined);
+				}
 			});
 		}));
 	}
@@ -245,7 +265,14 @@ export abstract class BaseLayoutController extends Disposable {
 
 	protected captureEditors(): void {
 		if (this.editorSession && this.canRestoreSessionEditors() && !this.isEditorAutoVisibilitySuppressed()) {
-			this.workingSets.set(this.editorSession, this.getWorkingSet(this.editorSession));
+			let snapshot = this.getWorkingSet(this.editorSession);
+			const previous = this.workingSets.get(this.editorSession);
+			if (previous && !this.layout.isPartVisible('editor') && this.retainedEditors.size && this.editor.groups.some(group => group.inputs.some(input => this.retainedEditors.has(input)))
+				&& snapshot.groups.length === previous.groups.length && snapshot.groups.every(group => group.id !== undefined && previous.groups.some(saved => saved.id === group.id))) {
+				// A hidden retained page has no new geometry. Preserve its split sizes while still capturing changes to tabs.
+				snapshot = { ...snapshot, ...(previous.layout ? { layout: previous.layout } : {}), groups: snapshot.groups.map(group => ({ ...group, size: previous.groups.find(saved => saved.id === group.id)!.size })) };
+			}
+			this.workingSets.set(this.editorSession, snapshot);
 			if (this.chatLayoutPresentation.configured === 'chat') {
 				this.chatVisibility.set(this.editorSession, { editor: this.layout.isPartVisible('editor'), auxiliarybar: this.layout.isPartVisible('auxiliarybar') });
 			}
@@ -253,7 +280,7 @@ export abstract class BaseLayoutController extends Disposable {
 	}
 
 	protected getWorkingSet(key: string): EditorWorkingSet { return this.editor.saveWorkingSet(key); }
-	protected isEditorAutoVisibilitySuppressed(): boolean { return this.restoring; }
+	protected isEditorAutoVisibilitySuppressed(): boolean { return this.restoring || this.autoVisibilitySuppressions > 0; }
 	protected shouldShowEditor(): boolean { return this.editors.visibleEditors.length > 0 || !this.layout.isPartVisible('sessions'); }
 	protected canRestoreSessionEditors(): boolean { return this.layout.isPartVisible('sessions'); }
 	protected applyWorkingSet(saved: EditorWorkingSet | 'empty'): Promise<void> { return this.editor.applyWorkingSet(saved, { preserveFocus: true }); }
@@ -290,6 +317,7 @@ export abstract class BaseLayoutController extends Disposable {
 		}
 		this.restoring = true;
 		const revision = this.revision;
+		this.editorWorkingSetState.set({ ...this.editorWorkingSetState.get(), applying: true }, undefined);
 		try {
 			await this.applyWorkingSet(saved ?? 'empty');
 			const visibility = revision === this.revision && this.chatLayoutPresentation.configured === 'chat' ? this.chatVisibility.get(key) : undefined;
@@ -303,6 +331,7 @@ export abstract class BaseLayoutController extends Disposable {
 			}
 		} finally {
 			this.restoring = false;
+			this.editorWorkingSetState.set({ ...this.editorWorkingSetState.get(), applying: false }, undefined);
 		}
 	}
 

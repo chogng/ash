@@ -1,15 +1,15 @@
-import { cloneDocumentStyles } from "../../base/browser/domStylesheets.js";
+import { cloneDocumentStyles } from '../../base/browser/domStylesheets.js';
 import {
 	isRegisteredWindow,
 	mainWindow,
 	registerWindow,
-} from "../../base/browser/window.js";
-import { onUnexpectedError } from "../../base/common/errors.js";
-import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
-import { environment } from "../../base/common/platform.js";
+} from '../../base/browser/window.js';
+import { onUnexpectedError } from '../../base/common/errors.js';
+import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
+import { environment } from '../../base/common/platform.js';
 import { type WorkbenchState, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
-import { type IWorkbenchHostService, type WorkbenchTextDownload } from "../services/host/common/workbenchHostService.js";
-import { h } from "../../base/browser/dom.js";
+import { type IWorkbenchHostService, type WorkbenchTextDownload } from '../services/host/common/workbenchHostService.js';
+import { h } from '../../base/browser/dom.js';
 
 export interface WorkbenchWindowOptions {
 	readonly root: HTMLElement;
@@ -39,15 +39,15 @@ export class WorkbenchWindow
 		this.ownerDocument = options.root.ownerDocument;
 		this.targetWindow = this.ownerDocument.defaultView;
 
-		options.root.classList.add("ash-workbench");
-		options.root.setAttribute("data-runtime", environment.runtime);
-		options.root.setAttribute("data-os", environment.os);
+		options.root.classList.add('ash-workbench');
+		options.root.setAttribute('data-runtime', environment.runtime);
+		options.root.setAttribute('data-os', environment.os);
 		this.setWorkbenchState(options.workbenchState);
 		this._register(toDisposable(() => {
-			options.root.classList.remove("ash-workbench");
-			options.root.removeAttribute("data-runtime");
-			options.root.removeAttribute("data-os");
-			options.root.removeAttribute("data-workbench-state");
+			options.root.classList.remove('ash-workbench');
+			options.root.removeAttribute('data-runtime');
+			options.root.removeAttribute('data-os');
+			options.root.removeAttribute('data-workbench-state');
 			options.root.replaceChildren();
 		}));
 
@@ -65,28 +65,28 @@ export class WorkbenchWindow
 		}
 		if (this.targetWindow) {
 			const onError = (event: ErrorEvent): void => {
-				const source = event.filename ? ` (${event.filename}:${event.lineno}:${event.colno})` : "";
-				onUnexpectedError(event.error ?? new Error(`${event.message || "Unexpected browser error"}${source}`));
+				const source = event.filename ? ` (${event.filename}:${event.lineno}:${event.colno})` : '';
+				onUnexpectedError(event.error ?? new Error(`${event.message || 'Unexpected browser error'}${source}`));
 				event.preventDefault();
 			};
 			const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
 				onUnexpectedError(event.reason);
 				event.preventDefault();
 			};
-			this.targetWindow.addEventListener("error", onError);
-			if (this.targetWindow !== mainWindow) this.targetWindow.addEventListener("unhandledrejection", onUnhandledRejection);
+			this.targetWindow.addEventListener('error', onError);
+			if (this.targetWindow !== mainWindow) this.targetWindow.addEventListener('unhandledrejection', onUnhandledRejection);
 			this._register(toDisposable(() => {
-				this.targetWindow?.removeEventListener("error", onError);
-				if (this.targetWindow !== mainWindow) this.targetWindow?.removeEventListener("unhandledrejection", onUnhandledRejection);
+				this.targetWindow?.removeEventListener('error', onError);
+				if (this.targetWindow !== mainWindow) this.targetWindow?.removeEventListener('unhandledrejection', onUnhandledRejection);
 			}));
 		}
 	}
 
 	downloadText(download: WorkbenchTextDownload): void {
-		if (!this.targetWindow) throw new Error("Text download requires a browser window");
+		if (!this.targetWindow) throw new Error('Text download requires a browser window');
 		const targetWindow = this.targetWindow as Window & typeof globalThis;
 		const url = targetWindow.URL.createObjectURL(new targetWindow.Blob([download.content], { type: download.mediaType }));
-		const anchor = h(this.ownerDocument, "a");
+		const anchor = h(this.ownerDocument, 'a');
 		anchor.href = url;
 		anchor.download = download.fileName;
 		anchor.click();
@@ -95,7 +95,7 @@ export class WorkbenchWindow
 
 	setWorkbenchState(state: WorkbenchState): void {
 		this.root.setAttribute(
-			"data-workbench-state",
+			'data-workbench-state',
 			workbenchStateToString(state),
 		);
 	}

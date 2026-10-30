@@ -1,10 +1,10 @@
 import { localize } from '../../../nls.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
-import { createSshRemoteAuthority } from "./remote.js";
-import { createSshRemoteWorkspaceUri } from "./remote.js";
-import { getRemoteWorkspacePath } from "./remote.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import { createSshRemoteAuthority } from './remote.js';
+import { createSshRemoteWorkspaceUri } from './remote.js';
+import { getRemoteWorkspacePath } from './remote.js';
 
 const CONNECTION_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/;
 
@@ -26,7 +26,7 @@ export function canonicalRemoteConnectionDefinition(connection: RemoteConnection
 /** Canonicalizes one shared Remote catalog identity. */
 export function canonicalRemoteConnectionName(value: string): string {
 	const normalized = value.trim().toLowerCase();
-	if (!CONNECTION_NAME_PATTERN.test(normalized)) throw new Error("Remote connection name must contain 1-64 ASCII letters, digits, dots, underscores, or hyphens and must start and end with a letter or digit");
+	if (!CONNECTION_NAME_PATTERN.test(normalized)) throw new Error('Remote connection name must contain 1-64 ASCII letters, digits, dots, underscores, or hyphens and must start and end with a letter or digit');
 	return normalized;
 }
 
@@ -64,10 +64,10 @@ export const IRemoteConnectionService = createServiceIdentifier<IRemoteConnectio
 export const UnavailableRemoteConnectionApi: IRemoteConnectionApi = Object.freeze({
 	available: false,
 	list: () => Promise.resolve([]),
-	save: () => Promise.reject(new Error("Named Remote connections require a native product host")),
-	update: () => Promise.reject(new Error("Named Remote connections require a native product host")),
-	remove: () => Promise.reject(new Error("Named Remote connections require a native product host")),
-	connect: () => Promise.reject(new Error("Named Remote connections require a native product host")),
+	save: () => Promise.reject(new Error('Named Remote connections require a native product host')),
+	update: () => Promise.reject(new Error('Named Remote connections require a native product host')),
+	remove: () => Promise.reject(new Error('Named Remote connections require a native product host')),
+	connect: () => Promise.reject(new Error('Named Remote connections require a native product host')),
 });
 
 /** Owns window-local resolver registrations; the host remains the saved connection owner. */

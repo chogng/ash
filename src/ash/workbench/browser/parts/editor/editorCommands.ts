@@ -1,32 +1,32 @@
 import { localize2 } from '../../../../nls.js';
-import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
-import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
-import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
-import { IInstantiationService, type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { ActiveEditorGroupEmptyContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, EditorTabsFocusContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from "../../../common/contextkeys.js";
-import { IEditorPart } from "./editorPart.js";
-import { IEditorGroupsService } from "../../../services/editor/common/editorGroupsService.js";
-import { resolveCommandsContext } from "./editorCommandsContext.js";
+import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { ActiveEditorGroupEmptyContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, EditorTabsFocusContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../common/contextkeys.js';
+import { IEditorPart } from './editorPart.js';
+import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
+import { resolveCommandsContext } from './editorCommandsContext.js';
 import { OpenWithEditorPicker } from '../../../services/editor/browser/openWithEditorPicker.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { URI, type UriComponents } from '../../../../base/common/uri.js';
 import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
-export const CLOSE_EDITOR_COMMAND_ID = "workbench.action.closeActiveEditor";
+export const CLOSE_EDITOR_COMMAND_ID = 'workbench.action.closeActiveEditor';
 export const CLOSE_EDITOR_GROUP_COMMAND_ID = 'workbench.action.closeGroup';
 
 registerAction2(class CloseActiveEditorAction extends Action2 {
 	constructor() {
 		super({
 			id: CLOSE_EDITOR_COMMAND_ID,
-			title: localize2({ bundle: "ash", key: "workbench.closeEditor" }, "Close"),
+			title: localize2({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close'),
 			f1: true,
 			precondition: EditorsVisibleContext.isEqualTo(true),
 			menu: [
-				{ id: MenuId.MenubarFileMenu, group: "6_close", order: 2 },
-				{ id: MenuId.EditorTitleContext, group: "1_close", order: 10 },
+				{ id: MenuId.MenubarFileMenu, group: '6_close', order: 2 },
+				{ id: MenuId.EditorTitleContext, group: '1_close', order: 10 },
 			],
-			keybinding: { primary: Keybinding.single(logicalKey("w", { primaryKey: true })) },
+			keybinding: { primary: Keybinding.single(logicalKey('w', { primaryKey: true })) },
 		});
 	}
 
@@ -70,13 +70,13 @@ registerAction2(class CloseEditorGroupAction extends Action2 {
 	}
 });
 
-export const REOPEN_WITH_COMMAND_ID = "workbench.action.reopenWithEditor";
+export const REOPEN_WITH_COMMAND_ID = 'workbench.action.reopenWithEditor';
 
 registerAction2(class ReopenWithAction extends Action2 {
 	constructor() {
 		super({
 			id: REOPEN_WITH_COMMAND_ID,
-			title: localize2({ bundle: "ash", key: "workbench.reopenWithEditor" }, "Reopen With..."),
+			title: localize2({ bundle: 'ash', key: 'workbench.reopenWithEditor' }, 'Reopen With...'),
 			f1: true,
 			menu: { id: MenuId.EditorTitleContext, group: '1_open', order: 20, when: EditorsVisibleContext.isEqualTo(true) },
 		});

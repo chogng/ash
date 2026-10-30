@@ -75,6 +75,6 @@ export function selectLanguageIds(selector: LanguageSelector, into: Set<string>)
 
 /** Validates a provider selector, including the explicit all-languages selector. */
 export function assertLanguageSelector(value: unknown): asserts value is string {
-	if (value === "*") return;
+	if (value === '*') return;
 	assertLanguageId(value);
 }

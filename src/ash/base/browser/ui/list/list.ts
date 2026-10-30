@@ -1,6 +1,6 @@
-import type { DragAndDropData } from "../dnd/dnd.js";
+import type { DragAndDropData } from '../dnd/dnd.js';
 
-export type ListScrolling = "internal" | "external" | "managed";
+export type ListScrolling = 'internal' | 'external' | 'managed';
 
 export interface IKeyboardNavigationLabelProvider<T> {
 	getKeyboardNavigationLabel(element: T): { toString(): string | undefined; } | { toString(): string | undefined; }[] | undefined;
@@ -25,7 +25,7 @@ export interface IListRenderer<T, TTemplateData> {
 }
 
 export interface ListAccessibilityProvider<T> {
-	readonly getRole?: (item: T) => "option" | "treeitem" | "row" | "presentation";
+	readonly getRole?: (item: T) => 'option' | 'treeitem' | 'row' | 'presentation';
 	readonly getAriaLabel?: (item: T) => string | undefined;
 	readonly getAriaLevel?: (item: T) => number | undefined;
 	readonly getAriaSetSize?: (item: T) => number | undefined;
@@ -33,17 +33,17 @@ export interface ListAccessibilityProvider<T> {
 	readonly isExpanded?: (item: T) => boolean | undefined;
 }
 
-export const ListDragTargetSector = Object.freeze({ Top: "top", CenterTop: "center-top", CenterBottom: "center-bottom", Bottom: "bottom" } as const);
+export const ListDragTargetSector = Object.freeze({ Top: 'top', CenterTop: 'center-top', CenterBottom: 'center-bottom', Bottom: 'bottom' } as const);
 export type ListDragTargetSector = typeof ListDragTargetSector[keyof typeof ListDragTargetSector];
 
-export const ListDragOverPosition = Object.freeze({ Over: "over", Before: "before", After: "after" } as const);
+export const ListDragOverPosition = Object.freeze({ Over: 'over', Before: 'before', After: 'after' } as const);
 export type ListDragOverPosition = typeof ListDragOverPosition[keyof typeof ListDragOverPosition];
 
 export type ListDragData<T> = DragAndDropData<T>;
 
 export interface ListDragOverReaction {
 	readonly accept: boolean;
-	readonly effect?: "copy" | "move";
+	readonly effect?: 'copy' | 'move';
 	readonly position?: ListDragOverPosition;
 	readonly feedback?: readonly number[];
 }

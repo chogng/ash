@@ -657,6 +657,48 @@ pub struct BackgroundClient {
     services: crate::services::Services,
 }
 impl BackgroundClient {
+    /// Creates and optionally starts a command in an activation-owned integrated terminal.
+    pub fn create_terminal(
+        &self,
+        name: String,
+        cwd: Option<String>,
+        env: BTreeMap<String, Option<String>>,
+        append_env: BTreeMap<String, String>,
+        command: Option<String>,
+    ) -> Result<crate::terminal::TerminalHandle, ExtensionError> {
+        serde_json::from_value(self.value(ExtensionClientOperation::CreateTerminal {
+            name,
+            cwd,
+            env,
+            append_env: (!append_env.is_empty()).then_some(append_env),
+            command,
+        })?)
+        .map_err(|_| unexpected_result())
+    }
+
+    /// Reads only this activation's terminal. Output retention is bounded by the terminal bridge.
+    pub fn read_terminal(
+        &self,
+        terminal_id: String,
+        after_sequence: u64,
+    ) -> Result<crate::terminal::TerminalRead, ExtensionError> {
+        serde_json::from_value(self.value(ExtensionClientOperation::ReadTerminal {
+            terminal_id,
+            after_sequence,
+        })?)
+        .map_err(|_| unexpected_result())
+    }
+
+    /// Closes a terminal and its shell through the terminal owner; other activations cannot use its ID.
+    pub fn dispose_terminal(&self, terminal_id: String) -> Result<(), ExtensionError> {
+        match self
+            .services
+            .call_operation(ExtensionClientOperation::DisposeTerminal { terminal_id })?
+        {
+            ExtensionClientResult::Done => Ok(()),
+            _ => Err(unexpected_result()),
+        }
+    }
     /// Uses the activation's bound window; retirement cancels an in-flight launch.
     pub fn start_debugging(
         &self,

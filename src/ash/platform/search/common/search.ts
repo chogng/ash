@@ -1,9 +1,9 @@
 import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type ContentSearchPatternKind = "literal" | "regex";
-export type ContentSearchFreshness = "indexed" | "current";
-export type ContentSearchCaseSensitivity = "smart" | "sensitive" | "insensitive";
+export type ContentSearchPatternKind = 'literal' | 'regex';
+export type ContentSearchFreshness = 'indexed' | 'current';
+export type ContentSearchCaseSensitivity = 'smart' | 'sensitive' | 'insensitive';
 
 export interface ContentSearchMatchRange {
 	start: number;
@@ -51,7 +51,7 @@ export interface IContentSearchService {
 	search(directory: IWorkspaceFolder, query: IContentSearchQuery, options?: IContentSearchOptions): Promise<IContentSearchComplete>;
 }
 
-export const IContentSearchService = createServiceIdentifier<IContentSearchService>("contentSearchService");
+export const IContentSearchService = createServiceIdentifier<IContentSearchService>('contentSearchService');
 
 export type ContentSearchEngine = 'tgrep' | 'ripgrep';
 

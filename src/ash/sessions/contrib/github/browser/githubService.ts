@@ -162,15 +162,23 @@ export class GitHubService extends Disposable implements IGitHubService {
 			if (source.token.isCancellationRequested) throw new CancellationError();
 			await binding.github.attachSessionPullRequest(binding.backendSessionId, reference);
 			binding.assertCurrent();
-			if (!this.isDisposed) { this.operation.value?.cancel(); this.refresh.schedule(0); }
-		} finally { this.attachments.deleteAndDispose(source); }
+			if (!this.isDisposed) {
+				this.operation.value?.cancel();
+				this.refresh.schedule(0);
+			}
+		} finally {
+			this.attachments.deleteAndDispose(source);
+		}
 	}
 
 	public async detachPullRequest(sessionId: SessionId, reference: GitHubPullRequestReference): Promise<void> {
 		const binding = this.capture(sessionId);
 		await binding.github.detachSessionPullRequest(binding.backendSessionId, reference);
 		binding.assertCurrent();
-		if (!this.isDisposed) { this.operation.value?.cancel(); this.refresh.schedule(0); }
+		if (!this.isDisposed) {
+			this.operation.value?.cancel();
+			this.refresh.schedule(0);
+		}
 	}
 
 	public getSessionPullRequests(sessionId: SessionId): readonly IResolvedSessionPullRequest[] {
@@ -201,7 +209,10 @@ export class GitHubService extends Disposable implements IGitHubService {
 			}
 			await binding.github.attachSessionIssue(binding.backendSessionId, reference);
 			binding.assertCurrent();
-			if (!this.isDisposed) { this.operation.value?.cancel(); this.refresh.schedule(0); }
+			if (!this.isDisposed) {
+				this.operation.value?.cancel();
+				this.refresh.schedule(0);
+			}
 		} finally {
 			this.attachments.deleteAndDispose(source);
 		}
@@ -211,7 +222,10 @@ export class GitHubService extends Disposable implements IGitHubService {
 		const binding = this.capture(sessionId);
 		await binding.github.detachSessionIssue(binding.backendSessionId, reference);
 		binding.assertCurrent();
-		if (!this.isDisposed) { this.operation.value?.cancel(); this.refresh.schedule(0); }
+		if (!this.isDisposed) {
+			this.operation.value?.cancel();
+			this.refresh.schedule(0);
+		}
 	}
 
 	private updateSelection(): void {
@@ -504,7 +518,11 @@ function directoryKey(session: ISession): string {
 
 function parsePullRequestReference(value: string): GitHubPullRequestReference {
 	let url: URL;
-	try { url = new URL(value.trim()); } catch { throw new Error(localize('sessions.github.invalidUrl', 'Enter an HTTPS pull request URL, such as https://github.com/owner/repo/pull/123.')); }
+	try {
+		url = new URL(value.trim());
+	} catch {
+		throw new Error(localize('sessions.github.invalidUrl', 'Enter an HTTPS pull request URL, such as https://github.com/owner/repo/pull/123.'));
+	}
 	const match = /^\/([\w.-]+)\/([\w.-]+)\/pull\/([1-9]\d*)\/?$/.exec(url.pathname);
 	if (url.protocol !== 'https:' || url.username || url.password || url.port || !match || !Number.isSafeInteger(Number(match[3]))) {
 		throw new Error(localize('sessions.github.invalidUrl', 'Enter an HTTPS pull request URL, such as https://github.com/owner/repo/pull/123.'));

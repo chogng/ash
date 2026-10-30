@@ -162,7 +162,11 @@ export class TunnelProcessCoordinator extends Disposable implements ITunnelProce
 		child.stdout.on('data', (chunk: string) => {
 			if (generation !== this.generation || this.isDisposed || stopping) { return; }
 			buffer += chunk;
-			if (buffer.length > 16_384) { rejectReady(new Error('Invalid hosting output')); void run.stop(); return; }
+			if (buffer.length > 16_384) {
+				rejectReady(new Error('Invalid hosting output'));
+				void run.stop();
+				return;
+			}
 			const newline = buffer.indexOf('\n');
 			if (newline < 0) { return; }
 			const status = parseTunnelMachineStatus(buffer.slice(0, newline));

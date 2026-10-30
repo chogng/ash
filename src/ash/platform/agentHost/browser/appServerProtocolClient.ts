@@ -1,13 +1,13 @@
 import { AppServerFrame, WEB_APP_SERVER_PROTOCOL_VERSION, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../common/appServerTransport.js';
-import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../.build/protocol/typescript/index.js";
-import { VSBuffer } from "../../../base/common/buffer.js";
-import { canceled, isCancellationError, toError } from "../../../base/common/errors.js";
-import { isRecord } from "../../../base/common/types.js";
-import type { AppServerConnectionState, IAppServerConnectionRecovery } from "../common/appServerApi.js";
-import { computeReconnectDelay, hasExhaustedReconnectAttempts, type IRemoteAgentHostReconnectPolicy } from "../common/reconnectPolicy.js";
-import { AppServerConnectionStoppedError, AppServerRemoteError } from "../common/appServerError.js";
-import type { DisposableHandle } from "../../ipc/common/ipc.js";
-import { checkAppServerInitializeCompatibility } from "../common/appServerProtocolCompatibility.js";
+import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from '../../../../../.build/protocol/typescript/index.js';
+import { VSBuffer } from '../../../base/common/buffer.js';
+import { canceled, isCancellationError, toError } from '../../../base/common/errors.js';
+import { isRecord } from '../../../base/common/types.js';
+import type { AppServerConnectionState, IAppServerConnectionRecovery } from '../common/appServerApi.js';
+import { computeReconnectDelay, hasExhaustedReconnectAttempts, type IRemoteAgentHostReconnectPolicy } from '../common/reconnectPolicy.js';
+import { AppServerConnectionStoppedError, AppServerRemoteError } from '../common/appServerError.js';
+import type { DisposableHandle } from '../../ipc/common/ipc.js';
+import { checkAppServerInitializeCompatibility } from '../common/appServerProtocolCompatibility.js';
 import type { AppServerServerRequestDefinition, AppServerServerRequestMethod, ClientCapabilities, JsonRpcId, ServerRequestParams, ServerRequestResult } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { Emitter } from '../../../base/common/event.js';
@@ -80,8 +80,8 @@ export class AppServerProtocolClient {
 	private bufferedCallBytes = 0;
 	private nextRequestId = 1;
 	private _generation = 0;
-	private _state: AppServerConnectionState = "stopped";
-	private _slashCommands: readonly InitializeResult["slashCommands"][number][] = [];
+	private _state: AppServerConnectionState = 'stopped';
+	private _slashCommands: readonly InitializeResult['slashCommands'][number][] = [];
 	private _capabilities: ServerCapabilities | undefined;
 	private _operatingSystem: OperatingSystem | undefined;
 	private _userHome: string | undefined;
@@ -95,11 +95,11 @@ export class AppServerProtocolClient {
 	constructor(transport: AppServerTransport, options: AppServerProtocolClientOptions = {}, decoder?: AppServerFrameDecoder) {
 		this.transport = transport;
 		this.options = {
-			clientName: options.clientName ?? "ash-web",
-			clientVersion: options.clientVersion ?? "0.1.0",
-			connectTimeoutMs: positiveInteger(options.connectTimeoutMs, DEFAULT_CONNECT_TIMEOUT, "connectTimeoutMs"),
-			initializeTimeoutMs: positiveInteger(options.initializeTimeoutMs, DEFAULT_CONNECT_TIMEOUT, "initializeTimeoutMs"),
-			requestTimeoutMs: positiveInteger(options.requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT, "requestTimeoutMs"),
+			clientName: options.clientName ?? 'ash-web',
+			clientVersion: options.clientVersion ?? '0.1.0',
+			connectTimeoutMs: positiveInteger(options.connectTimeoutMs, DEFAULT_CONNECT_TIMEOUT, 'connectTimeoutMs'),
+			initializeTimeoutMs: positiveInteger(options.initializeTimeoutMs, DEFAULT_CONNECT_TIMEOUT, 'initializeTimeoutMs'),
+			requestTimeoutMs: positiveInteger(options.requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT, 'requestTimeoutMs'),
 			capabilities: { ...options.capabilities, notifications: true },
 		};
 		// Ownership transfers after options have been validated; reconnect resets
@@ -116,7 +116,7 @@ export class AppServerProtocolClient {
 
 	public get generation(): number { return this._generation; }
 
-	get slashCommands(): readonly InitializeResult["slashCommands"][number][] {
+	get slashCommands(): readonly InitializeResult['slashCommands'][number][] {
 		return this._slashCommands;
 	}
 
@@ -153,17 +153,17 @@ export class AppServerProtocolClient {
 	}
 
 	async connect(): Promise<AppServerConnectionMetadata> {
-		if (this.disposed || this.isClosing) throw new Error("Cannot connect a disposed or closing App Server client");
-		if (this._state !== "stopped" && this._state !== 'crashed') throw new Error(`Cannot connect App Server client from ${this._state}`);
+		if (this.disposed || this.isClosing) throw new Error('Cannot connect a disposed or closing App Server client');
+		if (this._state !== 'stopped' && this._state !== 'crashed') throw new Error(`Cannot connect App Server client from ${this._state}`);
 		const generation = ++this._generation;
 		this.firstRequestId = this.nextRequestId;
 		const connected = new Promise<AppServerConnectionMetadata>((resolve, reject) => {
 			this.connectResolve = resolve;
 			this.connectReject = reject;
-			this.connectTimeout = setTimeout(() => this.fail(new Error("Timed out connecting to the App Server bridge")), this.options.connectTimeoutMs);
+			this.connectTimeout = setTimeout(() => this.fail(new Error('Timed out connecting to the App Server bridge')), this.options.connectTimeoutMs);
 		});
 		// Observers can close or replace the connection synchronously when its state changes.
-		this.setState("starting");
+		this.setState('starting');
 		if (this.isCurrentConnection(generation, 'starting')) {
 			try {
 				this.transport.send(WEB_APP_SERVER_CONNECT_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION });
@@ -173,7 +173,7 @@ export class AppServerProtocolClient {
 		}
 		const metadata = await connected;
 		if (!this.isCurrentConnection(generation, 'starting')) { throw canceled(); }
-		this.setState("initializing");
+		this.setState('initializing');
 		try {
 			if (!this.isCurrentConnection(generation, 'initializing')) { throw canceled(); }
 			const initialized = await this.requestRaw(APP_SERVER_METHODS.initialize, {
@@ -186,7 +186,7 @@ export class AppServerProtocolClient {
 			this._capabilities = initialization.capabilities;
 			this._operatingSystem = initialization.operatingSystem;
 			this._userHome = initialization.userHome;
-			this.setState("ready");
+			this.setState('ready');
 			if (!this.isCurrentConnection(generation, 'ready')) { throw canceled(); }
 			const calls = this.bufferedCalls.splice(0);
 			this.bufferedCallBytes = 0;
@@ -211,8 +211,8 @@ export class AppServerProtocolClient {
 	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: { readonly timeoutMs?: number; readonly signal?: AbortSignal; }): Promise<MethodResult<M>> {
 		// Abort listeners can reenter before the final state event is published.
 		if (options?.signal?.aborted) return Promise.reject(canceled());
-		if (this.disposed || this.isClosing || this.receiving?.closed || this._state !== "ready") return Promise.reject(new Error(`App Server is not ready: ${this.isClosing || this.receiving?.closed ? 'closing' : this._state}`));
-		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, "timeoutMs") : this.options.requestTimeoutMs, options?.signal);
+		if (this.disposed || this.isClosing || this.receiving?.closed || this._state !== 'ready') return Promise.reject(new Error(`App Server is not ready: ${this.isClosing || this.receiving?.closed ? 'closing' : this._state}`));
+		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, 'timeoutMs') : this.options.requestTimeoutMs, options?.signal);
 	}
 
 	onStateChange(listener: (state: AppServerConnectionState, error?: Error) => void): IDisposable {
@@ -237,7 +237,7 @@ export class AppServerProtocolClient {
 		if (this.disposed) return;
 		this.disposed = true;
 		try {
-			this.shutdown(new Error("App Server client disposed"), "stopped", { releaseTransport: true });
+			this.shutdown(new Error('App Server client disposed'), 'stopped', { releaseTransport: true });
 		} finally {
 			for (const complete of this.readyWaiters) complete(new Error('App Server client disposed'));
 			this.transport.off(WEB_APP_SERVER_CONNECTED_EVENT, this.handleConnected);
@@ -283,7 +283,7 @@ export class AppServerProtocolClient {
 			}
 		});
 		try {
-			const frame = JSON.stringify({ jsonrpc: "2.0", id, method: definition.method, params });
+			const frame = JSON.stringify({ jsonrpc: '2.0', id, method: definition.method, params });
 			this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
 		} catch (error) {
 			this.rejectPending(id, toError(error));
@@ -292,7 +292,7 @@ export class AppServerProtocolClient {
 	}
 
 	private readonly handleConnected = (payload: unknown): void => {
-		if (this._state !== "starting") return;
+		if (this._state !== 'starting') return;
 		try {
 			const metadata = validateConnectedPayload(payload);
 			this.clearConnectTimeout();
@@ -398,7 +398,7 @@ export class AppServerProtocolClient {
 		if (this.receiving) { this.receiving.closed ??= { payload }; return; }
 		const intentional = isRecord(payload) && payload.intentional === true;
 		const fallback = intentional ? 'App Server connection stopped' : 'App Server bridge closed';
-		const message = isRecord(payload) && typeof payload.message === "string" && payload.message.trim()
+		const message = isRecord(payload) && typeof payload.message === 'string' && payload.message.trim()
 			? payload.message
 			: fallback;
 		if (intentional) { this.shutdown(new AppServerConnectionStoppedError(message), 'stopped'); return; }
@@ -414,7 +414,7 @@ export class AppServerProtocolClient {
 		clearTimeout(pending.timeout);
 		pending.abortListener?.dispose();
 		if (!pending.resolve) { pending.reject(canceled()); return; }
-		if ("error" in response) {
+		if ('error' in response) {
 			pending.reject(new AppServerRemoteError(response.error.code, response.error.message, response.error.data));
 			return;
 		}
@@ -508,7 +508,7 @@ export class AppServerProtocolClient {
 
 	private fail(error: Error): void {
 		if (this.disposed || this.isClosing) { return; }
-		this.shutdown(error, this._state === "stopped" ? "stopped" : "crashed", { releaseTransport: true });
+		this.shutdown(error, this._state === 'stopped' ? 'stopped' : 'crashed', { releaseTransport: true });
 	}
 
 	private shutdown(error: Error, state: AppServerConnectionState, options?: { readonly releaseTransport: boolean; }): void {
@@ -739,23 +739,23 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 
 function validateConnectedPayload(payload: unknown): AppServerConnectionMetadata {
 	if (!isRecord(payload) || payload.protocolVersion !== WEB_APP_SERVER_PROTOCOL_VERSION) {
-		throw new Error("App Server bridge protocol version mismatch");
+		throw new Error('App Server bridge protocol version mismatch');
 	}
-	if (typeof payload.workspaceId !== "string" || payload.workspaceId.trim().length === 0) throw new Error("App Server bridge workspace ID is invalid");
-	if (typeof payload.workspaceRoot !== "string" || payload.workspaceRoot.trim().length === 0) throw new Error("App Server bridge workspace root is invalid");
+	if (typeof payload.workspaceId !== 'string' || payload.workspaceId.trim().length === 0) throw new Error('App Server bridge workspace ID is invalid');
+	if (typeof payload.workspaceRoot !== 'string' || payload.workspaceRoot.trim().length === 0) throw new Error('App Server bridge workspace root is invalid');
 	return { workspaceId: payload.workspaceId, workspaceRoot: payload.workspaceRoot };
 }
 
 function validateFramePayload(payload: unknown): { frame: string; byteLength: number; } {
 	if (payload instanceof AppServerFrame) return payload;
-	if (!isRecord(payload) || typeof payload.frame !== "string") throw new Error("App Server bridge frame is invalid");
+	if (!isRecord(payload) || typeof payload.frame !== 'string') throw new Error('App Server bridge frame is invalid');
 	const byteLength = VSBuffer.fromString(payload.frame).byteLength;
 	if (byteLength > MAX_FRAME_BYTES) throw new Error(`App Server frame exceeds ${MAX_FRAME_BYTES} bytes`);
 	return { frame: payload.frame, byteLength };
 }
 
-function validateInitializeResult(value: InitializeResult): Pick<InitializeResult, "capabilities" | "slashCommands"> & { operatingSystem: OperatingSystem | undefined; userHome: string | undefined; } {
-	const initialized = checkAppServerInitializeCompatibility(value, { expectedServerName: "ash-app-server" });
+function validateInitializeResult(value: InitializeResult): Pick<InitializeResult, 'capabilities' | 'slashCommands'> & { operatingSystem: OperatingSystem | undefined; userHome: string | undefined; } {
+	const initialized = checkAppServerInitializeCompatibility(value, { expectedServerName: 'ash-app-server' });
 	let operatingSystem: OperatingSystem | undefined;
 	switch (initialized.serverInfo.operatingSystem) {
 		case 'windows': operatingSystem = OperatingSystem.Windows; break;
@@ -780,5 +780,5 @@ function positiveInteger(value: number | undefined, fallback: number, name: stri
 }
 
 function describeValue(value: unknown): string {
-	return typeof value === "string" ? JSON.stringify(value) : String(value);
+	return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }

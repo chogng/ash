@@ -233,7 +233,7 @@ interface DecodedRequestSnapshot {
 }
 
 interface RequestWireMessage {
-	readonly kind: "request";
+	readonly kind: 'request';
 	readonly requestId: number;
 	readonly lane: string;
 	readonly resultBaseRequestId?: number;
@@ -242,7 +242,7 @@ interface RequestWireMessage {
 }
 
 interface SyncWireMessage {
-	readonly kind: "sync";
+	readonly kind: 'sync';
 	readonly previousVersion: number;
 	readonly modelVersion: number;
 	readonly eol: '\n' | '\r\n';
@@ -250,7 +250,7 @@ interface SyncWireMessage {
 }
 
 interface FullSnapshotWireDto {
-	readonly kind: "full";
+	readonly kind: 'full';
 	readonly version: number;
 	readonly length: number;
 	readonly lineCount: number;
@@ -258,7 +258,7 @@ interface FullSnapshotWireDto {
 }
 
 interface ReferencedSnapshotWireDto {
-	readonly kind: "reference";
+	readonly kind: 'reference';
 	readonly version: number;
 	readonly length: number;
 	readonly lineCount: number;
@@ -271,40 +271,40 @@ interface ContentChangeWireDto {
 }
 
 function encodeRequestMessage<TLane extends string, TPayload, TResult>(request: LanguageWorkerRequest<TLane, TPayload>, codec: WorkerTextModelCodec<TLane, TPayload, TResult>, mirroredVersion: number | undefined, resultBaseRequestId: number | undefined): EncodedRequestWireMessage {
-	if (resultBaseRequestId !== undefined) assertPositiveSafeInteger(resultBaseRequestId, "Result base request ID");
+	if (resultBaseRequestId !== undefined) assertPositiveSafeInteger(resultBaseRequestId, 'Result base request ID');
 	const snapshot = mirroredVersion === request.snapshot.version
 		? encodeReferencedSnapshot(request.snapshot)
 		: encodeFullSnapshot(request.snapshot);
 	return Object.freeze({
 		message: Object.freeze<RequestWireMessage>({
-			kind: "request",
+			kind: 'request',
 			requestId: request.requestId,
 			lane: request.lane,
 			...(resultBaseRequestId === undefined ? {} : { resultBaseRequestId }),
 			snapshot,
 			payload: codec.encodePayload(request.lane, request.payload),
 		}),
-		establishesMirrorVersion: snapshot.kind === "full" ? snapshot.version : undefined,
+		establishesMirrorVersion: snapshot.kind === 'full' ? snapshot.version : undefined,
 	});
 }
 
 function encodeSyncMessage(change: TextModelChange): SyncWireMessage {
-	assertPositiveSafeInteger(change.version, "Language worker sync model version");
+	assertPositiveSafeInteger(change.version, 'Language worker sync model version');
 	if (change.version <= 1) {
-		throw new RangeError("Language worker sync must describe one committed model version");
+		throw new RangeError('Language worker sync must describe one committed model version');
 	}
 	if (change.eol !== '\n' && change.eol !== '\r\n') throw new TypeError('Language worker sync EOL must be LF or CRLF');
 	const eol = change.eol;
 	return Object.freeze({
-		kind: "sync",
+		kind: 'sync',
 		previousVersion: change.version - 1,
 		modelVersion: change.version,
 		eol: change.eol,
 		changes: Object.freeze(change.changes.map(contentChange => {
-			assertNonNegativeSafeInteger(contentChange.rangeOffset, "Language worker sync range offset");
-			assertNonNegativeSafeInteger(contentChange.rangeLength, "Language worker sync range length");
-			if (typeof contentChange.text !== "string" || normalizeEOL(contentChange.text, eol) !== contentChange.text) {
-				throw new TypeError("Language worker sync text must use the resulting document EOL");
+			assertNonNegativeSafeInteger(contentChange.rangeOffset, 'Language worker sync range offset');
+			assertNonNegativeSafeInteger(contentChange.rangeLength, 'Language worker sync range length');
+			if (typeof contentChange.text !== 'string' || normalizeEOL(contentChange.text, eol) !== contentChange.text) {
+				throw new TypeError('Language worker sync text must use the resulting document EOL');
 			}
 			return Object.freeze({
 				rangeOffset: contentChange.rangeOffset,
@@ -315,30 +315,30 @@ function encodeSyncMessage(change: TextModelChange): SyncWireMessage {
 	});
 }
 
-function decodeRequestSnapshot(value: RequestWireMessage["snapshot"], mirror: TextSnapshot | undefined): DecodedRequestSnapshot {
-	assertRecord(value, "Language worker snapshot");
-	if (value.kind === "full") {
+function decodeRequestSnapshot(value: RequestWireMessage['snapshot'], mirror: TextSnapshot | undefined): DecodedRequestSnapshot {
+	assertRecord(value, 'Language worker snapshot');
+	if (value.kind === 'full') {
 		return Object.freeze({
 			snapshot: decodeFullSnapshot(value as FullSnapshotWireDto),
 			replacesMirror: true,
 		});
 	}
-	if (value.kind !== "reference") {
+	if (value.kind !== 'reference') {
 		throw new TypeError(`Unknown language worker snapshot kind '${String(value.kind)}'`);
 	}
 	assertSnapshotMetadata(value);
 	if (!mirror) {
-		throw new Error("Language worker request references an unavailable snapshot mirror");
+		throw new Error('Language worker request references an unavailable snapshot mirror');
 	}
 	if (mirror.version !== value.version || mirror.length !== value.length || mirror.lineCount !== value.lineCount) {
-		throw new Error("Language worker request snapshot reference does not match its mirror");
+		throw new Error('Language worker request snapshot reference does not match its mirror');
 	}
 	return Object.freeze({ snapshot: mirror, replacesMirror: false });
 }
 
 function encodeFullSnapshot(snapshot: TextSnapshot): FullSnapshotWireDto {
 	const value = Object.freeze({
-		kind: "full" as const,
+		kind: 'full' as const,
 		version: snapshot.version,
 		length: snapshot.length,
 		lineCount: snapshot.lineCount,
@@ -350,7 +350,7 @@ function encodeFullSnapshot(snapshot: TextSnapshot): FullSnapshotWireDto {
 
 function encodeReferencedSnapshot(snapshot: TextSnapshot): ReferencedSnapshotWireDto {
 	const value = Object.freeze({
-		kind: "reference" as const,
+		kind: 'reference' as const,
 		version: snapshot.version,
 		length: snapshot.length,
 		lineCount: snapshot.lineCount,
@@ -366,14 +366,14 @@ function decodeFullSnapshot(value: FullSnapshotWireDto): TextSnapshot {
 
 function assertFullSnapshot(value: FullSnapshotWireDto): void {
 	assertSnapshotMetadata(value);
-	if (typeof value.text !== "string" || !hasConsistentEOL(value.text)) {
-		throw new TypeError("Language worker snapshot text must use one consistent EOL sequence");
+	if (typeof value.text !== 'string' || !hasConsistentEOL(value.text)) {
+		throw new TypeError('Language worker snapshot text must use one consistent EOL sequence');
 	}
 	if (value.length !== value.text.length) {
-		throw new RangeError("Language worker snapshot length does not match its text");
+		throw new RangeError('Language worker snapshot length does not match its text');
 	}
 	if (value.lineCount !== countLines(value.text)) {
-		throw new RangeError("Language worker snapshot line count does not match its text");
+		throw new RangeError('Language worker snapshot line count does not match its text');
 	}
 }
 
@@ -384,10 +384,10 @@ function createSnapshot(version: number, text: string, lineCount = countLines(te
 		lineCount,
 		getText: () => text,
 		getTextBetweenOffsets: (startOffset: number, endOffset: number) => {
-			assertNonNegativeSafeInteger(startOffset, "Snapshot start offset");
-			assertNonNegativeSafeInteger(endOffset, "Snapshot end offset");
+			assertNonNegativeSafeInteger(startOffset, 'Snapshot start offset');
+			assertNonNegativeSafeInteger(endOffset, 'Snapshot end offset');
 			if (startOffset > endOffset || endOffset > text.length) {
-				throw new RangeError("Snapshot offset range is outside its text");
+				throw new RangeError('Snapshot offset range is outside its text');
 			}
 			return text.slice(startOffset, endOffset);
 		},
@@ -395,9 +395,9 @@ function createSnapshot(version: number, text: string, lineCount = countLines(te
 }
 
 function assertSnapshotMetadata(value: { readonly version: unknown; readonly length: unknown; readonly lineCount: unknown; }): void {
-	assertPositiveSafeInteger(value.version, "Language worker snapshot version");
-	assertNonNegativeSafeInteger(value.length, "Language worker snapshot length");
-	assertPositiveSafeInteger(value.lineCount, "Language worker snapshot line count");
+	assertPositiveSafeInteger(value.version, 'Language worker snapshot version');
+	assertNonNegativeSafeInteger(value.length, 'Language worker snapshot length');
+	assertPositiveSafeInteger(value.lineCount, 'Language worker snapshot line count');
 }
 
 function assertPositiveSafeInteger(value: unknown, owner: string): asserts value is number {
@@ -413,7 +413,7 @@ function assertNonNegativeSafeInteger(value: unknown, owner: string): asserts va
 }
 
 function assertRecord(value: unknown, owner: string): asserts value is Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 		throw new TypeError(`${owner} must be an object`);
 	}
 }

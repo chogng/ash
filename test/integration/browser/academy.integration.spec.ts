@@ -4,8 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { prepareAcademyExtension, startAcademyExtension } from '../../fixtures/academyExtension.js';
-import { expect, test, type Page, type Locator } from "@playwright/test";
-import { getAxeResults, injectAxe } from "axe-playwright";
+import { expect, test, type Page, type Locator } from '@playwright/test';
+import { getAxeResults, injectAxe } from 'axe-playwright';
 
 const pageErrors = new WeakMap<object, string[]>();
 const academyProcesses = new WeakMap<Page, Awaited<ReturnType<typeof startAcademyExtension>>>();
@@ -33,7 +33,7 @@ test.beforeAll(async () => {
 test.beforeEach(async ({ page }) => {
 	const errors: string[] = [];
 	pageErrors.set(page, errors);
-	page.on("pageerror", error => errors.push(error.stack ?? error.message));
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
 	let generation = 0;
 	let replacement = 0;
 	const packageDigest = () => digest(JSON.stringify(academyClient.resources) + replacement);
@@ -367,29 +367,29 @@ for (const paper of ['A4', 'Letter']) {
 	});
 }
 
-test("TextModel API and Academy code-block editing run in real browsers", async ({ page }) => {
-	await page.goto("/academy.html");
-	await expect(page.locator("#code-block textarea.stanza-document-text-input")).toBeVisible();
-	await expect(page.locator("#code-block .stanza-editor")).toHaveCount(0);
-	await expect(page.locator("#code-block .stanza-structured-format-toolbar")).toHaveAttribute("data-context", "code");
-	await expect(page.locator("#code-block .stanza-structured-format-code-context")).toHaveText("Code block · Academy");
-	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.apiDocumentType)).toBe("doc");
+test('TextModel API and Academy code-block editing run in real browsers', async ({ page }) => {
+	await page.goto('/academy.html');
+	await expect(page.locator('#code-block textarea.stanza-document-text-input')).toBeVisible();
+	await expect(page.locator('#code-block .stanza-editor')).toHaveCount(0);
+	await expect(page.locator('#code-block .stanza-structured-format-toolbar')).toHaveAttribute('data-context', 'code');
+	await expect(page.locator('#code-block .stanza-structured-format-code-context')).toHaveText('Code block · Academy');
+	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.apiDocumentType)).toBe('doc');
 
-	const codeBlockInput = page.locator("#code-block textarea.stanza-document-text-input");
+	const codeBlockInput = page.locator('#code-block textarea.stanza-document-text-input');
 	await codeBlockInput.focus();
-	await page.keyboard.press("Home");
-	await page.keyboard.type("// bridge\n");
-	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getCodeBlockText())).toBe("// bridge\nconst editor = 1;");
+	await page.keyboard.press('Home');
+	await page.keyboard.type('// bridge\n');
+	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getCodeBlockText())).toBe('// bridge\nconst editor = 1;');
 	await page.evaluate(() => window.ashAcademyIntegration.saveCodeBlock());
-	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getSavedCodeBlock())).toContain("// bridge\\nconst editor = 1;");
+	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getSavedCodeBlock())).toContain('// bridge\\nconst editor = 1;');
 
-	const structuredInput = page.locator("#document-editor textarea.stanza-document-text-input").first();
+	const structuredInput = page.locator('#document-editor textarea.stanza-document-text-input').first();
 	await structuredInput.focus();
-	await page.keyboard.press("End");
-	await page.keyboard.press("Enter");
-	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getStructuredBlockTexts())).toEqual(["Title", "", "Body"]);
-	await page.keyboard.press("Control+z");
-	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getStructuredBlockTexts())).toEqual(["Title", "Body"]);
+	await page.keyboard.press('End');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getStructuredBlockTexts())).toEqual(['Title', '', 'Body']);
+	await page.keyboard.press('Control+z');
+	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getStructuredBlockTexts())).toEqual(['Title', 'Body']);
 });
 
 test('Document links preserve editing and open through the product service with mouse and keyboard', async ({ page }) => {
@@ -555,54 +555,54 @@ test('Academy paragraph controls support keyboard style selection without steali
 	await expect(page.locator('#document-editor .stanza-document-heading')).toHaveCount(0);
 });
 
-test("Academy TextModel editor persists selected font, size, and emphasis formatting", async ({ page }) => {
-	await page.goto("/academy.html");
-	const input = page.locator("#document-editor textarea.stanza-document-text-input").first();
+test('Academy TextModel editor persists selected font, size, and emphasis formatting', async ({ page }) => {
+	await page.goto('/academy.html');
+	const input = page.locator('#document-editor textarea.stanza-document-text-input').first();
 	const fontFamily = page.locator("#document-editor select[aria-label='Font family']");
 	const fontSize = page.locator("#document-editor select[aria-label='Font size']");
 	await input.evaluate(element => {
 		const textarea = element as HTMLTextAreaElement;
 		textarea.focus();
 		textarea.setSelectionRange(0, 5);
-		textarea.dispatchEvent(new Event("select", { bubbles: true }));
+		textarea.dispatchEvent(new Event('select', { bubbles: true }));
 	});
-	await fontFamily.selectOption("serif");
+	await fontFamily.selectOption('serif');
 	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getStructuredFirstTextMarks())).toEqual([
-		{ type: "textStyle", attrs: { fontFamily: "serif" } },
+		{ type: 'textStyle', attrs: { fontFamily: 'serif' } },
 	]);
-	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getStructuredSelection())).toMatchObject({ kind: "text", anchor: { offset: 0 }, head: { offset: 5 } });
-	await fontSize.selectOption("18");
-	await expect(fontSize).toHaveValue("18");
+	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getStructuredSelection())).toMatchObject({ kind: 'text', anchor: { offset: 0 }, head: { offset: 5 } });
+	await fontSize.selectOption('18');
+	await expect(fontSize).toHaveValue('18');
 	const bold = page.locator("#document-editor [data-action-id='bold'] button");
 	await bold.click();
 
 	await expect.poll(() => page.evaluate(() => window.ashAcademyIntegration.getStructuredFirstTextMarks())).toEqual([
-		{ type: "textStyle", attrs: { fontFamily: "serif", fontSize: 18 } },
-		{ type: "strong", attrs: {} },
+		{ type: 'textStyle', attrs: { fontFamily: 'serif', fontSize: 18 } },
+		{ type: 'strong', attrs: {} },
 	]);
 
 	const styled = page.locator("#document-editor .stanza-document-mark-textStyle[data-font-family='serif']");
-	await expect(styled).toHaveText("Title");
-	await expect(styled).toHaveCSS("font-size", "18px");
-	await expect(bold).toHaveAttribute("aria-pressed", "true");
+	await expect(styled).toHaveText('Title');
+	await expect(styled).toHaveCSS('font-size', '18px');
+	await expect(bold).toHaveAttribute('aria-pressed', 'true');
 });
 
-test("Academy TextModel editor exposes collaboration as a separate contribution", async ({ page }) => {
-	await page.goto("/academy.html");
-	const toolbar = page.locator("#document-editor .stanza-document-collaboration-toolbar");
+test('Academy TextModel editor exposes collaboration as a separate contribution', async ({ page }) => {
+	await page.goto('/academy.html');
+	const toolbar = page.locator('#document-editor .stanza-document-collaboration-toolbar');
 	const start = toolbar.locator("[data-action-id='startCollaboration'] button");
-	await expect(toolbar).toHaveAttribute("data-state", "inactive");
+	await expect(toolbar).toHaveAttribute('data-state', 'inactive');
 	await start.click();
 	const dialog = page.getByRole('dialog', { name: 'Collaborate', exact: true });
 	await dialog.getByRole('textbox').fill('editor-browser-room');
 	await dialog.getByRole('button', { name: 'OK', exact: true }).click();
-	await expect(toolbar).toHaveAttribute("data-state", "connected");
-	await expect(toolbar.locator(".stanza-document-collaboration-status")).toHaveText("Room: editor-browser-room");
+	await expect(toolbar).toHaveAttribute('data-state', 'connected');
+	await expect(toolbar.locator('.stanza-document-collaboration-status')).toHaveText('Room: editor-browser-room');
 });
 
-test("Academy TextModel editor exposes room-owner invitations", async ({ page }) => {
-	await page.goto("/academy.html");
-	const toolbar = page.locator("#document-editor .stanza-document-collaboration-toolbar");
+test('Academy TextModel editor exposes room-owner invitations', async ({ page }) => {
+	await page.goto('/academy.html');
+	const toolbar = page.locator('#document-editor .stanza-document-collaboration-toolbar');
 	await toolbar.locator("[data-action-id='startCollaboration'] button").click();
 	const join = page.getByRole('dialog', { name: 'Collaborate', exact: true });
 	await join.getByRole('textbox').fill('editor-browser-room');
@@ -613,30 +613,30 @@ test("Academy TextModel editor exposes room-owner invitations", async ({ page })
 	await invitation.getByRole('textbox', { name: 'Name', exact: true }).fill('Writer');
 	await invitation.getByRole('textbox', { name: 'Role', exact: true }).fill('viewer');
 	await invitation.getByRole('button', { name: 'OK', exact: true }).click();
-	await expect(toolbar.locator(".stanza-document-collaboration-status")).toContainText("Invitation created for Writer");
-	await expect(toolbar.locator(".stanza-document-collaboration-invitation-token")).toHaveText("Room ID: editor-browser-room\nAccess token: editor-browser-member-token");
+	await expect(toolbar.locator('.stanza-document-collaboration-status')).toContainText('Invitation created for Writer');
+	await expect(toolbar.locator('.stanza-document-collaboration-invitation-token')).toHaveText('Room ID: editor-browser-room\nAccess token: editor-browser-member-token');
 	await toolbar.locator("[data-action-id='manageCollaborators'] button").click();
-	await expect(toolbar.locator("[data-principal-id='browser-member']")).toContainText("Writereditor · browser-member");
+	await expect(toolbar.locator("[data-principal-id='browser-member']")).toContainText('Writereditor · browser-member');
 	await toolbar.locator("[data-principal-id='browser-member'] button").first().click();
-	await expect(toolbar.locator(".stanza-document-collaboration-invitation-token")).toHaveText("Room ID: editor-browser-room\nAccess token: editor-browser-rotated-token");
+	await expect(toolbar.locator('.stanza-document-collaboration-invitation-token')).toHaveText('Room ID: editor-browser-room\nAccess token: editor-browser-rotated-token');
 });
 
-test("Academy TextModel editor has the accessibility contract", async ({ page }) => {
-	await page.goto("/academy.html");
-	const toolbar = page.locator("#document-editor .stanza-structured-format-toolbar");
-	const structuredInput = page.locator("#document-editor textarea.stanza-document-text-input").first();
-	await expect(toolbar).toHaveAttribute("role", "group");
-	await expect(toolbar).toHaveAttribute("aria-label", "Document formatting");
-	await expect(toolbar.locator(".stanza-structured-format-inline-actions")).toHaveAttribute("role", "toolbar");
-	await expect(toolbar.locator(".stanza-structured-format-document-actions button")).toHaveCount(13);
+test('Academy TextModel editor has the accessibility contract', async ({ page }) => {
+	await page.goto('/academy.html');
+	const toolbar = page.locator('#document-editor .stanza-structured-format-toolbar');
+	const structuredInput = page.locator('#document-editor textarea.stanza-document-text-input').first();
+	await expect(toolbar).toHaveAttribute('role', 'group');
+	await expect(toolbar).toHaveAttribute('aria-label', 'Document formatting');
+	await expect(toolbar.locator('.stanza-structured-format-inline-actions')).toHaveAttribute('role', 'toolbar');
+	await expect(toolbar.locator('.stanza-structured-format-document-actions button')).toHaveCount(13);
 	await expect(toolbar.locator("select[aria-label='Font family']")).toBeVisible();
 	await expect(toolbar.locator("select[aria-label='Font size']")).toBeVisible();
 	await expect(structuredInput).toBeVisible();
 
 	await injectAxe(page);
-	const accessibility = await getAxeResults(page, undefined, { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"] } });
-	expect(accessibility.violations.filter(violation => violation.impact === "critical")).toEqual([]);
-	const contrast = await getAxeResults(page, undefined, { runOnly: { type: "rule", values: ["color-contrast"] } });
+	const accessibility = await getAxeResults(page, undefined, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] } });
+	expect(accessibility.violations.filter(violation => violation.impact === 'critical')).toEqual([]);
+	const contrast = await getAxeResults(page, undefined, { runOnly: { type: 'rule', values: ['color-contrast'] } });
 	expect(contrast.violations).toEqual([]);
 });
 

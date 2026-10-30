@@ -1,15 +1,15 @@
 import { InlineDecoration, InlineDecorationType } from '../../common/viewModel/inlineDecorations.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { projectStanzaSemanticTokenLine } from "../../browser/viewParts/viewLines/viewLine.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { projectStanzaSemanticTokenLine } from '../../browser/viewParts/viewLines/viewLine.js';
 import { resolveSemanticTokenStyling } from '../../common/services/semanticTokensProviderStyling.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, createLanguageTokenStore, type LanguageToken } from '../../common/tokens/languageTokens.js';
 import { LanguageTokenLineIndex, StyledTokenSource, overlayTokenSources } from '../../common/tokens/languageTokenLineIndex.js';
 import { LanguageResultAcceptance } from '../../common/model/languageResultStore.js';
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
 
 test('Equal rendering inputs retain spans while changed styling and geometry refresh them', () => {
 	const dom = new JSDOM('<!doctype html><body><code></code></body>');
@@ -37,61 +37,61 @@ test('Equal rendering inputs retain spans while changed styling and geometry ref
 });
 
 test("Default resolver maps only Stanza's explicit semantic vocabulary", () => {
-	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, "keyword")).presentation, SemanticTokenPresentation.Keyword);
-	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, "method")).presentation, SemanticTokenPresentation.Function);
-	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, "plugin-controlled-class")).presentation, undefined);
+	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, 'keyword')).presentation, SemanticTokenPresentation.Keyword);
+	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, 'method')).presentation, SemanticTokenPresentation.Function);
+	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, 'plugin-controlled-class')).presentation, undefined);
 });
 
 test("Semantic token modifiers use Stanza's closed presentation vocabulary", () => {
 	assert.deepEqual(
-		resolveSemanticTokenStyling(token(0, 0, 1, "variable", ["declaration", "readonly", "unknown-plugin-modifier", "definition"])).modifiers,
+		resolveSemanticTokenStyling(token(0, 0, 1, 'variable', ['declaration', 'readonly', 'unknown-plugin-modifier', 'definition'])).modifiers,
 		[SemanticTokenModifier.Declaration, SemanticTokenModifier.Readonly],
 	);
 
-	const dom = new JSDOM("<!doctype html><body><code></code></body>");
-	const element = requiredElement<HTMLElement>(dom.window.document, "code");
-	projectStanzaSemanticTokenLine(element, "name", [presented(
+	const dom = new JSDOM('<!doctype html><body><code></code></body>');
+	const element = requiredElement<HTMLElement>(dom.window.document, 'code');
+	projectStanzaSemanticTokenLine(element, 'name', [presented(
 		0,
 		4,
 		SemanticTokenPresentation.Variable,
 		[SemanticTokenModifier.Declaration, SemanticTokenModifier.Readonly],
 	)]);
-	const rendered = requiredElement<HTMLElement>(element, ".stanza-editor-token");
+	const rendered = requiredElement<HTMLElement>(element, '.stanza-editor-token');
 	assert.equal(rendered.classList.contains(SemanticTokenModifier.Declaration), true);
 	assert.equal(rendered.classList.contains(SemanticTokenModifier.Readonly), true);
-	assert.equal(rendered.textContent, "name");
+	assert.equal(rendered.textContent, 'name');
 	dom.window.close();
 });
 
-test("syntax token presentation applies exact theme styling without a semantic class", () => {
-	const dom = new JSDOM("<!doctype html><body><code></code></body>");
-	const element = requiredElement<HTMLElement>(dom.window.document, "code");
-	projectStanzaSemanticTokenLine(element, "note", [{ startColumn: 0, endColumn: 4, syntaxPresentation: { foreground: "#6A9955", background: "#10101080", fontStyle: ["italic", "bold", "underline"] } }]);
-	const rendered = requiredElement<HTMLElement>(element, ".stanza-editor-token");
+test('syntax token presentation applies exact theme styling without a semantic class', () => {
+	const dom = new JSDOM('<!doctype html><body><code></code></body>');
+	const element = requiredElement<HTMLElement>(dom.window.document, 'code');
+	projectStanzaSemanticTokenLine(element, 'note', [{ startColumn: 0, endColumn: 4, syntaxPresentation: { foreground: '#6A9955', background: '#10101080', fontStyle: ['italic', 'bold', 'underline'] } }]);
+	const rendered = requiredElement<HTMLElement>(element, '.stanza-editor-token');
 	assert.equal(rendered.style.getPropertyValue('--ash-editor-token-foreground'), '#6A9955');
-	assert.equal(rendered.style.fontStyle, "italic");
-	assert.equal(rendered.style.fontWeight, "bold");
-	assert.equal(rendered.style.textDecorationLine, "underline");
+	assert.equal(rendered.style.fontStyle, 'italic');
+	assert.equal(rendered.style.fontWeight, 'bold');
+	assert.equal(rendered.style.textDecorationLine, 'underline');
 	dom.window.close();
 });
 
-test("long-line projection clips decorated tokens and keeps the final visible column mapped", () => {
-	const dom = new JSDOM("<!doctype html><body><code></code></body>");
-	const element = requiredElement<HTMLElement>(dom.window.document, "code");
-	const mapping = projectStanzaSemanticTokenLine(element, "abcdefghij", [presented(0, 10, SemanticTokenPresentation.Variable)], 4, [
-		new InlineDecoration(new Range(1, 3, 1, 10), "highlight", InlineDecorationType.Regular),
+test('long-line projection clips decorated tokens and keeps the final visible column mapped', () => {
+	const dom = new JSDOM('<!doctype html><body><code></code></body>');
+	const element = requiredElement<HTMLElement>(dom.window.document, 'code');
+	const mapping = projectStanzaSemanticTokenLine(element, 'abcdefghij', [presented(0, 10, SemanticTokenPresentation.Variable)], 4, [
+		new InlineDecoration(new Range(1, 3, 1, 10), 'highlight', InlineDecorationType.Regular),
 	], 1, 5);
-	assert.equal(element.textContent, "abcde…");
+	assert.equal(element.textContent, 'abcde…');
 	assert.equal(mapping.length, 6);
 	assert.equal(mapping.getDomPosition(6).charIndex, 3);
-	assert.equal(requiredElement<HTMLElement>(element, ".highlight").textContent, "cde");
-	projectStanzaSemanticTokenLine(element, "abcdefghij", [], 4, [], 1, -1);
-	assert.equal(element.textContent, "abcdefghij");
+	assert.equal(requiredElement<HTMLElement>(element, '.highlight').textContent, 'cde');
+	projectStanzaSemanticTokenLine(element, 'abcdefghij', [], 4, [], 1, -1);
+	assert.equal(element.textContent, 'abcdefghij');
 	dom.window.close();
 });
 
-test("Semantic token source resolves immutable named lines without owning common state", () => {
-	using model = new TextModel("const value");
+test('Semantic token source resolves immutable named lines without owning common state', () => {
+	using model = new TextModel('const value');
 	using store = createLanguageTokenStore(model);
 	assert.equal(store.accept({
 		requestId: 1,
@@ -99,8 +99,8 @@ test("Semantic token source resolves immutable named lines without owning common
 		modelVersion: model.version,
 		value: {
 			tokens: [
-				token(0, 0, 5, "keyword"),
-				token(0, 6, 11, "variable"),
+				token(0, 0, 5, 'keyword'),
+				token(0, 6, 11, 'variable'),
 			],
 		},
 	}), LanguageResultAcceptance.Applied);
@@ -128,8 +128,8 @@ test("Semantic token source resolves immutable named lines without owning common
 	assert.equal(store.result!.value.tokens.length, 2);
 });
 
-test("server semantic tokens replace intersecting syntax presentation and preserve uncovered syntax", () => {
-	using model = new TextModel("const value");
+test('server semantic tokens replace intersecting syntax presentation and preserve uncovered syntax', () => {
+	using model = new TextModel('const value');
 	using lexicalStore = createLanguageTokenStore(model);
 	using semanticStore = createLanguageTokenStore(model);
 	lexicalStore.accept({
@@ -138,12 +138,12 @@ test("server semantic tokens replace intersecting syntax presentation and preser
 		modelVersion: model.version,
 		value: {
 			tokens: [
-				{ ...token(0, 0, 5, "keyword"), presentation: { foreground: "#111111" } },
-				{ ...token(0, 6, 11, "variable"), presentation: { foreground: "#222222" } },
+				{ ...token(0, 0, 5, 'keyword'), presentation: { foreground: '#111111' } },
+				{ ...token(0, 6, 11, 'variable'), presentation: { foreground: '#222222' } },
 			]
 		},
 	});
-	semanticStore.accept({ requestId: 1, textModel: model, modelVersion: model.version, value: { tokens: [token(0, 6, 11, "function", ["declaration"])] } });
+	semanticStore.accept({ requestId: 1, textModel: model, modelVersion: model.version, value: { tokens: [token(0, 6, 11, 'function', ['declaration'])] } });
 	using lexicalIndex = new LanguageTokenLineIndex(lexicalStore);
 	using semanticIndex = new LanguageTokenLineIndex(semanticStore);
 	using lexicalSource = new StyledTokenSource(lexicalIndex);
@@ -154,7 +154,7 @@ test("server semantic tokens replace intersecting syntax presentation and preser
 		startColumn: 0,
 		endColumn: 5,
 		presentation: SemanticTokenPresentation.Keyword,
-		syntaxPresentation: { foreground: "#111111" },
+		syntaxPresentation: { foreground: '#111111' },
 	}, {
 		startColumn: 6,
 		endColumn: 11,
@@ -175,10 +175,10 @@ test("server semantic tokens replace intersecting syntax presentation and preser
 	dom.window.close();
 });
 
-test("Semantic line projection is HTML-safe and preserves exact text", () => {
-	const dom = new JSDOM("<!doctype html><body><code>old</code></body>");
-	const element = requiredElement<HTMLElement>(dom.window.document, "code");
-	const lineText = "const <tag> = 42";
+test('Semantic line projection is HTML-safe and preserves exact text', () => {
+	const dom = new JSDOM('<!doctype html><body><code>old</code></body>');
+	const element = requiredElement<HTMLElement>(dom.window.document, 'code');
+	const lineText = 'const <tag> = 42';
 	projectStanzaSemanticTokenLine(element, lineText, [
 		presented(0, 5, SemanticTokenPresentation.Keyword),
 		presented(6, 11, SemanticTokenPresentation.Variable),
@@ -186,51 +186,51 @@ test("Semantic line projection is HTML-safe and preserves exact text", () => {
 	]);
 
 	assert.equal(element.textContent, lineText);
-	assert.equal(element.querySelector("tag"), null);
-	assert.deepEqual([...element.querySelectorAll(".stanza-editor-token")].map(tokenElement => ({
+	assert.equal(element.querySelector('tag'), null);
+	assert.deepEqual([...element.querySelectorAll('.stanza-editor-token')].map(tokenElement => ({
 		className: tokenElement.className,
 		text: tokenElement.textContent,
 	})), [{
-		className: "stanza-editor-token token-keyword",
-		text: "const",
+		className: 'stanza-editor-token token-keyword',
+		text: 'const',
 	}, {
-		className: "stanza-editor-token token-variable",
-		text: "<tag>",
+		className: 'stanza-editor-token token-variable',
+		text: '<tag>',
 	}, {
-		className: "stanza-editor-token token-number",
-		text: "42",
+		className: 'stanza-editor-token token-number',
+		text: '42',
 	}]);
 	dom.window.close();
 });
 
-test("Semantic line projection composes lexical bracket colors without changing token text", () => {
-	const dom = new JSDOM("<!doctype html><body><code></code></body>");
-	const element = requiredElement<HTMLElement>(dom.window.document, "code");
-	projectStanzaSemanticTokenLine(element, "fn(a)", [presented(0, 2, SemanticTokenPresentation.Function)], 4, [
+test('Semantic line projection composes lexical bracket colors without changing token text', () => {
+	const dom = new JSDOM('<!doctype html><body><code></code></body>');
+	const element = requiredElement<HTMLElement>(dom.window.document, 'code');
+	projectStanzaSemanticTokenLine(element, 'fn(a)', [presented(0, 2, SemanticTokenPresentation.Function)], 4, [
 		new InlineDecoration(new Range(1, 3, 1, 4), 'stanza-editor-bracket-level-1', InlineDecorationType.Regular),
 		new InlineDecoration(new Range(1, 5, 1, 6), 'stanza-editor-bracket-level-1', InlineDecorationType.Regular),
 	]);
-	assert.equal(element.textContent, "fn(a)");
-	assert.deepEqual([...element.querySelectorAll(".stanza-editor-bracket-level-1")].map(entry => entry.textContent), ["(", ")"]);
+	assert.equal(element.textContent, 'fn(a)');
+	assert.deepEqual([...element.querySelectorAll('.stanza-editor-bracket-level-1')].map(entry => entry.textContent), ['(', ')']);
 	dom.window.close();
 });
 
-test("Invalid semantic line input fails before replacing existing DOM", () => {
-	const dom = new JSDOM("<!doctype html><body><code><b>stable</b></code></body>");
-	const element = requiredElement<HTMLElement>(dom.window.document, "code");
+test('Invalid semantic line input fails before replacing existing DOM', () => {
+	const dom = new JSDOM('<!doctype html><body><code><b>stable</b></code></body>');
+	const element = requiredElement<HTMLElement>(dom.window.document, 'code');
 	const existing = element.firstElementChild;
 
-	assert.throws(() => projectStanzaSemanticTokenLine(element, "abcd", [
+	assert.throws(() => projectStanzaSemanticTokenLine(element, 'abcd', [
 		presented(0, 3, SemanticTokenPresentation.Keyword),
 		presented(2, 4, SemanticTokenPresentation.String),
 	]), /sorted, non-overlapping/);
 	assert.equal(element.firstElementChild, existing);
-	assert.equal(element.innerHTML, "<b>stable</b>");
+	assert.equal(element.innerHTML, '<b>stable</b>');
 
-	assert.throws(() => projectStanzaSemanticTokenLine(element, "abcd", [
-		presented(0, 1, "worker-css" as SemanticTokenPresentation),
+	assert.throws(() => projectStanzaSemanticTokenLine(element, 'abcd', [
+		presented(0, 1, 'worker-css' as SemanticTokenPresentation),
 	]), /Unknown Stanza semantic token presentation/);
-	assert.equal(element.innerHTML, "<b>stable</b>");
+	assert.equal(element.innerHTML, '<b>stable</b>');
 	dom.window.close();
 });
 

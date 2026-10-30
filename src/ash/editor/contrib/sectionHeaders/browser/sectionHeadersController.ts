@@ -1,10 +1,10 @@
-import "./media/sectionHeaders.css";
-import { StandardTokenType } from "../../../common/encodedTokenAttributes.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import './media/sectionHeaders.css';
+import { StandardTokenType } from '../../../common/encodedTokenAttributes.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
-import { findSectionHeaders, type SectionHeader, type FindSectionHeaderOptions } from "../../../common/services/findSectionHeaders.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { type View } from "../../../browser/view.js";
+import { findSectionHeaders, type SectionHeader, type FindSectionHeaderOptions } from '../../../common/services/findSectionHeaders.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+import { type View } from '../../../browser/view.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { MinimapPosition, MinimapSectionHeaderStyle } from '../../../common/model.js';
@@ -22,10 +22,10 @@ export class SectionHeadersController extends Disposable {
 		private readonly model: TextModel,
 		private readonly editor: ICodeEditor,
 		private readonly configurations: ILanguageConfigurationService,
-		private readonly readOptions: () => Omit<FindSectionHeaderOptions, "foldingRules">,
+		private readonly readOptions: () => Omit<FindSectionHeaderOptions, 'foldingRules'>,
 	) {
 		super();
-		if (model !== viewport.textModel) throw new TypeError("Stanza section header dependencies must share a text model");
+		if (model !== viewport.textModel) throw new TypeError('Stanza section header dependencies must share a text model');
 		this.decorations = editor.createDecorationsCollection();
 		this._register(toDisposable(() => {
 			this.decorations.clear();
@@ -72,7 +72,7 @@ export class SectionHeadersController extends Disposable {
 
 	private update(): void {
 		const configuration = this.configurations.getLanguageConfiguration(this.model.getLanguageId());
-		const lines = [...this.viewport.domNode.domNode.querySelectorAll<HTMLElement>(".view-line")];
+		const lines = [...this.viewport.domNode.domNode.querySelectorAll<HTMLElement>('.view-line')];
 		const minimap = this.editor.getOption(EditorOption.minimap);
 		const options = this.readOptions();
 		if (lines.length === 0 && !minimap.enabled) {
@@ -130,13 +130,13 @@ export class SectionHeadersController extends Disposable {
 		for (const line of lines) {
 			const logicalLineIndex = Number(line.dataset.logicalLineIndex);
 			const header = headers.get(logicalLineIndex);
-			line.classList.toggle("section-header", Boolean(header));
+			line.classList.toggle('section-header', Boolean(header));
 			if (header) {
-				line.setAttribute("data-section-header", "true");
-				line.classList.toggle("section-header-separator", header.hasSeparatorLine);
+				line.setAttribute('data-section-header', 'true');
+				line.classList.toggle('section-header-separator', header.hasSeparatorLine);
 			} else {
-				line.removeAttribute("data-section-header");
-				line.classList.remove("section-header-separator");
+				line.removeAttribute('data-section-header');
+				line.classList.remove('section-header-separator');
 			}
 		}
 	}

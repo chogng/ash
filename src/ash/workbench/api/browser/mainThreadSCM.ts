@@ -287,10 +287,10 @@ export class MainThreadSCM extends Disposable {
 						primaryRepositoryAction: input => input.source?.kind === 'external' && input.source.providerId === source.extensionId && input.source.repositoryId === value.id ? actions(metadata.repositoryActions)[0] : undefined,
 						repositoryActions: input => input.source?.kind === 'external' && input.source.providerId === source.extensionId && input.source.repositoryId === value.id ? actions(metadata.repositoryActions) : [],
 					}));
-					provider.add(provider.onDidChangeResources(() => this.multiDiff.notifyChanged()));
+					provider.add(provider.onDidChangeDiff(() => this.multiDiff.notifyChanged()));
 				}
 				provider.add(this.quickDiff.addProvider({
-					id: `${source.extensionId}:${value.id}`, label: value.label, rootUri: provider.rootUri, onDidChange: listener => provider!.onDidChangeResources(() => listener(undefined)), provideOriginalResource: async (resource, signal) => {
+					id: `${source.extensionId}:${value.id}`, label: value.label, rootUri: provider.rootUri, onDidChange: listener => provider!.onDidChangeDiff(() => listener(undefined)), provideOriginalResource: async (resource, signal) => {
 						const result = await provider!.call('quickDiff', { resource: resource.toString() }, signal);
 						if (result === null) {
 							return undefined;
@@ -458,6 +458,9 @@ interface ProviderSnapshot {
 	readonly hasHistoryItemRefs: boolean;
 	readonly hasHistoryMergeBase: boolean;
 	readonly historyRevision: number;
+	readonly historyChangeSilent: boolean;
+	/** A completion sequence survives publication coalescing even when busy state was never observed. */
+	readonly historyOperationRevision: number;
 	readonly historyRefsRevision: number;
 	readonly historyRefsItems: readonly ISCMHistoryItem[];
 	readonly hasHistory: boolean;
@@ -469,9 +472,11 @@ interface ProviderSnapshot {
 class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeResources = this.changed.event;
+	private readonly diffChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeDiff = this.diffChanged.event;
 	private readonly decorationChanged = this._register(new Emitter<readonly URI[]>());
 	public readonly onDidChangeDecorations = this.decorationChanged.event;
-	private readonly historyChanged = this._register(new Emitter<void>());
+	private readonly historyChanged = this._register(new Emitter<void | { readonly silent: boolean; }>());
 	private readonly timelineChanged = this._register(new Emitter<void>());
 	public readonly onDidChangeTimeline = this.timelineChanged.event;
 	private readonly historyRefsChanged = this._register(new Emitter<readonly ISCMHistoryItem[]>());
@@ -675,8 +680,26 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 			this.draft = string(value.input.value);
 		}
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
+		const historyOperationCompleted = this.snapshot.historyOperationRevision !== value.historyOperationRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		const resourcesChanged = !structuralEquals(value.groups, this.snapshot.groups);
+		// An index write can change original content while path/status entries stay equal.
+		const diffChanged = resourcesChanged
+			|| value.label !== this.snapshot.label
+			|| value.historyRef?.revision !== this.snapshot.historyRef?.revision
+			|| this.snapshot.isBusy && !value.isBusy;
+		// History revisions and reference decorations do not change the working-tree
+		// presentation. Keep input, operation and status controls responsive independently.
+		const presentationChanged = resourcesChanged
+			|| value.label !== this.snapshot.label
+			|| value.count !== this.snapshot.count
+			|| value.activeRepositoryName !== this.snapshot.activeRepositoryName
+			|| value.statusMessage !== this.snapshot.statusMessage
+			|| value.isBusy !== this.snapshot.isBusy
+			|| !structuralEquals(value.input, this.snapshot.input)
+			|| !structuralEquals(value.actionButton, this.snapshot.actionButton)
+			|| !structuralEquals(value.statusBarCommands, this.snapshot.statusBarCommands)
+			|| !structuralEquals(value.multiDiff, this.snapshot.multiDiff);
 		const timelineChanged = historyChanged || resourcesChanged || !structuralEquals(value.timeline, this.snapshot.timeline);
 		if (resourcesChanged && this.resourceGroups) {
 			// Reconcile by provider/group/resource identity. Unchanged rows keep their
@@ -687,11 +710,13 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		if (!structuralEquals(this.historyRef.get(), value.historyRef)) { this.historyRef.set(value.historyRef); }
 		if (!structuralEquals(this.historyRemoteRef.get(), value.historyRemoteRef)) { this.historyRemoteRef.set(value.historyRemoteRef); }
 		if (!structuralEquals(this.historyBaseRef.get(), value.historyBaseRef)) { this.historyBaseRef.set(value.historyBaseRef); }
-		this.changed.fire();
-		this.decorationChanged.fire([]);
+		if (presentationChanged) this.changed.fire();
+		if (diffChanged) this.diffChanged.fire();
+		if (resourcesChanged) this.decorationChanged.fire([]);
 		if (timelineChanged) this.timelineChanged.fire();
-		if (historyChanged) { this.historyChanged.fire(); }
-		else if (historyRefsChanged) { this.historyRefsChanged.fire(value.historyRefsItems); }
+		if (historyChanged || historyOperationCompleted) {
+			this.historyChanged.fire({ silent: !historyOperationCompleted && value.historyChangeSilent });
+		} else if (historyRefsChanged) { this.historyRefsChanged.fire(value.historyRefsItems); }
 	}
 }
 function registrationKey(source: ExtensionClientSource, id: string): string { return JSON.stringify([source.extensionId, source.activationGeneration, source.incarnation, id]); }
@@ -795,10 +820,47 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	const selectionRevision = entry.selectionRevision == null ? 0 : number(entry.selectionRevision);
 	if (!Number.isSafeInteger(selectionRevision) || selectionRevision < 0) { throw new TypeError('Invalid SCM selection revision'); }
 	const historyRefsRevision = entry.historyRefsRevision == null ? 0 : number(entry.historyRefsRevision);
+	if (entry.historyChangeSilent !== undefined && typeof entry.historyChangeSilent !== 'boolean') {
+		throw new TypeError('Invalid SCM history change origin');
+	}
+	const historyOperationRevision = entry.historyOperationRevision == null ? 0 : number(entry.historyOperationRevision);
+	if (!Number.isSafeInteger(historyOperationRevision) || historyOperationRevision < 0) {
+		throw new TypeError('Invalid SCM history operation revision');
+	}
 	if (!Number.isSafeInteger(historyRefsRevision) || historyRefsRevision < 0) { throw new TypeError('Invalid SCM history refs revision'); }
 	const historyRefsItems = entry.historyRefsItems == null ? [] : array(entry.historyRefsItems).map(parseHistoryItem);
 	const timeline = entry.timeline == null ? undefined : object(entry.timeline);
-	return { actionButton: entry.actionButton == null ? undefined : parseActionButton(entry.actionButton), timeline: timeline ? { label: string(timeline.label), resetKey: optionalString(timeline.resetKey) } : undefined, count: entry.count == null ? undefined : number(entry.count), id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
+	return {
+		actionButton: entry.actionButton == null ? undefined : parseActionButton(entry.actionButton),
+		timeline: timeline ? { label: string(timeline.label), resetKey: optionalString(timeline.resetKey) } : undefined,
+		count: entry.count == null ? undefined : number(entry.count),
+		id: string(entry.id),
+		providerId: string(entry.providerId),
+		label: string(entry.label),
+		rootUri: optionalString(entry.rootUri),
+		selected: entry.selected === true,
+		selectionRevision,
+		groups,
+		input,
+		activeRepositoryName: optionalString(entry.activeRepositoryName),
+		statusMessage: string(entry.statusMessage),
+		isBusy: entry.isBusy === true,
+		statusBarCommands,
+		historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef),
+		historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef),
+		historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef),
+		hasHistoryItemRefs: entry.hasHistoryItemRefs === true,
+		hasHistoryMergeBase: entry.hasHistoryMergeBase === true,
+		historyRevision: number(entry.historyRevision),
+		historyChangeSilent: entry.historyChangeSilent === true,
+		historyOperationRevision,
+		historyRefsRevision,
+		historyRefsItems,
+		hasHistory: entry.hasHistory === true,
+		hasMerge: entry.hasMerge === true,
+		inputRevision: number(entry.inputRevision),
+		multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff),
+	};
 }
 function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), tooltip: entry.tooltip == null ? undefined : parseDetails(entry.tooltip), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }

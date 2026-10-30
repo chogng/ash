@@ -16,6 +16,8 @@ use std::time::SystemTime;
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ModelCapabilitiesPatch {
     pub tools: Option<CapabilitySupport>,
+    #[serde(default)]
+    pub agent_mode: Option<CapabilitySupport>,
     pub reasoning: Option<CapabilitySupport>,
     pub parallel_tool_calls: Option<CapabilitySupport>,
     pub personality: Option<CapabilitySupport>,

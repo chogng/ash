@@ -7,6 +7,7 @@ import { localize } from '../../../../nls.js';
 export interface SettingsTreeIndicatorsState {
 	readonly isPending: boolean;
 	readonly isConfigured: boolean;
+	readonly hasPolicyValue?: boolean;
 }
 
 let indicatorId = 0;
@@ -19,6 +20,7 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 	private readonly configuredDescription: HTMLSpanElement;
 	private readonly hover: Hover;
 	private readonly maturityDomNode: HTMLSpanElement;
+	private readonly policyDescription: HTMLSpanElement;
 
 	constructor(container: HTMLElement, contextViewProvider: IContextViewProvider, hoverDelay: () => number, configuredText = configuredLabel()) {
 		super();
@@ -35,6 +37,13 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 		this.maturityDomNode.hidden = true;
 		container.append(this.maturityDomNode);
 		this._register(toDisposable(() => this.maturityDomNode.remove()));
+		this.policyDescription = h(container.ownerDocument, 'span');
+		this.policyDescription.id = `ash-settings-policy-${++indicatorId}`;
+		this.policyDescription.className = 'ash-settings-policy ash-configuration-setting-description';
+		this.policyDescription.textContent = policyLabel();
+		this.policyDescription.hidden = true;
+		container.append(this.policyDescription);
+		this._register(toDisposable(() => this.policyDescription.remove()));
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.configuredDescription = h(container.ownerDocument, 'span');
 		this.configuredDescription.id = `ash-settings-configured-${++indicatorId}`;
@@ -59,6 +68,10 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 		return this.maturityDomNode.hidden ? undefined : this.maturityDomNode.id;
 	}
 
+	public get policyDescriptionId(): string | undefined {
+		return this.policyDescription.hidden ? undefined : this.policyDescription.id;
+	}
+
 	public updateMetadata(tags: readonly string[] | undefined): void {
 		const experimental = tags?.includes('experimental');
 		const preview = tags?.includes('preview');
@@ -72,19 +85,29 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 	}
 
 	public update(state: SettingsTreeIndicatorsState): void {
-		const label = state.isPending ? localize({ bundle: 'ash.settings', key: 'status.saving' }, 'Saving…') : '';
+		const label = state.isPending
+			? localize({ bundle: 'ash.settings', key: 'status.saving' }, 'Saving…')
+			: state.hasPolicyValue ? policyLabel() : '';
 		this.labelDomNode.textContent = label;
 		this.domNode.setAttribute('aria-label', getIndicatorsLabelAriaLabel(state));
 		this.domNode.classList.toggle('is-pending', state.isPending);
 		this.domNode.hidden = !label;
 		this.markerDomNode.hidden = !state.isConfigured;
 		this.configuredDescription.hidden = !state.isConfigured;
+		this.policyDescription.hidden = !state.hasPolicyValue;
 		if (!state.isConfigured) this.hover.hide();
 	}
 }
 
 export function getIndicatorsLabelAriaLabel(state: SettingsTreeIndicatorsState): string {
-	return state.isPending ? localize({ bundle: 'ash.settings', key: 'status.savingAria' }, 'Saving setting') : '';
+	const labels: string[] = [];
+	if (state.isPending) labels.push(localize({ bundle: 'ash.settings', key: 'status.savingAria' }, 'Saving setting'));
+	if (state.hasPolicyValue) labels.push(policyLabel());
+	return labels.join(' ');
+}
+
+function policyLabel(): string {
+	return localize({ bundle: 'ash.settings', key: 'status.policy' }, 'Managed by administrator policy. This value cannot be changed here.');
 }
 
 function configuredLabel(): string {

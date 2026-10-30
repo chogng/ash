@@ -1,8 +1,8 @@
-import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
-import { appServerRequest } from "../../agentHost/browser/appServerRequest.js";
-import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import { raceCancellationError } from "../../../base/common/async.js";
-import type { ISyntaxApi, SyntaxRange } from "../common/syntaxApi.js";
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
+import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import { raceCancellationError } from '../../../base/common/async.js';
+import type { ISyntaxApi, SyntaxRange } from '../common/syntaxApi.js';
 import { Event } from '../../../base/common/event.js';
 
 export function createDisconnectedSyntaxApi(unavailable: UnavailableOperation): ISyntaxApi {
@@ -12,10 +12,10 @@ export function createDisconnectedSyntaxApi(unavailable: UnavailableOperation): 
 		onDidChangeConnection: Event.None,
 		open: () => unavailable('syntax.open'),
 		update: () => unavailable('syntax.update'),
-		query: () => unavailable("syntax.query"),
-		analyze: () => unavailable("syntax.analyze"),
-		selectionRanges: () => unavailable("syntax.selectionRanges"),
-		close: () => unavailable("syntax.close"),
+		query: () => unavailable('syntax.query'),
+		analyze: () => unavailable('syntax.analyze'),
+		selectionRanges: () => unavailable('syntax.selectionRanges'),
+		close: () => unavailable('syntax.close'),
 	};
 }
 
@@ -69,9 +69,9 @@ export function createAppServerSyntaxApi(connection: AppServerProtocolClient): I
 				};
 			} finally { signal.removeEventListener('abort', cancel); }
 		},
-		analyze: params => appServerRequest(connection, "syntax/analyze", params),
-		selectionRanges: params => appServerRequest(connection, "syntax/selectionRanges", { ...params, ranges: [...params.ranges] }),
-		close: async params => { await appServerRequest(connection, "syntax/close", params); },
+		analyze: params => appServerRequest(connection, 'syntax/analyze', params),
+		selectionRanges: params => appServerRequest(connection, 'syntax/selectionRanges', { ...params, ranges: [...params.ranges] }),
+		close: async params => { await appServerRequest(connection, 'syntax/close', params); },
 	};
 }
 

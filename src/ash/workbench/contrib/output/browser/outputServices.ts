@@ -5,16 +5,16 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
 import { OutputLinkProvider } from './outputLinkProvider.js';
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { IStorageService } from "../../../../platform/storage/common/storage.js";
-import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
-import { OUTPUT_MODE_ID, LOG_MODE_ID, OutputSeverities, type IOutputViewFilters, type IOutputEntry, type OutputEntrySeverity, type IOutputChannel, type IOutputChannelDescriptor, type IOutputChannelRevealOptions, type IOutputChannelRevealRequest, type IOutputEntryInput, IOutputService, type OutputChannelKind } from "../../../services/output/common/output.js";
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { OUTPUT_MODE_ID, LOG_MODE_ID, OutputSeverities, type IOutputViewFilters, type IOutputEntry, type OutputEntrySeverity, type IOutputChannel, type IOutputChannelDescriptor, type IOutputChannelRevealOptions, type IOutputChannelRevealRequest, type IOutputEntryInput, IOutputService, type OutputChannelKind } from '../../../services/output/common/output.js';
 import { windowLogId } from '../../../services/log/common/logConstants.js';
-import { InMemoryOutputChannelModel } from "../common/outputChannelModel.js";
+import { InMemoryOutputChannelModel } from '../common/outputChannelModel.js';
 
-const ActiveChannelStorageKey = "output.activeChannel";
-const DefaultRevealOptions: IOutputChannelRevealOptions = Object.freeze({ focus: "take" });
+const ActiveChannelStorageKey = 'output.activeChannel';
+const DefaultRevealOptions: IOutputChannelRevealOptions = Object.freeze({ focus: 'take' });
 
 /** Default Output registry with caller-owned channels and workspace selection. */
 export class OutputService extends Disposable implements IOutputService {
@@ -96,7 +96,7 @@ export class OutputService extends Disposable implements IOutputService {
 	}
 
 	showChannel(id: string, options: IOutputChannelRevealOptions = DefaultRevealOptions): void {
-		if (options.focus !== "take" && options.focus !== "preserve") throw new TypeError(`Unsupported Output reveal focus: ${String(options.focus)}`);
+		if (options.focus !== 'take' && options.focus !== 'preserve') throw new TypeError(`Unsupported Output reveal focus: ${String(options.focus)}`);
 		this.selectChannel(id);
 		const channel = this.activeChannel;
 		if (channel) this.requestShowChannelEmitter.fire(Object.freeze({ channel, focus: options.focus }));
@@ -123,7 +123,7 @@ export class OutputService extends Disposable implements IOutputService {
 	}
 
 	private assertAvailable(): void {
-		if (this.isDisposed) throw new ReferenceError("OutputService is already disposed");
+		if (this.isDisposed) throw new ReferenceError('OutputService is already disposed');
 	}
 }
 
@@ -144,7 +144,7 @@ class OutputChannel extends Disposable implements IOutputChannel {
 
 	get id(): string { return this.descriptor.id; }
 	get label(): string { return this.descriptor.label; }
-	get kind(): OutputChannelKind { return this.descriptor.kind ?? "output"; }
+	get kind(): OutputChannelKind { return this.descriptor.kind ?? 'output'; }
 	get entries() { return this.model.entries; }
 
 	loadModel(): Promise<ITextModel> { this.assertAvailable(); return this.model.loadModel(); }
@@ -162,31 +162,31 @@ class OutputChannel extends Disposable implements IOutputChannel {
 
 function normalizeDescriptor(descriptor: IOutputChannelDescriptor): IOutputChannelDescriptor {
 	const id = validateChannelId(descriptor.id);
-	const label = validateIdentity(descriptor.label, "Output channel label");
-	const kind = descriptor.kind ?? "output";
-	if (kind !== "output" && kind !== "log") throw new TypeError(`Unsupported Output channel kind: ${String(kind)}`);
-	const source = descriptor.source ?? "core";
-	if (source !== "core" && source !== "extension" && source !== "user") throw new TypeError(`Unsupported Output channel source: ${String(source)}`);
-	const extensionId = descriptor.extensionId === undefined ? undefined : validateIdentity(descriptor.extensionId, "Output extension id");
-	const languageId = descriptor.languageId === undefined ? undefined : validateIdentity(descriptor.languageId, "Output language id");
-	if (source === "extension" && !extensionId) throw new TypeError("Extension Output channels require an extension id");
+	const label = validateIdentity(descriptor.label, 'Output channel label');
+	const kind = descriptor.kind ?? 'output';
+	if (kind !== 'output' && kind !== 'log') throw new TypeError(`Unsupported Output channel kind: ${String(kind)}`);
+	const source = descriptor.source ?? 'core';
+	if (source !== 'core' && source !== 'extension' && source !== 'user') throw new TypeError(`Unsupported Output channel source: ${String(source)}`);
+	const extensionId = descriptor.extensionId === undefined ? undefined : validateIdentity(descriptor.extensionId, 'Output extension id');
+	const languageId = descriptor.languageId === undefined ? undefined : validateIdentity(descriptor.languageId, 'Output language id');
+	if (source === 'extension' && !extensionId) throw new TypeError('Extension Output channels require an extension id');
 	return Object.freeze({ id, label, kind, source, ...(extensionId ? { extensionId } : {}), ...(languageId ? { languageId } : {}), ...(descriptor.logger ? { logger: descriptor.logger } : {}) });
 }
 
 function validateIdentity(value: string, label: string): string {
 	const normalized = value.trim();
-	if (!normalized || normalized.includes("\0")) throw new TypeError(`${label} must be non-empty and cannot contain null bytes`);
+	if (!normalized || normalized.includes('\0')) throw new TypeError(`${label} must be non-empty and cannot contain null bytes`);
 	if (normalized !== value) throw new TypeError(`${label} cannot contain leading or trailing whitespace`);
 	return value;
 }
 
 function validateChannelId(value: string): string {
-	const id = validateIdentity(value, "Output channel id");
-	if (/\s/.test(id)) throw new TypeError("Output channel id cannot contain whitespace");
+	const id = validateIdentity(value, 'Output channel id');
+	if (/\s/.test(id)) throw new TypeError('Output channel id cannot contain whitespace');
 	return id;
 }
 
-const OutputFilterStorageKey = "output.filterState";
+const OutputFilterStorageKey = 'output.filterState';
 const CurrentTextSyntaxVersion = 2;
 
 const SeverityRanks: Readonly<Record<OutputEntrySeverity, number>> = Object.freeze({ trace: 0, debug: 1, information: 2, log: 2, warning: 3, error: 4 });
@@ -203,7 +203,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private readonly hiddenSeverities = new Set<OutputEntrySeverity>();
 	private readonly hiddenCategories = new Set<string>();
-	private _text = "";
+	private _text = '';
 	private textSyntaxVersion: 1 | 2 = CurrentTextSyntaxVersion;
 	private preserveStoredState = false;
 
@@ -257,7 +257,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 
 	setCategoryVisible(category: string, visible: boolean, channelId: string): void {
 		const normalized = category.trim();
-		if (!normalized || normalized.includes('\0')) throw new TypeError("Output category must be non-empty and cannot contain null bytes");
+		if (!normalized || normalized.includes('\0')) throw new TypeError('Output category must be non-empty and cannot contain null bytes');
 		const key = channelCategoryKey(normalized, validateChannelId(channelId));
 		// An old category has no channel identity. Only explicit input can move
 		// that choice; restoration and unrelated filters keep its global effect.
@@ -272,7 +272,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 			return;
 		}
 		this.textSyntaxVersion = CurrentTextSyntaxVersion;
-		this._text = "";
+		this._text = '';
 		this.hiddenSeverities.clear();
 		this.hiddenCategories.clear();
 		this.persistAndFire();
@@ -281,7 +281,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	matches(entry: IOutputEntry, channelId: string): boolean {
 		if (this.hiddenSeverities.has(entry.severity) || (entry.category && !this.isCategoryVisible(entry.category, channelId))) return false;
 		const restored = this.textSyntaxVersion === 1;
-		const haystack = (restored ? `${entry.category ?? ""} ${entry.text}` : entry.text).toLocaleLowerCase();
+		const haystack = (restored ? `${entry.category ?? ''} ${entry.text}` : entry.text).toLocaleLowerCase();
 		const terms = restored ? parseRestoredFilterTerms(this._text) : parseFilterTerms(this._text);
 		const included = restored ? terms.includes.every(term => haystack.includes(term)) : terms.includes.length === 0 || terms.includes.some(term => haystack.includes(term));
 		return included && terms.excludes.every(term => !haystack.includes(term));
@@ -299,7 +299,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 				this.preserveStoredState = true;
 				return;
 			}
-			if (typeof stored.text === "string") {
+			if (typeof stored.text === 'string') {
 				this._text = stored.text;
 				this.textSyntaxVersion = stored.syntaxVersion === CurrentTextSyntaxVersion || stored.text.length === 0 ? CurrentTextSyntaxVersion : 1;
 			}
@@ -396,9 +396,9 @@ function parseRestoredFilterTerms(value: string): { readonly includes: readonly 
 	const includes: string[] = [];
 	const excludes: string[] = [];
 	for (const match of value.matchAll(/(?:"([^"]+)"|(\S+))/g)) {
-		const raw = (match[1] ?? match[2] ?? "").trim();
+		const raw = (match[1] ?? match[2] ?? '').trim();
 		if (!raw) continue;
-		const excluded = raw.startsWith("!") || raw.startsWith("-");
+		const excluded = raw.startsWith('!') || raw.startsWith('-');
 		const term = (excluded ? raw.slice(1) : raw).toLocaleLowerCase();
 		if (!term) continue;
 		(excluded ? excludes : includes).push(term);

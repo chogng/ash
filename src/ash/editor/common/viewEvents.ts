@@ -318,4 +318,3 @@ export type ViewEvent = (
 	| ViewTokensColorsChangedEvent
 	| ViewZonesChangedEvent
 );
-

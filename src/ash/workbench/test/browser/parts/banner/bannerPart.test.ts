@@ -10,6 +10,43 @@ suite('banner browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh']) {
+		test(`banner tooltips stay below the window chrome and inside the viewport (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/banner.html${locale === 'zh' ? '?zh' : ''}`);
+			await page.waitForFunction(() => !!window.ashBannerIntegration);
+			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
+			const banner = page.locator('[data-part="banner"]');
+			const close = banner.getByRole('button', { name: locale === 'zh' ? '关闭横幅' : 'Close Banner' });
+			const tooltip = page.getByRole('tooltip');
+			for (const width of [1280, 360]) {
+				await page.setViewportSize({ width, height: 600 });
+				for (const theme of [0, 1, 2, 3]) {
+					await page.evaluate(theme => window.ashBannerIntegration.setTheme(theme), theme);
+					for (const target of [close, banner.locator('.ash-banner-message')]) {
+						await target.hover();
+						await expect(tooltip).toHaveText(target === close ? (await close.getAttribute('aria-label'))! : (await target.textContent())!);
+						const bounds = (await tooltip.boundingBox())!;
+						const anchor = (await target.boundingBox())!;
+						expect(bounds.y).toBeGreaterThanOrEqual(anchor.y + anchor.height);
+						expect(bounds.x).toBeGreaterThanOrEqual(0);
+						expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+						await page.keyboard.press('Escape');
+						await expect(tooltip).toHaveCount(0);
+					}
+				}
+			}
+			await page.mouse.move(0, 599);
+			await page.evaluate(() => window.ashBannerIntegration.focus());
+			await banner.press('ArrowLeft');
+			await expect(close).toBeFocused();
+			await expect(tooltip).toHaveText((await close.getAttribute('aria-label'))!);
+			await expect(close).toHaveAttribute('aria-describedby', (await tooltip.getAttribute('id'))!);
+			await close.press('Escape');
+			await expect(tooltip).toHaveCount(0);
+			await expect(banner).toBeFocused();
+			await expect(banner).toBeVisible();
+		});
+
 		test(`Agent Host banner follows recovery, keeps editor focus and reconnects through the command (${locale})`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
@@ -25,7 +62,7 @@ suite('banner browser component', () => {
 			await expect(banner).toBeVisible();
 			await expect(banner).toContainText(locale === 'zh' ? '正在重新连接到 Agent Host…' : 'Reconnecting to the Agent Host…');
 			await expect(editor).toBeFocused();
-			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 32);
+			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 36);
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('failed'));
 			const reconnect = banner.getByRole('button', { name: locale === 'zh' ? '重新连接' : 'Reconnect', exact: true });
 			await expect(reconnect).toBeVisible();
@@ -40,11 +77,11 @@ suite('banner browser component', () => {
 			await expect(banner.getByRole('button')).toHaveCount(1);
 			await page.evaluate(() => window.ashBannerIntegration.rebuild());
 			await expect(banner).toBeVisible();
-			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 32);
+			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 36);
 			for (const index of [0, 1, 2, 3]) {
 				await page.evaluate(index => window.ashBannerIntegration.setTheme(index), index);
 				await page.screenshot({ path: testInfo.outputPath(`banner-${locale}-theme-${index}.png`) });
-				const colors = await banner.evaluate(node => ({ background: getComputedStyle(node).backgroundColor, foreground: getComputedStyle(node).color, border: getComputedStyle(node).borderBottomColor }));
+				const colors = await banner.locator('.ash-banner-content').evaluate(node => ({ background: getComputedStyle(node).backgroundColor, foreground: getComputedStyle(node).color, border: getComputedStyle(node).borderBottomColor }));
 				expect(colors.background).not.toBe(colors.foreground);
 				if (index > 1) expect(colors.border).not.toBe(colors.background);
 			}
@@ -162,6 +199,24 @@ suite('banner browser component', () => {
 			const banner = page.locator('[data-part="banner"]');
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
 			await expect(banner).toContainText(locale === 'zh' ? '此工作区为只读' : 'This workspace is read-only');
+			const surface = banner.locator('.ash-banner-content');
+			const outerBounds = (await banner.boundingBox())!;
+			const surfaceBounds = (await surface.boundingBox())!;
+			expect(surfaceBounds.height).toBe(28);
+			expect(surfaceBounds.y - outerBounds.y).toBe(4);
+			expect(outerBounds.y + outerBounds.height - surfaceBounds.y - surfaceBounds.height).toBe(4);
+			const partBounds = await page.locator('[data-part="activitybar"], [data-part="sidebar"], [data-part="editor"], [data-part="auxiliarybar"], [data-part="agentSidebar"], [data-part="panel"]').evaluateAll(nodes => nodes.filter(node => node.getClientRects().length > 0).map(node => {
+				const bounds = node.getBoundingClientRect();
+				return { left: bounds.left, right: bounds.right };
+			}));
+			expect(surfaceBounds.x).toBe(Math.min(...partBounds.map(bounds => bounds.left)));
+			expect(surfaceBounds.x + surfaceBounds.width).toBe(Math.max(...partBounds.map(bounds => bounds.right)));
+			await expect(surface).toHaveCSS('border-radius', '6px');
+			const iconBounds = (await banner.locator('.ash-banner-icon').boundingBox())!;
+			const closeBounds = (await banner.locator('.ash-banner-close').boundingBox())!;
+			expect(iconBounds.x + iconBounds.width / 2 - surfaceBounds.x).toBeCloseTo(surfaceBounds.x + surfaceBounds.width - closeBounds.x - closeBounds.width / 2, 2);
+			expect(iconBounds.y + iconBounds.height / 2).toBeCloseTo(closeBounds.y + closeBounds.height / 2, 2);
+			await page.screenshot({ path: browserTests.info.outputPath(`banner-readonly-${locale}.png`) });
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('failed'));
 			await expect(banner).toContainText(locale === 'zh' ? '无法恢复' : 'Could not restore');
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('idle'));
@@ -198,7 +253,7 @@ suite('banner browser component', () => {
 			const zh = locale === 'zh';
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
 			const banner = page.locator('[data-part="banner"]');
-			await banner.getByRole('button', { name: zh ? '管理权限' : 'Manage permissions', exact: true }).click();
+			await banner.getByRole('button', { name: zh ? '管理' : 'Manage', exact: true }).click();
 			const editor = page.locator('.ash-workspace-trust-editor');
 			const heading = editor.getByRole('heading', { level: 2 });
 			const trust = editor.getByRole('button', { name: zh ? '信任工作区' : 'Trust workspace', exact: true });
@@ -276,7 +331,7 @@ suite('banner browser component', () => {
 			const zh = locale === 'zh';
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
 			const banner = page.locator('[data-part="banner"]');
-			await banner.getByRole('button', { name: zh ? '管理权限' : 'Manage permissions', exact: true }).click();
+			await banner.getByRole('button', { name: zh ? '管理' : 'Manage', exact: true }).click();
 			const editor = page.locator('.ash-workspace-trust-editor');
 			await editor.locator('summary').click();
 			const write = editor.getByRole('switch', { name: zh ? '写入文件' : 'Write files', exact: true });
@@ -346,7 +401,7 @@ suite('banner browser component', () => {
 		await page.goto('/banner.html');
 		await page.waitForFunction(() => !!window.ashBannerIntegration);
 		await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
-		await page.locator('[data-part="banner"]').getByRole('button', { name: 'Manage permissions', exact: true }).click();
+		await page.locator('[data-part="banner"]').getByRole('button', { name: 'Manage', exact: true }).click();
 		const editor = page.locator('.ash-workspace-trust-editor');
 		await editor.locator('summary').click();
 		const write = editor.getByRole('switch', { name: 'Write files', exact: true });
@@ -379,5 +434,53 @@ suite('banner browser component', () => {
 		await expect(write).toBeEnabled();
 		await expect(save).toBeDisabled();
 		expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
+	});
+
+	for (const locale of ['en', 'zh']) {
+		test(`Workspace Trust requests coalesce, cancel with Escape and complete after recovery (${locale})`, async function () {
+			const { page } = browserTests;
+			const zh = locale === 'zh';
+			await page.goto(`/banner.html${zh ? '?zh' : ''}`);
+			await page.waitForFunction(() => !!window.ashBannerIntegration);
+			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
+			const origin = page.getByRole('textbox', { name: 'Editor draft' });
+			await origin.focus();
+			await page.evaluate(() => { window.ashBannerIntegration.requestTrust(); window.ashBannerIntegration.requestTrust(); });
+			const dialog = page.getByRole('dialog', { name: zh ? '工作区信任' : 'Workspace Trust', exact: true });
+			await expect(dialog).toHaveCount(1);
+			await expect(dialog).toContainText(zh ? '你是否信任此工作区中文件的作者' : 'Do you trust the authors');
+			await expect(dialog).toContainText(zh ? '未保存的状态可能丢失' : 'Unsaved process state may be lost');
+			await dialog.press('Escape');
+			await expect(dialog).toBeHidden();
+			await expect(origin).toBeFocused();
+			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled']);
+			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
+			await page.evaluate(() => window.ashBannerIntegration.requestTrust());
+			const trust = dialog.getByRole('button', { name: zh ? '信任工作区' : 'Trust workspace', exact: true });
+			await trust.focus();
+			await trust.press('Enter');
+			await expect(dialog).toBeHidden();
+			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled', 'trusted']);
+			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(1);
+			expect((await page.evaluate(() => window.ashBannerIntegration.state())).retries).toBe(1);
+			await expect(page.locator('[data-part="banner"]')).toBeHidden();
+		});
+	}
+
+	test('an old Workspace Trust dialog cannot authorize the replacement workspace request', async function () {
+		const { page } = browserTests;
+		await page.goto('/banner.html');
+		await page.waitForFunction(() => !!window.ashBannerIntegration);
+		await page.evaluate(() => { window.ashBannerIntegration.setPermissions('readonly'); window.ashBannerIntegration.requestTrust(); });
+		const dialog = page.getByRole('dialog', { name: 'Workspace Trust', exact: true });
+		await expect(dialog).toBeVisible();
+		await page.evaluate(() => window.ashBannerIntegration.switchWorkspace('replacement'));
+		await expect(dialog).toBeHidden();
+		await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled']);
+		expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
+		await page.evaluate(() => window.ashBannerIntegration.requestTrust());
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled']);
 	});
 });

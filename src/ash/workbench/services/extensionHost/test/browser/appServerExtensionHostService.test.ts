@@ -14,7 +14,7 @@ import { IEnvironmentVariableService } from '../../../../contrib/terminal/common
 import { EnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariableService.js';
 import { ITerminalContributionService, ITerminalProfileService, ITerminalProfileResolverService } from '../../../../contrib/terminal/common/terminal.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { ITerminalService } from '../../../../contrib/terminal/browser/terminal.js';
+import { ITerminalGroupService, ITerminalService } from '../../../../contrib/terminal/browser/terminal.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
 import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
@@ -60,26 +60,26 @@ import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewRegistry } 
 import { ITimelineService } from '../../../../contrib/timeline/common/timeline.js';
 import { TimelineService } from '../../../../contrib/timeline/common/timelineService.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
-import assert from "node:assert/strict";
-import { suite, test } from "mocha";
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
-import { CommandRegistry, CommandsRegistry } from "../../../../../platform/commands/common/commands.js";
-import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import { type ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
-import type { AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { CommandRegistry, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../../../platform/agentHost/browser/extensionHostProtocol.js';
-import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { Position } from "../../../../../editor/common/core/position.js";
+import { TextModel } from '../../../../../editor/common/model/textModel.js';
+import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
-import { ITaskService } from "../../../../contrib/tasks/common/taskService.js";
-import { type TaskProvider, type TaskProviderRegistration } from "../../../../contrib/tasks/common/tasks.js";
-import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from "../../../testing/common/testingService.js";
-import { AppServerExtensionHostService } from "../../browser/appServerExtensionHostService.js";
+import { ITaskService } from '../../../../contrib/tasks/common/taskService.js';
+import { type TaskProvider, type TaskProviderRegistration } from '../../../../contrib/tasks/common/tasks.js';
+import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from '../../../testing/common/testingService.js';
+import { AppServerExtensionHostService } from '../../browser/appServerExtensionHostService.js';
 import { MainThreadExtensionApi } from '../../../../api/browser/mainThreadExtensionApi.js';
 import { ISCMService, ISCMViewService } from '../../../../contrib/scm/common/scm.js';
 import { SCMService } from '../../../../contrib/scm/common/scmService.js';
@@ -112,7 +112,7 @@ import { ExtensionResourceLoaderService } from '../../../../../platform/extensio
 
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
-const DIGEST = `sha256:${"b".repeat(64)}`;
+const DIGEST = `sha256:${'b'.repeat(64)}`;
 
 test('a missing tree container isolates one registration while the fleet commits and activates other extensions', async () => {
 	const initial = snapshot(1, 'acme.run', [
@@ -248,7 +248,7 @@ test('SCM registrations reach their owner, preserve history on resource updates 
 	const signal = new AbortController().signal;
 	assert.deepEqual(await api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 2, providers: [provider] }, signal, source), { result: 'done' });
 	assert.equal(historyChanges, 0);
-	assert.deepEqual(invalidations, [undefined], 'Resource invalidation refreshes all quick diffs through their typed contract');
+	assert.deepEqual(invalidations, [], 'An identical resource snapshot does not invalidate working-tree consumers');
 	await api.clientHandler!({ operation: 'scmUpdate', registrationId: 'scm', revision: 3, providers: [{ ...provider, historyRevision: 2 }] }, signal, source);
 	assert.equal(historyChanges, 1);
 	api.invocationResult = Promise.resolve({ providerId: 'acme.demo:extension-repo', providerLabel: provider.label, label: provider.label, resource: 'git-original:/file.txt', text: 'base' });
@@ -586,8 +586,8 @@ test('document formatting bridge forwards cancellation while transport is pendin
 	await result;
 });
 
-test("keeps last-good contributions while refreshing and revokes them synchronously on disconnect", async () => {
-	const api = new FakeExtensionHostApi(snapshot(1, "acme.old"));
+test('keeps last-good contributions while refreshing and revokes them synchronously on disconnect', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.old'));
 	const commands = new CommandRegistry();
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
@@ -599,19 +599,19 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 
 	await service.start();
 	assert.equal(service.currentSnapshot.fleetGeneration, 1);
-	assert.equal(service.state, "ready");
+	assert.equal(service.state, 'ready');
 	assert.equal(failures.length, 0);
-	assert.ok(commands.hasCommand("acme.old"));
+	assert.ok(commands.hasCommand('acme.old'));
 
-	const handler = commands.getCommand("acme.old")!;
-	assert.deepEqual(await handler({} as ServicesAccessor, "argument"), { executed: true });
+	const handler = commands.getCommand('acme.old')!;
+	assert.deepEqual(await handler({} as ServicesAccessor, 'argument'), { executed: true });
 	assert.equal(api.invocations[0]?.activationGeneration, 11);
 	assert.equal(api.invocations[0]?.incarnation, 3);
 	const payload = api.invocations[0]?.payload;
-	assert.deepEqual(typeof payload === "object" && payload !== null && !Array.isArray(payload) ? (payload as { readonly arguments?: JsonValue; }).arguments : undefined, ["argument"]);
+	assert.deepEqual(typeof payload === 'object' && payload !== null && !Array.isArray(payload) ? (payload as { readonly arguments?: JsonValue; }).arguments : undefined, ['argument']);
 
-	assert.deepEqual(await tasks.providers[0]!.provideTasks(new AbortController().signal), [{ id: "unit", label: "Unit", command: "pnpm test", group: "test" }]);
-	assert.deepEqual(await tests.providers[0]!.provideTestProfiles(new AbortController().signal), [{ id: "unit", label: "Unit", taskId: "extension:extensionHost.61636d652e64656d6f.7461736b73:unit" }]);
+	assert.deepEqual(await tasks.providers[0]!.provideTasks(new AbortController().signal), [{ id: 'unit', label: 'Unit', command: 'pnpm test', group: 'test' }]);
+	assert.deepEqual(await tests.providers[0]!.provideTestProfiles(new AbortController().signal), [{ id: 'unit', label: 'Unit', taskId: 'extension:extensionHost.61636d652e64656d6f.7461736b73:unit' }]);
 
 	using descriptorSession = new MockDebugSession('debug-registration', 'Host', {});
 	const preparingAt = Date.now();
@@ -627,32 +627,32 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 	const pendingList = deferred<ExtensionHostFleetSnapshot>();
 	api.listResult = pendingList.promise;
 	api.emitChanged(2);
-	assert.equal(commands.hasCommand("acme.old"), true);
+	assert.equal(commands.hasCommand('acme.old'), true);
 	assert.equal(tasks.providers.length, 1);
-	api.current = snapshot(2, "acme.new");
+	api.current = snapshot(2, 'acme.new');
 	pendingList.resolve(api.current);
 	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
-	assert.ok(commands.hasCommand("acme.new"));
+	assert.ok(commands.hasCommand('acme.new'));
 
-	api.listResult = Promise.reject(new Error("temporary list failure"));
+	api.listResult = Promise.reject(new Error('temporary list failure'));
 	api.emitChanged(3);
-	await waitFor(() => failures.includes("extensionHostRefreshFailed"));
+	await waitFor(() => failures.includes('extensionHostRefreshFailed'));
 	assert.equal(service.currentSnapshot.fleetGeneration, 2);
-	assert.ok(commands.hasCommand("acme.new"));
-	assert.equal(service.state, "degraded");
-	api.current = snapshot(3, "acme.latest");
+	assert.ok(commands.hasCommand('acme.new'));
+	assert.equal(service.state, 'degraded');
+	api.current = snapshot(3, 'acme.latest');
 	api.listResult = undefined;
 
-	api.emitConnection("crashed");
-	assert.equal(commands.hasCommand("acme.new"), false);
-	assert.equal(services.get(IAdapterManager).get("acme"), undefined);
-	assert.equal(service.state, "failed");
-	api.emitConnection("ready");
-	await waitFor(() => commands.hasCommand("acme.latest"));
+	api.emitConnection('crashed');
+	assert.equal(commands.hasCommand('acme.new'), false);
+	assert.equal(services.get(IAdapterManager).get('acme'), undefined);
+	assert.equal(service.state, 'failed');
+	api.emitConnection('ready');
+	await waitFor(() => commands.hasCommand('acme.latest'));
 });
 
-test("projects supported language operations while diagnosing unsupported operations", async () => {
-	const current = snapshot(1, "acme.run", [{ registrationId: "language", kind: "languageProvider", languageIds: ["typescript"], operations: ["hover", "parameterHints", "definition", "documentColors"] }]);
+test('projects supported language operations while diagnosing unsupported operations', async () => {
+	const current = snapshot(1, 'acme.run', [{ registrationId: 'language', kind: 'languageProvider', languageIds: ['typescript'], operations: ['hover', 'parameterHints', 'definition', 'documentColors'] }]);
 	const api = new FakeExtensionHostApi(current);
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
@@ -663,7 +663,7 @@ test("projects supported language operations while diagnosing unsupported operat
 	service.onDidFail(failure => failures.push(failure.code));
 	await service.start();
 
-	using model = new TextModel("answer", { languageId: "typescript" });
+	using model = new TextModel('answer', { languageId: 'typescript' });
 	const signal = new AbortController().signal;
 	const request = {
 		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
@@ -673,17 +673,17 @@ test("projects supported language operations while diagnosing unsupported operat
 			activeSignatureHelp: { activeSignature: 0, signatures: [{ label: 'fn(value)', parameters: [{ label: 'value' }], activeParameter: 0 }] },
 		},
 	};
-	assert.deepEqual(await languages.hoverProvider.ordered(model)[0]!.provideHover(request, signal), { contents: ["Host hover"] });
-	assert.deepEqual(await languages.signatureHelpProvider.ordered(model)[0]!.provideParameterHints(request, signal), { signatures: [{ label: "fn(value)", parameters: [{ label: "value" }], activeParameter: 0 }], activeSignature: 0 });
-	assert.deepEqual((api.invocations.find(request => request.operation === "hover")!.payload as { readonly position: unknown; }).position, { lineIndex: 0, columnIndex: 1 });
-	assert.deepEqual((api.invocations.find(request => request.operation === "parameterHints")!.payload as { readonly position: unknown; }).position, { lineIndex: 0, columnIndex: 1 });
+	assert.deepEqual(await languages.hoverProvider.ordered(model)[0]!.provideHover(request, signal), { contents: ['Host hover'] });
+	assert.deepEqual(await languages.signatureHelpProvider.ordered(model)[0]!.provideParameterHints(request, signal), { signatures: [{ label: 'fn(value)', parameters: [{ label: 'value' }], activeParameter: 0 }], activeSignature: 0 });
+	assert.deepEqual((api.invocations.find(request => request.operation === 'hover')!.payload as { readonly position: unknown; }).position, { lineIndex: 0, columnIndex: 1 });
+	assert.deepEqual((api.invocations.find(request => request.operation === 'parameterHints')!.payload as { readonly position: unknown; }).position, { lineIndex: 0, columnIndex: 1 });
 	assert.deepEqual((api.invocations.find(request => request.operation === 'parameterHints')!.payload as { readonly context: unknown; }).context, request.context);
-	assert.equal(service.state, "degraded");
-	assert.ok(failures.includes("unsupportedRegistrationBridge"));
+	assert.equal(service.state, 'degraded');
+	assert.ok(failures.includes('unsupportedRegistrationBridge'));
 });
 
-test("keeps the service stopped when the negotiated Host capability is absent", async () => {
-	const api = new FakeExtensionHostApi(snapshot(1, "acme.run"));
+test('keeps the service stopped when the negotiated Host capability is absent', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run'));
 	api.available = false;
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
@@ -694,14 +694,14 @@ test("keeps the service stopped when the negotiated Host capability is absent", 
 	service.onDidFail(failure => failures.push(failure.code));
 
 	await service.start();
-	assert.equal(service.state, "stopped");
+	assert.equal(service.state, 'stopped');
 	assert.equal(service.currentSnapshot.fleetGeneration, 0);
 	assert.equal(api.reconciles, 0);
 	assert.deepEqual(failures, []);
 });
 
-test("projects bounded Extension Host stderr incrementally into extension-owned Output", async () => {
-	const api = new FakeExtensionHostApi(snapshot(1, "acme.run", [], "first diagnostic\n"));
+test('projects bounded Extension Host stderr incrementally into extension-owned Output', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [], 'first diagnostic\n'));
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
 	using languages = new LanguageFeaturesService();
@@ -711,25 +711,25 @@ test("projects bounded Extension Host stderr incrementally into extension-owned 
 	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 30_000);
 	await service.start();
 
-	const channel = output.getChannel("extension-host.acme.demo");
-	assert.equal(channel?.descriptor.source, "extension");
-	assert.equal(channel?.descriptor.extensionId, "acme.demo");
-	assert.match(channel?.getText() ?? "", /first diagnostic/);
+	const channel = output.getChannel('extension-host.acme.demo');
+	assert.equal(channel?.descriptor.source, 'extension');
+	assert.equal(channel?.descriptor.extensionId, 'acme.demo');
+	assert.match(channel?.getText() ?? '', /first diagnostic/);
 
-	api.current = snapshot(2, "acme.run", [], "first diagnostic\nsecond diagnostic\n");
+	api.current = snapshot(2, 'acme.run', [], 'first diagnostic\nsecond diagnostic\n');
 	api.emitChanged(2);
 	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
 	assert.equal((channel?.getText().match(/first diagnostic/g) ?? []).length, 1);
 	assert.equal((channel?.getText().match(/second diagnostic/g) ?? []).length, 1);
 });
 
-test("projects ordered extension-created named Output channels without replaying old reveal requests", async () => {
+test('projects ordered extension-created named Output channels without replaying old reveal requests', async () => {
 	const created: readonly ExtensionHostOutputEvent[] = Object.freeze([
-		Object.freeze({ sequence: 1, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "create", channelId: "review", label: "Review", kind: "log" }) }),
-		Object.freeze({ sequence: 2, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "append", channelId: "review", text: "first\n", severity: "information", category: "review" }) }),
-		Object.freeze({ sequence: 3, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "show", channelId: "review", preserveFocus: false }) }),
+		Object.freeze({ sequence: 1, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: 'create', channelId: 'review', label: 'Review', kind: 'log' }) }),
+		Object.freeze({ sequence: 2, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: 'append', channelId: 'review', text: 'first\n', severity: 'information', category: 'review' }) }),
+		Object.freeze({ sequence: 3, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: 'show', channelId: 'review', preserveFocus: false }) }),
 	]);
-	const api = new FakeExtensionHostApi(snapshot(1, "acme.run", [], "", created, 11));
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [], '', created, 11));
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
 	using languages = new LanguageFeaturesService();
@@ -741,18 +741,18 @@ test("projects ordered extension-created named Output channels without replaying
 	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 30_000);
 	await service.start();
 
-	const channelId = "extension.acme.demo.review";
-	assert.equal(output.getChannel(channelId)?.getText(), "first\n");
+	const channelId = 'extension.acme.demo.review';
+	assert.equal(output.getChannel(channelId)?.getText(), 'first\n');
 	assert.deepEqual(reveals, []);
 
-	const updated = Object.freeze([...created, Object.freeze({ sequence: 4, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "append" as const, channelId: "review", text: "second\n", severity: "warning" as const, category: undefined }) }), Object.freeze({ sequence: 5, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "show" as const, channelId: "review", preserveFocus: true }) })]);
-	api.current = snapshot(2, "acme.run", [], "", updated, 11);
+	const updated = Object.freeze([...created, Object.freeze({ sequence: 4, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: 'append' as const, channelId: 'review', text: 'second\n', severity: 'warning' as const, category: undefined }) }), Object.freeze({ sequence: 5, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: 'show' as const, channelId: 'review', preserveFocus: true }) })]);
+	api.current = snapshot(2, 'acme.run', [], '', updated, 11);
 	api.emitChanged(2);
 	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
-	assert.equal(output.getChannel(channelId)?.getText(), "first\nsecond\n");
-	assert.deepEqual(reveals, ["preserve"]);
+	assert.equal(output.getChannel(channelId)?.getText(), 'first\nsecond\n');
+	assert.deepEqual(reveals, ['preserve']);
 
-	api.current = snapshot(3, "acme.run", [], "", Object.freeze([...updated, Object.freeze({ sequence: 6, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: "dispose" as const, channelId: "review" }) })]), 11);
+	api.current = snapshot(3, 'acme.run', [], '', Object.freeze([...updated, Object.freeze({ sequence: 6, incarnation: 3, activationGeneration: 11, operation: Object.freeze({ operation: 'dispose' as const, channelId: 'review' }) })]), 11);
 	api.emitChanged(3);
 	await waitFor(() => service.currentSnapshot.fleetGeneration === 3);
 	assert.equal(output.getChannel(channelId), undefined);
@@ -1045,7 +1045,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 	readonly invocations: ExtensionHostInvocationRequest[] = [];
 	private readonly changed = new Set<(generation: number) => void>();
 	private readonly connections = new Set<(state: AppServerConnectionState) => void>();
-	private connectionState: AppServerConnectionState = "ready";
+	private connectionState: AppServerConnectionState = 'ready';
 
 	constructor(snapshotValue: ExtensionHostFleetSnapshot) { this.current = snapshotValue; }
 
@@ -1064,12 +1064,12 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		if (this.invocationResult) return this.invocationResult;
 		if (request.operation === 'outputEvent' || request.operation === 'documentEvent' || request.operation === 'workspaceEvent') return null;
 		if (request.operation === 'resolveConnection') return { connectionName: 'build' };
-		if (request.operation === "execute") return Object.freeze({ executed: true });
+		if (request.operation === 'execute') return Object.freeze({ executed: true });
 		if (request.operation === 'createDebugAdapterDescriptor') return { program: 'hosted-adapter', arguments: ['', ' literal '] };
-		if (request.operation === "provideTasks") return Object.freeze({ tasks: Object.freeze([{ id: "unit", label: "Unit", command: "pnpm test", group: "test" }]) });
-		if (request.operation === "provideTestProfiles") return Object.freeze({ profiles: Object.freeze([{ id: "unit", label: "Unit", taskProviderRegistrationId: "tasks", taskId: "unit" }]) });
-		if (request.operation === "hover") return Object.freeze({ contents: Object.freeze(["Host hover"]) });
-		if (request.operation === "parameterHints") return Object.freeze({ signatures: Object.freeze([{ label: "fn(value)", parameters: Object.freeze([{ label: "value" }]), activeParameter: 0 }]), activeSignature: 0 });
+		if (request.operation === 'provideTasks') return Object.freeze({ tasks: Object.freeze([{ id: 'unit', label: 'Unit', command: 'pnpm test', group: 'test' }]) });
+		if (request.operation === 'provideTestProfiles') return Object.freeze({ profiles: Object.freeze([{ id: 'unit', label: 'Unit', taskProviderRegistrationId: 'tasks', taskId: 'unit' }]) });
+		if (request.operation === 'hover') return Object.freeze({ contents: Object.freeze(['Host hover']) });
+		if (request.operation === 'parameterHints') return Object.freeze({ signatures: Object.freeze([{ label: 'fn(value)', parameters: Object.freeze([{ label: 'value' }]), activeParameter: 0 }]), activeSignature: 0 });
 		throw new Error(`Unexpected operation ${request.operation}`);
 	}
 
@@ -1111,7 +1111,7 @@ class ProviderSink<TProvider> {
 		this.providers = Object.freeze([...initial]);
 		const registration = toDisposable(() => { disposed = true; this.providers = Object.freeze([]); }) as TaskProviderRegistration;
 		registration.replace = providers => {
-			if (disposed) throw new ReferenceError("Provider registration is disposed");
+			if (disposed) throw new ReferenceError('Provider registration is disposed');
 			if (this.rejectNextReplacement) {
 				const error = this.rejectNextReplacement;
 				this.rejectNextReplacement = undefined;
@@ -1123,25 +1123,25 @@ class ProviderSink<TProvider> {
 	}
 }
 
-function snapshot(generation: number, command: string, additional: readonly ExtensionHostFleetSnapshot["extensions"][number]["registrations"][number][] = [], stderr = "", outputEvents: readonly ExtensionHostOutputEvent[] = [], activationGeneration = 10 + generation): ExtensionHostFleetSnapshot {
+function snapshot(generation: number, command: string, additional: readonly ExtensionHostFleetSnapshot['extensions'][number]['registrations'][number][] = [], stderr = '', outputEvents: readonly ExtensionHostOutputEvent[] = [], activationGeneration = 10 + generation): ExtensionHostFleetSnapshot {
 	return Object.freeze({
 		generation,
 		extensions: Object.freeze([Object.freeze({
-			id: "acme.demo",
-			version: "1.0.0",
+			id: 'acme.demo',
+			version: '1.0.0',
 			packageDigest: DIGEST,
 			runtimeApiVersion: 1,
 			activationGeneration,
 			incarnation: 3,
-			lifecycle: "ready" as const,
+			lifecycle: 'ready' as const,
 			failure: undefined,
 			stderr,
 			outputEvents: Object.freeze([...outputEvents]),
 			registrations: Object.freeze([
-				Object.freeze({ registrationId: "command", kind: "command" as const, command, title: "Run" }),
-				Object.freeze({ registrationId: "tasks", kind: "taskProvider" as const, taskType: "acme" }),
-				Object.freeze({ registrationId: "tests", kind: "testProfileProvider" as const, providerId: "acme.tests", label: "Tests" }),
-				Object.freeze({ registrationId: "debug", kind: "debugAdapter" as const, debuggerType: "acme" }),
+				Object.freeze({ registrationId: 'command', kind: 'command' as const, command, title: 'Run' }),
+				Object.freeze({ registrationId: 'tasks', kind: 'taskProvider' as const, taskType: 'acme' }),
+				Object.freeze({ registrationId: 'tests', kind: 'testProfileProvider' as const, providerId: 'acme.tests', label: 'Tests' }),
+				Object.freeze({ registrationId: 'debug', kind: 'debugAdapter' as const, debuggerType: 'acme' }),
 				...additional,
 			]),
 		})]),
@@ -1159,7 +1159,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		if (predicate()) return;
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
-	throw new Error("Timed out waiting for Extension Host state");
+	throw new Error('Timed out waiting for Extension Host state');
 }
 
 function acquireFile(services: InstantiationService, text: string, resource: URI, languageId = 'plaintext'): Promise<TextModelReference> {
@@ -1190,6 +1190,19 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi, services.get(IAdapterManager)));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None, listProfiles: async () => [] } as unknown as ITerminalProcessService);
 	services.registerInstance(ITerminalService, { ...Disposable.None } as unknown as ITerminalService);
+	services.registerInstance(ITerminalGroupService, {
+		...Disposable.None,
+		groups: [], activeGroup: undefined, onDidChangeGroups: Event.None,
+		createGroup: () => assert.fail('Unexpected terminal group creation'),
+		getGroupForInstance: () => assert.fail('Unexpected terminal group lookup'),
+		joinInstances: () => assert.fail('Unexpected terminal group join'),
+		moveInstance: () => assert.fail('Unexpected terminal group move'),
+		unsplitInstance: () => assert.fail('Unexpected terminal group unsplit'),
+		instanceIsSplit: () => assert.fail('Unexpected terminal split lookup'),
+		setActiveInstanceByIndex: () => assert.fail('Unexpected terminal group selection'),
+		showPanel: async () => assert.fail('Unexpected terminal panel request'),
+		focusHover: async () => assert.fail('Unexpected terminal hover request'),
+	});
 	services.registerSingleton(ITerminalCompletionService, () => services.createInstance(TerminalCompletionService));
 	services.registerSingleton(ITerminalQuickFixService, () => services.createInstance(TerminalQuickFixService));
 	services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));
@@ -1231,7 +1244,8 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(IMultiDiffSourceResolverService, services.resources.add(new MultiDiffSourceResolverService()));
 	services.registerInstance(IDecorationsService, { onDidChangeDecorations: Event.None, registerDecorationsProvider: () => toDisposable(() => { }), getDecoration: () => undefined });
 	services.registerInstance(IHostService, {
-		reload: async () => { throw new Error("Unexpected reload in this fixture"); },
+		getWindows: async () => [],
+		reload: async () => { throw new Error('Unexpected reload in this fixture'); },
 		hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => assert.fail('Unexpected window'),
 		restart: async () => assert.fail('Unexpected restart'), getScreenshot: async () => undefined,
 	});
@@ -1806,6 +1820,18 @@ test('Remote extension cancellation and revocation cannot open a window', async 
 });
 
 
+test('Canvas demand activates the admitted DataChannel owner without requiring a running registration', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['onDemand:dataChannel']));
+	api.activationResult = Promise.resolve(snapshot(2, 'acme.canvas', [], '', [], 11));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	services.registerInstance(ITerminalGroupService, {} as ITerminalGroupService);
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	await services.get(IExtensionService).activateByEvent('onCanvas');
+	assert.deepEqual(api.activations.map(({ initialization, ...request }) => request), [{ extensionId: 'acme.demo', activationGeneration: 11, event: { type: 'capability', capability: 'dataChannel' } }]);
+});
+
 test('terminal link demand activates its exact dormant extension through the window owner', async () => {
 	const api = new FakeExtensionHostApi(dormantSnapshot(['onDemand:terminalLinkProvider']));
 	api.activationResult = Promise.resolve(snapshot(2, 'acme.links', [], '', [], 11));
@@ -2184,7 +2210,13 @@ test('terminal completion and quick fix registrations bind the original instance
 	await services.get(IExtensionService).start();
 	using stateChanged = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').TerminalInstanceState>();
 	using removed = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance>();
-	const instance = { id: 'terminal-1', title: 'Shell', processId: 42, state: 'running', onDidChangeState: stateChanged.event } as import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance;
+	const instance = {
+		id: 'terminal-1',
+		title: 'Shell',
+		processId: 42,
+		state: 'running',
+		onDidChangeState: stateChanged.event
+	} as import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance;
 	Object.assign(services.get(ITerminalService), { instances: [instance], onDidDisposeInstance: removed.event });
 	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
 	await host.start();

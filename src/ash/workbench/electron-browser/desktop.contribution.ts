@@ -1,9 +1,9 @@
 import {
 	registerAction2,
-} from "../../platform/actions/common/actions.js";
+} from '../../platform/actions/common/actions.js';
 import {
 	ToggleDevToolsAction,
-} from "./actions/developerActions.js";
+} from './actions/developerActions.js';
 import './parts/dialogs/dialog.contribution.js';
 import '../contrib/files/electron-browser/fileActions.contribution.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';

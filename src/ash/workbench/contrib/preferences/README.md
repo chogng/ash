@@ -4,7 +4,7 @@
 
 本文是设置接入的职责约束。现有实现尚未全部符合这些约束；未迁移的实现不能作为新增接入的范例。偏好入口、JSON 编辑与存储路径见 [Preferences 与 Settings 的职责](../../../../../docs/preferences-and-settings.md)。
 
-该文档的 [页面与公开契约边界](../../../../../docs/preferences-and-settings.md#页面与公开契约的边界) 说明当前支持范围，未完成动作统一维护在 [Configuration / Preferences TODO](../../../../../TODO.md#configuration--preferences--todo)。本文维护接入规则，不重复保存上游文件清单或把目标架构描述成已有实现。
+该文档的 [页面与公开契约边界](../../../../../docs/preferences-and-settings.md#页面与公开契约的边界) 说明当前支持范围，[已有验证与限制](../../../../../docs/preferences-and-settings.md#已有验证与限制) 记录代码验收与真实环境覆盖。本文维护接入规则，不重复保存上游文件清单或把目标架构描述成已有实现。
 
 ## 职责归属
 

@@ -24,6 +24,8 @@ interface IChatContextItem {
 	readonly icon: Icon;
 	readonly commandId?: string;
 	readonly ordinal?: number;
+	/** Places an action beside the built-in sources in Add context. */
+	readonly presentation?: 'inline';
 	// New Chat can own a composer before a transcript widget exists.
 	isEnabled?(widget?: IChatWidget): boolean | Promise<boolean>;
 }

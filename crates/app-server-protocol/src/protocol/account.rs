@@ -119,6 +119,8 @@ pub enum AccountLoginMethodDto {
     },
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
+    ChatGptWebDeviceCode,
+    ChatGptWebCodex,
     KimiDeviceCode,
     XaiDeviceCode,
     BigModelBrowser,

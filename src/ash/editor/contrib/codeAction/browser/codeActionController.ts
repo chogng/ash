@@ -1,12 +1,12 @@
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { EditSources } from '../../../common/textModelEditSource.js';
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 
 import * as languages from '../../../common/languages.js';
-import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type View } from "../../../browser/view.js";
+import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
+import { type View } from '../../../browser/view.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { CodeActionTriggerType } from '../../../common/languages.js';
 import { CodeActionAutoApply, CodeActionTriggerSource, type CodeActionItem, type CodeActionFilter } from '../common/types.js';
@@ -15,7 +15,8 @@ import { CodeActionKeybindingResolver } from './codeActionKeybindingResolver.js'
 import { toMenuItems } from './codeActionMenu.js';
 import { LightBulbWidget } from './lightBulbWidget.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
-import { ActionListItemKind, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
+import { TabbedActionListWidget } from '../../../../platform/actionWidget/browser/tabbedActionListWidget.js';
+import { ActionListItemKind, type IActionListDelegate, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
 import { localize } from '../../../../nls.js';
 import { IBulkEditService, type IBulkEditOptions } from '../../../browser/services/bulkEditService.js';
 
@@ -25,6 +26,7 @@ export class CodeActionController extends Disposable {
 	static get(editor: ICodeEditor): CodeActionController | null {
 		return editor.getContribution<CodeActionController>(CodeActionController.ID);
 	}
+	private readonly tabbedMenu: TabbedActionListWidget;
 	private menuContext: languages.LanguageCodeActionRequest | undefined;
 	private readonly model: CodeActionModel;
 	private readonly lightbulb: LightBulbWidget;
@@ -48,11 +50,12 @@ export class CodeActionController extends Disposable {
 	) {
 		super();
 		if (diagnostics.textModel !== viewport.textModel || editor.getModel() !== viewport.textModel) {
-			throw new TypeError("Code action dependencies must share one text model");
+			throw new TypeError('Code action dependencies must share one text model');
 		}
 		this.model = this._register(instantiationService.createInstance(CodeActionModel, editor, diagnostics, onError));
 		this.lightbulb = this._register(instantiationService.createInstance(LightBulbWidget, editor));
 		this.keybindings = instantiationService.createInstance(CodeActionKeybindingResolver);
+		this.tabbedMenu = this._register(instantiationService.createInstance(TabbedActionListWidget));
 		this._register(this.model.onDidChangeState(state => {
 			this.hideMenu();
 			this.lightbulb.hide();
@@ -67,14 +70,14 @@ export class CodeActionController extends Disposable {
 				CodeActionTriggerSource.Lightbulb, { ...trigger.filter, includeSourceActions: true }).catch(onError);
 		}));
 		this._register(toDisposable(() => this.close()));
-		this._register(addDisposableListener(input, "keydown", event => {
+		this._register(addDisposableListener(input, 'keydown', event => {
 			if (event.defaultPrevented || event.isComposing) return;
-			if (event.key === "Escape" && this.context) {
+			if (event.key === 'Escape' && this.context) {
 				stopEvent(event);
 				this.close();
 				return;
 			}
-			if (event.altKey || (!event.ctrlKey && !event.metaKey) || event.key !== ".") return;
+			if (event.altKey || (!event.ctrlKey && !event.metaKey) || event.key !== '.') return;
 			if (!editor.getAction('editor.action.quickFix')?.isSupported()) return;
 			stopEvent(event);
 			editor.trigger('keyboard', 'editor.action.quickFix', {});
@@ -128,25 +131,36 @@ export class CodeActionController extends Disposable {
 			group.push(item);
 		}
 		const groupEntries = [...groups.entries()];
-		this.actionWidgetService.show(CodeActionController.ID, this.bulkEditService.hasPreviewHandler(), items, {
+		const delegate: IActionListDelegate<CodeActionItem> = {
 			onSelect: (entry, preview) => this.apply(entry, preview),
 			onHide: didCancel => {
 				this.menuContext = undefined;
 				if (this.context === context && didCancel !== false) this.close();
 			},
-		}, {
+		};
+		const anchor = {
 			left: bounds.left + coordinates.left,
 			top: bounds.top + coordinates.top,
 			width: 0,
 			height: coordinates.height,
-		}, { showFilter: true }, groups.size > 1 ? {
-			tabs: [
-				{ id: 'all', label: localize('codeAction.allActions', 'All actions') },
-				...groupEntries.map(([title], index) => ({ id: String(index), label: title })),
-			],
-			initialTab: 'all',
-			createActionList: id => ({ items: id === 'all' ? items : groupEntries[Number(id)]![1] }),
-		} : undefined);
+		};
+		const supportsPreview = this.bulkEditService.hasPreviewHandler();
+		if (groups.size > 1) {
+			this.tabbedMenu.show({
+				user: CodeActionController.ID, anchor, delegate, supportsPreview,
+				tabs: [
+					{ id: 'all', label: localize('codeAction.allActions', 'All actions') },
+					...groupEntries.map(([title], index) => ({ id: String(index), label: title })),
+				],
+				initialTab: 'all',
+				createActionList: id => ({
+					items: id === 'all' ? items : groupEntries[Number(id)]![1],
+					listOptions: { showFilter: true },
+				}),
+			});
+		} else {
+			this.actionWidgetService.show(CodeActionController.ID, supportsPreview, items, delegate, anchor, { showFilter: true });
+		}
 	}
 
 	private async apply(entry: CodeActionItem, preview = false): Promise<void> {
@@ -182,10 +196,10 @@ export class CodeActionController extends Disposable {
 				editDispatched = true;
 				applied = await this.applyWorkspaceEdit(resolved.edit, options) === true;
 			} else {
-				const documentEdit = resolved.edit.entries.find(edit => edit.kind === "textDocument" && edit.resource.toString() === context.resource.toString());
-				if (resolved.edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== "textDocument") throw new Error("This editor host cannot apply a multi-resource code action");
+				const documentEdit = resolved.edit.entries.find(edit => edit.kind === 'textDocument' && edit.resource.toString() === context.resource.toString());
+				if (resolved.edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== 'textDocument') throw new Error('This editor host cannot apply a multi-resource code action');
 				if (documentEdit.version !== undefined && documentEdit.version !== context.snapshot.version) {
-					throw new Error("Code action edit does not match the requested document version");
+					throw new Error('Code action edit does not match the requested document version');
 				}
 				if (documentEdit.edits.length > 0) {
 					editDispatched = true;
@@ -206,6 +220,7 @@ export class CodeActionController extends Disposable {
 		if (this.menuContext) {
 			this.menuContext = undefined;
 			this.actionWidgetService.hide();
+			this.tabbedMenu.hide();
 		}
 		this.actions = [];
 	}

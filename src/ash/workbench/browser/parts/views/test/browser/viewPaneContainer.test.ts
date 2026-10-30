@@ -4,12 +4,12 @@ import { IActivityService } from '../../../../../../workbench/services/activity/
 import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
-import type { IViewContainerDescriptor, IViewContainerModel } from "../../../../../../workbench/common/views.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
+import type { IViewContainerDescriptor, IViewContainerModel } from '../../../../../../workbench/common/views.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>", { url: "http://localhost" });
+const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -22,13 +22,13 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { toDisposable, DisposableStore } = await import("../../../../../../base/common/lifecycle.js");
-const { ContextKeyService, IContextKeyService } = await import("../../../../../../platform/contextkey/browser/contextKeyService.js");
-const { ViewContainerLocation } = await import("../../../../../../workbench/common/views.js");
-const { ViewPaneContainer } = await import("../../../../../../workbench/browser/parts/views/viewPaneContainer.js");
-const { InstantiationService } = await import("../../../../../../platform/instantiation/common/instantiationService.js");
-const { BrowserStorageService } = await import("../../../../../../workbench/services/storage/browser/storageService.js");
-const { IStorageService } = await import("../../../../../../platform/storage/common/storage.js");
+const { toDisposable, DisposableStore } = await import('../../../../../../base/common/lifecycle.js');
+const { ContextKeyService, IContextKeyService } = await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
+const { ViewContainerLocation } = await import('../../../../../../workbench/common/views.js');
+const { ViewPaneContainer } = await import('../../../../../../workbench/browser/parts/views/viewPaneContainer.js');
+const { InstantiationService } = await import('../../../../../../platform/instantiation/common/instantiationService.js');
+const { BrowserStorageService } = await import('../../../../../../workbench/services/storage/browser/storageService.js');
+const { IStorageService } = await import('../../../../../../platform/storage/common/storage.js');
 
 function createStorage(workspaceId: string) {
 	return new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId, backend: browserEnvironment.window.localStorage, flushInterval: 0 });
@@ -82,13 +82,13 @@ test('content-sized ViewPanes retain profile collapse state across workspaces wi
 	finally { restored.resources.dispose(); }
 });
 
-test("ViewPaneContainer opens a fixed visible view without toggling its visibility", async () => {
-	using storage = createStorage("fixed");
+test('ViewPaneContainer opens a fixed visible view without toggling its visibility', async () => {
+	using storage = createStorage('fixed');
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);
 	using contextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contextKeys);
-	const viewContainer: IViewContainerDescriptor = { id: "test.fixed", title: "Fixed", location: ViewContainerLocation.AuxiliaryBar };
+	const viewContainer: IViewContainerDescriptor = { id: 'test.fixed', title: 'Fixed', location: ViewContainerLocation.AuxiliaryBar };
 	let visibilityChanges = 0;
 	const model = {
 		viewContainer,
@@ -98,11 +98,11 @@ test("ViewPaneContainer opens a fixed visible view without toggling its visibili
 		onDidChangeAllViewDescriptors: () => toDisposable(() => undefined),
 		onDidChangeActiveViewDescriptors: () => toDisposable(() => undefined),
 		onDidChangeVisibleViewDescriptors: () => toDisposable(() => undefined),
-		isVisible: (viewId: string) => viewId === "test.fixed-view",
+		isVisible: (viewId: string) => viewId === 'test.fixed-view',
 		setFilter: () => undefined,
 		setVisible: () => {
 			visibilityChanges += 1;
-			throw new Error("fixed view visibility cannot be changed");
+			throw new Error('fixed view visibility cannot be changed');
 		},
 	} satisfies IViewContainerModel;
 	const options = {
@@ -122,7 +122,7 @@ test("ViewPaneContainer opens a fixed visible view without toggling its visibili
 	assert.throws(() => incompleteServices.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options), /Unknown service:.*contextKeyService/i);
 	using container = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
 
-	assert.doesNotThrow(() => container.openView("test.fixed-view"));
+	assert.doesNotThrow(() => container.openView('test.fixed-view'));
 	assert.equal(visibilityChanges, 0);
 
 });
@@ -130,7 +130,7 @@ test("ViewPaneContainer opens a fixed visible view without toggling its visibili
 
 suiteTeardown(() => {
 	browserEnvironment.window.close();
-	for (const name of ["window", "document", "Node", "Element", "HTMLElement", "Event", "navigator"]) Reflect.deleteProperty(globalThis, name);
+	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event', 'navigator']) Reflect.deleteProperty(globalThis, name);
 });
 
 test('ViewPaneContainer derives preferred width from visible view content', async () => {
@@ -181,21 +181,21 @@ test('ViewPaneContainer derives preferred width from visible view content', asyn
 	assert.deepEqual(changes, [620, 300, 700]);
 });
 
-test("ViewPaneContainer opens a collapsed view and focuses only when requested", async () => {
-	const { ViewPane } = await import("../../../../../../workbench/browser/parts/views/viewPane.js");
+test('ViewPaneContainer opens a collapsed view and focuses only when requested', async () => {
+	const { ViewPane } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
 	const { SyncDescriptor } = await import('../../../../../../platform/instantiation/common/descriptors.js');
 	class TestView extends ViewPane {
-		constructor(container: HTMLElement, options: import("../../../../../../workbench/browser/parts/views/viewPane.js").IViewPaneOptions) {
+		constructor(container: HTMLElement, options: import('../../../../../../workbench/browser/parts/views/viewPane.js').IViewPaneOptions) {
 			super(container, options);
 		}
 	}
 	using services = new InstantiationService();
-	using storage = createStorage("collapsed");
+	using storage = createStorage('collapsed');
 	services.registerInstance(IStorageService, storage);
 	using contextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contextKeys);
-	const viewContainer: IViewContainerDescriptor = { id: "test", title: "Test", location: ViewContainerLocation.Panel };
-	const descriptor = { id: "test.view", title: "Test View", collapsed: true, ctorDescriptor: new SyncDescriptor(TestView) };
+	const viewContainer: IViewContainerDescriptor = { id: 'test', title: 'Test', location: ViewContainerLocation.Panel };
+	const descriptor = { id: 'test.view', title: 'Test View', collapsed: true, ctorDescriptor: new SyncDescriptor(TestView) };
 	const views = [descriptor];
 	using container = registerContainerServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, {
 		viewContainer,
@@ -208,7 +208,7 @@ test("ViewPaneContainer opens a collapsed view and focuses only when requested",
 			onDidChangeActiveViewDescriptors: () => toDisposable(() => undefined),
 			onDidChangeVisibleViewDescriptors: () => toDisposable(() => undefined),
 			isVisible: () => true,
-			setVisible: () => { throw new Error("View is already registered as visible"); },
+			setVisible: () => { throw new Error('View is already registered as visible'); },
 		},
 	});
 	const view = container.getView(descriptor.id)!;
@@ -223,19 +223,20 @@ test("ViewPaneContainer opens a collapsed view and focuses only when requested",
 	assert.equal(browserEnvironment.window.document.activeElement, view.element);
 });
 
-test("ViewPaneContainer retains hidden view instances and restores workspace sizes and collapse state", async () => {
-	const { ViewPane } = await import("../../../../../../workbench/browser/parts/views/viewPane.js");
-	const { SyncDescriptor } = await import("../../../../../../platform/instantiation/common/descriptors.js");
-	const { WorkbenchViewRegistry } = await import("../../../../../../workbench/common/views.js");
-	const { ViewDescriptorService } = await import("../../../../../../workbench/services/views/browser/viewDescriptorService.js");
+test('ViewPaneContainer retains hidden view instances and restores workspace sizes and collapse state', async () => {
+	const { ViewPane } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
+	const { StorageScope } = await import('../../../../../../platform/storage/common/storage.js');
+	const { SyncDescriptor } = await import('../../../../../../platform/instantiation/common/descriptors.js');
+	const { WorkbenchViewRegistry } = await import('../../../../../../workbench/common/views.js');
+	const { ViewDescriptorService } = await import('../../../../../../workbench/services/views/browser/viewDescriptorService.js');
 	let created = 0;
 	let disposed = 0;
 	class TestView extends ViewPane {
 		readonly input: HTMLInputElement;
-		constructor(container: HTMLElement, options: import("../../../../../../workbench/browser/parts/views/viewPane.js").IViewPaneOptions) {
+		constructor(container: HTMLElement, options: import('../../../../../../workbench/browser/parts/views/viewPane.js').IViewPaneOptions) {
 			super(container, options);
 			created += 1;
-			this.input = container.ownerDocument.createElement("input");
+			this.input = container.ownerDocument.createElement('input');
 			this.contentElement.append(this.input);
 			this._register(toDisposable(() => disposed += 1));
 		}
@@ -244,31 +245,37 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	using contextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	const registry = new WorkbenchViewRegistry();
-	const viewContainer = { id: "test.multiple", title: "Multiple", location: ViewContainerLocation.Sidebar };
+	const viewContainer = { id: 'test.multiple', title: 'Multiple', location: ViewContainerLocation.Sidebar };
 	using registration = registry.registerViewContainer(viewContainer);
 	using views = registry.registerViews(viewContainer.id, [
-		{ id: "test.first", title: "First", ctorDescriptor: new SyncDescriptor(TestView) },
-		{ id: "test.second", title: "Second", collapsed: true, ctorDescriptor: new SyncDescriptor(TestView) },
+		{ id: 'test.first', title: 'First', ctorDescriptor: new SyncDescriptor(TestView) },
+		{ id: 'test.second', title: 'Second', collapsed: true, ctorDescriptor: new SyncDescriptor(TestView) },
 	]);
 	using descriptors = new TestViewDescriptorService({ registry }, contextKeys);
-	using storage = createStorage("test");
+	using storage = createStorage('test');
 	const options = { viewContainer, model: descriptors.getViewContainerModel(viewContainer.id) };
 	assert.throws(() => services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options), /Unknown service: storageService/);
 	services.registerInstance(IStorageService, storage);
 	const container = registerContainerServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
 	container.layout({ height: 600, width: 280 });
-	const first = container.getView("test.first") as TestView;
-	const second = container.getView("test.second") as TestView;
+	const first = container.getView('test.first') as TestView;
+	const second = container.getView('test.second') as TestView;
 	second.setExpanded(true);
 	container.resizeView(second, 270);
-	second.input.value = "unsent expression";
+	const sizeKey = 'workbench.viewContainer.test.multiple.test.second.size';
+	assert.equal(storage.getNumber(sizeKey, StorageScope.WORKSPACE), 270, 'code resizing saves its requested geometry explicitly');
+	first.element.closest('.ash-pane-view-container')!.querySelector<HTMLElement>('.ash-sash-horizontal')!
+		.dispatchEvent(new browserEnvironment.window.MouseEvent('dblclick', { bubbles: true }));
+	assert.equal(storage.getNumber(sizeKey, StorageScope.WORKSPACE), 300, 'user reset saves the completed geometry');
+	container.resizeView(second, 270);
+	second.input.value = 'unsent expression';
 	for (let attempt = 0; attempt < 3; attempt += 1) {
 		options.model.setVisible(second.id, false);
 		assert.equal(container.getView(second.id), undefined);
 		assert.equal(second.isVisible(), false);
 		assert.equal(second.element.isConnected, false);
 		assert.equal(container.openView(second.id), second);
-		assert.equal(second.input.value, "unsent expression");
+		assert.equal(second.input.value, 'unsent expression');
 		assert.equal(container.getViewSize(second), 270);
 	}
 	assert.equal(created, 2);
@@ -294,7 +301,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 	assert.equal(restoredSecond.isExpanded(), false);
 	restoredSecond.setExpanded(true);
 	assert.equal(restored.getViewSize(restoredSecond), 270);
-	using otherStorage = createStorage("other");
+	using otherStorage = createStorage('other');
 	using otherServices = services.createChild();
 	otherServices.registerInstance(IStorageService, otherStorage);
 	using otherWorkspace = registerContainerServices(otherServices).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);

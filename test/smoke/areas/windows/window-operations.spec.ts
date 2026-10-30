@@ -1,4 +1,4 @@
-import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
+import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 import { expect, test } from '../../../automation/test.js';
 
 // These cases assert the OS focus result of the host focus operation.

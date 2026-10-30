@@ -1,7 +1,7 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
-import { getRemoteWorkspacePath, withRemoteWorkspacePath } from "../../../../platform/remote/common/remote.js";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { createSshRemoteWorkspaceUri } from '../../../../platform/remote/common/remote.js';
+import { getRemoteWorkspacePath, withRemoteWorkspacePath } from '../../../../platform/remote/common/remote.js';
 import { URI } from '../../../../base/common/uri.js';
 
 test('Windows drive and UNC workspaces round-trip independently of the client OS', () => {
@@ -22,11 +22,11 @@ test('Windows drive and UNC workspaces round-trip independently of the client OS
 	}
 });
 
-test("Remote Workspace URIs preserve legal POSIX backslashes", () => {
-	const resource = createSshRemoteWorkspaceUri("BUILD-LINUX", "/srv/project\\archive");
+test('Remote Workspace URIs preserve legal POSIX backslashes', () => {
+	const resource = createSshRemoteWorkspaceUri('BUILD-LINUX', '/srv/project\\archive');
 
-	assert.equal(resource.toString(), "ash-remote://ssh+build-linux/srv/project%5Carchive");
-	assert.equal(getRemoteWorkspacePath(resource), "/srv/project\\archive");
+	assert.equal(resource.toString(), 'ash-remote://ssh+build-linux/srv/project%5Carchive');
+	assert.equal(getRemoteWorkspacePath(resource), '/srv/project\\archive');
 });
 
 test('Remote POSIX resource names preserve trailing spaces across adapter round trips', () => {
@@ -48,10 +48,10 @@ test('adapter paths retain Remote ownership and canonical Windows drive spelling
 	assert.throws(() => withRemoteWorkspacePath(URI.file('/workspace'), '/other'));
 });
 
-test("Remote Workspace URIs reject non-canonical POSIX paths instead of rewriting them", () => {
-	assert.throws(() => createSshRemoteWorkspaceUri("build-linux", "/srv/project/"), /canonical/);
-	assert.throws(() => createSshRemoteWorkspaceUri("build-linux", "/srv//project"), /canonical/);
-	assert.throws(() => createSshRemoteWorkspaceUri("build-linux", "/srv/../project"), /canonical/);
+test('Remote Workspace URIs reject non-canonical POSIX paths instead of rewriting them', () => {
+	assert.throws(() => createSshRemoteWorkspaceUri('build-linux', '/srv/project/'), /canonical/);
+	assert.throws(() => createSshRemoteWorkspaceUri('build-linux', '/srv//project'), /canonical/);
+	assert.throws(() => createSshRemoteWorkspaceUri('build-linux', '/srv/../project'), /canonical/);
 });
 
 test('extension-resolved folders retain canonical paths without requiring an SSH authority', () => {

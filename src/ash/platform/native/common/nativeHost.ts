@@ -2,7 +2,7 @@ import type { ITerminalOutputSnapshot, ITerminalReconnectLease } from '../../ter
 import type { TitleBarStyleConfiguration, IColorScheme, IWindowAlwaysOnTopChangedEvent, IAuxiliaryWindowState, IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../agentHost/common/agent.js';
-import type { DisposableHandle } from "../../ipc/common/ipc.js";
+import type { DisposableHandle } from '../../ipc/common/ipc.js';
 import type { FileFilter, MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenDialogReturnValue, SaveDialogOptions, SaveDialogReturnValue } from '../../../base/parts/sandbox/common/electronTypes.js';
 import type { IWorkbenchWindowInfo, IOpenEmptyWindowOptions } from '../../window/common/window.js';
 import type { AgentHostEditorUpdate, IAgentHostEditorState, IAgentsWindowInvitation } from '../../chat/common/agentsWindowInvitation.js';
@@ -39,13 +39,13 @@ export const NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL = 'ash:native-host:get-w
 export const NATIVE_HOST_IS_ADMIN_CHANNEL = 'ash:native-host:is-admin';
 
 export const NATIVE_HOST_TOGGLE_DEVELOPER_TOOLS_CHANNEL =
-	"ash:native-host:toggle-developer-tools";
+	'ash:native-host:toggle-developer-tools';
 export const NATIVE_HOST_PICK_FOLDER_CHANNEL =
-	"ash:native-host:pick-folder";
+	'ash:native-host:pick-folder';
 export const NATIVE_HOST_PICK_FILE_CHANNEL =
-	"ash:native-host:pick-file";
+	'ash:native-host:pick-file';
 export const NATIVE_HOST_OPEN_WORKSPACE_CHANNEL =
-	"ash:native-host:open-workspace";
+	'ash:native-host:open-workspace';
 export const NATIVE_HOST_OPEN_WINDOW_CHANNEL = 'ash:window:open';
 export const NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL = 'ash:native-host:open-agents-window';
 export const NATIVE_HOST_TERMINAL_MOVE_CHANNEL = 'ash:native-host:terminal-move';
@@ -54,15 +54,15 @@ export const NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL = 'ash:native-host:terminal-c
 export const NATIVE_HOST_TERMINAL_REQUEST_CHANNEL = 'ash:native-host:terminal-request';
 
 export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL =
-	"ash:native-host:set-window-theme";
+	'ash:native-host:set-window-theme';
 export const NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL =
-	"ash:native-host:set-window-dimmed";
+	'ash:native-host:set-window-dimmed';
 export const NATIVE_HOST_SAVE_FILE_CHANNEL =
-	"ash:native-host:save-file";
+	'ash:native-host:save-file';
 export const NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL =
-	"ash:native-host:get-accessibility-support";
+	'ash:native-host:get-accessibility-support';
 export const NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL =
-	"ash:native-host:accessibility-support-changed";
+	'ash:native-host:accessibility-support-changed';
 export const NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL =
 	'ash:native-host:sync-system-wide-keybindings';
 export const NATIVE_HOST_DIALOG_CHANNEL = 'ash:native-host:dialog';
@@ -396,7 +396,7 @@ export function validateAgentHostEditorState(value: unknown): IAgentHostEditorSt
 
 export function validatePickFolder(value: unknown): undefined {
 	if (value !== undefined) {
-		throw new Error("pick folder does not accept parameters");
+		throw new Error('pick folder does not accept parameters');
 	}
 	return undefined;
 }
@@ -467,14 +467,14 @@ export function validateMessageBoxResult(value: unknown): MessageBoxReturnValue 
 
 export function validateToggleDeveloperTools(value: unknown): undefined {
 	if (value !== undefined) {
-		throw new Error("toggle developer tools does not accept parameters");
+		throw new Error('toggle developer tools does not accept parameters');
 	}
 	return undefined;
 }
 
 export function validateAccessibilitySupportRead(value: unknown): undefined {
 	if (value !== undefined) {
-		throw new Error("accessibility support read does not accept parameters");
+		throw new Error('accessibility support read does not accept parameters');
 	}
 	return undefined;
 }
@@ -489,21 +489,21 @@ export function validateSaveDialogOptions(value: unknown): SaveDialogOptions {
 }
 
 export function validateAccessibilitySupport(value: unknown): boolean {
-	if (typeof value !== "boolean") {
-		throw new Error("accessibility support must be a boolean");
+	if (typeof value !== 'boolean') {
+		throw new Error('accessibility support must be a boolean');
 	}
 	return value;
 }
 
 export function validateNativeWindowTheme(value: unknown): INativeWindowTheme {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("window theme must be an object");
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('window theme must be an object');
 	const candidate = value as Record<string, unknown>;
 	const keys = Object.keys(candidate).sort();
-	if (keys.length !== 3 || keys[0] !== "backdropColor" || keys[1] !== "backgroundColor" || keys[2] !== "symbolColor") throw new Error("window theme contains unknown fields");
+	if (keys.length !== 3 || keys[0] !== 'backdropColor' || keys[1] !== 'backgroundColor' || keys[2] !== 'symbolColor') throw new Error('window theme contains unknown fields');
 	return {
-		backgroundColor: validateOpaqueHexColor(candidate.backgroundColor, "backgroundColor"),
-		symbolColor: validateOpaqueHexColor(candidate.symbolColor, "symbolColor"),
-		backdropColor: validateHexColor(candidate.backdropColor, "backdropColor"),
+		backgroundColor: validateOpaqueHexColor(candidate.backgroundColor, 'backgroundColor'),
+		symbolColor: validateOpaqueHexColor(candidate.symbolColor, 'symbolColor'),
+		backdropColor: validateHexColor(candidate.backdropColor, 'backdropColor'),
 	};
 }
 
@@ -513,7 +513,7 @@ export function validateWindowDimmed(value: unknown): boolean {
 }
 
 function validateOpaqueHexColor(value: unknown, name: string): string {
-	if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error(`${name} must be an opaque hexadecimal color`);
+	if (typeof value !== 'string' || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error(`${name} must be an opaque hexadecimal color`);
 	return value.toLowerCase();
 }
 

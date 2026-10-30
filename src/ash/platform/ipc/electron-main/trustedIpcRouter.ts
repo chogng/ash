@@ -1,4 +1,4 @@
-import { AbstractDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { AbstractDisposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 
 export interface IpcMainInvokeEventLike {
 	readonly sender: {
@@ -101,7 +101,7 @@ export class TrustedIpcRouter extends AbstractDisposable {
 			target.webContents === event.sender
 		);
 		if (!registration) {
-			throw new Error("Untrusted renderer IPC sender");
+			throw new Error('Untrusted renderer IPC sender');
 		}
 		requireTrustedSender(event, registration.target);
 		return registration.route.invoke(registration.route.validate(rawParams));
@@ -132,13 +132,13 @@ export function registerTrustedIpcRoutes(ipcMain: IpcMainLike, target: TrustedIp
 
 export function requireTrustedSender(event: IpcMainInvokeEventLike, target: TrustedIpcTarget): void {
 	if (event.sender !== target.webContents) {
-		throw new Error("Untrusted renderer IPC sender");
+		throw new Error('Untrusted renderer IPC sender');
 	}
 	if (!event.senderFrame || event.senderFrame !== event.sender.mainFrame) {
-		throw new Error("Renderer IPC must originate from the main frame");
+		throw new Error('Renderer IPC must originate from the main frame');
 	}
 	if (!target.allowedEntryUrls.has(normalizeEntryUrl(event.senderFrame.url))) {
-		throw new Error("Renderer IPC URL is not allowed");
+		throw new Error('Renderer IPC URL is not allowed');
 	}
 }
 

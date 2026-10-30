@@ -349,7 +349,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			if (removed.length > 0) this.providersChanged(removed);
 		}) as TaskProviderRegistration;
 		registration.replace = replacement => {
-			if (disposed) throw new ReferenceError("Task provider registration is already disposed");
+			if (disposed) throw new ReferenceError('Task provider registration is already disposed');
 			this.assertNotDisposed();
 			this.replaceProviders(owner, replacement);
 		};
@@ -387,7 +387,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			finally { if (this.activatingProviders === controller) this.activatingProviders = undefined; }
 			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			const providerSnapshot = [...this.providers.values()].map(entry => entry.provider);
-			this.log("debug", "discovery", `Refreshing workspace tasks from configuration and ${providerSnapshot.length} provider(s).`);
+			this.log('debug', 'discovery', `Refreshing workspace tasks from configuration and ${providerSnapshot.length} provider(s).`);
 			const [folderGroups, providerGroups] = await Promise.all([
 				Promise.all(folders.map(async folder => {
 					const tasks = await this.discoverWorkspaceTasks(folder.uri);
@@ -404,11 +404,11 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			this.loaded = true;
 			this.setTasks(mergeTasks(discovered, providerTasks));
-			this.log("information", "discovery", `Discovered ${this.currentTasks.length} workspace task(s).`);
+			this.log('information', 'discovery', `Discovered ${this.currentTasks.length} workspace task(s).`);
 			return this.currentTasks;
 		} catch (error) {
 			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
-			this.log("error", "discovery", `Task discovery failed: ${errorMessage(error)}`);
+			this.log('error', 'discovery', `Task discovery failed: ${errorMessage(error)}`);
 			throw error;
 		} finally {
 			if (this.activeRefresh === controller) this.activeRefresh = undefined;
@@ -690,7 +690,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	}
 
 	private replaceProviders(owner: object, providers: readonly TaskProvider[]): void {
-		if (!Array.isArray(providers)) throw new TypeError("Task providers must be an array");
+		if (!Array.isArray(providers)) throw new TypeError('Task providers must be an array');
 		const normalized = providers.map(normalizeTaskProvider);
 		const ids = new Set<string>();
 		for (const provider of normalized) {
@@ -740,7 +740,7 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 		try { contributions = await raceCancellationError(Promise.resolve(provider.provideTasks(signal)), signal); }
 		catch (error) {
 			if (signal.aborted) return Object.freeze([]);
-			this.log("error", "provider", `Task provider '${provider.id}' failed: ${errorMessage(error)}`);
+			this.log('error', 'provider', `Task provider '${provider.id}' failed: ${errorMessage(error)}`);
 			throw error;
 		}
 		if (signal.aborted) return Object.freeze([]);
@@ -762,29 +762,29 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 	private log(severity: OutputEntrySeverity, category: string, text: string): void {
 		this.output.appendLine({ severity, category, text });
 		const logCategory = `tasks.${category}`;
-		if (severity === "error") this.logService.error(logCategory, text);
-		else if (severity === "warning") this.logService.warn(logCategory, text);
-		else if (severity === "debug") this.logService.debug(logCategory, text);
+		if (severity === 'error') this.logService.error(logCategory, text);
+		else if (severity === 'warning') this.logService.warn(logCategory, text);
+		else if (severity === 'debug') this.logService.debug(logCategory, text);
 		else this.logService.info(logCategory, text);
 	}
 
 	private reportError(error: unknown): void {
-		this.logService.error("tasks.discovery", "Could not refresh workspace tasks", error);
+		this.logService.error('tasks.discovery', 'Could not refresh workspace tasks', error);
 	}
 
-	private async packageManager(root: URI): Promise<"npm" | "pnpm" | "yarn"> {
-		if (await this.exists(childResource(root, "pnpm-lock.yaml"))) return "pnpm";
-		if (await this.exists(childResource(root, "yarn.lock"))) return "yarn";
-		return "npm";
+	private async packageManager(root: URI): Promise<'npm' | 'pnpm' | 'yarn'> {
+		if (await this.exists(childResource(root, 'pnpm-lock.yaml'))) return 'pnpm';
+		if (await this.exists(childResource(root, 'yarn.lock'))) return 'yarn';
+		return 'npm';
 	}
 
 	private async discoverWorkspaceTasks(root: URI): Promise<readonly IWorkspaceTask[]> {
 		const discovered: IWorkspaceTask[] = [];
-		const tasksJson = await this.readOptional(childResource(root, ".vscode/tasks.json"));
+		const tasksJson = await this.readOptional(childResource(root, '.vscode/tasks.json'));
 		if (tasksJson !== undefined) discovered.push(...parseWorkspaceTasks(tasksJson, await this.paths.getOperatingSystem(root), this.resolver.resolvableVariables));
-		const packageJson = await this.readOptional(childResource(root, "package.json"));
+		const packageJson = await this.readOptional(childResource(root, 'package.json'));
 		if (packageJson !== undefined) discovered.push(...parsePackageTasks(packageJson, await this.packageManager(root)));
-		if (await this.exists(childResource(root, "Cargo.toml"))) discovered.push(...cargoWorkspaceTasks());
+		if (await this.exists(childResource(root, 'Cargo.toml'))) discovered.push(...cargoWorkspaceTasks());
 		return Object.freeze(discovered);
 	}
 
@@ -801,15 +801,15 @@ export abstract class AbstractTaskService extends Disposable implements ITaskSer
 }
 
 function taskProviderId(task: IWorkspaceTask): string | undefined {
-	if (task.source !== "extension" || !task.id.startsWith("extension:")) return undefined;
-	const encoded = task.id.slice("extension:".length).split(":", 1)[0];
+	if (task.source !== 'extension' || !task.id.startsWith('extension:')) return undefined;
+	const encoded = task.id.slice('extension:'.length).split(':', 1)[0];
 	if (!encoded) return undefined;
 	try { return decodeURIComponent(encoded); }
 	catch { return undefined; }
 }
 
 function childResource(root: URI, relativePath: string): URI {
-	return URI.joinPath(root, ...relativePath.split("/"));
+	return URI.joinPath(root, ...relativePath.split('/'));
 }
 
 function affectsTaskConfiguration(resources: readonly URI[] | undefined): boolean {
@@ -832,9 +832,9 @@ function mergeTasks(discovered: readonly IWorkspaceTask[], provided: readonly IW
 }
 
 function normalizeTaskProvider(provider: TaskProvider): TaskProvider {
-	if (!provider || typeof provider !== "object") throw new TypeError("Task provider must be an object");
-	const id = normalizeText(provider.id, "Task provider ID", 256);
-	if (typeof provider.provideTasks !== "function") throw new TypeError(`Task provider '${id}' must implement provideTasks`);
+	if (!provider || typeof provider !== 'object') throw new TypeError('Task provider must be an object');
+	const id = normalizeText(provider.id, 'Task provider ID', 256);
+	if (typeof provider.provideTasks !== 'function') throw new TypeError(`Task provider '${id}' must implement provideTasks`);
 	const type = provider.type === undefined ? undefined : normalizeText(provider.type, 'Task provider type', 256);
 	return Object.freeze({
 		id, type,
@@ -844,7 +844,7 @@ function normalizeTaskProvider(provider: TaskProvider): TaskProvider {
 }
 
 function projectProviderTask(providerId: string, contribution: TaskProviderTask): IWorkspaceTask {
-	if (!contribution || typeof contribution !== "object") throw new TypeError(`Task provider '${providerId}' returned an invalid task`);
+	if (!contribution || typeof contribution !== 'object') throw new TypeError(`Task provider '${providerId}' returned an invalid task`);
 	const id = normalizeText(contribution.id, `Task provider '${providerId}' task ID`, 256);
 	const label = normalizeText(contribution.label, `Task provider '${providerId}' task label`, 256);
 	const execution = contribution.execution;
@@ -861,7 +861,7 @@ function projectProviderTask(providerId: string, contribution: TaskProviderTask)
 	const shellCommand = execution?.type === 'shell' ? execution.commandLine ?? (typeof execution.command === 'string' ? execution.command : execution.command.value) : undefined;
 	const unresolved = contribution.command === undefined && execution === undefined && contribution.definition !== undefined;
 	const command = normalizeText(contribution.command ?? (execution?.type === 'process' ? execution.program : shellCommand ?? (execution?.type === 'custom' || unresolved ? label : '')), `Task provider '${providerId}' task command`, 32768, false);
-	if (!(["build", "test", "clean", "rebuild", "run", "other"] as const).includes(contribution.group)) throw new TypeError(`Task provider '${providerId}' task '${id}' has an invalid group`);
+	if (!(['build', 'test', 'clean', 'rebuild', 'run', 'other'] as const).includes(contribution.group)) throw new TypeError(`Task provider '${providerId}' task '${id}' has an invalid group`);
 	if (contribution.groupIsDefault !== undefined && typeof contribution.groupIsDefault !== 'boolean') throw new TypeError('Task groupIsDefault must be a boolean');
 	const environment = contribution.environment === undefined ? undefined : parseTaskEnvironment(contribution.environment);
 	const detail = contribution.detail === undefined ? undefined : normalizeText(contribution.detail, `Task provider '${providerId}' task detail`, 4096, false);
@@ -877,7 +877,7 @@ function projectProviderTask(providerId: string, contribution: TaskProviderTask)
 	return Object.freeze({
 		scope, extensionSource, ...(unsupportedFeatures ? { unsupportedFeatures } : {}),
 		id: `extension:${encodeURIComponent(providerId)}:${encodeURIComponent(id)}`, providerId,
-		label, command, source: "extension", group: contribution.group, groupIsDefault: contribution.groupIsDefault,
+		label, command, source: 'extension', group: contribution.group, groupIsDefault: contribution.groupIsDefault,
 		runOptions: contribution.runOptions === undefined ? undefined : parseTaskRunOptions(contribution.runOptions),
 		presentation: contribution.presentation === undefined ? undefined : parseTaskPresentationOptions(contribution.presentation),
 		execution: normalizedExecution, definition: contribution.definition, cwd, isBackground: contribution.isBackground,
@@ -887,12 +887,12 @@ function projectProviderTask(providerId: string, contribution: TaskProviderTask)
 }
 
 function normalizeText(value: string, owner: string, maximum: number, trim = true): string {
-	if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
+	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || value.includes('\0')) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
 	return trim ? value.trim() : value;
 }
 
-function taskOrder(group: IWorkspaceTask["group"]): number {
-	return group === "build" ? 0 : group === "test" ? 1 : group === "run" ? 2 : group === "clean" ? 3 : group === "rebuild" ? 4 : 5;
+function taskOrder(group: IWorkspaceTask['group']): number {
+	return group === 'build' ? 0 : group === 'test' ? 1 : group === 'run' ? 2 : group === 'clean' ? 3 : group === 'rebuild' ? 4 : 5;
 }
 
 function taskListsEqual(left: readonly IWorkspaceTask[], right: readonly IWorkspaceTask[]): boolean {
@@ -901,7 +901,7 @@ function taskListsEqual(left: readonly IWorkspaceTask[], right: readonly IWorksp
 
 function resolveKnownTask(task: IWorkspaceTask, tasks: readonly IWorkspaceTask[]): IWorkspaceTask {
 	const current = tasks.find(candidate => candidate.id === task.id);
-	if (!current || current.command !== task.command) throw new Error("Task is no longer present in the current workspace configuration");
+	if (!current || current.command !== task.command) throw new Error('Task is no longer present in the current workspace configuration');
 	return current;
 }
 
@@ -927,8 +927,8 @@ interface TaskRunQuickPickItem extends IQuickPickItem {
 }
 
 MenusRegistry.appendMenuItem(MenuId.GlobalActivity, {
-	command: { id: RUN_TASK_COMMAND_ID, title: localize2({ bundle: "ash", key: "workbench.manageRunTask" }, "Run Task...") },
-	group: "2_configuration",
+	command: { id: RUN_TASK_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.manageRunTask' }, 'Run Task...') },
+	group: '2_configuration',
 	order: 6, when: AppServerAvailableContext.isEqualTo(true),
 });
 
@@ -936,10 +936,10 @@ registerAction2(class RunTaskAction extends Action2 {
 	constructor() {
 		super({
 			id: RUN_TASK_COMMAND_ID,
-			title: localize2({ bundle: 'ash.workbench', key: 'command.RunTaskAction' }, "Run Task"),
+			title: localize2({ bundle: 'ash.workbench', key: 'command.RunTaskAction' }, 'Run Task'),
 			f1: true, precondition: AppServerAvailableContext.isEqualTo(true),
-			menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 1 },
-			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("t", { primaryKey: true })) },
+			menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 1 },
+			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('t', { primaryKey: true })) },
 		});
 	}
 
@@ -1001,7 +1001,7 @@ function runTaskCommand(accessor: ServicesAccessor, group?: 'build' | 'test'): v
 
 registerAction2(class RerunLastTaskAction extends Action2 {
 	constructor() {
-		super({ id: RERUN_LAST_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RerunLastTaskAction' }, "Rerun Last Task"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 2 } });
+		super({ id: RERUN_LAST_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.RerunLastTaskAction' }, 'Rerun Last Task'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 2 } });
 	}
 
 	override run(accessor: ServicesAccessor): void {
@@ -1015,7 +1015,7 @@ registerAction2(class RerunLastTaskAction extends Action2 {
 
 registerAction2(class TerminateTaskAction extends Action2 {
 	constructor() {
-		super({ id: TERMINATE_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.TerminateTaskAction' }, "Terminate Task"), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: "2_tasks", order: 3 } });
+		super({ id: TERMINATE_TASK_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.TerminateTaskAction' }, 'Terminate Task'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true), menu: { id: MenuId.MenubarRunMenu, group: '2_tasks', order: 3 } });
 	}
 
 	override run(accessor: ServicesAccessor): void {

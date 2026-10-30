@@ -5,14 +5,14 @@ import { TextDecorationCollection } from '../../../../common/model/decorationCol
 import { type UnicodeHighlight } from '../../../../common/services/unicodeTextModelHighlighter.js';
 import { type IVersionedEditorWorkerClient } from '../../../../browser/services/editorWorkerService.js';
 import { UnicodeHighlighterController } from '../../browser/unicodeHighlighterController.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { findUnicodeHighlights } from "../../common/unicodeHighlights.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { findUnicodeHighlights } from '../../common/unicodeHighlights.js';
+import { TextModel } from '../../../../common/model/textModel.js';
 
-test("Unicode highlighter finds invisible, bidi, and mixed-script confusable characters", () => {
-	using model = new TextModel("const a = 1;\u200b\nconst а = 2;\u202e");
-	assert.deepEqual(findUnicodeHighlights(model).map(highlight => highlight.kind), ["invisible", "confusable", "bidi"]);
+test('Unicode highlighter finds invisible, bidi, and mixed-script confusable characters', () => {
+	using model = new TextModel('const a = 1;\u200b\nconst а = 2;\u202e');
+	assert.deepEqual(findUnicodeHighlights(model).map(highlight => highlight.kind), ['invisible', 'confusable', 'bidi']);
 });
 
 test('ASCII documents do not start a Unicode worker, while unsafe edits still produce warnings', async () => {

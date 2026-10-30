@@ -3,15 +3,15 @@ import { Event } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { decodeBase64, VSBuffer } from '../../../base/common/buffer.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
-import { inertSubscription, type UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { AppServerProtocolClient } from "./appServerProtocolClient.js";
-import { appServerRequest, voidResult } from "./appServerRequest.js";
+import { inertSubscription, type UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { AppServerProtocolClient } from './appServerProtocolClient.js';
+import { appServerRequest, voidResult } from './appServerRequest.js';
 
 export function createDisconnectedAppServerApi(unavailable: UnavailableOperation): IAppServerApi {
 	return {
 		connectionGeneration: 0,
-		getConnectionState: () => Promise.resolve("stopped"),
-		getSlashCommands: () => unavailable("appServer.getSlashCommands"),
+		getConnectionState: () => Promise.resolve('stopped'),
+		getSlashCommands: () => unavailable('appServer.getSlashCommands'),
 		onConnectionState: inertSubscription,
 	};
 }
@@ -19,9 +19,9 @@ export function createDisconnectedAppServerApi(unavailable: UnavailableOperation
 export function createDisconnectedResourceApi(unavailable: UnavailableOperation): IResourceApi {
 	return {
 		connectionGeneration: 0,
-		metadata: () => unavailable("resource.metadata"),
-		read: () => unavailable("resource.read"),
-		release: () => unavailable("resource.release"),
+		metadata: () => unavailable('resource.metadata'),
+		read: () => unavailable('resource.read'),
+		release: () => unavailable('resource.release'),
 	};
 }
 
@@ -44,9 +44,9 @@ export function createAppServerAppServerApi(connection: AppServerProtocolClient,
 export function createAppServerResourceApi(connection: AppServerProtocolClient): IResourceApi {
 	return {
 		get connectionGeneration() { return connection.generation; },
-		metadata: (params) => appServerRequest(connection, "resource/metadata", params),
-		read: (params) => appServerRequest(connection, "resource/read", params),
-		release: (params) => voidResult(appServerRequest(connection, "resource/release", params)),
+		metadata: (params) => appServerRequest(connection, 'resource/metadata', params),
+		read: (params) => appServerRequest(connection, 'resource/read', params),
+		release: (params) => voidResult(appServerRequest(connection, 'resource/release', params)),
 	};
 }
 
@@ -100,18 +100,18 @@ export async function readAppServerResource(api: IResourceApi, resource: Resourc
 }
 
 export function createDisconnectedSkillOperations(unavailable: UnavailableOperation): IAppServerSkillApi {
-	return { onDidChangeSkills: Event.None, list: () => unavailable("skills.list"), read: () => unavailable("skills.read"), setEnabled: () => unavailable("skills.setEnabled"), registerSource: () => unavailable("skills.registerSource"), readTextResource: () => unavailable("skills.readTextResource") };
+	return { onDidChangeSkills: Event.None, list: () => unavailable('skills.list'), read: () => unavailable('skills.read'), setEnabled: () => unavailable('skills.setEnabled'), registerSource: () => unavailable('skills.registerSource'), readTextResource: () => unavailable('skills.readTextResource') };
 }
 
 export function createAppServerSkillOperations(connection: AppServerProtocolClient): IAppServerSkillApi {
 	return {
 		onDidChangeSkills: Event.any(
-			(listener, thisArgs) => connection.onNotification(event => { if (event.method === "skills/changed" || event.method === "config/changed") listener.call(thisArgs); }),
-			(listener, thisArgs) => connection.onStateChange(state => { if (state === "ready") listener.call(thisArgs); }),
+			(listener, thisArgs) => connection.onNotification(event => { if (event.method === 'skills/changed' || event.method === 'config/changed') listener.call(thisArgs); }),
+			(listener, thisArgs) => connection.onStateChange(state => { if (state === 'ready') listener.call(thisArgs); }),
 		),
-		list: async (reload, sessionId) => normalizeSkillCatalog(await appServerRequest(connection, "skills/list", { reload, sessionId })),
+		list: async (reload, sessionId) => normalizeSkillCatalog(await appServerRequest(connection, 'skills/list', { reload, sessionId })),
 		read: async (sessionId) => {
-			const [config, catalog] = await Promise.all([appServerRequest(connection, "config/read", {}), appServerRequest(connection, "skills/list", { reload: "refresh", sessionId })]);
+			const [config, catalog] = await Promise.all([appServerRequest(connection, 'config/read', {}), appServerRequest(connection, 'skills/list', { reload: 'refresh', sessionId })]);
 			return { revision: config.revision, catalog: normalizeSkillCatalog(catalog), diagnostics: catalog.diagnostics.map(entry => ({ source: entry.source, subject: entry.subject ?? undefined, message: entry.message })) };
 		},
 		readTextResource: async (reference, path, signal, sessionId) => {
@@ -125,7 +125,7 @@ export function createAppServerSkillOperations(connection: AppServerProtocolClie
 			return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 		},
 		setEnabled: async (skillId, enabled, expectedRevision, sessionId) => {
-			await appServerRequest(connection, "skill/enablement/set", { commandId: generateUuid(), expectedRevision, skillId, enablement: enabled ? "enabled" : "disabled", sessionId });
+			await appServerRequest(connection, 'skill/enablement/set', { commandId: generateUuid(), expectedRevision, skillId, enablement: enabled ? 'enabled' : 'disabled', sessionId });
 		},
 		registerSource: async rootReference => {
 			const config = await appServerRequest(connection, 'config/read', {});
@@ -146,9 +146,9 @@ export function createAppServerSkillOperations(connection: AppServerProtocolClie
 }
 
 function normalizeSkillCatalog(value: unknown): SkillCatalog {
-	const catalog = record(value, "Skill catalog");
-	if (!Number.isSafeInteger(catalog.generation) || (catalog.generation as number) < 0) throw new TypeError("Skill catalog generation is invalid");
-	if (!Array.isArray(catalog.skills)) throw new TypeError("Skill catalog entries must be an array");
+	const catalog = record(value, 'Skill catalog');
+	if (!Number.isSafeInteger(catalog.generation) || (catalog.generation as number) < 0) throw new TypeError('Skill catalog generation is invalid');
+	if (!Array.isArray(catalog.skills)) throw new TypeError('Skill catalog entries must be an array');
 	return Object.freeze({
 		generation: catalog.generation as number,
 		skills: Object.freeze(catalog.skills.map(normalizeSkill)),
@@ -156,29 +156,29 @@ function normalizeSkillCatalog(value: unknown): SkillCatalog {
 }
 
 function normalizeSkill(value: unknown): SkillDescriptor {
-	const skill = record(value, "Skill");
-	const id = record(skill.id, "Skill identity");
-	const source = boundedText(id.source, "Skill source", 256);
-	const name = boundedText(id.name, "Skill name", 64);
-	const description = boundedText(skill.description, "Skill description", 1024);
-	const metadata = Object.entries(record(skill.metadata ?? {}, "Skill metadata"));
-	if (metadata.length > 64 || metadata.some(([key, value]) => !key || [...key].length > 128 || typeof value !== 'string' || [...value].length > 1024)) throw new TypeError("Skill metadata is invalid");
-	const contentDigest = boundedText(skill.contentDigest, "Skill digest", 96);
-	const enablement = boundedText(skill.enablement, "Skill enablement", 16);
-	const compatibility = record(skill.compatibility, "Skill compatibility");
-	const compatibilityType = boundedText(compatibility.type, "Skill compatibility type", 16);
-	if (enablement !== "enabled" && enablement !== "disabled") throw new TypeError("Skill enablement is invalid");
-	if (compatibilityType !== "compatible" && compatibilityType !== "unknown") throw new TypeError("Skill compatibility is invalid");
-	return Object.freeze({ id: Object.freeze({ source, name }), description, metadata: Object.freeze(Object.fromEntries(metadata) as Record<string, string>), contentDigest, enabled: enablement === "enabled", compatible: compatibilityType === "compatible" });
+	const skill = record(value, 'Skill');
+	const id = record(skill.id, 'Skill identity');
+	const source = boundedText(id.source, 'Skill source', 256);
+	const name = boundedText(id.name, 'Skill name', 64);
+	const description = boundedText(skill.description, 'Skill description', 1024);
+	const metadata = Object.entries(record(skill.metadata ?? {}, 'Skill metadata'));
+	if (metadata.length > 64 || metadata.some(([key, value]) => !key || [...key].length > 128 || typeof value !== 'string' || [...value].length > 1024)) throw new TypeError('Skill metadata is invalid');
+	const contentDigest = boundedText(skill.contentDigest, 'Skill digest', 96);
+	const enablement = boundedText(skill.enablement, 'Skill enablement', 16);
+	const compatibility = record(skill.compatibility, 'Skill compatibility');
+	const compatibilityType = boundedText(compatibility.type, 'Skill compatibility type', 16);
+	if (enablement !== 'enabled' && enablement !== 'disabled') throw new TypeError('Skill enablement is invalid');
+	if (compatibilityType !== 'compatible' && compatibilityType !== 'unknown') throw new TypeError('Skill compatibility is invalid');
+	return Object.freeze({ id: Object.freeze({ source, name }), description, metadata: Object.freeze(Object.fromEntries(metadata) as Record<string, string>), contentDigest, enabled: enablement === 'enabled', compatible: compatibilityType === 'compatible' });
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, unknown>;
 }
 
 function boundedText(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== "string" || value.length === 0 || value.length > maximum) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || value.length === 0 || value.length > maximum) throw new TypeError(`${owner} is invalid`);
 	return value;
 }
 

@@ -48,7 +48,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Backspace: [],
 		Tab: [],
 		Space: [' ', ' ', '', '', 0, 'VK_SPACE'],
-		Minus: ['\'', '?', '´', '', 0, 'VK_OEM_4'],
+		Minus: ["'", '?', '´', '', 0, 'VK_OEM_4'],
 		Equal: ['^', '`', '~', '', 0, 'VK_OEM_6'],
 		BracketLeft: ['ü', 'è', '[', '', 0, 'VK_OEM_1'],
 		BracketRight: ['¨', '!', ']', '', 0, 'VK_OEM_3'],
@@ -162,4 +162,3 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BrowserFavorites: []
 	}
 });
-

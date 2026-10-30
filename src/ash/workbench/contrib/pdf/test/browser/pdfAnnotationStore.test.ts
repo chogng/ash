@@ -1,16 +1,16 @@
 import { Event } from '../../../../../base/common/event.js';
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
 import { type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { toDisposable, Disposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { FileKind, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
-import { WorkspacePdfAnnotationStore, pdfAnnotationSidecarResource } from "../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js";
-import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument } from "../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { toDisposable, Disposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { FileKind, type IFileWriteRequest } from '../../../../../platform/files/common/files.js';
+import { WorkspacePdfAnnotationStore, pdfAnnotationSidecarResource } from '../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js';
+import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument } from '../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js';
 
-test("PDF annotation store returns an empty document when no sidecar exists", async () => {
-	const resource = URI.file("/workspace/paper.pdf");
+test('PDF annotation store returns an empty document when no sidecar exists', async () => {
+	const resource = URI.file('/workspace/paper.pdf');
 	const files = new TestFileService();
 	using fileService = createTestFileService(files);
 	const store = new WorkspacePdfAnnotationStore(fileService);
@@ -22,13 +22,13 @@ test("PDF annotation store returns an empty document when no sidecar exists", as
 	assert.equal(files.readFileRequests.length, 0);
 });
 
-test("PDF annotation store reads and conditionally writes its sibling sidecar", async () => {
-	const resource = URI.file("/workspace/paper.pdf");
+test('PDF annotation store reads and conditionally writes its sibling sidecar', async () => {
+	const resource = URI.file('/workspace/paper.pdf');
 	const sidecar = pdfAnnotationSidecarResource(resource);
 	const files = new TestFileService();
-	files.entries = [{ resource: sidecar, name: "paper.pdf.ash-annotations.json", kind: FileKind.File }];
-	files.content = "{\n  \"version\": 1,\n  \"annotations\": []\n}\n";
-	files.revision = "before";
+	files.entries = [{ resource: sidecar, name: 'paper.pdf.ash-annotations.json', kind: FileKind.File }];
+	files.content = '{\n  "version": 1,\n  "annotations": []\n}\n';
+	files.revision = 'before';
 	using fileService = createTestFileService(files);
 	const store = new WorkspacePdfAnnotationStore(fileService);
 
@@ -37,9 +37,9 @@ test("PDF annotation store reads and conditionally writes its sibling sidecar", 
 
 	assert.equal(files.readFileRequests[0]?.toString(), sidecar.toString());
 	assert.equal(files.writeRequests[0]?.resource.toString(), sidecar.toString());
-	assert.equal(files.writeRequests[0]?.expectedRevision, "before");
-	assert.deepEqual(parsePdfAnnotationDocument(files.writeRequests[0]?.content ?? ""), emptyPdfAnnotationDocument());
-	assert.equal(saved.revision, "after");
+	assert.equal(files.writeRequests[0]?.expectedRevision, 'before');
+	assert.deepEqual(parsePdfAnnotationDocument(files.writeRequests[0]?.content ?? ''), emptyPdfAnnotationDocument());
+	assert.equal(saved.revision, 'after');
 });
 
 class TestFileService implements IFileSystemProvider {
@@ -49,8 +49,8 @@ class TestFileService implements IFileSystemProvider {
 
 	readonly onDidChangeFiles = () => toDisposable(() => { });
 	entries: readonly { readonly resource: URI; readonly name: string; readonly kind: FileKind; }[] = [];
-	content = "";
-	revision = "revision";
+	content = '';
+	revision = 'revision';
 	readonly readFileRequests: URI[] = [];
 	readonly writeRequests: IFileWriteRequest[] = [];
 
@@ -73,15 +73,15 @@ class TestFileService implements IFileSystemProvider {
 		this.writeRequests.push(request);
 		return {
 			stat: { resource: request.resource, kind: FileKind.File, sizeBytes: request.content.length, readonly: false, modifiedAtMillis: undefined },
-			revision: "after",
+			revision: 'after',
 		};
 	}
 
-	async createFile(): Promise<never> { throw new Error("PDF annotation tests do not create empty files"); }
-	async createDirectory(): Promise<never> { throw new Error("PDF annotation tests do not create directories"); }
-	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }
-	async rename(): Promise<never> { throw new Error("PDF annotation tests do not rename files"); }
-	async delete(): Promise<never> { throw new Error("PDF annotation tests do not delete files"); }
+	async createFile(): Promise<never> { throw new Error('PDF annotation tests do not create empty files'); }
+	async createDirectory(): Promise<never> { throw new Error('PDF annotation tests do not create directories'); }
+	async copy(): Promise<void> { throw new Error('Copy is not used in this test'); }
+	async rename(): Promise<never> { throw new Error('PDF annotation tests do not rename files'); }
+	async delete(): Promise<never> { throw new Error('PDF annotation tests do not delete files'); }
 }
 
 test('provider retirement cancels a sidecar write through the authorized file service', async () => {

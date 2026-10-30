@@ -50,7 +50,7 @@ function fixture() {
 		}
 	} as unknown as IInstantiationService;
 	const view = new CreatePullRequestContextView(instantiation,
-		{ show: () => true, hide: () => { }, layout: () => { } } as unknown as IContextViewService,
+		{ container: document.body, show: () => true, hide: () => { }, layout: () => { } } as IContextViewService,
 		{ activeSelection: { kind: 'session', active: { session, threadId: 'qualified-thread' } }, onDidChange: Event.None } as unknown as ISessionsService,
 		{} as IQuickInputService,
 		{ getScope: () => scope, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService,

@@ -19,6 +19,7 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import { DesignConfiguration } from '../../contrib/creator/common/config/editorConfiguration.js';
 import { Emitter, Event as AshEvent, Event } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
+import { constObservable } from '../../../base/common/observable.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
@@ -134,7 +135,7 @@ services.registerInstance(IFileDialogService, {
 });
 services.registerInstance(IDialogService, { onWillShowDialog: AshEvent.None, onDidShowDialog: AshEvent.None, showMessage: unexpected, info: unexpected, warn: unexpected, error: async message => { errors.push(message); }, confirm: unexpected, prompt: unexpected, input: unexpected, about: unexpected });
 services.registerInstance(IAssetService, { getCatalog: unexpected, updateEntry: unexpected, createCollection: unexpected, deleteCollection: unexpected, importImage: unexpected, getVersion: unexpected, readVersion: unexpected });
-services.registerInstance(ISessionsLayoutService, { ...Disposable.None, conversationVisible: false, onDidChangeConversationVisibility: AshEvent.None, setConversationVisible: unexpected, openEntry: unexpected, restore: unexpected });
+services.registerInstance(ISessionsLayoutService, { ...Disposable.None, editorWorkingSetState: constObservable({ owner: undefined, restoring: false, applying: false }), retainEditor: () => Disposable.None, suppressEditorAutoVisibility: () => Disposable.None, conversationVisible: false, onDidChangeConversationVisibility: AshEvent.None, setConversationVisible: unexpected, openEntry: unexpected, restore: unexpected });
 const fileProvider: IFileSystemProvider = {
 	capabilities: FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy,
 	onDidChangeCapabilities: Event.None,
@@ -452,7 +453,10 @@ test('Design color preview cancels without editing and one committed range gestu
 	assert.equal(view.domNode.querySelector('rect[data-shape-id]')!.getAttribute('fill'), '#808080');
 	assert.equal(browser.window.document.activeElement, fillButton);
 	fillButton.click();
-	for (const value of ['90', '70', '50']) { alpha.value = value; alpha.dispatchEvent(new browser.window.Event('input')); }
+	for (const value of ['90', '70', '50']) {
+		alpha.value = value;
+		alpha.dispatchEvent(new browser.window.Event('input'));
+	}
 	alpha.dispatchEvent(new browser.window.Event('change'));
 	assert.equal(model.value.shapes[0].fill, '#80808080');
 	view.designEditors.document.model.undo();

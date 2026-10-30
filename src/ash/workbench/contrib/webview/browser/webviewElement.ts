@@ -1,6 +1,6 @@
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { mainWindow, type CodeWindow } from "../../../../base/browser/window.js";
-import { Emitter } from "../../../../base/common/event.js";
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { mainWindow, type CodeWindow } from '../../../../base/browser/window.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -9,8 +9,8 @@ import { IFileService } from '../../../../platform/files/common/files.js';
 import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 import { webviewGenericCspSource } from '../common/webview.js';
 import { loadLocalResource } from './resourceLoading.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IWebviewElement, WebviewContentOptions, WebviewInitInfo, WebviewMessageReceivedEvent } from "./webview.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IWebviewElement, WebviewContentOptions, WebviewInitInfo, WebviewMessageReceivedEvent } from './webview.js';
 
 interface WebviewMessageEnvelope {
 	readonly channel: string;
@@ -30,7 +30,7 @@ const WEBVIEW_CONTENT_SECURITY_POLICY = [
 	"object-src 'none'",
 	`base-uri ${webviewGenericCspSource}`,
 	"form-action 'none'",
-].join("; ");
+].join('; ');
 
 /**
  * Owns one isolated origin. Its worker routes resource reads through the existing
@@ -65,7 +65,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		resolve: (sent: boolean) => void;
 		reject: (error: unknown) => void;
 	}[] = [];
-	private channel = "";
+	private channel = '';
 	private documentVersion = 0;
 	private html: string | undefined;
 	private isReady = false;
@@ -98,19 +98,19 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		this.messageProtocol = initInfo.contentOptions?.messageProtocol;
 		this.contentSecurityPolicy = initInfo.contentOptions?.contentSecurityPolicy;
 		this.forwardKeyboardEvents = initInfo.options.forwardKeyboardEvents === true;
-		const element = h(mainWindow.document, "iframe");
+		const element = h(mainWindow.document, 'iframe');
 		this.element = element;
 		element.name = instanceId;
-		element.className = "ash-webview";
+		element.className = 'ash-webview';
 		element.tabIndex = 0;
-		element.setAttribute("sandbox", "allow-scripts allow-same-origin");
+		element.setAttribute('sandbox', 'allow-scripts allow-same-origin');
 		if (this.messageProtocol === 'mcp') element.setAttribute('allow', "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-write 'none'");
-		element.setAttribute("referrerpolicy", "no-referrer");
-		element.setAttribute("title", validateTitle(initInfo.title ?? "Webview"));
-		element.style.border = "0";
-		element.style.display = "block";
-		element.style.width = "100%";
-		element.style.height = "100%";
+		element.setAttribute('referrerpolicy', 'no-referrer');
+		element.setAttribute('title', validateTitle(initInfo.title ?? 'Webview'));
+		element.style.border = '0';
+		element.style.display = 'block';
+		element.style.width = '100%';
+		element.style.height = '100%';
 		this._register(toDisposable(() => {
 			if (this.isBootstrapReady && element.isConnected) {
 				this.sendControl({ type: 'shutdown' });
@@ -131,7 +131,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	public mountTo(parent: HTMLElement, targetWindow: CodeWindow): void {
 		this.assertNotDisposed();
 		if (this.isMounted) {
-			throw new Error("WebviewElement is already mounted");
+			throw new Error('WebviewElement is already mounted');
 		}
 		if (this.frameOrigin === targetWindow.location.origin) {
 			throw new Error('Webview origin must be isolated from the Workbench');
@@ -139,15 +139,15 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		this.isMounted = true;
 		const listeners = new DisposableStore();
 		this.mountListeners.value = listeners;
-		listeners.add(addDisposableListener(this.element, "focus", () => {
+		listeners.add(addDisposableListener(this.element, 'focus', () => {
 			this.setFocused(true);
 			// DOM focus targets the outer iframe; keyboard input belongs to its content document.
 			if (this.isBootstrapReady) {
 				this.sendControl({ type: 'focus' });
 			}
 		}));
-		listeners.add(addDisposableListener(this.element, "blur", () => this.setFocused(false)));
-		listeners.add(addDisposableListener<MessageEvent>(targetWindow, "message", event => {
+		listeners.add(addDisposableListener(this.element, 'blur', () => this.setFocused(false)));
+		listeners.add(addDisposableListener<MessageEvent>(targetWindow, 'message', event => {
 			const contentWindow = this.element.contentWindow;
 			if (!contentWindow || event.source !== contentWindow || event.origin !== this.frameOrigin) {
 				return;
@@ -165,7 +165,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 				return;
 			}
 			if (event.data?.channel === `${this.channel}:lifecycle`) {
-				if (event.data.type === "ready") {
+				if (event.data.type === 'ready') {
 					this.isReady = true;
 					// Focus can precede bootstrap or document loading when an editor pane opens.
 					if (this.element.ownerDocument.activeElement === this.element) {
@@ -179,8 +179,8 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 							pending.reject(error);
 						}
 					}
-				} else if (event.data.type === "focus" || event.data.type === "blur") {
-					this.setFocused(event.data.type === "focus");
+				} else if (event.data.type === 'focus' || event.data.type === 'blur') {
+					this.setFocused(event.data.type === 'focus');
 				}
 				return;
 			}
@@ -201,7 +201,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 			}
 		}));
 		if (this.html === undefined) {
-			this.setHtml("");
+			this.setHtml('');
 		}
 		this.element.src = this.bootstrapUrl.href;
 		parent.append(this.element);
@@ -223,13 +223,13 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		const cancellation = new CancellationTokenSource();
 		this.resourceRequests.value = toDisposable(() => cancellation.dispose(true));
 		this.documentCancellation = cancellation;
-		this.element.setAttribute("data-ash-webview-channel", this.channel);
+		this.element.setAttribute('data-ash-webview-channel', this.channel);
 		this.sendDocument();
 	}
 
 	public setTitle(title: string): void {
 		this.assertNotDisposed();
-		this.element.setAttribute("title", validateTitle(title));
+		this.element.setAttribute('title', validateTitle(title));
 		this.sendControl({ type: 'title', title });
 	}
 
@@ -398,15 +398,15 @@ function validateEnvelope(
 	value: unknown,
 	channel: string,
 ): WebviewMessageEnvelope | undefined {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 		return undefined;
 	}
 	const candidate = value as Record<string, unknown>;
 	const keys = Object.keys(candidate).sort();
 	if (
 		keys.length !== 2 ||
-		keys[0] !== "channel" ||
-		keys[1] !== "message" ||
+		keys[0] !== 'channel' ||
+		keys[1] !== 'message' ||
 		candidate.channel !== channel
 	) {
 		return undefined;
@@ -418,27 +418,27 @@ function validateEnvelope(
 }
 
 function validateHtml(value: string): string {
-	if (typeof value !== "string") {
-		throw new Error("webview HTML must be a string");
+	if (typeof value !== 'string') {
+		throw new Error('webview HTML must be a string');
 	}
 	if (value.length > MAX_WEBVIEW_HTML_LENGTH) {
-		throw new Error("webview HTML exceeds the supported size");
+		throw new Error('webview HTML exceeds the supported size');
 	}
 	return value;
 }
 
 function validateTitle(value: string): string {
-	if (typeof value !== "string" || value.length === 0) {
-		throw new Error("webview title must be a non-empty string");
+	if (typeof value !== 'string' || value.length === 0) {
+		throw new Error('webview title must be a non-empty string');
 	}
 	if (value.length > MAX_WEBVIEW_TITLE_LENGTH) {
-		throw new Error("webview title is too long");
+		throw new Error('webview title is too long');
 	}
 	return value;
 }
 
 function escapeAttribute(value: string): string {
 	return value
-		.replaceAll("&", "&amp;")
-		.replaceAll('"', "&quot;");
+		.replaceAll('&', '&amp;')
+		.replaceAll('"', '&quot;');
 }

@@ -1,12 +1,12 @@
-import { createConnection, createServer } from "node:net";
-import { type ChildProcess, spawn } from "node:child_process";
-import { throwIfCancelled } from "../../../base/common/cancellation.js";
-import { CancellationError, getErrorMessage } from "../../../base/common/errors.js";
-import { Emitter } from "../../../base/common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
-import { getWorkspaceRemoteAuthority } from "../../workspace/common/workspace.js";
-import { createSshRemoteAuthority } from "../common/remote.js";
+import { createConnection, createServer } from 'node:net';
+import { type ChildProcess, spawn } from 'node:child_process';
+import { throwIfCancelled } from '../../../base/common/cancellation.js';
+import { CancellationError, getErrorMessage } from '../../../base/common/errors.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import type { IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
+import { getWorkspaceRemoteAuthority } from '../../workspace/common/workspace.js';
+import { createSshRemoteAuthority } from '../common/remote.js';
 
 /** Data returned by the Main-owned SSH process; no process handle crosses IPC. */
 export interface SshPortForward {
@@ -33,7 +33,7 @@ const LISTENER_PROBE_TIMEOUT_MS = 250;
 const DEFAULT_RECOVERY_WINDOW_MS = 30_000;
 const DEFAULT_INITIAL_RECOVERY_DELAY_MS = 250;
 const DEFAULT_MAX_RECOVERY_DELAY_MS = 2_000;
-const REMOTE_LOOPBACK_HOST = "127.0.0.1" as const;
+const REMOTE_LOOPBACK_HOST = '127.0.0.1' as const;
 
 export interface SpawnSshTunnelOptions {
 	readonly environment: NodeJS.ProcessEnv;
@@ -42,7 +42,7 @@ export interface SpawnSshTunnelOptions {
 export type SpawnSshTunnel = (executable: string, args: readonly string[], options: SpawnSshTunnelOptions) => ChildProcess;
 
 /** Whether the selected loopback port currently accepts TCP connections. */
-export type LoopbackListenerReadiness = "pending" | "ready";
+export type LoopbackListenerReadiness = 'pending' | 'ready';
 
 /** Probes the local listener created by OpenSSH without sending application bytes. */
 export type ProbeLoopbackListener = (localPort: number, signal?: AbortSignal) => Promise<LoopbackListenerReadiness>;
@@ -96,14 +96,14 @@ export class SshPortForwardingService extends Disposable {
 	constructor(readonly options: SshPortForwardingServiceOptions) {
 		super();
 		if (options.sshExecutable.trim().length === 0 || hasControlCharacter(options.sshExecutable)) {
-			throw new Error("SSH executable must be non-empty and contain no control characters");
+			throw new Error('SSH executable must be non-empty and contain no control characters');
 		}
 		this.spawnProcess = options.spawnProcess ?? defaultSpawn;
 		this.reserveLocalPort = options.reserveLocalPort ?? reserveLoopbackPort;
 		this.probeLoopbackListener = options.probeLoopbackListener ?? probeLoopbackListener;
 		this.startupTimeoutMs = options.startupTimeoutMs ?? DEFAULT_STARTUP_TIMEOUT_MS;
 		if (!Number.isSafeInteger(this.startupTimeoutMs) || this.startupTimeoutMs <= 0) {
-			throw new Error("startupTimeoutMs must be a positive safe integer");
+			throw new Error('startupTimeoutMs must be a positive safe integer');
 		}
 		this.recoveryPolicy = options.recoveryPolicy ?? {
 			windowMs: DEFAULT_RECOVERY_WINDOW_MS,
@@ -160,13 +160,13 @@ export class SshPortForwardingService extends Disposable {
 
 	async open(request: SshPortForwardOpenRequest): Promise<SshPortForward> {
 		this.assertNotDisposed();
-		validatePort(request.remotePort, "remotePort");
+		validatePort(request.remotePort, 'remotePort');
 		const revision = this.workspaceRevision;
 		const authority = this.remoteAuthority();
 		const localPort = await this.reserveLocalPort();
-		validatePort(localPort, "localPort");
+		validatePort(localPort, 'localPort');
 		if (this.isDisposed || revision !== this.workspaceRevision) {
-			throw new CancellationError("SSH tunnel startup was cancelled");
+			throw new CancellationError('SSH tunnel startup was cancelled');
 		}
 		const startup = new AbortController();
 		this.pendingStarts.add(startup);
@@ -182,13 +182,13 @@ export class SshPortForwardingService extends Disposable {
 			await waitForStartup(child, localPort, this.startupTimeoutMs, this.probeLoopbackListener, this.wait, this.now, signal);
 		} catch (error) {
 			await stopChild(child);
-			throw error instanceof Error ? error : new Error("SSH tunnel failed to start");
+			throw error instanceof Error ? error : new Error('SSH tunnel failed to start');
 		} finally {
 			this.pendingStarts.delete(startup);
 		}
 		if (this.isDisposed || revision !== this.workspaceRevision) {
 			await stopChild(child);
-			throw new CancellationError("SSH tunnel startup was cancelled");
+			throw new CancellationError('SSH tunnel startup was cancelled');
 		}
 
 		const record: TunnelRecord = {
@@ -197,7 +197,7 @@ export class SshPortForwardingService extends Disposable {
 				localPort,
 				remoteHost: REMOTE_LOOPBACK_HOST,
 				remotePort: request.remotePort,
-				state: "open",
+				state: 'open',
 			}),
 			host: authority.host,
 			cancellation: new AbortController(),
@@ -209,7 +209,7 @@ export class SshPortForwardingService extends Disposable {
 			this.tunnels.delete(record.tunnel.id);
 			throw new Error(`SSH tunnel exited before it became ready: ${child.exitCode ?? child.signalCode}`);
 		}
-		this.changes.fire({ kind: "upsert", tunnel: record.tunnel });
+		this.changes.fire({ kind: 'upsert', tunnel: record.tunnel });
 		return record.tunnel;
 	}
 
@@ -223,7 +223,7 @@ export class SshPortForwardingService extends Disposable {
 		record.candidateChild = undefined;
 		await Promise.all([...children].map(stopChild));
 		await record.recovery;
-		this.changes.fire({ kind: "removed", id });
+		this.changes.fire({ kind: 'removed', id });
 	}
 
 	async closeAll(): Promise<void> {
@@ -243,7 +243,7 @@ export class SshPortForwardingService extends Disposable {
 		const workspace = this.options.getWorkspace();
 		const remoteAuthority = getWorkspaceRemoteAuthority(workspace);
 		if (!remoteAuthority?.startsWith('ssh+')) {
-			throw new Error("Remote tunnels require an SSH Remote Workspace");
+			throw new Error('Remote tunnels require an SSH Remote Workspace');
 		}
 		const authority = createSshRemoteAuthority(remoteAuthority.slice(4));
 		return authority;
@@ -258,10 +258,10 @@ export class SshPortForwardingService extends Disposable {
 	}
 
 	private bindChild(record: TunnelRecord, child: ChildProcess): void {
-		child.once("exit", (code, signal) => {
-			this.beginRecovery(record, child, `SSH process exited (${code ?? "signal"} ${signal ?? ""})`.trim());
+		child.once('exit', (code, signal) => {
+			this.beginRecovery(record, child, `SSH process exited (${code ?? 'signal'} ${signal ?? ''})`.trim());
 		});
-		child.once("error", error => {
+		child.once('error', error => {
 			this.beginRecovery(record, child, `SSH process failed: ${error.message}`);
 		});
 	}
@@ -270,7 +270,7 @@ export class SshPortForwardingService extends Disposable {
 		if (!this.isCurrent(record) || record.child !== child || record.recovery) return;
 		record.child = undefined;
 		record.candidateChild = child;
-		this.publish(record, "recovering");
+		this.publish(record, 'recovering');
 		const recovery = this.recover(record, failure);
 		record.recovery = recovery;
 		void recovery.then(() => {
@@ -307,7 +307,7 @@ export class SshPortForwardingService extends Disposable {
 					record.candidateChild = undefined;
 					record.child = child;
 					this.bindChild(record, child);
-					this.publish(record, "open");
+					this.publish(record, 'open');
 					return;
 				} catch (error) {
 					lastFailure = getErrorMessage(error);
@@ -324,14 +324,14 @@ export class SshPortForwardingService extends Disposable {
 		if (!this.isCurrent(record)) return;
 		record.child = undefined;
 		record.candidateChild = undefined;
-		this.publish(record, "failed");
+		this.publish(record, 'failed');
 		console.error(`SSH tunnel ${record.tunnel.id} did not recover within ${this.recoveryPolicy.windowMs}ms after ${attempts} attempts: ${failure}`);
 	}
 
-	private publish(record: TunnelRecord, state: SshPortForward["state"]): void {
+	private publish(record: TunnelRecord, state: SshPortForward['state']): void {
 		if (!this.isCurrent(record)) return;
 		record.tunnel = Object.freeze({ ...record.tunnel, state });
-		this.changes.fire({ kind: "upsert", tunnel: record.tunnel });
+		this.changes.fire({ kind: 'upsert', tunnel: record.tunnel });
 	}
 
 	private isCurrent(record: TunnelRecord): boolean {
@@ -341,37 +341,37 @@ export class SshPortForwardingService extends Disposable {
 
 /** Builds the direct OpenSSH arguments for one fixed loopback forward. */
 export function sshTunnelArguments(host: string, localPort: number, remotePort: number): readonly string[] {
-	if (host.trim().length === 0 || hasControlCharacter(host)) throw new Error("SSH host must be non-empty and contain no control characters");
-	validatePort(localPort, "localPort");
-	validatePort(remotePort, "remotePort");
+	if (host.trim().length === 0 || hasControlCharacter(host)) throw new Error('SSH host must be non-empty and contain no control characters');
+	validatePort(localPort, 'localPort');
+	validatePort(remotePort, 'remotePort');
 	return [
-		"-N",
-		"-T",
-		"-o",
-		"BatchMode=yes",
-		"-o",
-		"ExitOnForwardFailure=yes",
-		"-o",
+		'-N',
+		'-T',
+		'-o',
+		'BatchMode=yes',
+		'-o',
+		'ExitOnForwardFailure=yes',
+		'-o',
 		`ConnectTimeout=${DEFAULT_CONNECT_TIMEOUT_SECONDS}`,
-		"-L",
+		'-L',
 		`127.0.0.1:${localPort}:127.0.0.1:${remotePort}`,
 		host,
 	];
 }
 
 function defaultSpawn(executable: string, args: readonly string[], options: SpawnSshTunnelOptions): ChildProcess {
-	return spawn(executable, [...args], { env: { ...options.environment }, shell: false, stdio: "ignore" });
+	return spawn(executable, [...args], { env: { ...options.environment }, shell: false, stdio: 'ignore' });
 }
 
 async function reserveLoopbackPort(): Promise<number> {
 	const server = createServer();
 	return new Promise<number>((resolve, reject) => {
-		server.once("error", reject);
+		server.once('error', reject);
 		server.listen({ host: REMOTE_LOOPBACK_HOST, port: 0 }, () => {
 			const address = server.address();
-			if (!address || typeof address === "string") {
+			if (!address || typeof address === 'string') {
 				server.close();
-				reject(new Error("Could not allocate a local loopback port"));
+				reject(new Error('Could not allocate a local loopback port'));
 				return;
 			}
 			server.close(error => error ? reject(error) : resolve(address.port));
@@ -380,7 +380,7 @@ async function reserveLoopbackPort(): Promise<number> {
 }
 
 async function probeLoopbackListener(localPort: number, signal?: AbortSignal): Promise<LoopbackListenerReadiness> {
-	if (signal) throwIfCancelled(signal, "SSH tunnel startup was cancelled");
+	if (signal) throwIfCancelled(signal, 'SSH tunnel startup was cancelled');
 	return new Promise<LoopbackListenerReadiness>((resolve, reject) => {
 		const socket = createConnection({ host: REMOTE_LOOPBACK_HOST, port: localPort });
 		let settled = false;
@@ -388,7 +388,7 @@ async function probeLoopbackListener(localPort: number, signal?: AbortSignal): P
 			if (settled) return;
 			settled = true;
 			clearTimeout(timeout);
-			signal?.removeEventListener("abort", abort);
+			signal?.removeEventListener('abort', abort);
 			socket.destroy();
 			resolve(result);
 		};
@@ -397,13 +397,13 @@ async function probeLoopbackListener(localPort: number, signal?: AbortSignal): P
 			settled = true;
 			clearTimeout(timeout);
 			socket.destroy();
-			reject(new CancellationError("SSH tunnel startup was cancelled", signal?.reason));
+			reject(new CancellationError('SSH tunnel startup was cancelled', signal?.reason));
 		};
-		const timeout = setTimeout(() => finish("pending"), LISTENER_PROBE_TIMEOUT_MS);
+		const timeout = setTimeout(() => finish('pending'), LISTENER_PROBE_TIMEOUT_MS);
 		timeout.unref();
-		socket.once("connect", () => finish("ready"));
-		socket.once("error", () => finish("pending"));
-		signal?.addEventListener("abort", abort, { once: true });
+		socket.once('connect', () => finish('ready'));
+		socket.once('error', () => finish('pending'));
+		signal?.addEventListener('abort', abort, { once: true });
 	});
 }
 
@@ -416,41 +416,41 @@ async function waitForStartup(child: ChildProcess, localPort: number, timeoutMs:
 	let listenerObserved = false;
 	const exit = (code: number | null, signal: NodeJS.Signals | null): void => {
 		if (settled) return;
-		failure = new Error(`SSH tunnel exited before startup (${code ?? "signal"} ${signal ?? ""})`.trim());
+		failure = new Error(`SSH tunnel exited before startup (${code ?? 'signal'} ${signal ?? ''})`.trim());
 	};
 	const error = (value: Error): void => {
 		if (settled) return;
 		failure = value;
 	};
-	child.once("exit", exit);
-	child.once("error", error);
+	child.once('exit', exit);
+	child.once('error', error);
 	try {
 		while (true) {
 			throwIfStartupFailed(child, failure, signal);
 			const readiness = await probe(localPort, signal);
 			throwIfStartupFailed(child, failure, signal);
-			if (readiness === "ready" && listenerObserved) return;
+			if (readiness === 'ready' && listenerObserved) return;
 
-			const intervalMs = readiness === "ready" ? STARTUP_STABILITY_MS : STARTUP_POLL_INTERVAL_MS;
+			const intervalMs = readiness === 'ready' ? STARTUP_STABILITY_MS : STARTUP_POLL_INTERVAL_MS;
 			const elapsedMs = Math.max(waitedMs, Math.max(0, now() - startedAt));
 			const remainingMs = timeoutMs - elapsedMs;
 			if (remainingMs <= 0) throw new Error(`SSH tunnel did not listen on 127.0.0.1:${localPort} within ${timeoutMs}ms`);
-			listenerObserved = readiness === "ready";
+			listenerObserved = readiness === 'ready';
 			const delayMs = Math.min(intervalMs, remainingMs);
 			await wait(delayMs, signal);
 			waitedMs += delayMs;
 		}
 	} finally {
 		settled = true;
-		child.removeListener("exit", exit);
-		child.removeListener("error", error);
+		child.removeListener('exit', exit);
+		child.removeListener('error', error);
 	}
 }
 
 function throwIfStartupFailed(child: ChildProcess, failure: Error | undefined, signal?: AbortSignal): void {
 	if (failure) throw failure;
 	if (child.exitCode !== null || child.signalCode !== null) throw new Error(`SSH tunnel exited before startup: ${child.exitCode ?? child.signalCode}`);
-	if (signal) throwIfCancelled(signal, "SSH tunnel startup was cancelled");
+	if (signal) throwIfCancelled(signal, 'SSH tunnel startup was cancelled');
 }
 
 async function stopChild(child: ChildProcess): Promise<void> {
@@ -458,14 +458,14 @@ async function stopChild(child: ChildProcess): Promise<void> {
 	if (child.exitCode !== null || child.signalCode !== null) return;
 	await new Promise<void>(resolve => {
 		const done = (): void => {
-			child.removeListener("exit", done);
-			child.removeListener("close", done);
-			child.removeListener("error", done);
+			child.removeListener('exit', done);
+			child.removeListener('close', done);
+			child.removeListener('error', done);
 			resolve();
 		};
-		child.once("exit", done);
-		child.once("close", done);
-		child.once("error", done);
+		child.once('exit', done);
+		child.once('close', done);
+		child.once('error', done);
 		child.kill();
 	});
 }
@@ -475,11 +475,11 @@ function validatePort(value: number, name: string): void {
 }
 
 function validateRecoveryPolicy(policy: SshPortForwardingRecoveryPolicy): void {
-	validatePositiveSafeInteger(policy.windowMs, "recoveryPolicy.windowMs");
-	validatePositiveSafeInteger(policy.initialDelayMs, "recoveryPolicy.initialDelayMs");
-	validatePositiveSafeInteger(policy.maxDelayMs, "recoveryPolicy.maxDelayMs");
+	validatePositiveSafeInteger(policy.windowMs, 'recoveryPolicy.windowMs');
+	validatePositiveSafeInteger(policy.initialDelayMs, 'recoveryPolicy.initialDelayMs');
+	validatePositiveSafeInteger(policy.maxDelayMs, 'recoveryPolicy.maxDelayMs');
 	if (policy.maxDelayMs < policy.initialDelayMs) {
-		throw new Error("recoveryPolicy.maxDelayMs must be greater than or equal to initialDelayMs");
+		throw new Error('recoveryPolicy.maxDelayMs must be greater than or equal to initialDelayMs');
 	}
 }
 
@@ -502,11 +502,11 @@ function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
 	return new Promise(resolve => {
 		const done = (): void => {
 			clearTimeout(timeout);
-			signal?.removeEventListener("abort", done);
+			signal?.removeEventListener('abort', done);
 			resolve();
 		};
 		const timeout = setTimeout(done, milliseconds);
 		timeout.unref();
-		signal?.addEventListener("abort", done, { once: true });
+		signal?.addEventListener('abort', done, { once: true });
 	});
 }

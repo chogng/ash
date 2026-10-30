@@ -1,15 +1,15 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import "./media/menubarControl.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { ButtonActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
-import { SubmenuAction, type IAction } from "../../../../base/common/actions.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import { localize as resolveNls } from "../../../../nls.js";
-import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { type IMenu, type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
+import './media/menubarControl.css';
+import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { localize as resolveNls } from '../../../../nls.js';
+import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { type IMenu, type IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import type { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { localize, type ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 
 /** Host-selected menubar presentation owned by the titlebar. */
@@ -30,23 +30,23 @@ class ApplicationMenuActionViewItem extends ButtonActionViewItem {
 
 	public override render(container: HTMLElement): void {
 		super.render(container);
-		this.button.toggleClassName("ash-menubar-item", true);
-		this.button.domNode.setAttribute("aria-haspopup", "menu");
-		this.button.domNode.setAttribute("aria-expanded", "false");
-		this._register(addDisposableListener(this.button.domNode, "keydown", this.handleKeyDown));
+		this.button.toggleClassName('ash-menubar-item', true);
+		this.button.domNode.setAttribute('aria-haspopup', 'menu');
+		this.button.domNode.setAttribute('aria-expanded', 'false');
+		this._register(addDisposableListener(this.button.domNode, 'keydown', this.handleKeyDown));
 	}
 
 	public get anchor(): HTMLElement { return this.button.domNode; }
 
 	public setLabel(label: string): void {
 		this.button.label = label;
-		this.button.domNode.setAttribute("aria-label", label);
+		this.button.domNode.setAttribute('aria-label', label);
 		this.button.setTitle(label);
 	}
 
 	public setExpanded(expanded: boolean): void {
-		this.button.toggleClassName("active", expanded);
-		this.button.domNode.setAttribute("aria-expanded", String(expanded));
+		this.button.toggleClassName('active', expanded);
+		this.button.domNode.setAttribute('aria-expanded', String(expanded));
 	}
 }
 
@@ -80,7 +80,7 @@ export class BrowserMenubarControl extends Disposable
 			: resolveNls({ bundle: 'ash.regions', key: 'applicationMenu' }, 'Application menu');
 		this.menu = this._register(menuService.createMenu(options.applicationMenuId ?? MenuId.MenubarMainMenu));
 		const action: IAction = {
-			id: "ash.applicationMenu",
+			id: 'ash.applicationMenu',
 			get label() { return applicationMenuLabel(); },
 			get tooltip() { return applicationMenuLabel(); },
 			icon: Lxicon.menu,
@@ -93,7 +93,7 @@ export class BrowserMenubarControl extends Disposable
 		this.toolbar = this._register(new MenuWorkbenchToolBar(container, menuService, contextMenuService, options.titlebarMenuId ?? MenuId.TitleBarLeft, {
 			contextKeyService,
 			ariaLabel: leftActionsLabel(),
-			presentation: "inherit-foreground",
+			presentation: 'inherit-foreground',
 			// Layout actions expose their pressed state without a persistent titlebar fill.
 			highlightToggledItems: false,
 			leadingActions: options.presentation === 'actions-only' ? [] : [action],
@@ -105,7 +105,7 @@ export class BrowserMenubarControl extends Disposable
 			},
 		}));
 		this.domNode = this.toolbar.element;
-		this.domNode.classList.add("ash-menubar", "ash-titlebar-left-actions");
+		this.domNode.classList.add('ash-menubar', 'ash-titlebar-left-actions');
 		this._register(this.toolbar.onDidChangeMenuItems(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();
 		}));
@@ -123,15 +123,15 @@ export class BrowserMenubarControl extends Disposable
 	}
 
 	private get currentMenuItem(): ApplicationMenuActionViewItem {
-		if (!this.menuItem) throw new Error("Application menu item was not rendered");
+		if (!this.menuItem) throw new Error('Application menu item was not rendered');
 		return this.menuItem;
 	}
 
 	private handleMenuKeyDown(event: KeyboardEvent): void {
 		if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
-		if (event.key === "ArrowDown" || event.key === "Enter") {
+		if (event.key === 'ArrowDown' || event.key === 'Enter') {
 			if (!this.active) this.showMenu();
-		} else if (event.key === "Escape" && this.active) {
+		} else if (event.key === 'Escape' && this.active) {
 			this.contextMenuService.hideContextMenu();
 		} else {
 			return;

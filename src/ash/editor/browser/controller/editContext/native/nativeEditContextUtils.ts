@@ -1,5 +1,5 @@
-import { addDisposableListener, getShadowRoot } from "../../../../../base/browser/dom.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import { addDisposableListener, getShadowRoot } from '../../../../../base/browser/dom.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
 import { type ILogService } from '../../../../../platform/log/common/log.js';
 
@@ -32,11 +32,11 @@ export class FocusTracker extends Disposable {
 		private readonly onFocusChange: (focused: boolean) => void,
 	) {
 		super();
-		this._register(addDisposableListener(this.domNode, "focus", () => {
+		this._register(addDisposableListener(this.domNode, 'focus', () => {
 			logService.trace('NativeEditContext.focus');
 			if (!this.paused) this.refreshFocusState();
 		}));
-		this._register(addDisposableListener(this.domNode, "blur", () => {
+		this._register(addDisposableListener(this.domNode, 'blur', () => {
 			logService.trace('NativeEditContext.blur');
 			if (!this.paused) this.setFocused(false);
 		}));
@@ -103,7 +103,7 @@ export function isNativeTextUpdateEvent(event: {
 } | null | undefined): boolean {
 	return Boolean(
 		event &&
-		typeof event.text === "string" &&
+		typeof event.text === 'string' &&
 		isFiniteOffset(event.updateRangeStart as number) &&
 		isFiniteOffset(event.updateRangeEnd as number),
 	);

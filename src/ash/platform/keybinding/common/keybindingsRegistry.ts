@@ -1,19 +1,19 @@
-import { Emitter, type Event } from "../../../base/common/event.js";
+import { Emitter, type Event } from '../../../base/common/event.js';
 import {
 	decodeKeybinding,
 	type Keybinding,
-} from "../../../base/common/keybindings.js";
+} from '../../../base/common/keybindings.js';
 import {
 	type IDisposable,
 	toDisposable,
-} from "../../../base/common/lifecycle.js";
+} from '../../../base/common/lifecycle.js';
 import type {
 	CommandId,
-} from "../../commands/common/commands.js";
+} from '../../commands/common/commands.js';
 import type {
 	ContextKeyExpression,
-} from "../../contextkey/common/contextkey.js";
-import { operatingSystem } from "../../../base/common/platform.js";
+} from '../../contextkey/common/contextkey.js';
+import { operatingSystem } from '../../../base/common/platform.js';
 
 export const enum KeybindingWeight {
 	EditorCore = 0,
@@ -31,9 +31,9 @@ export enum KeybindingSource {
 }
 
 export enum KeybindingRuleKind {
-	Command = "command",
-	Blocker = "blocker",
-	PassThrough = "passThrough",
+	Command = 'command',
+	Blocker = 'blocker',
+	PassThrough = 'passThrough',
 }
 
 /** One command shortcut contribution before host-specific resolution. */
@@ -147,8 +147,8 @@ export class KeybindingRegistry {
 export const KeybindingsRegistry = new KeybindingRegistry();
 
 function resolveKeybinding(value: Keybinding | number | readonly number[]): Keybinding {
-	if (typeof value === "object" && !Array.isArray(value)) return value as Keybinding;
+	if (typeof value === 'object' && !Array.isArray(value)) return value as Keybinding;
 	const decoded = decodeKeybinding(value as number | readonly number[], operatingSystem);
-	if (!decoded) throw new TypeError("Keybinding must not be empty");
+	if (!decoded) throw new TypeError('Keybinding must not be empty');
 	return decoded;
 }

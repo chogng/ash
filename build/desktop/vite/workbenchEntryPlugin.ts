@@ -1,6 +1,6 @@
 import { readFile, realpath } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
-import { normalizePath, type Connect, type Plugin } from "vite";
+import { normalizePath, type Connect, type Plugin } from 'vite';
 import type { ICSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 
 interface WorkbenchEntryServer {
@@ -20,7 +20,7 @@ interface CSSDevelopmentHost {
 	readonly sourceRoot: string;
 }
 
-export type AshWorkbenchEntryPlugin = Omit<Plugin, "configureServer"> & {
+export type AshWorkbenchEntryPlugin = Omit<Plugin, 'configureServer'> & {
 	readonly configureServer: (server: WorkbenchEntryServer) => void;
 };
 
@@ -43,7 +43,7 @@ export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.h
 		});
 	}
 	return {
-		name: "ash-workbench-entry",
+		name: 'ash-workbench-entry',
 		configResolved(config) {
 			root = config.root;
 			development = config.command === 'serve';
@@ -85,16 +85,16 @@ export function workbenchEntryPlugin(entryPath = '/browser/workbench/workbench.h
 					})().catch(next);
 					return;
 				}
-				const targetsRoot = request.url === "/" || request.url?.startsWith("/?");
-				if ((method !== "GET" && method !== "HEAD") || !targetsRoot) {
+				const targetsRoot = request.url === '/' || request.url?.startsWith('/?');
+				if ((method !== 'GET' && method !== 'HEAD') || !targetsRoot) {
 					next();
 					return;
 				}
 
 				response.statusCode = 302;
-				response.setHeader("Cache-Control", "no-store");
+				response.setHeader('Cache-Control', 'no-store');
 				const query = request.url?.indexOf('?') ?? -1;
-				response.setHeader("Location", `${entryPath}${query >= 0 ? request.url!.slice(query) : ''}`);
+				response.setHeader('Location', `${entryPath}${query >= 0 ? request.url!.slice(query) : ''}`);
 				response.end();
 			});
 		},

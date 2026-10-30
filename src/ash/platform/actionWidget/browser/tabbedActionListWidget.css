@@ -1,4 +1,37 @@
+.ash-tabbed-action-list {
+	display: flex;
+	position: relative;
+	flex-direction: column;
+	max-height: calc(100vh - var(--ash-spacing-size240));
+	overflow: visible;
+}
+
 .ash-tabbed-action-list-tabbar {
+	flex: 0 0 auto;
 	min-width: 0;
-	padding: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}
+
+.ash-tabbed-action-list-panel {
+	display: flex;
+	min-height: 0;
+	flex-direction: column;
+}
+
+.ash-tabbed-action-list-panel > .ash-action-widget-items {
+	min-height: 0;
+	overflow: auto;
+}
+
+.ash-tabbed-action-list-footer {
+	flex-shrink: 0;
+}
+
+.ash-tabbed-action-list-details {
+	min-height: 0;
+	overflow: auto;
+}
+
+.ash-tabbed-action-list-back.ash-button {
+	margin: var(--ash-spacing-size80);
 }

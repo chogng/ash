@@ -1,5 +1,5 @@
-import { toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import type { NativeEditContext } from "./nativeEditContext.js";
+import { toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import type { NativeEditContext } from './nativeEditContext.js';
 
 /**
  * Finds an active native edit context without making clipboard or host code

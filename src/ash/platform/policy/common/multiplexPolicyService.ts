@@ -1,5 +1,5 @@
 import type { PolicyValue } from '../../../base/common/policy.js';
-import { AbstractPolicyService, type IPolicyService } from './policy.js';
+import { AbstractPolicyService, type IPolicyService, type PolicyValueSource } from './policy.js';
 
 /** The first defined source wins. Desktop registers system policy before account policy. */
 export class MultiplexPolicyService extends AbstractPolicyService {
@@ -13,12 +13,17 @@ export class MultiplexPolicyService extends AbstractPolicyService {
 	}
 	private combine(): void {
 		const values: Record<string, PolicyValue> = {};
+		const sources: Record<string, PolicyValueSource> = {};
 		for (const name of Object.keys(this.policyDefinitions)) {
 			for (const source of this.sources) {
 				const value = source.getPolicyValue(name);
-				if (value !== undefined) { Object.defineProperty(values, name, { value, enumerable: true }); break; }
+				if (value !== undefined) {
+					Object.defineProperty(values, name, { value, enumerable: true });
+					Object.defineProperty(sources, name, { value: source.getPolicyValueSource(name), enumerable: true });
+					break;
+				}
 			}
 		}
-		this.accept(values);
+		this.accept(values, sources);
 	}
 }

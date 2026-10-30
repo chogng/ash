@@ -1,14 +1,14 @@
 import type { DocumentCodec } from '../common/documentCodec.js';
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { type URI } from '../../../../base/common/uri.js';
 import { type DocumentNode } from '../common/documentCodec.js';
 import type { DocumentTextModel } from '../common/documentCodec.js';
-import { TextFileSaveConflictError } from "../../textfile/common/textFileService.js";
-import type { ITextFileService } from "../../textfile/common/textfiles.js";
-import type { IWorkingCopy } from "../../workingCopy/common/workingCopyService.js";
-import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
+import { TextFileSaveConflictError } from '../../textfile/common/textFileService.js';
+import type { ITextFileService } from '../../textfile/common/textfiles.js';
+import type { IWorkingCopy } from '../../workingCopy/common/workingCopyService.js';
+import type { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 import { DocumentTypes } from '../common/documentTypes.js';
 import { localize } from '../../../../nls.js';
 
@@ -39,7 +39,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	private saveQueue: Promise<void> = Promise.resolve();
 
 	readonly resource: URI;
-	readonly backupKind = "structuredDocument" as const;
+	readonly backupKind = 'structuredDocument' as const;
 	readonly backupContentType: string;
 	readonly onDidChangeDirty = this.dirtyEmitter.event;
 	readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
@@ -55,7 +55,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		this.revision = options.initialRevision;
 		this._register(options.model.onDidChangeBlocks(() => this.refreshDirty()));
 		this._register(options.textFiles.onDidChangeFiles(event => {
-			if (this.resource.scheme === "untitled" || (event.resources && !event.resources.some(resource => resource.toString() === this.resource.toString()))) return;
+			if (this.resource.scheme === 'untitled' || (event.resources && !event.resources.some(resource => resource.toString() === this.resource.toString()))) return;
 			if (this.isDirty) {
 				this.setExternalChange(true);
 				return;
@@ -97,9 +97,9 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 
 	private async saveContent(signal: AbortSignal): Promise<void> {
-		throwIfCancelled(signal, "Document save was cancelled");
-		if (this.resource.scheme === "untitled") {
-			if (!this.options.onSave) throw new Error("Untitled document has no save handler");
+		throwIfCancelled(signal, 'Document save was cancelled');
+		if (this.resource.scheme === 'untitled') {
+			if (!this.options.onSave) throw new Error('Untitled document has no save handler');
 			const result = await this.options.onSave();
 			// Save As may replace every view and retire this resource's shared model.
 			// The destination working copy owns the saved baseline after that transfer.
@@ -124,7 +124,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 
 	async saveAs(resource: URI, signal: AbortSignal): Promise<void> {
-		throwIfCancelled(signal, "Document Save As was cancelled");
+		throwIfCancelled(signal, 'Document Save As was cancelled');
 		const type = DocumentTypes.find({ resource: this.resource, contentType: this.backupContentType });
 		if (type && DocumentTypes.find({ resource })?.id !== type.id) {
 			// Renaming must not turn a structured working copy into a plain-text view.
@@ -139,15 +139,15 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 
 	async revert(signal: AbortSignal): Promise<void> {
-		throwIfCancelled(signal, "Document revert was cancelled");
-		if (this.resource.scheme === "untitled") {
+		throwIfCancelled(signal, 'Document revert was cancelled');
+		if (this.resource.scheme === 'untitled') {
 			this.savedContent = this.initialContent;
 			this.options.model.resetBlocks(this.initialDocument);
 			this.setExternalChange(false);
 			return;
 		}
 		const content = await this.options.textFiles.resolve({ resource: this.resource }, signal);
-		throwIfCancelled(signal, "Document revert was cancelled");
+		throwIfCancelled(signal, 'Document revert was cancelled');
 		const document = this.options.codec.parse(content.text, this.options.createEmptyDocument);
 		this.savedContent = this.options.codec.serialize(document);
 		this.revision = content.revision;

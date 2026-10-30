@@ -1,3 +1,4 @@
+import { Orientation } from '../../base/browser/ui/sash/sash.js';
 import { DisposableStore } from '../../base/common/lifecycle.js';
 import { ISessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
@@ -8,27 +9,27 @@ import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.
 import { isRecord } from '../../base/common/types.js';
 import { isUntitledSession } from '../services/sessions/browser/sessionsService.js';
 import { ChatEditorInput } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
-import "./media/chatViewPane.css";
-import { setDisposableOwner, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
-import { IMenuService } from "../../platform/actions/common/actions.js";
+import './media/chatViewPane.css';
+import { setDisposableOwner, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { IMenuService } from '../../platform/actions/common/actions.js';
 import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
-import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
-import { ICommandService } from "../../platform/commands/common/commands.js";
-import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../workbench/browser/parts/views/viewPane.js";
-import { IWorkbenchLayoutService } from "../../workbench/services/layout/browser/layoutService.js";
-import { IChatService } from "../../workbench/services/chat/common/chatService.js";
-import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from "../services/sessions/common/session.js";
-import { ISessionsManagementService } from "../services/sessions/common/sessionsManagement.js";
-import { ChatWidget, resolveMarkdownWorkspaceResource } from "../../workbench/contrib/chat/browser/widget/chatWidget.js";
-import { ChatViewTitleControl } from "../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js";
-import { addDisposableListener, h, isHTMLElement } from "../../base/browser/dom.js";
-import { type ChatContextAttachment, type ChatImageCapture, type IChatContextTarget } from "../../workbench/services/chat/common/chatContextService.js";
-import { IOpenerService } from "../../platform/opener/common/opener.js";
-import { IEditorService } from "../../workbench/services/editor/common/editorService.js";
+import { IContextMenuService, IContextViewService } from '../../platform/contextview/browser/contextView.js';
+import { ICommandService } from '../../platform/commands/common/commands.js';
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../workbench/browser/parts/views/viewPane.js';
+import { IWorkbenchLayoutService } from '../../workbench/services/layout/browser/layoutService.js';
+import { IChatService } from '../../workbench/services/chat/common/chatService.js';
+import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, ThreadId } from '../services/sessions/common/session.js';
+import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
+import { ChatWidget, resolveMarkdownWorkspaceResource } from '../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { ChatViewTitleControl } from '../../workbench/contrib/chat/browser/widgetHosts/viewPane/chatViewTitleControl.js';
+import { addDisposableListener, h, isHTMLElement } from '../../base/browser/dom.js';
+import { type ChatContextAttachment, type ChatImageCapture, type IChatContextTarget } from '../../workbench/services/chat/common/chatContextService.js';
+import { IOpenerService } from '../../platform/opener/common/opener.js';
+import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { URI } from '../../base/common/uri.js';
-import { type IContextKey } from "../../platform/contextkey/common/contextkey.js";
-import { ContextKeyService, IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
+import { type IContextKey } from '../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService, IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { SHOW_CHAT_HISTORY_COMMAND_ID, AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, AgentSessionsOrientationContext, AgentSessionsSidebarVisibleContext } from '../../workbench/contrib/chat/common/chat.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { AgentSessionsControl } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsControl.js';
@@ -127,22 +128,22 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.sessionService = sessionService;
 		this.contextMenuService = contextMenuService;
 		this.commandService = commandService;
-		this.element.classList.add("ash-chat-view-pane");
+		this.element.classList.add('ash-chat-view-pane');
 		this.headerElement.hidden = true;
-		this.contentElement.classList.add("ash-chat-view");
+		this.contentElement.classList.add('ash-chat-view');
 		const viewId = `ash-chat-view-${++chatViewInstanceId}`;
 		this.titleControl = this._register(this.instantiationService.createInstance(ChatViewTitleControl,
 			this.element,
 			viewId,
 			() => this.commandService.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID),
 		));
-		this.paneHost = h(container.ownerDocument, "div");
-		this.paneHost.className = "ash-chat-pane-host";
-		this.empty = h(container.ownerDocument, "div");
-		this.empty.className = "ash-chat-empty ash-chat-view-empty";
-		this.empty.textContent = "Start a new chat to begin.";
-		this.body = h(container.ownerDocument, "div");
-		this.body.className = "ash-chat-body";
+		this.paneHost = h(container.ownerDocument, 'div');
+		this.paneHost.className = 'ash-chat-pane-host';
+		this.empty = h(container.ownerDocument, 'div');
+		this.empty.className = 'ash-chat-empty ash-chat-view-empty';
+		this.empty.textContent = 'Start a new chat to begin.';
+		this.body = h(container.ownerDocument, 'div');
+		this.body.className = 'ash-chat-body';
 		const sidebarContextKeys = contextKeyService ?? this._register(new ContextKeyService());
 		this.inEditor = sidebarContextKeys.createKey('chatInEditor', false);
 		this._register(toDisposable(() => this.inEditor.reset()));
@@ -179,7 +180,12 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.sessionsSidebar.hidden = true;
 		const storedWidth = storage.getNumber(sessionsSidebarWidthKey, StorageScope.WORKSPACE);
 		this.sessionsSidebarWidth = storedWidth !== undefined && storedWidth >= minimumSessionsSidebarWidth ? storedWidth : defaultSessionsSidebarWidth;
-		this.sessionsSash = this._register(new Sash(this.body, 'vertical'));
+		this.sessionsSash = this._register(new Sash(this.body, {
+			getVerticalSashLeft: () => {
+				const width = this.body.getBoundingClientRect().width;
+				return width - this.getSessionsSidebarWidth(width);
+			}
+		}, { orientation: Orientation.VERTICAL }));
 		this.sessionsSash.element.classList.add('ash-chat-sessions-sash');
 		this.sessionsSash.element.setAttribute('aria-label', localize('chat.sessions.resize', 'Resize Sessions list'));
 		this.sessionsSash.element.setAttribute('aria-controls', this.sessionsSidebar.id);
@@ -192,7 +198,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 				return;
 			}
 			const width = this.body.getBoundingClientRect().width;
-			this.sessionsSidebarWidth = this.getSessionsSidebarWidth(width, resizeStartWidth - event.delta);
+			this.sessionsSidebarWidth = this.getSessionsSidebarWidth(width, resizeStartWidth - (event.currentX - event.startX));
 			this.layoutSessionsSidebar(width);
 		}));
 		this._register(this.sessionsSash.onDidEnd(() => {
@@ -231,7 +237,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		}));
 		this._register(storage.onWillSaveState(() => this.saveViewState()));
 		this._register(layoutService.onDidChangePartVisibility((event) => {
-			if (event.partId === "auxiliarybar" && event.visible) this.ensureConversationForVisibleChat();
+			if (event.partId === 'auxiliarybar' && event.visible) this.ensureConversationForVisibleChat();
 		}));
 		this._register(toDisposable(() => {
 			this.viewDisposed = true;
@@ -474,7 +480,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 					this.paneHost,
 					`ash-chat-pane-${++chatPaneInstanceId}`,
-					this.instantiationService.createInstance(ChatWidgetModel, this.chatService, { kind: "untitled", session: untitledSession }, this.sessionService),
+					this.instantiationService.createInstance(ChatWidgetModel, this.chatService, { kind: 'untitled', session: untitledSession }, this.sessionService),
 					() => { this.sessionService.createUntitledSession(); },
 					this.contextMenuService,
 					this.contextViewService,
@@ -499,7 +505,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			entries.push({ label: untitledSession.title.trim() || localize('chat.title.new', 'New Chat'), pane });
 		}
 		for (const session of this.sessionService.sessions) {
-			if (session.status !== "active") continue;
+			if (session.status !== 'active') continue;
 			const selection = this.selectionForSession(session);
 			if (!selection) continue;
 			const paneId = sessionPaneId(session);
@@ -512,7 +518,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 				pane = this.instantiationService.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 					this.paneHost,
 					`ash-chat-pane-${++chatPaneInstanceId}`,
-					this.instantiationService.createInstance(ChatWidgetModel, this.chatService, { kind: "session", active: selection }, this.sessionService),
+					this.instantiationService.createInstance(ChatWidgetModel, this.chatService, { kind: 'session', active: selection }, this.sessionService),
 					() => { this.sessionService.createUntitledSession(); },
 					this.contextMenuService,
 					this.contextViewService,
@@ -579,14 +585,14 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		if (retainedThreadId && isActiveThread(session, retainedThreadId)) {
 			return { session, threadId: retainedThreadId };
 		}
-		const thread = rootThread(session) ?? session.chats.find((candidate) => candidate.status === "active");
+		const thread = rootThread(session) ?? session.chats.find((candidate) => candidate.status === 'active');
 		return thread ? { session, threadId: thread.threadId } : undefined;
 	}
 
 	private ensureConversationForVisibleChat(): void {
-		if (!this.layoutService.isPartVisible("auxiliarybar") || this.panes.size > 0) return;
+		if (!this.layoutService.isPartVisible('auxiliarybar') || this.panes.size > 0) return;
 		const session = this.sessionService.createUntitledSession();
-		if (this.sessionService.state === "loading" && this.initialUntitledSessionId === undefined) {
+		if (this.sessionService.state === 'loading' && this.initialUntitledSessionId === undefined) {
 			this.initialUntitledSessionId = session.untitledSessionId;
 		}
 	}
@@ -734,7 +740,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		const sidebarWidth = this.getSessionsSidebarWidth(width);
 		const maximumWidth = width - minimumChatWidth;
 		this.sessionsSidebar.style.flexBasis = `${sidebarWidth}px`;
-		this.sessionsSash.element.style.left = `${width - sidebarWidth}px`;
+		this.sessionsSash.layout();
 		if (sidebarWidth >= maximumWidth) {
 			this.sessionsSash.state = SashState.AtMinimum;
 		} else if (sidebarWidth <= minimumSessionsSidebarWidth) {
@@ -751,11 +757,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 }
 
 function isActiveThread(session: ISession, threadId: ThreadId): boolean {
-	return session.chats.some((thread) => thread.threadId === threadId && thread.status === "active");
+	return session.chats.some((thread) => thread.threadId === threadId && thread.status === 'active');
 }
 
 function rootThread(session: ISession): IChat | undefined {
-	return session.chats.find((thread) => thread.status === "active" && thread.origin.type === "root");
+	return session.chats.find((thread) => thread.status === 'active' && thread.origin.type === 'root');
 }
 
 function untitledSessionPaneId(session: IUntitledChatSession): string {

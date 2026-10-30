@@ -16,17 +16,17 @@ import { IMarkerService } from '../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../platform/markers/common/markerService.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
-import { IInstantiationService, type ServiceIdentifier } from "../../../platform/instantiation/common/instantiation.js";
-import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
-import { SyncDescriptor } from "../../../platform/instantiation/common/descriptors.js";
-import { IThemeService } from "../../../platform/theme/common/themeService.js";
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { IInstantiationService, type ServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason, type IStorageValueChangeEvent, type IWillSaveStateEvent, type StorageValue } from '../../../platform/storage/common/storage.js';
 import { ConfigurationTarget, IConfigurationService, isConfigurationUpdateOverrides, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationOverrides, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ICodeEditorService, type ICodeEditorService as ICodeEditorServiceContract } from '../../browser/services/codeEditorService.js';
 import { type LanguageCompletionWorkerFactory, type SyntaxWorkerFactory } from '../../common/languages.js';
-import { createEditorWorkerClient, type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
+import { createEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
@@ -43,14 +43,14 @@ import { InMemoryTextModelService } from '../../common/services/inMemoryTextMode
 import { ITextResourcePropertiesService, type ITextResourcePropertiesService as ITextResourcePropertiesServiceContract } from '../../common/services/textResourceConfiguration.js';
 import { isLinux, isMacintosh } from '../../../base/common/platform.js';
 import type { URI } from '../../../base/common/uri.js';
-import { IStandaloneThemeService } from "../common/standaloneTheme.js";
-import { StandaloneThemeService } from "./standaloneThemeService.js";
+import { IStandaloneThemeService } from '../common/standaloneTheme.js';
+import { StandaloneThemeService } from './standaloneThemeService.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { IWorkspaceContextService, WorkbenchState, type IWorkspace, type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { BrowserClipboardService } from '../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
-import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { addDisposableListener, stopEvent } from '../../../base/browser/dom.js';
 import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
@@ -171,7 +171,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 	readonly codeEditorService: ICodeEditorServiceContract;
 
 	constructor(overrides: StandaloneServiceOverrides) {
-		if (overrides.languageFeaturesService && !overrides.languageConfigurationService) throw new TypeError("Standalone language feature overrides require a language configuration service");
+		if (overrides.languageFeaturesService && !overrides.languageConfigurationService) throw new TypeError('Standalone language feature overrides require a language configuration service');
 		super();
 		this.registerSingleton(IWebWorkerService, () => new StandaloneWebWorkerService());
 		this.registerInstance(ILogService, new NullLoggerService());
@@ -560,7 +560,7 @@ const initialized = new Emitter<void>();
 export namespace StandaloneServices {
 	export function initialize(overrides: StandaloneServiceOverrides = {}): StandaloneServiceCollection {
 		if (services) {
-			if (Object.keys(overrides).length > 0) throw new Error("Standalone services are already initialized");
+			if (Object.keys(overrides).length > 0) throw new Error('Standalone services are already initialized');
 			return services;
 		}
 		services = new StandaloneServiceCollection(overrides);

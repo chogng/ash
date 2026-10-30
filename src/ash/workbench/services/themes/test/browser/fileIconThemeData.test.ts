@@ -10,6 +10,8 @@ import { EditorGroupModel } from '../../../../common/editor/editorGroupModel.js'
 import { createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
 import { EditorShowIconsConfiguration, EditorTabsModeConfiguration } from '../../../editor/common/editorConfiguration.js';
 import type { EditorTabsDelegate } from '../../../../browser/parts/editor/editorTabsControl.js';
+import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { IHostColorSchemeService } from '../../common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../browser/browserHostColorSchemeService.js';
 import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
@@ -91,6 +93,7 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		using languages = new LanguageService();
 		using typescript = languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] });
 		using rust = languages.registerLanguage({ id: 'rust', extensions: ['.rs'] });

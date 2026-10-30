@@ -436,7 +436,37 @@ impl AppDriver {
             }
             AppCommand::OpenWorkspace { path } => return CommandEffect::OpenWorkspace(path),
             AppCommand::Quit => return CommandEffect::Quit,
-            AppCommand::Suspend => return CommandEffect::Suspend,
+            AppCommand::Suspend => {
+                let resource_id = self.app.prepare_suspend();
+                let start_queued = self.queued_commands.iter().any(|scheduled| {
+                    matches!(scheduled.command, AppCommand::DictationStart { .. })
+                });
+                if let Some(resource_id) = resource_id {
+                    // The Dictation request key has drained any in-flight start/stop.
+                    // Cancel joins the remaining worker before terminal ownership is
+                    // released; queued starts have not acquired server resources yet.
+                    if !start_queued
+                        && let Err(error) = self.client.cancel_dictation(resource_id.clone())
+                    {
+                        self.app
+                            .update(ThreadEvent::FailureReported(error.to_string()));
+                        return CommandEffect::None;
+                    }
+                    self.app.update(crate::app::AppEvent::DictationStopped {
+                        resource_id,
+                        result: Ok(None),
+                    });
+                }
+                // Keep a queued stop usable if cancellation failed. Once confirmed,
+                // discard all queued capture work so resume cannot restart it.
+                self.queued_commands.retain(|scheduled| {
+                    !matches!(
+                        scheduled.command,
+                        AppCommand::DictationStart { .. } | AppCommand::DictationStop { .. }
+                    )
+                });
+                return CommandEffect::Suspend;
+            }
         }
         CommandEffect::None
     }

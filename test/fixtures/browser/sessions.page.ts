@@ -1,7 +1,11 @@
 import { sessionIdentity } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
 import { installMultiHostSessionsFixture } from './multiHostSessionsFixture.js';
 import { errorHandler } from '../../../src/ash/base/common/errors.js';
-import { Event } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
+import { IUpdateService, type UpdateCheckResult, type UpdateReadyResult, type UpdateState } from '../../../src/ash/platform/update/common/updateService.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
+import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import type { } from '../../../src/ash/workbench/browser/web.api.js';
 import { codeSessionsProfile } from '../../../src/ash/code/common/codeSessionsProfile.js';
@@ -15,6 +19,34 @@ if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 await import('../../../src/ash/sessions/sessions.web.main.js');
+const updateChanges = new Emitter<UpdateState>();
+let updateState: UpdateState = new URL(location.href).searchParams.get('update') === 'ready' ? 'ready' : 'idle';
+let updateInstallCount = 0;
+let updateInstallation: DeferredPromise<void> | undefined;
+window.addEventListener('pagehide', () => updateChanges.dispose(), { once: true });
+if (new URL(location.href).searchParams.has('update')) {
+	// Select the fixture provider before the real SidebarPart resolves its service.
+	getSingletonServiceDescriptors().find(([id]) => id === IUpdateService)![1] = new SyncDescriptor(class implements IUpdateService {
+		get state(): UpdateState { return updateState; }
+		readonly onDidChangeState = updateChanges.event;
+		async checkForUpdates(): Promise<UpdateCheckResult> { return { status: 'current' }; }
+		async checkAutomatically(): Promise<undefined> { return undefined; }
+		async downloadUpdate(): Promise<UpdateReadyResult> { throw new Error('Unexpected fixture download'); }
+		async installUpdate(): Promise<void> {
+			updateInstallCount++;
+			updateState = 'installing';
+			updateChanges.fire(updateState);
+			updateInstallation = new DeferredPromise<void>();
+			try {
+				await updateInstallation.p;
+			} catch (error) {
+				updateState = 'ready';
+				updateChanges.fire(updateState);
+				throw error;
+			}
+		}
+	});
+}
 const { SessionsBrowserMain } = await import('../../../src/ash/sessions/browser/web.main.js');
 
 // Mount the renderer's real Parts, settings and canvas without a product process or backend.
@@ -54,18 +86,32 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 		},
 	};
 }
+let completeCustomizeDetails = (): void => { };
+let customizeDetailsRead: 'ready' | 'hold' | 'fail' = 'ready';
+window.addEventListener('pagehide', () => completeCustomizeDetails(), { once: true });
 // Synthetic catalogs exercise the real Sessions composition without using a personal profile.
 if (new URL(location.href).searchParams.has('customize')) {
 	const catalog = { generation: 1, skills: ['research-notes', 'code-review', 'writing-guide'].map(name => ({
-		id: { source: 'fixture', name }, description: `Reusable ${name.toLowerCase()} instructions with a deliberately long description to verify card wrapping without pushing actions outside the page.`,
+		id: { source: 'fixture', name }, description: name === 'writing-guide' ? 'Reusable writing instructions.' : name === 'research-notes' ? 'Reusable research instructions.'
+			: `Reusable ${name.toLowerCase()} instructions with a deliberately long description to verify card wrapping without pushing actions outside the page.`,
 		metadata: { author: 'Ash fixtures' }, contentDigest: 'a'.repeat(64), enabled: true, compatible: true,
 	})) };
 	const summaries = ['Data explorer', 'Document studio', 'Team knowledge', 'Writing companion'].map((displayName, index) => ({
 		id: `fixture.package-${index}`, version: '1.0.0', packageType: 'plugin', displayName, description: `Tools and reusable instructions for ${displayName.toLowerCase()}.`,
 	}));
+	const installed: Awaited<ReturnType<typeof disconnectedApi.extensionManagement.install>>[] = [];
 	globalThis.ashWebWorkbenchHost = { api: {
 		...globalThis.ashWebWorkbenchHost!.api,
-		skills: { ...disconnectedApi.skills, list: async () => catalog, read: async () => ({ revision: 1, catalog, diagnostics: [] }) },
+		skills: {
+			...disconnectedApi.skills, list: async () => catalog,
+			read: async () => {
+				const mode = customizeDetailsRead;
+				customizeDetailsRead = 'ready';
+				if (mode === 'fail') throw new Error('Synthetic detail failure');
+				if (mode === 'hold') await new Promise<void>(resolve => { completeCustomizeDetails = resolve; });
+				return { revision: 1, catalog, diagnostics: [] };
+			},
+		},
 		plugins: { ...disconnectedApi.plugins, list: async () => ({ revision: 1, activationGeneration: 1, packages: [{
 			id: 'fixture.local', version: '1.0.0', digest: 'a'.repeat(64), displayName: 'Local productivity', permissions: [],
 			hasEditorExtensions: true, enabled: true, granted: false, effective: false, revoked: false,
@@ -77,7 +123,18 @@ if (new URL(location.href).searchParams.has('customize')) {
 		}] }) },
 		extensionManagement: {
 			...disconnectedApi.extensionManagement,
-			listInstalled: async () => ({ instanceId: 'fixture', generation: 1, packages: [] }),
+			listInstalled: async () => ({ instanceId: 'fixture', generation: 1 + installed.length, packages: installed }),
+			install: async ({ packageId, version }) => {
+				if (new URL(location.href).searchParams.has('installFails')) throw new Error('Synthetic installation failure');
+				if (installed.some(item => item.package.id === packageId)) throw new Error('Duplicate installation');
+				const result = {
+					installationId: `installed:${packageId}`, package: { id: packageId, version: version!, digest: 'a'.repeat(64) }, state: 'installed' as const,
+					capabilities: [{ reference: { id: `skill:${packageId}` }, kind: 'skill' as const, id: 'fixture-skill', contractVersion: '1', permissions: [], authenticationProvider: null }],
+				};
+				installed.push(result);
+				return result;
+			},
+			editorExtensions: async () => ({ revision: 1, extensions: [] }),
 			sources: async () => ({ revision: 1, sources: [{ id: 'Ash fixtures', kind: 'ash', enabled: true, productOwned: true }] }),
 			search: async ({ query }) => ({ unavailableSources: [], packages: summaries.filter(item => item.displayName.toLowerCase().includes(query.toLowerCase())) }),
 			searchPage: async ({ query, cursor }) => {
@@ -134,6 +191,8 @@ window.addEventListener('pagehide', stopObservingErrors, { once: true });
 declare global {
 	interface Window {
 		ashSessionsIntegration: {
+			completeCustomizeDetails(): void;
+			setCustomizeDetailsRead(mode: 'hold' | 'fail'): void;
 			readonly errors: readonly string[];
 			readonly multiHost?: ReturnType<typeof installMultiHostSessionsFixture>;
 			readonly errorDetails: readonly string[];
@@ -143,12 +202,23 @@ declare global {
 			openChat(): Promise<void>;
 			setTheme(id: string): Promise<void>;
 			updateConfiguration(key: string, value: unknown): Promise<void>;
+			setUpdateState(value: UpdateState): void;
+			getUpdateInstallCount(): number;
+			finishUpdateInstall(fail: boolean): Promise<void>;
 		};
 	}
 }
 
 window.ashSessionsIntegration = {
+	completeCustomizeDetails: () => completeCustomizeDetails(),
+	setCustomizeDetailsRead: mode => { customizeDetailsRead = mode; },
 	errors, errorDetails, multiHost,
+	setUpdateState: value => { updateState = value; updateChanges.fire(value); },
+	getUpdateInstallCount: () => updateInstallCount,
+	finishUpdateInstall: async fail => {
+		if (fail) await updateInstallation!.error(new Error('Synthetic install failure'));
+		else await updateInstallation!.complete();
+	},
 	openChat: () => workbench.acceptHandoff({}),
 	takeErrors: () => { errorDetails.splice(0); return errors.splice(0); },
 	disposeAndCheckErrorHandler: async () => {

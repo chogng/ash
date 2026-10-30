@@ -102,16 +102,32 @@ function withStyles(component: ExtensionEditorModule | ExtensionResourceEditorMo
 					parent.dataset.ashEditorClient = identity;
 					styledParents.set(parent, this);
 					this.styleParent = parent;
-					try { super.create(parent); this.styleLease = lease; }
-					catch (error) { lease.dispose(); this.clearStyleParent(); throw error; }
+					try {
+						super.create(parent);
+						this.styleLease = lease;
+					}
+					catch (error) {
+						lease.dispose();
+						this.clearStyleParent();
+						throw error;
+					}
 				}
 				override dispose(): void {
-					try { super.dispose(); }
-					finally { this.styleLease?.dispose(); this.styleLease = undefined; this.clearStyleParent(); }
+					try {
+						super.dispose();
+					}
+					finally {
+						this.styleLease?.dispose();
+						this.styleLease = undefined;
+						this.clearStyleParent();
+					}
 				}
 				private clearStyleParent(): void {
 					const parent = this.styleParent;
-					if (parent && styledParents.get(parent) === this) { delete parent.dataset.ashEditorClient; styledParents.delete(parent); }
+					if (parent && styledParents.get(parent) === this) {
+						delete parent.dataset.ashEditorClient;
+						styledParents.delete(parent);
+					}
 					this.styleParent = undefined;
 				}
 			};

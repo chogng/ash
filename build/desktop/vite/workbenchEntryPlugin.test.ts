@@ -1,33 +1,33 @@
-import assert from "node:assert/strict";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import test from 'node:test';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { build, createServer, type Connect } from "vite";
+import { build, createServer, type Connect } from 'vite';
 
-import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
+import { workbenchEntryPlugin } from './workbenchEntryPlugin.ts';
 import { CSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 
-test("Workbench entry redirects root requests to the shared Workbench", () => {
+test('Workbench entry redirects root requests to the shared Workbench', () => {
 	const middleware = configuredMiddleware();
-	const result = invoke(middleware, { method: "GET", url: "/?theme=dark" });
+	const result = invoke(middleware, { method: 'GET', url: '/?theme=dark' });
 	assert.deepEqual(result, {
 		ended: true,
 		headers: {
-			"Cache-Control": "no-store",
-			Location: "/browser/workbench/workbench.html?theme=dark",
+			'Cache-Control': 'no-store',
+			Location: '/browser/workbench/workbench.html?theme=dark',
 		},
 		nextCalled: false,
 		statusCode: 302,
 	});
 });
 
-test("Workbench entry leaves non-root and mutating requests to Vite", () => {
+test('Workbench entry leaves non-root and mutating requests to Vite', () => {
 	const middleware = configuredMiddleware();
 	for (const request of [
-		{ method: "GET", url: "/browser/workbench/workbench.html" },
-		{ method: "POST", url: "/" },
+		{ method: 'GET', url: '/browser/workbench/workbench.html' },
+		{ method: 'POST', url: '/' },
 	]) {
 		assert.deepEqual(invoke(middleware, request), {
 			ended: false,

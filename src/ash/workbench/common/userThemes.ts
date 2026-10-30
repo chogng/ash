@@ -1,7 +1,7 @@
-import type { IColorTheme } from "../../platform/theme/common/themeService.js";
-import { createServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
-import type { ColorScheme } from "../../platform/theme/common/theme.js";
-import type { URI } from "../../base/common/uri.js";
+import type { IColorTheme } from '../../platform/theme/common/themeService.js';
+import { createServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
+import type { ColorScheme } from '../../platform/theme/common/theme.js';
+import type { URI } from '../../base/common/uri.js';
 
 export interface IUserThemeLoadIssue {
 	readonly file: string;
@@ -40,7 +40,7 @@ export interface IUserThemeService {
 	saveAs(source: string): Promise<IUserThemeSaveResult>;
 }
 
-export const IUserThemeService = createServiceIdentifier<IUserThemeService>("userThemeService");
+export const IUserThemeService = createServiceIdentifier<IUserThemeService>('userThemeService');
 
 /** Browser-host fallback used when the host cannot persist user theme files. */
 export const UnavailableUserThemeService: IUserThemeService = Object.freeze({
@@ -49,9 +49,9 @@ export const UnavailableUserThemeService: IUserThemeService = Object.freeze({
 	issues: Object.freeze([]),
 	sourceFor: () => undefined,
 	getSource: () => undefined,
-	resolve: () => Promise.reject(new Error("User themes are not available in this host")),
-	delete: () => Promise.reject(new Error("User themes are not available in this host")),
+	resolve: () => Promise.reject(new Error('User themes are not available in this host')),
+	delete: () => Promise.reject(new Error('User themes are not available in this host')),
 	reload: () => Promise.resolve(),
-	save: () => Promise.reject(new Error("User themes are not available in this host")),
-	saveAs: () => Promise.reject(new Error("User themes are not available in this host")),
+	save: () => Promise.reject(new Error('User themes are not available in this host')),
+	saveAs: () => Promise.reject(new Error('User themes are not available in this host')),
 });

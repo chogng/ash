@@ -1,5 +1,5 @@
-import type { Event } from "../../../../base/common/event.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { Event } from '../../../../base/common/event.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 /**
  * Window-scoped diagnostic stream for tracing native keyboard events through
@@ -13,5 +13,5 @@ export interface IKeyboardShortcutTroubleshootingService {
 
 export const IKeyboardShortcutTroubleshootingService =
 	createServiceIdentifier<IKeyboardShortcutTroubleshootingService>(
-		"keyboardShortcutTroubleshootingService",
+		'keyboardShortcutTroubleshootingService',
 	);

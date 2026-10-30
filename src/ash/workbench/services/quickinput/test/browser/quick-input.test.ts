@@ -24,71 +24,71 @@ import { CodeEditorService } from '../../../../services/editor/browser/codeEdito
 import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
-import assert from "node:assert/strict";
-import { suite, suiteSetup, suiteTeardown, test } from "mocha";
-import { JSDOM } from "jsdom";
-import { Action2, IMenuService, MenuId, MenusRegistry, registerAction2 } from "../../../../../platform/actions/common/actions.js";
-import { MenuService } from "../../../../../platform/actions/common/menuService.js";
+import assert from 'node:assert/strict';
+import { suite, suiteSetup, suiteTeardown, test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { Action2, IMenuService, MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import {
 	ICommandService,
-} from "../../../../../platform/commands/common/commands.js";
-import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+} from '../../../../../platform/commands/common/commands.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import {
 	IKeybindingService,
 	type IKeybindingService as KeybindingService,
-} from "../../../../../platform/keybinding/common/keybinding.js";
+} from '../../../../../platform/keybinding/common/keybinding.js';
 import {
 	filterQuickPickItems,
 	QuickInputList,
-} from "../../../../../platform/quickinput/browser/quickInputList.js";
+} from '../../../../../platform/quickinput/browser/quickInputList.js';
 import {
 	IQuickInputService,
 	QuickPickFocus,
 	type IQuickPick,
 	type IQuickPickItem,
-} from "../../../../../platform/quickinput/common/quickInput.js";
-import { QuickAccessRegistry } from "../../../../../platform/quickinput/common/quickAccess.js";
+} from '../../../../../platform/quickinput/common/quickInput.js';
+import { QuickAccessRegistry } from '../../../../../platform/quickinput/common/quickAccess.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import {
 	CommandService,
-} from "../../../../../workbench/services/commands/common/commandService.js";
+} from '../../../../../workbench/services/commands/common/commandService.js';
 import {
 	TestQuickInputService,
-} from "../../../../../platform/quickinput/test/browser/testQuickInputService.js";
+} from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import {
 	ShowAllCommandsCommandId,
-} from "../../../../../workbench/browser/quickaccess.js";
+} from '../../../../../workbench/browser/quickaccess.js';
 await import('../../../../../workbench/contrib/quickaccess/browser/quickAccess.contribution.js');
 await import('../../../../../workbench/contrib/search/browser/searchQuickAccess.contribution.js');
-import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 
-test("Show All Commands is not duplicated in the titlebar action menu", () => {
+test('Show All Commands is not duplicated in the titlebar action menu', () => {
 	const titlebarCommandIds = MenusRegistry.getMenuItems(MenuId.TitleBar)
-		.flatMap((item) => "command" in item ? [item.command.id] : []);
+		.flatMap((item) => 'command' in item ? [item.command.id] : []);
 
 	assert.equal(titlebarCommandIds.includes(ShowAllCommandsCommandId), false);
 });
 
-test("Quick Pick filtering matches ordered characters and favors labels", () => {
+test('Quick Pick filtering matches ordered characters and favors labels', () => {
 	const items = [
-		{ label: "Open Folder", description: "workbench.openFolder" },
-		{ label: "Format Document", description: "editor.formatDocument" },
-		{ label: "Focus Sidebar", description: "workbench.focusSidebar" },
+		{ label: 'Open Folder', description: 'workbench.openFolder' },
+		{ label: 'Format Document', description: 'editor.formatDocument' },
+		{ label: 'Focus Sidebar', description: 'workbench.focusSidebar' },
 	];
 
 	assert.deepEqual(
-		filterQuickPickItems(items, "open f").map((item) => item.label),
-		["Open Folder"],
+		filterQuickPickItems(items, 'open f').map((item) => item.label),
+		['Open Folder'],
 	);
 	assert.deepEqual(
-		filterQuickPickItems(items, "format").map((item) => item.label),
-		["Format Document"],
+		filterQuickPickItems(items, 'format').map((item) => item.label),
+		['Format Document'],
 	);
-	assert.deepEqual(filterQuickPickItems(items, "missing"), []);
+	assert.deepEqual(filterQuickPickItems(items, 'missing'), []);
 });
 
 test('Quick Pick item button fires without accepting its row', () => {
@@ -217,8 +217,8 @@ test('QuickInputList mounts theme icons and retains labeled and unlabeled group 
 	}
 });
 
-test("QuickInputList owns filtering, looping focus, and acceptance", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('QuickInputList owns filtering, looping focus, and acceptance', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
 	const list = new QuickInputList<{ label: string; }>(
@@ -235,27 +235,27 @@ test("QuickInputList owns filtering, looping focus, and acceptance", () => {
 	});
 
 	list.items = [
-		{ label: "First" },
-		{ label: "Second" },
-		{ label: "Third" },
+		{ label: 'First' },
+		{ label: 'Second' },
+		{ label: 'Third' },
 	];
-	assert.equal(list.activeItem?.label, "First");
+	assert.equal(list.activeItem?.label, 'First');
 	list.focus(QuickPickFocus.Previous);
-	assert.equal(list.activeItem?.label, "Third");
+	assert.equal(list.activeItem?.label, 'Third');
 	list.acceptActive();
-	assert.deepEqual(acceptedLabels, ["Third"]);
+	assert.deepEqual(acceptedLabels, ['Third']);
 
-	list.filter("second");
+	list.filter('second');
 	assert.deepEqual(
 		list.visibleItems.map((item) => item.label),
-		["Second"],
+		['Second'],
 	);
-	assert.equal(list.activeItem?.label, "Second");
-	list.filter("missing");
+	assert.equal(list.activeItem?.label, 'Second');
+	list.filter('missing');
 	assert.equal(list.activeItem, undefined);
 	assert.equal(
-		list.element.querySelector(".ash-quick-pick-empty")?.textContent,
-		"No matching results",
+		list.element.querySelector('.ash-quick-pick-empty')?.textContent,
+		'No matching results',
 	);
 	assert.equal(activeLabels.at(-1), undefined);
 
@@ -265,14 +265,14 @@ test("QuickInputList owns filtering, looping focus, and acceptance", () => {
 	dom.window.close();
 });
 
-test("Command Palette filters, executes, closes, and restores focus", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('Command Palette filters, executes, closes, and restores focus', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using heights = installTestElementHeights(dom.window.document);
 	installDomGlobals(dom);
-	const container = dom.window.document.querySelector("main");
+	const container = dom.window.document.querySelector('main');
 	assert.ok(container);
-	const focusTarget = h(dom.window.document, "button");
-	focusTarget.textContent = "Restore focus";
+	const focusTarget = h(dom.window.document, 'button');
+	focusTarget.textContent = 'Restore focus';
 	container.append(focusTarget);
 	focusTarget.focus();
 
@@ -300,8 +300,8 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	class PaletteTargetAction extends Action2 {
 		constructor() {
 			super({
-				id: "test.quickInput.target",
-				title: "Run Palette Target",
+				id: 'test.quickInput.target',
+				title: 'Run Palette Target',
 				f1: true,
 			});
 		}
@@ -315,28 +315,28 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	await commands.executeCommand(ShowAllCommandsCommandId);
 	assert.equal(contextKeys.getValue(inQuickInputContext.key), true);
 	const input = container.querySelector<HTMLInputElement>(
-		".ash-quick-pick-input input",
+		'.ash-quick-pick-input input',
 	);
 	assert.ok(input);
-	input.value = ">palette target";
-	input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+	input.value = '>palette target';
+	input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	assert.deepEqual(
-		[...container.querySelectorAll(".ash-quick-pick-row-label")]
+		[...container.querySelectorAll('.ash-quick-pick-row-label')]
 			.map((label) => label.textContent),
-		["Run Palette Target"],
+		['Run Palette Target'],
 	);
 
-	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
-		key: "Enter",
+		key: 'Enter',
 	}));
 	await Promise.resolve();
 
 	assert.equal(executions, 1);
 	assert.equal(contextKeys.getValue(inQuickInputContext.key), false);
 	assert.equal(
-		container.querySelector(".ash-quick-pick"),
+		container.querySelector('.ash-quick-pick'),
 		null,
 	);
 	assert.equal(dom.window.document.activeElement, focusTarget);
@@ -802,7 +802,7 @@ function emptyKeybindingService(): KeybindingService {
 			[Symbol.dispose]() { },
 		}),
 		resolveKeybinding() {
-			throw new Error("Not needed by Command Palette test");
+			throw new Error('Not needed by Command Palette test');
 		},
 		registerSchemaContribution: () => Disposable.None,
 		getKeybindings: () => [],

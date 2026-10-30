@@ -56,3 +56,9 @@
 	width: var(--ash-lxiconFontSize);
 	height: var(--ash-lxiconFontSize);
 }
+
+.ash-editor-breadcrumbs .ash-breadcrumb-item.disabled {
+	background: transparent;
+	color: inherit;
+	cursor: default;
+}

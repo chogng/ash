@@ -8,7 +8,7 @@ import { extensionMenuId } from '../common/extensionMenus.js';
 import { ViewsRegistry } from '../../../common/views.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { KeybindingsRegistry, KeybindingSource, KeybindingWeight, type IKeybindingRule } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { URI } from "../../../../base/common/uri.js";
+import { URI } from '../../../../base/common/uri.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationNode, type IConfigurationDefaults } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { registerProblemMatcherContributions, type ProblemMatcherContributions } from '../../../contrib/tasks/common/problemMatcher.js';
@@ -25,16 +25,16 @@ import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } f
 import type { IWorkbenchFileIconTheme, IWorkbenchProductIconTheme } from '../../themes/common/workbenchThemeService.js';
 import { FileIconThemeData } from '../../themes/browser/fileIconThemeData.js';
 import { ProductIconThemeData, loadExtensionFontIcon } from '../../themes/browser/productIconThemeData.js';
-import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Emitter, runWithBufferedEvents, type Event } from '../../../../base/common/event.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { LanguageConfiguration } from '../../../../editor/common/languages/languageConfiguration.js';
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
-import { parseLanguageConfiguration } from "./languageConfigurationParser.js";
-import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/services/languagesRegistry.js";
+import { parseLanguageConfiguration } from './languageConfigurationParser.js';
+import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from '../../../../editor/common/services/languagesRegistry.js';
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
-import type { IExtensionApi, ExtensionCatalogReload, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
-import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { parseJsonc } from "../common/jsonc.js";
+import type { IExtensionApi, ExtensionCatalogReload, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { parseJsonc } from '../common/jsonc.js';
 import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
 import { getNLSLanguage } from '../../../../nls.js';
 import { match } from '../../../../base/common/glob.js';
@@ -42,11 +42,11 @@ import { basename } from '../../../../base/common/resources.js';
 import { EditorPanes, getBuiltinEditorPaneFactory, type IEditorPaneDescriptor } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { isResourceDiffEditorInput } from '../../../common/editor.js';
-import { ExtensionFileTemplateRegistry, type ExtensionFileTemplateDefinition, type ExtensionFileTemplateSource } from "../common/extensionFileTemplate.js";
+import { ExtensionFileTemplateRegistry, type ExtensionFileTemplateDefinition, type ExtensionFileTemplateSource } from '../common/extensionFileTemplate.js';
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
-import { ExtensionThemeRegistry, loadExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from "../common/extensionTheme.js";
-import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, ExtensionSnippetActivation, ExtensionSnippetFile, IExtensionService } from "../common/extensionService.js";
-import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions, type ExtensionDebugAdapterDefinition, type ExtensionDebugAdapterSource } from "../common/extensionDebugAdapter.js";
+import { ExtensionThemeRegistry, loadExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from '../common/extensionTheme.js';
+import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, ExtensionSnippetActivation, ExtensionSnippetFile, IExtensionService } from '../common/extensionService.js';
+import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions, type ExtensionDebugAdapterDefinition, type ExtensionDebugAdapterSource } from '../common/extensionDebugAdapter.js';
 
 export interface AppServerExtensionServiceOptions {
 	readonly api: IExtensionApi;
@@ -157,13 +157,13 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		this.themes = Object.freeze({ get currentCatalog() { return themeRegistry.currentCatalog; }, onDidChange: themeRegistry.onDidChange });
 		this.fileTemplates = Object.freeze({ get currentCatalog() { return fileTemplateRegistry.currentCatalog; }, onDidChange: fileTemplateRegistry.onDidChange });
 		this.debugAdapters = Object.freeze({ get definitions() { return debugAdapterRegistry.definitions; }, onDidChange: debugAdapterRegistry.onDidChange, get: (type: string) => debugAdapterRegistry.get(type) });
-		if (!options || typeof options !== "object") {
+		if (!options || typeof options !== 'object') {
 			this.dispose();
-			throw new TypeError("App Server extension service options are required");
+			throw new TypeError('App Server extension service options are required');
 		}
-		if (!options.api || typeof options.api.list !== "function" || typeof options.api.resources?.readExtensionResourceBytes !== "function") {
+		if (!options.api || typeof options.api.list !== 'function' || typeof options.api.resources?.readExtensionResourceBytes !== 'function') {
 			this.dispose();
-			throw new TypeError("App Server extension service requires an extension API");
+			throw new TypeError('App Server extension service requires an extension API');
 		}
 		const hasLanguageServices = options.languageService !== undefined || options.languageConfigurationService !== undefined;
 		if (hasLanguageServices && (!options.languageService || !options.languageConfigurationService)) {
@@ -185,7 +185,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				} else {
 					return;
 				}
-				void this.requestReload('cached').catch(error => console.error("Declarative extension refresh failed", error));
+				void this.requestReload('cached').catch(error => console.error('Declarative extension refresh failed', error));
 			});
 			this._register(toDisposable(() => subscription.dispose()));
 		}
@@ -609,7 +609,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				this.productIconRegistration.replace(this.activeProductIconThemes);
 				this.problemMatcherRegistration.replace(previousProblemContributions);
 			} catch (rollbackError) {
-				throw new AggregateError([error, rollbackError], "Extension contribution activation and rollback both failed");
+				throw new AggregateError([error, rollbackError], 'Extension contribution activation and rollback both failed');
 			}
 			throw error;
 		}
@@ -654,13 +654,13 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 
 	private async loadLanguageConfiguration(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<ReturnType<typeof parseLanguageConfiguration>> {
 		const bytes = await this.loadResource(resources, generation, extensionId, path);
-		const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 		return parseLanguageConfiguration(parseJsonc(text, `Extension '${extensionId}' language configuration '${path}'`), `Extension '${extensionId}' language configuration '${path}'`);
 	}
 
 	private async loadSnippetFile(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<string> {
 		const bytes = await this.loadResource(resources, generation, extensionId, path);
-		const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 		return text;
 	}
 

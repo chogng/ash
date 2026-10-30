@@ -1,1 +1,1 @@
-export const ShowAllCommandsCommandId = "workbench.action.showCommands";
+export const ShowAllCommandsCommandId = 'workbench.action.showCommands';

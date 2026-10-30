@@ -2,21 +2,21 @@ import { Selection } from '../../../../../../editor/common/core/selection.js';
 import type { ChatInputEditorSelection } from './chatInputEditorRegistry.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { DEFAULT_FONT_FAMILY } from '../../../../../../base/browser/fonts.js';
-import "./chatInputEditor.css";
-import { addDisposableListener, stopEvent, h } from "../../../../../../base/browser/dom.js";
-import { Emitter, type Event } from "../../../../../../base/common/event.js";
-import { RunOnceScheduler } from "../../../../../../base/common/async.js";
-import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
-import { EditorLineWrapping, EditorOption } from "../../../../../../editor/common/config/editorOptions.js";
-import { CodeEditorWidget, type CodeEditorWidgetOptions } from "../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
+import './chatInputEditor.css';
+import { addDisposableListener, stopEvent, h } from '../../../../../../base/browser/dom.js';
+import { Emitter, type Event } from '../../../../../../base/common/event.js';
+import { RunOnceScheduler } from '../../../../../../base/common/async.js';
+import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { EditorLineWrapping, EditorOption } from '../../../../../../editor/common/config/editorOptions.js';
+import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ChatInputConfiguration } from '../../../common/constants.js';
 import { EditorCoreCommandId } from '../../../../../../editor/browser/coreCommands.js';
-import { Position } from "../../../../../../editor/common/core/position.js";
-import { Range } from "../../../../../../editor/common/core/range.js";
-import { TextModel } from "../../../../../../editor/common/model/textModel.js";
-import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputEditorRegistry.js";
-import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider, createChatSkillCompletionProvider } from "./editor/chatInputCompletions.js";
+import { Position } from '../../../../../../editor/common/core/position.js';
+import { Range } from '../../../../../../editor/common/core/range.js';
+import { TextModel } from '../../../../../../editor/common/model/textModel.js';
+import { type ChatInputEditorOptions, type IChatInputEditor } from './chatInputEditorRegistry.js';
+import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider, createChatSkillCompletionProvider } from './editor/chatInputCompletions.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 import { InlineChatAttachmentWidget } from '../../attachments/chatAttachmentWidgets.js';
 import { ICodeEditorService } from '../../../../../../editor/browser/services/codeEditorService.js';
@@ -75,8 +75,8 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_MAX_HEIGHT;
 		this.tabFocusMode = options.tabFocusMode ?? false;
 		this.height = this.minimumHeight;
-		this.element = h(options.container.ownerDocument, "div");
-		this.element.className = "ash-chat-input-editor";
+		this.element = h(options.container.ownerDocument, 'div');
+		this.element.className = 'ash-chat-input-editor';
 		this.element.style.height = `${this.height}px`;
 		this.element.style.minHeight = `${this.minimumHeight}px`;
 		options.container.append(this.element);
@@ -92,7 +92,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			...this.getFontOptions(),
 			ariaLabel: options.ariaLabel,
 			placeholder: options.placeholder,
-			presentation: "embedded",
+			presentation: 'embedded',
 			padding: CHAT_INPUT_EDITOR_PADDING,
 			glyphMargin: false,
 			lineDecorationsWidth: 0,
@@ -139,8 +139,8 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			layout.schedule();
 			this._onDidChange.fire(this.value);
 		}));
-		this._register(addDisposableListener(this.editor.controller.element, "keydown", event => {
-			if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey) return;
+		this._register(addDisposableListener(this.editor.controller.element, 'keydown', event => {
+			if (event.defaultPrevented || event.isComposing || event.key !== 'Enter' || event.shiftKey) return;
 			if (event.altKey && !event.ctrlKey && !event.metaKey) {
 				stopEvent(event);
 				const selection = this.editor.getSelection();

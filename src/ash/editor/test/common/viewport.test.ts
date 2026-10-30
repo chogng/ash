@@ -1,15 +1,15 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Emitter, Event } from "../../../base/common/event.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable as DisposableBase } from '../../../base/common/lifecycle.js';
 import { MenuId } from '../../../platform/actions/common/actions.js';
 import { type IEditorConfiguration } from '../../common/config/editorConfiguration.js';
 import { EditorOption, type IComputedEditorOptions } from '../../common/config/editorOptions.js';
-import { Range } from "../../common/core/range.js";
+import { Range } from '../../common/core/range.js';
 import { ScrollType } from '../../common/editorCommon.js';
-import { TextModel } from "../../common/model/textModel.js";
+import { TextModel } from '../../common/model/textModel.js';
 import { type CustomLineHeightData } from '../../common/viewLayout/lineHeights.js';
-import { EditorViewportChangeReason, type EditorViewportVerticalPadding, ViewLayout as EditorViewLayout } from "../../common/viewLayout/viewLayout.js";
+import { EditorViewportChangeReason, type EditorViewportVerticalPadding, ViewLayout as EditorViewLayout } from '../../common/viewLayout/viewLayout.js';
 import { type EditorViewportLineSource } from '../../common/viewModel.js';
 
 interface TestViewLayoutOptions {
@@ -62,7 +62,7 @@ function testConfiguration(lineHeight: number, padding: EditorViewportVerticalPa
 	};
 }
 
-test("ViewLayout calculates visible line ranges", () => {
+test('ViewLayout calculates visible line ranges', () => {
 	using model = new TextModel(lines(100));
 	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
@@ -133,7 +133,7 @@ test("ViewLayout calculates visible line ranges", () => {
 	});
 });
 
-test("ViewLayout includes vertical padding in content and row projection", () => {
+test('ViewLayout includes vertical padding in content and row projection', () => {
 	using model = new TextModel(lines(10));
 	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
@@ -249,7 +249,7 @@ test('ViewLayout orders same-line view zones by explicit ordinal and creation or
 	]);
 });
 
-test("Viewport resize and line-height changes preserve a stable top line", () => {
+test('Viewport resize and line-height changes preserve a stable top line', () => {
 	using model = new TextModel(lines(100));
 	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
@@ -292,7 +292,7 @@ test("Viewport resize and line-height changes preserve a stable top line", () =>
 	});
 });
 
-test("Model line changes update layout and clamp scrolling", () => {
+test('Model line changes update layout and clamp scrolling', () => {
 	using model = new TextModel(lines(100));
 	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
@@ -305,7 +305,7 @@ test("Model line changes update layout and clamp scrolling", () => {
 
 	model.applyEdits([{
 		range: Range.fromPositions(model.positionAt(0), end),
-		text: "a\nb",
+		text: 'a\nb',
 	}]);
 
 	assert.deepEqual({
@@ -332,8 +332,8 @@ test("Model line changes update layout and clamp scrolling", () => {
 	});
 });
 
-test("Same-line model changes do not publish unchanged layout", () => {
-	using model = new TextModel("abc");
+test('Same-line model changes do not publish unchanged layout', () => {
+	using model = new TextModel('abc');
 	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 	});
@@ -348,14 +348,14 @@ test("Same-line model changes do not publish unchanged layout", () => {
 			model.positionAt(1),
 			model.positionAt(2),
 		),
-		text: "X",
+		text: 'X',
 	}]);
 
 	assert.deepEqual(reasons, []);
 });
 
-test("Viewport virtualizes a caller-owned visual-line source", () => {
-	using model = new TextModel("one\ntwo");
+test('Viewport virtualizes a caller-owned visual-line source', () => {
+	using model = new TextModel('one\ntwo');
 	using visualLines = new MutableLineSource(5);
 	using viewport = new ViewLayout(model, {
 		lineHeight: 10,
@@ -381,8 +381,8 @@ test("Viewport virtualizes a caller-owned visual-line source", () => {
 	});
 });
 
-test("Zero-sized viewports render no lines and setters suppress no-ops", () => {
-	using model = new TextModel("");
+test('Zero-sized viewports render no lines and setters suppress no-ops', () => {
+	using model = new TextModel('');
 	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 	});
@@ -467,8 +467,8 @@ test('ViewLayout publishes scroll, content-size, and whitespace changes from one
 	assert.deepEqual(viewport.layout.scrollPosition, { left: 30, top: 50 });
 });
 
-test("ViewLayout validates geometry before changing layout", () => {
-	using model = new TextModel("a");
+test('ViewLayout validates geometry before changing layout', () => {
+	using model = new TextModel('a');
 
 	assert.throws(
 		() => new ViewLayout(model, { lineHeight: 0 }),
@@ -504,8 +504,8 @@ test("ViewLayout validates geometry before changing layout", () => {
 	});
 });
 
-test("Viewport disposal releases its listener without owning the model", () => {
-	using model = new TextModel("a");
+test('Viewport disposal releases its listener without owning the model', () => {
+	using model = new TextModel('a');
 	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 	});
@@ -520,7 +520,7 @@ test("Viewport disposal releases its listener without owning the model", () => {
 			model.positionAt(1),
 			model.positionAt(1),
 		),
-		text: "b",
+		text: 'b',
 	}]);
 
 	assert.deepEqual({
@@ -534,7 +534,7 @@ test("Viewport disposal releases its listener without owning the model", () => {
 
 function lines(count: number): string {
 	return Array.from({ length: count }, (_, index) =>
-		`line ${index}`).join("\n");
+		`line ${index}`).join('\n');
 }
 
 class MutableLineSource implements EditorViewportLineSource, Disposable {

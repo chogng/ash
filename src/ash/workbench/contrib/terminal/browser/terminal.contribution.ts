@@ -9,10 +9,10 @@ import { TerminalInputSerializer } from './terminalEditorSerializer.js';
 import { TerminalEditorService } from './terminalEditorService.js';
 import { registerTerminalActions } from './terminalActions.js';
 import { setupTerminalMenus } from './terminalMenus.js';
-import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
-import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
-import { TERMINAL_VIEW_ID } from "../common/terminal.js";
-import { TerminalViewPane } from "./terminalView.js";
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from '../../../common/views.js';
+import { TERMINAL_VIEW_ID } from '../common/terminal.js';
+import { TerminalViewPane } from './terminalView.js';
 import { ITerminalLogService, ITerminalProcessService } from '../../../../platform/terminal/common/terminal.js';
 import { TerminalLogService } from '../../../../platform/terminal/common/terminalLogService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -57,7 +57,7 @@ registerWorkbenchServiceContribution({
 });
 
 
-export { TERMINAL_VIEW_ID } from "../common/terminal.js";
+export { TERMINAL_VIEW_ID } from '../common/terminal.js';
 
 registerTerminalActions();
 setupTerminalCommands();
@@ -67,16 +67,16 @@ setupTerminalMenus();
 export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
 	registry.registerStaticViewContainer({
 		id: WorkbenchViewContainerId.Terminal,
-		title: "Terminal",
-		localizationKey: { bundle: "ash.views", key: "terminal" },
+		title: 'Terminal',
+		localizationKey: { bundle: 'ash.views', key: 'terminal' },
 		location: ViewContainerLocation.Panel,
 		order: 3,
 		isDefault: true,
 	});
 	registry.registerStaticViews(WorkbenchViewContainerId.Terminal, [{
 		id: TERMINAL_VIEW_ID,
-		title: "Terminal",
-		localizationKey: { bundle: "ash.views", key: "terminal" },
+		title: 'Terminal',
+		localizationKey: { bundle: 'ash.views', key: 'terminal' },
 		order: 1,
 		canToggleVisibility: false,
 		canMoveView: true,

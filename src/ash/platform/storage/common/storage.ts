@@ -1,21 +1,21 @@
-import { type Event } from "../../../base/common/event.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { type Event } from '../../../base/common/event.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const enum StorageScope {
-	APPLICATION = "application",
-	PROFILE = "profile",
-	WORKSPACE = "workspace",
+	APPLICATION = 'application',
+	PROFILE = 'profile',
+	WORKSPACE = 'workspace',
 }
 
 export const enum StorageTarget {
-	USER = "user",
-	MACHINE = "machine",
+	USER = 'user',
+	MACHINE = 'machine',
 }
 
 export const enum WillSaveStateReason {
-	PERIODIC = "periodic",
-	WORKSPACE_CHANGE = "workspaceChange",
-	SHUTDOWN = "shutdown",
+	PERIODIC = 'periodic',
+	WORKSPACE_CHANGE = 'workspaceChange',
+	SHUTDOWN = 'shutdown',
 }
 
 export type StorageValue = string | number | boolean | null | undefined;
@@ -54,4 +54,4 @@ export interface IStorageService {
 	flush(reason?: WillSaveStateReason): Promise<void>;
 }
 
-export const IStorageService = createServiceIdentifier<IStorageService>("storageService");
+export const IStorageService = createServiceIdentifier<IStorageService>('storageService');

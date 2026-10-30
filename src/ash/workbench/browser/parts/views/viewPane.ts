@@ -1,9 +1,9 @@
 import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/paneviewlet.css';
 import './media/views.css';
-import { Emitter, Event } from "../../../../base/common/event.js";
-import { Pane, type IPaneOptions } from "../../../../base/browser/ui/splitview/paneview.js";
-import type { IView } from "../../../common/views.js";
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { Pane, type IPaneOptions } from '../../../../base/browser/ui/splitview/paneview.js';
+import type { IView } from '../../../common/views.js';
 import { getWindow, h } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
@@ -171,7 +171,7 @@ export abstract class ViewPane extends Pane implements IView {
 			headerActionsVisibility = 'always';
 		}
 		super(container, { ...options, headerActionsVisibility });
-		this.element.classList.add("ash-view-pane");
+		this.element.classList.add('ash-view-pane');
 		// Pane owns collapse visibility; this variant bypasses its hover/focus reveal.
 		this.element.classList.toggle('show-actions', options.showActions === ViewPaneShowActions.WhenExpanded || options.showActions === ViewPaneShowActions.Always);
 		this.element.dataset.viewId = options.id;

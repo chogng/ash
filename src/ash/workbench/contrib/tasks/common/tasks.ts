@@ -1,18 +1,18 @@
 import type { URI } from '../../../../base/common/uri.js';
-import { type Event } from "../../../../base/common/event.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
+import { type Event } from '../../../../base/common/event.js';
+import { type IDisposable } from '../../../../base/common/lifecycle.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import { isHighSurrogate, isLowSurrogate } from '../../../../base/common/strings.js';
 
-export const RUN_TASK_COMMAND_ID = "workbench.action.tasks.runTask";
-export const RUN_BUILD_TASK_COMMAND_ID = "workbench.action.tasks.build";
-export const RUN_TEST_TASK_COMMAND_ID = "workbench.action.tasks.test";
-export const RERUN_LAST_TASK_COMMAND_ID = "workbench.action.tasks.reRunTask";
-export const TERMINATE_TASK_COMMAND_ID = "workbench.action.tasks.terminate";
+export const RUN_TASK_COMMAND_ID = 'workbench.action.tasks.runTask';
+export const RUN_BUILD_TASK_COMMAND_ID = 'workbench.action.tasks.build';
+export const RUN_TEST_TASK_COMMAND_ID = 'workbench.action.tasks.test';
+export const RERUN_LAST_TASK_COMMAND_ID = 'workbench.action.tasks.reRunTask';
+export const TERMINATE_TASK_COMMAND_ID = 'workbench.action.tasks.terminate';
 
-export type WorkspaceTaskSource = "vscode" | "npm" | "pnpm" | "yarn" | "cargo" | "extension";
-export type WorkspaceTaskGroup = "build" | "test" | "clean" | "rebuild" | "run" | "other";
+export type WorkspaceTaskSource = 'vscode' | 'npm' | 'pnpm' | 'yarn' | 'cargo' | 'extension';
+export type WorkspaceTaskGroup = 'build' | 'test' | 'clean' | 'rebuild' | 'run' | 'other';
 
 export interface TaskDefinition {
 	readonly type: string;
@@ -162,7 +162,7 @@ export interface TaskProviderRegistration extends IDisposable {
 	replace(providers: readonly TaskProvider[]): void;
 }
 
-export type TaskRunStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
+export type TaskRunStatus = 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled';
 
 /** One task execution projected through an integrated Terminal instance. */
 export interface ITaskRun {

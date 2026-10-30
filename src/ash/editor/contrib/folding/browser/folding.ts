@@ -9,30 +9,30 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
-import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import type { LanguageFoldingRangeProvider } from '../../../common/languages.js';
 import type { ITextModel } from '../../../common/model.js';
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../browser/editorBrowser.js';
-import { EditorFoldingModel, type CollapseMemento } from "./foldingModel.js";
-import { EditorFoldingRangeSource, type EditorFoldingRange, type EditorFoldingRegion } from "./foldingRanges.js";
-import { Position } from "../../../common/core/position.js";
-import { Selection } from "../../../common/core/selection.js";
-import { type View } from "../../../browser/view.js";
-import { type ILanguageConfigurationService } from "../../../common/languages/languageConfigurationRegistry.js";
-import { type ILanguageFeaturesService } from "../../../common/services/languageFeatures.js";
-import { TextEditorCapability } from "../../textEditorCapabilities.js";
+import { EditorFoldingModel, type CollapseMemento } from './foldingModel.js';
+import { EditorFoldingRangeSource, type EditorFoldingRange, type EditorFoldingRegion } from './foldingRanges.js';
+import { Position } from '../../../common/core/position.js';
+import { Selection } from '../../../common/core/selection.js';
+import { type View } from '../../../browser/view.js';
+import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
+import { type ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import { TextEditorCapability } from '../../textEditorCapabilities.js';
 import {
 	EditorAction,
 	registerEditorAction,
 	registerEditorContribution,
 	registerInstantiatedEditorAction,
 	type ServicesAccessor,
-} from "../../../browser/editorFeatureRegistration.js";
-import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
-import { computeEditorIndentFoldingRanges } from "./indentRangeProvider.js";
-import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "./syntaxRangeProvider.js";
-import { FoldingRangeService } from "../common/languageFoldingRanges.js";
+} from '../../../browser/editorFeatureRegistration.js';
+import { EditorHiddenRangeModel } from './hiddenRangeModel.js';
+import { computeEditorIndentFoldingRanges } from './indentRangeProvider.js';
+import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from './syntaxRangeProvider.js';
+import { FoldingRangeService } from '../common/languageFoldingRanges.js';
 import { FoldingDecorationProvider } from './foldingDecorations.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
@@ -233,7 +233,7 @@ export class FoldingController extends Disposable {
 		this.folding = folding;
 		try {
 			if (this.viewport.textModel !== this.editor.getModel() || this.viewport.textModel !== this.folding.model) {
-				throw new TypeError("Stanza folding dependencies must share one text model");
+				throw new TypeError('Stanza folding dependencies must share one text model');
 			}
 			if (folding.model.largeFile.tooLargeForTokenization) return;
 			const enabled = foldingEnabled.bindTo(contextKeyService);
@@ -384,7 +384,7 @@ registerEditorContribution({
 		context.register(hidden.onDidChange(syncHiddenAreas));
 	},
 	install: context => {
-		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
+		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;
 		const folding = context.getService(TextEditorCapability.folding);
 		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.model.uri));
 		const reporter = context.register(new RangesLimitReporter(context.editor));

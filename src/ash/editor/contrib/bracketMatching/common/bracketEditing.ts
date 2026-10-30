@@ -1,5 +1,5 @@
-import { type IBracketPairsTextModelPart } from "../../../common/textModelBracketPairs.js";
-import { Selection } from "../../../common/core/selection.js";
+import { type IBracketPairsTextModelPart } from '../../../common/textModelBracketPairs.js';
+import { Selection } from '../../../common/core/selection.js';
 import { type Range } from '../../../common/core/range.js';
 import { type ICursorStateComputerData, type IEditOperationBuilder, type ICommand } from '../../../common/editorCommon.js';
 import { type ITextModel } from '../../../common/model.js';

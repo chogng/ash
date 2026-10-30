@@ -61,7 +61,7 @@ export const EN_US_DARWIN_LAYOUT: IKeymapInfo = {
 		BracketRight: [']', '}', '‘', '’', 0],
 		Backslash: ['\\', '|', '«', '»', 0],
 		Semicolon: [';', ':', '…', 'Ú', 0],
-		Quote: ['\'', '"', 'æ', 'Æ', 0],
+		Quote: ["'", '"', 'æ', 'Æ', 0],
 		Backquote: ['`', '~', '`', '`', 4],
 		Comma: [',', '<', '≤', '¯', 0],
 		Period: ['.', '>', '≥', '˘', 0],
@@ -136,4 +136,3 @@ export const EN_US_DARWIN_LAYOUT: IKeymapInfo = {
 };
 
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout(EN_US_DARWIN_LAYOUT);
-

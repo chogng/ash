@@ -1,30 +1,30 @@
-import { EditorPanes } from "../../editor.js";
-import { binaryDiffEditorDescriptor } from "./binaryDiffEditor.js";
+import { EditorPanes } from '../../editor.js';
+import { binaryDiffEditorDescriptor } from './binaryDiffEditor.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { QuickAccessRegistry } from "../../../../platform/quickinput/common/quickAccess.js";
-import { localize } from "../../../../nls.js";
-import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
-import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
-import { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import { CopyEditorToNewWindowCommandId, MoveEditorToNewWindowCommandId, ToggleEditorGroupLockCommandId } from "./editorActions.js";
-import { CLOSE_EDITOR_COMMAND_ID, CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID } from "./editorCommands.js";
-import "./diffEditor.workbench.contribution.js";
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { QuickAccessRegistry } from '../../../../platform/quickinput/common/quickAccess.js';
+import { localize } from '../../../../nls.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
+import { IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
+import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
+import { CopyEditorToNewWindowCommandId, MoveEditorToNewWindowCommandId, ToggleEditorGroupLockCommandId } from './editorActions.js';
+import { CLOSE_EDITOR_COMMAND_ID, CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOSE_SAVED_EDITORS_COMMAND_ID } from './editorCommands.js';
+import './diffEditor.workbench.contribution.js';
 import '../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js';
 import { ToggleCollapseUnchangedRegions } from '../../../../editor/browser/widget/diffEditor/commands.js';
-import { GOTO_NEXT_CHANGE, GOTO_PREVIOUS_CHANGE, registerDiffEditorCommands } from "./diffEditorCommands.js";
+import { GOTO_NEXT_CHANGE, GOTO_PREVIOUS_CHANGE, registerDiffEditorCommands } from './diffEditorCommands.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { ActiveEditorContext, ActiveEditorGroupLockedContext, EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext, EditorPartModalVisibleContext, EditorsVisibleContext, IsAuxiliaryWindowContext } from '../../../common/contextkeys.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ConfigureEditorAction } from '../../actions/layoutActions.js';
 import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
-import { EditorAutoSave } from "./editorAutoSave.js";
-import { IEditorPart } from "./editorPart.js";
-import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from "./editorQuickAccess.js";
-import { ChangeEncodingAction, ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from "./editorStatus.js";
-import { DynamicEditorConfigurations } from "./editorConfiguration.js";
+import { EditorAutoSave } from './editorAutoSave.js';
+import { IEditorPart } from './editorPart.js';
+import { ActiveGroupEditorsByMostRecentlyUsedQuickAccess, AllEditorsByMostRecentlyUsedQuickAccess } from './editorQuickAccess.js';
+import { ChangeEncodingAction, ChangeEOLAction, ChangeLanguageAction, EditorStatusContribution } from './editorStatus.js';
+import { DynamicEditorConfigurations } from './editorConfiguration.js';
 
 const outsideModalEditor = EditorPartModalVisibleContext.isEqualTo(false);
 
@@ -120,8 +120,8 @@ registerWorkbenchContribution(
 
 QuickAccessRegistry.register({
 	prefix: AllEditorsByMostRecentlyUsedQuickAccess.PREFIX,
-	get placeholder() { return localize("workbench.editorQuickAccessPlaceholder", "Select an open editor"); },
-	get helpLabel() { return localize("workbench.showAllEditors", "Show All Editors"); },
+	get placeholder() { return localize('workbench.editorQuickAccessPlaceholder', 'Select an open editor'); },
+	get helpLabel() { return localize('workbench.showAllEditors', 'Show All Editors'); },
 	ctor: AllEditorsByMostRecentlyUsedQuickAccess,
 });
 

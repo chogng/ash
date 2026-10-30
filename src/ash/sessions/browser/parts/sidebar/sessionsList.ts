@@ -1,15 +1,15 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
-import "./media/sessionsList.css";
+import './media/sessionsList.css';
 import { LoadingSkeleton } from '../../ui/loadingSkeleton.js';
-import { addDisposableListener, getWindow, h } from "../../../../base/browser/dom.js";
+import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { AbstractDisposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
+import { AbstractDisposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { DomWidget } from '../../../../platform/domWidget/browser/domWidget.js';
-import { ISessionsService } from "../../../services/sessions/browser/sessionsService.js";
-import { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagement.js";
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { IGitHubService } from '../../../contrib/github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../contrib/github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../workbench/common/chatPullRequest.js';
@@ -71,19 +71,19 @@ export class SessionsList extends DomWidget {
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.domNode = h(ownerDocument, "section");
-		this.domNode.className = "ash-sessions-list";
+		this.domNode = h(ownerDocument, 'section');
+		this.domNode.className = 'ash-sessions-list';
 		this.domNode.tabIndex = -1;
 		this.domNode.dataset.mode = mode;
 		this.navigation = h(ownerDocument, 'nav', { className: 'ash-sessions-list-navigation', attributes: { 'aria-label': localize('sessions.list.navigation', 'Sessions navigation') } });
-		this.heading = h(ownerDocument, "h2");
+		this.heading = h(ownerDocument, 'h2');
 		this.heading.textContent = title;
-		this.list = h(ownerDocument, "div");
-		this.list.className = "ash-sessions-list-items";
+		this.list = h(ownerDocument, 'div');
+		this.list.className = 'ash-sessions-list-items';
 		this.loading = this._register(new LoadingSkeleton(this.list, localize('sessions.list.loading', 'Loading sessions…')));
 		this.projectLoading = this._register(new LoadingSkeleton(this.list, localize('projects.loading', 'Loading projects…'), 'list', 3));
-		this.empty = h(ownerDocument, "p");
-		this.empty.className = "ash-sessions-empty";
+		this.empty = h(ownerDocument, 'p');
+		this.empty.className = 'ash-sessions-empty';
 		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
 		this.projectError.type = 'button';
 		this.projectError.textContent = localize('sessions.list.projectsRetry', 'Could not load projects. Retry');
@@ -141,7 +141,7 @@ export class SessionsList extends DomWidget {
 	focus(): void {
 		const activeNavigation = this.navigation.querySelector<HTMLButtonElement>('[aria-current="page"]');
 		if (activeNavigation) { activeNavigation.focus(); return; }
-		const firstItem = this.list.querySelector<HTMLButtonElement>("button");
+		const firstItem = this.list.querySelector<HTMLButtonElement>('button');
 		(firstItem ?? this.domNode).focus();
 	}
 
@@ -421,7 +421,7 @@ class SessionListItem extends AbstractDisposable {
 		if (icon) appendIcon(icon, this.button);
 		// Keep attention metadata clear of the trailing hover actions.
 		this.button.append(this.pullRequest, content);
-		this.clickListener = addDisposableListener(this.button, "click", () => this.open());
+		this.clickListener = addDisposableListener(this.button, 'click', () => this.open());
 		const showMenu = (event: MouseEvent | KeyboardEvent): void => {
 			if (!this.contextMenu) return;
 			event.preventDefault(); event.stopPropagation();
@@ -453,8 +453,8 @@ class SessionListItem extends AbstractDisposable {
 		this.button.classList.toggle('has-management', state !== undefined);
 		this.managementDescription = [state, management?.activity?.text, management?.summary].filter(Boolean).join('. ');
 		this.updateDescription();
-		this.domNode.classList.toggle("selected", selected);
-		this.button.setAttribute("aria-current", selected ? "page" : "false");
+		this.domNode.classList.toggle('selected', selected);
+		this.button.setAttribute('aria-current', selected ? 'page' : 'false');
 		this.open = open;
 	}
 

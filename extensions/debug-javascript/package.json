@@ -18,6 +18,7 @@
     "onStartupFinished",
     "onCommand:ash.debug-javascript.toggleAutoAttach",
     "onDebug:node",
+    "onDebug:node-terminal",
     "onDebug:pwa-node",
     "onDebug:chrome",
     "onDebug:pwa-chrome",
@@ -33,6 +34,14 @@
       }
     ],
     "debuggers": [
+      {
+        "type": "node-terminal",
+        "label": "%configuration.terminal%",
+        "languages": [
+          "javascript",
+          "typescript"
+        ]
+      },
       {
         "type": "node",
         "label": "Node.js",

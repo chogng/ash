@@ -1,8 +1,8 @@
-import { PieceBuffer, PieceNode, canCoalesce, coalescePieces, createPiece, lowerBound, nodeLength, nodeLineFeeds, nodePieces, slicePiece, updateNodeAndAncestors, type BufferPiece } from "./pieceTreeBase.js";
+import { PieceBuffer, PieceNode, canCoalesce, coalescePieces, createPiece, lowerBound, nodeLength, nodeLineFeeds, nodePieces, slicePiece, updateNodeAndAncestors, type BufferPiece } from './pieceTreeBase.js';
 import { containsRTL, isBasicASCII } from '../../../../base/common/strings.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { NodeColor, deleteNode, insertAfter, insertBefore, leftmost, nextNode, previousNode } from "./rbTreeBase.js";
+import { NodeColor, deleteNode, insertAfter, insertBefore, leftmost, nextNode, previousNode } from './rbTreeBase.js';
 import { Position } from '../../core/position.js';
 import { Range } from '../../core/range.js';
 import { WordCharacterClass } from '../../core/wordCharacterClassifier.js';
@@ -43,7 +43,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	private readonly changeContentEmitter = this._register(new Emitter<void>());
 	public readonly onDidChangeContent: Event<void> = this.changeContentEmitter.event;
 	private originalBuffer: string;
-	private addBuffer = "";
+	private addBuffer = '';
 	private root: PieceNode | undefined;
 	private readonly bom: string;
 	private eol: '\n' | '\r\n';
@@ -125,7 +125,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	private getText(): string {
 		const parts: string[] = [];
 		this.collectText(this.root, parts);
-		return parts.join("");
+		return parts.join('');
 	}
 
 	createSnapshot(preserveBOM = false): TextBufferSnapshot {
@@ -141,10 +141,10 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 
 	private getTextBetweenOffsets(startOffset: number, endOffset: number): string {
 		this.assertRange(startOffset, endOffset);
-		if (startOffset === endOffset) return "";
+		if (startOffset === endOffset) return '';
 		const parts: string[] = [];
 		this.collectRange(this.root, 0, startOffset, endOffset, parts);
-		return parts.join("");
+		return parts.join('');
 	}
 
 	getValueInRange(range: Range, eol = EndOfLinePreference.TextDefined): string {
@@ -269,7 +269,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 
 	getOffsetAt(lineNumber: number, column: number): number {
 		this.assertLineNumber(lineNumber);
-		assertSafeIndex(column, "column");
+		assertSafeIndex(column, 'column');
 		const lineIndex = lineNumber - 1;
 		const columnIndex = column - 1;
 		const startOffset = this.lineStartOffset(lineIndex);
@@ -283,7 +283,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	}
 
 	getPositionAt(offset: number): Position {
-		assertSafeIndex(offset, "offset");
+		assertSafeIndex(offset, 'offset');
 		if (offset > this.getLength()) {
 			throw new RangeError(
 				`offset must be a safe integer between 0 and ${this.getLength()}`,
@@ -451,7 +451,7 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	compact(): void {
 		const text = this.getText();
 		this.originalBuffer = text;
-		this.addBuffer = "";
+		this.addBuffer = '';
 		this.root = text.length > 0 ? this.createRootNode(createPiece(PieceBuffer.Original, 0, text)) : undefined;
 	}
 

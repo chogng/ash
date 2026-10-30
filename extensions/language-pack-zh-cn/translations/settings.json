@@ -1,5 +1,6 @@
 {
   "ash.settings": {
+    "status.policy": "由管理员策略管理，无法在此更改。",
     "categories.settings-editor.label": "设置编辑器",
     "categories.settings-editor.description": "配置 Ash 如何打开和编辑设置。",
     "editor.title": "默认设置编辑器",
@@ -443,7 +444,9 @@
     "lsp.idle.groupTitle": "分析缓存与内存",
     "lsp.idle.groupDescription": "已启动的服务器默认保持运行，复用内存中的分析结果。Rust 默认按需分析。服务器停止后会丢失分析缓存，磁盘上的 Cargo 编译产物不能恢复这份缓存。",
     "lsp.idle.state": "闲置时已释放",
-    "lsp.idle.help": "已启动的语言服务器默认保持运行，以保留内存中的分析结果。可在语言服务器设置中启用自动释放，在最后一个相关文件关闭并经过等待时间后回收进程内存。Rust 重启后需重新建立分析缓存，Cargo 编译产物不能恢复这份缓存。基础高亮和折叠不受影响。Rust 设置中的缓存容量按条目计数，不是 MB 数或总内存上限。"
+    "lsp.idle.help": "已启动的语言服务器默认保持运行，以保留内存中的分析结果。可在语言服务器设置中启用自动释放，在最后一个相关文件关闭并经过等待时间后回收进程内存。Rust 重启后需重新建立分析缓存，Cargo 编译产物不能恢复这份缓存。基础高亮和折叠不受影响。Rust 设置中的缓存容量按条目计数，不是 MB 数或总内存上限。",
+    "open.invalidSectionQuery": "分区查询必须为字符串，并指定图形设置分区。",
+    "open.unsupportedSectionSearch": "此设置分区不提供独立搜索。"
   },
   "ash": {
     "color.settings.focusedRowBackground": "包含键盘焦点的设置行的背景色。",

@@ -2,6 +2,7 @@
 
 use crate::JsonSchema;
 use crate::TS;
+use ash_protocol::SessionId;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -53,7 +54,60 @@ pub struct BrowserCreateParams {
     pub url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub canvas: Option<BrowserCanvasPresentation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub network_token: Option<String>,
+}
+
+/// Live presentation metadata. The request's Thread identity is supplied by the host.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserCanvasPresentation {
+    pub session_id: SessionId,
+    #[schemars(length(min = 1, max = 128), regex(pattern = "^[A-Za-z0-9._-]+$"))]
+    pub instance_id: String,
+    #[schemars(length(min = 1, max = 256))]
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub definition: Option<BrowserCanvasDefinitionId>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserCanvasDefinitionId {
+    #[schemars(length(min = 1, max = 1024))]
+    pub extension_id: String,
+    #[schemars(length(min = 1, max = 128), regex(pattern = "^[A-Za-z0-9._-]+$"))]
+    pub canvas_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserCanvasDefinition {
+    pub id: BrowserCanvasDefinitionId,
+    #[schemars(length(min = 1, max = 256))]
+    pub display_name: String,
+    #[schemars(length(max = 4096))]
+    pub description: String,
+    pub requires_input: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserCanvasListParams {
+    pub session_id: SessionId,
+    #[schemars(length(min = 1, max = 1024))]
+    pub thread_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BrowserCanvasListResult {
+    /// `None` means pending; an empty array is authoritative.
+    #[schemars(length(max = 256))]
+    pub canvases: Option<Vec<BrowserCanvasDefinition>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

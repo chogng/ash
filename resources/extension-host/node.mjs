@@ -30,7 +30,10 @@ if (args.length !== 12 || args[0] !== '--extension-id' || args[2] !== '--package
 const address = /^127\.0\.0\.1:([1-9]\d{0,4})$/.exec(args[9]);
 if (!address || Number(address[1]) > 65535 || !/^[a-f0-9]{64}$/.test(args[11])) throw new Error('Invalid Node control binding');
 const control = createConnection({ host: '127.0.0.1', port: Number(address[1]) });
-control.on('error', error => { process.stderr.write(String(error) + '\n'); process.exit(1); });
+control.on('error', error => {
+	process.stderr.write(String(error) + '\n');
+	process.exit(1);
+});
 await new Promise(resolveConnected => control.once('connect', resolveConnected));
 control.setNoDelay(true);
 await new Promise((resolveWrite, reject) => control.write(args[11] + '\n', error => error ? reject(error) : resolveWrite()));

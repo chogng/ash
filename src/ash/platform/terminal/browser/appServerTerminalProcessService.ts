@@ -1,10 +1,10 @@
 import type { ITerminalAutoReply, TerminalProcessSignal } from '../common/terminal.js';
-import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { decodeBase64 } from "../../../base/common/buffer.js";
-import type { IAppServerApi } from "../../agentHost/common/appServerApi.js";
-import type { TerminalReadResult, TerminalCommandStatusEvent, TerminalProcessReady } from "../../../../../.build/protocol/typescript/index.js";
-import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
-import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
+import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { decodeBase64 } from '../../../base/common/buffer.js';
+import type { IAppServerApi } from '../../agentHost/common/appServerApi.js';
+import type { TerminalReadResult, TerminalCommandStatusEvent, TerminalProcessReady } from '../../../../../.build/protocol/typescript/index.js';
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { appServerRequest, voidResult } from '../../agentHost/browser/appServerRequest.js';
 import { GeneralShellType, PosixShellType } from '../common/terminal.js';
 import type {
 	ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation,
@@ -12,7 +12,7 @@ import type {
 	ITerminalProcessProfile, ITerminalProcessCommandStatusEvent, ITerminalProcessReadOptions, ITerminalProcessReadResult,
 	ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions,
 	TerminalProcessConnectionState, ITerminalResolvedProfile, TerminalProcessProfileSelection,
-} from "../common/terminal.js";
+} from '../common/terminal.js';
 
 /** App Server implementation of the terminal process service. */
 export class AppServerTerminalProcessService implements ITerminalProcessService {
@@ -21,7 +21,7 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 	get operatingSystem() { return this.connection.operatingSystem; }
 
 	async listProfiles(dirId?: string): Promise<readonly ITerminalProcessProfile[]> {
-		const result = await appServerRequest(this.connection, "terminal/profile/list", { dirId });
+		const result = await appServerRequest(this.connection, 'terminal/profile/list', { dirId });
 		return result.profiles;
 	}
 
@@ -30,14 +30,14 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 	}
 
 	async getEnvironment(names?: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>> {
-		const result = await appServerRequest(this.connection, "terminal/environment/read", { names: names && [...names], dirId });
+		const result = await appServerRequest(this.connection, 'terminal/environment/read', { names: names && [...names], dirId });
 		return result.values;
 	}
 
 	async create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
 		const execution = options.execution?.type === 'process' ? { ...options.execution, args: typeof options.execution.args === 'string' ? options.execution.args : [...options.execution.args] } : options.execution;
-		const created = await appServerRequest(this.connection, "terminal/create", { ...options, autoReplies: options.autoReplies && [...options.autoReplies], profile: profileSelection(options.profile), execution, lifecycle: { type: "connectionOwned" } });
-		return { ready: decodeTerminalProcessReady(created.ready), terminalId: created.terminalId, profile: created.profile, connectionPersistence: "connectionOwned" };
+		const created = await appServerRequest(this.connection, 'terminal/create', { ...options, autoReplies: options.autoReplies && [...options.autoReplies], profile: profileSelection(options.profile), execution, lifecycle: { type: 'connectionOwned' } });
+		return { ready: decodeTerminalProcessReady(created.ready), terminalId: created.terminalId, profile: created.profile, connectionPersistence: 'connectionOwned' };
 	}
 
 	async getProcessInfo(options: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo> {
@@ -54,7 +54,7 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 	}
 
 	resize(options: ITerminalProcessResizeOptions): Promise<void> {
-		return voidResult(appServerRequest(this.connection, "terminal/resize", options));
+		return voidResult(appServerRequest(this.connection, 'terminal/resize', options));
 	}
 
 	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: TerminalProcessSignal; }): Promise<void> {
@@ -66,12 +66,12 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 	}
 
 	async read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
-		const result = await appServerRequest(this.connection, "terminal/read", options);
+		const result = await appServerRequest(this.connection, 'terminal/read', options);
 		return decodeTerminalProcessReadResult(result);
 	}
 
 	close(options: ITerminalProcessCloseOptions): Promise<void> {
-		return voidResult(appServerRequest(this.connection, "terminal/close", options));
+		return voidResult(appServerRequest(this.connection, 'terminal/close', options));
 	}
 
 	getConnectionState(): Promise<TerminalProcessConnectionState> {

@@ -19,7 +19,7 @@ export interface ExtensionGrammarContribution {
 	readonly path: string;
 	readonly injectTo: readonly string[];
 	readonly embeddedLanguages?: Readonly<Record<string, string>>;
-	readonly tokenTypes?: Readonly<Record<string, "string" | "other" | "comment" | "regex">>;
+	readonly tokenTypes?: Readonly<Record<string, 'string' | 'other' | 'comment' | 'regex'>>;
 	readonly balancedBracketScopes?: readonly string[];
 	readonly unbalancedBracketScopes?: readonly string[];
 }
@@ -69,6 +69,7 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly canvases: readonly { readonly id: string; readonly displayName: string; readonly description: string; readonly requiresInput: boolean; }[];
 		readonly keybindings: readonly IKeybindingRule[];
 		readonly imageEditors: readonly { readonly id: string; readonly displayName: string; readonly default?: boolean; readonly accessibilityHelp: string; }[];
 		readonly breakpoints: readonly { readonly language: string; readonly when?: string; }[];
@@ -122,16 +123,16 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		throw new TypeError(`Extension '${descriptor.id}' manifest is not valid JSON`);
 	}
 	const manifest = record(value, `Extension '${descriptor.id}' manifest`);
-	const name = requiredString(manifest.name, "name", 256);
-	const publisher = requiredString(manifest.publisher, "publisher", 256);
-	const version = requiredString(manifest.version, "version", 256);
+	const name = requiredString(manifest.name, 'name', 256);
+	const publisher = requiredString(manifest.publisher, 'publisher', 256);
+	const version = requiredString(manifest.version, 'version', 256);
 	if (name !== descriptor.name || publisher !== descriptor.publisher || version !== descriptor.version) {
 		throw new TypeError(`Extension '${descriptor.id}' manifest identity does not match its catalog entry`);
 	}
-	const displayName = typeof manifest.displayName === "string" && manifest.displayName.trim().length > 0
-		? boundedText(manifest.displayName, "displayName", 256)
+	const displayName = typeof manifest.displayName === 'string' && manifest.displayName.trim().length > 0
+		? boundedText(manifest.displayName, 'displayName', 256)
 		: descriptor.displayName ?? name;
-	const contributes = manifest.contributes === undefined ? {} : record(manifest.contributes, "Extension contributes");
+	const contributes = manifest.contributes === undefined ? {} : record(manifest.contributes, 'Extension contributes');
 	let themes: readonly ExtensionThemeContribution[] = [];
 	if (manifest.themes !== undefined) { themes = parsePortableThemes(manifest); }
 	else if (contributes.themes !== undefined) { themes = parseThemes(contributes.themes, descriptor.id); }
@@ -141,6 +142,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		version,
 		displayName,
 		contributes: Object.freeze({
+			canvases: parseCanvases(contributes.canvases),
 			imageEditors: parseImageEditors(contributes.imageEditors),
 			speechProviders: parseSpeechProviders(contributes.speechProviders),
 			debugVisualizers: parseDebugVisualizers(contributes.debugVisualizers),
@@ -311,7 +313,7 @@ function parseLanguages(value: unknown, extensionId: string): readonly Extension
 
 function parseExtensions(value: unknown, extensionId: string, index: number): readonly string[] {
 	const extensions = parseTextList(value, `Extension '${extensionId}' language ${index} extensions`, true, false);
-	if (extensions.some(extension => !extension.startsWith("."))) {
+	if (extensions.some(extension => !extension.startsWith('.'))) {
 		throw new TypeError(`Extension '${extensionId}' language ${index} extensions must start with a dot`);
 	}
 	return Object.freeze([...new Set(extensions)]);
@@ -324,8 +326,8 @@ function parseGrammars(value: unknown, extensionId: string): readonly ExtensionG
 		const scopeName = scopeNameValue(grammar.scopeName, `Extension '${extensionId}' grammar ${index} scopeName`);
 		const language = grammar.language === undefined ? undefined : languageId(grammar.language, `Extension '${extensionId}' grammar ${index} language`);
 		const injectTo = grammar.injectTo === undefined ? Object.freeze([]) : parseScopes(grammar.injectTo, `Extension '${extensionId}' grammar ${index} injectTo`);
-		const embeddedLanguages = grammar.embeddedLanguages === undefined ? undefined : parseScopeMap(grammar.embeddedLanguages, extensionId, index, "embeddedLanguages", languageId);
-		const tokenTypes = grammar.tokenTypes === undefined ? undefined : parseScopeMap(grammar.tokenTypes, extensionId, index, "tokenTypes", tokenTypeValue, selectorValue);
+		const embeddedLanguages = grammar.embeddedLanguages === undefined ? undefined : parseScopeMap(grammar.embeddedLanguages, extensionId, index, 'embeddedLanguages', languageId);
+		const tokenTypes = grammar.tokenTypes === undefined ? undefined : parseScopeMap(grammar.tokenTypes, extensionId, index, 'tokenTypes', tokenTypeValue, selectorValue);
 		const balancedBracketScopes = grammar.balancedBracketScopes === undefined ? undefined : parseBracketScopes(grammar.balancedBracketScopes, `Extension '${extensionId}' grammar ${index} balancedBracketScopes`);
 		const unbalancedBracketScopes = grammar.unbalancedBracketScopes === undefined ? undefined : parseBracketScopes(grammar.unbalancedBracketScopes, `Extension '${extensionId}' grammar ${index} unbalancedBracketScopes`);
 		return Object.freeze({
@@ -346,7 +348,7 @@ function parseSnippets(value: unknown, extensionId: string): readonly ExtensionS
 	return value.map((candidate, index) => {
 		const snippet = record(candidate, `Extension '${extensionId}' snippet ${index}`);
 		const language = snippet.language === undefined ? snippet.languageIds : snippet.language;
-		const languages = typeof language === "string" ? [language] : parseTextList(language, `Extension '${extensionId}' snippet ${index} language`, false);
+		const languages = typeof language === 'string' ? [language] : parseTextList(language, `Extension '${extensionId}' snippet ${index} language`, false);
 		if (languages.length === 0) throw new TypeError(`Extension '${extensionId}' snippet ${index} must declare a language`);
 		return Object.freeze({
 			language: Object.freeze(languages.map((value, languageIndex) => languageId(value, `Extension '${extensionId}' snippet ${index} language ${languageIndex}`))),
@@ -389,7 +391,7 @@ function parseThemes(value: unknown, extensionId: string): readonly ExtensionThe
 
 function extensionUiTheme(value: unknown, owner: string): string {
 	const uiTheme = boundedText(value, owner, 32);
-	if (uiTheme !== "vs" && uiTheme !== "vs-dark" && uiTheme !== "hc-black" && uiTheme !== "hc-light") throw new TypeError(`${owner} is invalid`);
+	if (uiTheme !== 'vs' && uiTheme !== 'vs-dark' && uiTheme !== 'hc-black' && uiTheme !== 'hc-light') throw new TypeError(`${owner} is invalid`);
 	return uiTheme;
 }
 
@@ -481,16 +483,16 @@ function parseScopeMap<T>(value: unknown, extensionId: string, index: number, fi
 	return Object.freeze(Object.fromEntries(entries));
 }
 
-function tokenTypeValue(value: unknown, owner: string): "string" | "other" | "comment" | "regex" {
+function tokenTypeValue(value: unknown, owner: string): 'string' | 'other' | 'comment' | 'regex' {
 	const tokenType = boundedText(value, owner, 32);
-	if (tokenType !== "string" && tokenType !== "other" && tokenType !== "comment" && tokenType !== "regex") {
+	if (tokenType !== 'string' && tokenType !== 'other' && tokenType !== 'comment' && tokenType !== 'regex') {
 		throw new TypeError(`${owner} is invalid`);
 	}
 	return tokenType;
 }
 
 function selectorValue(value: string, owner: string): string {
-	if (typeof value !== "string" || value.length === 0 || value.length > 512 || /[\r\n]/u.test(value) || value.trim() !== value) {
+	if (typeof value !== 'string' || value.length === 0 || value.length > 512 || /[\r\n]/u.test(value) || value.trim() !== value) {
 		throw new TypeError(`${owner} is invalid`);
 	}
 	return value;
@@ -506,7 +508,7 @@ function parseScopes(value: unknown, owner: string): readonly string[] {
 function parseBracketScopes(value: unknown, owner: string): readonly string[] {
 	const scopes = parseTextList(value, owner);
 	const normalized = scopes.map(scope => {
-		if (scope === "*") return scope;
+		if (scope === '*') return scope;
 		if (!/^[A-Za-z0-9][A-Za-z0-9._+*-]*$/u.test(scope)) throw new TypeError(`${owner} contains an invalid scope selector`);
 		return scope;
 	});
@@ -539,15 +541,15 @@ function scopeNameValue(value: unknown, owner: string): string {
 
 function normalizeResourcePath(value: unknown, owner: string): string {
 	let path = boundedText(value, owner, 1024);
-	while (path.startsWith("./")) path = path.slice(2);
-	if (path.length === 0 || path.includes("\\") || path.startsWith("/") || path.includes(":") || path.split("/").some(segment => segment.length === 0 || segment === "." || segment === "..")) {
+	while (path.startsWith('./')) path = path.slice(2);
+	if (path.length === 0 || path.includes('\\') || path.startsWith('/') || path.includes(':') || path.split('/').some(segment => segment.length === 0 || segment === '.' || segment === '..')) {
 		throw new TypeError(`${owner} must be a safe relative path`);
 	}
 	return path;
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, unknown>;
 }
 
@@ -556,7 +558,7 @@ function requiredString(value: unknown, owner: string, maximum: number): string 
 }
 
 function boundedText(value: unknown, owner: string, maximum = 256): string {
-	if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || /[\0\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || /[\0\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
 	return value;
 }
 
@@ -711,4 +713,17 @@ function parseImageEditors(value: unknown): ExtensionManifest['contributes']['im
 		if (entry.accessibilityHelp !== undefined && (typeof entry.accessibilityHelp !== 'string' || entry.accessibilityHelp.length > 16384)) throw new TypeError('Invalid image editor accessibility help');
 		return Object.freeze({ accessibilityHelp: entry.accessibilityHelp as string ?? '', id, displayName: requiredString(entry.displayName, 'image editor name', 256), ...(entry.default === undefined ? {} : { default: entry.default as boolean }) });
 	}));
+}
+
+function parseCanvases(value: unknown): ExtensionManifest['contributes']['canvases'] {
+	if (value === undefined) { return []; }
+	if (!Array.isArray(value) || value.length > 64) { throw new TypeError('Invalid Canvas declarations'); }
+	const ids = new Set<string>();
+	return value.map(item => {
+		const entry = record(item, 'Canvas declaration');
+		const id = requiredString(entry.id, 'Canvas id', 128);
+		if (!/^[A-Za-z0-9._-]+$/.test(id) || ids.has(id) || entry.requiresInput !== undefined && typeof entry.requiresInput !== 'boolean') { throw new TypeError('Invalid Canvas declaration'); }
+		ids.add(id);
+		return Object.freeze({ id, displayName: requiredString(entry.displayName, 'Canvas name', 256), description: entry.description === undefined ? '' : boundedText(entry.description, 'Canvas description', 4096), requiresInput: entry.requiresInput === true });
+	});
 }

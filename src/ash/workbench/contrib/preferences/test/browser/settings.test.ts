@@ -19,6 +19,8 @@ import snapshotMessages from '../../../../../../../extensions/snapshot/package.n
 import snapshotManifest from '../../../../../../../extensions/snapshot/package.json' with { type: 'json' };
 import { localizeManifest } from '../../../../../platform/extensionManagement/common/extensionNls.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import manifest from '../../../../../../../extensions/git/package.json' with { type: 'json' };
 import { readFile } from 'node:fs/promises';
@@ -33,6 +35,8 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../../../platform/github/common/githubService.js';
 import { IAccountPolicyService } from '../../../../services/policies/common/accountPolicyService.js';
+import { IManagedSettingsUpdateService } from '../../../../services/policies/common/managedSettingsUpdate.js';
+import { ManagedSettingsUpdateService } from '../../../../services/policies/browser/managedSettingsUpdateService.js';
 import { IGitHubConnectionService } from '../../../../../workbench/services/accounts/common/gitHubConnectionService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../../../workbench/contrib/github/browser/githubReviewModel.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
@@ -73,7 +77,11 @@ import type { RemoteAgentConnection } from '../../../../../platform/remote/commo
 import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
 import type { IWorkspaceTrustApi } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import type { ILanguagePackService } from '../../../../../platform/languagePacks/common/languagePacks.js';
-import type { IDictationModelStatus, ILocalTranscriptionModelService as LocalTranscriptionService, DictationModelState as ModelState } from '../../../../../platform/localTranscription/common/localTranscription.js';
+import type {
+	IDictationModelStatus,
+	ILocalTranscriptionModelService as LocalTranscriptionService,
+	DictationModelState as ModelState,
+} from '../../../../../platform/localTranscription/common/localTranscription.js';
 
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -140,7 +148,11 @@ const { EditorSelectionConfiguration } = await import('../../../../common/editor
 const { CodeEditorConfiguration } = await import('../../../codeEditor/common/editorConfiguration.js');
 const { EDITOR_FONT_DEFAULTS } = await import('../../../../../editor/common/config/fontInfo.js');
 const { ContentSearchConfiguration } = await import('../../../search/common/searchConfiguration.js');
-const GitConfiguration = { autofetch: 'git.autofetch', autofetchPeriod: 'git.autofetchPeriod', rebaseWhenSync: 'git.rebaseWhenSync' };
+const GitConfiguration = {
+	autofetch: 'git.autofetch',
+	autofetchPeriod: 'git.autofetchPeriod',
+	rebaseWhenSync: 'git.rebaseWhenSync',
+};
 await import('../../../scm/browser/scm.contribution.js');
 
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
@@ -154,14 +166,33 @@ const { IFileDialogService } = await import('../../../../../platform/dialogs/com
 const { IAppServerRemoteAgentService: RemoteAgentServiceId } = await import('../../../../services/remote/common/appServerRemoteAgentService.js');
 const { IWorkspaceTrustApi: WorkspaceTrustApiId } = await import('../../../../../platform/workspace/common/workspaceTrust.js');
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
-configurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(manifest).replace(/%([^%]+)%/g, (match, key) => (gitMessages as Record<string, string>)[key] ?? match), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
-configurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(localizeManifest(snapshotManifest, snapshotMessages)), { id: 'ash.snapshot', name: 'snapshot', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
+configurationRegistry.updateConfigurations({
+	add: [
+		...parseExtensionManifest(
+			JSON.stringify(manifest).replace(/%([^%]+)%/g, (match, key) => (gitMessages as Record<string, string>)[key] ?? match),
+			{ id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' },
+		).contributes.configuration,
+	],
+	remove: [],
+});
+configurationRegistry.updateConfigurations({
+	add: [
+		...parseExtensionManifest(JSON.stringify(localizeManifest(snapshotManifest, snapshotMessages)), {
+			id: 'ash.snapshot',
+			name: 'snapshot',
+			publisher: 'ash',
+			version: '0.1.0',
+		}).contributes.configuration,
+	],
+	remove: [],
+});
 const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
 const { EditorPaneRegistry, EditorPanes } = await import('../../../../browser/editor.js');
 const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
 await import('../../browser/preferencesActions.js');
 await import('../../../../browser/actions/layoutActions.js');
 await import('../../../extensions/browser/extensions.contribution.js');
+await import('../../../canvases/electron-browser/canvases.contribution.js');
 const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
 
 // The canonical module above captures English. Chinese metadata tests need the
@@ -184,7 +215,7 @@ const { BrowserEditorService } = await import('../../../../services/editor/brows
 const { ILocalizationService: LocalizationServiceId } = await import('../../../../services/localization/common/localizationService.js');
 const { createSettingWidget: instantiateSettingWidget } = await import('../../browser/settingsWidgets.js');
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../services/preferences/common/settingsModels.js');
-const { TestConfigurationService: WorkspaceService } = await import("../../../../services/configuration/test/common/testServices.js");
+const { TestConfigurationService: WorkspaceService } = await import('../../../../services/configuration/test/common/testServices.js');
 const { productLanguagePackCatalogs } = await import('../../../../services/localization/common/localizationCatalogs.js');
 const { ILanguagePackService: LanguagePackServiceId } = await import('../../../../../platform/languagePacks/common/languagePacks.js');
 const { ILocaleService, LocalizationConfiguration } = await import('../../../../services/localization/common/locale.js');
@@ -206,17 +237,39 @@ test('Sandbox diagnostics render Chinese readiness and preserve backend reasons 
 	const { AgentCapabilitiesSettings } = await import('../../browser/agentCapabilitiesSettings.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	const root = h(browserEnvironment.window.document, 'div');
-	using panel = new AgentCapabilitiesSettings(root, {
-		isAvailable: true, onDidChange: Event.None,
-		read: async () => ({
-			localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
-			sandboxPolicy: { profile: '<profile>', fileSystem: 'readOnly', network: 'managed', hostRead: 'grantedRoots', managedConstraints: true, pathRuleCount: 2 },
-			sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }]
-		}),
-	}, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
-		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi, {
-		whenReady: Promise.resolve(), translate: (bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
-	});
+	using panel = new AgentCapabilitiesSettings(
+		root,
+		{
+			isAvailable: true,
+			onDidChange: Event.None,
+			read: async () => ({
+				localProcessSandboxConfigured: true,
+				sandboxBackends: ['mxc'],
+				directoryGrantsReadable: false,
+				sandboxPolicy: {
+					profile: '<profile>',
+					fileSystem: 'readOnly',
+					network: 'managed',
+					hostRead: 'grantedRoots',
+					managedConstraints: true,
+					pathRuleCount: 2,
+				},
+				sandboxDiagnostics: [
+					{
+						backend: 'mxc',
+						network: 'managed',
+						readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' },
+					},
+				],
+			}),
+		},
+		{ onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
+		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi,
+		{
+			whenReady: Promise.resolve(),
+			translate: (bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
+		},
+	);
 	panel.setView('sandbox');
 	await nextTurn();
 	assert.match(root.textContent ?? '', /mxc · 受管网络 · 不支持此策略: <script>diagnostic<\/script>/);
@@ -232,19 +285,36 @@ test('Sandbox diagnostics refresh after runtime installation and stop reading wh
 	let installed = false;
 	let reads = 0;
 	const root = h(browserEnvironment.window.document, 'div');
-	const panel = new AgentCapabilitiesSettings(root, {
-		isAvailable: true, onDidChange: changed.event,
-		read: async () => {
-			reads++;
-			return {
-				localProcessSandboxConfigured: true, sandboxBackends: [], directoryGrantsReadable: false, sandboxDiagnostics: [],
-				sandboxPolicy: { profile: 'command-defaults', fileSystem: installed ? 'readOnly' : 'directoryWrite', network: 'denied', hostRead: 'host', managedConstraints: false, pathRuleCount: 0 },
-			};
+	const panel = new AgentCapabilitiesSettings(
+		root,
+		{
+			isAvailable: true,
+			onDidChange: changed.event,
+			read: async () => {
+				reads++;
+				return {
+					localProcessSandboxConfigured: true,
+					sandboxBackends: [],
+					directoryGrantsReadable: false,
+					sandboxDiagnostics: [],
+					sandboxPolicy: {
+						profile: 'command-defaults',
+						fileSystem: installed ? 'readOnly' : 'directoryWrite',
+						network: 'denied',
+						hostRead: 'host',
+						managedConstraints: false,
+						pathRuleCount: 0,
+					},
+				};
+			},
 		},
-	}, { onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
-		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi, {
-		whenReady: Promise.resolve(), translate: (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters),
-	});
+		{ onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
+		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi,
+		{
+			whenReady: Promise.resolve(),
+			translate: (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters),
+		},
+	);
 	try {
 		panel.setView('sandbox');
 		await nextTurn();
@@ -262,7 +332,9 @@ test('Sandbox diagnostics refresh after runtime installation and stop reading wh
 		changed.fire();
 		await nextTurn();
 		assert.equal(reads, before);
-	} finally { panel.dispose(); }
+	} finally {
+		panel.dispose();
+	}
 });
 
 test('developer command opens a grouped read-only tool snapshot outside ordinary settings', async () => {
@@ -270,15 +342,35 @@ test('developer command opens a grouped read-only tool snapshot outside ordinary
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	using reset = toDisposable(resetNlsResolver);
 	using tools = createTestLanguageModelToolsService({
-		isAvailable: true, read: async () => ({
+		isAvailable: true,
+		read: async () => ({
 			sourceGroups: [],
-			tools: [{ name: 'read_file', category: 'read', description: 'Read files', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }],
-		})
+			tools: [
+				{
+					name: 'read_file',
+					category: 'read',
+					description: 'Read files',
+					source: 'local',
+					sourceDetails: ['ash-app-server'],
+					exposure: 'direct',
+					authority: 'directoryRead',
+				},
+			],
+		}),
 	});
 	const opened: import('../../../../common/editor.js').IResourceEditorInput[] = [];
 	const command = CommandsRegistry.getCommand('workbench.action.chat.showToolCatalog');
 	assert.ok(command);
-	await command({ get: (id: unknown) => id === ILanguageModelToolsService ? tools : { openEditor: async (input: import('../../../../common/editor.js').IResourceEditorInput) => { opened.push(input); } } } as unknown as import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor);
+	await command({
+		get: (id: unknown) =>
+			id === ILanguageModelToolsService
+				? tools
+				: {
+					openEditor: async (input: import('../../../../common/editor.js').IResourceEditorInput) => {
+						opened.push(input);
+					},
+				},
+	} as unknown as import('../../../../../platform/instantiation/common/instantiation.js').ServicesAccessor);
 	assert.equal(opened[0].readOnly, true);
 	assert.equal(opened[0].resource.scheme, 'ash-tool-catalog');
 	assert.equal(opened[0].label, 'Agent 工具目录');
@@ -291,7 +383,10 @@ test('developer command opens a grouped read-only tool snapshot outside ordinary
 	using model = await services.get(IFileTextModelService).acquire(opened[0], new AbortController().signal);
 	assert.equal(model.model.getText(), opened[0].initialText);
 
-	assert.equal(SettingsCategories.some(category => category.id === 'tools'), false);
+	assert.equal(
+		SettingsCategories.some(category => category.id === 'tools'),
+		false,
+	);
 });
 
 test('Chinese indexed search settings explain engine scope in the control and accessibility help', async () => {
@@ -309,10 +404,31 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
-	services.registerInstance(RemoteAgentServiceId, { onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None } as IAppServerRemoteAgentService);
-	services.registerInstance(IContentSearchConfigurationService, { read: async () => ({ revision: 1, engine: 'tgrep' }), configure: async () => { } });
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
-	const content = resources.add(services.createInstance(SettingsSectionRenderer, root, resources.add(services.createInstance(SearchSettingsModel)), AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings));
+	services.registerInstance(RemoteAgentServiceId, {
+		onDidChangeConnectionState: Event.None,
+		onDidChangeConnection: Event.None,
+	} as IAppServerRemoteAgentService);
+	services.registerInstance(IContentSearchConfigurationService, {
+		read: async () => ({ revision: 1, engine: 'tgrep' }),
+		configure: async () => { },
+	});
+	services.registerInstance(IAccessibleViewService, {
+		show: () => true,
+		getOpenAriaHint: () => undefined,
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
+	});
+	const content = resources.add(
+		services.createInstance(
+			SettingsSectionRenderer,
+			root,
+			resources.add(services.createInstance(SearchSettingsModel)),
+			AccessibleViewProviderId.ContentSearchSettings,
+			AccessibilityVerbositySettingId.ContentSearchSettings,
+		),
+	);
 	const item = content.getNodes()[0].children![0].element;
 	assert.ok(item.kind === 'item' && 'rendererId' in item.value);
 	root.append(content.renderItem(item.value));
@@ -324,7 +440,9 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	assert.match(root.textContent ?? '', /tgrep 加速 Agent 和 Codebase 的索引搜索/);
 	assert.match(root.textContent ?? '', /编辑器的 Current 搜索始终使用 ripgrep（rg）/);
 	engine.focus();
-	const help = AccessibleViewRegistry.getImplementations().find(provider => provider.name.startsWith('settingsSection-') && provider.type === AccessibleViewType.Help)?.getProvider(services);
+	const help = AccessibleViewRegistry.getImplementations()
+		.find(provider => provider.name.startsWith('settingsSection-') && provider.type === AccessibleViewType.Help)
+		?.getProvider(services);
 	assert.ok(help);
 	resources.add(help);
 	assert.match(help.provideContent(), /选择 ripgrep 会关闭索引并扫描当前文件/);
@@ -337,10 +455,24 @@ test('Search settings discard retired reads and save through the current backend
 	const connections = resources.add(new Emitter<void>());
 	const reads: DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep'; }>[] = [];
 	const writes: [string, number][] = [];
-	const model = resources.add(new SearchSettingsModel({
-		read: () => { const read = new DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep'; }>(); reads.push(read); return read.p; },
-		configure: async (engine, revision) => { writes.push([engine, revision]); },
-	}, { onDidChangeConnection: connections.event, onDidChangeConnectionState: Event.None } as unknown as IAppServerRemoteAgentService));
+	const model = resources.add(
+		new SearchSettingsModel(
+			{
+				read: () => {
+					const read = new DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep'; }>();
+					reads.push(read);
+					return read.p;
+				},
+				configure: async (engine, revision) => {
+					writes.push([engine, revision]);
+				},
+			},
+			{
+				onDidChangeConnection: connections.event,
+				onDidChangeConnectionState: Event.None,
+			} as unknown as IAppServerRemoteAgentService,
+		),
+	);
 	const engine = () => model.fields.find(field => field.kind === 'select')!;
 	model.setVisible(true);
 	connections.fire();
@@ -365,13 +497,42 @@ test('Search settings discard retired reads and save through the current backend
 
 test('Settings maturity filters compose with text, identifiers and modified settings without changing values', () => {
 	using tree = new SettingsTreeModel<boolean>(id => id === 'test.preview');
-	tree.setChildren([{
-		element: { kind: 'group', id: 'maturity', title: 'Maturity', description: '' }, children: [
-			{ element: { kind: 'item', id: 'test.experimental', title: 'Browser alpha', description: '', tags: ['experimental', 'browser'], value: true } },
-			{ element: { kind: 'item', id: 'test.preview', title: 'Browser preview', description: '', tags: ['preview'], value: false } },
-			{ element: { kind: 'item', id: 'test.stable', title: 'Browser stable', description: '', value: false } },
-		]
-	}]);
+	tree.setChildren([
+		{
+			element: { kind: 'group', id: 'maturity', title: 'Maturity', description: '' },
+			children: [
+				{
+					element: {
+						kind: 'item',
+						id: 'test.experimental',
+						title: 'Browser alpha',
+						description: '',
+						tags: ['experimental', 'browser'],
+						value: true,
+					},
+				},
+				{
+					element: {
+						kind: 'item',
+						id: 'test.preview',
+						title: 'Browser preview',
+						description: '',
+						tags: ['preview'],
+						value: false,
+					},
+				},
+				{
+					element: {
+						kind: 'item',
+						id: 'test.stable',
+						title: 'Browser stable',
+						description: '',
+						value: false,
+					},
+				},
+			],
+		},
+	]);
 	for (const [query, ids] of [
 		['@tag:experimental browser', ['test.experimental']],
 		['@TAG:EXPERIMENTAL @tag:browser', ['test.experimental']],
@@ -380,11 +541,25 @@ test('Settings maturity filters compose with text, identifiers and modified sett
 		['@stable @tag:experimental', []],
 	] as const) {
 		tree.setQuery(query);
-		assert.deepEqual(tree.visibleItems.map(item => item.id), ids);
+		assert.deepEqual(
+			tree.visibleItems.map(item => item.id),
+			ids,
+		);
 		assert.equal(new SettingsSearchQuery(query).isEmpty, false);
 	}
 	tree.setQuery('');
-	assert.deepEqual(tree.visibleItems.map(item => item.value), [true, false, false]);
+	assert.deepEqual(
+		tree.visibleItems.map(item => item.value),
+		[true, false, false],
+	);
+});
+
+test('Welcome illustration is discoverable in startup settings', () => {
+	const defaults = new DefaultSettings();
+	const setting = defaults.get('chat.welcomePage.agentsWindowGraphic');
+	assert.equal(setting.valueType, 'select');
+	assert.equal(setting.configuration.defaultValue, 'auto');
+	assert.equal(findSettingCategory(createSettingsLayout(defaults.all), setting.id), 'startup');
 });
 
 test('DefaultSettings projects only Configuration Registry metadata', () => {
@@ -429,7 +604,10 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 	const defaults = new DefaultSettings(registry);
 	tags.push('preview');
 	assert.deepEqual(defaults.get(visible).tags, ['experimental']);
-	assert.deepEqual(defaults.all.map(setting => setting.id), ['editor.test.enabled', 'editor.test.patterns']);
+	assert.deepEqual(
+		defaults.all.map(setting => setting.id),
+		['editor.test.enabled', 'editor.test.patterns'],
+	);
 	assert.equal(defaults.get(visible).valueType, 'boolean');
 	assert.equal(defaults.get('editor.test.patterns').valueType, 'stringMap');
 });
@@ -437,8 +615,15 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 test('Explicit host settings resolve registry metadata without entering the automatic Workbench catalog', () => {
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({
-		key: 'test.host.preference', defaultValue: false, parse: value => value as boolean,
-		setting: { included: false, valueType: 'boolean', title: 'Host preference', description: 'Host-owned layout entry.' },
+		key: 'test.host.preference',
+		defaultValue: false,
+		parse: value => value as boolean,
+		setting: {
+			included: false,
+			valueType: 'boolean',
+			title: 'Host preference',
+			description: 'Host-owned layout entry.',
+		},
 	});
 	const defaults = new DefaultSettings(registry);
 	assert.deepEqual(defaults.all, []);
@@ -459,52 +644,87 @@ test('Sessions resolves its registered appearance metadata in the active languag
 	assert.equal(scope.title, '布局范围');
 	assert.ok(scope.valueType === 'select');
 	assert.equal(scope.options.find(option => option.value === 'session-shared')!.label, '会话');
-	assert.equal(defaults.all.some(setting => setting.id === SessionsConfiguration.layoutStyle), false);
+	assert.equal(
+		defaults.all.some(setting => setting.id === SessionsConfiguration.layoutStyle),
+		false,
+	);
 });
 
 test('resource editor accessibility is addressable without appearing in IDE settings', async () => {
 	await import('../../../../services/extensions/browser/resourceEditorAccessibility.js');
 	const defaults = new DefaultSettings();
 	assert.equal(defaults.get('accessibility.verbosity.resourceEditor').valueType, 'boolean');
-	assert.equal(defaults.all.some(setting => setting.id === 'accessibility.verbosity.resourceEditor'), false);
+	assert.equal(
+		defaults.all.some(setting => setting.id === 'accessibility.verbosity.resourceEditor'),
+		false,
+	);
 });
 
 test('Extension settings use catalog identities and standard schemas without a product layout entry', () => {
 	const registry = new ConfigurationRegistry();
-	const parsed = parseExtensionManifest(JSON.stringify({
-		name: 'sample', publisher: 'test', version: '1.0.0', displayName: '示例扩展',
-		contributes: {
-			configuration: [{
-				id: 'preferences', title: 'Sample settings', properties: {
-					'editor.sample.enabled': { type: 'boolean', default: true, description: 'Enable sample', tags: ['preview'] },
-					'sample.count': { type: 'integer', default: 2, minimum: 1, maximum: 10 },
-					'sample.mode': { type: 'string', enum: ['first', 'second'], default: 'first' },
-					'sample.text': { type: 'string', default: '', markdownDescription: 'Sample text' },
-					'sample.rules': { type: 'array', default: [], items: { type: 'string' } },
-					'sample.hidden': { type: 'boolean', default: false, included: false },
-				}, allOf: [{ properties: { 'sample.nested': { type: 'boolean', default: false } } }],
-			}]
-		},
-	}), { id: 'test.sample', name: 'sample', publisher: 'test', version: '1.0.0' });
+	const parsed = parseExtensionManifest(
+		JSON.stringify({
+			name: 'sample',
+			publisher: 'test',
+			version: '1.0.0',
+			displayName: '示例扩展',
+			contributes: {
+				configuration: [
+					{
+						id: 'preferences',
+						title: 'Sample settings',
+						properties: {
+							'editor.sample.enabled': {
+								type: 'boolean',
+								default: true,
+								description: 'Enable sample',
+								tags: ['preview'],
+							},
+							'sample.count': { type: 'integer', default: 2, minimum: 1, maximum: 10 },
+							'sample.mode': { type: 'string', enum: ['first', 'second'], default: 'first' },
+							'sample.text': { type: 'string', default: '', markdownDescription: 'Sample text' },
+							'sample.rules': { type: 'array', default: [], items: { type: 'string' } },
+							'sample.hidden': { type: 'boolean', default: false, included: false },
+						},
+						allOf: [{ properties: { 'sample.nested': { type: 'boolean', default: false } } }],
+					},
+				],
+			},
+		}),
+		{ id: 'test.sample', name: 'sample', publisher: 'test', version: '1.0.0' },
+	);
 	registry.updateConfigurations({ add: [...parsed.contributes.configuration], remove: [] });
 	const defaults = new DefaultSettings(registry);
-	assert.deepEqual(defaults.all.map(setting => [setting.id, setting.valueType]), [
-		['editor.sample.enabled', 'boolean'], ['sample.count', 'number'], ['sample.mode', 'select'],
-		['sample.text', 'text'], ['sample.rules', 'complex'], ['sample.nested', 'boolean'],
-	]);
+	assert.deepEqual(
+		defaults.all.map(setting => [setting.id, setting.valueType]),
+		[
+			['editor.sample.enabled', 'boolean'],
+			['sample.count', 'number'],
+			['sample.mode', 'select'],
+			['sample.text', 'text'],
+			['sample.rules', 'complex'],
+			['sample.nested', 'boolean'],
+		],
+	);
 	const layout = createSettingsLayout(defaults.all);
 	const extension = layout.find(category => category.id === 'extension.test.sample')!;
 	using tree = new SettingsTreeModel<ISetting>();
 	tree.setChildren(settingsRootNodes(layout));
 	tree.setQuery('@tag:preview');
-	assert.deepEqual(tree.visibleItems.map(item => item.id), ['editor.sample.enabled']);
+	assert.deepEqual(
+		tree.visibleItems.map(item => item.id),
+		['editor.sample.enabled'],
+	);
 	assert.equal(extension.descriptor.label, '示例扩展');
 	assert.equal(findSettingCategory(layout, 'editor.sample.enabled'), extension.id, 'extension ownership wins over product key patterns');
 	assert.equal(defaults.get('sample.text').description, 'Sample text');
 	assert.deepEqual(defaults.get('editor.sample.enabled').tags, ['preview']);
 	assert.equal(registry.getConfiguration('sample.nested')?.source?.id, 'test.sample');
 	registry.updateConfigurations({ add: [], remove: [...parsed.contributes.configuration] });
-	assert.equal(createSettingsLayout(new DefaultSettings(registry).all).some(category => category.id === extension.id), false);
+	assert.equal(
+		createSettingsLayout(new DefaultSettings(registry).all).some(category => category.id === extension.id),
+		false,
+	);
 });
 
 test('Built-in Git, Markdown and Media settings localize, persist and reset through the canonical registry', async () => {
@@ -512,14 +732,29 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	for (const name of ['git', 'markdown-language-features', 'media-preview']) {
 		const manifest = JSON.parse(await readFile(`extensions/${name}/package.json`, 'utf8'));
 		const messages = JSON.parse(await readFile(`extensions/${name}/package.nls.zh-CN.json`, 'utf8')) as Record<string, string>;
-		const localized = JSON.stringify(manifest, (_key, value) => typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value);
-		registry.updateConfigurations({ add: [...parseExtensionManifest(localized, { id: `${manifest.publisher}.${name}`, name, publisher: manifest.publisher, version: manifest.version }).contributes.configuration], remove: [] });
+		const localized = JSON.stringify(manifest, (_key, value) => (typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value));
+		registry.updateConfigurations({
+			add: [
+				...parseExtensionManifest(localized, {
+					id: `${manifest.publisher}.${name}`,
+					name,
+					publisher: manifest.publisher,
+					version: manifest.version,
+				}).contributes.configuration,
+			],
+			remove: [],
+		});
 	}
 	const defaults = new DefaultSettings(registry);
 	const layout = createSettingsLayout(defaults.all);
-	assert.deepEqual(layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]), [
-		['extension.ash.git', 103], ['extension.ash.markdown-language-features', 13], ['extension.ash.media-preview', 2],
-	]);
+	assert.deepEqual(
+		layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]),
+		[
+			['extension.ash.git', 103],
+			['extension.ash.markdown-language-features', 13],
+			['extension.ash.media-preview', 2],
+		],
+	);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
 	const severity = defaults.get('markdown.validate.fragmentLinks.enabled');
@@ -530,7 +765,11 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	await configuration.updateValue('markdown.validate.enabled', false);
 	await configuration.updateValue('git.untrackedChanges', 'separate');
 	const document = (await configuration.read()).source;
-	assert.deepEqual(JSON.parse(document), { 'mediaPreview.video.loop': true, 'markdown.validate.enabled': false, 'git.untrackedChanges': 'separate' });
+	assert.deepEqual(JSON.parse(document), {
+		'mediaPreview.video.loop': true,
+		'markdown.validate.enabled': false,
+		'git.untrackedChanges': 'separate',
+	});
 	using reopened = new WorkspaceService({ registry, source: document });
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
 	await assert.rejects(reopened.updateValue('git.untrackedChanges', 'unsupported'), TypeError);
@@ -547,9 +786,19 @@ for (const locale of ['en', 'zh-CN']) {
 		resources.add(toDisposable(resetNlsResolver));
 		const manifest = JSON.parse(await readFile('extensions/rust/package.json', 'utf8'));
 		const messages = JSON.parse(await readFile(`extensions/rust/package.nls${locale === 'en' ? '' : '.zh-CN'}.json`, 'utf8'));
-		const localized = JSON.stringify(manifest, (_key, value) => typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value);
+		const localized = JSON.stringify(manifest, (_key, value) => (typeof value === 'string' ? value.replace(/%([^%]+)%/g, (match, key) => messages[key] ?? match) : value));
 		const registry = new ConfigurationRegistry();
-		registry.updateConfigurations({ add: [...parseExtensionManifest(localized, { id: `${manifest.publisher}.${manifest.name}`, name: manifest.name, publisher: manifest.publisher, version: manifest.version }).contributes.configuration], remove: [] });
+		registry.updateConfigurations({
+			add: [
+				...parseExtensionManifest(localized, {
+					id: `${manifest.publisher}.${manifest.name}`,
+					name: manifest.name,
+					publisher: manifest.publisher,
+					version: manifest.version,
+				}).contributes.configuration,
+			],
+			remove: [],
+		});
 		const defaults = new DefaultSettings(registry);
 		for (const key of ['lru.capacity', 'numThreads', 'cachePriming.numThreads', 'procMacro.processes', 'completion.limit']) {
 			assert.equal(defaults.get(`rust-analyzer.${key}`).valueType, 'numberWithOptions', key);
@@ -562,17 +811,35 @@ for (const locale of ['en', 'zh-CN']) {
 		let actions: readonly IAction[] = [];
 		const errors: string[] = [];
 		const widgets = ['lru.capacity', 'numThreads'].map(key => {
-			const widget = resources.add(createSettingWidget(resources, root, defaults.get(`rust-analyzer.${key}`), {
-				configurationService: configuration, contextViewProvider: contextView,
-				contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); } },
-				clipboardService: {
-					triggerPaste: () => undefined, read: async () => [], readText: async () => '', writeText: async () => { },
-					readFindText: async () => '', writeFindText: async () => { }, readImage: async () => new Uint8Array(),
-					readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
-				},
-				onOpenSettings: async () => { assert.fail('Numeric settings must not require JSON editing'); },
-				onStatus: (message, error) => { if (error) errors.push(message); },
-			}));
+			const widget = resources.add(
+				createSettingWidget(resources, root, defaults.get(`rust-analyzer.${key}`), {
+					configurationService: configuration,
+					contextViewProvider: contextView,
+					contextMenuProvider: {
+						showContextMenu: delegate => {
+							actions = delegate.getActions();
+						},
+					},
+					clipboardService: {
+						triggerPaste: () => undefined,
+						read: async () => [],
+						readText: async () => '',
+						writeText: async () => { },
+						readFindText: async () => '',
+						writeFindText: async () => { },
+						readImage: async () => new Uint8Array(),
+						readResources: async () => ({ resources: [], operation: 'copy' }),
+						writeResources: async () => { },
+						hasResources: async () => false,
+					},
+					onOpenSettings: async () => {
+						assert.fail('Numeric settings must not require JSON editing');
+					},
+					onStatus: (message, error) => {
+						if (error) errors.push(message);
+					},
+				}),
+			);
 			root.append(widget.domNode);
 			return widget;
 		});
@@ -633,25 +900,44 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 	resources.add(toDisposable(() => root.remove()));
 	let menuActions: readonly IAction[] = [];
 	const errors: string[] = [];
-	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings().get('files.exclude'), {
-		configurationService: configuration,
-		contextViewProvider: resources.add(new BrowserContextViewService(root)),
-		contextMenuProvider: { showContextMenu: delegate => { menuActions = delegate.getActions().filter((action): action is IAction => !(action instanceof Separator)); } },
-		clipboardService: {
-			triggerPaste: () => undefined, read: async () => [], readText: async () => '', writeText: async () => { },
-			readFindText: async () => '', writeFindText: async () => { }, readImage: async () => new Uint8Array(),
-			readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
-		},
-		onStatus: (message, error) => { if (error) errors.push(message); },
-	}));
+	const widget = resources.add(
+		createSettingWidget(resources, root, new DefaultSettings().get('files.exclude'), {
+			configurationService: configuration,
+			contextViewProvider: resources.add(new BrowserContextViewService(root)),
+			contextMenuProvider: {
+				showContextMenu: delegate => {
+					menuActions = delegate.getActions().filter((action): action is IAction => !(action instanceof Separator));
+				},
+			},
+			clipboardService: {
+				triggerPaste: () => undefined,
+				read: async () => [],
+				readText: async () => '',
+				writeText: async () => { },
+				readFindText: async () => '',
+				writeFindText: async () => { },
+				readImage: async () => new Uint8Array(),
+				readResources: async () => ({ resources: [], operation: 'copy' }),
+				writeResources: async () => { },
+				hasResources: async () => false,
+			},
+			onStatus: (message, error) => {
+				if (error) errors.push(message);
+			},
+		}),
+	);
 	root.append(widget.domNode);
 	const displayedRules = () => [...widget.domNode.querySelectorAll<HTMLElement>('.ash-pattern-row')].map(row => row.dataset.pattern);
 	const defaults = ['**/.git', '**/.svn', '**/.hg', '**/.jj', '**/.DS_Store', '**/Thumbs.db'];
 	const ruleRow = (pattern: string) => [...widget.domNode.querySelectorAll<HTMLElement>('.ash-pattern-row')].find(row => row.dataset.pattern === pattern)!;
 	const save = async (action: () => void): Promise<void> => {
 		let resolveSaved!: () => void;
-		const saved = new Promise<void>(resolve => { resolveSaved = resolve; });
-		using listener = configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration('files.exclude')) resolveSaved(); });
+		const saved = new Promise<void>(resolve => {
+			resolveSaved = resolve;
+		});
+		using listener = configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('files.exclude')) resolveSaved();
+		});
 		action();
 		await saved;
 		await nextTurn();
@@ -660,7 +946,10 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 	assert.equal(widget.domNode.querySelectorAll('input').length, 0, 'rules are readable text until edited');
 	assert.equal(findSettingCategory(createSettingsLayout(new DefaultSettings().all), 'files.exclude'), 'editor-files');
 	await save(() => ruleRow('**/.DS_Store').querySelectorAll<HTMLButtonElement>('button')[1]!.click());
-	assert.deepEqual(displayedRules(), defaults.filter(pattern => pattern !== '**/.DS_Store'));
+	assert.deepEqual(
+		displayedRules(),
+		defaults.filter(pattern => pattern !== '**/.DS_Store'),
+	);
 	assert.deepEqual(JSON.parse((await configuration.read()).source)['files.exclude'], { '**/.DS_Store': false }, 'only the explicit override is persisted');
 	assert.equal(widget.domNode.classList.contains('is-configured'), true);
 	using reopened = new WorkspaceService({ source: (await configuration.read()).source });
@@ -699,7 +988,9 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 	assert.equal(browserEnvironment.window.document.activeElement, add);
 	assert.equal(configuration.inspect('files.exclude').userLocalValue, undefined, 'cancelling a draft does not save it');
 	const updateValue = configuration.updateValue.bind(configuration);
-	configuration.updateValue = async () => { throw new Error('Settings disk unavailable'); };
+	configuration.updateValue = async () => {
+		throw new Error('Settings disk unavailable');
+	};
 	add.click();
 	inputs = widget.domNode.querySelectorAll<HTMLInputElement>('.ash-pattern-editor input');
 	inputs[0]!.value = '**/unsaved';
@@ -712,7 +1003,9 @@ test('File exclusion Settings show defaults, persist disabled rules and reset th
 	inputs[0]!.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	await save(() => ruleRow('**/.git').querySelectorAll<HTMLButtonElement>('button')[1]!.click());
 	let resolveReset!: () => void;
-	const resetSaved = new Promise<void>(resolve => { resolveReset = resolve; });
+	const resetSaved = new Promise<void>(resolve => {
+		resolveReset = resolve;
+	});
 	using resetListener = configuration.onDidChangeConfiguration(event => {
 		if (event.affectsConfiguration('files.exclude') && configuration.inspect('files.exclude').userLocalValue === undefined) resolveReset();
 	});
@@ -733,24 +1026,33 @@ test('URL rule suggestions follow extension registration without changing saved 
 	await configuration.updateValue('workbench.externalUriOpeners', { '*': 'extension:test:viewer' });
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.replaceChildren(root);
-	resources.add(toDisposable(() => { updateContributedOpeners([], []); root.remove(); }));
+	resources.add(
+		toDisposable(() => {
+			updateContributedOpeners([], []);
+			root.remove();
+		}),
+	);
 	const contextView = resources.add(new BrowserContextViewService(root));
-	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings().get('workbench.externalUriOpeners'), {
-		configurationService: configuration,
-		contextViewProvider: contextView,
-		clipboardService: {
-			readText: async () => '', writeText: async () => { },
-			triggerPaste: () => undefined,
-			read: async () => [],
-			readFindText: async () => '',
-			writeFindText: async () => { },
-			readImage: async () => new Uint8Array(),
-			readResources: async () => ({ resources: [], operation: 'copy' }),
-			writeResources: async () => { }, hasResources: async () => false,
-		},
-		contextMenuProvider: { showContextMenu() { } },
-		onStatus: () => { },
-	}));
+	const widget = resources.add(
+		createSettingWidget(resources, root, new DefaultSettings().get('workbench.externalUriOpeners'), {
+			configurationService: configuration,
+			contextViewProvider: contextView,
+			clipboardService: {
+				readText: async () => '',
+				writeText: async () => { },
+				triggerPaste: () => undefined,
+				read: async () => [],
+				readFindText: async () => '',
+				writeFindText: async () => { },
+				readImage: async () => new Uint8Array(),
+				readResources: async () => ({ resources: [], operation: 'copy' }),
+				writeResources: async () => { },
+				hasResources: async () => false,
+			},
+			contextMenuProvider: { showContextMenu() { } },
+			onStatus: () => { },
+		}),
+	);
 	root.append(widget.domNode);
 	const opener = widget.domNode.querySelector<HTMLInputElement>('[data-pattern-part="value"]')!;
 	opener.focus();
@@ -770,25 +1072,56 @@ test('URL rule suggestions follow extension registration without changing saved 
 test('Configured markers follow explicit local user overrides and expose one accessible row description', async () => {
 	using resources = new DisposableStore();
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({ key: 'status.flag', defaultValue: true, parse: value => value as boolean, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE, setting: { valueType: 'boolean', title: 'Flag', description: '' } });
-	registry.registerConfiguration({ key: 'status.object', defaultValue: {}, parse: value => value as Record<string, unknown>, setting: { valueType: 'stringMap', title: 'Object', description: '', structuredValues: true, keyLabel: 'Key', valueLabel: 'Value', addLabel: 'Add', removeLabel: 'Remove', incompleteMessage: 'Incomplete', duplicateMessage: 'Duplicate' } });
+	registry.registerConfiguration({
+		key: 'status.flag',
+		defaultValue: true,
+		parse: value => value as boolean,
+		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+		setting: { valueType: 'boolean', title: 'Flag', description: '' },
+	});
+	registry.registerConfiguration({
+		key: 'status.object',
+		defaultValue: {},
+		parse: value => value as Record<string, unknown>,
+		setting: {
+			valueType: 'stringMap',
+			title: 'Object',
+			description: '',
+			structuredValues: true,
+			keyLabel: 'Key',
+			valueLabel: 'Value',
+			addLabel: 'Add',
+			removeLabel: 'Remove',
+			incompleteMessage: 'Incomplete',
+			duplicateMessage: 'Duplicate',
+		},
+	});
 	const configuration = resources.add(new WorkspaceService({ registry }));
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.replaceChildren(root);
 	resources.add(toDisposable(() => root.remove()));
 	const contextView = resources.add(new BrowserContextViewService(root));
 	const widgets = new DefaultSettings(registry).all.map(setting => {
-		const widget = resources.add(createSettingWidget(resources, root, setting, {
-			configurationService: configuration, contextViewProvider: contextView, contextMenuProvider: { showContextMenu() { } },
-			clipboardService: {
-				triggerPaste: () => undefined,
-				read: async () => [],
-				readText: async () => '', writeText: async () => { }, readFindText: async () => '',
-				writeFindText: async () => { },
-				readImage: async () => new Uint8Array(), readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false
-			},
-			onStatus: () => { },
-		}));
+		const widget = resources.add(
+			createSettingWidget(resources, root, setting, {
+				configurationService: configuration,
+				contextViewProvider: contextView,
+				contextMenuProvider: { showContextMenu() { } },
+				clipboardService: {
+					triggerPaste: () => undefined,
+					read: async () => [],
+					readText: async () => '',
+					writeText: async () => { },
+					readFindText: async () => '',
+					writeFindText: async () => { },
+					readImage: async () => new Uint8Array(),
+					readResources: async () => ({ resources: [], operation: 'copy' }),
+					writeResources: async () => { },
+					hasResources: async () => false,
+				},
+				onStatus: () => { },
+			}),
+		);
 		root.append(widget.domNode);
 		return widget;
 	});
@@ -826,24 +1159,105 @@ test('Configured markers follow explicit local user overrides and expose one acc
 	assert.equal(widgets[0]!.domNode.hasAttribute('aria-describedby'), false);
 });
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`Policy controls show managed values and preserve overrides through equal-value policy changes (${locale})`, async () => {
+		using resources = new DisposableStore();
+		const { AbstractPolicyService } = await import('../../../../../platform/policy/common/policy.js');
+		const { BrowserClipboardService } = await import('../../../../../platform/clipboard/browser/clipboardService.js');
+		const { configurationSettingBinding } = await import('../../../../services/preferences/common/settingsModels.js');
+		const registry = new ConfigurationRegistry();
+		registry.registerConfiguration({ key: 'policy.flag', defaultValue: false, parse: value => value as boolean, policy: { name: 'ManagedFlag' }, setting: { valueType: 'boolean', title: 'Flag', description: '' } });
+		registry.registerConfiguration({ key: 'policy.count', defaultValue: 0, parse: value => value as number, policy: { name: 'ManagedCount' }, setting: { valueType: 'number', title: 'Count', description: '', minimum: 0, maximum: 10 } });
+		registry.registerConfiguration({ key: 'policy.text', defaultValue: '', parse: value => value as string, policy: { name: 'ManagedText' }, setting: { valueType: 'text', title: 'Text', description: '', placeholder: '' } });
+		registry.registerConfiguration({ key: 'policy.channel', defaultValue: 'stable', parse: value => value as string, policy: { name: 'ManagedChannel' }, setting: { valueType: 'select', title: 'Channel', description: '', options: [{ value: 'stable', label: 'Stable' }, { value: 'latest', label: 'Latest' }] } });
+		const source = '{ "policy.flag": false, "policy.count": 0, "policy.text": "", "policy.channel": "stable" }';
+		const configuration = resources.add(new WorkspaceService({ registry, source }));
+		class Policies extends AbstractPolicyService {
+			set(managed: boolean): void { this.accept(managed ? { ManagedFlag: false, ManagedCount: 0, ManagedText: '', ManagedChannel: 'stable' } : {}); }
+			protected async refresh(): Promise<void> { }
+		}
+		const policies = resources.add(new Policies());
+		await configuration.initialize(configuration.fileService, policies);
+		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		if (locale === 'zh-CN') setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		try {
+			const root = h(browserEnvironment.window.document, 'div');
+			browserEnvironment.window.document.body.replaceChildren(root);
+			resources.add(toDisposable(() => root.remove()));
+			const contextView = resources.add(new BrowserContextViewService(root));
+			const clipboard = resources.add(new BrowserClipboardService(undefined));
+			let actions: readonly IAction[] = [];
+			const widgets = new DefaultSettings(registry).all.map(setting => {
+				// Host-specific bindings, such as Desktop updates, still honor configuration policy.
+				if (setting.valueType === 'text') setting = { ...setting, binding: configurationSettingBinding(configuration, setting.configuration) };
+				const widget = resources.add(createSettingWidget(resources, root, setting, {
+					configurationService: configuration, contextViewProvider: contextView, clipboardService: clipboard,
+					contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); delegate.onHide?.(false); } },
+					onStatus: message => assert.equal(message, ''),
+				}));
+				root.append(widget.domNode);
+				return widget;
+			});
+			for (const managed of [true, false]) {
+				policies.set(managed);
+				for (const widget of widgets) {
+					const control = widget.domNode.querySelector<HTMLInputElement | HTMLButtonElement>('input[data-configuration-key], [data-configuration-key] button')!;
+					assert.equal(control.disabled, managed);
+					assert.equal(control.hasAttribute('aria-busy'), false, 'policy management does not mean a save is pending');
+					const description = widget.domNode.querySelector<HTMLElement>('.ash-settings-policy')!;
+					assert.equal(description.hidden, !managed);
+					assert.equal(description.textContent, locale === 'zh-CN' ? '由管理员策略管理，无法在此更改。' : 'Managed by administrator policy. This value cannot be changed here.');
+					assert.equal(widget.domNode.getAttribute('aria-describedby')?.split(' ').includes(description.id) ?? false, managed);
+					widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
+					assert.equal(actions.find(action => action.id === 'settings.resetSetting')!.enabled, !managed);
+				}
+				assert.equal((await configuration.read()).source, source);
+			}
+			for (const widget of widgets) widget.dispose();
+			policies.set(true);
+			assert.equal(root.querySelectorAll('.ash-configuration-setting').length, 0);
+		} finally { resetNlsResolver(); }
+	});
+}
+
 test('Copy Setting as JSON reads the latest local user values and preserves falsy and structured values', async () => {
 	using resources = new DisposableStore();
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({
-		key: 'copy.boolean', defaultValue: true, parse: value => value as boolean, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+		key: 'copy.boolean',
+		defaultValue: true,
+		parse: value => value as boolean,
+		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 		setting: { valueType: 'boolean', title: 'Boolean', description: '' },
 	});
 	registry.registerConfiguration({
-		key: 'copy.number', defaultValue: 1, parse: value => value as number,
+		key: 'copy.number',
+		defaultValue: 1,
+		parse: value => value as number,
 		setting: { valueType: 'number', title: 'Number', description: '', minimum: 0, maximum: 10 },
 	});
 	registry.registerConfiguration({
-		key: 'copy.text', defaultValue: 'Default', parse: value => value as string,
+		key: 'copy.text',
+		defaultValue: 'Default',
+		parse: value => value as string,
 		setting: { valueType: 'text', title: 'Text', description: '', placeholder: '' },
 	});
 	registry.registerConfiguration({
-		key: 'copy.structured', defaultValue: {}, parse: value => value as Record<string, unknown>,
-		setting: { valueType: 'stringMap', title: 'Object', description: '', structuredValues: true, keyLabel: 'Key', valueLabel: 'Value', addLabel: 'Add', removeLabel: 'Remove', incompleteMessage: 'Incomplete', duplicateMessage: 'Duplicate' },
+		key: 'copy.structured',
+		defaultValue: {},
+		parse: value => value as Record<string, unknown>,
+		setting: {
+			valueType: 'stringMap',
+			title: 'Object',
+			description: '',
+			structuredValues: true,
+			keyLabel: 'Key',
+			valueLabel: 'Value',
+			addLabel: 'Add',
+			removeLabel: 'Remove',
+			incompleteMessage: 'Incomplete',
+			duplicateMessage: 'Duplicate',
+		},
 	});
 	const configuration = resources.add(new WorkspaceService({ registry }));
 	const root = h(browserEnvironment.window.document, 'div');
@@ -855,19 +1269,35 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 	const errors: string[] = [];
 	const widgets = new Map<string, import('../../browser/settingsWidgets.js').SettingWidget>();
 	for (const setting of new DefaultSettings(registry).all) {
-		const widget = resources.add(createSettingWidget(resources, root, setting, {
-			configurationService: configuration, contextViewProvider: contextView,
-			contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); delegate.onHide?.(false); } },
-			clipboardService: {
-				triggerPaste: () => undefined,
-				read: async () => [],
-				readText: async () => '', writeText: async value => { copied.push(value); }, readFindText: async () => '',
-				writeFindText: async () => { },
-				readImage: async () => new Uint8Array(),
-				readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
-			},
-			onStatus: (message, isError) => { if (isError) errors.push(message); },
-		}));
+		const widget = resources.add(
+			createSettingWidget(resources, root, setting, {
+				configurationService: configuration,
+				contextViewProvider: contextView,
+				contextMenuProvider: {
+					showContextMenu: delegate => {
+						actions = delegate.getActions();
+						delegate.onHide?.(false);
+					},
+				},
+				clipboardService: {
+					triggerPaste: () => undefined,
+					read: async () => [],
+					readText: async () => '',
+					writeText: async value => {
+						copied.push(value);
+					},
+					readFindText: async () => '',
+					writeFindText: async () => { },
+					readImage: async () => new Uint8Array(),
+					readResources: async () => ({ resources: [], operation: 'copy' }),
+					writeResources: async () => { },
+					hasResources: async () => false,
+				},
+				onStatus: (message, isError) => {
+					if (isError) errors.push(message);
+				},
+			}),
+		);
 		root.append(widget.domNode);
 		widgets.set(setting.id, widget);
 	}
@@ -887,22 +1317,33 @@ test('Copy Setting as JSON reads the latest local user values and preserves fals
 	await copy('copy.structured');
 	await configuration.updateValue('copy.text', 'quote" and back\\slash\n中文');
 	await copy('copy.text');
-	assert.deepEqual(copied.map(fragment => JSON.parse(`{${fragment}}`)), [
-		{ 'copy.boolean': true }, { 'copy.boolean': false }, { 'copy.number': 0 }, { 'copy.text': '' },
-		{ 'copy.structured': {} }, { 'copy.structured': structured }, { 'copy.text': 'quote" and back\\slash\n中文' },
-	]);
+	assert.deepEqual(
+		copied.map(fragment => JSON.parse(`{${fragment}}`)),
+		[
+			{ 'copy.boolean': true },
+			{ 'copy.boolean': false },
+			{ 'copy.number': 0 },
+			{ 'copy.text': '' },
+			{ 'copy.structured': {} },
+			{ 'copy.structured': structured },
+			{ 'copy.text': 'quote" and back\\slash\n中文' },
+		],
+	);
 	assert.equal(copied[5], `"copy.structured": ${JSON.stringify(structured, null, 2)}`);
 	assert.deepEqual(errors, []);
 });
 
 test('Copy Setting as JSON uses the current window default and reports clipboard failures in Chinese', async () => {
 	using resources = new DisposableStore();
-	const { testConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
+	const { testConfigurationService } = await import('../../../../services/configuration/test/common/testServices.js');
 	const { ConfigurationService: SessionsConfigurationService } = await import('../../../../../sessions/services/configuration/browser/configurationService.js');
 	const ConfigurationService = testConfigurationService(SessionsConfigurationService);
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({
-		key: 'copy.window', defaultValue: true, parse: value => value as boolean, agentsWindow: { default: false },
+		key: 'copy.window',
+		defaultValue: true,
+		parse: value => value as boolean,
+		agentsWindow: { default: false },
 		setting: { valueType: 'boolean', title: 'Window default', description: '' },
 	});
 	const configuration = resources.add(new ConfigurationService({ registry }));
@@ -918,20 +1359,39 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 	let revealed = '';
 	let fail = false;
 	const reported = new DeferredPromise<{ message: string; isError: boolean; }>();
-	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings(registry).get('copy.window'), {
-		configurationService: configuration, contextViewProvider: contextView,
-		contextMenuProvider: { showContextMenu: delegate => { actions = delegate.getActions(); delegate.onHide?.(false); } },
-		clipboardService: {
-			triggerPaste: () => undefined,
-			read: async () => [],
-			readText: async () => '', writeText: async value => { if (fail) throw undefined; copied = value; }, readFindText: async () => '',
-			writeFindText: async () => { },
-			readImage: async () => new Uint8Array(),
-			readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
-		},
-		onOpenSettings: async key => { revealed = key; },
-		onStatus: (message, isError) => { void reported.complete({ message, isError }); },
-	}));
+	const widget = resources.add(
+		createSettingWidget(resources, root, new DefaultSettings(registry).get('copy.window'), {
+			configurationService: configuration,
+			contextViewProvider: contextView,
+			contextMenuProvider: {
+				showContextMenu: delegate => {
+					actions = delegate.getActions();
+					delegate.onHide?.(false);
+				},
+			},
+			clipboardService: {
+				triggerPaste: () => undefined,
+				read: async () => [],
+				readText: async () => '',
+				writeText: async value => {
+					if (fail) throw undefined;
+					copied = value;
+				},
+				readFindText: async () => '',
+				writeFindText: async () => { },
+				readImage: async () => new Uint8Array(),
+				readResources: async () => ({ resources: [], operation: 'copy' }),
+				writeResources: async () => { },
+				hasResources: async () => false,
+			},
+			onOpenSettings: async key => {
+				revealed = key;
+			},
+			onStatus: (message, isError) => {
+				void reported.complete({ message, isError });
+			},
+		}),
+	);
 	root.append(widget.domNode);
 	widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!.click();
 	const action = actions.find(action => action.id === 'settings.copySettingAsJSON')!;
@@ -978,33 +1438,68 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	let status = '';
 	const registered = configurationRegistry.getConfiguration('editor.fontSize') as IRegisteredConfiguration<number> | undefined;
 	assert.ok(registered);
-	const widget = resources.add(createSettingWidget(resources, root, {
-		id: registered.key, title: '字号', description: '', valueType: 'number', configuration: registered, minimum: 1, maximum: 10,
-		binding: {
-			id: registered.key, defaultValue: 1, getValue: () => current,
-			updateValue: async value => { await pending.p; current = value; },
-			resetValue: async () => { current = 1; },
-		},
-	}, {
-		configurationService: configuration, contextViewProvider: contextView, contextMenuProvider,
-		clipboardService: {
-			triggerPaste: () => undefined,
-			read: async () => [],
-			readText: async () => '', writeText: async () => { }, readFindText: async () => '',
-			writeFindText: async () => { },
-			readImage: async () => new Uint8Array(),
-			readResources: async () => ({ resources: [], operation: 'copy' }),
-			writeResources: async () => { }, hasResources: async () => false,
-		},
-		onOpenSettings: async () => { throw new Error('Domain bindings have no settings.json entry'); },
-		onStatus: message => { status = message; },
-	}));
+	const widget = resources.add(
+		createSettingWidget(
+			resources,
+			root,
+			{
+				id: registered.key,
+				title: '字号',
+				description: '',
+				valueType: 'number',
+				configuration: registered,
+				minimum: 1,
+				maximum: 10,
+				binding: {
+					id: registered.key,
+					defaultValue: 1,
+					getValue: () => current,
+					updateValue: async value => {
+						await pending.p;
+						current = value;
+					},
+					resetValue: async () => {
+						current = 1;
+					},
+				},
+			},
+			{
+				configurationService: configuration,
+				contextViewProvider: contextView,
+				contextMenuProvider,
+				clipboardService: {
+					triggerPaste: () => undefined,
+					read: async () => [],
+					readText: async () => '',
+					writeText: async () => { },
+					readFindText: async () => '',
+					writeFindText: async () => { },
+					readImage: async () => new Uint8Array(),
+					readResources: async () => ({ resources: [], operation: 'copy' }),
+					writeResources: async () => { },
+					hasResources: async () => false,
+				},
+				onOpenSettings: async () => {
+					throw new Error('Domain bindings have no settings.json entry');
+				},
+				onStatus: message => {
+					status = message;
+				},
+			},
+		),
+	);
 	root.append(widget.domNode);
 	assert.equal(widget.domNode.querySelector<HTMLElement>('.ash-settings-configured-marker')!.hidden, true, 'domain bindings do not expose local user configuration markers');
 	const more = widget.domNode.querySelector<HTMLButtonElement>('.ash-setting-item-actions-trigger')!;
 	assert.equal(more.getAttribute('aria-label'), '字号 的更多操作');
 	more.click();
-	assert.deepEqual(actions.map(action => [action.label, action.enabled]), [['重置设置', false], ['复制设置 ID', true]]);
+	assert.deepEqual(
+		actions.map(action => [action.label, action.enabled]),
+		[
+			['重置设置', false],
+			['复制设置 ID', true],
+		],
+	);
 	const input = widget.domNode.querySelector<HTMLInputElement>('input')!;
 	input.value = '2';
 	input.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
@@ -1026,7 +1521,10 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	assert.equal(filter.getAttribute('aria-label'), '筛选设置');
 	search.value = '@id:editor.fontSize';
 	filter.click();
-	assert.deepEqual(actions.filter(action => action.id !== Separator.ID).map(action => action.label), ['已修改', '设置 ID…', '实验性', '预览', '稳定', '清除筛选条件']);
+	assert.deepEqual(
+		actions.filter(action => action.id !== Separator.ID).map(action => action.label),
+		['已修改', '设置 ID…', '实验性', '预览', '稳定', '清除筛选条件'],
+	);
 	search.value = 'font @MODIFIED @id:editor.fontSize';
 	filter.click();
 	await actions.find(action => action.id === 'settings.search.modified')!.run();
@@ -1048,7 +1546,12 @@ test('Workspace permission banner registration participates in the complete Sett
 		key: 'security.workspace.trust.banner',
 		defaultValue: 'untilDismissed',
 		parse: value => String(value),
-		setting: { valueType: 'select', title: 'Workspace permissions banner', description: 'Controls the workspace permissions banner.', options: [{ value: 'untilDismissed', label: 'Until dismissed' }] },
+		setting: {
+			valueType: 'select',
+			title: 'Workspace permissions banner',
+			description: 'Controls the workspace permissions banner.',
+			options: [{ value: 'untilDismissed', label: 'Until dismissed' }],
+		},
 	});
 	const defaults = new DefaultSettings(registry);
 	const setting = defaults.get('security.workspace.trust.banner');
@@ -1123,7 +1626,13 @@ test('Settings Editor belongs to Workbench and localizes the shared default edit
 		assert.equal(setting.title, '默认设置编辑器');
 		assert.equal(setting.valueType, 'select');
 		if (setting.valueType === 'select') {
-			assert.deepEqual(setting.options.map(option => [option.value, option.label]), [['ui', 'UI'], ['json', 'JSON']]);
+			assert.deepEqual(
+				setting.options.map(option => [option.value, option.label]),
+				[
+					['ui', 'UI'],
+					['json', 'JSON'],
+				],
+			);
 		}
 		const layout = createSettingsLayout(defaults.all);
 		assert.equal(findSettingCategory(layout, setting.id), 'settings-editor');
@@ -1131,7 +1640,10 @@ test('Settings Editor belongs to Workbench and localizes the shared default edit
 		assert.equal(category.descriptor.label, 'Settings Editor');
 		assert.equal(chinese.bundles['ash.settings']?.['categories.settings-editor.label'], '设置编辑器');
 		assert.ok(SettingsNavigation.find(group => group.id === 'workbench')?.categories.some(item => item.id === category.id));
-		assert.deepEqual(category.groups.flatMap(group => group.settings.map(item => item.id)), [setting.id]);
+		assert.deepEqual(
+			category.groups.flatMap(group => group.settings.map(item => item.id)),
+			[setting.id],
+		);
 		assert.equal(layout.flatMap(category => category.groups.flatMap(group => group.settings)).filter(item => item.id === setting.id).length, 1);
 	} finally {
 		resetNlsResolver();
@@ -1146,7 +1658,11 @@ test('Files belongs to Editor and owns file behavior exactly once', async () => 
 	assert.equal(files.descriptor.label, 'Files');
 	assert.ok(SettingsNavigation.find(group => group.id === 'editor')?.categories.some(category => category.id === files.id));
 	const opening = ['workbench.editor.openErrorDialog', 'workbench.editor.defaultBinaryEditor', 'workbench.editorLargeFileConfirmation', EditorSelectionConfiguration.defaultNewDocumentEditor];
-	const expected = defaults.all.filter(setting => !setting.configuration.source && (setting.id.startsWith('files.') || setting.id.startsWith('workbench.localHistory.') || setting.id === 'debug.saveBeforeStart' || opening.includes(setting.id)));
+	const expected = defaults.all.filter(
+		setting =>
+			!setting.configuration.source &&
+			(setting.id.startsWith('files.') || setting.id.startsWith('workbench.localHistory.') || setting.id === 'debug.saveBeforeStart' || opening.includes(setting.id)),
+	);
 	assert.deepEqual(new Set(files.groups.flatMap(group => group.settings.map(setting => setting.id))), new Set(expected.map(setting => setting.id)));
 	for (const setting of expected) {
 		assert.equal(findSettingCategory(layout, setting.id), 'editor-files', setting.id);
@@ -1169,11 +1685,16 @@ test('file opening preferences have a translated group and correctly typed contr
 		assert.equal(group?.title, '文件打开');
 		assert.equal(group?.settings.length, 4);
 		assert.equal(group?.settings.find(setting => setting.id === EditorSelectionConfiguration.defaultNewDocumentEditor)?.valueType, 'select');
-		assert.deepEqual(group?.settings.filter(setting => setting.id !== EditorSelectionConfiguration.defaultNewDocumentEditor).map(setting => ({ id: setting.id, title: setting.title, valueType: setting.valueType })), [
-			{ id: 'workbench.editor.openErrorDialog', title: '文件打开错误弹窗', valueType: 'boolean' },
-			{ id: 'workbench.editor.defaultBinaryEditor', title: '默认二进制编辑器', valueType: 'select' },
-			{ id: 'workbench.editorLargeFileConfirmation', title: '大文件打开确认（MiB）', valueType: 'number' },
-		]);
+		assert.deepEqual(
+			group?.settings
+				.filter(setting => setting.id !== EditorSelectionConfiguration.defaultNewDocumentEditor)
+				.map(setting => ({ id: setting.id, title: setting.title, valueType: setting.valueType })),
+			[
+				{ id: 'workbench.editor.openErrorDialog', title: '文件打开错误弹窗', valueType: 'boolean' },
+				{ id: 'workbench.editor.defaultBinaryEditor', title: '默认二进制编辑器', valueType: 'select' },
+				{ id: 'workbench.editorLargeFileConfirmation', title: '大文件打开确认（MiB）', valueType: 'number' },
+			],
+		);
 		const binary = defaults.get('workbench.editor.defaultBinaryEditor');
 		assert.equal(binary.valueType === 'select' && binary.options[0]?.label, '默认');
 		assert.match(defaults.get('workbench.editor.openErrorDialog').description, /自动恢复文件时不显示错误弹窗/);
@@ -1191,33 +1712,42 @@ test('font preferences show translated labels and the actual platform defaults',
 		const layout = await loadChineseSettingsLayout();
 		const fonts = layout.createSettingsLayout(defaults.all).find(category => category.id === 'editor-fonts')!;
 		assert.equal(fonts.groups[0]?.title, '字体');
-		assert.deepEqual(fonts.groups.flatMap(group => group.settings.map(setting => ({ id: setting.id, title: setting.title, type: setting.valueType }))), [
-			{ id: 'editor.fontFamily', title: '字体', type: 'text' },
-			{ id: 'editor.fontSize', title: '字号', type: 'number' },
-			{ id: 'editor.lineHeight', title: '行高', type: 'number' },
-			{ id: 'editor.fontLigatures', title: '字体连字', type: 'boolean' },
-		]);
+		assert.deepEqual(
+			fonts.groups.flatMap(group => group.settings.map(setting => ({ id: setting.id, title: setting.title, type: setting.valueType }))),
+			[
+				{ id: 'editor.fontFamily', title: '字体', type: 'text' },
+				{ id: 'editor.fontSize', title: '字号', type: 'number' },
+				{ id: 'editor.lineHeight', title: '行高', type: 'number' },
+				{ id: 'editor.fontLigatures', title: '字体连字', type: 'boolean' },
+			],
+		);
 		const family = defaults.get('editor.fontFamily');
 		assert.equal(family.valueType === 'text' && family.placeholder, '系统默认');
 		assert.ok(family.description.includes(EDITOR_FONT_DEFAULTS.fontFamily));
 		assert.ok(defaults.get('editor.fontSize').description.includes(String(EDITOR_FONT_DEFAULTS.fontSize)));
 		const input = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-input')!;
 		assert.equal(input.groups[0]?.title, '消息输入');
-		assert.deepEqual(input.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])), [
-			['chat.input.fontFamily', '字体', ''],
-			['chat.input.fontSize', '字号', 13],
-			['chat.input.lineHeight', '行高', 20],
-		]);
+		assert.deepEqual(
+			input.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])),
+			[
+				['chat.input.fontFamily', '字体', ''],
+				['chat.input.fontSize', '字号', 13],
+				['chat.input.lineHeight', '行高', 20],
+			],
+		);
 		const inputFamily = defaults.get('chat.input.fontFamily');
 		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
 		const blocks = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-code-blocks')!;
 		assert.equal(blocks.groups[0]?.title, '代码块');
-		assert.deepEqual(blocks.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])), [
-			['chat.editor.fontFamily', '字体', ''],
-			['chat.editor.fontSize', '字号', 0],
-			['chat.editor.lineHeight', '行高', 0],
-			['chat.editor.wordWrap', '自动换行', 'off'],
-		]);
+		assert.deepEqual(
+			blocks.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])),
+			[
+				['chat.editor.fontFamily', '字体', ''],
+				['chat.editor.fontSize', '字号', 0],
+				['chat.editor.lineHeight', '行高', 0],
+				['chat.editor.wordWrap', '自动换行', 'off'],
+			],
+		);
 		const blocksFamily = defaults.get('chat.editor.fontFamily');
 		assert.equal(blocksFamily.valueType === 'text' && blocksFamily.placeholder, '跟随编辑器');
 	} finally {
@@ -1230,44 +1760,50 @@ test('settingsLayout is the single projection from registered settings to catego
 	const layout = createSettingsLayout(defaults.all);
 	const model = new SettingsEditorModel(defaults.all);
 
-	assert.deepEqual(SettingsCategories.map(category => category.id), [
-		'general',
-		'github',
-		'network',
-		'appearance',
-		'layout',
-		'debugging',
-		'settings-editor',
-		'startup',
-		'browser',
-		'editor-fonts',
-		'editor-display',
-		'editor-editing',
-		'editor-suggestions',
-		'editor-language',
-		'editor-search',
-		'editor-diff',
-		'editor-files',
-		'editor-opening',
-		'accessibilitySignals',
-		'accessibility',
-		'explorer',
-		'search',
-		'source-control',
-		'terminal',
-		'voice-input',
-		'chat-input',
-		'chat-code-blocks',
-		'agents',
-		'teams',
-		'agent-defaults',
-		'models',
-		'rules',
-		'sandbox',
-		'execution-trace',
-		'hooks',
-	]);
-	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
+	assert.deepEqual(
+		SettingsCategories.map(category => category.id),
+		[
+			'general',
+			'github',
+			'network',
+			'appearance',
+			'layout',
+			'debugging',
+			'settings-editor',
+			'startup',
+			'browser',
+			'editor-fonts',
+			'editor-display',
+			'editor-editing',
+			'editor-suggestions',
+			'editor-language',
+			'editor-search',
+			'editor-diff',
+			'editor-files',
+			'editor-opening',
+			'accessibilitySignals',
+			'accessibility',
+			'explorer',
+			'search',
+			'source-control',
+			'terminal',
+			'voice-input',
+			'chat-input',
+			'chat-code-blocks',
+			'agents',
+			'teams',
+			'agent-defaults',
+			'models',
+			'rules',
+			'sandbox',
+			'execution-trace',
+			'hooks',
+		],
+	);
+	assert.deepEqual(
+		model.settings.map(setting => setting.id),
+		defaults.all.map(setting => setting.id),
+	);
 	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks), 'accessibility');
 	for (const id of ['editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency']) {
 		assert.equal(findSettingCategory(layout, id), 'accessibility');
@@ -1284,7 +1820,10 @@ test('settingsLayout is the single projection from registered settings to catego
 	tree.setChildren(settingsRootNodes(layout));
 	const features = new TOCTreeModel(tree).children.find(node => node.element.id === 'group.features');
 	assert.ok(features);
-	assert.deepEqual([...features.children!].slice(0, 2).map(node => node.element.id), ['accessibilitySignals', 'accessibility']);
+	assert.deepEqual(
+		[...features.children!].slice(0, 2).map(node => node.element.id),
+		['accessibilitySignals', 'accessibility'],
+	);
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
 	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'general');
 	for (const key of ['extensions.ignoreRecommendations', 'extensions.showRecommendationsOnlyOnDemand']) {
@@ -1296,8 +1835,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
-	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), 'models');
+	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), undefined);
 	assert.equal(findSettingCategory(layout, 'chat.editing.autoAcceptDelay'), 'agent-defaults');
+	assert.equal(findSettingCategory(layout, 'chat.canvases.enabled'), 'agent-defaults');
 	assert.equal(defaults.get('chat.editing.autoAcceptDelay').valueType, 'number');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme), 'appearance');
 	assert.equal(findSettingCategory(layout, 'workbench.tips.enabled'), 'appearance');
@@ -1311,7 +1851,10 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(startupWindow.configuration.defaultValue, 'default');
 	assert.equal(startupWindow.configuration.scope, ConfigurationScope.APPLICATION);
 	if (startupWindow.valueType === 'select') {
-		assert.deepEqual(startupWindow.options.map(option => option.value), ['default', 'ide', 'agents']);
+		assert.deepEqual(
+			startupWindow.options.map(option => option.value),
+			['default', 'ide', 'agents'],
+		);
 	}
 	assert.throws(() => startupWindow.configuration.parse('unknown'), /Unknown startup window/);
 	assert.equal(findSettingCategory(layout, 'window.restoreWindows'), 'startup');
@@ -1333,12 +1876,18 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(chinese?.bundles.ash?.['dictation.cloudModel.title'], '转写模型');
 	assert.equal(chinese?.bundles.ash?.['dictation.subscription.title'], 'Codex 订阅听写');
 	assert.equal(chinese?.bundles.ash?.['dictation.subscription.manage'], '管理 Codex 账号');
-	assert.equal(defaults.all.some(setting => Object.values(SessionsConfiguration).includes(setting.id)), false);
+	assert.equal(
+		defaults.all.some(setting => Object.values(SessionsConfiguration).includes(setting.id)),
+		false,
+	);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.activityBarLocation), 'layout');
 	const iconThemeSetting = defaults.get(WorkbenchConfiguration.iconTheme);
 	assert.equal(iconThemeSetting.valueType, 'select');
 	if (iconThemeSetting.valueType === 'select') {
-		assert.equal(iconThemeSetting.options.some(option => option.value === iconThemeSetting.configuration.defaultValue), true);
+		assert.equal(
+			iconThemeSetting.options.some(option => option.value === iconThemeSetting.configuration.defaultValue),
+			true,
+		);
 	}
 	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor), 'editor-files');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.modernUIEditorTabStyle), 'editor-opening');
@@ -1346,7 +1895,10 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(tabStyleSetting.valueType, 'select');
 	if (tabStyleSetting.valueType === 'select') {
 		assert.equal(tabStyleSetting.configuration.defaultValue, 'standard');
-		assert.deepEqual(tabStyleSetting.options.map(option => option.value), ['standard', 'connected', 'pill']);
+		assert.deepEqual(
+			tabStyleSetting.options.map(option => option.value),
+			['standard', 'connected', 'pill'],
+		);
 	}
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.filePath'), 'editor-display');
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.symbolPath'), 'editor-display');
@@ -1356,30 +1908,42 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.renderControlCharacters), 'editor-display');
 	assert.equal(findSettingCategory(layout, ContentSearchConfiguration.maxResults), 'search');
 	assert.equal(findSettingCategory(layout, 'scm.diffDecorationsIgnoreTrimWhitespace'), 'source-control');
-	assert.deepEqual(layout.find(category => category.id === 'terminal')?.groups.flatMap(group => group.settings.map(setting => setting.id)).sort(), [
-		'terminal.integrated.cursorBlinking',
-		'terminal.integrated.cursorStyle',
-		'terminal.integrated.cursorStyleInactive',
-		'terminal.integrated.cursorWidth',
-		'terminal.integrated.fontFamily',
-		'terminal.integrated.fontSize',
-		'terminal.integrated.letterSpacing',
-		'terminal.integrated.lineHeight',
-		'terminal.integrated.minimumContrastRatio',
-		'terminal.integrated.scrollback',
-		'terminal.integrated.shellIntegration.history',
-	]);
+	assert.deepEqual(
+		layout
+			.find(category => category.id === 'terminal')
+			?.groups.flatMap(group => group.settings.map(setting => setting.id))
+			.sort(),
+		[
+			'terminal.integrated.cursorBlinking',
+			'terminal.integrated.cursorStyle',
+			'terminal.integrated.cursorStyleInactive',
+			'terminal.integrated.cursorWidth',
+			'terminal.integrated.fontFamily',
+			'terminal.integrated.fontSize',
+			'terminal.integrated.letterSpacing',
+			'terminal.integrated.lineHeight',
+			'terminal.integrated.minimumContrastRatio',
+			'terminal.integrated.scrollback',
+			'terminal.integrated.shellIntegration.history',
+		],
+	);
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.cloudProvider), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
-	assert.equal(defaults.all.some(setting => setting.id === GitConfiguration.autofetch), true);
+	assert.equal(
+		defaults.all.some(setting => setting.id === GitConfiguration.autofetch),
+		true,
+	);
 	assert.equal(findSettingCategory(layout, GitConfiguration.autofetch), 'extension.ash.git');
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetch)?.defaultValue, false);
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.autofetchPeriod)?.defaultValue, 180);
 	assert.equal(findSettingCategory(layout, GitConfiguration.rebaseWhenSync), 'extension.ash.git');
 	assert.equal(configurationRegistry.getConfiguration(GitConfiguration.rebaseWhenSync)?.defaultValue, false);
 	assert.equal(defaults.get(GitConfiguration.rebaseWhenSync).valueType, 'boolean');
-	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'numberWithOptions', 'select', 'text', 'stringMap', 'complex'].includes(setting.valueType)), true);
+	assert.equal(
+		defaults.all.every(setting => ['boolean', 'number', 'numberWithOptions', 'select', 'text', 'stringMap', 'complex'].includes(setting.valueType)),
+		true,
+	);
 	assert.equal(defaults.get('git.ignoredRepositories').valueType, 'complex');
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
@@ -1389,7 +1953,10 @@ test('settingsLayout is the single projection from registered settings to catego
 			id: 'test-preferences-dynamic-theme',
 			label: 'Dynamic test theme',
 		});
-		assert.equal(themeSetting.options.some(option => option.value === 'test-preferences-dynamic-theme'), true);
+		assert.equal(
+			themeSetting.options.some(option => option.value === 'test-preferences-dynamic-theme'),
+			true,
+		);
 	}
 	const layoutStyleSetting = defaults.get(WorkbenchConfiguration.layoutStyle);
 	assert.equal(layoutStyleSetting.valueType, 'select');
@@ -1402,6 +1969,21 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.throws(() => configurationRegistry.getConfiguration(SessionsConfiguration.layoutStyle)?.parse('other'), /Unknown Sessions layout style/);
 
 	model.dispose();
+});
+
+test('Settings layout matching preserves literal dots, wildcard groups and input order across rebuilds', () => {
+	const defaults = new DefaultSettings();
+	const first = { ...defaults.get('editor.minimap.enabled'), id: 'editor.minimap.first' };
+	const second = { ...first, id: 'editor.minimap.second[preview]' };
+	const locale = defaults.get(LocalizationConfiguration.locale);
+	const projected = (settings: readonly ISetting[]) => createSettingsLayout(settings).flatMap(category => category.groups.flatMap(group => group.settings.map(setting => [category.id, setting.id, setting.title])));
+	assert.deepEqual(projected([second, locale, first]), [
+		['general', locale.id, locale.title],
+		['editor-display', second.id, second.title],
+		['editor-display', first.id, first.title],
+	]);
+	assert.deepEqual(projected([{ ...first, title: 'Updated metadata' }]), [['editor-display', first.id, 'Updated metadata']]);
+	assert.throws(() => createSettingsLayout([{ ...locale, id: 'workbenchXlocale' }]), /missing from settingsLayout/u);
 });
 
 test('feature settings navigation and groups capture the language initialized before module loading', async () => {
@@ -1435,49 +2017,72 @@ test('feature settings navigation and groups capture the language initialized be
 
 test('SettingsLayout validates stable configuration identities', () => {
 	const fontFamily = new DefaultSettings().get(CodeEditorConfiguration.fontFamily);
-	const layout = new SettingsLayout('editor', [{
-		id: 'typography',
-		title: 'Typography',
-		description: 'Editor typography.',
-		settings: [fontFamily],
-	}]);
+	const layout = new SettingsLayout('editor', [
+		{
+			id: 'typography',
+			title: 'Typography',
+			description: 'Editor typography.',
+			settings: [fontFamily],
+		},
+	]);
 
 	assert.equal(layout.nodes[0]?.element.id, 'editor.group.typography');
 	assert.equal(layout.nodes[0]?.children?.[0]?.element.id, CodeEditorConfiguration.fontFamily);
 	assert.deepEqual(layout.nodes[0]?.children?.[0]?.element.keywords, [CodeEditorConfiguration.fontFamily]);
-	assert.throws(() => new SettingsLayout('editor', [{
-		id: 'typography',
-		title: 'Typography',
-		description: '',
-		settings: [fontFamily, fontFamily],
-	}]), /Duplicate Settings setting ID/);
+	assert.throws(
+		() =>
+			new SettingsLayout('editor', [
+				{
+					id: 'typography',
+					title: 'Typography',
+					description: '',
+					settings: [fontFamily, fontFamily],
+				},
+			]),
+		/Duplicate Settings setting ID/,
+	);
 	assert.throws(() => new SettingsLayout('', []), /TOC ID must not be empty/);
-	assert.throws(() => new SettingsLayout('editor', [{
-		id: 'typography',
-		title: 'Typography',
-		description: '',
-		settings: [{ ...fontFamily, id: 'editor.font\0Family' }],
-	}]), /must not contain control characters/);
+	assert.throws(
+		() =>
+			new SettingsLayout('editor', [
+				{
+					id: 'typography',
+					title: 'Typography',
+					description: '',
+					settings: [{ ...fontFamily, id: 'editor.font\0Family' }],
+				},
+			]),
+		/must not contain control characters/,
+	);
 });
 
 test('Settings search normalizes pasted setting syntax and matches complete metadata terms', () => {
 	const query = new SettingsSearchQuery('  "Editor.Font: Family"  ');
 
 	assert.equal(query.text, 'editor.font family');
-	assert.equal(query.matches({
-		title: 'Font family',
-		description: 'Configure the editor font.',
-		keywords: ['editor.fontFamily'],
-	}), true);
-	assert.equal(query.matches({
-		title: 'Font size',
-		description: 'Configure the editor font size.',
-	}), false);
+	assert.equal(
+		query.matches({
+			title: 'Font family',
+			description: 'Configure the editor font.',
+			keywords: ['editor.fontFamily'],
+		}),
+		true,
+	);
+	assert.equal(
+		query.matches({
+			title: 'Font size',
+			description: 'Configure the editor font size.',
+		}),
+		false,
+	);
 });
 
 test('Settings ordinary search matches IDs and combines them with metadata words', () => {
 	const metadata = { id: 'editor.fontFamily', title: 'Font family', description: 'Editor typography.' };
-	assert.deepEqual(['editor.fontFamily', 'EDITOR.FONT', 'editor.font typography', 'font missing'].map(query => new SettingsSearchQuery(query).matches(metadata)), [true, true, true, false]);
+	assert.deepEqual(
+		['editor.fontFamily', 'EDITOR.FONT', 'editor.font typography', 'font missing'].map(query => new SettingsSearchQuery(query).matches(metadata)),
+		[true, true, true, false],
+	);
 	assert.equal(new SettingsSearchQuery('typography').matches({ title: 'Font family', description: 'Editor typography.' }), true);
 });
 
@@ -1515,20 +2120,35 @@ test('Settings search matches complete setting IDs without selecting prefixed ID
 test('Modified Settings derives membership from accepted local overrides through reset, failure and reload', async () => {
 	using resources = new DisposableStore();
 	const registry = new ConfigurationRegistry();
-	for (const [key, defaultValue] of [['modified.boolean', true], ['modified.number', 1], ['modified.text', 'Default'], ['modified.default', true], ['modified.language', true]] as const) {
-		registry.registerConfiguration({ key, defaultValue, parse: value => value, scope: ConfigurationScope.LANGUAGE_OVERRIDABLE });
+	for (const [key, defaultValue] of [
+		['modified.boolean', true],
+		['modified.number', 1],
+		['modified.text', 'Default'],
+		['modified.default', true],
+		['modified.language', true],
+	] as const) {
+		registry.registerConfiguration({
+			key,
+			defaultValue,
+			parse: value => value,
+			scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+		});
 	}
 	const pending = new DeferredPromise<void>();
 	let blockWrites = false;
-	using api = new class extends TestConfigurationFiles {
+	using api = new (class extends TestConfigurationFiles {
 		override async writeFile(...args: Parameters<TestConfigurationFiles['writeFile']>): ReturnType<TestConfigurationFiles['writeFile']> {
 			if (blockWrites) await pending.p;
 			return super.writeFile(...args);
 		}
-	}();
+	})();
 	const configuration = resources.add(new WorkspaceService({ registry, files: api }));
 	const tree = resources.add(new SettingsTreeModel<string>(id => registry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined));
-	tree.setChildren([...registry.getConfigurations(), 'service.status'].map(id => ({ element: { kind: 'item', id, title: 'Preference', description: '', value: id } })));
+	tree.setChildren(
+		[...registry.getConfigurations(), 'service.status'].map(id => ({
+			element: { kind: 'item', id, title: 'Preference', description: '', value: id },
+		})),
+	);
 	tree.setQuery('@modified');
 	resources.add(configuration.onDidChangeConfiguration(() => tree.refilter()));
 	const visible = () => tree.visibleItems.map(item => item.id);
@@ -1552,7 +2172,10 @@ test('Modified Settings derives membership from accepted local overrides through
 	assert.deepEqual(visible(), configured.slice(0, -1));
 	using restored = new WorkspaceService({ registry, files: api });
 	await restored.reloadConfiguration();
-	assert.deepEqual([...registry.getConfigurations()].filter(id => restored.inspect(id).userLocalValue !== undefined), configured.slice(0, -1));
+	assert.deepEqual(
+		[...registry.getConfigurations()].filter(id => restored.inspect(id).userLocalValue !== undefined),
+		configured.slice(0, -1),
+	);
 });
 
 test('Settings table of contents follows modified result counts through reset', async () => {
@@ -1615,8 +2238,26 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	const changed = disposables.add(new Emitter<void>());
 	const model = { provider: 'openai', model: 'gpt-test' };
 	let catalog = [{ model, displayName: 'GPT Test' }];
-	let resolveProviders!: (providers: readonly { connection: string; provider: string; displayName: string; apiKeyPolicy: 'required'; apiKeyConfigured: boolean; }[]) => void;
-	const providers = new Promise<readonly { connection: string; provider: string; displayName: string; apiKeyPolicy: 'required'; apiKeyConfigured: boolean; }[]>(resolve => { resolveProviders = resolve; });
+	let resolveProviders!: (
+		providers: readonly {
+			connection: string;
+			provider: string;
+			displayName: string;
+			apiKeyPolicy: 'required';
+			apiKeyConfigured: boolean;
+		}[],
+	) => void;
+	const providers = new Promise<
+		readonly {
+			connection: string;
+			provider: string;
+			displayName: string;
+			apiKeyPolicy: 'required';
+			apiKeyConfigured: boolean;
+		}[]
+	>(resolve => {
+		resolveProviders = resolve;
+	});
 	const chat = {
 		onDidChangeModels: changed.event,
 		listModelCatalog: async () => catalog,
@@ -1627,7 +2268,12 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	} as unknown as IChatService;
 	const services = disposables.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
+	services.registerInstance(IAppServerHookApi, {
+		onDidChangeHooks: Event.None,
+		list: async () => {
+			throw new Error('Unexpected Hook read in Skill fixture');
+		},
+	});
 	const localTranscription = disposables.add(new NullLocalTranscriptionService());
 	services.registerInstance(ILocalTranscriptionModelService, localTranscription);
 	services.registerInstance(ILocalTranscriptionService, localTranscription);
@@ -1636,15 +2282,44 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IDialogService, {} as IDialogService);
-	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
-	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(ISecretStorageStatusService, {
+		readState: async () => ({ status: 'available' }),
+		authorizeAccess: async () => ({ status: 'available' }),
+		setStorageMode: async mode => ({ status: 'available', mode }),
+	});
+	services.registerInstance(IAgentExecutionSettingsService, {
+		onDidChange: Event.None,
+		read: async () => ({
+			revision: 1,
+			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
+		}),
+		configure: async () => { },
+	});
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
+	services.registerInstance(IAccessibleViewService, {
+		show: () => true,
+		getOpenAriaHint: () => undefined,
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
+	});
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 	const panel = disposables.add(services.createInstance(ModelSettingsRenderer, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsSectionReference>());
-	disposables.add(new SettingsTree(root, {
-		model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderGroupHeader: header => panel.renderItem(header), renderItem: item => panel.renderItem(item.value),
-	}));
+	disposables.add(
+		new SettingsTree(root, {
+			model: modelTree,
+			rootClassName: 'ash-models-settings',
+			groupClassName: 'ash-settings-content-group',
+			groupDescriptionClassName: 'ash-settings-group-description',
+			itemsClassName: 'ash-settings-list',
+			renderGroupHeader: header => panel.renderItem(header),
+			renderItem: item => panel.renderItem(item.value),
+		}),
+	);
 	disposables.add(panel.onDidChange(() => modelTree.setChildren(panel.getNodes())));
 	panel.setVisible(true);
 	modelTree.setNavigationTarget('models.catalog');
@@ -1654,7 +2329,15 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	modelTree.setNavigationTarget(undefined);
 	catalog = [{ model, displayName: 'GPT Test Updated' }];
 	changed.fire();
-	resolveProviders([{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required', apiKeyConfigured: false }]);
+	resolveProviders([
+		{
+			connection: 'openai',
+			provider: 'openai',
+			displayName: 'OpenAI API',
+			apiKeyPolicy: 'required',
+			apiKeyConfigured: false,
+		},
+	]);
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-models-settings-api-row h5')?.textContent, 'OpenAI API');
 	assert.equal(root.querySelector('.ash-models-settings-model-row'), retainedModel);
@@ -1686,6 +2369,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => catalog,
 		listCustomModelProviders: async () => [],
+		removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [],
@@ -1696,33 +2380,70 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		isModelVisible: model => catalog.some(entry => entry.model.provider === model.provider && entry.model.model === model.model && enabled.has(entry.displayName)),
 		setModelVisible: async (model, visible) => {
 			const entry = catalog.find(entry => entry.model.provider === model.provider && entry.model.model === model.model)!;
-			if (visible) { enabled.add(entry.displayName); } else { enabled.delete(entry.displayName); }
+			if (visible) {
+				enabled.add(entry.displayName);
+			} else {
+				enabled.delete(entry.displayName);
+			}
 			changed.fire();
 		},
 		discoverProviderModels: async () => catalog,
 	};
 	const services = resources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
+	services.registerInstance(IAppServerHookApi, {
+		onDidChangeHooks: Event.None,
+		list: async () => {
+			throw new Error('Unexpected Hook read in Skill fixture');
+		},
+	});
 	services.registerInstance(ILanguageModelsService, models);
 	services.registerInstance(IDialogService, {} as IDialogService);
-	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
-	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(ISecretStorageStatusService, {
+		readState: async () => ({ status: 'available' }),
+		authorizeAccess: async () => ({ status: 'available' }),
+		setStorageMode: async mode => ({ status: 'available', mode }),
+	});
+	services.registerInstance(IAgentExecutionSettingsService, {
+		onDidChange: Event.None,
+		read: async () => ({
+			revision: 1,
+			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
+		}),
+		configure: async () => { },
+	});
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
 	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
+	services.registerInstance(IAccessibleViewService, {
+		show: () => true,
+		getOpenAriaHint: () => undefined,
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
+	});
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	const tree = resources.add(new SettingsTreeModel<SettingsSectionReference>());
-	resources.add(new SettingsTree(root, {
-		model: tree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list',
-		renderGroupHeader: header => content.renderItem(header), renderItem: item => content.renderItem(item.value),
-	}));
+	resources.add(
+		new SettingsTree(root, {
+			model: tree,
+			rootClassName: 'ash-models-settings',
+			groupClassName: 'ash-settings-content-group',
+			groupDescriptionClassName: 'ash-settings-group-description',
+			itemsClassName: 'ash-settings-list',
+			renderGroupHeader: header => content.renderItem(header),
+			renderItem: item => content.renderItem(item.value),
+		}),
+	);
 	resources.add(content.onDidChange(() => tree.setChildren(content.getNodes())));
 	content.setVisible(true);
 	await nextTurn();
 	const names = (query?: InstanceType<typeof SettingsSearchQuery>): string[] => {
 		content.getNodes(query);
-		return [...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent!);
+		return [...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent!);
 	};
 	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
 	// Enable in reverse order so activation order cannot masquerade as catalog order.
@@ -1750,44 +2471,86 @@ test('Settings tree preserves item identity while filtering and updating', () =>
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
 	const model = disposables.add(new SettingsTreeModel<string>());
-	model.setChildren([{
-		element: { kind: 'group', id: 'appearance.colors', title: 'Colors', description: 'Choose the active color scheme.' },
-		children: [
-			{ element: { kind: 'item', id: 'appearance.colors.theme', title: 'Theme', description: 'Choose a theme.', value: 'Theme' } },
-			{ element: { kind: 'item', id: 'appearance.colors.font', title: 'Font family', description: 'Choose a UI font.', value: 'Font' } },
-		],
-	}]);
-	const disposedItems: string[] = [];
-	const renderer = disposables.add(new SettingsTree(ownerDocument.body, {
-		model,
-		rootClassName: 'test-settings-tree',
-		groupClassName: 'test-settings-group',
-		groupDescriptionClassName: 'test-settings-group-description',
-		itemsClassName: 'test-settings-items',
-		renderItem: item => {
-			const element = h(ownerDocument, 'article');
-			element.textContent = item.value;
-			return element;
+	model.setChildren([
+		{
+			element: {
+				kind: 'group',
+				id: 'appearance.colors',
+				title: 'Colors',
+				description: 'Choose the active color scheme.',
+			},
+			children: [
+				{
+					element: {
+						kind: 'item',
+						id: 'appearance.colors.theme',
+						title: 'Theme',
+						description: 'Choose a theme.',
+						value: 'Theme',
+					},
+				},
+				{
+					element: {
+						kind: 'item',
+						id: 'appearance.colors.font',
+						title: 'Font family',
+						description: 'Choose a UI font.',
+						value: 'Font',
+					},
+				},
+			],
 		},
-		updateItem: (item, element) => { element.textContent = item.value; },
-		disposeItem: item => disposedItems.push(item.id),
-	}));
+	]);
+	const disposedItems: string[] = [];
+	const renderer = disposables.add(
+		new SettingsTree(ownerDocument.body, {
+			model,
+			rootClassName: 'test-settings-tree',
+			groupClassName: 'test-settings-group',
+			groupDescriptionClassName: 'test-settings-group-description',
+			itemsClassName: 'test-settings-items',
+			renderItem: item => {
+				const element = h(ownerDocument, 'article');
+				element.textContent = item.value;
+				return element;
+			},
+			updateItem: (item, element) => {
+				element.textContent = item.value;
+			},
+			disposeItem: item => disposedItems.push(item.id),
+		}),
+	);
 
 	const themeElement = renderer.getItemElement('appearance.colors.theme');
 	assert.ok(themeElement);
 	model.setQuery('font family');
-	assert.deepEqual(model.visibleItems.map(item => item.id), ['appearance.colors.font']);
+	assert.deepEqual(
+		model.visibleItems.map(item => item.id),
+		['appearance.colors.font'],
+	);
 	model.setQuery('');
 	assert.equal(renderer.getItemElement('appearance.colors.theme'), themeElement);
-	model.setNodeChildren('appearance.colors', [{
-		element: { kind: 'item', id: 'appearance.colors.theme', title: 'Theme', description: 'Choose a theme.', value: 'Updated Theme' },
-	}]);
+	model.setNodeChildren('appearance.colors', [
+		{
+			element: {
+				kind: 'item',
+				id: 'appearance.colors.theme',
+				title: 'Theme',
+				description: 'Choose a theme.',
+				value: 'Updated Theme',
+			},
+		},
+	]);
 	assert.equal(themeElement.textContent, 'Updated Theme');
 	assert.deepEqual(disposedItems, ['appearance.colors.font']);
-	assert.throws(() => model.setChildren([
-		{ element: { kind: 'item', id: 'duplicate', title: 'One', description: '', value: 'one' } },
-		{ element: { kind: 'item', id: 'duplicate', title: 'Two', description: '', value: 'two' } },
-	]), /Duplicate tree node ID/);
+	assert.throws(
+		() =>
+			model.setChildren([
+				{ element: { kind: 'item', id: 'duplicate', title: 'One', description: '', value: 'one' } },
+				{ element: { kind: 'item', id: 'duplicate', title: 'Two', description: '', value: 'two' } },
+			]),
+		/Duplicate tree node ID/,
+	);
 });
 
 test('SettingsEditor opens directly and updates registry-backed settings', async () => {
@@ -1850,11 +2613,24 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	let rebaseWhenSync = false;
 	const gitService = {
 		onDidChangeAutoFetch: autoFetchChanged.event,
-		get autoFetch() { return autoFetch; },
-		get autoFetchPeriod() { return autoFetchPeriod; },
-		setAutoFetch: async (value: false | true | 'all') => { autoFetch = value; autoFetchChanged.fire(); },
-		setAutoFetchPeriod: async (value: number) => { autoFetchPeriod = value; autoFetchChanged.fire(); },
-		setRebaseWhenSync: async (value: boolean) => { rebaseWhenSync = value; autoFetchChanged.fire(); },
+		get autoFetch() {
+			return autoFetch;
+		},
+		get autoFetchPeriod() {
+			return autoFetchPeriod;
+		},
+		setAutoFetch: async (value: false | true | 'all') => {
+			autoFetch = value;
+			autoFetchChanged.fire();
+		},
+		setAutoFetchPeriod: async (value: number) => {
+			autoFetchPeriod = value;
+			autoFetchChanged.fire();
+		},
+		setRebaseWhenSync: async (value: boolean) => {
+			rebaseWhenSync = value;
+			autoFetchChanged.fire();
+		},
 	};
 	const model = { provider: 'openai', model: 'gpt-test' };
 	const modelsChanged = disposables.add(new Emitter<void>());
@@ -1864,40 +2640,77 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const advisorModel = { provider: 'openai', model: 'gpt-6.1-sol' };
 	const otherAdvisorModel = { provider: 'meta', model: 'muse-spark-1.3' };
 	const hiddenAdvisors = new Set<string>();
-	let advisor: import('../../../../services/chat/common/chatService.js').AdvisorConfig | null = { model: advisorModel, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' };
+	let advisor: import('../../../../services/chat/common/chatService.js').AdvisorConfig | null = {
+		model: advisorModel,
+		enabled: true,
+		maxCalls: 5,
+		maxOutputTokens: 4096,
+		reasoningEffort: 'high',
+	};
 	const advisorWrites: (typeof advisor | null)[] = [];
 	let rejectAdvisorSave = false;
 	const chatService = {
 		onDidChangeModels: modelsChanged.event,
-		listAdvisorModels: async () => [{ model: advisorModel, displayName: 'GPT-6.1 Sol' }, { model: otherAdvisorModel, displayName: 'Muse Spark 1.3', supportedReasoningEfforts: [{ effort: 'high' }] }, { model, displayName: 'GPT Test' }],
+		listAdvisorModels: async () => [
+			{ model: advisorModel, displayName: 'GPT-6.1 Sol' },
+			{
+				model: otherAdvisorModel,
+				displayName: 'Muse Spark 1.3',
+				supportedReasoningEfforts: [{ effort: 'high' }],
+			},
+			{ model, displayName: 'GPT Test' },
+		],
 		readAdvisorDefault: async () => advisor,
 		saveAdvisorDefault: async (next: typeof advisor) => {
-			if (rejectAdvisorSave) { throw new Error('Preference write failed'); }
+			if (rejectAdvisorSave) {
+				throw new Error('Preference write failed');
+			}
 			advisor = next;
 			advisorWrites.push(next);
 		},
 		listModelCatalog: async () => [{ model, displayName: 'GPT Test' }],
 		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
-		listModelProviders: async () => [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required', apiKeyConfigured: savedKeys.length > 0 }],
-		isModelVisible: (entry: typeof model) => entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model),
+		listModelProviders: async () => [
+			{
+				connection: 'openai',
+				provider: 'openai',
+				displayName: 'OpenAI API',
+				apiKeyPolicy: 'required',
+				apiKeyConfigured: savedKeys.length > 0,
+			},
+		],
+		isModelVisible: (entry: typeof model) => (entry.model === model.model ? modelVisible : !hiddenAdvisors.has(entry.model)),
 		setModelVisible: async (_model: typeof model, visible: boolean) => {
 			modelWrites.push(visible);
 			modelVisible = visible;
 			modelsChanged.fire();
 		},
-		setModelProviderApiKey: async (_connection: string, key: string) => { savedKeys.push(key); },
+		setModelProviderApiKey: async (_connection: string, key: string) => {
+			savedKeys.push(key);
+		},
 		refreshModels: async () => [{ model, displayName: 'GPT Test' }],
 	} as unknown as IChatService;
 	const contextView = disposables.add(new BrowserContextViewService(root));
 	let hookReads = 0;
 	let hooksFailure = false;
 	let openUserToml = 0;
-	let sources: readonly HookSource[] = [{
-		namespace: 'user', configPath: '/profile/config.toml', hooks: [{
-			id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'],
-		}]
-	}];
+	let sources: readonly HookSource[] = [
+		{
+			namespace: 'user',
+			configPath: '/profile/config.toml',
+			hooks: [
+				{
+					id: 'user:hook:check',
+					event: 'preToolUse',
+					enabled: false,
+					toolNames: ['shell-command'],
+					program: '/program with spaces',
+					args: ['two words', '"quote"'],
+				},
+			],
+		},
+	];
 	const hooksChanged = disposables.add(new Emitter<void>());
 	const firstHookRead = new DeferredPromise<void>();
 	let nextHooksRead: Promise<readonly HookSource[]> | undefined;
@@ -1932,13 +2745,46 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const skillId = { source: 'directory:skill-source:test', name: 'review' };
 	services.registerInstance(IAppServerSkillApi, {
 		onDidChangeSkills: skillsChanged.event,
-		readTextResource: async () => { throw new Error("No Skill body in this test fixture"); },
+		readTextResource: async () => {
+			throw new Error('No Skill body in this test fixture');
+		},
 		list: async () => ({ generation: 0, skills: [] }),
-		read: async sessionId => { skillScopes.push(sessionId); return { revision: 7, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', contentDigest: 'sha256:review', enabled: skillEnabled, compatible: true }] }, diagnostics: [] }; },
-		registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async (...args) => { skillMutations.push(args); skillEnabled = args[1]; },
+		read: async sessionId => {
+			skillScopes.push(sessionId);
+			return {
+				revision: 7,
+				catalog: {
+					generation: 1,
+					skills: [
+						{
+							id: skillId,
+							description: 'Review changes',
+							contentDigest: 'sha256:review',
+							enabled: skillEnabled,
+							compatible: true,
+						},
+					],
+				},
+				diagnostics: [],
+			};
+		},
+		registerSource: async () => {
+			throw new Error('Unexpected skill source registration');
+		},
+		setEnabled: async (...args) => {
+			skillMutations.push(args);
+			skillEnabled = args[1];
+		},
 	});
-	services.registerInstance(IExtensionManagementService, { onDidChangeInstalled: Event.None } as IExtensionManagementService);
-	services.registerInstance(ILanguageServerService, { control: async () => { }, read: async () => ({ revision: 0, configurations: {}, servers: [] }), configure: async () => { }, removeConfiguration: async () => { } });
+	services.registerInstance(IExtensionManagementService, {
+		onDidChangeInstalled: Event.None,
+	} as IExtensionManagementService);
+	services.registerInstance(ILanguageServerService, {
+		control: async () => { },
+		read: async () => ({ revision: 0, configurations: {}, servers: [] }),
+		configure: async () => { },
+		removeConfiguration: async () => { },
+	});
 	services.registerInstance(ICodeEditorService, { getActiveCodeEditor: () => null } as ICodeEditorService);
 	services.registerInstance(IDialogService, disposables.add(new DialogService()));
 	services.registerInstance(ClipboardServiceId, clipboardService);
@@ -1950,12 +2796,25 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	disposables.add(CommandsRegistry.register('git.updateAutoFetch', async (_accessor, value) => gitService.setAutoFetch(value as false | true | 'all')));
 	disposables.add(CommandsRegistry.register('git.updateAutoFetchPeriod', async (_accessor, value) => gitService.setAutoFetchPeriod(value as number)));
 	disposables.add(CommandsRegistry.register('git.updateRebaseWhenSync', async (_accessor, value) => gitService.setRebaseWhenSync(value as boolean)));
-	services.registerInstance(IServerEventApi, { subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })) });
+	services.registerInstance(IServerEventApi, {
+		subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })),
+	});
 	services.registerInstance(ChatServiceId, chatService);
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
 	services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService);
-	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
-	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(ISecretStorageStatusService, {
+		readState: async () => ({ status: 'available' }),
+		authorizeAccess: async () => ({ status: 'available' }),
+		setStorageMode: async mode => ({ status: 'available', mode }),
+	});
+	services.registerInstance(IAgentExecutionSettingsService, {
+		onDidChange: Event.None,
+		read: async () => ({
+			revision: 1,
+			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
+		}),
+		configure: async () => { },
+	});
 	const localTranscription = disposables.add(new NullLocalTranscriptionService());
 	services.registerInstance(ILocalTranscriptionModelService, localTranscription);
 	services.registerInstance(ILocalTranscriptionService, localTranscription);
@@ -1968,47 +2827,88 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: agentCapabilitiesService/);
 	let capabilityReads = 0;
 	services.registerInstance(IAgentCapabilitiesService, {
-		isAvailable: true, onDidChange: Event.None,
+		isAvailable: true,
+		onDidChange: Event.None,
 		read: async () => {
 			capabilityReads++;
 			return {
 				localProcessSandboxConfigured: true,
 				sandboxBackends: ['mxc'],
-				sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' } }],
+				sandboxDiagnostics: [
+					{
+						backend: 'mxc',
+						network: 'managed',
+						readiness: { type: 'unsupported', reason: '<script>diagnostic</script>' },
+					},
+				],
 				directoryGrantsReadable: true,
 			};
 		},
 	});
-	services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({
-		isAvailable: true,
-		read: async () => {
-			capabilityReads++;
-			return { sourceGroups: [], tools: [{ name: 'read_file', category: 'read', description: 'Read a file.', source: 'local', sourceDetails: ['ash-app-server'], exposure: 'direct', authority: 'directoryRead' }] };
-		},
-	}));
+	services.registerSingleton(ILanguageModelToolsService, () =>
+		createTestLanguageModelToolsService({
+			isAvailable: true,
+			read: async () => {
+				capabilityReads++;
+				return {
+					sourceGroups: [],
+					tools: [
+						{
+							name: 'read_file',
+							category: 'read',
+							description: 'Read a file.',
+							source: 'local',
+							sourceDetails: ['ash-app-server'],
+							exposure: 'direct',
+							authority: 'directoryRead',
+						},
+					],
+				};
+			},
+		}),
+	);
 	assert.throws(() => descriptor.create({ instantiationService: services }), /Unknown service: appServerRemoteAgentService/);
 	const connectionChanged = disposables.add(new Emitter<RemoteConnectionState>());
 	const connectionIdentityChanged = disposables.add(new Emitter<RemoteAgentConnection>());
 	let connectionIdentity: RemoteAgentConnection = { kind: 'local', generation: 1 };
-	services.registerInstance(ITraceSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }), configure: async () => { } });
+	services.registerInstance(ITraceSettingsService, {
+		onDidChange: Event.None,
+		read: async () => ({ revision: 1, configured: null, recording: { type: 'disabled' } }),
+		configure: async () => { },
+	});
 	services.registerInstance(IFileDialogService, {
-		pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
-		pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
-		showOpenDialog: async () => undefined, showSaveDialog: async () => undefined, pickFileToSave: async () => undefined, showSaveConfirm: async () => 2
+		pickFolderAndOpen: async () => {
+			throw new Error('Unexpected folder open');
+		},
+		pickWorkspaceAndOpen: async () => {
+			throw new Error('Unexpected workspace open');
+		},
+		showOpenDialog: async () => undefined,
+		showSaveDialog: async () => undefined,
+		pickFileToSave: async () => undefined,
+		showSaveConfirm: async () => 2,
 	});
 	services.registerInstance(RemoteAgentServiceId, {
 		onDidChangeConnectionState: connectionChanged.event,
 		onDidChangeConnection: connectionIdentityChanged.event,
 		connectionState: 'connected',
-		get connection() { return connectionIdentity; },
+		get connection() {
+			return connectionIdentity;
+		},
 		reconnect: async () => ({ kind: 'alreadyConnected' }),
 		rollbackRuntime: async () => ({ kind: 'cancelled' }),
 	});
 	services.registerInstance(WorkspaceTrustApiId, {
 		onDidChangeTrust: Event.None,
-		listDirectories: async () => ({ revision: 1, entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }] }),
+		listDirectories: async () => ({
+			revision: 1,
+			entries: [{ dir: 'dir-1', path: '/workspace', permissions: ['readFiles'] }],
+		}),
 	} as unknown as IWorkspaceTrustApi);
-	let searchSnapshot: import('../../../../../platform/search/common/search.js').ContentSearchConfiguration = { revision: 4, engine: 'tgrep' };
+	let searchSnapshot: import('../../../../../platform/search/common/search.js').ContentSearchConfiguration = {
+		revision: 4,
+		engine: 'tgrep',
+	};
 	let rejectSearchSave = false;
 	let nextSearchRead: Promise<typeof searchSnapshot> | undefined;
 	const searchWrites: { engine: string; expectedRevision: number; }[] = [];
@@ -2020,7 +2920,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		},
 		configure: async (engine, expectedRevision) => {
 			searchWrites.push({ engine, expectedRevision });
-			if (rejectSearchSave) { throw new Error('Revision conflict'); }
+			if (rejectSearchSave) {
+				throw new Error('Revision conflict');
+			}
 			searchSnapshot = { engine, revision: expectedRevision + 1 };
 		},
 	});
@@ -2033,13 +2935,30 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IChatSessionNavigationService, {
 		revision: 0,
 		getActiveConversation: () => ({ sessionId: 'session-hooks', threadId: 'thread-hooks' }),
-		getConversations: () => [], captureActiveDraft: async () => undefined, openConversation: async () => { },
-		startVoiceConversation: async () => { throw new Error("Unexpected voice start"); },
-		appendToActiveDraft: text => { prompts.push(text); },
+		getConversations: () => [],
+		captureActiveDraft: async () => undefined,
+		openConversation: async () => { },
+		startVoiceConversation: async () => {
+			throw new Error('Unexpected voice start');
+		},
+		appendToActiveDraft: text => {
+			prompts.push(text);
+		},
 	});
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
+	services.registerInstance(IAccessibleViewService, {
+		show: () => true,
+		getOpenAriaHint: () => undefined,
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
+	});
 	const hooksFolder = await mkdtemp(join(tmpdir(), 'ash-settings-hooks-'));
-	await using hooksFolderCleanup = { [Symbol.asyncDispose]: async () => { await rm(hooksFolder, { recursive: true, force: true }); } };
+	await using hooksFolderCleanup = {
+		[Symbol.asyncDispose]: async () => {
+			await rm(hooksFolder, { recursive: true, force: true });
+		},
+	};
 	services.registerSingleton(IFileService, () => createTestFileService(disposables.add(new DiskFileSystemProvider([URI.file(hooksFolder)]))));
 	services.registerSingleton(ITextFileService, () => disposables.add(createTestTextFileService(services.get(IFileService), configuration)));
 	const editorPanes = new EditorPaneRegistry();
@@ -2050,23 +2969,74 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const editor = disposables.add(editorServices.createInstance(EditorPart, root, { registry: editorPanes }));
 	editorServices.registerInstance(IEditorPart, editor);
 	editorServices.registerInstance(ICommandService, disposables.add(new CommandService(editorServices)));
+	editorServices.registerSingleton(IMenuService, () => editorServices.createInstance(MenuService));
 	editorServices.registerInstance(IEditorService, disposables.add(new BrowserEditorService(editor)));
-	const preferences = disposables.add(new PreferencesService(editorServices.get(IEditorService), editorServices.get(IFileTextModelService), keybindingProfile.files, keybindingProfile.profiles, editorServices, configuration, configuration, editorServices.get(IEditorService) as InstanceType<typeof BrowserEditorService>));
+	const preferences = disposables.add(
+		new PreferencesService(
+			editorServices.get(IEditorService),
+			editorServices.get(IFileTextModelService),
+			keybindingProfile.files,
+			keybindingProfile.profiles,
+			editorServices,
+			configuration,
+			configuration,
+			editorServices.get(IEditorService) as InstanceType<typeof BrowserEditorService>,
+		),
+	);
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
-	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
+	services.registerInstance(IAccountService, {
+		onDidChangeAccounts: Event.None,
+		onDidCompleteLogin: Event.None,
+		read: async () => ({ revision: 1n, accounts: [] }),
+		startLogin: async () => {
+			throw new Error('Not used');
+		},
+		cancelLogin: async () => { },
+		logout: async () => { },
+	});
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
-	services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
-	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
+	services.registerInstance(IAccountPolicyService, {
+		state: { phase: 'idle' },
+		onDidChangeState: Event.None,
+		refresh: async () => { },
+	});
+	services.registerSingleton(IManagedSettingsUpdateService, () => services.createInstance(ManagedSettingsUpdateService));
+	services.registerInstance(IGitHubConnectionService, {
+		isConnecting: false,
+		connect: async () => { },
+		cancel: async () => { },
+	});
 	services.registerInstance(IGitHubReviewModel, disposables.add(services.createInstance(GitHubReviewModel)));
-	services.registerInstance(IWorkbenchHostService, { downloadText: () => assert.fail('Unexpected download'), editUserConfiguration: async () => { openUserToml++; } });
+	services.registerInstance(IWorkbenchHostService, {
+		downloadText: () => assert.fail('Unexpected download'),
+		editUserConfiguration: async () => {
+			openUserToml++;
+		},
+	});
 
 	services.registerInstance(IKeybindingService, {
-		inChordMode: false, onDidUpdateKeybindings: Event.None, getKeybindings: () => [],
-		enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => toDisposable(() => { }),
-		resolveKeybinding, resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
+		inChordMode: false,
+		onDidUpdateKeybindings: Event.None,
+		getKeybindings: () => [],
+		enableKeybindingHoldMode: () => undefined,
+		registerSchemaContribution: () => toDisposable(() => { }),
+		resolveKeybinding,
+		resolveUserBinding: () => undefined,
+		lookupKeybindings: () => [],
+		lookupKeybinding: () => undefined,
 	});
-	services.registerInstance(IHostService, { reload: async () => { throw new Error("Unexpected reload in this fixture"); }, hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => { }, restart: async () => { }, getScreenshot: async () => undefined });
+	services.registerInstance(IHostService, {
+		getWindows: async () => [],
+		reload: async () => {
+			throw new Error('Unexpected reload in this fixture');
+		},
+		hasFocus: true,
+		onDidChangeFocus: Event.None,
+		openWindow: async () => { },
+		restart: async () => { },
+		getScreenshot: async () => undefined,
+	});
 
 	await preferences.openSettings();
 	const host = root.querySelector<HTMLElement>('.ash-modal-editor-host');
@@ -2183,12 +3153,20 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
 	assert.ok(languageControl);
 	assert.equal(languageControl.textContent, 'English');
-	catalogs.push({ ...productLanguagePackCatalogs[0], locale: 'fr', languageName: 'French', localizedLanguageName: 'Français' });
+	catalogs.push({
+		...productLanguagePackCatalogs[0],
+		locale: 'fr',
+		languageName: 'French',
+		localizedLanguageName: 'Français',
+	});
 	languagePacksChanged.fire();
 	languageControl.click();
 	const languageListId = languageControl.getAttribute('aria-controls')!;
 	const languageOptions = [...ownerDocument.getElementById(languageListId)!.querySelectorAll<HTMLElement>('[role="option"]')];
-	assert.deepEqual(languageOptions.map(option => option.textContent), ['English', 'Français', '简体中文']);
+	assert.deepEqual(
+		languageOptions.map(option => option.textContent),
+		['English', 'Français', '简体中文'],
+	);
 	languageOptions.find(option => option.textContent === 'Français')!.click();
 	await nextTurn();
 	assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'fr');
@@ -2202,7 +3180,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(languageControl.getAttribute('aria-label'), 'Interface language');
 	root.querySelector<HTMLButtonElement>('[data-settings-item-id="workbench.locale"] .ash-setting-item-actions-trigger')!.click();
 	let resolveSaved!: () => void;
-	const resetSaved = new Promise<void>(resolve => { resolveSaved = resolve; });
+	const resetSaved = new Promise<void>(resolve => {
+		resolveSaved = resolve;
+	});
 	using savedListener = configuration.onDidChangeConfiguration(event => {
 		if (event.affectsConfiguration(LocalizationConfiguration.locale)) resolveSaved();
 	});
@@ -2244,10 +3224,24 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(rebaseControl.getAttribute('aria-checked'), 'false');
 	assert.equal(autoFetch, 'all');
 
-	const extensionNodes = [...parseExtensionManifest(JSON.stringify({
-		name: 'live', publisher: 'test', version: '1.0.0', displayName: 'Live extension',
-		contributes: { configuration: { properties: { 'live.enabled': { type: 'boolean', default: false, description: 'Enable live extension' } } } },
-	}), { id: 'test.live', name: 'live', publisher: 'test', version: '1.0.0' }).contributes.configuration];
+	const extensionNodes = [
+		...parseExtensionManifest(
+			JSON.stringify({
+				name: 'live',
+				publisher: 'test',
+				version: '1.0.0',
+				displayName: 'Live extension',
+				contributes: {
+					configuration: {
+						properties: {
+							'live.enabled': { type: 'boolean', default: false, description: 'Enable live extension' },
+						},
+					},
+				},
+			}),
+			{ id: 'test.live', name: 'live', publisher: 'test', version: '1.0.0' },
+		).contributes.configuration,
+	];
 	configurationRegistry.updateConfigurations({ add: extensionNodes, remove: [] });
 	try {
 		await preferences.openSettings({ section: 'extension.test.live' });
@@ -2301,7 +3295,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await copyAction.run();
 	assert.deepEqual(copied, [HoverConfiguration.delay]);
 	let resolveHoverReset!: () => void;
-	const hoverReset = new Promise<void>(resolve => { resolveHoverReset = resolve; });
+	const hoverReset = new Promise<void>(resolve => {
+		resolveHoverReset = resolve;
+	});
 	using hoverResetListener = configuration.onDidChangeConfiguration(event => {
 		if (event.affectsConfiguration(HoverConfiguration.delay)) resolveHoverReset();
 	});
@@ -2312,8 +3308,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
-		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'sandbox', 'execution-trace', 'hooks']
-			.map(categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent),
+		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'sandbox', 'execution-trace', 'hooks'].map(
+			categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent,
+		),
 		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
 	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
@@ -2335,7 +3332,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(otherAdvisorOption);
 	otherAdvisorOption.click();
 	await nextTurn();
-	assert.deepEqual(advisorWrites[1], { model: otherAdvisorModel, enabled: true, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' });
+	assert.deepEqual(advisorWrites[1], {
+		model: otherAdvisorModel,
+		enabled: true,
+		maxCalls: 5,
+		maxOutputTokens: 4096,
+		reasoningEffort: 'high',
+	});
 	rejectAdvisorSave = true;
 	advisorSwitch.checked = false;
 	advisorSwitch.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
@@ -2351,7 +3354,13 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(clearAdvisorOption);
 	clearAdvisorOption.click();
 	await nextTurn();
-	assert.deepEqual(advisorWrites[3], { model: otherAdvisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' });
+	assert.deepEqual(advisorWrites[3], {
+		model: otherAdvisorModel,
+		enabled: false,
+		maxCalls: 5,
+		maxOutputTokens: 4096,
+		reasoningEffort: 'high',
+	});
 	assert.equal(advisorSwitch.checked, false);
 	assert.equal(advisorSwitch.disabled, false);
 	advisorSwitch.checked = true;
@@ -2362,7 +3371,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-advisor-settings [aria-haspopup="menu"]')?.textContent, 'Muse Spark 1.3');
 	root.querySelector<HTMLElement>('.ash-advisor-settings [aria-haspopup="menu"]')?.click();
-	assert.deepEqual([...root.querySelectorAll('[role="menuitemradio"]')].map(option => option.textContent), ['Disable', 'GPT-6.1 Sol']);
+	assert.deepEqual(
+		[...root.querySelectorAll('[role="menuitemradio"]')].map(option => option.textContent),
+		['Disable', 'GPT-6.1 Sol'],
+	);
 	assert.equal(advisorWrites.length, 5, 'Hiding a model must not change the saved preference');
 	assert.ok(root.querySelector('.ash-advisor-settings.ash-settings-card'));
 	assert.equal(root.querySelector('.ash-advisor-settings')?.textContent?.includes('Refresh'), false);
@@ -2413,9 +3425,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(hookSearch);
 	hookSearch.value = 'two words';
 	hookSearch.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
-	assert.deepEqual([...hooksRoot.querySelectorAll<HTMLElement>('.ash-hooks-event')].filter(row => !row.hidden).map(row => row.dataset.hookEvent), ['preToolUse']);
+	assert.deepEqual(
+		[...hooksRoot.querySelectorAll<HTMLElement>('.ash-hooks-event')].filter(row => !row.hidden).map(row => row.dataset.hookEvent),
+		['preToolUse'],
+	);
 	hooksRoot.querySelector<HTMLElement>('summary')?.focus();
-	const contentProvider = AccessibleViewRegistry.getImplementations().find(provider => provider.name.startsWith('aiCustomizationManagement-') && provider.type === AccessibleViewType.View)?.getProvider(editorServices);
+	const contentProvider = AccessibleViewRegistry.getImplementations()
+		.find(provider => provider.name.startsWith('aiCustomizationManagement-') && provider.type === AccessibleViewType.View)
+		?.getProvider(editorServices);
 	assert.ok(contentProvider);
 	assert.match(contentProvider.provideContent(), /user:hook:check/);
 	contentProvider.dispose();
@@ -2473,7 +3490,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal((quickInput.currentQuickInput as IQuickPick<IQuickPickItem> | undefined)?.busy, true);
 	let pickerReleased = false;
-	void configureHooks.then(() => { pickerReleased = true; });
+	void configureHooks.then(() => {
+		pickerReleased = true;
+	});
 	pickerInput.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	await nextTurn();
 	assert.equal(pickerReleased, true, 'dismissal must release the picker before discovery completes');
@@ -2621,7 +3640,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	search.value = '';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	root.querySelector<HTMLButtonElement>('.ash-settings-search-filter')?.click();
-	assert.deepEqual(menuActions.filter(action => action.label).map(action => action.label), ['Modified', 'Setting ID…', 'Experimental', 'Preview', 'Stable', 'Clear Filters']);
+	assert.deepEqual(
+		menuActions.filter(action => action.label).map(action => action.label),
+		['Modified', 'Setting ID…', 'Experimental', 'Preview', 'Stable', 'Clear Filters'],
+	);
 	const idFilter = menuActions.find(action => action.id === 'settings.search.id');
 	assert.ok(idFilter);
 	await idFilter.run();
@@ -2669,14 +3691,20 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('.ash-settings-search input'), search, 'query opening reuses the search owner');
 	assert.equal(search.value, 'editor.fontFamily');
 	assert.equal(ownerDocument.activeElement, search);
-	assert.deepEqual([...root.querySelectorAll<HTMLElement>('.ash-settings-content-tree [data-settings-item-id]')].map(row => row.dataset.settingsItemId).sort(), ['chat.editor.fontFamily', 'editor.fontFamily']);
+	assert.deepEqual([...root.querySelectorAll<HTMLElement>('.ash-settings-content-tree [data-settings-item-id]')].map(row => row.dataset.settingsItemId).sort(), [
+		'chat.editor.fontFamily',
+		'editor.fontFamily',
+	]);
 	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`), fontFamily);
 	await commands.executeCommand('workbench.action.openSettings', { query: '@id:editor.fontSize' });
 	assert.equal(search.value, '@id:editor.fontSize');
 	assert.equal(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length, 1);
 	const focusedSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]')!;
 	focusedSize.focus();
-	await commands.executeCommand('workbench.action.openSettings', { query: '@id:editor.fontSize', focusSearch: false });
+	await commands.executeCommand('workbench.action.openSettings', {
+		query: '@id:editor.fontSize',
+		focusSearch: false,
+	});
 	assert.equal(ownerDocument.activeElement, focusedSize, 'opening options can retain focus on the current control');
 	await preferences.openSettings({ focusSearch: true });
 	assert.equal(ownerDocument.activeElement, search);
@@ -2690,9 +3718,20 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
 	await preferences.openSettings({ section: 'models' });
 	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'models');
+	await preferences.openSettings({ section: 'models', query: '', sectionQuery: '@provider:openai @capability:vision', focusSearch: true });
+	const scopedSearch = root.querySelector<HTMLInputElement>('.ash-chat-models-catalog [role="combobox"]')!;
+	assert.equal(scopedSearch.value, '@provider:openai @capability:vision');
+	assert.equal(search.value, '');
+	assert.equal(ownerDocument.activeElement, scopedSearch);
+	await preferences.openSettings({ section: 'models', sectionQuery: '', focusSearch: false });
+	assert.equal(ownerDocument.activeElement, scopedSearch);
+	await assert.rejects(preferences.openSettings({ section: 'general', sectionQuery: 'unsupported' }), /does not provide its own search/);
+
 
 	using language = editorServices.get(ILanguageService).registerLanguage({ id: 'settings-test-language' });
-	await commands.executeCommand('workbench.action.openSettings', { query: '@lang:settings-test-language @id:editor.fontSize' });
+	await commands.executeCommand('workbench.action.openSettings', {
+		query: '@lang:settings-test-language @id:editor.fontSize',
+	});
 	const languageSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]');
 	assert.ok(languageSize, 'language search shows language-overridable settings');
 	languageSize.value = '29';
@@ -2711,7 +3750,6 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await preferences.openSettings({ query: '@id:editor.fontSize' });
 	assert.notEqual(root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]')?.value, '29');
 
-
 	root.querySelector<HTMLButtonElement>('.ash-modal-editor-close button')?.click();
 	await nextTurn();
 	assert.equal(host.hidden, true);
@@ -2719,12 +3757,19 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'After close');
 	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`), null);
 	const firstGroup = editor.activeGroup;
-	await commands.executeCommand('workbench.action.openSettings', { groupId: firstGroup.id, query: '@id:editor.fontFamily' });
+	await commands.executeCommand('workbench.action.openSettings', {
+		groupId: firstGroup.id,
+		query: '@id:editor.fontFamily',
+	});
 	const firstSearch = firstGroup.domNode.querySelector<HTMLInputElement>('.ash-settings-search input')!;
 	const firstPane = firstGroup.activePane!;
 	assert.equal(firstPane.group, firstGroup);
 	assert.equal(firstSearch.value, '@id:editor.fontFamily');
-	await commands.executeCommand('workbench.action.openSettings', { openToSide: true, groupId: firstGroup.id, query: '@id:editor.fontSize' });
+	await commands.executeCommand('workbench.action.openSettings', {
+		openToSide: true,
+		groupId: firstGroup.id,
+		query: '@id:editor.fontSize',
+	});
 	const secondGroup = editor.activeGroup;
 	const secondSearch = secondGroup.domNode.querySelector<HTMLInputElement>('.ash-settings-search input')!;
 	assert.notEqual(secondGroup, firstGroup, 'side opening takes precedence over an explicit group');
@@ -2733,18 +3778,28 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(firstSearch.value, '@id:editor.fontFamily');
 	assert.equal(secondSearch.value, '@id:editor.fontSize');
 	assert.equal(ownerDocument.activeElement, secondSearch);
-	await commands.executeCommand('workbench.action.openSettings', { groupId: firstGroup.id, query: '@modified', preserveFocus: true });
+	await commands.executeCommand('workbench.action.openSettings', {
+		groupId: firstGroup.id,
+		query: '@modified',
+		preserveFocus: true,
+	});
 	assert.equal(firstSearch.value, '@modified');
 	assert.equal(secondSearch.value, '@id:editor.fontSize');
 	assert.equal(editor.activeGroup, secondGroup);
 	assert.equal(ownerDocument.activeElement, secondSearch);
-	await commands.executeCommand('workbench.action.openSettings', { groupId: firstGroup.id, query: '@id:editor.fontSize' });
+	await commands.executeCommand('workbench.action.openSettings', {
+		groupId: firstGroup.id,
+		query: '@id:editor.fontSize',
+	});
 	assert.equal(ownerDocument.activeElement, firstSearch);
 	assert.equal(firstGroup.activePane, firstPane, 'reopening a group reuses its pane');
 	await secondGroup.closeEditor(secondGroup.activeInput!);
 	await nextTurn();
 	assert.equal(firstGroup.activePane, firstPane, 'closing the other pane does not retire this pane');
-	await commands.executeCommand('workbench.action.openSettings', { openToSide: true, query: '@id:editor.fontFamily' });
+	await commands.executeCommand('workbench.action.openSettings', {
+		openToSide: true,
+		query: '@id:editor.fontFamily',
+	});
 	assert.notEqual(editor.activeGroup, firstGroup);
 	assert.equal(firstSearch.value, '@id:editor.fontSize');
 	assert.equal(editor.activeGroup.domNode.querySelector<HTMLInputElement>('.ash-settings-search input')?.value, '@id:editor.fontFamily');
@@ -2767,11 +3822,19 @@ test('Local model controls share translated snapshots and keep preparation runni
 	await configuration.updateValue(DictationConfiguration.model, 'imported-model');
 	const services = resources.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
+	services.registerInstance(IAppServerHookApi, {
+		onDidChangeHooks: Event.None,
+		list: async () => {
+			throw new Error('Unexpected Hook read in Skill fixture');
+		},
+	});
 	services.registerInstance(ConfigurationServiceId, configuration);
 	const changed = resources.add(new Emitter<void>());
 	let modelStatus: IDictationModelStatus | undefined;
-	const progress = (status: IDictationModelStatus): void => { modelStatus = status; changed.fire(); };
+	const progress = (status: IDictationModelStatus): void => {
+		modelStatus = status;
+		changed.fire();
+	};
 	let finish!: (state: ModelState.Cancelled) => void;
 	let cancellations = 0;
 	const imported: unknown[] = [];
@@ -2780,13 +3843,23 @@ test('Local model controls share translated snapshots and keep preparation runni
 		getModel: async (model: string) => ({ model, available: false, sizeBytes: 0, status: modelStatus }),
 		listModels: async () => [],
 		onDidChangeModels: changed.event,
-		cancelModel: async () => { cancellations++; progress({ state: DictationModelState.Cancelled }); finish(DictationModelState.Cancelled); },
+		cancelModel: async () => {
+			cancellations++;
+			progress({ state: DictationModelState.Cancelled });
+			finish(DictationModelState.Cancelled);
+		},
 		importPackage: (options: unknown, onProgress: typeof progress) => {
 			imported.push(options);
 			progress({ state: DictationModelState.Checking });
 			return {
-				completed: new Promise<ModelState.Cancelled>(resolve => { finish = resolve; }),
-				cancel: async () => { cancellations++; progress({ state: DictationModelState.Cancelled }); finish(DictationModelState.Cancelled); },
+				completed: new Promise<ModelState.Cancelled>(resolve => {
+					finish = resolve;
+				}),
+				cancel: async () => {
+					cancellations++;
+					progress({ state: DictationModelState.Cancelled });
+					finish(DictationModelState.Cancelled);
+				},
 				dispose() { },
 			};
 		},
@@ -2844,44 +3917,121 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			{ model: { provider: 'openai', model: 'older' }, displayName: 'Older OpenAI' },
 			{ model: { provider: 'anthropic', model: 'opus' }, displayName: 'Opus' },
 		],
-		listModelProviders: async () => ['openai', 'openai-compatible'].map(connection => ({ connection, provider: connection, displayName: connection, apiKeyPolicy: 'required', apiKeyConfigured: true })),
+		listModelProviders: async () =>
+			['openai', 'openai-compatible'].map(connection => ({
+				connection,
+				provider: connection,
+				displayName: connection,
+				apiKeyPolicy: 'required',
+				apiKeyConfigured: true,
+			})),
 		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
-		saveCustomModelProvider: async (provider: typeof saved[number]) => { saved.push(provider); },
-		setModelProviderApiKey: async (_id: string, key: string) => { if (rejectKey) throw new Error('Key write rejected'); keys.push(key); },
-		removeModelProviderApiKey: async () => { removed++; },
+		removeCustomModelProvider: async () => { },
+		saveCustomModelProvider: async (provider: (typeof saved)[number]) => {
+			saved.push(provider);
+		},
+		setModelProviderApiKey: async (_id: string, key: string) => {
+			if (rejectKey) throw new Error('Key write rejected');
+			keys.push(key);
+		},
+		removeModelProviderApiKey: async () => {
+			removed++;
+		},
 		refreshModels: async () => [],
-		testProviderModel: async () => failed ? { type: 'failed', message: 'Endpoint rejected this model' } : { type: 'passed' },
+		testProviderModel: async () => (failed ? { type: 'failed', message: 'Endpoint rejected this model' } : { type: 'passed' }),
 	} as unknown as IChatService;
 	const configuration = disposables.add(new WorkspaceService());
 	const services = disposables.add(new InstantiationService());
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
+	services.registerInstance(IAppServerHookApi, {
+		onDidChangeHooks: Event.None,
+		list: async () => {
+			throw new Error('Unexpected Hook read in Skill fixture');
+		},
+	});
 	services.registerInstance(ChatServiceId, chat);
 	services.registerInstance(INotificationService, disposables.add(new TestNotificationService()));
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
 	services.registerInstance(IDialogService, {} as IDialogService);
-	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
-	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
+	services.registerInstance(ISecretStorageStatusService, {
+		readState: async () => ({ status: 'available' }),
+		authorizeAccess: async () => ({ status: 'available' }),
+		setStorageMode: async mode => ({ status: 'available', mode }),
+	});
+	services.registerInstance(IAgentExecutionSettingsService, {
+		onDidChange: Event.None,
+		read: async () => ({
+			revision: 1,
+			settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' },
+		}),
+		configure: async () => { },
+	});
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(ConfigurationServiceId, configuration);
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
+	services.registerInstance(IAccessibleViewService, {
+		show: () => true,
+		getOpenAriaHint: () => undefined,
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
+	});
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 	const content = disposables.add(services.createInstance(ModelSettingsRenderer, root));
 	const modelTree = disposables.add(new SettingsTreeModel<SettingsSectionReference>());
-	disposables.add(new SettingsTree(root, { model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderGroupHeader: header => content.renderItem(header), renderItem: item => content.renderItem(item.value) }));
-	disposables.add(content.onDidChange(() => modelTree.setChildren([{ element: { kind: 'group', id: 'models', title: 'Models', description: '' }, children: content.getNodes() }])));
+	disposables.add(
+		new SettingsTree(root, {
+			model: modelTree,
+			rootClassName: 'ash-models-settings',
+			groupClassName: 'ash-settings-content-group',
+			groupDescriptionClassName: 'ash-settings-group-description',
+			itemsClassName: 'ash-settings-list',
+			renderGroupHeader: header => content.renderItem(header),
+			renderItem: item => content.renderItem(item.value),
+		}),
+	);
+	disposables.add(
+		content.onDidChange(() =>
+			modelTree.setChildren([
+				{
+					element: { kind: 'group', id: 'models', title: 'Models', description: '' },
+					children: content.getNodes(),
+				},
+			]),
+		),
+	);
 	content.setVisible(true);
 	await nextTurn();
-	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent), ['Newest OpenAI', 'Opus']);
+	assert.deepEqual(
+		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
+		['Newest OpenAI', 'Opus'],
+	);
 	const expand = root.querySelector<HTMLButtonElement>('.ash-models-settings-expand button')!;
 	expand.click();
 	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 3);
 	assert.equal(expand.getAttribute('aria-expanded'), 'true');
+	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 2);
+	assert.equal(root.querySelector<HTMLDetailsElement>('.ash-chat-models-filters')!.hidden, false);
+	[...root.querySelectorAll<HTMLButtonElement>('.ash-chat-models-catalog > button')].find(button => button.textContent === 'Collapse All')!.click();
+	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 0);
 	expand.click();
 	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 2);
-	assert.equal(content.getNodes(new SettingsSearchQuery('Older')).flatMap(node => node.children ?? []).some(node => node.element.kind === 'item' && node.element.description.includes('Older OpenAI')), true);
-	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent), ['Older OpenAI']);
+	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 0);
+	assert.equal(
+		content
+			.getNodes(new SettingsSearchQuery('Older'))
+			.flatMap(node => node.children ?? [])
+			.some(node => node.element.kind === 'item' && node.element.description.includes('Older OpenAI')),
+		true,
+	);
+	assert.deepEqual(
+		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
+		['Older OpenAI'],
+	);
 	content.getNodes();
 	const search = root.querySelector<HTMLInputElement>('input[aria-label="Search models"]')!;
 	const searchModels = (value: string): void => {
@@ -2890,7 +4040,10 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	};
 	search.focus();
 	searchModels('OPENAI/OLDER');
-	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent), ['Older OpenAI']);
+	assert.deepEqual(
+		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
+		['Older OpenAI'],
+	);
 	assert.equal(document.activeElement, search);
 	assert.equal(root.querySelectorAll('.ash-models-settings-api-row').length, 1);
 	searchModels('missing model');
@@ -2898,7 +4051,10 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	assert.match(root.textContent ?? '', /No models found/);
 	assert.equal(document.activeElement, search);
 	searchModels('');
-	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(row => row.textContent), ['Newest OpenAI', 'Opus']);
+	assert.deepEqual(
+		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
+		['Newest OpenAI', 'Opus'],
+	);
 	assert.equal(root.querySelectorAll('.ash-models-settings-api-row').length, 1);
 	const input = root.querySelector<HTMLInputElement>('.ash-models-settings-api-row input')!;
 	const edit = (field: HTMLInputElement, value: string): void => {
@@ -2945,7 +4101,10 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	edit(card.querySelector<HTMLInputElement>('input[aria-label="Context window (tokens)"]')!, '128000');
 	button('Save model').click();
 	await nextTurn();
-	assert.deepEqual(saved.at(-1)?.models, [{ id: 'first-private-model', contextWindow: 1_000_000 }, { id: 'second-private-model', contextWindow: 128_000 }]);
+	assert.deepEqual(saved.at(-1)?.models, [
+		{ id: 'first-private-model', contextWindow: 1_000_000 },
+		{ id: 'second-private-model', contextWindow: 128_000 },
+	]);
 	const testButton = button('Test models');
 	testButton.click();
 	await nextTurn();
@@ -2959,7 +4118,9 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	assert.match(card.textContent ?? '', /Endpoint rejected this model/);
 	button('Add model').click();
 	first.focus();
-	const help = AccessibleViewRegistry.getImplementations().find(provider => provider.name.startsWith('models-settings-'))?.getProvider(services);
+	const help = AccessibleViewRegistry.getImplementations()
+		.find(provider => provider.name.startsWith('models-settings-'))
+		?.getProvider(services);
 	assert.match(help?.provideContent() ?? '', /clear the field to remove a key/);
 	help?.dispose();
 });
@@ -2974,21 +4135,33 @@ test('Custom provider fields and test states use the Chinese catalog', () => {
 		assert.equal(localize('models.provider.passed', 'Model test passed'), '模型测试通过');
 		assert.equal(localize('models.discovery.unsupported', 'This endpoint does not provide a model list. Add model IDs manually.'), '此端点不提供模型列表，请手动添加模型 ID。');
 		assert.equal(localize('models.provider.contextWindow', 'Context window (tokens)'), '上下文长度（tokens）');
-	} finally { resetNlsResolver(); }
+	} finally {
+		resetNlsResolver();
+	}
 });
 
-function createSettingWidget(resources: import('../../../../../base/common/lifecycle.js').DisposableStore, container: HTMLElement, setting: ISetting,
+function createSettingWidget(
+	resources: import('../../../../../base/common/lifecycle.js').DisposableStore,
+	container: HTMLElement,
+	setting: ISetting,
 	options: import('../../browser/settingsWidgets.js').SettingWidgetOptions & {
 		clipboardService: IClipboardService;
 		configurationService: import('../../../../../platform/configuration/common/configuration.js').IConfigurationService;
 		contextMenuProvider: import('../../../../../base/browser/contextmenu.js').IContextMenuProvider;
 		contextViewProvider: import('../../../../../platform/contextview/browser/contextView.js').IContextViewService;
-	}): import('../../browser/settingsWidgets.js').SettingWidget {
+	},
+): import('../../browser/settingsWidgets.js').SettingWidget {
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(ClipboardServiceId, options.clipboardService);
 	services.registerInstance(ConfigurationServiceId, options.configurationService);
 	services.registerInstance(IContextViewService, options.contextViewProvider);
-	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, ...options.contextMenuProvider, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, hideContextMenu() { } });
+	services.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom' as const,
+		...options.contextMenuProvider,
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
+		hideContextMenu() { },
+	});
 	services.registerInstance(IHoverService, resources.add(new HoverService(options.configurationService, options.contextViewProvider, services.get(IContextMenuService))));
 	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings }, services);
 }
@@ -3002,7 +4175,13 @@ test('Settings widgets require their scoped clipboard registration and clean up 
 	const configuration = resources.add(new WorkspaceService());
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
-	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom' as const, showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None });
+	services.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom' as const,
+		showContextMenu() { },
+		hideContextMenu() { },
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
+	});
 	assert.throws(() => instantiateSettingWidget(root, new DefaultSettings().get('editor.lineNumbers'), { onStatus() { } }, services), /clipboardService/);
 	assert.equal(root.querySelector('.ash-configuration-setting'), null);
 });
@@ -3015,27 +4194,56 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
 	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
-	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
+	services.registerInstance(IAccessibleViewService, {
+		show: () => true,
+		getOpenAriaHint: () => undefined,
+		disableHint: async () => { },
+		showAccessibleViewHelp: () => { },
+		dispose() { },
+		[Symbol.dispose]() { },
+	});
 	services.registerInstance(ILanguageModelsService, {
 		onDidChangeModels: Event.None,
 		listModelCatalog: async () => [],
 		listModelProviders: async () => [],
 		listCustomModelProviders: async () => [],
 	} as unknown as ILanguageModelsService);
-	let state: { status: 'accessDenied' | 'available'; mode: 'encrypted' | 'file'; } = { status: 'accessDenied', mode: 'encrypted' };
+	let state: { status: 'accessDenied' | 'available'; mode: 'encrypted' | 'file'; } = {
+		status: 'accessDenied',
+		mode: 'encrypted',
+	};
 	const mutations: string[] = [];
 	services.registerInstance(ISecretStorageStatusService, {
 		readState: async () => state,
-		authorizeAccess: async () => { mutations.push('authorize'); state = { status: 'available', mode: 'encrypted' }; return state; },
-		setStorageMode: async mode => { mutations.push(mode); state = { status: 'available', mode }; return state; },
+		authorizeAccess: async () => {
+			mutations.push('authorize');
+			state = { status: 'available', mode: 'encrypted' };
+			return state;
+		},
+		setStorageMode: async mode => {
+			mutations.push(mode);
+			state = { status: 'available', mode };
+			return state;
+		},
 	});
 	let confirmed = false;
 	let confirmations = 0;
-	services.registerInstance(IDialogService, { confirm: async () => { confirmations++; return { confirmed }; } } as unknown as IDialogService);
+	services.registerInstance(IDialogService, {
+		confirm: async () => {
+			confirmations++;
+			return { confirmed };
+		},
+	} as unknown as IDialogService);
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	content.setVisible(true);
 	await nextTurn();
-	const node = content.getNodes().flatMap(group => group.children ?? []).find(node => node.element.id === 'models.credentials.storage')!;
+	const node = content
+		.getNodes()
+		.flatMap(group => group.children ?? [])
+		.find(node => node.element.id === 'models.credentials.storage')!;
 	assert.equal(node.element.kind, 'item');
 	if (node.element.kind !== 'item') throw new Error('Expected credential storage item');
 	root.append(content.renderItem(node.element.value));

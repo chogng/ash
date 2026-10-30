@@ -1,10 +1,10 @@
-import { Position } from "../../../../editor/common/core/position.js";
-import { Range } from "../../../../editor/common/core/range.js";
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range } from '../../../../editor/common/core/range.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from '../../../../editor/common/languages.js';
-import { workspaceResourceFromPath } from "../../../../platform/workspace/common/workspace.js";
-import type { ICodebaseSymbolsService, CodebaseSymbolsRange } from "../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js";
-import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { workspaceResourceFromPath } from '../../../../platform/workspace/common/workspace.js';
+import type { ICodebaseSymbolsService, CodebaseSymbolsRange } from '../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js';
+import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 
 const MAX_WORKSPACE_SYMBOL_RESULTS = 100;
 
@@ -29,7 +29,7 @@ class CodebaseSymbolsWorkspaceSymbolProvider implements LanguageWorkspaceSymbolP
 				resource,
 				range: textRange(match.selectionRange),
 				...(match.containerName === undefined ? {} : { containerName: match.containerName }),
-				data: Object.freeze({ source: "codebaseSymbols", score: match.score, sourceRevision: match.sourceRevision, declarationRange: textRange(match.declarationRange), matchedIndices: match.matchedIndices }),
+				data: Object.freeze({ source: 'codebaseSymbols', score: match.score, sourceRevision: match.sourceRevision, declarationRange: textRange(match.declarationRange), matchedIndices: match.matchedIndices }),
 			})];
 		}));
 	}

@@ -17,19 +17,19 @@ export const CONTEXT_DEBUG_UX = new RawContextKey<string>('debugUx', 'simple');
 export const CONTEXT_BREAKPOINTS_EXIST = new RawContextKey<boolean>('breakpointsExist', false);
 export const DISASSEMBLY_VIEW_ID = 'workbench.debug.disassemblyView';
 export const OPEN_DISASSEMBLY_VIEW_COMMAND_ID = 'debug.action.openDisassemblyView';
-export const DEBUG_CONSOLE_VIEW_ID = "workbench.panel.debugConsole";
-export const FOCUS_DEBUG_CONSOLE_COMMAND_ID = "workbench.debug.action.focusRepl";
-export const CLEAR_DEBUG_CONSOLE_COMMAND_ID = "workbench.debug.panel.action.clearReplAction";
+export const DEBUG_CONSOLE_VIEW_ID = 'workbench.panel.debugConsole';
+export const FOCUS_DEBUG_CONSOLE_COMMAND_ID = 'workbench.debug.action.focusRepl';
+export const CLEAR_DEBUG_CONSOLE_COMMAND_ID = 'workbench.debug.panel.action.clearReplAction';
 export const SELECT_AND_START_ID = 'workbench.action.debug.selectandstart';
-export const START_DEBUG_COMMAND_ID = "workbench.action.debug.start";
-export const STOP_DEBUG_COMMAND_ID = "workbench.action.debug.stop";
-export const STOP_ALL_DEBUG_COMMAND_ID = "workbench.action.debug.stopAll";
-export const RESTART_DEBUG_COMMAND_ID = "workbench.action.debug.restart";
-export const CONTINUE_DEBUG_COMMAND_ID = "workbench.action.debug.continue";
-export const PAUSE_DEBUG_COMMAND_ID = "workbench.action.debug.pause";
-export const STEP_OVER_DEBUG_COMMAND_ID = "workbench.action.debug.stepOver";
-export const STEP_INTO_DEBUG_COMMAND_ID = "workbench.action.debug.stepInto";
-export const STEP_OUT_DEBUG_COMMAND_ID = "workbench.action.debug.stepOut";
+export const START_DEBUG_COMMAND_ID = 'workbench.action.debug.start';
+export const STOP_DEBUG_COMMAND_ID = 'workbench.action.debug.stop';
+export const STOP_ALL_DEBUG_COMMAND_ID = 'workbench.action.debug.stopAll';
+export const RESTART_DEBUG_COMMAND_ID = 'workbench.action.debug.restart';
+export const CONTINUE_DEBUG_COMMAND_ID = 'workbench.action.debug.continue';
+export const PAUSE_DEBUG_COMMAND_ID = 'workbench.action.debug.pause';
+export const STEP_OVER_DEBUG_COMMAND_ID = 'workbench.action.debug.stepOver';
+export const STEP_INTO_DEBUG_COMMAND_ID = 'workbench.action.debug.stepInto';
+export const STEP_OUT_DEBUG_COMMAND_ID = 'workbench.action.debug.stepOut';
 export const BREAKPOINT_EDITOR_CONTRIBUTION_ID = 'editor.contrib.breakpoint';
 
 export interface IDebugConfiguration {
@@ -39,7 +39,7 @@ export interface IDebugConfiguration {
 	readonly workspaceFolderName?: string;
 	readonly name: string;
 	readonly type: string;
-	readonly request: "launch" | "attach";
+	readonly request: 'launch' | 'attach';
 	/** Contributed executables are internal defaults, not extension configuration properties. */
 	readonly adapterExplicit?: boolean;
 	readonly adapter?: DebugAdapterDescriptor;
@@ -127,12 +127,12 @@ export interface IDebugBreakpoint extends IBaseBreakpoint {
 }
 
 export interface IFunctionBreakpoint extends IBaseBreakpoint {
-	readonly kind: "function";
+	readonly kind: 'function';
 	readonly name: string;
 	readonly logMessage?: string;
 }
 
-export type DataBreakpointAccessType = "read" | "write" | "readWrite";
+export type DataBreakpointAccessType = 'read' | 'write' | 'readWrite';
 
 export interface IDataBreakpointInfoResponse {
 	readonly dataId: string | null;
@@ -142,7 +142,7 @@ export interface IDataBreakpointInfoResponse {
 }
 
 export interface IDataBreakpoint extends IBaseBreakpoint {
-	readonly kind: "data";
+	readonly kind: 'data';
 	readonly dataId: string;
 	readonly description: string;
 	readonly accessType: DataBreakpointAccessType;
@@ -154,7 +154,7 @@ export interface IDataBreakpoint extends IBaseBreakpoint {
 }
 
 export interface IInstructionBreakpoint extends IBaseBreakpoint {
-	readonly kind: "instruction";
+	readonly kind: 'instruction';
 	readonly instructionReference: string;
 	readonly offset?: number;
 	/** Instruction addresses are valid only for the current debuggee. */
@@ -246,10 +246,10 @@ export interface IDisassembledInstruction {
 	readonly column?: number;
 	readonly endLine?: number;
 	readonly endColumn?: number;
-	readonly presentationHint?: "normal" | "invalid";
+	readonly presentationHint?: 'normal' | 'invalid';
 }
 
-export type DebugSteppingGranularity = "statement" | "line" | "instruction";
+export type DebugSteppingGranularity = 'statement' | 'line' | 'instruction';
 
 export interface IDebugScope {
 	readonly name: string;
@@ -269,7 +269,7 @@ export interface IDebugVariable {
 	};
 }
 
-export type DebugEvaluateContext = "watch" | "repl" | "hover";
+export type DebugEvaluateContext = 'watch' | 'repl' | 'hover';
 
 export interface IDebugEvaluateResult {
 	readonly result: string;
@@ -311,7 +311,7 @@ export interface IDebugSessionCapabilities {
 	readonly exceptionBreakpointFilters: readonly IDebugExceptionBreakpointFilter[];
 }
 
-export type DebugSessionState = "starting" | "running" | "stopped" | "terminated" | "error";
+export type DebugSessionState = 'starting' | 'running' | 'stopped' | 'terminated' | 'error';
 
 export enum DebugConsoleMode {
 	Separate = 0,
@@ -335,6 +335,7 @@ export interface IDebugStackInspection {
 export interface IDebugScopeInspection {
 	readonly scope: IDebugScope;
 	readonly variables: readonly IDebugVariable[];
+	readonly variablesLoaded: boolean;
 	readonly error?: string;
 }
 export interface IDebugWatchResult {
@@ -440,7 +441,7 @@ export interface IDebugSession extends IDisposable {
 	stepOut(granularity?: DebugSteppingGranularity): Promise<void>;
 	restart(): Promise<void>;
 	inspectStack(threadId?: number): Promise<IDebugStackInspection>;
-	inspectFrame(frameId: number): Promise<readonly IDebugScopeInspection[]>;
+	inspectFrame(frameId: number, scopes?: 'initial' | 'all'): Promise<readonly IDebugScopeInspection[]>;
 	evaluateWatchExpressions(expressions: readonly string[], frameId?: number): Promise<readonly IDebugWatchResult[]>;
 	threads(): Promise<readonly IDebugThread[]>;
 	selectThread(threadId: number): void;
@@ -539,7 +540,7 @@ export interface IDebugService extends IDisposable {
 	setExceptionBreakpoints(filters: readonly string[]): Promise<void>;
 }
 
-export const IDebugService = createServiceIdentifier<IDebugService>("debugService");
+export const IDebugService = createServiceIdentifier<IDebugService>('debugService');
 
 /** Session-owned inline IO. DAP state and request pairing remain in DebugSession. */
 export interface InlineDebugAdapter {
@@ -590,7 +591,7 @@ export interface IAdapterManager extends IDisposable {
 	get(type: string): DebugAdapterFactory | undefined;
 }
 
-export const IAdapterManager = createServiceIdentifier<IAdapterManager>("debugAdapterManager");
+export const IAdapterManager = createServiceIdentifier<IAdapterManager>('debugAdapterManager');
 
 /** One caller-owned factory set that can be atomically replaced. */
 export interface DebugAdapterFactoryRegistration extends IDisposable {
@@ -601,7 +602,7 @@ export interface IDebugConsoleSession {
 	readonly elements: readonly DebugConsoleEntry[];
 	readonly id: string;
 	readonly label: string;
-	readonly state: "starting" | "running" | "stopped" | "terminated" | "error";
+	readonly state: 'starting' | 'running' | 'stopped' | 'terminated' | 'error';
 	readonly output: string;
 	readonly canEvaluate: boolean;
 }
@@ -623,11 +624,11 @@ export function createStaticDebugAdapterFactory(type: string, label: string, sou
 }
 
 export function normalizeDebugAdapterFactory(factory: DebugAdapterFactory): DebugAdapterFactory {
-	if (!factory || typeof factory !== "object") throw new TypeError("Debug Adapter factory must be an object");
-	const type = normalizeIdentifier(factory.type, "Debug Adapter type");
-	const label = normalizeText(factory.label, "Debug Adapter label", 256);
-	const sourceId = normalizeIdentifier(factory.sourceId, "Debug Adapter source ID");
-	if (typeof factory.createDebugAdapter !== "function" && typeof factory.createDebugAdapterDescriptor !== "function") throw new TypeError(`Debug Adapter '${type}' must provide a factory`);
+	if (!factory || typeof factory !== 'object') throw new TypeError('Debug Adapter factory must be an object');
+	const type = normalizeIdentifier(factory.type, 'Debug Adapter type');
+	const label = normalizeText(factory.label, 'Debug Adapter label', 256);
+	const sourceId = normalizeIdentifier(factory.sourceId, 'Debug Adapter source ID');
+	if (typeof factory.createDebugAdapter !== 'function' && typeof factory.createDebugAdapterDescriptor !== 'function') throw new TypeError(`Debug Adapter '${type}' must provide a factory`);
 	return Object.freeze({
 		type,
 		label,
@@ -674,7 +675,7 @@ export function normalizeDebugAdapterDescriptor(value: unknown, owner: string): 
 }
 
 function normalizeExecutable(executable: DebugAdapterExecutable, owner: string): DebugAdapterExecutable {
-	if (!executable || typeof executable !== "object") throw new TypeError(`${owner} executable must be an object`);
+	if (!executable || typeof executable !== 'object') throw new TypeError(`${owner} executable must be an object`);
 	const program = normalizeText(executable.program, `${owner} program`, 4096);
 	if (!Array.isArray(executable.arguments)) throw new TypeError(`${owner} arguments must be an array`);
 	const argumentsList = executable.arguments.map((argument, index) => {
@@ -693,7 +694,7 @@ function normalizeIdentifier(value: string, owner: string): string {
 }
 
 function normalizeText(value: string, owner: string, maximum: number): string {
-	if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
+	if (typeof value !== 'string' || value.trim().length === 0 || value.length > maximum || value.includes('\0')) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
 	return value.trim();
 }
 

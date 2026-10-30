@@ -16,6 +16,8 @@ import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/
 import { createBuiltinExtensionFixture } from './builtinExtensionsFixture.js';
 import '../../../src/ash/workbench/browser/parts/notifications/media/notificationsList.css';
 import '../../../src/ash/workbench/browser/parts/notifications/media/notificationsToasts.css';
+import { ITelemetryService } from '../../../src/ash/platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../src/ash/platform/telemetry/common/telemetryUtils.js';
 import { IHostColorSchemeService } from '../../../src/ash/workbench/services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/services/themes/browser/browserHostColorSchemeService.js';
 import type { TextModelReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
@@ -151,6 +153,7 @@ const configuration = resources.add(new WorkbenchConfigurationService());
 await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
 const services = resources.add(new InstantiationService());
 services.registerInstance(IConfigurationService, configuration);
+services.registerInstance(ITelemetryService, NullTelemetryService);
 const languages = resources.add(new LanguageService());
 resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] }));
 resources.add(languages.registerLanguage({ id: 'markdown', extensions: ['.md'] }));

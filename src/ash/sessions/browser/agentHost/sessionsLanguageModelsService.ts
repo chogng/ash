@@ -98,4 +98,9 @@ export class SessionsLanguageModelsService extends Disposable implements ILangua
 		const scope = this.scopes.getScope(); scope.assertCurrent();
 		return scope.services.models.discoverProviderModels(...args);
 	}
+	removeCustomModelProvider(...args: Parameters<ILanguageModelsService['removeCustomModelProvider']>): ReturnType<ILanguageModelsService['removeCustomModelProvider']> {
+		const scope = this.scopes.getScope(); scope.assertCurrent();
+		return scope.services.models.removeCustomModelProvider(...args);
+	}
+
 }

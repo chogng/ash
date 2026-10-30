@@ -1,11 +1,11 @@
-import { Disposable, setDisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, setDisposableOwner, toDisposable } from '../../../../base/common/lifecycle.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import type { IAppServerApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { ILogger, ILogSink, LogEntry, ILogFile, ILogFileCursor, ILogFileService } from "../../../../platform/log/common/log.js";
+import type { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { ILogger, ILogSink, LogEntry, ILogFile, ILogFileCursor, ILogFileService } from '../../../../platform/log/common/log.js';
 import { validateLogEntry } from '../../../../platform/log/common/logIpc.js';
 import { windowLogGroup, windowLogId } from '../../log/common/logConstants.js';
 import { localize } from '../../../../nls.js';
-import type { IOutputChannel, IOutputService, IOutputEntryInput } from "../common/output.js";
+import type { IOutputChannel, IOutputService, IOutputEntryInput } from '../common/output.js';
 
 /** Owns built-in Window and App Server diagnostic Output channels. */
 export class SystemOutputService extends Disposable implements ILogSink {

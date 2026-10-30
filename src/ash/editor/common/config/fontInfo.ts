@@ -197,13 +197,13 @@ export const FONT_VARIATION_OFF = 'normal';
 export const FONT_VARIATION_TRANSLATE = 'translate';
 
 /** Windows editor fallback family used by the VS Code-compatible defaults. */
-export const DEFAULT_WINDOWS_FONT_FAMILY = 'Consolas, \'Courier New\', monospace';
+export const DEFAULT_WINDOWS_FONT_FAMILY = "Consolas, 'Courier New', monospace";
 
 /** macOS editor fallback family used by the VS Code-compatible defaults. */
-export const DEFAULT_MAC_FONT_FAMILY = 'Menlo, Monaco, \'Courier New\', monospace';
+export const DEFAULT_MAC_FONT_FAMILY = "Menlo, Monaco, 'Courier New', monospace";
 
 /** Linux editor fallback family used by the VS Code-compatible defaults. */
-export const DEFAULT_LINUX_FONT_FAMILY = '\'Droid Sans Mono\', monospace';
+export const DEFAULT_LINUX_FONT_FAMILY = "'Droid Sans Mono', monospace";
 
 /** Platform-aware defaults used when a host does not provide font settings. */
 export const EDITOR_FONT_DEFAULTS = Object.freeze({

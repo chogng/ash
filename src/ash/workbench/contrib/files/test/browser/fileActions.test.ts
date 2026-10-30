@@ -424,7 +424,14 @@ test('Explorer paste forwards copy and move requests to the system file transfer
 		const destination = URI.file('/project/destination');
 		using workspace = new TestWorkspaceService({ id: 'project', uri: URI.file('/project') });
 		using explorer = createExplorerService(workspace);
-		using view = explorer.registerView({ refresh: async () => { }, getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { }, hasFocus: () => false });
+		using view = explorer.registerView({
+			refresh: async () => { },
+			getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)],
+			getAccessibleContent: () => '',
+			selectResource: async () => { },
+			focus() { },
+			hasFocus: () => false
+		});
 		const pastes: { directory: string; moveRequested: boolean; }[] = [];
 		using services = createFileActionServices();
 		services.registerInstance(IWorkspaceContextService, workspace);
@@ -468,7 +475,14 @@ test('Explorer paste imports exact bytes from the system file list', async () =>
 		});
 		using workspace = new TestWorkspaceService({ id: 'project', uri: root });
 		using explorer = createExplorerService(workspace);
-		using view = explorer.registerView({ refresh: async () => { }, getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)], getAccessibleContent: () => '', selectResource: async () => { }, focus() { }, hasFocus: () => false });
+		using view = explorer.registerView({
+			refresh: async () => { },
+			getContext: () => [new ExplorerItem(destination, 'destination', FileKind.Directory)],
+			getAccessibleContent: () => '',
+			selectResource: async () => { },
+			focus() { },
+			hasFocus: () => false
+		});
 		const writes: { resource: string; bytes: number[]; }[] = [];
 		const attemptedTransfers: string[] = [];
 		using services = createFileActionServices();
@@ -1215,7 +1229,7 @@ suite('fileMenus browser component', () => {
 		});
 	});
 
-	test("application menu switches its root submenus on pointer entry", async function () {
+	test('application menu switches its root submenus on pointer entry', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/fileMenus.html?applicationMenu');
@@ -1257,7 +1271,7 @@ suite('fileMenus browser component', () => {
 		await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
 	});
 
-	test("application menu keeps submenu arrows inside their menu rows", async function () {
+	test('application menu keeps submenu arrows inside their menu rows', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/fileMenus.html?applicationMenu');
@@ -1278,7 +1292,7 @@ suite('fileMenus browser component', () => {
 		expect(itemBounds!.x + itemBounds!.width - arrowBounds!.x - arrowBounds!.width).toBeGreaterThanOrEqual(8);
 	});
 
-	test("application menu aligns command labels with and without icons", async function () {
+	test('application menu aligns command labels with and without icons', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/fileMenus.html?applicationMenu');
@@ -1306,7 +1320,7 @@ suite('fileMenus browser component', () => {
 		expect(Math.abs(iconBounds!.x - plainBounds!.x)).toBeLessThanOrEqual(1);
 	});
 
-	test("checked View menu icons stay inside the leading slot", async function () {
+	test('checked View menu icons stay inside the leading slot', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/fileMenus.html?applicationMenu');

@@ -136,8 +136,8 @@ class TestStorageService extends Disposable implements IStorageService {
 		fallbackValue?: boolean,
 	): boolean | undefined {
 		const value = this.get(key, scope);
-		if (value === "true") return true;
-		if (value === "false") return false;
+		if (value === 'true') return true;
+		if (value === 'false') return false;
 		return fallbackValue;
 	}
 

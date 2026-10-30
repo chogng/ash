@@ -3,14 +3,14 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { AgentHostAutomationStore } from './agentHostAutomationStore.js';
 import type { AgentExecutionNode, AgentSession, ThreadSubscription, TurnStatus } from '../../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../../nls.js';
-import { Emitter } from "../../../../../base/common/event.js";
-import { canceled } from "../../../../../base/common/errors.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { createUuid } from "../../../../../base/common/uuid.js";
-import { IAppServerApi, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { IAgentSessionService, IAgentTurnService } from "../../../../../platform/agentHost/common/agentService.js";
-import { IAgentModelsService } from "../../../../../platform/agentHost/common/agentModels.js";
-import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from "../../../../services/sessions/common/session.js";
+import { Emitter } from '../../../../../base/common/event.js';
+import { canceled } from '../../../../../base/common/errors.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { createUuid } from '../../../../../base/common/uuid.js';
+import { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
+import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
+import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from '../../../../services/sessions/common/session.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../common/agentHostSessionsProvider.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -84,12 +84,12 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		});
 		this._register(toDisposable(() => connection.dispose()));
 		const subscription = events.subscribe(event => {
-			if (event.method === "session/changed") this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: event.params.agentTreeChanged });
-			if (event.method === "session/deleted") this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: false });
+			if (event.method === 'session/changed') this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: event.params.agentTreeChanged });
+			if (event.method === 'session/deleted') this._onDidChangeSession.fire({ sessionId: event.params.sessionId, detailChanged: false });
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(toDisposable(() => {
-			if (this.catalogSubscribed) { void this.releaseOnDispose(() => this.sessionApi.unsubscribeCatalog(), "Failed to unsubscribe Session catalog"); }
+			if (this.catalogSubscribed) { void this.releaseOnDispose(() => this.sessionApi.unsubscribeCatalog(), 'Failed to unsubscribe Session catalog'); }
 			for (const sessionId of this.subscribed) {
 				void this.releaseOnDispose(() => this.sessionApi.unsubscribe({ sessionId }), `Failed to unsubscribe Session '${sessionId}'`);
 			}
@@ -158,7 +158,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 
 	subscribe(session: ISession): Promise<ISession> {
 		this.assertNotDisposed();
-		if (session.status !== "active") return Promise.resolve(session);
+		if (session.status !== 'active') return Promise.resolve(session);
 		const revision = this.subscriptionRevisions.get(session.sessionId) ?? 0;
 		const pending = this.subscriptions.get(session.sessionId);
 		if (pending?.revision === revision) return pending.promise;
@@ -192,7 +192,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			await this.sessionApi.unsubscribe({ sessionId: session.sessionId });
 			throw new Error(`Session subscription returned '${next.sessionId}' for '${session.sessionId}'`);
 		}
-		if (next.status !== "active") {
+		if (next.status !== 'active') {
 			this.subscribed.delete(session.sessionId);
 			await this.sessionApi.unsubscribe({ sessionId: session.sessionId });
 			this.assertCurrentConnection(generation, epoch);
@@ -251,7 +251,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		try {
 			const session = await this.subscribe(toSession(created.session));
 			this.assertCurrentConnection(generation, epoch);
-			if (!session.chats.some(candidate => candidate.threadId === root.threadId && candidate.status === "active")) {
+			if (!session.chats.some(candidate => candidate.threadId === root.threadId && candidate.status === 'active')) {
 				throw new Error(localize('sessions.create.noActiveChat', 'The new session has no active chat.'));
 			}
 			// First-Turn defaults belong to ChatService; the catalog only reports durable facts.
@@ -265,14 +265,14 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 	}
 
 	async setModel(model: ModelRef): Promise<void> {
-		await this.modelApi.setModel({ commandId: commandId("model"), model });
+		await this.modelApi.setModel({ commandId: commandId('model'), model });
 	}
 
 	async archive(session: ISession): Promise<ISession> {
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const result = await this.sessionApi.archive({ commandId: commandId("archive-session"), sessionId: session.sessionId });
+		const result = await this.sessionApi.archive({ commandId: commandId('archive-session'), sessionId: session.sessionId });
 		this.assertCurrentConnection(generation, epoch);
 		await this.unsubscribe(session.sessionId);
 		this.assertCurrentConnection(generation, epoch);
@@ -283,7 +283,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		this.assertNotDisposed();
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const result = await this.sessionApi.stop({ commandId: commandId("stop-session"), sessionId: session.sessionId });
+		const result = await this.sessionApi.stop({ commandId: commandId('stop-session'), sessionId: session.sessionId });
 		this.assertCurrentConnection(generation, epoch);
 		await this.unsubscribe(session.sessionId);
 		this.assertCurrentConnection(generation, epoch);
@@ -326,7 +326,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		const node = findAgentNode(current.agentTree.roots.map(toAgentTreeNode), threadId);
 		if (!node?.currentTurnId || !canInterrupt(node)) throw new Error(`Running Agent Thread is not available: ${threadId}`);
 		await this.turnApi.interrupt({
-			commandId: commandId("agent-interrupt"),
+			commandId: commandId('agent-interrupt'),
 			sessionId: session.sessionId,
 			threadId,
 			turnId: node.currentTurnId,
@@ -355,7 +355,7 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 		workspace: buildAgentHostSessionWorkspace(session.executionTarget),
 		model: session.model,
 		management: { ...session.manager },
-		nextApprovalMode: previous?.nextApprovalMode ?? "manual",
+		nextApprovalMode: previous?.nextApprovalMode ?? 'manual',
 		chats: session.threads.map(thread => {
 			const snapshot = byId.get(thread.threadId);
 			const detail = snapshot?.thread;
@@ -364,15 +364,15 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 				threadId: thread.threadId,
 				workspace: snapshot ? buildAgentHostChatWorkspace(snapshot.directory ?? null) : prior?.workspace,
 				origin: thread.parentThreadId || thread.forkedFromId
-					? { type: "fork" as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }
-					: { type: "root" as const },
+					? { type: 'fork' as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }
+					: { type: 'root' as const },
 				status: thread.status,
 				title: detail?.title ?? thread.title,
 				management: thread.manager ? { ...thread.manager } : undefined,
-				executionStatus: detail ? executionStatus(detail.turns.at(-1)?.status) : prior?.executionStatus ?? "idle",
+				executionStatus: detail ? executionStatus(detail.turns.at(-1)?.status) : prior?.executionStatus ?? 'idle',
 			};
 		}),
-		agentTree: session.status === "active" ? agentTree?.map(toAgentTreeNode) ?? previous?.agentTree : undefined,
+		agentTree: session.status === 'active' ? agentTree?.map(toAgentTreeNode) ?? previous?.agentTree : undefined,
 	};
 }
 
@@ -382,9 +382,9 @@ function toAgentTreeNode(node: AgentExecutionNode): AgentTreeNode {
 		threadSequence: node.threadSequence,
 		title: node.title,
 		origin: node.parentThreadId || node.forkedFromId
-			? { type: "fork", parentThreadId: node.parentThreadId ?? node.forkedFromId!, parentSequence: node.threadSequence }
-			: { type: "root" },
-		membershipStatus: "active",
+			? { type: 'fork', parentThreadId: node.parentThreadId ?? node.forkedFromId!, parentSequence: node.threadSequence }
+			: { type: 'root' },
+		membershipStatus: 'active',
 		executionStatus: node.executionStatus,
 		...(node.currentTurnId ? { currentTurnId: node.currentTurnId } : {}),
 		...(node.waitingReason ? { waitingReason: node.waitingReason } : {}),
@@ -399,16 +399,16 @@ function toAgentTreeNode(node: AgentExecutionNode): AgentTreeNode {
 
 function executionStatus(status: TurnStatus | undefined): AgentThreadExecutionStatus {
 	switch (status) {
-		case "created": return "queued";
-		case "running":
-		case "cancelling": return "running";
-		case "waitingForApproval":
-		case "waitingForUserInput":
-		case "waitingForCapability": return "waiting";
-		case "completed": return "completed";
-		case "failed": return "failed";
-		case "interrupted": return "cancelled";
-		case undefined: return "idle";
+		case 'created': return 'queued';
+		case 'running':
+		case 'cancelling': return 'running';
+		case 'waitingForApproval':
+		case 'waitingForUserInput':
+		case 'waitingForCapability': return 'waiting';
+		case 'completed': return 'completed';
+		case 'failed': return 'failed';
+		case 'interrupted': return 'cancelled';
+		case undefined: return 'idle';
 	}
 }
 
@@ -422,7 +422,7 @@ function findAgentNode(nodes: readonly AgentTreeNode[], threadId: ThreadId): Age
 }
 
 function canInterrupt(node: AgentTreeNode): boolean {
-	return node.membershipStatus === "active" && (node.executionStatus === "queued" || node.executionStatus === "running" || node.executionStatus === "waiting");
+	return node.membershipStatus === 'active' && (node.executionStatus === 'queued' || node.executionStatus === 'running' || node.executionStatus === 'waiting');
 }
 
 function commandId(kind: string): string { return `desktop-${kind}-${createUuid()}`; }

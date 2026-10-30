@@ -93,4 +93,3 @@ const enum IgnoreBracketsInTokens {
 export function ignoreBracketsInToken(standardTokenType: StandardTokenType): boolean {
 	return (standardTokenType & IgnoreBracketsInTokens.value) !== 0;
 }
-

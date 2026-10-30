@@ -5,17 +5,17 @@ import './toggleMinimap.js';
 import './toggleRenderWhitespace.js';
 import './toggleRenderControlCharacter.js';
 import './toggleWordWrap.js';
-import { getBrowserTextModelService } from "../../../services/textmodelResolver/browser/browserTextModelService.js";
-import { registerEditorPane } from "../../../browser/editor.js";
-import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";
-import { createBrowserEditorPart } from "./browserEditorPart.js";
-import { matchCodeEditor, matchDiffEditor } from "./codeEditorInput.js";
-import { CODE_EDITOR_ID, TextResourceEditor, type EditorPaneOptions } from "../../../browser/parts/editor/textResourceEditor.js";
-import { DIFF_EDITOR_ID } from "../../../common/editor/diffEditorInput.js";
-import { TextDiffEditor } from "../../../browser/parts/editor/textDiffEditor.js";
-import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
+import { getBrowserTextModelService } from '../../../services/textmodelResolver/browser/browserTextModelService.js';
+import { registerEditorPane } from '../../../browser/editor.js';
+import { getBrowserTextResourceStore } from './browserTextResourceStore.js';
+import { createBrowserEditorPart } from './browserEditorPart.js';
+import { matchCodeEditor, matchDiffEditor } from './codeEditorInput.js';
+import { CODE_EDITOR_ID, TextResourceEditor, type EditorPaneOptions } from '../../../browser/parts/editor/textResourceEditor.js';
+import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
+import { TextDiffEditor } from '../../../browser/parts/editor/textDiffEditor.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import './dictation/editorDictation.js';
-import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/editorConfiguration.js";
+import { CodeEditorConfiguration, type WrappingIndentSetting } from '../common/editorConfiguration.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import { TextFileSaveErrorHandler } from '../../files/browser/editors/textFileSaveErrorHandler.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
@@ -35,7 +35,7 @@ registerEditorPane({
 	name: localize('workbench.textEditor', 'Text Editor'),
 	canOpen: matchCodeEditor,
 	create: options => {
-		if (!options.textFileService) throw new Error("Stanza Code requires the Workbench text file service");
+		if (!options.textFileService) throw new Error('Stanza Code requires the Workbench text file service');
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		const instantiationService = options.instantiationService;
@@ -91,14 +91,14 @@ registerEditorPane({
 
 registerEditorPane({
 	id: DIFF_EDITOR_ID,
-	name: "Stanza Diff",
+	name: 'Stanza Diff',
 	canOpen: matchDiffEditor,
 	create: options => {
-		if (!options.textFileService) throw new Error("Stanza Diff requires the Workbench text file service");
+		if (!options.textFileService) throw new Error('Stanza Diff requires the Workbench text file service');
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Diff requires the Workbench instantiation service');
 		const diffService = options.diffService;
-		if (!diffService) throw new Error("Stanza Diff requires the Workbench diff service");
+		if (!diffService) throw new Error('Stanza Diff requires the Workbench diff service');
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		return instantiationService.createInstance(TextDiffEditor, resourceStore, {
@@ -112,5 +112,5 @@ registerEditorPane({
 		});
 	},
 });
-import "./media/editorPane.css";
-import "./media/diffEditorPane.css";
+import './media/editorPane.css';
+import './media/diffEditorPane.css';

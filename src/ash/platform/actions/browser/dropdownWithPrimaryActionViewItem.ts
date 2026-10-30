@@ -1,13 +1,16 @@
 import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import '../../../base/browser/ui/dropdown/dropdown.css';
-import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import { addDisposableListener, stopEvent, h } from "../../../base/browser/dom.js";
-import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
-import { DropdownMenuActionViewItem, type DropdownMenuActions } from "../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
-import type { IAction } from "../../../base/common/actions.js";
-import { Emitter } from "../../../base/common/event.js";
-import { DisposableStore, MutableDisposable } from "../../../base/common/lifecycle.js";
-import { assertDefined } from "../../../base/common/types.js";
+import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
+import { addDisposableListener, stopEvent, h } from '../../../base/browser/dom.js';
+import { observeElementSize } from '../../../base/browser/observer.js';
+import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import { DropdownMenuActionViewItem, type DropdownMenuActions } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
+import type { IAction } from '../../../base/common/actions.js';
+import { Emitter } from '../../../base/common/event.js';
+import { DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
+import { assertDefined } from '../../../base/common/types.js';
+import { MenuItemAction } from '../common/actions.js';
+import { MenuEntryActionViewItem } from './menuEntryActionViewItem.js';
 
 export type IDropdownWithPrimaryActionViewItemOptions = ActionViewItemOptions;
 
@@ -46,7 +49,9 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		super(primaryAction, viewItemOptions);
 		this.contextMenuProvider = contextMenuProvider;
 		this.viewItemOptions = viewItemOptions;
-		this.primaryItem = this._register(new ButtonActionViewItem(primaryAction, viewItemOptions));
+		this.primaryItem = this._register(primaryAction instanceof MenuItemAction
+			? new MenuEntryActionViewItem(primaryAction, viewItemOptions)
+			: new ButtonActionViewItem(primaryAction, viewItemOptions));
 		this.setDropdownItem(dropdownAction, dropdownActions);
 	}
 
@@ -54,30 +59,31 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		if (this.primaryButton || this.dropdownButton) {
 			throw new Error(`Action view item is already rendered: ${this.action.id}`);
 		}
-		container.classList.add("ash-dropdown-with-primary-action-view-item");
-		container.classList.toggle("disabled", !this.action.enabled);
+		container.classList.add('ash-dropdown-with-primary-action-view-item', 'ash-split-action');
+		container.classList.toggle('primary', this.viewItemOptions.buttonPresentation === 'primary');
+		container.classList.toggle('disabled', !this.action.enabled);
 
-		const primaryContainer = h(container.ownerDocument, "div");
-		primaryContainer.className = "ash-dropdown-with-primary-primary";
-		primaryContainer.classList.toggle("icon", this.action.icon !== undefined);
+		const primaryContainer = h(container.ownerDocument, 'div');
+		primaryContainer.className = 'ash-dropdown-with-primary-primary ash-split-action-primary';
+		primaryContainer.classList.toggle('icon', this.action.icon !== undefined);
 		this.primaryItem.render(primaryContainer);
+		const primaryButton = primaryContainer.querySelector<HTMLButtonElement>('button');
+		assertDefined(primaryButton, `Primary action button was not rendered: ${this.action.id}`);
+		this.primaryButton = primaryButton;
 
-		const dropdownContainer = h(container.ownerDocument, "div");
-		dropdownContainer.className = "ash-dropdown-with-primary-dropdown";
+		const dropdownContainer = h(container.ownerDocument, 'div');
+		dropdownContainer.className = 'ash-dropdown-with-primary-dropdown ash-split-action-dropdown';
 		this.dropdownContainer = dropdownContainer;
 		this.renderDropdownItem();
 
-		const primaryButton = primaryContainer.querySelector<HTMLButtonElement>("button");
-		assertDefined(primaryButton, `Primary action button was not rendered: ${this.action.id}`);
-		this.primaryButton = primaryButton;
 		container.append(primaryContainer, dropdownContainer);
 		this._register(this.onDidChangeDropdownVisibility((visible) => {
-			container.classList.toggle("active", visible);
+			container.classList.toggle('active', visible);
 		}));
 
-		this._register(addDisposableListener(primaryButton, "keydown", (event) => {
+		this._register(addDisposableListener(primaryButton, 'keydown', (event) => {
 			const dropdownButton = this.dropdownButton;
-			if (event.key !== "ArrowRight" || !dropdownButton || dropdownButton.disabled) return;
+			if (event.key !== 'ArrowRight' || !dropdownButton || dropdownButton.disabled) return;
 			stopEvent(event);
 			primaryButton.tabIndex = -1;
 			dropdownButton.tabIndex = 0;
@@ -142,21 +148,30 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		assertDefined(item, `Dropdown action view item is not available: ${this.action.id}`);
 		container.replaceChildren();
 		item.render(container);
-		const dropdownButton = container.querySelector<HTMLButtonElement>("button");
+		const dropdownButton = container.querySelector<HTMLButtonElement>('button');
 		assertDefined(dropdownButton, `Dropdown action button was not rendered: ${this.action.id}`);
 		this.dropdownButton = dropdownButton;
-		dropdownButton.setAttribute("aria-label", dropdownActionLabel(item.action));
+		dropdownButton.setAttribute('aria-label', dropdownActionLabel(item.action));
 		item.setTabbable(false);
 
 		const renderStore = new DisposableStore();
-		renderStore.add(addDisposableListener(dropdownButton, "keydown", (event) => {
+		renderStore.add(addDisposableListener(dropdownButton, 'keydown', (event) => {
 			const primaryButton = this.primaryButton;
-			if (event.key !== "ArrowLeft" || !primaryButton || primaryButton.disabled) return;
+			if (event.key !== 'ArrowLeft' || !primaryButton || primaryButton.disabled) return;
 			stopEvent(event);
 			dropdownButton.tabIndex = -1;
 			primaryButton.tabIndex = 0;
 			primaryButton.focus();
 		}));
+		if (this.viewItemOptions.buttonPresentation === 'primary') {
+			const primaryButton = this.primaryButton;
+			assertDefined(primaryButton, `Primary action button is not available: ${this.action.id}`);
+			renderStore.add(observeElementSize(primaryButton, size => {
+				if (size.height > 0) {
+					dropdownButton.style.width = `${size.height}px`;
+				}
+			}));
+		}
 		this.dropdownRenderStore.value = renderStore;
 	}
 }

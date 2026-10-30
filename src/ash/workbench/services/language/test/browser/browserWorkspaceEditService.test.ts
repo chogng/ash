@@ -3,20 +3,20 @@ import { createTestFileService } from '../../../../test/common/testEditorService
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { TestDialogService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { MemoryResourceStore, MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { isCancellationError } from "../../../../../base/common/errors.js";
-import { Event } from "../../../../../base/common/event.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { BrowserTextModelService } from "../../../textmodelResolver/browser/browserTextModelService.js";
-import { Position } from "../../../../../editor/common/core/position.js";
-import { Range } from "../../../../../editor/common/core/range.js";
-import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from "../../../textmodelResolver/common/textResourceStore.js";
-import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";
-import { type IWorkingCopy } from "../../../workingCopy/common/workingCopyService.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { Event } from '../../../../../base/common/event.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { Range } from '../../../../../editor/common/core/range.js';
+import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from '../../../textmodelResolver/common/textResourceStore.js';
+import { BrowserWorkingCopyService } from '../../../workingCopy/browser/browserWorkingCopyService.js';
+import { type IWorkingCopy } from '../../../workingCopy/common/workingCopyService.js';
 import { BulkEditService } from '../../../../contrib/bulkEdit/browser/bulkEditService.js';
 import { ResourceTextEdit } from '../../../../../editor/browser/services/bulkEditService.js';
-import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileService } from "../../../../../platform/files/common/files.js";
+import { FileKind, FileNotFoundError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileService } from '../../../../../platform/files/common/files.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
@@ -24,31 +24,31 @@ suiteTeardown(() => uriIdentityServices.dispose());
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-test("workspace edits preflight every document before mutating and persist closed resources", async () => {
-	const first = URI.file("C:\\project\\first.ts");
-	const second = URI.file("C:\\project\\second.ts");
-	using store = new MemoryResourceStore([[first, "alpha"], [second, "bravo"]]);
+test('workspace edits preflight every document before mutating and persist closed resources', async () => {
+	const first = URI.file('C:\\project\\first.ts');
+	const second = URI.file('C:\\project\\second.ts');
+	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	const files = new MemoryFileService([[first, "alpha"], [second, "bravo"]]);
+	const files = new MemoryFileService([[first, 'alpha'], [second, 'bravo']]);
 	using fileService = createTestFileService(files);
 	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	await service.apply({
 		entries: [
-			{ kind: "textDocument", resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "one" }] },
-			{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: "two" }] },
+			{ kind: 'textDocument', resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: 'one' }] },
+			{ kind: 'textDocument', resource: second, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), text: 'two' }] },
 		]
 	});
 
-	assert.equal(store.text(first), "one");
-	assert.equal(store.text(second), "two");
+	assert.equal(store.text(first), 'one');
+	assert.equal(store.text(second), 'two');
 	assert.deepEqual(store.saved, [first.toString(), second.toString()]);
 });
 
-test("workspace edit undo restores multiple closed documents", async () => {
+test('workspace edit undo restores multiple closed documents', async () => {
 	const first = URI.file('C:\\project\\first.ts');
 	const second = URI.file('C:\\project\\second.ts');
 	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
@@ -184,7 +184,7 @@ test('bulk language workspace edits preserve explicitly ordered document operati
 	assert.equal(store.text(resource), 'abc def');
 });
 
-test("workspace edit undo reverses a created file and its inserted text", async () => {
+test('workspace edit undo reverses a created file and its inserted text', async () => {
 	const resource = URI.file('C:\\project\\new.ts');
 	using store = new MemoryResourceStore([]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
@@ -262,75 +262,75 @@ test('workspace edit undo leaves all resources intact when another target change
 	secondReference.dispose();
 });
 
-test("workspace edits keep open working copies dirty instead of saving behind the editor", async () => {
-	const resource = URI.file("C:\\project\\open.ts");
-	using store = new MemoryResourceStore([[resource, "alpha"]]);
+test('workspace edits keep open working copies dirty instead of saving behind the editor', async () => {
+	const resource = URI.file('C:\\project\\open.ts');
+	using store = new MemoryResourceStore([[resource, 'alpha']]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using fileService = createTestFileService(new MemoryFileService([[resource, "alpha"]]));
+	using fileService = createTestFileService(new MemoryFileService([[resource, 'alpha']]));
 	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const reference = await models.acquire({ resource }, new AbortController().signal);
 	const registration = workingCopies.register(workingCopy(reference));
 
-	await service.apply({ entries: [{ kind: "textDocument", resource, version: reference.model.version, edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] }] });
+	await service.apply({ entries: [{ kind: 'textDocument', resource, version: reference.model.version, edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }] }] });
 
-	assert.equal(reference.model.getText(), "alpha!");
+	assert.equal(reference.model.getText(), 'alpha!');
 	assert.equal(reference.isDirty, true);
 	assert.deepEqual(store.saved, []);
 	registration.dispose();
 	reference.dispose();
 });
 
-test("workspace edit preflight rejects stale or invalid edits without changing any document", async () => {
-	const first = URI.file("C:\\project\\first.ts");
-	const second = URI.file("C:\\project\\second.ts");
-	using store = new MemoryResourceStore([[first, "alpha"], [second, "bravo"]]);
+test('workspace edit preflight rejects stale or invalid edits without changing any document', async () => {
+	const first = URI.file('C:\\project\\first.ts');
+	const second = URI.file('C:\\project\\second.ts');
+	using store = new MemoryResourceStore([[first, 'alpha'], [second, 'bravo']]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using fileService = createTestFileService(new MemoryFileService([[first, "alpha"], [second, "bravo"]]));
+	using fileService = createTestFileService(new MemoryFileService([[first, 'alpha'], [second, 'bravo']]));
 	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const reference = await models.acquire({ resource: first }, new AbortController().signal);
 
 	await assert.rejects(service.apply({
 		entries: [
-			{ kind: "textDocument", resource: first, version: reference.model.version, edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
-			{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((4) + 1, (0) + 1)), text: "invalid" }] },
+			{ kind: 'textDocument', resource: first, version: reference.model.version, edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }] },
+			{ kind: 'textDocument', resource: second, edits: [{ range: Range.fromPositions(new Position((4) + 1, (0) + 1)), text: 'invalid' }] },
 		]
 	}), /outside|line/i);
 
-	assert.equal(reference.model.getText(), "alpha");
-	assert.equal(store.text(second), "bravo");
+	assert.equal(reference.model.getText(), 'alpha');
+	assert.equal(store.text(second), 'bravo');
 	assert.deepEqual(store.saved, []);
 	reference.dispose();
 });
 
-test("workspace edit preflight rejects a changed target content baseline atomically", async () => {
-	const first = URI.file("C:\\workspace\\first.ts");
-	const second = URI.file("C:\\workspace\\second.ts");
-	using store = new MemoryResourceStore([[first, "first"], [second, "changed"]]);
+test('workspace edit preflight rejects a changed target content baseline atomically', async () => {
+	const first = URI.file('C:\\workspace\\first.ts');
+	const second = URI.file('C:\\workspace\\second.ts');
+	using store = new MemoryResourceStore([[first, 'first'], [second, 'changed']]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using fileService = createTestFileService(new MemoryFileService([[first, "first"], [second, "changed"]]));
+	using fileService = createTestFileService(new MemoryFileService([[first, 'first'], [second, 'changed']]));
 	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	await assert.rejects(service.apply({
 		entries: [
-			{ kind: "textDocument", resource: first, expectedText: "first", edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: "!" }] },
-			{ kind: "textDocument", resource: second, expectedText: "second", edits: [{ range: Range.fromPositions(new Position((0) + 1, (6) + 1)), text: "!" }] },
+			{ kind: 'textDocument', resource: first, expectedText: 'first', edits: [{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }] },
+			{ kind: 'textDocument', resource: second, expectedText: 'second', edits: [{ range: Range.fromPositions(new Position((0) + 1, (6) + 1)), text: '!' }] },
 		]
 	}), /content.*stale/);
-	assert.equal(store.text(first), "first");
-	assert.equal(store.text(second), "changed");
+	assert.equal(store.text(first), 'first');
+	assert.equal(store.text(second), 'changed');
 });
 
-test("workspace edit applies create then text edit in protocol order", async () => {
-	const created = URI.file("C:\\workspace\\created.ts");
+test('workspace edit applies create then text edit in protocol order', async () => {
+	const created = URI.file('C:\\workspace\\created.ts');
 	using store = new MemoryResourceStore([]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
@@ -342,41 +342,41 @@ test("workspace edit applies create then text edit in protocol order", async () 
 
 	await service.apply({
 		entries: [
-			{ kind: "create", resource: created, existing: "error" },
-			{ kind: "textDocument", resource: created, expectedText: "", edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "export const ready = true;" }] },
+			{ kind: 'create', resource: created, existing: 'error' },
+			{ kind: 'textDocument', resource: created, expectedText: '', edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'export const ready = true;' }] },
 		]
 	});
 
 	assert.equal(files.has(created), true);
-	assert.equal(store.text(created), "export const ready = true;");
+	assert.equal(store.text(created), 'export const ready = true;');
 });
 
-test("workspace edit rolls back created resources when a later operation fails", async () => {
-	const created = URI.file("C:\\workspace\\created.ts");
-	const target = URI.file("C:\\workspace\\target.ts");
+test('workspace edit rolls back created resources when a later operation fails', async () => {
+	const created = URI.file('C:\\workspace\\created.ts');
+	const target = URI.file('C:\\workspace\\target.ts');
 	using store = new MemoryResourceStore([]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	const files = new MemoryFileService([[target, "occupied"]]);
+	const files = new MemoryFileService([[target, 'occupied']]);
 	files.failRename = true;
 	using fileService = createTestFileService(files);
 	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 
 	await assert.rejects(service.apply({
 		entries: [
-			{ kind: "create", resource: created, existing: "error" },
-			{ kind: "rename", source: created, target: URI.file("C:\\workspace\\moved.ts"), existing: "error" },
+			{ kind: 'create', resource: created, existing: 'error' },
+			{ kind: 'rename', source: created, target: URI.file('C:\\workspace\\moved.ts'), existing: 'error' },
 		]
 	}), /injected rename failure/);
 
 	assert.equal(files.has(created), false);
-	assert.equal(files.text(target), "occupied");
+	assert.equal(files.text(target), 'occupied');
 });
 
-test("workspace edits classify caller cancellation before mutating resources", async () => {
-	const created = URI.file("C:\\workspace\\cancelled.ts");
+test('workspace edits classify caller cancellation before mutating resources', async () => {
+	const created = URI.file('C:\\workspace\\cancelled.ts');
 	using store = new MemoryResourceStore([]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
@@ -386,21 +386,21 @@ test("workspace edits classify caller cancellation before mutating resources", a
 	using fileService = createTestFileService(files);
 	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const controller = new AbortController();
-	controller.abort("superseded");
+	controller.abort('superseded');
 
 	await assert.rejects(service.apply({
 		entries: [
-			{ kind: "create", resource: created, existing: "error" },
+			{ kind: 'create', resource: created, existing: 'error' },
 		]
-	}, { token: controller.signal }), error => isCancellationError(error) && error.reason === "superseded");
+	}, { token: controller.signal }), error => isCancellationError(error) && error.reason === 'superseded');
 
 	assert.equal(files.has(created), false);
 });
 
-function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService["acquire"]>>): IWorkingCopy {
+function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService['acquire']>>): IWorkingCopy {
 	return {
 		resource: reference.resource,
-		backupKind: "text",
+		backupKind: 'text',
 		get isDirty() { return reference.isDirty; },
 		get hasExternalChange() { return reference.hasExternalChange; },
 		onDidChangeDirty: reference.onDidChangeDirty,
@@ -417,31 +417,31 @@ function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService["acqu
 }
 
 
-test("workspace edit content checks accept the current CRLF document and preserve its EOL", async () => {
-	const resource = URI.file("C:\\project\\crlf.ts");
-	using store = new MemoryResourceStore([[resource, "alpha\r\nbravo"]]);
+test('workspace edit content checks accept the current CRLF document and preserve its EOL', async () => {
+	const resource = URI.file('C:\\project\\crlf.ts');
+	using store = new MemoryResourceStore([[resource, 'alpha\r\nbravo']]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
 	const dialogs = new TestDialogService();
-	using fileService = createTestFileService(new MemoryFileService([[resource, "alpha\r\nbravo"]]));
+	using fileService = createTestFileService(new MemoryFileService([[resource, 'alpha\r\nbravo']]));
 	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	const result = await service.apply({
 		entries: [{
-			kind: "textDocument", resource, expectedText: "alpha\r\nbravo",
-			edits: [{ range: new Range(1, 1, 1, 6), text: "updated" }],
+			kind: 'textDocument', resource, expectedText: 'alpha\r\nbravo',
+			edits: [{ range: new Range(1, 1, 1, 6), text: 'updated' }],
 		}]
 	});
-	assert.equal(store.text(resource), "updated\r\nbravo");
+	assert.equal(store.text(resource), 'updated\r\nbravo');
 	assert.ok(result.isApplied);
 	await result.undo();
-	assert.equal(store.text(resource), "alpha\r\nbravo");
+	assert.equal(store.text(resource), 'alpha\r\nbravo');
 });
 
-test("workspace edits recheck model versions after asynchronous file operations", async () => {
-	const resource = URI.file("C:\\project\\version.ts");
-	const created = URI.file("C:\\project\\created.ts");
-	using store = new MemoryResourceStore([[resource, "original"]]);
+test('workspace edits recheck model versions after asynchronous file operations', async () => {
+	const resource = URI.file('C:\\project\\version.ts');
+	const created = URI.file('C:\\project\\created.ts');
+	using store = new MemoryResourceStore([[resource, 'original']]);
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, store, {});
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using configuration = new InMemoryConfigurationService();
@@ -451,18 +451,18 @@ test("workspace edits recheck model versions after asynchronous file operations"
 		override async createFile(...args: Parameters<MemoryFileService['createFile']>) {
 			const result = await super.createFile(...args);
 			// The user can edit and undo while another resource is being written.
-			reference.model.applyOperations([{ range: new Range(1, 1, 1, 1), text: "user " }]);
+			reference.model.applyOperations([{ range: new Range(1, 1, 1, 1), text: 'user ' }]);
 			reference.model.undo();
 			return result;
 		}
-	}([[resource, "original"]]);
+	}([[resource, 'original']]);
 	using fileService = createTestFileService(files);
 	using service = new BulkEditService(models, workingCopies, fileService, configuration, dialogs);
 	await assert.rejects(service.apply({
 		entries: [
-			{ kind: "create", resource: created, existing: "error" },
-			{ kind: "textDocument", resource, version: reference.model.version, edits: [{ range: new Range(1, 1, 1, 9), text: "agent" }] },
+			{ kind: 'create', resource: created, existing: 'error' },
+			{ kind: 'textDocument', resource, version: reference.model.version, edits: [{ range: new Range(1, 1, 1, 9), text: 'agent' }] },
 		]
 	}), /stale/);
-	assert.deepEqual({ text: reference.model.getText(), created: files.has(created) }, { text: "original", created: false });
+	assert.deepEqual({ text: reference.model.getText(), created: files.has(created) }, { text: 'original', created: false });
 });

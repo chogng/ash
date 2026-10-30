@@ -51,7 +51,10 @@ test('Browser migrates retired storage before restoring font metrics', { tag: ['
 	await page.reload();
 	await workbench.waitForReady();
 	const fonts = JSON.parse((await readStorageEntries(application, page, identity)).editorFontInfo!.value) as ISerializedFontInfo[];
-	const value = JSON.stringify(fonts.map(font => ({ ...font, typicalHalfwidthCharacterWidth: font.typicalHalfwidthCharacterWidth + 1 })));
+	const value = JSON.stringify(fonts.map(font => ({
+		...font,
+		typicalHalfwidthCharacterWidth: font.typicalHalfwidthCharacterWidth + 1
+	})));
 	await page.addInitScript(value => {
 		if (sessionStorage.getItem('storage-migration-seeded')) { return; }
 		localStorage.setItem('ash.storage.application', JSON.stringify({ version: 1, entries: { editorFontInfo: { value, target: 'machine' } } }));
@@ -96,7 +99,10 @@ for (const restoreAgents of [false, true]) {
 			const document = JSON.parse(await readFile(file, 'utf8')) as { version: number; storages: IStorageSnapshot[]; };
 			const application = document.storages.find(storage => storage.identity.scope === StorageScope.APPLICATION)!;
 			const fonts = JSON.parse(application.entries.editorFontInfo!.value) as ISerializedFontInfo[];
-			const value = JSON.stringify(fonts.map(font => ({ ...font, typicalHalfwidthCharacterWidth: font.typicalHalfwidthCharacterWidth + 1 })));
+			const value = JSON.stringify(fonts.map(font => ({
+				...font,
+				typicalHalfwidthCharacterWidth: font.typicalHalfwidthCharacterWidth + 1
+			})));
 			const storages = document.storages.map(snapshot => ({ ...snapshot, identity: { ...snapshot.identity, applicationId: 'code' } }));
 			const index = storages.findIndex(storage => storage.identity.scope === StorageScope.APPLICATION);
 			storages[index] = { ...storages[index]!, entries: { ...application.entries, editorFontInfo: { value, target: StorageTarget.MACHINE }, savedPreference: { value: 'retained', target: StorageTarget.USER } } };

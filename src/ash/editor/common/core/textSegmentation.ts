@@ -4,8 +4,8 @@ export interface TextWordSegment {
 	readonly wordLike: boolean;
 }
 
-const graphemeSegmenter = createSegmenter("grapheme");
-const wordSegmenter = createSegmenter("word");
+const graphemeSegmenter = createSegmenter('grapheme');
+const wordSegmenter = createSegmenter('word');
 
 /** Returns ordered UTF-16 caret boundaries including zero and text length. */
 export function getTextGraphemeBoundaries(text: string): readonly number[] {
@@ -74,9 +74,9 @@ function classify(value: string): TextSegmentKind {
 	return TextSegmentKind.Other;
 }
 
-function createSegmenter(granularity: Intl.SegmenterOptions["granularity"]): Intl.Segmenter | undefined {
+function createSegmenter(granularity: Intl.SegmenterOptions['granularity']): Intl.Segmenter | undefined {
 	try {
-		return typeof Intl.Segmenter === "function"
+		return typeof Intl.Segmenter === 'function'
 			? new Intl.Segmenter(undefined, { granularity })
 			: undefined;
 	} catch {

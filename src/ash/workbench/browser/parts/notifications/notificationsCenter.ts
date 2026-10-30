@@ -1,29 +1,29 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import "./media/notificationsCenter.css";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { Button } from "../../../../base/browser/ui/button/button.js";
+import './media/notificationsCenter.css';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import { Separator, type IAction, type IActionRunner } from "../../../../base/common/actions.js";
+import { Separator, type IAction, type IActionRunner } from '../../../../base/common/actions.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
-import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import { createServiceIdentifier, IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { IContextKeyService, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextKeyService, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
-import { localize } from "../../../../nls.js";
+import { localize } from '../../../../nls.js';
 import { INotificationService, NotificationsFilter } from '../../../../platform/notification/common/notification.js';
 import { getNotificationsPosition, NotificationsPosition, NotificationsSettings, type NotificationsModel } from '../../../common/notifications.js';
-import type { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
-import { NotificationsToasts } from "./notificationsToasts.js";
-import { StatusbarHeight } from "../workbenchPartDimensions.js";
-import { NotificationsAlerts } from "./notificationsAlerts.js";
-import { NotificationsStatus } from "./notificationsStatus.js";
-import { NotificationsList } from "./notificationsList.js";
+import type { IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
+import { NotificationsToasts } from './notificationsToasts.js';
+import { StatusbarHeight } from '../workbenchPartDimensions.js';
+import { NotificationsAlerts } from './notificationsAlerts.js';
+import { NotificationsStatus } from './notificationsStatus.js';
+import { NotificationsList } from './notificationsList.js';
 import { CopyNotificationMessageAction } from './notificationsActions.js';
 
 export interface INotificationsCenter {
@@ -33,8 +33,8 @@ export interface INotificationsCenter {
 	toggle(): void;
 	clearAll(): void;
 }
-export const INotificationsCenter = createServiceIdentifier<INotificationsCenter>("notificationsCenter");
-export const NotificationsFocusedContext = new RawContextKey<boolean>("notificationsFocus", false);
+export const INotificationsCenter = createServiceIdentifier<INotificationsCenter>('notificationsCenter');
+export const NotificationsFocusedContext = new RawContextKey<boolean>('notificationsFocus', false);
 
 /** One window's notification presentation and history controls. */
 export class NotificationsCenter extends Disposable implements INotificationsCenter {
@@ -73,10 +73,10 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		const document = root.ownerDocument;
 		const toasts = this._register(instantiationService.createInstance(NotificationsToasts, toastContainer, this.model, actionRunner));
 		this._register(instantiationService.createInstance(NotificationsAlerts, this.model));
-		this.panel = h(document, "section"); this.panel.className = "ash-notifications-center";
+		this.panel = h(document, 'section'); this.panel.className = 'ash-notifications-center';
 		this.panel.tabIndex = -1;
-		this.panel.style.setProperty("--ash-feedback-statusbar-height", `${statusbar ? StatusbarHeight : 0}px`);
-		this.panel.setAttribute("role", "region"); this.panel.setAttribute("aria-label", localize('notifications.center', 'Notification Center'));
+		this.panel.style.setProperty('--ash-feedback-statusbar-height', `${statusbar ? StatusbarHeight : 0}px`);
+		this.panel.setAttribute('role', 'region'); this.panel.setAttribute('aria-label', localize('notifications.center', 'Notification Center'));
 		this.panel.hidden = true;
 		const updatePosition = (): void => {
 			const position = getNotificationsPosition(configurationService);
@@ -98,8 +98,8 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			contextKeys.removeContext(`config.${NotificationsSettings.NOTIFICATIONS_POSITION}`);
 			contextKeys.removeContext(`config.${NotificationsSettings.NOTIFICATIONS_BUTTON}`);
 		}));
-		const header = h(document, "div"); header.className = "ash-notifications-center-header";
-		this.title = h(document, "h2");
+		const header = h(document, 'div'); header.className = 'ash-notifications-center-header';
+		this.title = h(document, 'h2');
 		header.append(this.title);
 		const clear: IAction = {
 			id: 'notifications.clearAll',
@@ -157,18 +157,18 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		this._register(notificationService.onDidChangeFilter(updateDoNotDisturb));
 		updateDoNotDisturb();
 		this.panel.append(header);
-		this.notificationList = this._register(instantiationService.createInstance(NotificationsList, this.panel, "center", actionRunner));
+		this.notificationList = this._register(instantiationService.createInstance(NotificationsList, this.panel, 'center', actionRunner));
 		this.list = this.notificationList.domNode;
 		root.append(this.panel);
 		this._register(toDisposable(() => this.panel.remove()));
 		const focused = NotificationsFocusedContext.bindTo(contextKeys);
-		this._register(addDisposableListener(this.panel, "focusin", () => {
+		this._register(addDisposableListener(this.panel, 'focusin', () => {
 			focused.set(true);
 			const hint = getHelpHint?.();
-			if (hint) this.panel.setAttribute("aria-description", hint);
-			else this.panel.removeAttribute("aria-description");
+			if (hint) this.panel.setAttribute('aria-description', hint);
+			else this.panel.removeAttribute('aria-description');
 		}));
-		this._register(addDisposableListener(this.panel, "focusout", event => {
+		this._register(addDisposableListener(this.panel, 'focusout', event => {
 			if (!this.panel.contains(event.relatedTarget as Node | null)) focused.reset();
 		}));
 		this._register(toDisposable(() => focused.reset()));
@@ -184,7 +184,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			if (this.open && model.getNotifications().length === 0) this.hide();
 			this.render();
 		}));
-		this._register(addDisposableListener(this.panel, "keydown", event => {
+		this._register(addDisposableListener(this.panel, 'keydown', event => {
 			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showCopyMenu(event);
 		}));
 		this._register(addDisposableListener(this.list, 'contextmenu', event => this.showCopyMenu(event)));
@@ -194,7 +194,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
 			const dialogHasFocus = Boolean(document.activeElement?.closest('[role="dialog"]'));
 			const accessibleDialogOpen = Boolean(document.querySelector('.ash-accessible-view-dialog'));
-			if (this.open && event.key === "Escape" && !this.contextMenuVisible && !this.copyMenu && !dialogHasFocus && !accessibleDialogOpen) {
+			if (this.open && event.key === 'Escape' && !this.contextMenuVisible && !this.copyMenu && !dialogHasFocus && !accessibleDialogOpen) {
 				event.preventDefault();
 				event.stopPropagation();
 				this.hide();
@@ -265,7 +265,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		// History changes invalidate this center's pending copy-menu presentation.
 		this.cancelCopyMenu();
 		const document = this.panel.ownerDocument;
-		const focusedRow = document.activeElement?.closest<HTMLElement>("[data-notification-id]");
+		const focusedRow = document.activeElement?.closest<HTMLElement>('[data-notification-id]');
 		const focusedId = this.list.contains(focusedRow ?? null) ? focusedRow?.dataset.notificationId : undefined;
 		const focusedIndex = focusedRow ? [...this.list.children].indexOf(focusedRow) : -1;
 		const items = this.model.getNotifications().slice().reverse();

@@ -1,6 +1,6 @@
-import { chromium, type Browser } from "@playwright/test";
-import type { AppServerTestMode } from "./testTarget.js";
-import { PlaywrightDriver, WorkbenchDiagnostics } from "./playwrightDriver.js";
+import { chromium, type Browser } from '@playwright/test';
+import type { AppServerTestMode } from './testTarget.js';
+import { PlaywrightDriver, WorkbenchDiagnostics } from './playwrightDriver.js';
 
 export interface BrowserLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
@@ -46,8 +46,8 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 				}
 			}, { endpoint, token, origin: new URL(options.baseURL).origin });
 		}
-		await page.goto(options.baseURL, { waitUntil: "domcontentloaded" });
-		if (options.appServerMode === "required") {
+		await page.goto(options.baseURL, { waitUntil: 'domcontentloaded' });
+		if (options.appServerMode === 'required') {
 			await page.waitForFunction(
 				() => (globalThis as { ashWebWorkbenchHost?: unknown; }).ashWebWorkbenchHost !== undefined,
 				undefined,

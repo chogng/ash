@@ -88,7 +88,11 @@ def _cleanup_generations(directory: Path, current: str) -> None:
 
 
 def publish_generation(
-    package: Path, binaries: dict[str, Path], directory: Path
+    package: Path,
+    binaries: dict[str, Path],
+    directory: Path,
+    *,
+    symbol_directories: dict[str, Path] | None = None,
 ) -> tuple[bool, str]:
     # Windows link and directory APIs need extended paths for packaged resource names.
     if os.name == "nt":
@@ -98,13 +102,16 @@ def publish_generation(
     # Publication and collection must serialize: a concurrent publisher may already
     # have linked its objects but not yet committed current.json.
     with _exclusive_lock(directory / "publish.lock", create=True):
-        result = _publish_generation(package, binaries, directory)
+        result = _publish_generation(package, binaries, directory, symbol_directories)
         _cleanup_generations(directory, result[1])
         return result
 
 
 def _publish_generation(
-    package: Path, binaries: dict[str, Path], directory: Path
+    package: Path,
+    binaries: dict[str, Path],
+    directory: Path,
+    symbol_directories: dict[str, Path] | None,
 ) -> tuple[bool, str]:
     # Cargo may rewrite its outputs on the next build. Freeze only changed binary contents;
     # generations share executable objects through hard links. Declarative resource readers
@@ -124,15 +131,26 @@ def _publish_generation(
         }
     )
     digests = {name: sha256(path) for name, path in sorted(files.items())}
-    identity = json.dumps(
-        {"version": 1, "resources": str(package.resolve()), "binaries": digests},
-        sort_keys=True,
-    )
+    contents = {"version": 1, "resources": str(package.resolve()), "binaries": digests}
+    copied_directories = {"ash-resources": package / "ash-resources"}
+    if symbol_directories:
+        # Symbols must travel with the exact executable. Hash their contents too,
+        # so a later compiler output cannot mutate or reuse an older generation.
+        contents["symbols"] = {
+            f"bin/{name}/{path.relative_to(source).as_posix()}": sha256(path)
+            for name, source in sorted(symbol_directories.items())
+            for path in sorted(source.rglob("*"))
+            if path.is_file()
+        }
+        copied_directories.update(
+            {f"bin/{name}": source for name, source in symbol_directories.items()}
+        )
+    identity = json.dumps(contents, sort_keys=True)
     return _publish_files(
         files,
         digests,
         identity,
-        {"ash-resources": package / "ash-resources"},
+        copied_directories,
         {"ash-path": package / "ash-path"},
         directory,
     )

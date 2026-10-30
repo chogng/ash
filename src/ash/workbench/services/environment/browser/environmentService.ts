@@ -11,6 +11,7 @@ export interface IBrowserWorkbenchEnvironmentService extends IWorkbenchEnvironme
 export const IBrowserWorkbenchEnvironmentService = refineServiceDecorator<IWorkbenchEnvironmentService, IBrowserWorkbenchEnvironmentService>(IWorkbenchEnvironmentService);
 
 export class BrowserWorkbenchEnvironmentService implements IBrowserWorkbenchEnvironmentService {
+	public readonly isBuilt = import.meta.env?.PROD ?? true;
 	readonly argvResource = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' });
 	public readonly webviewExternalEndpoint: string;
 

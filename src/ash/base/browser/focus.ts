@@ -1,9 +1,9 @@
-import { Emitter, type Event } from "../common/event.js";
+import { Emitter, type Event } from '../common/event.js';
 import {
 	Disposable,
 	MutableDisposable,
 	type IDisposable,
-} from "../common/lifecycle.js";
+} from '../common/lifecycle.js';
 import {
 	addDisposableListener,
 	getActiveDocument,
@@ -12,12 +12,12 @@ import {
 	isAncestor,
 	isHTMLElement,
 	isNode,
-} from "./dom.js";
-import { disposableWindowTimeout } from "./scheduler.js";
+} from './dom.js';
+import { disposableWindowTimeout } from './scheduler.js';
 import {
 	type BrowserWindow,
 	isWindow,
-} from "./window.js";
+} from './window.js';
 
 export interface IFocusTracker extends IDisposable {
 	readonly onDidFocus: Event<void>;
@@ -27,21 +27,21 @@ export interface IFocusTracker extends IDisposable {
 }
 
 const tabbableSelector = [
-	"a[href]",
-	"area[href]",
-	"button",
-	"input",
-	"select",
-	"textarea",
-	"iframe",
-	"object",
-	"embed",
-	"audio[controls]",
-	"video[controls]",
-	"summary",
-	"[contenteditable]",
-	"[tabindex]",
-].join(",");
+	'a[href]',
+	'area[href]',
+	'button',
+	'input',
+	'select',
+	'textarea',
+	'iframe',
+	'object',
+	'embed',
+	'audio[controls]',
+	'video[controls]',
+	'summary',
+	'[contenteditable]',
+	'[tabindex]',
+].join(',');
 
 export enum FocusNavigationDirection {
 	Forward,
@@ -92,24 +92,24 @@ export function restoreFocus(
  */
 export function isFocusable(element: HTMLElement): boolean {
 	if (!element.isConnected || isUnavailableForFocus(element)) return false;
-	if (element.hasAttribute("tabindex")) return true;
+	if (element.hasAttribute('tabindex')) return true;
 	if (element.isContentEditable) return true;
 	switch (element.tagName) {
-		case "A":
-		case "AREA":
-			return element.hasAttribute("href");
-		case "BUTTON":
-		case "INPUT":
-		case "SELECT":
-		case "TEXTAREA":
-		case "IFRAME":
-		case "OBJECT":
-		case "EMBED":
-		case "SUMMARY":
+		case 'A':
+		case 'AREA':
+			return element.hasAttribute('href');
+		case 'BUTTON':
+		case 'INPUT':
+		case 'SELECT':
+		case 'TEXTAREA':
+		case 'IFRAME':
+		case 'OBJECT':
+		case 'EMBED':
+		case 'SUMMARY':
 			return true;
-		case "AUDIO":
-		case "VIDEO":
-			return element.hasAttribute("controls");
+		case 'AUDIO':
+		case 'VIDEO':
+			return element.hasAttribute('controls');
 		default:
 			return false;
 	}
@@ -192,10 +192,10 @@ export function moveFocus(
 
 /** Keeps sequential Tab navigation inside a container until disposed. */
 export function trapTabFocus(container: HTMLElement): IDisposable {
-	return addDisposableListener(container, "keydown", (event: KeyboardEvent) => {
+	return addDisposableListener(container, 'keydown', (event: KeyboardEvent) => {
 		if (
 			event.isComposing ||
-			event.key !== "Tab" ||
+			event.key !== 'Tab' ||
 			event.altKey ||
 			event.ctrlKey ||
 			event.metaKey
@@ -260,24 +260,24 @@ class FocusTracker extends Disposable implements IFocusTracker {
 		this.target = target;
 		if (isWindow(target)) {
 			this._hasFocus = target.document.hasFocus();
-			this._register(addDisposableListener(target, "focus", () =>
+			this._register(addDisposableListener(target, 'focus', () =>
 				this.setFocused(true),
 			));
-			this._register(addDisposableListener(target, "blur", () =>
+			this._register(addDisposableListener(target, 'blur', () =>
 				this.setFocused(false),
 			));
 			return;
 		}
 
 		this._hasFocus = isAncestorOfActiveElement(target);
-		this._register(addDisposableListener(target, "focusin", () => {
+		this._register(addDisposableListener(target, 'focusin', () => {
 			this.pendingRefresh.clear();
 			this.setFocused(true);
 		}));
-		this._register(addDisposableListener(target, "focusout", () =>
+		this._register(addDisposableListener(target, 'focusout', () =>
 			this.scheduleRefresh()
 		));
-		this._register(addDisposableListener(getWindow(target), "blur", () =>
+		this._register(addDisposableListener(getWindow(target), 'blur', () =>
 			this.setFocused(false),
 		));
 	}
@@ -314,14 +314,14 @@ function isUnavailableForFocus(element: HTMLElement): boolean {
 	if (
 		element.hidden ||
 		element.closest("[inert], [aria-hidden='true']") !== null ||
-		element.matches(":disabled")
+		element.matches(':disabled')
 	) {
 		return true;
 	}
 	const style = getWindow(element).getComputedStyle(element);
-	return style.display === "none" ||
-		style.visibility === "hidden" ||
-		style.visibility === "collapse" ||
+	return style.display === 'none' ||
+		style.visibility === 'hidden' ||
+		style.visibility === 'collapse' ||
 		element.getClientRects().length === 0;
 }
 
@@ -352,14 +352,14 @@ function isComposedAncestor(
 
 function isShadowRoot(node: Node): node is ShadowRoot {
 	return node.nodeType === 11 &&
-		"host" in node &&
+		'host' in node &&
 		isHTMLElement((node as ShadowRoot).host);
 }
 
 function isTabbableRadio(element: HTMLElement): boolean {
 	if (
-		element.tagName !== "INPUT" ||
-		(element as HTMLInputElement).type !== "radio"
+		element.tagName !== 'INPUT' ||
+		(element as HTMLInputElement).type !== 'radio'
 	) {
 		return true;
 	}

@@ -1,3 +1,4 @@
+import { APP_SERVER_METHODS, type EnvDirSetEntry } from '../../../../.build/protocol/typescript/index.js';
 import { TERMINAL_WINDOW_LIFETIME_CHANNEL } from '../../platform/terminal/common/terminal.js';
 import { localize } from '../../nls.js';
 import { throwIfCancelled } from '../../base/common/cancellation.js';
@@ -8,7 +9,7 @@ import { agentHostConnectionAddress } from '../../platform/agentHost/common/agen
 import type { RemoteConnectionDefinition } from '../../platform/remote/common/remoteConnectionService.js';
 import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
 import { createSshRemoteWorkspaceUri } from '../../platform/remote/common/remote.js';
-import { AppServerChannelService } from "../../platform/collab/browser/appServerChannelService.js";
+import { AppServerChannelService } from '../../platform/collab/browser/appServerChannelService.js';
 import type { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import type { IAddress } from '../../platform/remote/common/remoteAgentConnection.js';
@@ -34,8 +35,8 @@ import type { IRendererHost, IRendererAgentHost } from '../../platform/renderer/
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ReconnectableTerminalProcessService } from '../../platform/terminal/browser/reconnectableTerminalProcessService.js';
-import { operatingSystemFromNodePlatform } from "../../base/common/environment.js";
-import { sandboxProcess } from "../../base/parts/sandbox/electron-browser/globals.js";
+import { operatingSystemFromNodePlatform } from '../../base/common/environment.js';
+import { sandboxProcess } from '../../base/parts/sandbox/electron-browser/globals.js';
 import { ConfigurationService } from '../../platform/configuration/common/configurationService.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { IPolicyService } from '../../platform/policy/common/policy.js';
@@ -46,21 +47,21 @@ import { FileUserDataProvider } from '../../platform/userData/common/fileUserDat
 import { ILogService, NullLoggerService } from '../../platform/log/common/log.js';
 import { Schemas } from '../../base/common/network.js';
 import { popup as popupContextMenu, close as closeContextMenu } from '../../base/parts/contextmenu/electron-browser/contextmenu.js';
-import { createNativeKeyboardLayoutApi } from "../../platform/keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
-import { createUserKeyboardLayoutApi } from "../../platform/keyboardLayout/electron-browser/userKeyboardLayoutApi.js";
-import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
-import { URI } from "../../base/common/uri.js";
-import { createWorkspaceContextApi } from "../../platform/workspace/electron-browser/workspaceContextApi.js";
-import type { AshElectronRendererApi } from "../../platform/native/common/rendererApi.js";
-import { createNativeHostApi } from "../../platform/native/electron-browser/nativeHostApi.js";
+import { createNativeKeyboardLayoutApi } from '../../platform/keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js';
+import { createUserKeyboardLayoutApi } from '../../platform/keyboardLayout/electron-browser/userKeyboardLayoutApi.js';
+import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../platform/files/common/diskFileSystemProviderClient.js';
+import { URI } from '../../base/common/uri.js';
+import { createWorkspaceContextApi } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
+import type { AshElectronRendererApi } from '../../platform/native/common/rendererApi.js';
+import { createNativeHostApi } from '../../platform/native/electron-browser/nativeHostApi.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
-import type { IAppServerApi, IAppServerConnectionRecovery } from "../../platform/agentHost/common/appServerApi.js";
-import type { RendererHostCapabilities } from "../../platform/renderer/common/rendererHost.js";
-import { createRemoteAgentApi } from "../../platform/remote/electron-browser/remoteAgentApi.js";
-import { createRemoteConnectionApi } from "../../platform/remote/electron-browser/remoteConnectionApi.js";
+import type { IAppServerApi, IAppServerConnectionRecovery } from '../../platform/agentHost/common/appServerApi.js';
+import type { RendererHostCapabilities } from '../../platform/renderer/common/rendererHost.js';
+import { createRemoteAgentApi } from '../../platform/remote/electron-browser/remoteAgentApi.js';
+import { createRemoteConnectionApi } from '../../platform/remote/electron-browser/remoteConnectionApi.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../platform/remote/common/remote.js';
-import type { IWorkspaceTrustRequestService } from '../../platform/workspace/common/workspaceTrust.js';
+import type { IDirectoryPermissionRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { InstantiationType } from '../../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../../platform/webWorker/browser/webWorkerService.js';
@@ -70,7 +71,7 @@ import { isCancellationError, CancellationError } from '../../base/common/errors
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; readonly agentHosts?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; readonly agentHosts?: boolean; }, workspaceTrust: IDirectoryPermissionRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
 	const workspaceApi = createWorkspaceContextApi();
@@ -113,27 +114,42 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		let backend: IRendererHost;
 		const workspaceChanges = resources.add(new Emitter<void>());
 		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; error?: unknown; } | undefined;
+		const trackWorkspaceInitialization = (promise: Promise<void>): Promise<void> => {
+			const attempt: NonNullable<typeof workspaceInitialization> = {
+				generation: client.generation, state: 'restoring', promise,
+			};
+			workspaceInitialization = attempt;
+			workspaceChanges.fire();
+			void promise.then(() => {
+				if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
+				attempt.state = 'ready';
+				workspaceChanges.fire();
+			}, error => {
+				if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
+				attempt.state = 'failed';
+				attempt.error = error;
+				workspaceChanges.fire();
+			});
+			return promise;
+		};
 		const restoreWorkspace = (retry = false): Promise<void> => {
 			// Terminals and reconnect listeners share one binding attempt per generation.
 			if (workspaceInitialization?.generation !== client.generation || retry && workspaceInitialization.state === 'failed') {
-				const attempt: NonNullable<typeof workspaceInitialization> = {
-					generation: client.generation, state: 'restoring',
-					promise: Promise.resolve().then(() => initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)),
-				};
-				workspaceInitialization = attempt;
-				workspaceChanges.fire();
-				void attempt.promise.then(() => {
-					if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
-					attempt.state = 'ready';
-					workspaceChanges.fire();
-				}, error => {
-					if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
-					attempt.state = 'failed';
-					attempt.error = error;
-					workspaceChanges.fire();
-				});
+				return trackWorkspaceInitialization(Promise.resolve().then(() => initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)));
 			}
 			return workspaceInitialization.promise;
+		};
+		const setWorkspaceFolders = (folders: readonly EnvDirSetEntry[]): Promise<unknown> => {
+			const generation = client.generation;
+			// Reconnection still reads the old Main identity until the transition commits.
+			// Drain that restoration before replacing its roots, and make later callers
+			// join the replacement instead of replaying the previous directory snapshot.
+			const operation = Promise.resolve(workspaceInitialization?.promise).catch(() => undefined).then(() => {
+				if (resources.isDisposed || client.generation !== generation || client.state !== 'ready') throw new CancellationError();
+				return client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs: [...folders] });
+			});
+			trackWorkspaceInitialization(operation.then(() => { }));
+			return operation;
 		};
 		const recovery: IAppServerConnectionRecovery = {
 			get status() {
@@ -167,7 +183,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)), remoteConnection.kind === 'ssh' ? remoteConnection.host : undefined, recovery);
 			resources.add(backend.mcpServerManagement);
 			if (backend.contextResourceHost) { resources.add(backend.contextResourceHost); }
-			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
+			resources.add(registerAppServerWorkspaceHost(() => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, setWorkspaceFolders, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
 			// Editor recovery belongs to this Desktop profile, including SSH workspaces.
 			backend = { ...backend, backup: new AppServerBackupService(localClient, 'ash-editor'), ...(agentHost.windowExtensions ? { extensionHost: agentHost.windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
@@ -186,7 +202,12 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			backend = { ...backend, terminal: terminals };
 			const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
 			resources.add(toDisposable(() => replacement.dispose()));
-			await restoreWorkspace();
+			try {
+				await restoreWorkspace();
+			} catch (error) {
+				// Cancellation leaves directory access pending; the Workbench can offer an explicit retry.
+				if (!isCancellationError(error)) throw error;
+			}
 			// The selected execution host needs its roots after a runtime replacement,
 			// including SSH and extension hosts; local device recovery is independent.
 			resources.add(connection.onDidReconnect(() => {
@@ -256,7 +277,11 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				if (hostResources.isDisposed) { throw new CancellationError(); }
 				let api = createRendererHost(lease.client, {
 					externalOpener: { openExternal: value => invoke<boolean>('ash:host:openExternal', value) },
-					callbackHost: { listen: options => invoke('ash:oauth-callback:listen', options), wait: id => invoke('ash:oauth-callback:wait', { id }), close: id => invoke('ash:oauth-callback:close', { id }) },
+					callbackHost: {
+						listen: options => invoke('ash:oauth-callback:listen', options),
+						wait: id => invoke('ash:oauth-callback:wait', { id }),
+						close: id => invoke('ash:oauth-callback:close', { id })
+					},
 					clipboardService: new ElectronRendererClipboardService(),
 				}, [], target.host, lease.recovery);
 				hostResources.add(api.mcpServerManagement);
@@ -371,7 +396,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			dispose: () => resources.dispose(),
 			[Symbol.dispose]: () => resources.dispose(),
 			environment: {
-				runtime: "electron",
+				runtime: 'electron',
 				os: operatingSystemFromNodePlatform(sandboxProcess.platform),
 				arch: sandboxProcess.arch,
 			},
@@ -389,5 +414,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			workspace: workspaceApi,
 			workspaceConfigurationFiles: workspaceApi.configurationFiles,
 		};
-	} catch (error) { resources.dispose(); throw error; }
+	} catch (error) {
+		resources.dispose();
+		throw error;
+	}
 }

@@ -287,6 +287,10 @@ pub enum GitChangeStatusDto {
 #[serde(rename_all = "camelCase")]
 pub struct GitUpstreamDto {
     pub name: String,
+    /// Commit captured with the reference snapshot; absent when the upstream ref is gone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub object_id: Option<String>,
     pub ahead: usize,
     pub behind: usize,
 }
@@ -342,6 +346,9 @@ pub struct GitStatusResult {
     /// Scoped to stream_instance_id, independently of worktree/index status revision.
     #[ts(type = "number")]
     pub history_revision: u64,
+    /// Whether the last history revision came from automatic background fetching.
+    #[serde(default)]
+    pub history_change_silent: bool,
     pub path: String,
     pub head: GitHeadDto,
     pub changes: Vec<GitRepositoryChangeDto>,

@@ -31,6 +31,8 @@ import { EndOfLinePreference } from '../../../../editor/common/model.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { Terminal } from '@xterm/xterm';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
@@ -255,9 +257,9 @@ export function registerTerminalActions(): void {
 		constructor() {
 			super({
 				id: TerminalCommandId.Focus,
-				title: localize2({ bundle: "ash", key: "workbench.focusTerminal" }, "Focus Terminal"),
+				title: localize2({ bundle: 'ash', key: 'workbench.focusTerminal' }, 'Focus Terminal'),
 				f1: true, precondition: AppServerAvailableContext.isEqualTo(true),
-				menu: { id: MenuId.MenubarTerminalMenu, group: "1_terminal", order: 1 },
+				menu: { id: MenuId.MenubarTerminalMenu, group: '1_terminal', order: 1 },
 			});
 		}
 
@@ -284,9 +286,25 @@ export function registerTerminalActions(): void {
 			});
 		}
 		override async run(accessor: ServicesAccessor): Promise<void> {
-			const terminals = accessor.get(ITerminalService);
-			const groups = accessor.get(ITerminalGroupService);
-			const quickInput = accessor.get(IQuickInputService);
+			const instantiation = accessor.get(IInstantiationService);
+			const workspaceContext = accessor.get(IWorkspaceContextService);
+			const workspace = workspaceContext.getWorkspace();
+			const trust = accessor.get(IWorkspaceTrustManagementService);
+			const requests = accessor.get(IWorkspaceTrustRequestService);
+			await trust.workspaceTrustInitialized;
+			const permissions = await Promise.all(workspace.folders.map(async folder => (await trust.getUriTrustInfo(folder.uri)).permissions));
+			if (workspaceContext.getWorkspace() !== workspace) return;
+			if (permissions.some(allowed => !allowed?.includes('executeCommands'))) {
+				const accepted = await requests.requestWorkspaceTrust({
+					message: localize('workspaceTrust.terminalRequest', 'Creating a terminal can run code from this workspace. Do you trust its authors?'),
+				});
+				if (accepted !== true) return;
+			}
+			if (workspaceContext.getWorkspace() !== workspace) return;
+			// Construct process owners only after authorization and its connection recovery finish.
+			const { terminals, groups, quickInput } = instantiation.invokeFunction(accessor => ({
+				terminals: accessor.get(ITerminalService), groups: accessor.get(ITerminalGroupService), quickInput: accessor.get(IQuickInputService),
+			}));
 			const instance = await terminals.createTerminal();
 			// Creation may itself ask for a workspace folder. That completed prompt
 			// belongs to this action; a picker still open now owns the user's focus.

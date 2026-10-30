@@ -5,24 +5,25 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { localize } from '../../../../nls.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import "./media/titlebarpart.css";
-import { addDisposableListener, h, type IDimension } from "../../../../base/browser/dom.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
-import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { IMenuService, MenuId, SubmenuItemAction, type IMenu } from "../../../../platform/actions/common/actions.js";
-import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import './media/titlebarpart.css';
+import { addDisposableListener, getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { IMenuService, MenuId, SubmenuItemAction, type IMenu } from '../../../../platform/actions/common/actions.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { createActionViewItem, getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IsAuxiliaryWindowContext, IsCompactTitleBarContext } from '../../../common/contextkeys.js';
-import { Part } from "../../part.js";
-import type { GlobalCompositeBar } from "../globalCompositeBar.js";
-import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
-import { BrowserMenubarControl, type IMenubarControl } from "./menubarControl.js";
-import { ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import { CommandCenterControl } from "./commandCenterControl.js";
+import { Part } from '../../part.js';
+import type { GlobalCompositeBar } from '../globalCompositeBar.js';
+import { WorkbenchWindowBarHeight } from '../workbenchPartDimensions.js';
+import { BrowserMenubarControl, type IMenubarControl } from './menubarControl.js';
+import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { CommandCenterControl } from './commandCenterControl.js';
 import { WindowTitle } from './windowTitle.js';
 import type { IView } from '../../../../base/browser/ui/grid/grid.js';
 import type { IActiveEditorActions, IEditorGroupsContainer } from '../../../services/editor/common/editorGroupsService.js';
@@ -198,6 +199,9 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 	private readonly menubar: IMenubarControl;
 	private readonly centerAdjacentActions: MenuWorkbenchToolBar;
 	private readonly actions: WorkbenchToolBar;
+	private readonly actionsDomNode: HTMLElement;
+	private readonly centerDomNode: HTMLElement;
+	private readonly editorTitleControlHost: HTMLElement;
 	private readonly editorActionsLifetime = this._register(new DisposableStore());
 	private readonly editorGroupListener = this._register(new MutableDisposable());
 	private editorActions: IActiveEditorActions | undefined;
@@ -226,19 +230,24 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 		IsCompactTitleBarContext.bindTo(this.contextKeyService);
 		const ownerDocument = container.ownerDocument;
 		this.menubar = this._register(createMenubar(menuService, contextMenuService, localizationService, this.contextKeyService));
-		const appIconDomNode = h(ownerDocument, "span");
-		appIconDomNode.className = "ash-titlebar-app-icon";
-		appIconDomNode.setAttribute("aria-hidden", "true");
+		const appIconDomNode = h(ownerDocument, 'span');
+		appIconDomNode.className = 'ash-titlebar-app-icon';
+		appIconDomNode.setAttribute('aria-hidden', 'true');
 		appendIcon(Lxicon.ashMark, appIconDomNode);
 		this.titleDomNode.append(appIconDomNode);
 		if (this.menubar.domNode) {
-			this.menubar.domNode.classList.add("ash-titlebar-interactive-region");
+			this.menubar.domNode.classList.add('ash-titlebar-interactive-region');
 			this.titleDomNode.append(this.menubar.domNode);
 		}
-		const centerDomNode = h(ownerDocument, "div");
-		centerDomNode.className = "ash-titlebar-center";
+		const centerDomNode = h(ownerDocument, 'div');
+		this.centerDomNode = centerDomNode;
+		centerDomNode.className = 'ash-titlebar-center';
 		this.contentDomNode.before(centerDomNode);
-		this._register(instantiationService.createInstance(CommandCenterControl, centerDomNode, options.windowTitle, localizationService));
+		this._register(instantiationService.createInstance(CommandCenterControl, centerDomNode, options.windowTitle, localizationService, undefined));
+		this.editorTitleControlHost = h(ownerDocument, 'div');
+		this.editorTitleControlHost.className = 'ash-titlebar-editor-control';
+		centerDomNode.append(this.editorTitleControlHost);
+		this._register(toDisposable(() => this.editorTitleControlHost.replaceChildren()));
 		const windowTitleDomNode = h(ownerDocument, 'span');
 		windowTitleDomNode.className = 'ash-titlebar-window-title';
 		centerDomNode.append(windowTitleDomNode);
@@ -248,8 +257,8 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 		};
 		this._register(options.windowTitle.onDidChange(updateWindowTitle));
 		updateWindowTitle();
-		const centerAdjacentActionsDomNode = h(ownerDocument, "div");
-		centerAdjacentActionsDomNode.className = "ash-titlebar-center-adjacent-actions ash-titlebar-interactive-region";
+		const centerAdjacentActionsDomNode = h(ownerDocument, 'div');
+		centerAdjacentActionsDomNode.className = 'ash-titlebar-center-adjacent-actions ash-titlebar-interactive-region';
 		centerDomNode.append(centerAdjacentActionsDomNode);
 		this.centerAdjacentActions = this._register(
 			new MenuWorkbenchToolBar(
@@ -257,20 +266,22 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 				menuService,
 				contextMenuService,
 				MenuId.TitleBarAdjacentCenter,
-				{ presentation: "inherit-foreground", contextKeyService: this.contextKeyService },
+				{ presentation: 'inherit-foreground', contextKeyService: this.contextKeyService },
 			),
 		);
-		const actionsDomNode = h(ownerDocument, "div");
-		actionsDomNode.className = "ash-titlebar-actions ash-titlebar-interactive-region";
+		const actionsDomNode = h(ownerDocument, 'div');
+		this.actionsDomNode = actionsDomNode;
+		actionsDomNode.className = 'ash-titlebar-actions ash-titlebar-interactive-region';
 		this.contentDomNode.append(actionsDomNode);
 		this.actions = this._register(new WorkbenchToolBar(actionsDomNode, contextMenuService, {
-			ariaLabel: localizationService.translate("ash", "workbench.titleBarGlobalActions", "Title Bar global actions"),
-			presentation: "inherit-foreground",
+			ariaLabel: localizationService.translate('ash', 'workbench.titleBarGlobalActions', 'Title Bar global actions'),
+			presentation: 'inherit-foreground',
 			actionViewItemProvider: (action, actionOptions) => this.activityActions?.bar.createActionViewItem(action, actionOptions)
 				?? (action instanceof SubmenuItemAction && action.item.isSplitButton
 					? createActionViewItem(action, contextMenuService, { ...actionOptions, buttonPresentation: 'primary' })
 					: undefined),
 		}));
+		this._register(observeResize([this.domNode, actionsDomNode, this.editorTitleControlHost], () => this.layoutCommandCenter()));
 		this.layoutMenu = this._register(menuService.createMenu(MenuId.LayoutControlMenu, this.contextKeyService));
 		this.globalMenu = this._register(menuService.createMenu(MenuId.TitleBar, this.contextKeyService));
 		this._register(this.layoutMenu.onDidChange(() => this.updateToolbarActions()));
@@ -287,11 +298,11 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 		}
 		const isActivityAction = (target: EventTarget | null) =>
 			(target as Element | null)?.closest('[data-action-id="ash.activityBar.accounts"], [data-action-id="ash.activityBar.manage"]') !== null;
-		this._register(addDisposableListener(actionsDomNode, "contextmenu", event => {
+		this._register(addDisposableListener(actionsDomNode, 'contextmenu', event => {
 			if (this.activityActions && isActivityAction(event.target)) this.activityActions.showContextMenu(event);
 		}));
-		this._register(addDisposableListener(actionsDomNode, "keydown", event => {
-			if (this.activityActions && isActivityAction(event.target) && (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey))) {
+		this._register(addDisposableListener(actionsDomNode, 'keydown', event => {
+			if (this.activityActions && isActivityAction(event.target) && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) {
 				this.activityActions.showContextMenu(event);
 			}
 		}));
@@ -326,6 +337,12 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 	}
 
 	private updateToolbarActions(): void {
+		// The pane retains ownership; window chrome only mounts its current title control.
+		const titleControl = this.editorActions?.titleControl as HTMLElement | undefined;
+		if (this.editorTitleControlHost.firstElementChild !== (titleControl ?? null)) {
+			this.editorTitleControlHost.replaceChildren(...(titleControl ? [titleControl] : []));
+		}
+		this.centerDomNode.classList.toggle('ash-titlebar-center-custom', titleControl !== undefined);
 		const layout = getActionBarActions(this.layoutMenu.getActions(), 'navigation');
 		const global = getActionBarActions(this.isCompact ? [] : this.globalMenu.getActions());
 		const editor = this.editorActions?.actions;
@@ -334,6 +351,31 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 			[...(editor?.secondary ?? []), ...layout.secondary, ...global.secondary],
 			this.isCompact ? [] : this.activityActions?.bar.getActions() ?? [],
 		);
+		this.layoutCommandCenter();
+	}
+
+	private layoutCommandCenter(): void {
+		if (!this.isCompact || !this.editorTitleControlHost.firstElementChild) {
+			this.centerDomNode.style.removeProperty('max-width');
+			return;
+		}
+		const bounds = this.domNode.getBoundingClientRect();
+		if (!bounds.width) return;
+		const style = getWindow(this.domNode).getComputedStyle(this.domNode);
+		const center = bounds.left + bounds.width / 2;
+		const navigation = this.editorTitleControlHost.querySelector<HTMLElement>('.ash-titlebar-command-center-navigation');
+		const leadingWidth = navigation?.getClientRects().length
+			? this.centerDomNode.getBoundingClientRect().left - navigation.getBoundingClientRect().left
+			: 0;
+		const gap = parseFloat(style.getPropertyValue('--ash-spacing-size80')) || 0;
+		// Keep both edges equally far from the window center. The narrower side
+		// limits the search width, including native controls and editor navigation.
+		const available = Math.min(
+			center - bounds.left - parseFloat(style.paddingLeft) - leadingWidth,
+			this.actionsDomNode.getBoundingClientRect().left - gap - center,
+		);
+		const maxWidth = `${Math.max(0, Math.floor(2 * available))}px`;
+		if (this.centerDomNode.style.maxWidth !== maxWidth) this.centerDomNode.style.maxWidth = maxWidth;
 	}
 
 }

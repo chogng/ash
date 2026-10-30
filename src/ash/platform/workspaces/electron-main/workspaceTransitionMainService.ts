@@ -1,44 +1,44 @@
 import type { WorkspaceTrustGrant } from '../../workspace/common/workspaceTrust.js';
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import type { IAnyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import type { IAnyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
 import type { WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import type { WorkspacesManagementMainService } from './workspacesManagementMainService.js';
 
 export enum WorkspaceTransitionPhase {
-	Idle = "idle",
-	Resolving = "resolving",
-	SwitchingRuntime = "switchingRuntime",
-	Committing = "committing",
-	Recovering = "recovering",
+	Idle = 'idle',
+	Resolving = 'resolving',
+	SwitchingRuntime = 'switchingRuntime',
+	Committing = 'committing',
+	Recovering = 'recovering',
 }
 
 export enum WorkspaceTransitionStatus {
-	Unchanged = "unchanged",
-	Applied = "applied",
-	Recovered = "recovered",
-	Blocked = "blocked",
-	Failed = "failed",
+	Unchanged = 'unchanged',
+	Applied = 'applied',
+	Recovered = 'recovered',
+	Blocked = 'blocked',
+	Failed = 'failed',
 }
 
 export enum WorkspaceTransitionFailureKind {
-	InvalidTarget = "invalidTarget",
-	RuntimeBusy = "runtimeBusy",
-	RuntimeUnavailable = "runtimeUnavailable",
-	RuntimeUnsupported = "runtimeUnsupported",
-	RuntimeRejected = "runtimeRejected",
+	InvalidTarget = 'invalidTarget',
+	RuntimeBusy = 'runtimeBusy',
+	RuntimeUnavailable = 'runtimeUnavailable',
+	RuntimeUnsupported = 'runtimeUnsupported',
+	RuntimeRejected = 'runtimeRejected',
 }
 
 export enum WorkspaceTransitionFailureStage {
-	Resolve = "resolve",
-	Runtime = "runtime",
+	Resolve = 'resolve',
+	Runtime = 'runtime',
 }
 
 export enum WorkspaceTransitionRecovery {
-	KeepCurrent = "keepCurrent",
-	Retry = "retry",
-	Reconciled = "reconciled",
+	KeepCurrent = 'keepCurrent',
+	Retry = 'retry',
+	Reconciled = 'reconciled',
 }
 
 export interface IWorkspaceTransitionContext {
@@ -141,14 +141,14 @@ export class WorkspaceTransitionMainService extends Disposable {
 		return this._state;
 	}
 
-	transitionToFolder(path: string, grant: WorkspaceTrustGrant = { type: "config" }): Promise<IWorkspaceTransitionResult> {
+	transitionToFolder(path: string, grant: WorkspaceTrustGrant = { type: 'config' }): Promise<IWorkspaceTransitionResult> {
 		const transition = this.transitionQueue.then(() => this.doTransitionToFolder(path, grant));
 		this.transitionQueue = transition.then(() => undefined, () => undefined);
 		return transition;
 	}
 
 	/** Transitions to an already validated local or Remote single-folder Workspace identity. */
-	transitionToWorkspace(target: IResolvedWorkspaceTransitionTarget, grant: WorkspaceTrustGrant = { type: "config" }): Promise<IWorkspaceTransitionResult> {
+	transitionToWorkspace(target: IResolvedWorkspaceTransitionTarget, grant: WorkspaceTrustGrant = { type: 'config' }): Promise<IWorkspaceTransitionResult> {
 		const transition = this.transitionQueue.then(() => this.doTransitionToWorkspace(target.root, target.workspace, grant));
 		this.transitionQueue = transition.then(() => undefined, () => undefined);
 		return transition;
@@ -226,7 +226,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 					return {
 						failure: {
 							...failure,
-							error: new Error("Workspace runtime recovery failed", { cause: recoveryError }),
+							error: new Error('Workspace runtime recovery failed', { cause: recoveryError }),
 						},
 						recovered,
 					};
@@ -236,7 +236,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 				recovered = true;
 			}
 		}
-		throw new Error("Workspace transition retry bound was exceeded");
+		throw new Error('Workspace transition retry bound was exceeded');
 	}
 
 	private finishBeforeCommit(failure: IWorkspaceTransitionFailure): IWorkspaceTransitionResult {

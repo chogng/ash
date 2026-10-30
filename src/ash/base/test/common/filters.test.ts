@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { matchesContiguousSubString, matchesSubString } from '../../common/filters.js';
+import { matchesContiguousSubString, matchesSubString, matchesWords, matchesCamelCase } from '../../common/filters.js';
 
 suite('Label filters', () => {
 	test('finds case-insensitive subsequences in source order and merges adjacent ranges', () => {
@@ -36,4 +36,14 @@ suite('Label filters', () => {
 		assert.deepEqual(matchesSubString('ib', 'İb'), [{ start: 0, end: 2 }]);
 		assert.equal(matchesContiguousSubString('ib', 'İb'), null);
 	});
+});
+
+
+test('Word and camel-case matching use prefixes and source UTF-16 highlight offsets', () => {
+	assert.deepEqual(matchesWords('CCM', 'Claude Code Model'), [{ start: 0, end: 1 }, { start: 7, end: 8 }, { start: 12, end: 13 }]);
+	assert.deepEqual(matchesCamelCase('CCM', 'ClaudeCodeModel'), [{ start: 0, end: 1 }, { start: 6, end: 7 }, { start: 10, end: 11 }]);
+	assert.deepEqual(matchesWords('tr', '🌲 Trail', true), [{ start: 3, end: 5 }]);
+	assert.deepEqual(matchesWords('b', 'İ🌲B'), [{ start: 3, end: 4 }]);
+	assert.equal(matchesWords('lph', 'Alpha Tree'), null);
+	assert.equal(matchesCamelCase('MCC', 'ClaudeCodeModel'), null);
 });

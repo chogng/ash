@@ -3,11 +3,11 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
-import { ITerminalProcessService, type TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminal.js";
-import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { ITerminalProcessService, type TerminalProcessConnectionState } from '../../../../platform/terminal/common/terminal.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalTransferError, ITerminalEditorService, ITerminalGroupService, type ICreateTerminalOptions, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type ITerminalLocationOptions } from './terminal.js';
 import { TerminalInstance } from './terminalInstance.js';
 import { TerminalInstanceService } from './terminalInstanceService.js';
@@ -202,7 +202,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 				title: profile?.overrideName ? profile.profileName : shell.name,
 				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profileName, path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
 				env: shell.env, strictEnv: shell.strictEnv, cwd: shell.cwd, icon: shell.icon, color: shell.color,
-				initialText: shell.initialText, waitOnExit: shell.waitOnExit, environmentVariableCollections: shell.environmentVariableCollections, environmentVariableCollectionsPersistable: shell.environmentVariableCollectionsPersistable,
+				type: shell.type, initialText: shell.initialText, waitOnExit: shell.waitOnExit, environmentVariableCollections: shell.environmentVariableCollections, environmentVariableCollectionsPersistable: shell.environmentVariableCollectionsPersistable,
 			};
 			launch = {
 				...launch, revivalLaunch: options.revivalLaunch ?? (inheritsResolvedEnvironment ? parent.revivalLaunch : {
@@ -394,7 +394,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			this.resolveWorkspaceFolder(instance.dirId);
 		}
 		if (!this._instances.includes(instance as TerminalInstance)) {
-			throw new Error("Terminal must belong to this TerminalService");
+			throw new Error('Terminal must belong to this TerminalService');
 		}
 		if (instance.state === 'reconnecting') return;
 		const processId = instance.processId;
@@ -433,7 +433,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 
 	setActiveInstance(instance: ITerminalInstance | undefined): void {
 		if (instance !== undefined && !this._instances.includes(instance as TerminalInstance)) {
-			throw new Error("Active terminal must belong to this TerminalService");
+			throw new Error('Active terminal must belong to this TerminalService');
 		}
 		if (this._activeInstance === instance) return;
 		this._activeInstance = instance as TerminalInstance | undefined;
@@ -444,7 +444,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	moveTerminal(instance: ITerminalInstance, targetIndex: number): void {
 		const currentIndex = this._instances.indexOf(instance as TerminalInstance);
 		if (currentIndex < 0) {
-			throw new Error("Terminal must belong to this TerminalService");
+			throw new Error('Terminal must belong to this TerminalService');
 		}
 		this._instances.splice(currentIndex, 1);
 		const insertionIndex = Math.min(Math.max(0, targetIndex), this._instances.length);
@@ -516,7 +516,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 
 	private setConnectionState(state: TerminalProcessConnectionState): void {
-		if (state === "ready") {
+		if (state === 'ready') {
 			for (const instance of this._instances) instance.restoreConnection();
 			return;
 		}
@@ -530,7 +530,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		if (!dirId && folders.length === 0) return undefined;
 		if (!dirId && folders.length > 1) throw new Error(localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'));
 		const folder = dirId ? folders.find(folder => folder.id === dirId) : folders[0];
-		if (!folder) throw new Error("TerminalUnavailable: Terminal requires an open workspace folder");
+		if (!folder) throw new Error('TerminalUnavailable: Terminal requires an open workspace folder');
 		return folder;
 	}
 }
@@ -544,8 +544,8 @@ function terminalProfileTitle(profile: ITerminalProfile, executable?: string | r
 	if (profile.profileId === 'powershell') return 'pwsh';
 	if (profile.profileId === 'windows-powershell') return 'powershell';
 	if (profile.profileId === 'git-bash') return 'bash';
-	if (profile.profileId === "cmd" || profile.profileId === "command-prompt") {
-		return "cmd";
+	if (profile.profileId === 'cmd' || profile.profileId === 'command-prompt') {
+		return 'cmd';
 	}
 	return profile.title;
 }

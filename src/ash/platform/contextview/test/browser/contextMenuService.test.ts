@@ -1,10 +1,10 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { h } from "../../../../base/browser/dom.js";
-import type { IAction } from "../../../../base/common/actions.js";
-import { type IMenuActionOptions, IMenuService, MenuId } from "../../../actions/common/actions.js";
-import { ContextKeyService, IContextKeyService } from "../../../contextkey/browser/contextKeyService.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { h } from '../../../../base/browser/dom.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { type IMenuActionOptions, IMenuService, MenuId } from '../../../actions/common/actions.js';
+import { ContextKeyService, IContextKeyService } from '../../../contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { ActionRunner } from '../../../../base/common/actions.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -21,19 +21,19 @@ import { promiseWithResolvers } from '../../../../base/common/async.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { errorHandler } from '../../../../base/common/errors.js';
 
-test("menu delegates prepend explicit actions and use their context-key scope", async () => {
-	const environment = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
+test('menu delegates prepend explicit actions and use their context-key scope', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', {
 		configurable: true,
 		value: environment.window,
 	});
 	const { transformContextMenuDelegate } = await import(
-		"../../browser/contextMenuService.js"
+		'../../browser/contextMenuService.js'
 	);
-	const explicit = action("explicit");
-	const contributed = action("contributed");
+	const explicit = action('explicit');
+	const contributed = action('contributed');
 	using globalContext = new ContextKeyService();
-	using scopedContext = globalContext.createScoped(h(environment.window.document, "div"));
+	using scopedContext = globalContext.createScoped(h(environment.window.document, 'div'));
 	let receivedContext: unknown;
 	const menuService = {
 		getMenuActions(
@@ -42,23 +42,23 @@ test("menu delegates prepend explicit actions and use their context-key scope", 
 			contextKeyService?: IContextKeyService,
 		) {
 			receivedContext = contextKeyService;
-			return [["navigation", [contributed]]];
+			return [['navigation', [contributed]]];
 		},
 	} as unknown as IMenuService;
 	const delegate = transformContextMenuDelegate({
-		menuId: MenuId.for("test.contextMenu"),
+		menuId: MenuId.for('test.contextMenu'),
 		contextKeyService: scopedContext,
 		getAnchor: () => environment.window.document.body,
 		getActions: () => [explicit],
 	}, menuService, globalContext);
 
 	assert.deepEqual(
-		delegate.getActions().filter((item) => item.id !== "ash.actions.separator"),
+		delegate.getActions().filter((item) => item.id !== 'ash.actions.separator'),
 		[explicit, contributed],
 	);
 	assert.equal(receivedContext, scopedContext);
 	environment.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
 function action(id: string): IAction {

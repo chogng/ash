@@ -2,31 +2,31 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
-import { isMacintosh } from "../../../../base/common/platform.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { isMacintosh } from '../../../../base/common/platform.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import {
 	BrowserMenubarControl,
 	type IMenubarControl,
-} from "../../../browser/parts/titlebar/menubarControl.js";
+} from '../../../browser/parts/titlebar/menubarControl.js';
 import {
 	BrowserTitlebarPart,
 	BrowserTitleService,
 	AuxiliaryBrowserTitlebarPart,
 	type ITitlebarPartFactoryOptions,
-} from "../../../browser/parts/titlebar/titlebarPart.js";
-import { NativeMenubarControl } from "./menubarControl.js";
-import { IThemeService } from "../../../../platform/theme/common/themeService.js";
-import { titleBarActionForeground, titleBarBackground } from "../../../common/theme.js";
+} from '../../../browser/parts/titlebar/titlebarPart.js';
+import { NativeMenubarControl } from './menubarControl.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { titleBarActionForeground, titleBarBackground } from '../../../common/theme.js';
 import { dialogBackdropBackground } from '../../../../platform/theme/common/colors/componentColors.js';
-import { INativeHostService } from "../../../common/services.js";
-import type { INativeHostApi } from "../../../../platform/native/common/nativeHost.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { INativeHostService } from '../../../common/services.js';
+import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IEditorGroupsContainer } from '../../../services/editor/common/editorGroupsService.js';
 import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IsWindowAlwaysOnTopContext } from '../../../common/contextkeys.js';
-import "./titlebarpart.css";
+import './titlebarpart.css';
 
 /**
  * Desktop titlebar integration for Electron's native window controls overlay.
@@ -55,7 +55,7 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 			contextMenuService,
 			localizationService, themeService, storageService, contextKeyService
 		);
-		this.domNode.classList.add("ash-electron-titlebar");
+		this.domNode.classList.add('ash-electron-titlebar');
 		this._register(bindWindowControlTheme(themeService, hostService));
 	}
 }

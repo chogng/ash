@@ -11,6 +11,9 @@ serde.workspace = true
 serde_json.workspace = true
 ash-async-utils.workspace = true
 ash-http-client.workspace = true
+ash-debug-adapter.workspace = true
+ash-sandboxing.workspace = true
+tokio = { workspace = true, features = ["io-util", "net", "rt", "sync", "time"] }
 dirs.workspace = true
 dunce.workspace = true
 fs2.workspace = true
@@ -22,6 +25,7 @@ url.workspace = true
 [dev-dependencies]
 ash-external-ext.workspace = true
 external-ext-protocol.workspace = true
+tokio = { workspace = true, features = ["process"] }
 
 [lints]
 workspace = true

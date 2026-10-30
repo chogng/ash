@@ -187,7 +187,7 @@ export class ActivityBar extends Disposable {
 		return new AccountActionViewItem(action, options, presentation, this.showAccountMenu, event => this.showContextMenu(event), anchor => this.hoverService.setupDelayedHover(anchor, () => ({
 			content: action.label,
 			position: { hoverPosition: presentation === 'titlebar' ? HoverPosition.BELOW : getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
-		}), { groupId: 'actions' }));
+		}), { groupId: options.hoverGroupId }));
 	}
 
 	private showContextMenu(event: MouseEvent | KeyboardEvent): void {

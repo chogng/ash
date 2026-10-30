@@ -140,6 +140,7 @@ interface AttachContextHost {
 type ContextSourceItem = IQuickPickItem & (
 	| { readonly source: 'upload' | 'workspace' | 'editors' | 'providers' | 'back'; }
 	| { readonly source: 'context'; readonly context: IChatContextValueItem; }
+	| { readonly source: 'contextPicker'; readonly picker: IChatContextValueItem | IChatContextPickerItem; }
 );
 
 /** Each picker belongs to its originating composer, even when another pane becomes active. */
@@ -201,10 +202,15 @@ export class AttachContextAction extends Disposable {
 				instantiation.createInstance(SearchViewResultChatContextPick),
 				instantiation.createInstance(ChatInstructionsPickerPick, this.navigation.getActiveConversation()?.sessionId),
 			];
-			sources.push(...contexts.filter(context => context.isEnabled?.() !== false).map(context => ({ label: context.label, iconClass: ThemeIcon.asClassName(context.icon), source: 'context' as const, context })));
+			const registered = [...this.contextPicks.items];
+			const available = await raceCancellationError(Promise.all(registered.map(picker => picker.isEnabled?.() ?? true)), controller.signal);
+			const inline = registered.filter((picker, index) => picker.presentation === 'inline' && available[index]);
+			for (const context of contexts.filter(context => context.isEnabled?.() !== false)) {
+				sources.push({ label: context.label, iconClass: ThemeIcon.asClassName(context.icon), source: 'context', context });
+				if (context instanceof SessionReferenceContextPickerPick) { sources.push(...inline.map(picker => ({ label: picker.label, iconClass: ThemeIcon.asClassName(picker.icon), source: 'contextPicker' as const, picker }))); }
+			}
 			if (this.editors.groups.some(group => group.inputs.length)) sources.push({ label: localize('chat.context.editors', 'Open editors'), iconClass: ThemeIcon.asClassName(Lxicon.files), source: 'editors' });
-			const availableProviders = await raceCancellationError(Promise.all([...this.contextPicks.items].map(picker => picker.isEnabled?.() ?? true)), controller.signal);
-			if (availableProviders.some(Boolean)) sources.push({ label: localize('chat.context.providers', 'Other context sources'), iconClass: ThemeIcon.asClassName(Lxicon.connectors), source: 'providers' });
+			if (registered.some((picker, index) => picker.presentation !== 'inline' && available[index])) sources.push({ label: localize('chat.context.providers', 'Other context sources'), iconClass: ThemeIcon.asClassName(Lxicon.connectors), source: 'providers' });
 			if (this.isDisposed || controller.signal.aborted) return;
 			await this.showAttachments(sources, controller.signal, scopedQuickInput, contextBackground, anchor);
 		} catch (error) {
@@ -268,6 +274,14 @@ export class AttachContextAction extends Disposable {
 						const picker = this.quickInput.currentQuickInput;
 						transitioning = true;
 						picker?.hide();
+						if (item.source === 'contextPicker') {
+							const selected = item as Extract<ContextSourceItem, { source: 'contextPicker'; }>;
+							const selection = await pickRegisteredChatContext(this.contextPicks, quickInput, this.commands, signal, selected.picker);
+							if (selection === 'noop') { finish(); return; }
+							if (selection) { await this.host.target.acquireContext(async () => Array.isArray(selection) ? selection : [selection], signal); finish(); }
+							else { show(); }
+							return;
+						}
 						if (item.source === 'context') {
 							const context = (item as Extract<ContextSourceItem, { source: 'context'; }>).context;
 							if ((context instanceof ClipboardImageContextValuePick || context instanceof ScreenshotContextValuePick) && !this.host.supportsImages()) throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
@@ -346,8 +360,8 @@ export class AttachContextAction extends Disposable {
 
 
 /** Selection is scoped to the originating composer; registration never owns a Quick Pick. */
-async function pickRegisteredChatContext(service: IChatContextPickService, quickInput: IQuickInputService, commands: ICommandService, signal: AbortSignal): Promise<ChatContextPickAttachment | undefined> {
-	const items = [...service.items];
+async function pickRegisteredChatContext(service: IChatContextPickService, quickInput: IQuickInputService, commands: ICommandService, signal: AbortSignal, selectedProvider?: IChatContextValueItem | IChatContextPickerItem): Promise<ChatContextPickAttachment | undefined> {
+	const items = selectedProvider ? [selectedProvider] : [...service.items].filter(item => item.presentation !== 'inline');
 	const available = await raceCancellationError(Promise.all(items.map(async item => await item.isEnabled?.() ?? true)), signal);
 	const enabled = items.filter((item, index) => available[index] && [...service.items].includes(item));
 	if (signal.aborted || enabled.length === 0) return undefined;

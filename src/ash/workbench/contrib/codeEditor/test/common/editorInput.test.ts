@@ -1,13 +1,13 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { URI } from "../../../../../base/common/uri.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { URI } from '../../../../../base/common/uri.js';
 import { DocumentTypes } from '../../../../services/documentEditor/common/documentTypes.js';
 import { ACADEMY_DOCUMENT_CONTENT_TYPE } from '../../../../../../../extensions/academy/browser/documentTypes.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { EditorResourceAccessor, SideBySideEditor } from '../../../../common/editor.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -19,28 +19,28 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorPaneRegistry } = await import("../../../../browser/editor.js");
-const { binaryEditorDescriptor, BINARY_EDITOR_ID } = await import("../../../../browser/parts/editor/binaryEditor.js");
-const { matchPdfEditor, PDF_EDITOR_ID } = await import("../../../../../../../extensions/pdf-viewer/browser/pdfEditorInput.js");
-const { EditorPaneMatch } = await import("../../../../browser/parts/editor/editorPane.js");
-const { languageForEditorInput, matchCodeEditor, matchDiffEditor } = await import("../../browser/codeEditorInput.js");
-const { CODE_EDITOR_ID } = await import("../../../../browser/parts/editor/textResourceEditor.js");
-const { DIFF_EDITOR_ID, createDiffEditorInput } = await import("../../../../common/editor/diffEditorInput.js");
+const { EditorPaneRegistry } = await import('../../../../browser/editor.js');
+const { binaryEditorDescriptor, BINARY_EDITOR_ID } = await import('../../../../browser/parts/editor/binaryEditor.js');
+const { matchPdfEditor, PDF_EDITOR_ID } = await import('../../../../../../../extensions/pdf-viewer/browser/pdfEditorInput.js');
+const { EditorPaneMatch } = await import('../../../../browser/parts/editor/editorPane.js');
+const { languageForEditorInput, matchCodeEditor, matchDiffEditor } = await import('../../browser/codeEditorInput.js');
+const { CODE_EDITOR_ID } = await import('../../../../browser/parts/editor/textResourceEditor.js');
+const { DIFF_EDITOR_ID, createDiffEditorInput } = await import('../../../../common/editor/diffEditorInput.js');
 
-test("Stanza opens text files while registered languages own resource detection", () => {
+test('Stanza opens text files while registered languages own resource detection', () => {
 	using languages = new LanguageService();
 	using tsx = languages.registerLanguage({ id: 'typescriptreact', extensions: ['.tsx'] });
 	using jsonc = languages.registerLanguage({ id: 'jsonc', extensions: ['.jsonc'] });
-	assert.equal(CODE_EDITOR_ID, "stanza.editor.code");
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\view.tsx") }), EditorPaneMatch.Builtin);
-	assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\view.tsx") }, languages), "typescriptreact");
-	assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\settings.jsonc") }, languages), "jsonc");
-	assert.equal(matchCodeEditor({ resource: URI.parse("untitled:/Untitled-1") }), EditorPaneMatch.Default);
-	assert.equal(languageForEditorInput({ resource: URI.parse("untitled:/Untitled-1"), languageId: "typescript" }), "typescript");
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script") }), EditorPaneMatch.Builtin);
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script.cgi") }), EditorPaneMatch.Builtin);
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\.env") }), EditorPaneMatch.Builtin);
-	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\binary.bin") }), EditorPaneMatch.Builtin);
+	assert.equal(CODE_EDITOR_ID, 'stanza.editor.code');
+	assert.equal(matchCodeEditor({ resource: URI.file('C:\\project\\view.tsx') }), EditorPaneMatch.Builtin);
+	assert.equal(languageForEditorInput({ resource: URI.file('C:\\project\\view.tsx') }, languages), 'typescriptreact');
+	assert.equal(languageForEditorInput({ resource: URI.file('C:\\project\\settings.jsonc') }, languages), 'jsonc');
+	assert.equal(matchCodeEditor({ resource: URI.parse('untitled:/Untitled-1') }), EditorPaneMatch.Default);
+	assert.equal(languageForEditorInput({ resource: URI.parse('untitled:/Untitled-1'), languageId: 'typescript' }), 'typescript');
+	assert.equal(matchCodeEditor({ resource: URI.file('C:\\project\\script') }), EditorPaneMatch.Builtin);
+	assert.equal(matchCodeEditor({ resource: URI.file('C:\\project\\script.cgi') }), EditorPaneMatch.Builtin);
+	assert.equal(matchCodeEditor({ resource: URI.file('C:\\project\\.env') }), EditorPaneMatch.Builtin);
+	assert.equal(matchCodeEditor({ resource: URI.file('C:\\project\\binary.bin') }), EditorPaneMatch.Builtin);
 });
 
 test('resource detection follows registrations instead of a hardcoded MIME or suffix table', () => {
@@ -53,23 +53,23 @@ test('resource detection follows registrations instead of a hardcoded MIME or su
 	assert.equal(languageForEditorInput(input, languages), 'plaintext');
 });
 
-test("Stanza excludes registered structured documents by MIME and suffix", async () => {
+test('Stanza excludes registered structured documents by MIME and suffix', async () => {
 	using types = DocumentTypes.registerTypes();
 	types.replace([{ id: 'academy', contentType: ACADEMY_DOCUMENT_CONTENT_TYPE, extensions: ['.ash-paper'] }]);
 	assert.equal(matchCodeEditor({ resource: URI.file('C:/papers/research.ash-paper') }), EditorPaneMatch.None);
 	assert.equal(matchCodeEditor({
-		resource: URI.file("C:\\papers\\research.ash-paper"),
+		resource: URI.file('C:\\papers\\research.ash-paper'),
 		contentType: ACADEMY_DOCUMENT_CONTENT_TYPE,
 	}), EditorPaneMatch.None);
 });
 
-test("Stanza diff inputs have one stable tab identity and select only the diff pane", () => {
-	const original = { resource: URI.file("C:\\project\\before.ts"), label: "before.ts" };
-	const modified = { resource: URI.file("C:\\project\\after.ts"), label: "after.ts" };
-	const input = createDiffEditorInput(original, modified, "Review changes");
+test('Stanza diff inputs have one stable tab identity and select only the diff pane', () => {
+	const original = { resource: URI.file('C:\\project\\before.ts'), label: 'before.ts' };
+	const modified = { resource: URI.file('C:\\project\\after.ts'), label: 'after.ts' };
+	const input = createDiffEditorInput(original, modified, 'Review changes');
 
-	assert.equal(DIFF_EDITOR_ID, "stanza.editor.diff");
-	assert.equal(input.label, "Review changes");
+	assert.equal(DIFF_EDITOR_ID, 'stanza.editor.diff');
+	assert.equal(input.label, 'Review changes');
 	assert.equal(input.readOnly, true);
 	assert.equal(matchDiffEditor(input), EditorPaneMatch.Default);
 	assert.equal(matchCodeEditor(input), EditorPaneMatch.None);

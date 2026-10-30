@@ -9,13 +9,13 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWidget.js';
 import { ChatAttachmentsContentPart } from './chatContentParts/chatAttachmentsContentPart.js';
 import './media/chatListWidget.css';
-import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
-import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
+import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
+import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
-import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
+import type { ChatTurnErrorAction, IChatListItem } from './chatListItems.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
@@ -133,8 +133,8 @@ export class ChatListWidget extends DomWidget {
 		this.mcpAppDelegate = options.mcpAppDelegate;
 		this.classPrefix = options.classPrefix ?? 'ash-chat';
 		this.scrollable = this._register(new ScrollableElement(container, {
-			direction: "vertical",
-			vertical: "auto",
+			direction: 'vertical',
+			vertical: 'auto',
 			tabIndex: -1,
 		}));
 		this._register(this.scrollable.onDidScroll(event => {
@@ -146,10 +146,10 @@ export class ChatListWidget extends DomWidget {
 		this.element.classList.add(`${this.classPrefix}-list-widget`, `${this.classPrefix}-transcript-scrollable`);
 		this.transcript = this.scrollable.contentElement;
 		this.transcript.classList.add(`${this.classPrefix}-transcript`);
-		this.transcript.setAttribute("role", "log");
+		this.transcript.setAttribute('role', 'log');
 		this.transcript.tabIndex = -1;
 		this.transcript.setAttribute('aria-label', localize('chat.transcript.label', 'Chat transcript'));
-		this.transcript.setAttribute("aria-live", "polite");
+		this.transcript.setAttribute('aria-live', 'polite');
 		const Observer = this.element.ownerDocument.defaultView?.IntersectionObserver;
 		if (Observer) {
 			// Keep text, actions and disclosure DOM available to native selection, find
@@ -175,7 +175,7 @@ export class ChatListWidget extends DomWidget {
 					const active = this.element.ownerDocument.activeElement as HTMLElement | null;
 					if (!active || !this.transcript.contains(active)) return undefined;
 					const provider = new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => {
-						if (type === AccessibleViewType.Help) return localize('chat.requests.help', 'Use Edit message on an accepted request to edit its text. Enter inserts a line; Ctrl or Command+Enter sends it into a new chat with its original context and attachments. Cancel edit or Escape keeps the original request and draft. Fork Conversation in Chat actions copies the current history without sending. New Chat in Session opens an empty chat in the same session. These actions preserve the original conversation.') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize("chat.transcript.help", "Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message copies its current source text, including Markdown. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.") + "\n" + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.');
+						if (type === AccessibleViewType.Help) return localize('chat.requests.help', 'Use Edit message on an accepted request to edit its text. Enter inserts a line; Ctrl or Command+Enter sends it into a new chat with its original context and attachments. Cancel edit or Escape keeps the original request and draft. Fork Conversation in Chat actions copies the current history without sending. New Chat in Session opens an empty chat in the same session. These actions preserve the original conversation.') + '\n' + localize('chat.naming.help', 'New conversations take an initial name from the first message. Use Chat: Rename Conversation in the Command Palette to set a name. Enter saves it and Escape cancels. Manual names are kept when automatic naming finishes later.') + '\n' + localize('chat.history.paginationHelp', 'Chat initially shows recent messages. Use Tab to reach Load earlier messages, then Enter or Space to load another page. Loading preserves your draft, active approvals and reading position. If it fails, use Retry earlier messages. Live messages remain available while older history loads.') + '\n' + localize('chat.transcript.help', 'Chat responses\nWith a Speech extension, use Read aloud on a completed response. The same button stops reading; Escape also stops it. Hiding or removing the response cancels reading. Use Stop reading aloud in the Command Palette after moving focus elsewhere. Use Tab and Shift+Tab to reach message copy actions, response links, code block actions and tool summaries. Copy message copies its current source text, including Markdown. Press Enter or Space on a tool summary to expand or collapse its input, source, execution target, output and result. Code block actions copy the complete source, insert it into the active editor, or open it in a new unsaved file. Use context summaries to inspect the exact text attached to a request. Use resource summaries to inspect returned data and Open resource for a read-only preview. Use Load image or Load audio to read a stored attachment. Open image or Open audio opens its original bytes in a read-only editor. Opening audio pauses the transcript player. Open interactive view loads a declared MCP App; use Tab or Shift+Tab to reach its controls and Close interactive view to return focus. Streaming updates and provider corrections keep code selections, keyboard focus and expansion. Reading older messages preserves the reading position; returning to the bottom follows new content. Failed calls show an error; a finished turn without a result is never shown as successful. Use <keybinding:editor.action.accessibleView> to read the transcript as plain text, including collapsed tool details. Closing this view returns focus to the response.') + '\n' + localize('chat.imageGeneration.help', 'Generated images appear outside the tool details. Use Open image for a read-only preview of the original image, or Download to save it. Progress ends with a reveal after decoding; reduced motion and high contrast show the result directly. Failure or stopping ends progress, and restored history does not replay generation animations.');
 						return [...this.renderedItems].map(([, row]) => row.toolPart || row.hookPart
 							? [...(row.toolPart?.domNode ?? row.hookPart!.domNode).children].map(child => child.textContent).filter(Boolean).join('\n\n')
 							: [itemLabel(row.item), row.item.text, row.item.contextText, row.item.detail].filter(Boolean).join('\n\n')).join('\n\n');
@@ -677,11 +677,11 @@ export class ChatListWidget extends DomWidget {
 
 	private renderItem(item: IChatListItem): RenderedItem {
 		const disposables = new DisposableStore();
-		const article = h(this.element.ownerDocument, "article");
+		const article = h(this.element.ownerDocument, 'article');
 		article.className = `${this.classPrefix}-item ${this.classPrefix}-item-${item.type}`;
 		article.dataset.itemId = item.id;
-		if (item.transient) article.dataset.transient = "true";
-		if (item.isError) article.classList.add("error");
+		if (item.transient) article.dataset.transient = 'true';
+		if (item.isError) article.classList.add('error');
 		if (item.toolInvocation) {
 			const part = disposables.add(this.instantiationService.createInstance(ChatToolInvocationPart, article.ownerDocument, item.toolInvocation, item.attachmentSource, this.mcpAppDelegate));
 			disposables.add(part.onDidChangeHeight(() => { this.relayout.schedule(); this._onDidChangeContent.fire(); }));
@@ -714,19 +714,19 @@ export class ChatListWidget extends DomWidget {
 			}));
 			return new RenderedItem(item, article, disposables, undefined, undefined, undefined, undefined, { disclosure, summary, content });
 		}
-		const label = h(this.element.ownerDocument, item.type === "advisor" ? "summary" : "div");
+		const label = h(this.element.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
 		label.className = `${this.classPrefix}-item-label`;
 		label.textContent = itemLabel(item);
-		const body = item.type === "advisor" ? h(this.element.ownerDocument, "details") : article;
+		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
 		body.append(label);
 		if (body !== article) {
 			const disclosure = body as HTMLDetailsElement;
 			disclosure.open = this.advisorExpansion.get(item.id) ?? true;
-			disposables.add(addDisposableListener(disclosure, "toggle", () => { this.advisorExpansion.set(item.id, disclosure.open); }));
+			disposables.add(addDisposableListener(disclosure, 'toggle', () => { this.advisorExpansion.set(item.id, disclosure.open); }));
 			article.append(body);
 		}
 		let markdownPart: ChatMarkdownContentPart | undefined;
-		if (item.type === "agentMessage" || item.type === "reasoning" || item.type === "plan" || item.type === "advisor") {
+		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
 				visible: this.visible,
@@ -749,14 +749,14 @@ export class ChatListWidget extends DomWidget {
 			markdownPart = markdown;
 			body.append(markdown.domNode);
 		} else {
-			const content = h(this.element.ownerDocument, "pre");
+			const content = h(this.element.ownerDocument, 'pre');
 			content.textContent = item.text;
 			body.append(content);
 		}
 		const attachments = h(article.ownerDocument, 'div');
 		body.append(attachments);
 		if (item.detail) {
-			const detail = h(this.element.ownerDocument, "p");
+			const detail = h(this.element.ownerDocument, 'p');
 			detail.className = `${this.classPrefix}-turn-error-detail`;
 			detail.textContent = item.detail;
 			body.append(detail);
@@ -801,7 +801,7 @@ function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 function sameAction(left: ChatTurnErrorAction | undefined, right: ChatTurnErrorAction | undefined): boolean {
 	if (left === right) return true;
 	if (!left || !right || left.type !== right.type || left.label !== right.label) return false;
-	return left.type !== "retry" || (right.type === "retry" && left.turnId === right.turnId);
+	return left.type !== 'retry' || (right.type === 'retry' && left.turnId === right.turnId);
 }
 
 function itemLabel(item: IChatListItem): string {
@@ -809,25 +809,25 @@ function itemLabel(item: IChatListItem): string {
 	switch (item.type) {
 		case 'voiceTranscript': return localize('chat.voice.transcript.label', 'Voice transcript');
 		case 'hook': return 'Hook';
-		case "userMessage":
-		case "userContext":
-		case "userImage":
-		case "userImageAttachment":
-		case "userAudioAttachment":
+		case 'userMessage':
+		case 'userContext':
+		case 'userImage':
+		case 'userImageAttachment':
+		case 'userAudioAttachment':
 			return localize('chat.transcript.you', 'You');
-		case "agentMessage":
-			return "Ash";
-		case "reasoning":
+		case 'agentMessage':
+			return 'Ash';
+		case 'reasoning':
 			return localize('chat.transcript.reasoning', 'Reasoning');
-		case "plan":
+		case 'plan':
 			return localize('chat.transcript.plan', 'Plan');
-		case "toolCall":
+		case 'toolCall':
 			return localize('chat.transcript.toolCall', 'Tool call');
-		case "toolResult":
+		case 'toolResult':
 			return item.isError ? localize('chat.transcript.toolError', 'Tool error') : localize('chat.transcript.toolResult', 'Tool result');
-		case "advisor":
+		case 'advisor':
 			return localize('advisor.settings.title', 'Advisor');
-		case "turnError":
+		case 'turnError':
 			return localize('chat.transcript.error', 'Error');
 	}
 }

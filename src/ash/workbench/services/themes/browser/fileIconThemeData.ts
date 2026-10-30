@@ -172,9 +172,11 @@ function suggestionStyles(icons: ReadonlyMap<string, FileIconDefinition>, normal
 		const icon = icons.get(iconId)!;
 		styles.push(`${selector}{font-size:0;min-width:16px;inline-size:16px;}`);
 		const common = 'display:inline-block;width:16px;height:16px;vertical-align:middle;';
+		// The wrapper hides fallback text at 0px; theme percentages still scale the UI font.
+		const glyphSize = `calc(var(--ash-fontSize-body1) * ${parseFloat(icon.fontSize) / 100})`;
 		styles.push(icon.image
 			? `${selector}::before{${common}content:"";background:url(${cssString(icon.image)}) center/contain no-repeat;}`
-			: `${selector}::before{${common}content:${cssString(icon.character)};${icon.color ? `color:${icon.color};` : ''}font-family:${cssString(icon.fontFamily)};font-size:${icon.fontSize};font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;}`);
+			: `${selector}::before{${common}content:${cssString(icon.character)};${icon.color ? `color:${icon.color};` : ''}font-family:${cssString(icon.fontFamily)};font-size:${glyphSize};font-weight:${icon.fontWeight};font-style:${icon.fontStyle};line-height:16px;}`);
 	};
 	const base = ':where(.ash-workbench) .ash-themed-file-icon';
 	const lightBase = ':where(.ash-workbench[data-color-scheme="light"],.ash-workbench[data-color-scheme="hcLight"]) .ash-themed-file-icon';

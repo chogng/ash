@@ -93,6 +93,10 @@
 	display: flex;
 	box-sizing: border-box;
 	min-width: 0;
+	height: 100%;
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: center;
 	padding: 0 var(--ash-tabList-itemContentInset);
 	border: 0;
 	color: inherit;
@@ -106,9 +110,12 @@
 	min-width: 0;
 }
 
+/* Action-bearing tabs keep their label at the leading edge as their width changes. */
+.ash-tab.has-actions .ash-tab-label {
+	justify-content: flex-start;
+}
+
 .ash-tab-list-inset .ash-tab {
-	min-width: 64px;
-	max-width: 180px;
 	border-radius: var(--ash-cornerRadius-small);
 	color: var(--ash-description-foreground);
 	background: var(--ash-tab-list-inactive-background, transparent);
@@ -137,11 +144,12 @@
 
 	position: relative;
 	overflow: hidden;
-	height: 100%;
-	flex: 1 1 auto;
-	padding-right: 4px;
 	outline: none;
 	white-space: nowrap;
+}
+
+.ash-tab-list-inset .ash-tab.has-actions .ash-tab-label {
+	padding-right: var(--ash-spacing-size40);
 }
 
 .ash-tab-list-sizing-fit .ash-tab {
@@ -176,20 +184,23 @@
 }
 
 .ash-tab-list-inset .ash-tab-label:focus-visible,
-.ash-tab-list-navigation .ash-tab-label:focus-visible {
+.ash-tab-list-navigation .ash-tab-label:focus-visible,
+.ash-tab-list-underline .ash-tab-label:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
 
 /* Page categories size to their labels, while keeping the shared overflow and
  * keyboard-reveal behavior. Hosts only size this root and select visual tokens. */
-.ash-tab-list-navigation {
+.ash-tab-list-navigation,
+.ash-tab-list-underline {
 	width: max-content;
 	max-width: 100%;
 	height: var(--ash-tab-height);
 }
 
-.ash-tab-list-navigation > .ash-scrollbar-viewport {
+.ash-tab-list-navigation > .ash-scrollbar-viewport,
+.ash-tab-list-underline > .ash-scrollbar-viewport {
 	position: relative;
 	inset: auto;
 }
@@ -199,17 +210,16 @@
 	color: var(--ash-foreground);
 }
 
-.ash-tab-list-navigation .ash-tab-label {
-	height: 100%;
-	align-items: center;
-	justify-content: center;
+.ash-tab-list-navigation .ash-tab-label,
+.ash-tab-list-underline .ash-tab-label {
 	border-radius: inherit;
 	font-weight: inherit;
 	outline: none;
 	white-space: nowrap;
 }
 
-.ash-tab-list-navigation .ash-tab:hover {
+.ash-tab-list-navigation .ash-tab:hover,
+.ash-tab-list-underline .ash-tab:hover {
 	background: var(--ash-tabList-hoverBackground);
 }
 
@@ -218,6 +228,18 @@
 	outline: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, transparent);
 	outline-offset: -1px;
+}
+
+.ash-tab-list-underline .ash-tab {
+	box-sizing: border-box;
+	border-bottom: var(--ash-strokeThickness) solid transparent;
+	color: var(--ash-description-foreground);
+}
+
+.ash-tab-list-underline .ash-tab.checked {
+	border-bottom-color: var(--ash-foreground);
+	color: var(--ash-foreground);
+	background: transparent;
 }
 
 .ash-tab.preview .ash-icon-label-text {

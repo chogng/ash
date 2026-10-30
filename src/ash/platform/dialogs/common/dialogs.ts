@@ -1,14 +1,14 @@
 import {
 	createServiceIdentifier,
-} from "../../instantiation/common/instantiation.js";
+} from '../../instantiation/common/instantiation.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { Event } from '../../../base/common/event.js';
 
 /** Visual severity used by a modal message dialog. */
 export enum DialogSeverity {
-	Info = "info",
-	Warning = "warning",
-	Error = "error",
+	Info = 'info',
+	Warning = 'warning',
+	Error = 'error',
 }
 
 /** Content shared by message and confirmation dialogs. */
@@ -20,7 +20,7 @@ export interface IDialogOptions {
 }
 
 export interface IDialogInput {
-	readonly type?: "text" | "password";
+	readonly type?: 'text' | 'password';
 	readonly placeholder?: string;
 	readonly value?: string;
 }
@@ -80,13 +80,13 @@ export interface IActionPromptResult<T> {
 /** Requests understood by a host-specific dialog handler. */
 export type DialogRequest =
 	| ({
-		readonly kind: "message";
+		readonly kind: 'message';
 	} & IMessageDialogOptions)
 	| ({
-		readonly kind: "confirmation";
+		readonly kind: 'confirmation';
 	} & IConfirmationDialogOptions)
 	| ({
-		readonly kind: "prompt";
+		readonly kind: 'prompt';
 	} & IPromptDialogOptions)
 	| ({
 		readonly kind: 'choice';
@@ -95,14 +95,14 @@ export type DialogRequest =
 		readonly cancelButton: string;
 	} & IDialogOptions)
 	| ({
-		readonly kind: "input";
+		readonly kind: 'input';
 	} & IInputDialogOptions);
 
 /** Result returned by a host-specific dialog handler. */
 export enum DialogResult {
-	Primary = "primary",
-	Secondary = "secondary",
-	Cancel = "cancel",
+	Primary = 'primary',
+	Secondary = 'secondary',
+	Cancel = 'cancel',
 }
 
 export interface IDialogOutcome {
@@ -139,7 +139,7 @@ export interface IDialogService {
 }
 
 export const IDialogService =
-	createServiceIdentifier<IDialogService>("dialogService");
+	createServiceIdentifier<IDialogService>('dialogService');
 
 /** Selects a file path for an editor Save As operation. */
 export interface IFileDialogService {

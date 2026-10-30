@@ -9,6 +9,33 @@ use std::time::Instant;
 use tokio_tungstenite::tungstenite;
 
 #[test]
+fn managed_node_launcher_preserves_probes_arguments_and_stdio() {
+    let node = Command::new("node")
+        .args(["-p", "process.execPath"])
+        .output()
+        .unwrap();
+    assert!(node.status.success());
+    let executable = String::from_utf8(node.stdout).unwrap();
+    let mut launcher = Command::new(env!("CARGO_BIN_EXE_ash-debug-javascript"));
+    launcher.env("ASH_JS_DEBUG_NODE_RUNTIME", executable.trim());
+    launcher.env_remove("NODE_OPTIONS");
+    let version = launcher.arg("--version").output().unwrap();
+    assert!(version.status.success());
+    assert!(version.stdout.starts_with(b"v"));
+    let result = Command::new(env!("CARGO_BIN_EXE_ash-debug-javascript"))
+        .env("ASH_JS_DEBUG_NODE_RUNTIME", executable.trim())
+        .env_remove("NODE_OPTIONS")
+        .args(["-e", "process.stdout.write(JSON.stringify([process.argv[1], process.env.ELECTRON_RUN_AS_NODE, process.env.ASH_JS_DEBUG_NODE_RUNTIME ?? null])); process.stderr.write('node stderr')", "argument with spaces"])
+        .output().unwrap();
+    assert!(result.status.success());
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&result.stdout).unwrap(),
+        json!(["argument with spaces", "1", null])
+    );
+    assert_eq!(result.stderr, b"node stderr");
+}
+
+#[test]
 fn bootstrap_leaves_unsupported_inspectors_running() {
     for host in ["localhost", "0.0.0.0"] {
         bootstrap_runs_script(Some(host));

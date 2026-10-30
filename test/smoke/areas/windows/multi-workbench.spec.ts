@@ -1,15 +1,15 @@
-import type { ElectronApplication, Page } from "@playwright/test";
-import { readFile, readdir, realpath } from "node:fs/promises";
+import type { ElectronApplication, Page } from '@playwright/test';
+import { readFile, readdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseWorkspace } from "../../../../src/ash/platform/workspace/common/workspace.js";
-import { expect, test } from "../../../automation/test.js";
-import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "../../../automation/testWorkspace.js";
-import { Workbench } from "../../../automation/workbench.js";
+import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
+import { expect, test } from '../../../automation/test.js';
+import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from '../../../automation/testWorkspace.js';
+import { Workbench } from '../../../automation/workbench.js';
 import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 import type { IStorageSnapshot } from '../../../../src/ash/platform/storage/common/storageIpc.js';
 
-import { waitForElectronWindowState } from "../../../automation/electronDriver.js";
+import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
 // Reopening a workspace or Agents must focus its existing OS window.
 const focusTest = test.extend({ electronWindowMode: 'active' });
@@ -19,18 +19,18 @@ test.afterAll(async () => {
 	for (const workspace of workspacesToDispose) await disposeTestWorkspace(workspace);
 });
 
-focusTest("a second instance opens an independent Workbench and reuses an existing Workspace window", { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
-	if (target.kind !== "electron" || !("windows" in application)) return;
+focusTest('a second instance opens an independent Workbench and reuses an existing Workspace window', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	if (target.kind !== 'electron' || !('windows' in application)) return;
 
 	const secondWorkspace = await createTestWorkspace();
 	workspacesToDispose.push(secondWorkspace);
 	let secondPage: Page | undefined;
 	try {
-		const secondPagePromise = application.waitForEvent("window");
+		const secondPagePromise = application.waitForEvent('window');
 		await emitSecondInstance(application, secondWorkspace.directory);
 		secondPage = await secondPagePromise;
 		if (target.appServerMode === 'required') {
-			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder & Enable Features' }).click();
+			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
 		}
 		const secondWorkbench = new Workbench(secondPage);
 		await secondWorkbench.waitForReady();
@@ -66,14 +66,14 @@ focusTest("a second instance opens an independent Workbench and reuses an existi
 		await secondPage.evaluate(({ identity, key, target }) => globalThis.ashTestMainProcess.call('storage', 'updateItems', { identity, key, entry: { value: 'second workspace', target } }), { identity: workspaceIdentity, key, target: StorageTarget.MACHINE });
 		expect(await workbench.page.evaluate(async ({ identity, key }) => (await globalThis.ashTestMainProcess.call<IStorageSnapshot>('storage', 'getItems', { identity })).entries[key], { identity: { scope: StorageScope.WORKSPACE, id: firstWorkspaceId }, key })).toBeUndefined();
 
-		await workbench.page.evaluate(() => { document.title = "multi-workbench:first"; });
-		await secondPage.evaluate(() => { document.title = "multi-workbench:second"; });
+		await workbench.page.evaluate(() => { document.title = 'multi-workbench:first'; });
+		await secondPage.evaluate(() => { document.title = 'multi-workbench:second'; });
 		await emitSecondInstance(application, testWorkspace.directory);
 
 		await expect.poll(() => application.windows().length).toBe(2);
-		await expect.poll(() => focusedWindowTitle(application)).toBe("multi-workbench:first");
+		await expect.poll(() => focusedWindowTitle(application)).toBe('multi-workbench:first');
 
-		const closed = secondPage.waitForEvent("close");
+		const closed = secondPage.waitForEvent('close');
 		const closingWindowId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(window => window.getTitle() === 'multi-workbench:second')!.id);
 		await expect.poll(() => readWindowLogs(application, closingWindowId)).toContainEqual(expect.objectContaining({ source: `window-${closingWindowId}`, category: 'lifecycle', message: 'Workbench restored' }));
 		await application.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)!.close(), closingWindowId);
@@ -107,7 +107,7 @@ focusTest('Open in Agents reuses one window across Workbench workspaces', { tag:
 		await emitSecondInstance(application, secondWorkspace.directory);
 		secondPage = await secondPagePromise;
 		if (target.appServerMode === 'required') {
-			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder & Enable Features' }).click();
+			await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
 		}
 		await new Workbench(secondPage).waitForReady();
 
@@ -155,7 +155,7 @@ test('dirty editor content survives an immediate Electron window close', { tag: 
 		const opened = application.waitForEvent('window');
 		await emitSecondInstance(application, workspace.directory);
 		secondPage = await opened;
-		await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder & Enable Features' }).click();
+		await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder' }).click();
 		const secondWorkbench = new Workbench(secondPage);
 		await secondWorkbench.waitForReady();
 		await secondPage.bringToFront();
@@ -191,15 +191,15 @@ test('dirty editor content survives an immediate Electron window close', { tag: 
 
 async function emitSecondInstance(application: ElectronApplication, workspaceDirectory: string): Promise<void> {
 	await application.evaluate(({ app }, directory) => {
-		app.emit("second-instance", {} as never, [process.execPath, app.getAppPath(), "--folder", directory], process.cwd(), {});
+		app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--folder', directory], process.cwd(), {});
 	}, workspaceDirectory);
 }
 
 async function canonicalWorkspacePath(page: Page): Promise<string> {
 	const value = await page.evaluate(async () => {
 		const bridge = (globalThis as unknown as { ash?: { ipcRenderer?: { invoke(channel: string): Promise<unknown>; }; }; }).ash?.ipcRenderer;
-		if (!bridge) throw new Error("Ash renderer IPC bridge is unavailable");
-		return bridge.invoke("ash:workspace:context:read");
+		if (!bridge) throw new Error('Ash renderer IPC bridge is unavailable');
+		return bridge.invoke('ash:workspace:context:read');
 	});
 	const workspace = parseWorkspace(value);
 	expect(workspace.folders).toHaveLength(1);

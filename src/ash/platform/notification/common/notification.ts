@@ -1,7 +1,7 @@
-import { type Event } from "../../../base/common/event.js";
-import type { IAction } from "../../../base/common/actions.js";
-import Severity from "../../../base/common/severity.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { type Event } from '../../../base/common/event.js';
+import type { IAction } from '../../../base/common/actions.js';
+import Severity from '../../../base/common/severity.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export { Severity };
 
@@ -96,4 +96,4 @@ export interface INotificationService {
 	status(message: NotificationMessage, options?: IStatusMessageOptions): IStatusHandle;
 }
 
-export const INotificationService = createServiceIdentifier<INotificationService>("notificationService");
+export const INotificationService = createServiceIdentifier<INotificationService>('notificationService');

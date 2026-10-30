@@ -213,5 +213,3 @@ export class ViewEventHandler extends Disposable {
 		}
 	}
 }
-
-

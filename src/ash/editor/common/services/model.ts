@@ -1,11 +1,11 @@
-import type { Event } from "../../../base/common/event.js";
-import type { URI } from "../../../base/common/uri.js";
-import { createDecorator } from "../../../platform/instantiation/common/instantiation.js";
+import type { Event } from '../../../base/common/event.js';
+import type { URI } from '../../../base/common/uri.js';
+import { createDecorator } from '../../../platform/instantiation/common/instantiation.js';
 import type { ITextBufferFactory, ITextModel, ITextModelCreationOptions } from '../model.js';
 import type { ILanguageSelection } from '../languages/language.js';
 import type { TextModelEditSource } from '../textModelEditSource.js';
 
-export const IModelService = createDecorator<IModelService>("modelService");
+export const IModelService = createDecorator<IModelService>('modelService');
 
 export interface IModelService {
 	readonly _serviceBrand: undefined;

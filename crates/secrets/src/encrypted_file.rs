@@ -68,6 +68,14 @@ pub struct ProfileSecretStore {
 }
 
 impl ProfileSecretStore {
+    /// Removes this profile's encryption key after its owned ciphertext has been
+    /// purged. Other logical keys in the injected store remain untouched.
+    pub fn delete_encryption_key(
+        keyring: &dyn SecretStore,
+    ) -> Result<DeleteSecretOutcome, SecretStoreError> {
+        keyring.delete(&SecretKey::new(MASTER_KEY_NAME).expect("fixed internal secret key"))
+    }
+
     /// Opens private directories without accessing the keyring or displaying system prompts.
     ///
     /// The first availability check, write, or operation on existing data initializes encryption
@@ -76,6 +84,16 @@ impl ProfileSecretStore {
     pub fn open(
         root: impl AsRef<Path>,
         keyring: Arc<dyn SecretStore>,
+    ) -> Result<Self, SecretStoreError> {
+        Self::open_with_default_mode(root, keyring, SecretStorageMode::Encrypted)
+    }
+
+    /// Selects a host default only for an empty store without a persisted mode.
+    /// Existing credentials and migration journals always retain their original mode.
+    pub fn open_with_default_mode(
+        root: impl AsRef<Path>,
+        keyring: Arc<dyn SecretStore>,
+        default_mode: SecretStorageMode,
     ) -> Result<Self, SecretStoreError> {
         let root = std::path::absolute(root.as_ref()).map_err(store_io)?;
         fs::create_dir_all(&root).map_err(store_io)?;
@@ -86,7 +104,7 @@ impl ProfileSecretStore {
         let legacy = FileSecretStore::open(&root)?;
         ensure_directory_without_symlinks(&boundary, &root.join("encrypted"))?;
         let files = FileSecretStore::open(root.join("encrypted"))?;
-        Ok(Self {
+        let store = Self {
             root,
             boundary,
             files,
@@ -94,7 +112,17 @@ impl ProfileSecretStore {
             keyring,
             master_key: OnceLock::new(),
             operations: Mutex::new(()),
-        })
+        };
+        if default_mode == SecretStorageMode::File
+            && store
+                .legacy
+                .load_path(&store.root.join(STORAGE_MODE), 32)?
+                .is_none()
+            && store.is_uninitialized()?
+        {
+            store.write_storage_state(StorageState::Ready(SecretStorageMode::File))?;
+        }
+        Ok(store)
     }
 
     // All callers hold both operation locks. Only a successful load is retained: a silent

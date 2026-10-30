@@ -264,5 +264,19 @@ Local evidence remains under `.build/desktop/playwright/`: `uac-environment-fina
 `uac-visible-cancel-20261021.log`, `uac-approved-final-20261021.log`,
 `uac-final-verify-20261021.log` and `uac-final-preparation-20261021.log`. Final result directories
 are `elevation-windows-visible-cancel-20261021/` and `elevation-windows-approved-final-20261021/`.
-Earlier failed or unobserved interactions do not count as passes. The remaining macOS and
-Linux system-authorization acceptance is tracked in the [root TODO](../../../../../TODO.md#系统授权保存--todo).
+Earlier failed or unobserved interactions do not count as passes.
+
+### Code acceptance · 2026-10-30
+
+The current code audit passed all 10 `elevatedFileService.test.ts` tests and 15 Rust tests from
+`just test ash-file-system --lib elevated::`. They cover editor encoding/revision/dirty state,
+authorization failure categories, platform launcher selection and macOS quoting, directory
+grants, conflicts, cancellation, staging cleanup and the real helper subprocess handshake.
+Logs are `.build/todo-code-audit-policy-elevation-container-retest.log` and
+`.build/todo-code-audit-elevation-rust.log`.
+
+The system-save TODO is retired under the user's code-and-tests acceptance scope. This run
+did not exercise macOS password authorization or Linux pkexec/polkit interaction. The prior
+Dev Container lacked pkexec, polkit and a graphical authentication agent; neither root nor
+passwordless rules establish those OS interaction results. The Windows evidence above keeps
+its original platform scope.

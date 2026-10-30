@@ -1,4 +1,4 @@
-import { expect, test } from "../../../automation/test.js";
+import { expect, test } from '../../../automation/test.js';
 import type { Page } from '@playwright/test';
 
 test('Opening Sessions reserves workbench width without manually resizing Chat', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, workbench }, testInfo) => {
@@ -52,10 +52,10 @@ test('Opening Sessions reserves workbench width without manually resizing Chat',
 
 test('Agent Sessions list shares Chat space and closes with Escape in Web and Electron', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ driver, target, workbench }, testInfo) => {
 	const page = workbench.page;
-	if (!await page.locator(".ash-chat-view-pane").isVisible()) {
-		await page.getByRole("button", { name: "Show Secondary Side Bar", exact: true }).click();
+	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
+		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	await expect(page.locator(".ash-chat-view-pane")).toBeVisible();
+	await expect(page.locator('.ash-chat-view-pane')).toBeVisible();
 
 	const toggle = page.locator("[data-action-id='agentSessions.toggleAgentSessionsSidebar'] button");
 	await expect(toggle).toBeVisible();
@@ -131,7 +131,7 @@ test('Agent Sessions list shares Chat space and closes with Escape in Web and El
 	}
 	await toggle.click();
 	await toggle.click();
-	await page.keyboard.press("Escape");
+	await page.keyboard.press('Escape');
 	await expect(sidebar).toBeHidden();
 	await expect(toggle).toBeFocused();
 });

@@ -1,14 +1,14 @@
-import type { DebugConsoleEntry } from "../../../../platform/debug/common/debugAdapterProcessService.js";
+import type { DebugConsoleEntry } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import { localize } from '../../../../nls.js';
-import { Emitter } from "../../../../base/common/event.js";
+import { Emitter } from '../../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
-import { combinedDisposable, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type IReplModel, type IDebugConsoleSession, type IDebugService, type IDebugSession } from "./debug.js";
+import { combinedDisposable, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { type IReplModel, type IDebugConsoleSession, type IDebugService, type IDebugSession } from './debug.js';
 
 interface DebugConsoleRecord {
 	readonly id: string;
 	label: string;
-	state: IDebugConsoleSession["state"];
+	state: IDebugConsoleSession['state'];
 	elements: readonly DebugConsoleEntry[];
 	revision: number;
 	owner: IDebugSession;
@@ -65,14 +65,14 @@ export class ReplModel extends Disposable implements IReplModel {
 
 	async evaluate(expression: string): Promise<void> {
 		const normalized = expression.trim();
-		if (!normalized || normalized.length > 32_768 || normalized.includes("\0")) throw new TypeError(localize('debug.repl.invalidExpression', 'Debug Console expression must contain 1 to 32768 characters'));
+		if (!normalized || normalized.length > 32_768 || normalized.includes('\0')) throw new TypeError(localize('debug.repl.invalidExpression', 'Debug Console expression must contain 1 to 32768 characters'));
 		const record = this.activeSessionId ? this.records.get(this.activeSessionId) : undefined;
 		if (!record?.session) throw new Error(localize('debug.repl.activeRequired', 'Debug Console requires an active session'));
 		const session = record.session;
 		// Capture the selected frame at submission; frame IDs belong to one paused adapter session.
 		const frame = this.debug.session === session && session.state === 'stopped'
 			? this.debug.getViewModel().focusedStackFrame : undefined;
-		await session.evaluate(normalized, frame?.id, "repl");
+		await session.evaluate(normalized, frame?.id, 'repl');
 		if (this.isDisposed) return;
 		if (session.replElementsRevision >= record.revision) {
 			record.elements = session.getReplElements();

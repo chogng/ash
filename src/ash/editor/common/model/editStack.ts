@@ -1,6 +1,6 @@
-import { type OffsetTextEdit } from "./historyCoalescing.js";
-import { Selection } from "../core/selection.js";
-import { TextChange } from "../core/textChange.js";
+import { type OffsetTextEdit } from './historyCoalescing.js';
+import { Selection } from '../core/selection.js';
+import { TextChange } from '../core/textChange.js';
 import { EndOfLineSequence } from '../model.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 
@@ -84,7 +84,7 @@ export class TextModelHistory {
 
 	beginRevision(historyGroup: UndoRedoGroup): void {
 		if (this.protectedGroup) {
-			throw new Error("A history revision is already active");
+			throw new Error('A history revision is already active');
 		}
 		this.protectedGroup = historyGroup;
 	}
@@ -118,7 +118,7 @@ export class TextModelHistory {
 		const entry = this.undoStack[this.undoStack.length - 1];
 		if (!entry) return undefined;
 		if (entry.historyGroup !== historyGroup) {
-			throw new Error("The active history revision is not the latest undo step");
+			throw new Error('The active history revision is not the latest undo step');
 		}
 		return this.takeUndo();
 	}
@@ -144,7 +144,7 @@ export class TextModelHistory {
 		afterCursorState: Selection[] | null = previous.afterCursorState,
 	): void {
 		if (this.undoStack[this.undoStack.length - 1] !== previous) {
-			throw new Error("Only the latest undo entry can be replaced");
+			throw new Error('Only the latest undo entry can be replaced');
 		}
 		const replacement = createEntry(
 			edits,
@@ -280,7 +280,7 @@ export class TextModelHistory {
 
 	private assertProtectedGroup(historyGroup: UndoRedoGroup): void {
 		if (this.protectedGroup !== historyGroup) {
-			throw new Error("The history revision is no longer active");
+			throw new Error('The history revision is no longer active');
 		}
 	}
 }

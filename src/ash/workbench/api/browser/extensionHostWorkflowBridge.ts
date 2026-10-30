@@ -1,14 +1,14 @@
 import { type IDebugSession, type IDebugConfiguration, normalizeDebugAdapterDescriptor, type DebugAdapterFactory, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory } from '../../contrib/debug/common/debug.js';
 import { parseShellExecution, parseTaskEnvironment, parseTaskRunOptions, parseTaskPresentationOptions } from '../../contrib/tasks/common/taskConfiguration.js';
-import { encodeHex, VSBuffer } from "../../../base/common/buffer.js";
+import { encodeHex, VSBuffer } from '../../../base/common/buffer.js';
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
-import type { IWorkspaceTask, TaskDefinition, TaskPseudoterminal, TaskProvider, TaskProviderTask, WorkspaceTaskGroup } from "../../contrib/tasks/common/tasks.js";
+import type { IWorkspaceTask, TaskDefinition, TaskPseudoterminal, TaskProvider, TaskProviderTask, WorkspaceTaskGroup } from '../../contrib/tasks/common/tasks.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { DeferredPromise, TaskQueue } from '../../../base/common/async.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
-import type { TestProfileContribution, TestProfileProvider } from "../../services/testing/common/testingService.js";
-import type { ExtensionHostProviderInvoker } from "./extensionHostLanguageBridge.js";
+import type { TestProfileContribution, TestProfileProvider } from '../../services/testing/common/testingService.js';
+import type { ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import type { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { URI } from '../../../base/common/uri.js';
 
@@ -74,7 +74,7 @@ export function extensionHostTaskSnapshot(task: IWorkspaceTask, workspace: IWork
 export function createExtensionHostTaskProvider(id: string, invoke: ExtensionHostProviderInvoker, workspace: IWorkspaceContextService, type?: string): TaskProvider {
 	return Object.freeze({
 		id, type,
-		provideTasks: async (signal: AbortSignal): Promise<readonly TaskProviderTask[]> => normalizeTaskResult(await invoke("provideTasks", Object.freeze({}), signal), invoke),
+		provideTasks: async (signal: AbortSignal): Promise<readonly TaskProviderTask[]> => normalizeTaskResult(await invoke('provideTasks', Object.freeze({}), signal), invoke),
 		resolveTask: async (task: IWorkspaceTask, signal: AbortSignal): Promise<TaskProviderTask | undefined> => {
 			const payload = { task: { ...object(extensionHostTaskSnapshot(task, workspace), 'Task snapshot'), label: task.label, command: task.command, ...(task.dirId ? { dirId: task.dirId } : {}) } };
 			const value = await invoke('resolveTask', normalizeExtensionHostPayload(payload), signal);
@@ -201,7 +201,7 @@ export function createExtensionHostDebugAdapterTrackerFactory(type: string, id: 
 export function createExtensionHostTestProfileProvider(id: string, invoke: ExtensionHostProviderInvoker, resolveTaskId: (providerRegistrationId: string, taskId: string) => string): TestProfileProvider {
 	return Object.freeze({
 		id,
-		provideTestProfiles: async (signal: AbortSignal): Promise<readonly TestProfileContribution[]> => normalizeTestProfileResult(await invoke("provideTestProfiles", Object.freeze({}), signal), resolveTaskId),
+		provideTestProfiles: async (signal: AbortSignal): Promise<readonly TestProfileContribution[]> => normalizeTestProfileResult(await invoke('provideTestProfiles', Object.freeze({}), signal), resolveTaskId),
 	});
 }
 
@@ -214,10 +214,10 @@ export function extensionHostCanonicalTaskId(providerId: string, taskId: string)
 }
 
 export function normalizeTaskResult(value: JsonValue, invoke: ExtensionHostProviderInvoker): readonly TaskProviderTask[] {
-	const result = exactObject(value, "Extension Task provider result", ["tasks"]);
-	const tasks = boundedArray(result.tasks, "Extension Tasks", 10_000).map((task, index) => {
+	const result = exactObject(value, 'Extension Task provider result', ['tasks']);
+	const tasks = boundedArray(result.tasks, 'Extension Tasks', 10_000).map((task, index) => {
 		const input = object(task, `Extension Task ${index}`);
-		assertAllowedKeys(input, `Extension Task ${index}`, ["command", "detail", "env", "group", "groupIsDefault", "runOptions", "presentation", "id", "label", 'execution', 'definition', 'cwd', 'isBackground', 'problemMatchers', 'scope', 'source'], ["group", "id", "label"]);
+		assertAllowedKeys(input, `Extension Task ${index}`, ['command', 'detail', 'env', 'group', 'groupIsDefault', 'runOptions', 'presentation', 'id', 'label', 'execution', 'definition', 'cwd', 'isBackground', 'problemMatchers', 'scope', 'source'], ['group', 'id', 'label']);
 		if (input.isBackground !== undefined && typeof input.isBackground !== 'boolean') throw new TypeError('Extension Task isBackground must be a boolean');
 		if (input.groupIsDefault !== undefined && typeof input.groupIsDefault !== 'boolean') throw new TypeError('Extension Task groupIsDefault must be a boolean');
 		const runOptions = input.runOptions === undefined ? undefined : object(input.runOptions, 'Extension Task runOptions');
@@ -261,14 +261,14 @@ export function normalizeTaskResult(value: JsonValue, invoke: ExtensionHostProvi
 			...(input.problemMatchers === undefined ? {} : { problemMatchers: Object.freeze([...boundedArray(input.problemMatchers, 'Extension Task problemMatchers', 32)]) }),
 			...(definition === undefined ? {} : { definition: Object.freeze({ ...definition, type: definition.type as string }) }),
 			...(input.cwd === undefined ? {} : { cwd: boundedString(input.cwd, 'Extension Task cwd', 32768, false, false) }),
-			group: textEnum(input.group, `Extension Task ${index} group`, ["build", "test", "clean", "rebuild", "run", "other"] as const) as WorkspaceTaskGroup,
+			group: textEnum(input.group, `Extension Task ${index} group`, ['build', 'test', 'clean', 'rebuild', 'run', 'other'] as const) as WorkspaceTaskGroup,
 			...(input.groupIsDefault === undefined ? {} : { groupIsDefault: input.groupIsDefault }),
 			...(runOptions === undefined ? {} : { runOptions: parseTaskRunOptions(runOptions) }),
 			...(presentation === undefined ? {} : { presentation: parseTaskPresentationOptions(presentation) }),
 			...(input.detail === undefined ? {} : { detail: boundedString(input.detail, `Extension Task ${index} detail`, 4096, true) }),
 		});
 	});
-	assertUnique(tasks.map(task => task.id), "Extension Task IDs");
+	assertUnique(tasks.map(task => task.id), 'Extension Task IDs');
 	return Object.freeze(tasks);
 }
 
@@ -356,10 +356,10 @@ class ExtensionTaskTerminal extends Disposable implements TaskPseudoterminal {
 }
 
 function normalizeTestProfileResult(value: JsonValue, resolveTaskId: (providerRegistrationId: string, taskId: string) => string): readonly TestProfileContribution[] {
-	const result = exactObject(value, "Extension Test Profile provider result", ["profiles"]);
-	const profiles = boundedArray(result.profiles, "Extension Test Profiles", 10_000).map((profile, index) => {
+	const result = exactObject(value, 'Extension Test Profile provider result', ['profiles']);
+	const profiles = boundedArray(result.profiles, 'Extension Test Profiles', 10_000).map((profile, index) => {
 		const input = object(profile, `Extension Test Profile ${index}`);
-		assertAllowedKeys(input, `Extension Test Profile ${index}`, ["detail", "id", "label", "taskId", "taskProviderRegistrationId"], ["id", "label", "taskId", "taskProviderRegistrationId"]);
+		assertAllowedKeys(input, `Extension Test Profile ${index}`, ['detail', 'id', 'label', 'taskId', 'taskProviderRegistrationId'], ['id', 'label', 'taskId', 'taskProviderRegistrationId']);
 		const taskReference = boundedString(input.taskId, `Extension Test Profile ${index} task ID`, 1024, false);
 		const taskProviderRegistrationId = boundedString(input.taskProviderRegistrationId, `Extension Test Profile ${index} Task provider registration ID`, 256, false);
 		return Object.freeze({
@@ -369,7 +369,7 @@ function normalizeTestProfileResult(value: JsonValue, resolveTaskId: (providerRe
 			...(input.detail === undefined ? {} : { detail: boundedString(input.detail, `Extension Test Profile ${index} detail`, 4096, true) }),
 		});
 	});
-	assertUnique(profiles.map(profile => profile.id), "Extension Test Profile IDs");
+	assertUnique(profiles.map(profile => profile.id), 'Extension Test Profile IDs');
 	return Object.freeze(profiles);
 }
 
@@ -382,7 +382,7 @@ function exactObject(value: JsonValue, owner: string, keys: readonly string[]): 
 }
 
 function object(value: JsonValue, owner: string): Record<string, JsonValue> {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
+	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, JsonValue>;
 }
 
@@ -397,12 +397,12 @@ function boundedArray(value: JsonValue | undefined, owner: string, maximum: numb
 }
 
 function boundedString(value: JsonValue | undefined, owner: string, maximum: number, allowEmpty: boolean, trim = true): string {
-	if (typeof value !== "string" || (!allowEmpty && value.trim().length === 0) || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || (!allowEmpty && value.trim().length === 0) || value.length > maximum || value.includes('\0')) throw new TypeError(`${owner} is invalid`);
 	return trim ? value.trim() : value;
 }
 
 function textEnum<const T extends readonly string[]>(value: JsonValue | undefined, owner: string, values: T): T[number] {
-	if (typeof value !== "string" || !values.includes(value)) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || !values.includes(value)) throw new TypeError(`${owner} is invalid`);
 	return value as T[number];
 }
 

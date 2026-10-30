@@ -1,21 +1,21 @@
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../common/output.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import type { AppServerConnectionState, IAppServerApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { SystemOutputService, openLogOutput } from "../../browser/systemOutputService.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import type { AppServerConnectionState, IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { SystemOutputService, openLogOutput } from '../../browser/systemOutputService.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { windowLogId } from '../../../log/common/logConstants.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import type { ILogFileReadResult, ILogFileCursor, ILogFileService } from '../../../../../platform/log/common/log.js';
 
-test("SystemOutputService projects App Server lifecycle", async () => {
+test('SystemOutputService projects App Server lifecycle', async () => {
 	const listeners = new Set<(state: AppServerConnectionState) => void>();
 	const appServer: IAppServerApi = {
 		connectionGeneration: 1,
-		getConnectionState: async () => "ready",
+		getConnectionState: async () => 'ready',
 		getSlashCommands: async () => [],
 		onConnectionState: listener => { listeners.add(listener); return { dispose: () => listeners.delete(listener) }; },
 	};
@@ -23,10 +23,10 @@ test("SystemOutputService projects App Server lifecycle", async () => {
 	const output = workbenchInstantiationService(outputResources).get(IOutputService);
 	using service = new SystemOutputService(output, appServer);
 	await Promise.resolve();
-	for (const listener of listeners) listener("crashed");
+	for (const listener of listeners) listener('crashed');
 
-	assert.match(output.getChannel("app-server")?.getText() ?? "", /Initial App Server connection state: ready/);
-	assert.match(output.getChannel("app-server")?.getText() ?? "", /connection is crashed/);
+	assert.match(output.getChannel('app-server')?.getText() ?? '', /Initial App Server connection state: ready/);
+	assert.match(output.getChannel('app-server')?.getText() ?? '', /connection is crashed/);
 });
 
 test('system Output preserves producer time, severity, category and error context', () => {

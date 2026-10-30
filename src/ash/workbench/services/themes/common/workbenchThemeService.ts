@@ -27,11 +27,12 @@ export interface IWorkbenchProductIconTheme extends IProductIconTheme { }
 
 export interface IColorCustomizations { [colorOrThemeScope: string]: string | Readonly<Record<string, string>>; }
 
+/** The product entry point committing a color theme selection. */
+export type ColorThemeChangeSource = 'themePicker' | 'themeEditor';
+
 /** Theme selection updates the currently active system preference when automatic appearance is enabled. */
 export interface IWorkbenchThemeService extends IThemeService {
-	setColorTheme(themeId: string): Promise<IColorTheme>;
-	/** Keeps the applied version of a theme across source saves until explicit selection. */
-	deferColorThemeApplication(themeId: string): void;
+	setColorTheme(themeId: string, source: ColorThemeChangeSource): Promise<IColorTheme>;
 	/** A window-shared, temporary theme; disposing restores the configured selection. */
 	previewColorTheme(theme: IColorTheme): IDisposable & { update(theme: IColorTheme): void; };
 }

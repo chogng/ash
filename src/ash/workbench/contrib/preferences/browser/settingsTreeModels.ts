@@ -1,12 +1,12 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
-import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
-import { TreeVisibility } from "../../../../base/browser/ui/tree/tree.js";
-import { SettingsSearchQuery } from "./settingsSearch.js";
+import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
+import { TreeVisibility } from '../../../../base/browser/ui/tree/tree.js';
+import { SettingsSearchQuery } from './settingsSearch.js';
 
 export interface SettingsTreeItem<T> {
 	readonly tags?: readonly string[];
-	readonly kind: "item";
+	readonly kind: 'item';
 	readonly id: string;
 	readonly title: string;
 	readonly description: string;
@@ -17,7 +17,7 @@ export interface SettingsTreeItem<T> {
 export interface SettingsTreeGroup {
 	/** The Preferences renderer retains the interactive heading, independently of tree metadata. */
 	readonly header?: SettingsSectionReference;
-	readonly kind: "group";
+	readonly kind: 'group';
 	readonly id: string;
 	readonly title: string;
 	readonly description: string;
@@ -62,7 +62,7 @@ export type SettingsSectionField =
 export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>> {
 	private navigationScopeIds: ReadonlySet<string> | undefined;
 	private navigationTargetId: string | undefined;
-	private searchQuery = new SettingsSearchQuery("");
+	private searchQuery = new SettingsSearchQuery('');
 
 	constructor(private readonly isConfigured: (id: string) => boolean = () => false) {
 		super({ identityProvider: { getId: (node) => node.id } });
@@ -84,7 +84,7 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	get visibleItems(): readonly SettingsTreeItem<T>[] {
 		return this.visibleNodes
 			.map((node) => node.element)
-			.filter((node): node is SettingsTreeItem<T> => node.kind === "item");
+			.filter((node): node is SettingsTreeItem<T> => node.kind === 'item');
 	}
 
 	setChildren(children: readonly SettingsTreeNode<T>[]): void {
@@ -100,7 +100,7 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	}
 
 	setQuery(query: string | SettingsSearchQuery): void {
-		const next = typeof query === "string" ? new SettingsSearchQuery(query) : query;
+		const next = typeof query === 'string' ? new SettingsSearchQuery(query) : query;
 		if (next.key === this.searchQuery.key) return;
 		this.searchQuery = next;
 		this.refilter();
@@ -124,12 +124,12 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 
 	getGroup(id: string): SettingsTreeGroup | undefined {
 		const node = this.getElement(id);
-		return node?.kind === "group" ? node : undefined;
+		return node?.kind === 'group' ? node : undefined;
 	}
 
 	getItem(id: string): SettingsTreeItem<T> | undefined {
 		const node = this.getElement(id);
-		return node?.kind === "item" ? node : undefined;
+		return node?.kind === 'item' ? node : undefined;
 	}
 
 	countVisibleItems(groupId?: string): number {
@@ -142,7 +142,7 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	private filterNode(node: SettingsTreeElement<T>): boolean | TreeVisibility {
 		if (this.navigationScopeIds && !this.navigationScopeIds.has(node.id)) return false;
 		if (this.searchQuery.isEmpty) return TreeVisibility.Visible;
-		if (node.kind === "group") return TreeVisibility.Recurse;
+		if (node.kind === 'group') return TreeVisibility.Recurse;
 		if (this.searchQuery.hasModifiedFilter && !this.isConfigured(node.id)) return false;
 		return this.searchQuery.matches(node);
 	}
@@ -166,7 +166,7 @@ function collectNavigationScopeIds<T>(target: ObjectTreeNode<SettingsTreeElement
 
 function countVisibleItems<T>(node: ObjectTreeNode<SettingsTreeElement<T>>): number {
 	if (!node.visible) return 0;
-	if (node.element.kind === "item") return 1;
+	if (node.element.kind === 'item') return 1;
 	return node.children.reduce((count, child) => count + countVisibleItems(child), 0);
 }
 
@@ -174,7 +174,7 @@ function validateSettingsNodes<T>(nodes: readonly SettingsTreeNode<T>[]): void {
 	const visit = (node: SettingsTreeNode<T>): void => {
 		const element = node.element;
 		if (!element.title.trim()) throw new TypeError(`Settings tree ${element.kind} '${element.id}' must have a title`);
-		if (element.kind === "item" && (node.children?.length ?? 0) > 0) {
+		if (element.kind === 'item' && (node.children?.length ?? 0) > 0) {
 			throw new TypeError(`Settings tree item '${element.id}' must not have children`);
 		}
 		for (const child of node.children ?? []) visit(child);

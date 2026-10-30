@@ -1,4 +1,4 @@
-import { type IDocumentDiffProviderOptions } from "./documentDiffProvider.js";
+import { type IDocumentDiffProviderOptions } from './documentDiffProvider.js';
 
 /** One immutable text document with LF line endings supplied to a diff computation. */
 export interface DiffComputationDocument {

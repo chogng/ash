@@ -97,6 +97,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "beaker",
+      "file": "beaker.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "bell",
       "file": "bell.svg",
       "rendering": "symbolic"
@@ -402,6 +407,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "debug-disconnect",
+      "file": "debug-disconnect.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "debug-pause",
       "file": "debug-pause.svg",
       "rendering": "symbolic"
@@ -672,8 +682,18 @@
       "rendering": "symbolic"
     },
     {
+      "id": "git-branch-changes",
+      "file": "git-branch-changes.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "git-commit",
       "file": "git-commit.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git-compare",
+      "file": "git-compare.svg",
       "rendering": "symbolic"
     },
     {
@@ -809,6 +829,11 @@
     {
       "id": "keyboard-tab",
       "file": "keyboard-tab.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "language-server",
+      "file": "language-server.svg",
       "rendering": "symbolic"
     },
     {

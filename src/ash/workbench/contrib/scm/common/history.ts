@@ -87,6 +87,8 @@ export interface ISCMHistoryItemGraphNode {
 
 export interface ISCMHistoryItemViewModel {
 	readonly historyItem: ISCMHistoryItem;
+	/** Reference color at the node, including commits with no outgoing lane. */
+	readonly color?: number;
 	readonly inputSwimlanes: readonly ISCMHistoryItemGraphNode[];
 	readonly outputSwimlanes: readonly ISCMHistoryItemGraphNode[];
 	readonly kind: 'HEAD' | 'node' | 'incoming-changes' | 'outgoing-changes';
@@ -135,7 +137,8 @@ export interface ISCMHistoryProvider {
 	provideHistoryItemRefs?(historyItemRefs?: readonly string[]): Promise<readonly ISCMHistoryItemRef[]>;
 	resolveHistoryItemRefsCommonAncestor?(historyItemRefs: readonly string[]): Promise<string | undefined>;
 
-	readonly onDidChange: Event<void>;
+	/** Silent changes come from background fetch; omitted details denote an active update. */
+	readonly onDidChange: Event<void | { readonly silent: boolean; }>;
 	/** Updated decorations for cached items; their identities and commit traversal remain unchanged. */
 	readonly onDidChangeHistoryItemRefs?: Event<readonly ISCMHistoryItem[]>;
 	readonly historyItemRef: IObservable<ISCMHistoryItemRef | undefined>;

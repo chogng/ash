@@ -1,12 +1,12 @@
 import { raceCancellationError } from '../../../../base/common/async.js';
-import { Emitter } from "../../../../base/common/event.js";
-import { canceled, isCancellationError } from "../../../../base/common/errors.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import { createUuid } from "../../../../base/common/uuid.js";
-import { observableValue } from "../../../../base/common/observable.js";
-import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManagementInfo, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from "../common/session.js";
-import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagement.js";
-import type { ISessionsProvider } from "../common/sessionsProvider.js";
+import { Emitter } from '../../../../base/common/event.js';
+import { canceled, isCancellationError } from '../../../../base/common/errors.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { createUuid } from '../../../../base/common/uuid.js';
+import { observableValue } from '../../../../base/common/observable.js';
+import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManagementInfo, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from '../common/session.js';
+import type { ISessionsManagementService, SessionsManagementState } from '../common/sessionsManagement.js';
+import type { ISessionsProvider } from '../common/sessionsProvider.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../../../nls.js';
 import { ISessionsProvidersService } from './sessionsProvidersService.js';
@@ -19,7 +19,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private _active: IActiveSessionThread | undefined;
 	private _untitledSessions: readonly IUntitledChatSession[] = [];
 	private _activeUntitledSessionId: string | undefined;
-	private _state: SessionsManagementState = "loading";
+	private _state: SessionsManagementState = 'loading';
 	private _error: string | undefined;
 	private initializePromise: Promise<void> | undefined;
 	private catalogGeneration = 0;
@@ -137,7 +137,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	get error(): string | undefined { return this._error; }
 
 	initialize(): Promise<void> {
-		if (!this.initializePromise || this._state === "error") this.initializePromise = this.loadSessions();
+		if (!this.initializePromise || this._state === 'error') this.initializePromise = this.loadSessions();
 		return this.initializePromise;
 	}
 
@@ -183,8 +183,8 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	selectThread(sessionId: SessionId, threadId: ThreadId): void {
 		this.selectionRevision++;
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
-		const thread = session?.chats.find(candidate => candidate.threadId === threadId && candidate.status === "active");
-		if (!session || !thread || session.status !== "active") throw new Error(`Active Session Thread is not available: ${threadId}`);
+		const thread = session?.chats.find(candidate => candidate.threadId === threadId && candidate.status === 'active');
+		if (!session || !thread || session.status !== 'active') throw new Error(`Active Session Thread is not available: ${threadId}`);
 		if (this._active?.session.sessionId === sessionId && this._active.threadId === threadId && this._activeUntitledSessionId === undefined) return;
 		this._active = { session, threadId };
 		this._activeUntitledSessionId = undefined;
@@ -194,12 +194,12 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	async interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
-		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === 'active');
 		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
 		await this.owner(sessionId).interrupt(backendSession(session, this.provider.id), parseSessionIdentity(threadId, this.provider.id).backendSessionId);
 	}
 
-	createUntitledSession(title = "New Chat", workspace?: SessionWorkspaceSelection, providerId?: string): IUntitledChatSession {
+	createUntitledSession(title = 'New Chat', workspace?: SessionWorkspaceSelection, providerId?: string): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
 		workspace ??= provider.currentWorkspace();
 		this.selectionRevision++;
@@ -287,7 +287,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
 		this.materializedSessions.set(new Map([...this.materializedSessions.get(), [untitledSessionId, { sessionId: active.session.sessionId, threadId: active.threadId }]]));
 		if (wasActive || !this._active && !this.activeUntitledSession) this._active = active;
-		if (this.pendingCreations === 0) this.setState("ready");
+		if (this.pendingCreations === 0) this.setState('ready');
 		else this._onDidChange.fire();
 	}
 
@@ -302,7 +302,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return this._active ?? this.startNewSession();
 	}
 
-	async startNewSession(title = "New Chat"): Promise<IActiveSessionThread> {
+	async startNewSession(title = 'New Chat'): Promise<IActiveSessionThread> {
 		const revision = ++this.selectionRevision;
 		const active = await this.createSession(title, this.creationProvider().currentWorkspace());
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
@@ -310,13 +310,13 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			this._active = active;
 			this._activeUntitledSessionId = undefined;
 		}
-		if (this.pendingCreations === 0) this.setState("ready");
+		if (this.pendingCreations === 0) this.setState('ready');
 		else this._onDidChange.fire();
 		return active;
 	}
 
-	async archiveSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, "archiving"); }
-	async stopSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, "stopping"); }
+	async archiveSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, 'archiving'); }
+	async stopSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, 'stopping'); }
 
 	async restoreSession(sessionId: SessionId): Promise<void> {
 		await this.initialize();
@@ -373,7 +373,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	private async createSession(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid(), providerId?: string): Promise<IActiveSessionThread> {
 		this.pendingCreations++;
-		this.setState("creating");
+		this.setState('creating');
 		try {
 			const provider = this.creationProvider(workspace, providerId);
 			const created = await provider.create(title, workspace, agent, creationId);
@@ -393,19 +393,19 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 	}
 
-	private async finishSession(sessionId: SessionId, state: "archiving" | "stopping"): Promise<void> {
+	private async finishSession(sessionId: SessionId, state: 'archiving' | 'stopping'): Promise<void> {
 		await this.initialize();
-		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === 'active');
 		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
 		this.setState(state);
 		try {
 			const provider = this.owner(sessionId);
-			const result = state === "archiving" ? await provider.archive(backendSession(session, this.provider.id)) : await provider.stop(backendSession(session, this.provider.id));
+			const result = state === 'archiving' ? await provider.archive(backendSession(session, this.provider.id)) : await provider.stop(backendSession(session, this.provider.id));
 			if (this.owner(sessionId) !== provider) throw canceled();
 			this.replaceSession(this.project(result, provider));
 			if (this._active?.session.sessionId === sessionId) this._active = this.firstActiveThread();
 			this.restoreSelection();
-			this.setState("ready");
+			this.setState('ready');
 			if (this._active && !this._active.session.agentTree) void this.hydrateSession(this._active.session.sessionId).catch(error => this.setError(error));
 		} catch (error) {
 			this.setError(error);
@@ -418,7 +418,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		// Superseded jobs can finish later, but must not own the new catalog's refresh slots.
 		this.hydrating.clear();
 		this.refreshes.clear();
-		this.setState("loading");
+		this.setState('loading');
 		try {
 			const providers = this.availableProviders();
 			const sessions = providers.length === 1 ? await this.provider.list() : await this.loadProviderCatalogs(providers);
@@ -429,7 +429,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			const selected = sessions.find(session => session.sessionId === active?.session.sessionId && session.status === 'active');
 			this._active = selected && active ? activeThread(selected, active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
 			this.restoreSelection();
-			this.setState("ready");
+			this.setState('ready');
 			for (const sessionId of this.pendingRefreshes) this.scheduleRefresh(sessionId);
 			for (const sessionId of hydrated) void this.hydrateSession(sessionId).catch(error => this.setError(error));
 			if (this._active) void this.hydrateSession(this._active.session.sessionId).catch(error => this.setError(error));
@@ -468,10 +468,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				const listed = await this.readCatalog(sessionId, current);
 				if (this.isDisposed || generation !== this.catalogGeneration) return;
 				const detailChanged = this.pendingDetailRefreshes.delete(sessionId);
-				if (current?.agentTree && listed?.status !== "active") await this.unsubscribe(sessionId);
+				if (current?.agentTree && listed?.status !== 'active') await this.unsubscribe(sessionId);
 				const membershipChanged = listed && current && (listed.chats.length !== current.chats.length
 					|| listed.chats.some(chat => !current.chats.some(previous => previous.threadId === chat.threadId)));
-				const refreshed = listed && (detailChanged || membershipChanged) && current?.agentTree && listed.status === "active"
+				const refreshed = listed && (detailChanged || membershipChanged) && current?.agentTree && listed.status === 'active'
 					? await this.subscribe(listed)
 					: listed;
 				if (this.isDisposed || generation !== this.catalogGeneration) return;
@@ -479,7 +479,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				if (refreshed) this.replaceSession(refreshed);
 				else this._sessions = this._sessions.filter(candidate => candidate.sessionId !== sessionId);
 				if (this._active?.session.sessionId === sessionId) {
-					this._active = refreshed?.status === "active" ? activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
+					this._active = refreshed?.status === 'active' ? activeThread(refreshed, this._active.threadId) ?? this.firstActiveThread() : this.firstActiveThread();
 				}
 				this.restoreSelection();
 				this._error = undefined;
@@ -496,11 +496,11 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		if (pending) return pending;
 		const generation = this.catalogGeneration;
 		const hydrate = (async () => {
-			const current = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === "active");
+			const current = this._sessions.find(candidate => candidate.sessionId === sessionId && candidate.status === 'active');
 			if (!current || current.agentTree && current.chats.every(chat => chat.status !== 'active' || chat.workspace !== undefined)) return;
 			const session = await this.subscribe(current);
 			if (this.isDisposed || generation !== this.catalogGeneration) return;
-			if (!this._sessions.some(candidate => candidate.sessionId === sessionId && candidate.status === "active")) {
+			if (!this._sessions.some(candidate => candidate.sessionId === sessionId && candidate.status === 'active')) {
 				await this.unsubscribe(sessionId);
 				return;
 			}
@@ -540,23 +540,23 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private setError(error: unknown): void {
 		if (this.isDisposed || isCancellationError(error)) return;
 		this.restoreSelection();
-		this._state = "error";
-		this._error = error instanceof Error ? error.message : "Unable to load sessions.";
+		this._state = 'error';
+		this._error = error instanceof Error ? error.message : 'Unable to load sessions.';
 		this._onDidChange.fire();
 	}
 }
 
 function firstActiveThread(sessions: readonly ISession[]): IActiveSessionThread | undefined {
 	for (const session of sessions) {
-		if (session.status !== "active") continue;
-		const thread = session.chats.find(candidate => candidate.status === "active" && candidate.origin.type === "root") ?? session.chats.find(candidate => candidate.status === "active");
+		if (session.status !== 'active') continue;
+		const thread = session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active');
 		if (thread) return { session, threadId: thread.threadId };
 	}
 	return undefined;
 }
 
 function activeThread(session: ISession, threadId: ThreadId): IActiveSessionThread | undefined {
-	return session.chats.some(thread => thread.threadId === threadId && thread.status === "active") ? { session, threadId } : undefined;
+	return session.chats.some(thread => thread.threadId === threadId && thread.status === 'active') ? { session, threadId } : undefined;
 }
 
 function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | undefined): boolean {

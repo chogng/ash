@@ -155,6 +155,7 @@ pub struct Fixture {
     app_server: PathBuf,
     product_services: Option<PathBuf>,
     voice_host: Option<PathBuf>,
+    isolated_home: Option<PathBuf>,
     announcement_url: String,
     #[cfg(unix)]
     model_download_proxy: Option<std::net::SocketAddr>,
@@ -171,21 +172,24 @@ impl Fixture {
             .unwrap();
         #[cfg(windows)]
         let root = tempfile::Builder::new().prefix("zt-").tempdir().unwrap();
-        #[cfg(unix)]
         let path = {
-            // Path clipping in text snapshots must be identical on macOS and Linux.
+            // Host path length must not change clipping in shared terminal snapshots.
+            #[cfg(unix)]
             const LENGTH: usize = 66;
+            // AF_UNIX endpoints remain below the Windows sun_path limit.
+            #[cfg(windows)]
+            const LENGTH: usize = 52;
+            #[cfg(unix)]
             let path = fs::canonicalize(root.path()).unwrap();
+            #[cfg(windows)]
+            let path = root.path().to_path_buf();
             let padding = LENGTH
                 .checked_sub(path.as_os_str().len())
-                .expect("Unix PTY fixture root exceeds the fixed snapshot path length");
+                .expect("PTY fixture root exceeds the fixed snapshot path length");
             let path = if padding == 0 {
                 path
             } else {
-                assert!(
-                    padding > 1,
-                    "Unix PTY fixture path cannot be padded by one byte"
-                );
+                assert!(padding > 1, "PTY fixture path cannot be padded by one byte");
                 let padded = path.join("x".repeat(padding - 1));
                 fs::create_dir(&padded).unwrap();
                 padded
@@ -193,8 +197,6 @@ impl Fixture {
             assert_eq!(path.as_os_str().len(), LENGTH);
             path
         };
-        #[cfg(windows)]
-        let path = root.path().to_path_buf();
         let workspace = path.join("workspace");
         let profile = path.join("profile");
         fs::create_dir_all(&workspace).unwrap();
@@ -226,6 +228,7 @@ impl Fixture {
             app_server,
             product_services: None,
             voice_host: None,
+            isolated_home: None,
             announcement_url: String::new(),
             #[cfg(unix)]
             model_download_proxy: None,
@@ -259,6 +262,14 @@ impl Fixture {
         self
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn with_isolated_home(mut self) -> Self {
+        let home = self.root.join("home");
+        fs::create_dir_all(home.join(".config")).unwrap();
+        self.isolated_home = Some(home);
+        self
+    }
+
     #[cfg(unix)]
     pub fn with_model_download_proxy(mut self, address: std::net::SocketAddr) -> Self {
         self.model_download_proxy = Some(address);
@@ -289,6 +300,10 @@ impl Fixture {
                 self.app_server.clone().into_os_string(),
             ),
         ];
+        if let Some(home) = &self.isolated_home {
+            environment.push(("HOME", home.clone().into_os_string()));
+            environment.push(("XDG_CONFIG_HOME", home.join(".config").into_os_string()));
+        }
         if let Some(path) = &self.product_services {
             environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone().into_os_string()));
         }
@@ -397,7 +412,7 @@ contextWindow = 128000
         find_named(&self.root, name)
     }
 
-    pub fn sessions(&self) -> Vec<ash_protocol::Session> {
+    pub fn connect(&self) -> AppServerSession {
         let mut command = StdioAppServerCommand::new(&self.ash)
             .with_argument("app-server")
             .with_argument("connect");
@@ -405,7 +420,7 @@ contextWindow = 128000
             command = command.with_environment_variable(name, value);
         }
         eprintln!("PTY inspector: connecting");
-        let session = AppServerSession::start_stdio(
+        AppServerSession::start_stdio(
             command,
             ClientInfo {
                 name: "ash-tui-real-scenario-inspector".into(),
@@ -413,7 +428,11 @@ contextWindow = 128000
             },
             ash_tui::client_capabilities(),
         )
-        .unwrap();
+        .unwrap()
+    }
+
+    pub fn sessions(&self) -> Vec<ash_protocol::Session> {
+        let session = self.connect();
         eprintln!("PTY inspector: listing sessions");
         let sessions = session.client().list_sessions().unwrap().sessions;
         eprintln!("PTY inspector: shutting down");
@@ -640,6 +659,11 @@ impl TuiProcess {
 
     pub fn right(&mut self) {
         self.send_input(b"\x1b[C");
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn left(&mut self) {
+        self.send_input(b"\x1b[D");
     }
 
     pub fn space(&mut self) {
@@ -958,10 +982,56 @@ fn normalize_snapshot(mut screen: String, paths: &[String]) -> String {
         .replace("macOS Seatbelt", "platform sandbox")
         .replace("Linux Bubblewrap", "platform sandbox")
         .lines()
-        .map(|line| normalize_elapsed_time(&normalize_truncated_fixture_path(line, paths)))
+        .map(|line| {
+            normalize_elapsed_time(&normalize_fixture_separators(
+                &normalize_truncated_fixture_path(line, paths),
+            ))
+        })
         .collect::<Vec<_>>()
         .join("\n");
     normalize_assessment_ids(&normalize_session_thread_ids(&screen))
+}
+
+fn normalize_fixture_separators(line: &str) -> String {
+    let mut parts = line.split("<FIXTURE>");
+    let mut result = parts.next().unwrap_or_default().to_owned();
+    for part in parts {
+        let end = part
+            .find(|character: char| {
+                character.is_whitespace() || matches!(character, '│' | '"' | '\'' | '`')
+            })
+            .unwrap_or(part.len());
+        result.push_str("<FIXTURE>");
+        let path = part[..end].replace("\\\\", "/").replace('\\', "/");
+        if let Some(ids) = path.strip_prefix("/profile/worktrees/") {
+            result.push_str("/profile/worktrees/");
+            for (index, component) in ids.splitn(3, '/').enumerate() {
+                if index > 0 {
+                    result.push('/');
+                }
+                if index < 2 && component.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    result.push_str(&"x".repeat(component.len()));
+                } else {
+                    result.push_str(component);
+                }
+            }
+        } else {
+            result.push_str(&path);
+        }
+        result.push_str(&part[end..]);
+    }
+    result
+}
+
+#[test]
+fn snapshot_normalization_changes_only_fixture_path_separators() {
+    assert_eq!(
+        normalize_snapshot(
+            r"read C:\fixture\workspace\file.rs and user \keep\literal".into(),
+            &[r"C:\fixture".into()]
+        ),
+        r"read <FIXTURE>/workspace/file.rs and user \keep\literal"
+    );
 }
 
 fn normalize_elapsed_time(line: &str) -> String {
@@ -1194,6 +1264,8 @@ fn assert_named_snapshot(name: &str, screen: String) {
 
     let mut settings = insta::Settings::clone_current();
     settings.set_prepend_module_to_snapshot(false);
+    #[cfg(windows)]
+    settings.set_snapshot_suffix("windows");
     settings.set_snapshot_path(snapshot_dir);
     settings.bind(|| insta::assert_snapshot!(snapshot_name, screen));
 }

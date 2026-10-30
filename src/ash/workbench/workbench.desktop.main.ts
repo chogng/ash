@@ -12,8 +12,8 @@ import { IElevatedFileService } from './services/files/common/elevatedFileServic
  * Add Electron-only services and contributions here. Registrations shared
  * with the browser host belong in `workbench.common.main.ts`.
  */
-import "../platform/update/common/update.config.contribution.js";
-import "./workbench.common.main.js";
+import '../platform/update/common/update.config.contribution.js';
+import './workbench.common.main.js';
 import './contrib/terminal/electron-browser/terminal.contribution.js';
 import './services/tunnel/electron-browser/tunnelService.js';
 import './services/clipboard/electron-browser/clipboardService.js';
@@ -23,7 +23,7 @@ import './contrib/processExplorer/electron-browser/processExplorer.contribution.
 import './contrib/issue/electron-browser/issue.contribution.js';
 import './contrib/codeEditor/electron-browser/selectionClipboard.js';
 import './services/browserView/electron-browser/playwrightWorkbenchService.js';
-import "./services/update/electron-browser/updateService.js";
+import './services/update/electron-browser/updateService.js';
 import './services/workspaces/electron-browser/workspacesService.js';
 import './contrib/chat/electron-browser/chat.contribution.js';
 import { NativeHostService } from './services/host/electron-browser/nativeHostService.js';
@@ -35,9 +35,10 @@ import { IRemoteAuthorityResolverService } from '../platform/remote/common/remot
 import { RemoteAuthorityResolverService } from '../platform/remote/electron-browser/remoteAuthorityResolverService.js';
 import { IIntegrityService } from './services/integrity/common/integrity.js';
 import { IntegrityService } from './services/integrity/electron-browser/integrityService.js';
-import "./electron-browser/desktop.contribution.js";
-import "./contrib/browserView/electron-browser/browserView.contribution.js";
-import "./contrib/update/electron-browser/update.contribution.js";
+import './electron-browser/desktop.contribution.js';
+import './contrib/browserView/electron-browser/browserView.contribution.js';
+import './contrib/canvases/electron-browser/editorCanvases.contribution.js';
+import './contrib/update/electron-browser/update.contribution.js';
 
 import { ITunnelService } from '../platform/tunnel/common/tunnel.js';
 import { TunnelService } from './services/tunnel/electron-browser/tunnelService.js';

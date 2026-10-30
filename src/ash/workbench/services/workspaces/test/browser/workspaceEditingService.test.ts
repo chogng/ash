@@ -288,7 +288,7 @@ test('Browser multi-root editing writes metadata, preserves JSONC on save and re
 	assert.deepEqual(fixture.context.getWorkspace().folders.map(folder => folder.uri.toString()), [fixture.first.toString(), fixture.second.toString()]);
 	await fixture.editing.removeFolders([fixture.second]);
 	assert.equal(fixture.context.getWorkspace().folders.length, 1);
-	assert.equal((await fixture.files.stat(fixture.second)).kind, "directory");
+	assert.equal((await fixture.files.stat(fixture.second)).kind, 'directory');
 	await fixture.host.openWindow([{ workspaceUri: target }]);
 	assert.equal(fixture.context.getWorkspace().configuration?.toString(), target.toString());
 });

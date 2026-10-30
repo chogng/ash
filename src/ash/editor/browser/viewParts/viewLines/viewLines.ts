@@ -716,7 +716,7 @@ export class LineWidthIndex extends Disposable {
 		const previousMaximum = this.maximumWidth;
 		for (const lineIndex of lineIndexes) {
 			if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= this.model.lineCount) {
-				throw new RangeError("Observed Stanza line index is outside the text model");
+				throw new RangeError('Observed Stanza line index is outside the text model');
 			}
 			if (lineIndex < this.nextLineIndex || this.observedLineIndexes.has(lineIndex)) continue;
 			this.observedLineIndexes.add(lineIndex);
@@ -775,7 +775,7 @@ export class LineWidthIndex extends Disposable {
 			this.model.getLineContent((lineIndex) + 1),
 		);
 		if (!Number.isFinite(width) || width < 0) {
-			throw new RangeError("Stanza line width must be finite and non-negative");
+			throw new RangeError('Stanza line width must be finite and non-negative');
 		}
 		return width;
 	}
@@ -788,7 +788,7 @@ export class LineWidthIndex extends Disposable {
 	private removeWidth(width: number): void {
 		const count = this.widthCounts.get(width);
 		if (count === undefined) {
-			throw new Error("Stanza line width index is inconsistent");
+			throw new Error('Stanza line width index is inconsistent');
 		}
 		if (count === 1) this.widthCounts.delete(width);
 		else this.widthCounts.set(width, count - 1);
@@ -797,20 +797,20 @@ export class LineWidthIndex extends Disposable {
 
 function readInitialMeasurement(value: LineWidthInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
 	if (value === undefined) return undefined;
-	if (!value || typeof value.schedule !== "function") {
-		throw new TypeError("Stanza initial line measurement requires a scheduler");
+	if (!value || typeof value.schedule !== 'function') {
+		throw new TypeError('Stanza initial line measurement requires a scheduler');
 	}
 	const initialLineCount = value.initialLineCount ?? 512;
 	const linesPerSlice = value.linesPerSlice ?? initialLineCount;
 	const maximumMeasuredLineCount = value.maximumMeasuredLineCount ?? Number.MAX_SAFE_INTEGER;
 	if (!Number.isSafeInteger(initialLineCount) || initialLineCount <= 0) {
-		throw new RangeError("Stanza initial line measurement count must be a positive safe integer");
+		throw new RangeError('Stanza initial line measurement count must be a positive safe integer');
 	}
 	if (!Number.isSafeInteger(linesPerSlice) || linesPerSlice <= 0) {
-		throw new RangeError("Stanza line measurement slice size must be a positive safe integer");
+		throw new RangeError('Stanza line measurement slice size must be a positive safe integer');
 	}
 	if (!Number.isSafeInteger(maximumMeasuredLineCount) || maximumMeasuredLineCount <= 0) {
-		throw new RangeError("Stanza maximum initial line measurement count must be a positive safe integer");
+		throw new RangeError('Stanza maximum initial line measurement count must be a positive safe integer');
 	}
 	return Object.freeze({ initialLineCount: Math.min(initialLineCount, maximumMeasuredLineCount), linesPerSlice, maximumMeasuredLineCount, schedule: value.schedule });
 }

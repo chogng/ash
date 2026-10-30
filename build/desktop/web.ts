@@ -47,6 +47,7 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 	}
 	const environment = buildAppServerEnvironment(source, hostPlatform, {
 		ASH_HOME: resolve(source.ASH_WEB_APP_SERVER_PROFILE ?? join(root, '.build/desktop/dev/web-profile')),
+		ASH_USE_DEVELOPMENT_SECRETSTORAGE: '1',
 		ASH_WORKSPACE_ROOT: resolve(source.ASH_WORKSPACE_ROOT ?? root),
 		ASH_RG_PATH: resolve(source.ASH_RG_PATH ?? join(packageRoot, 'ash-path', `rg${suffix}`)),
 		...(source.ASH_PRODUCT_SERVICES_PATH ? { ASH_PRODUCT_SERVICES_PATH: source.ASH_PRODUCT_SERVICES_PATH } : {}),

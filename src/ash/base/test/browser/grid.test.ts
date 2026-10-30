@@ -1,10 +1,12 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import type { IPositionedRectangle } from "../../browser/geometry.js";
-import { h } from "../../browser/dom.js";
+import { LayoutPriority } from '../../browser/ui/splitview/splitview.js';
+import { Orientation } from '../../browser/ui/sash/sash.js';
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import type { IPositionedRectangle } from '../../browser/geometry.js';
+import { h } from '../../browser/dom.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -21,7 +23,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { Grid, SerializableGrid } = await import("../../browser/ui/grid/grid.js");
+const { Grid, SerializableGrid } = await import('../../browser/ui/grid/grid.js');
 
 class TestGridView {
 	readonly element: HTMLDivElement;
@@ -41,7 +43,7 @@ class TestGridView {
 		readonly maximumHeight = Number.POSITIVE_INFINITY,
 		readonly snap = false,
 	) {
-		this.element = h(ownerDocument, "div");
+		this.element = h(ownerDocument, 'div');
 	}
 
 	layout(bounds: IPositionedRectangle): void {
@@ -68,28 +70,28 @@ class SerializableTestGridView extends TestGridView {
 	}
 }
 
-test("Grid lays out a nested SplitView tree in two dimensions", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Grid lays out a nested SplitView tree in two dimensions', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const left = new TestGridView(dom.window.document, 100, 600);
 	const session = new TestGridView(dom.window.document, 120, Infinity, 36, 36);
 	const editor = new TestGridView(dom.window.document, 120, Infinity, 84);
 	const right = new TestGridView(dom.window.document, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
-		type: "branch",
-		orientation: "horizontal",
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
-			{ type: "leaf", view: left, size: 200 },
+			{ type: 'leaf', view: left, size: 200 },
 			{
-				type: "branch",
-				orientation: "vertical",
+				type: 'branch',
+				orientation: Orientation.VERTICAL,
 				size: 400,
 				children: [
-					{ type: "leaf", view: session, size: 36 },
-					{ type: "leaf", view: editor, size: 564 },
+					{ type: 'leaf', view: session, size: 36 },
+					{ type: 'leaf', view: editor, size: 564 },
 				],
 			},
-			{ type: "leaf", view: right, size: 200 },
+			{ type: 'leaf', view: right, size: 200 },
 		],
 	});
 
@@ -113,25 +115,25 @@ test("Grid lays out a nested SplitView tree in two dimensions", () => {
 		top: 36,
 		left: 200,
 	});
-	assert.equal(grid.element.querySelectorAll(".ash-sash").length, 2);
+	assert.equal(grid.element.querySelectorAll('.ash-sash').length, 2);
 
 	grid.dispose();
 	dom.window.close();
 });
 
-test("Grid keeps hidden leaves mounted and restores their pixel size", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Grid keeps hidden leaves mounted and restores their pixel size', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const left = new TestGridView(dom.window.document, 100, 600);
 	const editor = new TestGridView(dom.window.document, 120, Infinity);
 	const right = new TestGridView(dom.window.document, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
-		type: "branch",
-		orientation: "horizontal",
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
-			{ type: "leaf", view: left, size: 200 },
-			{ type: "leaf", view: editor, size: 400 },
-			{ type: "leaf", view: right, size: 200 },
+			{ type: 'leaf', view: left, size: 200 },
+			{ type: 'leaf', view: editor, size: 400 },
+			{ type: 'leaf', view: right, size: 200 },
 		],
 	});
 	grid.layout(800, 600);
@@ -153,41 +155,41 @@ test("Grid keeps hidden leaves mounted and restores their pixel size", () => {
 	dom.window.close();
 });
 
-test("Grid wires nested SplitView intersections as corner sashes", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Grid wires nested SplitView intersections as corner sashes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const left = new TestGridView(dom.window.document, 100, 600, 100, 600);
 	const top = new TestGridView(dom.window.document, 100, 600, 100, 600);
 	const bottom = new TestGridView(dom.window.document, 100, 600, 100, 600);
 	const right = new TestGridView(dom.window.document, 100, 600, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
-		type: "branch",
-		orientation: "horizontal",
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
-			{ type: "leaf", view: left, size: 200 },
+			{ type: 'leaf', view: left, size: 200 },
 			{
-				type: "branch",
-				orientation: "vertical",
+				type: 'branch',
+				orientation: Orientation.VERTICAL,
 				size: 400,
 				children: [
-					{ type: "leaf", view: top, size: 300 },
-					{ type: "leaf", view: bottom, size: 300 },
+					{ type: 'leaf', view: top, size: 300 },
+					{ type: 'leaf', view: bottom, size: 300 },
 				],
 			},
-			{ type: "leaf", view: right, size: 200 },
+			{ type: 'leaf', view: right, size: 200 },
 		],
 	});
 	grid.layout(800, 600);
-	const horizontalSash = grid.element.querySelector<HTMLElement>(".ash-sash-horizontal");
+	const horizontalSash = grid.element.querySelector<HTMLElement>('.ash-sash-horizontal');
 	assert.ok(horizontalSash);
-	const startHandle = horizontalSash.querySelector<HTMLElement>(".ash-sash-orthogonal-handle-start");
-	const endHandle = horizontalSash.querySelector<HTMLElement>(".ash-sash-orthogonal-handle-end");
+	const startHandle = horizontalSash.querySelector<HTMLElement>('.ash-sash-orthogonal-handle-start');
+	const endHandle = horizontalSash.querySelector<HTMLElement>('.ash-sash-orthogonal-handle-end');
 	assert.ok(startHandle);
 	assert.ok(endHandle);
 
-	startHandle.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, button: 0 }));
-	dom.window.dispatchEvent(new dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 50, clientY: 40 }));
-	dom.window.dispatchEvent(new dom.window.MouseEvent("pointerup", { bubbles: true, clientX: 50, clientY: 40 }));
+	startHandle.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientX: 50, clientY: 40 }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, clientX: 50, clientY: 40 }));
 
 	assert.deepEqual(grid.getViewSize(left), { width: 250, height: 600 });
 	assert.deepEqual(grid.getViewSize(top), { width: 350, height: 340 });
@@ -197,88 +199,88 @@ test("Grid wires nested SplitView intersections as corner sashes", () => {
 	dom.window.close();
 });
 
-test("Grid recursively projects inherited boundary sashes", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Grid recursively projects inherited boundary sashes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const view = () => new TestGridView(dom.window.document, 50, 1_000, 50, 1_000);
 	const grid = new Grid(dom.window.document.body, {
-		type: "branch",
-		orientation: "horizontal",
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
-			{ type: "leaf", view: view(), size: 100 },
+			{ type: 'leaf', view: view(), size: 100 },
 			{
-				type: "branch",
-				orientation: "vertical",
+				type: 'branch',
+				orientation: Orientation.VERTICAL,
 				size: 600,
 				children: [
 					{
-						type: "branch",
-						orientation: "horizontal",
+						type: 'branch',
+						orientation: Orientation.HORIZONTAL,
 						size: 300,
 						children: [
 							{
-								type: "branch",
-								orientation: "vertical",
+								type: 'branch',
+								orientation: Orientation.VERTICAL,
 								size: 300,
 								children: [
-									{ type: "leaf", view: view(), size: 150 },
-									{ type: "leaf", view: view(), size: 150 },
+									{ type: 'leaf', view: view(), size: 150 },
+									{ type: 'leaf', view: view(), size: 150 },
 								],
 							},
-							{ type: "leaf", view: view(), size: 300 },
+							{ type: 'leaf', view: view(), size: 300 },
 						],
 					},
-					{ type: "leaf", view: view(), size: 300 },
+					{ type: 'leaf', view: view(), size: 300 },
 				],
 			},
-			{ type: "leaf", view: view(), size: 100 },
+			{ type: 'leaf', view: view(), size: 100 },
 		],
 	});
 	grid.layout(800, 600);
-	const horizontalSashes = [...grid.element.querySelectorAll<HTMLElement>(".ash-sash-horizontal")];
+	const horizontalSashes = [...grid.element.querySelectorAll<HTMLElement>('.ash-sash-horizontal')];
 	assert.equal(horizontalSashes.length, 2);
 	for (const sash of horizontalSashes) {
-		assert.ok(sash.querySelector(".ash-sash-orthogonal-handle-start"));
-		assert.ok(sash.querySelector(".ash-sash-orthogonal-handle-end"));
+		assert.ok(sash.querySelector('.ash-sash-orthogonal-handle-start'));
+		assert.ok(sash.querySelector('.ash-sash-orthogonal-handle-end'));
 	}
-	const panes = [...grid.element.querySelectorAll<HTMLElement>(".ash-split-view-pane")];
+	const panes = [...grid.element.querySelectorAll<HTMLElement>('.ash-split-view-pane')];
 	for (const pane of panes) {
-		const hostsNestedSplitView = pane.firstElementChild?.classList.contains("ash-split-view") === true;
-		assert.equal(pane.classList.contains("ash-split-view-pane-overflow-visible"), hostsNestedSplitView);
+		const hostsNestedSplitView = pane.firstElementChild?.classList.contains('ash-split-view') === true;
+		assert.equal(pane.classList.contains('ash-split-view-pane-overflow-visible'), hostsNestedSplitView);
 	}
 
 	grid.dispose();
 	dom.window.close();
 });
 
-test("Grid links aligned sashes in a 2 by 2 layout", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Grid links aligned sashes in a 2 by 2 layout', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const topLeft = new TestGridView(dom.window.document, 100, 1_000, 100, 1_000);
 	const topRight = new TestGridView(dom.window.document, 100, 1_000, 100, 1_000);
 	const bottomLeft = new TestGridView(dom.window.document, 100, 1_000, 100, 1_000);
 	const bottomRight = new TestGridView(dom.window.document, 100, 1_000, 100, 1_000);
 	const row = (left: TestGridView, right: TestGridView) => ({
-		type: "branch" as const,
-		orientation: "horizontal" as const,
+		type: 'branch' as const,
+		orientation: Orientation.HORIZONTAL as const,
 		size: 300,
 		children: [
-			{ type: "leaf" as const, view: left, size: 400 },
-			{ type: "leaf" as const, view: right, size: 400 },
+			{ type: 'leaf' as const, view: left, size: 400 },
+			{ type: 'leaf' as const, view: right, size: 400 },
 		],
 	});
 	const grid = new Grid(dom.window.document.body, {
-		type: "branch",
-		orientation: "vertical",
+		type: 'branch',
+		orientation: Orientation.VERTICAL,
 		size: 600,
 		children: [row(topLeft, topRight), row(bottomLeft, bottomRight)],
 	});
 	grid.layout(800, 600);
-	const handle = grid.element.querySelector<HTMLElement>(".ash-sash-vertical .ash-sash-orthogonal-handle-end");
+	const handle = grid.element.querySelector<HTMLElement>('.ash-sash-vertical .ash-sash-orthogonal-handle-end');
 	assert.ok(handle);
 
-	handle.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 0, clientY: 0 }));
-	dom.window.dispatchEvent(new dom.window.MouseEvent("pointermove", { bubbles: true, clientX: 50, clientY: 30 }));
-	dom.window.dispatchEvent(new dom.window.MouseEvent("pointerup", { bubbles: true, clientX: 50, clientY: 30 }));
+	handle.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 0, clientY: 0 }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointermove', { bubbles: true, clientX: 50, clientY: 30 }));
+	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, clientX: 50, clientY: 30 }));
 
 	assert.deepEqual(grid.getViewSize(topLeft), { width: 450, height: 330 });
 	assert.deepEqual(grid.getViewSize(topRight), { width: 350, height: 330 });
@@ -288,29 +290,29 @@ test("Grid links aligned sashes in a 2 by 2 layout", () => {
 	dom.window.close();
 });
 
-test("Grid edge snapping allows collapse but gates outer-edge restore", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Grid edge snapping allows collapse but gates outer-edge restore', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const sidebar = new TestGridView(dom.window.document, 100, 400, 0, Infinity, true);
 	const editor = new TestGridView(dom.window.document, 100, Infinity);
 	const grid = new Grid(dom.window.document.body, {
-		type: "branch",
-		orientation: "horizontal",
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
 		size: 600,
 		children: [
-			{ type: "leaf", view: sidebar, size: 100 },
-			{ type: "leaf", view: editor, size: 500 },
+			{ type: 'leaf', view: sidebar, size: 100 },
+			{ type: 'leaf', view: editor, size: 500 },
 		],
 	});
 	grid.layout(600, 300);
 	assert.equal(grid.edgeSnapping, false);
-	const sash = grid.element.querySelector<HTMLElement>(".ash-sash");
+	const sash = grid.element.querySelector<HTMLElement>('.ash-sash');
 	assert.ok(sash);
 
 	dragGridSash(dom.window, sash, -60);
 	assert.equal(grid.isViewVisible(sidebar), false);
-	assert.equal(sash.classList.contains("ash-sash-disabled"), true);
+	assert.equal(sash.classList.contains('ash-sash-disabled'), true);
 	grid.edgeSnapping = true;
-	assert.equal(sash.classList.contains("ash-sash-minimum"), true);
+	assert.equal(sash.classList.contains('ash-sash-minimum'), true);
 	dragGridSash(dom.window, sash, 60);
 	assert.equal(grid.isViewVisible(sidebar), true);
 
@@ -318,24 +320,24 @@ test("Grid edge snapping allows collapse but gates outer-edge restore", () => {
 	dom.window.close();
 });
 
-test("Grid resets a visible sash by distributing its sibling sizes", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Grid resets a visible sash by distributing its sibling sizes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const left = new TestGridView(dom.window.document, 100, 600);
 	const right = new TestGridView(dom.window.document, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
-		type: "branch",
-		orientation: "horizontal",
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
 		size: 600,
 		children: [
-			{ type: "leaf", view: left, size: 200 },
-			{ type: "leaf", view: right, size: 400 },
+			{ type: 'leaf', view: left, size: 200 },
+			{ type: 'leaf', view: right, size: 400 },
 		],
 	});
 	grid.layout(600, 400);
-	const sash = grid.element.querySelector<HTMLElement>(".ash-sash");
+	const sash = grid.element.querySelector<HTMLElement>('.ash-sash');
 	assert.ok(sash);
 
-	sash.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true }));
+	sash.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
 
 	assert.deepEqual(grid.getViewSize(left), { width: 300, height: 400 });
 	assert.deepEqual(grid.getViewSize(right), { width: 300, height: 400 });
@@ -343,27 +345,27 @@ test("Grid resets a visible sash by distributing its sibling sizes", () => {
 	dom.window.close();
 });
 
-test("Grid resets only the views adjacent to the selected sash", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Grid resets only the views adjacent to the selected sash', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const left = new TestGridView(dom.window.document, 100, 600);
 	const middle = new TestGridView(dom.window.document, 100, 600);
 	const right = new TestGridView(dom.window.document, 100, 600);
 	const grid = new Grid(dom.window.document.body, {
-		type: "branch",
-		orientation: "horizontal",
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
 		size: 600,
 		children: [
-			{ type: "leaf", view: left, size: 100 },
-			{ type: "leaf", view: middle, size: 300 },
-			{ type: "leaf", view: right, size: 200 },
+			{ type: 'leaf', view: left, size: 100 },
+			{ type: 'leaf', view: middle, size: 300 },
+			{ type: 'leaf', view: right, size: 200 },
 		],
 	});
 	grid.layout(600, 400);
-	const sashes = grid.element.querySelectorAll<HTMLElement>(":scope > .ash-split-view > .ash-sash");
+	const sashes = grid.element.querySelectorAll<HTMLElement>(':scope > .ash-split-view > .ash-sash');
 	const secondSash = sashes[1];
 	assert.ok(secondSash);
 
-	secondSash.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true }));
+	secondSash.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
 
 	assert.deepEqual(grid.getViewSize(left), { width: 100, height: 400 });
 	assert.deepEqual(grid.getViewSize(middle), { width: 250, height: 400 });
@@ -372,17 +374,17 @@ test("Grid resets only the views adjacent to the selected sash", () => {
 	dom.window.close();
 });
 
-test("Grid rejects duplicate views in its descriptor", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Grid rejects duplicate views in its descriptor', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const view = new TestGridView(dom.window.document, 0, Infinity);
 	assert.throws(
 		() => new Grid(dom.window.document.body, {
-			type: "branch",
-			orientation: "horizontal",
+			type: 'branch',
+			orientation: Orientation.HORIZONTAL,
 			size: 200,
 			children: [
-				{ type: "leaf", view, size: 100 },
-				{ type: "leaf", view, size: 100 },
+				{ type: 'leaf', view, size: 100 },
+				{ type: 'leaf', view, size: 100 },
 			],
 		}),
 		/same view twice/,
@@ -390,19 +392,19 @@ test("Grid rejects duplicate views in its descriptor", () => {
 	dom.window.close();
 });
 
-test("SerializableGrid restores view identity and runtime geometry", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const left = new SerializableTestGridView(dom.window.document, "left", 100, 600);
-	const editor = new SerializableTestGridView(dom.window.document, "editor", 120, Infinity);
-	const right = new SerializableTestGridView(dom.window.document, "right", 100, 600);
+test('SerializableGrid restores view identity and runtime geometry', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const left = new SerializableTestGridView(dom.window.document, 'left', 100, 600);
+	const editor = new SerializableTestGridView(dom.window.document, 'editor', 120, Infinity);
+	const right = new SerializableTestGridView(dom.window.document, 'right', 100, 600);
 	const grid = new SerializableGrid(dom.window.document.body, {
-		type: "branch",
-		orientation: "horizontal",
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
 		size: 800,
 		children: [
-			{ type: "leaf", view: left, size: 200 },
-			{ type: "leaf", view: editor, size: 400, priority: "high" },
-			{ type: "leaf", view: right, size: 200 },
+			{ type: 'leaf', view: left, size: 200 },
+			{ type: 'leaf', view: editor, size: 400, priority: LayoutPriority.High },
+			{ type: 'leaf', view: right, size: 200 },
 		],
 	});
 	grid.layout(900, 600);
@@ -416,14 +418,14 @@ test("SerializableGrid restores view identity and runtime geometry", () => {
 		snapshot,
 		{
 			fromJSON: (data) => {
-				if (typeof data !== "string") {
-					throw new TypeError("Serialized test view ID must be a string");
+				if (typeof data !== 'string') {
+					throw new TypeError('Serialized test view ID must be a string');
 				}
 				const view = new SerializableTestGridView(
 					dom.window.document,
 					data,
-					data === "editor" ? 120 : 100,
-					data === "editor" ? Infinity : 600,
+					data === 'editor' ? 120 : 100,
+					data === 'editor' ? Infinity : 600,
 				);
 				restoredViews.set(data, view);
 				return view;
@@ -432,9 +434,9 @@ test("SerializableGrid restores view identity and runtime geometry", () => {
 	);
 	restored.layout(900, 600);
 
-	assert.equal(restored.isViewVisible(restoredViews.get("left")!), false);
-	assert.equal(restored.getViewSize(restoredViews.get("editor")!).width, 650);
-	assert.equal(restored.getViewSize(restoredViews.get("right")!).width, 250);
+	assert.equal(restored.isViewVisible(restoredViews.get('left')!), false);
+	assert.equal(restored.getViewSize(restoredViews.get('editor')!).width, 650);
+	assert.equal(restored.getViewSize(restoredViews.get('right')!).width, 250);
 
 	restored.dispose();
 	grid.dispose();
@@ -442,14 +444,14 @@ test("SerializableGrid restores view identity and runtime geometry", () => {
 });
 
 function dragGridSash(targetWindow: typeof browserEnvironment.window, sash: HTMLElement, delta: number): void {
-	const vertical = sash.classList.contains("ash-sash-vertical");
+	const vertical = sash.classList.contains('ash-sash-vertical');
 	const event = (type: string, coordinate: number) => new targetWindow.MouseEvent(type, {
 		bubbles: true,
 		button: 0,
 		clientX: vertical ? coordinate : 0,
 		clientY: vertical ? 0 : coordinate,
 	});
-	sash.dispatchEvent(event("pointerdown", 0));
-	targetWindow.dispatchEvent(event("pointermove", delta));
-	targetWindow.dispatchEvent(event("pointerup", delta));
+	sash.dispatchEvent(event('pointerdown', 0));
+	targetWindow.dispatchEvent(event('pointermove', delta));
+	targetWindow.dispatchEvent(event('pointerup', delta));
 }

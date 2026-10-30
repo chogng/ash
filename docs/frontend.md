@@ -20,6 +20,12 @@
 
 `Ash (Hot Reload)` 专用于前端热更新和 Electron 宿主监听，仍连接 Rust 后端，但不监听后端源码变化；`Ash` 和 `Ash Agents` 同时监听前后端，也支持前端热更新。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
 
+这三个 Desktop F5 配置由 Node 调试器运行 Electron launcher，Ash 与 VS Code 共用同一配置。launcher 准备后端，在 5183 端口启动 Vite；`Ash` 和 `Ash Agents` 还会启动 Rust 源码 watcher，等待监听就绪后再启动窗口，成功构建后自动切换后端。launcher 发布调试目标后自动启动 `Ash Main Process` 附加会话。停止调试会一并关闭 launcher 所拥有的 Electron、Vite 和 Rust watcher；启动准备阶段的 Stop 也会取消正在执行的构建。Electron Main 构建生成 source map，映射回当前 checkout 的 `src/`。Rust 开发运行包使用剥离符号的 `dev-small` profile；调试 Rust 源码须使用带调试信息的独立目标。
+
+`Ash Code (TUI)` 通过 CodeLLDB 调试 `.build/cargo/ci-test/ash`（Windows 为 `.exe`），在集成终端运行。其 `Prepare Ash Code Debug` 前置任务为 CLI 和 TUI 构建完整调试符号，准备匹配的后端程序和完整的 Node 扩展运行资源，并将 `ASH_DEV_RUNTIME_ROOT` 及校验锁定的 ripgrep／tgrep 路径写入 `.build/code/debug.env`。单独准备可执行 `node build/python.ts -B build/code/debug.py`；直接运行 TUI 仍用 `just ash-code`，也会先准备这些运行资源。
+
+Windows 自举验收在完成 Desktop 构建和上述 TUI 准备任务后，设置 `$env:ASH_SELFHOST_ACCEPTANCE='1'`，依次运行 `pnpm run smoketest-no-compile test/smoke/areas/windows/selfhost-tui.spec.ts --workers=1` 与 `pnpm run smoketest-no-compile test/smoke/areas/windows/selfhost-dev.spec.ts --workers=1`。整仓场景会临时修改并恢复当前 checkout 的 Renderer、Main 和 Rust 源码，必须独占 checkout，期间不要编辑源码或并发构建。它检查原型热更新、Main 重启、Rust 编译失败保留旧后端、修正后切换及草稿保留；普通烟测默认跳过这两个显式验收场景。
+
 `Ash Server (Web)` 只启动完整 Web 服务并输出认证链接，可手动在浏览器打开；带 `Chrome` 或 `Edge` 的配置在服务就绪后自动打开对应浏览器调试器。Ash 的 Agent 执行由 Rust App Server 承担，没有 VS Code 的独立 Node Agent Host 入口。Chrome 和 Edge 配置分别要求本机安装对应浏览器。
 
 IDE Web 仅前端模式打开 `http://127.0.0.1:5173/`，完整 Web 模式使用 5174 端口。Agents Web 仅前端模式使用 5175，完整模式使用 5176，可与 IDE Web 同时启动和调试；完整模式须打开各自终端输出的认证链接。Stanza 页面为 `http://127.0.0.1:5199/`，仅启动编辑器，可通过 `globalThis.stanza.editor` 检查模型和编辑器。
@@ -32,7 +38,7 @@ IDE Web 仅前端模式打开 `http://127.0.0.1:5173/`，完整 Web 模式使用
 4. 开发过程中执行 `pnpm test:web:dev --grep '<场景标题>'`，通过现有 Playwright Browser UI 项目直接验证 Vite 开发入口。
 5. 提交前按 [验证范围规则](../.github/instructions/testing.instructions.md#learnings) 检查是否仍需补充生产资源验证。需要时执行 `pnpm test:web --grep '<场景标题>'`，其前置步骤会构建 Web 和编译测试，无需先单独执行 `pnpm build:web`。已有匹配当前源码和构建模式的产物及已编译测试时，用 `pnpm test:smoke:browser:no-compile --grep '<场景标题>'`；相关输入未变且测试已经通过时直接复用结果。`pnpm start:web` 启动生产资源预览。
 
-F5 先准备生成资源，再由 VS Code 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在集成终端，F5 配置关闭输出颜色，保证 VS Code 的 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。同一 Web 入口的 F5 和手动启动使用相同端口，选择一种启动方式；IDE 与 Agents 使用不同端口，可以同时调试。
+F5 先准备生成资源，再由 Node 调试器直接启动 Vite；服务就绪后启动 Chrome 调试。Vite 输出显示在集成终端，F5 配置关闭输出颜色，保证 `serverReadyAction` 能匹配就绪地址。停止 Vite 或 Chrome 调试会一起结束这两个会话并释放服务端口。手动执行 `pnpm dev:web` 或运行 `Run Ash Web` 任务时，服务由对应终端或任务管理，需要用 `Ctrl+C` 或“终止任务”停止。同一 Web 入口的 F5 和手动启动使用相同端口，选择一种启动方式；IDE 与 Agents 使用不同端口，可以同时调试。
 
 F5 生命周期回归测试使用已安装的 VS Code 和 Playwright。设置 `ASH_VSCODE_EXECUTABLE` 为 VS Code 可执行文件的绝对路径，再执行 `pnpm --dir build exec node --test desktop/launch/webDebug.test.ts`；它使用独立配置目录，验证停止任一调试会话、进程退出、端口释放、再次启动和端口占用失败。未提供该环境变量时，构建工具测试会跳过这一项。
 
@@ -169,6 +175,12 @@ Renderer 通过 `createElectronRendererApi()` 适配桥接，由组合入口注�
 Agent 浏览器操作复用同一组目标：Rust 管理工具、批准、超时和资源权限，独立 Playwright 进程通过窗口 MessagePort 与 Thread Group CDP 操作 Main 的可见页面。产品协议不开放任意 CDP 调用，也不开放调试端口。关闭 Group 只解绑自动化，页面仍由 Main 持有。
 
 界面命令为 `Browser: Open Browser`，网页中用 F6 或 Ctrl/Cmd+L 返回地址栏。Agent 创建的目标也显示为页签；Renderer 重载接回现存页面，应用重启恢复用户页签与工作区登录。用户可向指定 Thread 分享页面并撤销，网站权限支持记忆和重置，远程 Session 在创建页面前配置 SSH SOCKS5。双语导航已通过 macOS Electron 验证；上游契约差异及网络隔离限制见 [浏览器能力](desktop-architecture.md#7-浏览器能力)。
+
+会话 Canvas 由 `workbench/contrib/canvases` 承载。Agent 可通过 `browser_open` 的 `canvas: { instance_id, title }` 参数打开交互页面，也可用 `canvas_list` 和 `canvas_open` 选择扩展注册的类型。后端从执行事实提供 Session 和 Thread，扩展只返回当前页面来源；模型打开的页面继续受当前工具执行的浏览器网络权限约束。Main 拥有原生页面及其成员身份，扩展拥有应用状态，CanvasService 只投影编辑器与呈现状态，普通浏览器贡献排除 Canvas。
+
+扩展通过 SDK `window.registerCanvasProvider` 和 `contributes.canvases` 声明类型，使用现有受监督 DataChannel 的 `canvas.provider.v1` 契约发现、打开、解析和关闭实例。定义加载失败或重连未完成时保留最近一次权威清单；旧 incarnation 的异步结果不能替换新来源。用户可从添加上下文、Canvas 按钮或 Agents Window 的 Add Tab 菜单打开页面，操作不修改草稿附件。手动打开使用窗口的用户导航权限与隔离的临时存储；模型打开使用 Agent 页面和原有任务网络策略。
+
+IDE 根据可见 Chat 控件识别归属，Agents Window 根据 Session／Chat 选择及布局范围识别归属，复用现有文档组和工作集。关闭标签只隐藏页面并保留页面内状态，元数据更新不会重新弹出用户关闭的标签；Close Canvas、`browser_close`、扩展撤销或权威会话删除才结束页面。工作集只保存当前窗口已接纳的版本化不透明身份，不保存 URL，冷启动不能凭旧数据重建页面。来源暂时未知时保留身份并隐藏旧内容，恢复等待工作集切换完成。Design／白板继续使用独立的空间画布和文档模型。当前 Canvas 的原生页面承载与扩展回调接入属于 Desktop 本地能力，远程 Provider 未声明支持时不借用本地注册表。
 
 ## iframe Webview
 

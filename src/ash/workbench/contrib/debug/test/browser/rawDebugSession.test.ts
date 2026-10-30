@@ -13,7 +13,7 @@ function backend(overrides: Partial<IDebugAdapterProcessService> = {}): IDebugAd
 		reserveSession: async () => { throw new Error('Not used by RawDebugSession'); }, manageSession: async () => { throw new Error('Not used by RawDebugSession'); }, readConsole: async () => { throw new Error('Not used by RawDebugSession'); }, setExceptionBreakpoints: async () => 1,
 		readWorkspaceState: async () => { throw new Error('Not used by RawDebugSession'); }, editWorkspaceState: async () => { throw new Error('Not used by RawDebugSession'); },
 		start: async () => 'client', send: async () => { }, read: async () => empty, close: async () => { },
-		setBreakpoints: async () => { }, readBreakpoints: async () => ({ revision: 0, version: 0, appliedVersion: 0, bindings: [], error: null }), startInspection: async () => 1, readInspection: async () => ({ state: "pending" }), initializeSession: async () => { }, completeConfiguration: async () => { }, startRequest: async () => 1, readResponse: async () => ({ state: 'pending' }), acceptInput: async () => { },
+		setBreakpoints: async () => { }, readBreakpoints: async () => ({ revision: 0, version: 0, appliedVersion: 0, bindings: [], error: null }), startInspection: async () => 1, readInspection: async () => ({ state: 'pending' }), initializeSession: async () => { }, completeConfiguration: async () => { }, startRequest: async () => 1, readResponse: async () => ({ state: 'pending' }), acceptInput: async () => { },
 		getConnectionState: async () => 'ready', onConnectionState: Event.None, ...overrides,
 	};
 }

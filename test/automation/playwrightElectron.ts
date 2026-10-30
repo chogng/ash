@@ -1,17 +1,19 @@
-import { execFile, type ChildProcess } from "node:child_process";
-import { resolve } from "node:path";
-import { DisposableStore, toDisposable } from "../../src/ash/base/common/lifecycle.js";
-import { promisify } from "node:util";
+import { execFile, type ChildProcess } from 'node:child_process';
+import { resolve } from 'node:path';
+import { DisposableStore, toDisposable } from '../../src/ash/base/common/lifecycle.js';
+import { promisify } from 'node:util';
 import { getEventListeners, type EventEmitter } from 'node:events';
-import { appServerDaemonExecutablePath } from "../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js";
-import { _electron, type ElectronApplication, type Request, type Page } from "@playwright/test";
-import { ElectronPlaywrightDriver } from "./electronDriver.js";
+import { appServerDaemonExecutablePath } from '../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
+import { _electron, type ElectronApplication, type Request, type Page } from '@playwright/test';
+import { ElectronPlaywrightDriver } from './electronDriver.js';
 import { WorkbenchDiagnostics } from './playwrightDriver.js';
-import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
+import { resolveElectronConfiguration, type ElectronLaunchOptions } from './electron.js';
 import { isProcessRunning, registerRunResource } from '../../build/processes.ts';
 
 export interface ElectronApplicationLaunchResult {
 	readonly application: ElectronApplication;
+	/** Retained before Playwright releases its channel if Main exits during startup. */
+	readonly process: ChildProcess;
 	readonly diagnostics: WorkbenchDiagnostics;
 	/** Runs the product quit handshake, including renderer shutdown participants and state saves. */
 	quit(): Promise<void>;
@@ -30,10 +32,19 @@ export type ElectronLaunchMilestone = 'electron-launch-resolved' | 'first-window
 export async function launchElectronApplication(options: ElectronLaunchOptions): Promise<ElectronApplicationLaunchResult> {
 	const configuration = resolveElectronConfiguration(options);
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
-	const resource = await registerRunResource(options.appServerMode === 'required' && options.profileDirectory === undefined ? () => ({
-		executable: appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath }),
-		profile: resolve(options.userDataDirectory, 'profile'),
-	}) : undefined);
+	const resource = await registerRunResource(
+		options.appServerMode === 'required' && options.profileDirectory === undefined
+			? () => ({
+					executable: appServerDaemonExecutablePath({
+						appPath: configuration.cwd,
+						isPackaged: options.packagedBundle !== undefined,
+						platform: process.platform,
+						resourcesPath: configuration.resourcesPath,
+					}),
+					profile: resolve(options.userDataDirectory, 'profile'),
+				})
+			: undefined,
+	);
 	const application = await _electron.launch({
 		args: [...configuration.args],
 		// On Linux Playwright otherwise injects --no-sandbox, bypassing the product's renderer isolation.
@@ -50,7 +61,7 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 			// Main coordinates product-document reloads. CDP's automatic dismissal
 			// otherwise races its will-prevent-unload decision and can force navigation.
 			if (dialog.type() === 'beforeunload' && /\/(?:workbench|sessions)\.html(?:[?#].*)?$/u.test(page.url())) return;
-			if (getEventListeners(page as unknown as EventEmitter, 'dialog').length === 1) void dialog.dismiss().catch(() => { });
+			if (getEventListeners(page as unknown as EventEmitter, 'dialog').length === 1) void dialog.dismiss().catch(() => {});
 		});
 	};
 	for (const page of application.context().pages()) observeDialogs(page);
@@ -58,79 +69,122 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 	application.context().once('close', () => application.context().off('page', observeDialogs));
 	// Playwright releases the application channel on exit; retain the child process for startup diagnostics and cleanup.
 	const electronProcess = application.process();
-	await resource.process(electronProcess);
 	let closing: Promise<void> | undefined;
-	const shutdown = (kind: 'quit' | 'destroy'): Promise<void> => closing ??= (async () => {
-		const exited = electronProcess.exitCode !== null || electronProcess.signalCode !== null
-			? Promise.resolve() : new Promise<void>(resolveExit => electronProcess.once('exit', () => resolveExit()));
-		let termination: Promise<void> | undefined;
-		const shutdownTimer = setTimeout(() => { termination = terminateElectronProcess(electronProcess); }, 10_000);
-		try {
+	const shutdown = (kind: 'quit' | 'destroy'): Promise<void> =>
+		(closing ??= (async () => {
+			const exited =
+				electronProcess.exitCode !== null || electronProcess.signalCode !== null ? Promise.resolve() : new Promise<void>(resolveExit => electronProcess.once('exit', () => resolveExit()));
+			let termination: Promise<void> | undefined;
+			const shutdownTimer = setTimeout(() => {
+				termination = terminateElectronProcess(electronProcess);
+			}, 10_000);
 			try {
-				// End the renderer before stopping its daemon, so it cannot reconnect.
-				if (kind === 'destroy' && electronProcess.exitCode === null && electronProcess.signalCode === null) {
-					try {
-						await application.evaluate(({ app }) => {
-							// Let Electron own forced window teardown. Destroying windows first
-							// can reenter Cocoa key-window changes during pending close events.
-							// exit() bypasses vetoes; quit() exercises the product handshake.
-							app.exit(0);
-						});
-					} catch (error) {
-						// Forced exit can close Main before its inspector sends the reply.
-						// Accept a confirmed clean exit or the fixture's deliberate force
-						// termination, never an unrelated process crash.
-						if (!(error instanceof Error) || !error.message.includes('Target page, context or browser has been closed')) throw error;
-						await exited;
-						if (electronProcess.exitCode !== 0 && !termination) {
-							throw new Error(`Fixture destruction observed an unexpected Main exit: code=${electronProcess.exitCode}; signal=${electronProcess.signalCode}`, { cause: error });
+				try {
+					// End the renderer before stopping its daemon, so it cannot reconnect.
+					if (kind === 'destroy' && electronProcess.exitCode === null && electronProcess.signalCode === null) {
+						try {
+							await application.evaluate(({ app }) => {
+								// Let Electron own forced window teardown. Destroying windows first
+								// can reenter Cocoa key-window changes during pending close events.
+								// exit() bypasses vetoes; quit() exercises the product handshake.
+								app.exit(0);
+							});
+						} catch (error) {
+							// Forced exit can close Main before its inspector sends the reply.
+							// Accept a confirmed clean exit or the fixture's deliberate force
+							// termination, never an unrelated process crash.
+							if (!(error instanceof Error) || !error.message.includes('Target page, context or browser has been closed')) throw error;
+							await exited;
+							if (electronProcess.exitCode !== 0 && !termination) {
+								throw new Error(`Fixture destruction observed an unexpected Main exit: code=${electronProcess.exitCode}; signal=${electronProcess.signalCode}`, { cause: error });
+							}
 						}
 					}
+				} finally {
+					// Electron's process exit ends its renderers. A daemon can keep inherited
+					// pipes open, so stop it on exit instead of awaiting Playwright's pipe-close event.
+					const stopDaemon = async (): Promise<void> => {
+						if (options.appServerMode !== 'required' || options.profileDirectory !== undefined) return;
+						const daemon = appServerDaemonExecutablePath({
+							appPath: configuration.cwd,
+							isPackaged: options.packagedBundle !== undefined,
+							platform: process.platform,
+							resourcesPath: configuration.resourcesPath,
+						});
+						await promisify(execFile)(daemon, ['stop'], {
+							env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') },
+							windowsHide: true,
+							timeout: 30_000,
+						}).catch(error => {
+							throw new Error(`Test daemon shutdown failed: code=${error.code}; signal=${error.signal}; killed=${error.killed}; stdout=${error.stdout}; stderr=${error.stderr}`, {
+								cause: error,
+							});
+						});
+					};
+					await Promise.all([
+						application.close(),
+						exited.then(async () => {
+							clearTimeout(shutdownTimer);
+							await stopDaemon();
+						}),
+					]);
 				}
-			} finally {
-				// Electron's process exit ends its renderers. A daemon can keep inherited
-				// pipes open, so stop it on exit instead of awaiting Playwright's pipe-close event.
-				const stopDaemon = async (): Promise<void> => {
-					if (options.appServerMode !== 'required' || options.profileDirectory !== undefined) return;
-					const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath });
-					await promisify(execFile)(daemon, ['stop'], { env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') }, windowsHide: true, timeout: 30_000 }).catch(error => {
-						throw new Error(`Test daemon shutdown failed: code=${error.code}; signal=${error.signal}; killed=${error.killed}; stdout=${error.stdout}; stderr=${error.stderr}`, { cause: error });
+			} catch (error) {
+				if (termination && kind === 'quit')
+					throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated', {
+						cause: error,
 					});
-				};
-				await Promise.all([application.close(), exited.then(async () => {
+				throw error;
+			} finally {
+				try {
+					await Promise.all([exited, termination]);
+				} finally {
 					clearTimeout(shutdownTimer);
-					await stopDaemon();
-				})]);
+				}
 			}
-		} catch (error) {
-			if (termination && kind === 'quit') throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated', { cause: error });
-			throw error;
-		} finally {
-			try { await Promise.all([exited, termination]); }
-			finally { clearTimeout(shutdownTimer); }
+			if (termination && kind === 'quit') throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
+			await resource.dispose();
+		})());
+	try {
+		await resource.process(electronProcess);
+	} catch (error) {
+		try {
+			await shutdown('destroy');
+		} catch (cleanup) {
+			throw new AggregateError([error, cleanup], 'Electron process registration and cleanup failed');
 		}
-		if (termination && kind === 'quit') throw new Error('Electron shutdown exceeded 10000ms; its process tree was terminated');
-		await resource.dispose();
-	})();
-	return { application, diagnostics, quit: () => shutdown('quit'), close: () => shutdown('destroy') };
+		throw error;
+	}
+	return {
+		application,
+		process: electronProcess,
+		diagnostics,
+		quit: () => shutdown('quit'),
+		close: () => shutdown('destroy'),
+	};
 }
 
 /** Launches Ash Desktop through Playwright's Electron adapter and waits for Workbench readiness. */
 export async function launchElectron(options: ElectronLaunchOptions, onMilestone?: (milestone: ElectronLaunchMilestone) => void): Promise<ElectronLaunchResult> {
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
 	const session = await launchElectronApplication(options);
-	const { application, diagnostics, close } = session;
+	const { application, process: electronProcess, diagnostics, close } = session;
 	onMilestone?.('electron-launch-resolved');
-	const electronProcess = application.process();
 	const startupResources = new DisposableStore();
 	let processErrors = '';
-	const onProcessError = (chunk: Buffer): void => { processErrors = (processErrors + chunk.toString()).slice(-16_384); };
+	const onProcessError = (chunk: Buffer): void => {
+		processErrors = (processErrors + chunk.toString()).slice(-16_384);
+	};
 	electronProcess.stderr?.on('data', onProcessError);
-	startupResources.add(toDisposable(() => { electronProcess.stderr?.off('data', onProcessError); }));
+	startupResources.add(
+		toDisposable(() => {
+			electronProcess.stderr?.off('data', onProcessError);
+		}),
+	);
 	const pendingRequests = new Set<Request>();
 	const failedRequests: string[] = [];
 	const start = async (): Promise<ElectronLaunchResult> => {
-		const page = application.windows()[0] ?? await application.waitForEvent("window", { timeout: Math.max(1, startupDeadline - Date.now()) });
+		const page = application.windows()[0] ?? (await application.waitForEvent('window', { timeout: Math.max(1, startupDeadline - Date.now()) }));
 		// Cold Remote initialization can defer trust and Workbench UI past ordinary action deadlines.
 		page.setDefaultTimeout(Math.max(1, startupDeadline - Date.now()));
 		startupResources.add(toDisposable(() => page.setDefaultTimeout(30_000)));
@@ -142,8 +196,12 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 			}, options.recordVideo.size);
 		}
 		const driver = new ElectronPlaywrightDriver(application, page, diagnostics);
-		const onRequest = (request: Request): void => { pendingRequests.add(request); };
-		const onRequestFinished = (request: Request): void => { pendingRequests.delete(request); };
+		const onRequest = (request: Request): void => {
+			pendingRequests.add(request);
+		};
+		const onRequestFinished = (request: Request): void => {
+			pendingRequests.delete(request);
+		};
 		const onRequestFailed = (request: Request): void => {
 			pendingRequests.delete(request);
 			failedRequests.push(`${request.url()}: ${request.failure()?.errorText}`);
@@ -151,17 +209,19 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		page.on('request', onRequest);
 		page.on('requestfinished', onRequestFinished);
 		page.on('requestfailed', onRequestFailed);
-		startupResources.add(toDisposable(() => {
-			page.off('request', onRequest);
-			page.off('requestfinished', onRequestFinished);
-			page.off('requestfailed', onRequestFailed);
-		}));
+		startupResources.add(
+			toDisposable(() => {
+				page.off('request', onRequest);
+				page.off('requestfinished', onRequestFinished);
+				page.off('requestfailed', onRequestFailed);
+			}),
+		);
 		const ready = driver.workbench.waitForReady();
 		if (options.appServerMode === 'required' && options.workspaceDirectory && options.workspacePermissions === 'development') {
 			const prompt = page.getByRole('dialog', { name: 'Ash' });
 			await Promise.race([ready, prompt.waitFor({ state: 'visible' })]);
 			if (await prompt.isVisible()) {
-				await prompt.getByRole('button', { name: /^(?:Trust Folder & Enable Features|信任文件夹并启用开发功能)$/u }).click();
+				await prompt.getByRole('button', { name: /^(?:Trust Folder(?: & Enable Features)?|信任文件夹)$/u }).click();
 				onMilestone?.('trust-accepted');
 			}
 		}
@@ -174,17 +234,20 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 	} catch (error) {
 		// A deadline can win before the readiness call rejects. Collect the document
 		// here while the process is still alive, with a separate bounded read.
-		const page = application.windows()[0];
-		const text = page ? await beforeDeadline(page.evaluate(() => [
-			document.body.innerText,
-			...Array.from(document.querySelectorAll('textarea'), field => field.value),
-		].join('\n')), Date.now() + 1_000, 'Startup document diagnostics timed out').catch(error => String(error)) : 'No Electron window opened';
-		const details = [
-			...diagnostics.consoleErrors.slice(-8),
-			...diagnostics.pageErrors,
-			...failedRequests,
-			...[...pendingRequests].map(request => `Pending: ${request.url()}`),
-		].join('\n');
+		// Main may have exited and released Playwright's channel before startup
+		// diagnostics run. Keep that failure from hiding the original launch error.
+		const page =
+			electronProcess.exitCode === null && electronProcess.signalCode === null
+				? application.windows()[0]
+				: undefined;
+		const text = page
+			? await beforeDeadline(
+					page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n')),
+					Date.now() + 1_000,
+					'Startup document diagnostics timed out',
+				).catch(error => String(error))
+			: 'No Electron window opened';
+		const details = [...diagnostics.consoleErrors.slice(-8), ...diagnostics.pageErrors, ...failedRequests, ...[...pendingRequests].map(request => `Pending: ${request.url()}`)].join('\n');
 		const bufferedError = electronProcess.stderr?.read();
 		if (bufferedError) {
 			onProcessError(Buffer.isBuffer(bufferedError) ? bufferedError : Buffer.from(String(bufferedError)));
@@ -195,7 +258,9 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 		} catch (closeError) {
 			processErrors = `${processErrors}\nCleanup: ${String(closeError)}`;
 		}
-		throw new Error(`Electron startup failed${exitCode === null ? '' : ` (exit code ${exitCode})`}: ${String(error)}\n${text}\n${details}${processErrors ? `\n${processErrors}` : ''}`, { cause: error });
+		throw new Error(`Electron startup failed${exitCode === null ? '' : ` (exit code ${exitCode})`}: ${String(error)}\n${text}\n${details}${processErrors ? `\n${processErrors}` : ''}`, {
+			cause: error,
+		});
 	} finally {
 		startupResources.dispose();
 	}
@@ -203,9 +268,14 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 
 async function beforeDeadline<T>(operation: Promise<T>, deadline: number, message: string): Promise<T> {
 	let timer: ReturnType<typeof setTimeout>;
-	const expired = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), Math.max(1, deadline - Date.now())); });
-	try { return await Promise.race([operation, expired]); }
-	finally { clearTimeout(timer!); }
+	const expired = new Promise<never>((_, reject) => {
+		timer = setTimeout(() => reject(new Error(message)), Math.max(1, deadline - Date.now()));
+	});
+	try {
+		return await Promise.race([operation, expired]);
+	} finally {
+		clearTimeout(timer!);
+	}
 }
 
 async function terminateElectronProcess(child: ChildProcess): Promise<void> {
@@ -216,7 +286,10 @@ async function terminateElectronProcess(child: ChildProcess): Promise<void> {
 	// owns the Electron tree. Terminate that owned tree, including helper processes.
 	if (process.platform === 'win32') {
 		try {
-			await promisify(execFile)('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 5_000 });
+			await promisify(execFile)('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+				windowsHide: true,
+				timeout: 5_000,
+			});
 		} catch (error) {
 			// A tree can finish exiting between taskkill's enumeration and termination.
 			// Keep permission failures and genuine survivors observable.

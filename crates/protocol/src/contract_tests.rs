@@ -114,7 +114,7 @@ fn model_declarations_and_presets_use_snake_case_json_fields() {
         "id":"model", "display_name":"Model", "description":null, "access":"unknown",
         "context_window":"unknown", "auto_compact_token_limit":null,
         "capabilities":{
-            "tools":"unknown", "reasoning":"unknown", "parallel_tool_calls":"unknown",
+            "tools":"unknown", "agent_mode":"unknown", "reasoning":"unknown", "parallel_tool_calls":"unknown",
             "personality":"unknown", "image_detail_original":"unknown", "fast_mode":"unknown"
         },
         "supported_reasoning_efforts":[], "default_reasoning_effort":null, "default_personality":null,

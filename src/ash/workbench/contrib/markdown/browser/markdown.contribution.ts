@@ -1,1 +1,1 @@
-import "./media/markdown.css";
+import './media/markdown.css';

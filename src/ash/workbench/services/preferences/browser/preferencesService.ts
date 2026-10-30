@@ -54,7 +54,7 @@ export class PreferencesService extends Disposable implements IPreferencesServic
 			if (!this.workspace.getWorkspace().configuration) validated = { ...validated, target: ConfigurationTarget.WORKSPACE, folderUri: undefined };
 		}
 		validated = { ...validated, target: validated.target ?? target };
-		if (validated.jsonEditor ?? this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json') {
+		if (validated.jsonEditor ?? (validated.sectionQuery === undefined && this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json')) {
 			await this.openSettingsJson(validated);
 			return;
 		}

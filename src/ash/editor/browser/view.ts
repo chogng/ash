@@ -86,7 +86,7 @@ interface BrowserCaretDocument {
 	caretRangeFromPoint?(x: number, y: number): BrowserCaretRange | null;
 }
 
-export type EditorViewportPresentation = "document" | "embedded";
+export type EditorViewportPresentation = 'document' | 'embedded';
 
 export enum EditorTextDirection {
 	Auto = 'auto',
@@ -95,7 +95,7 @@ export enum EditorTextDirection {
 }
 
 /** Chooses which component renders the visible focus outline for an Stanza viewport. */
-export type EditorFocusOutlineOwner = "editor" | "host";
+export type EditorFocusOutlineOwner = 'editor' | 'host';
 
 /** Space reserved around the editor's projected text rows. */
 export interface EditorViewportPadding {
@@ -220,40 +220,40 @@ export class View extends ViewEventHandler {
 		}
 		this.viewModel = options.viewModel;
 		this.model = options.viewModel.model;
-		this.domNode = new FastDomNode(options.rootDomNode ?? h(ownerDocument, "div"));
-		this.contentElement = h(ownerDocument, "div");
+		this.domNode = new FastDomNode(options.rootDomNode ?? h(ownerDocument, 'div'));
+		this.contentElement = h(ownerDocument, 'div');
 		this.contentNode = new FastDomNode(this.contentElement);
-		this.textMetricsElement = h(ownerDocument, "span");
-		this.accessibilityStatusElement = h(ownerDocument, "div");
-		this.presentation = options.presentation ?? "document";
-		this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
+		this.textMetricsElement = h(ownerDocument, 'span');
+		this.accessibilityStatusElement = h(ownerDocument, 'div');
+		this.presentation = options.presentation ?? 'document';
+		this.focusOutlineOwner = options.focusOutlineOwner ?? 'editor';
 		this.editorConfiguration = options.configuration;
 		const mouseStyle = this.editorConfiguration.options.get(EditorOption.mouseStyle);
 		this.padding = resolveEditorViewportPadding(options.padding);
 		this.indentation = resolveEditorIndentationOptions(options.indentation);
 		this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
-		this.domNode.domNode.className = "stanza-editor";
+		this.domNode.domNode.className = 'stanza-editor';
 		this.domNode.domNode.classList.add(`stanza-editor-${this.presentation}`);
 		this.domNode.domNode.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
 		this.domNode.domNode.classList.add(`stanza-editor-direction-${this.textDirection}`);
 		this.domNode.domNode.classList.add(`stanza-editor-mouse-${mouseStyle}`);
-		this.domNode.domNode.classList.toggle("hide-line-numbers", options.configuration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off);
+		this.domNode.domNode.classList.toggle('hide-line-numbers', options.configuration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off);
 		this.domNode.domNode.style.tabSize = String(this.indentation.tabSize);
-		this.domNode.domNode.style.setProperty("--stanza-editor-padding-left", `${this.padding.left}px`);
-		this.domNode.domNode.style.setProperty("--stanza-editor-padding-right", `${this.padding.right}px`);
+		this.domNode.domNode.style.setProperty('--stanza-editor-padding-left', `${this.padding.left}px`);
+		this.domNode.domNode.style.setProperty('--stanza-editor-padding-right', `${this.padding.right}px`);
 		this.domNode.domNode.dir = this.textDirection;
-		this.domNode.domNode.classList.toggle("word-wrapped", this.softWrapping);
+		this.domNode.domNode.classList.toggle('word-wrapped', this.softWrapping);
 		// The text input owns the Tab stop; region focus still delegates to that input.
 		this.domNode.domNode.tabIndex = -1;
-		this.domNode.domNode.setAttribute("role", "region");
-		this.domNode.domNode.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor");
-		this.contentNode.setClassName("stanza-editor-content");
+		this.domNode.domNode.setAttribute('role', 'region');
+		this.domNode.domNode.setAttribute('aria-label', options.ariaLabel ?? 'Stanza editor');
+		this.contentNode.setClassName('stanza-editor-content');
 		this.textMetricsElement.className =
-			"stanza-editor-text-metrics";
-		this.textMetricsElement.setAttribute("aria-hidden", "true");
-		this.accessibilityStatusElement.className = "stanza-editor-accessibility-status";
-		this.accessibilityStatusElement.setAttribute("aria-live", "polite");
-		this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
+			'stanza-editor-text-metrics';
+		this.textMetricsElement.setAttribute('aria-hidden', 'true');
+		this.accessibilityStatusElement.className = 'stanza-editor-accessibility-status';
+		this.accessibilityStatusElement.setAttribute('aria-live', 'polite');
+		this.accessibilityStatusElement.setAttribute('aria-atomic', 'true');
 		this.domNode.domNode.append(this.contentElement, this.textMetricsElement, this.accessibilityStatusElement);
 		if (options.rootDomNode) {
 			this._register(toDisposable(() => {
@@ -492,7 +492,7 @@ export class View extends ViewEventHandler {
 			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
 		);
 		const scrollDomNode = this.scrollbar.getDomNode().domNode;
-		this._register(addDisposableListener(scrollDomNode, "scroll", () => {
+		this._register(addDisposableListener(scrollDomNode, 'scroll', () => {
 			if (scrollDomNode.scrollLeft === this.syncedScrollLeft && scrollDomNode.scrollTop === this.syncedScrollTop) return;
 			viewport.setScrollPosition({
 				scrollLeft: scrollDomNode.scrollLeft,
@@ -528,7 +528,7 @@ export class View extends ViewEventHandler {
 		}
 		const fontSet = ownerDocument.fonts;
 		if (fontSet) {
-			this._register(addDisposableListener(fontSet, "loadingdone", () => {
+			this._register(addDisposableListener(fontSet, 'loadingdone', () => {
 				this.refreshFontMetrics();
 			}));
 		}
@@ -542,7 +542,7 @@ export class View extends ViewEventHandler {
 			if (event.hasChanged(EditorOption.fontInfo)) this.applyFontConfiguration();
 			else if (event.hasChanged(EditorOption.disableMonospaceOptimizations)) this.refreshFontMetrics(true);
 			if (event.hasChanged(EditorOption.wrappingInfo)) {
-				this.domNode.domNode.classList.toggle("word-wrapped", this.softWrapping);
+				this.domNode.domNode.classList.toggle('word-wrapped', this.softWrapping);
 			}
 			if (!this.changingLayout && event.hasChanged(EditorOption.layoutInfo)) {
 				const layoutInfo = this.editorConfiguration.options.get(EditorOption.layoutInfo);
@@ -592,19 +592,19 @@ export class View extends ViewEventHandler {
 	/** Changes only this viewport's visual row projection; document text is unaffected. */
 	setLineWrapping(lineWrapping: EditorLineWrapping): EditorViewportLayout {
 		if (!Object.values(EditorLineWrapping).includes(lineWrapping)) {
-			throw new TypeError("Unknown Stanza editor line wrapping mode");
+			throw new TypeError('Unknown Stanza editor line wrapping mode');
 		}
 		const nextSoftWrapping = lineWrapping === EditorLineWrapping.On;
 		if (nextSoftWrapping === this.softWrapping) return this.viewport.layout;
 		this.editorConfiguration.updateOptions({ wordWrap: nextSoftWrapping ? 'on' : 'off' });
-		this.domNode.domNode.classList.toggle("word-wrapped", nextSoftWrapping);
+		this.domNode.domNode.classList.toggle('word-wrapped', nextSoftWrapping);
 		this.render(true, false);
 		return this.viewport.layout;
 	}
 
 	setWrappingIndent(wrappingIndent: WrappingIndent): EditorViewportLayout {
 		if (!isWrappingIndent(wrappingIndent)) {
-			throw new TypeError("Unknown Stanza wrapping indent mode");
+			throw new TypeError('Unknown Stanza wrapping indent mode');
 		}
 		if (wrappingIndent === this.wrappingIndent) return this.viewport.layout;
 		this.editorConfiguration.updateOptions({ wrappingIndent: rawWrappingIndent(wrappingIndent) });
@@ -690,8 +690,8 @@ export class View extends ViewEventHandler {
 
 	/** Announces one editor status message through the viewport's live region. */
 	announceAccessibilityStatus(message: string): void {
-		if (typeof message !== "string" || message.trim().length === 0) {
-			throw new TypeError("Stanza accessibility status must be a non-empty string");
+		if (typeof message !== 'string' || message.trim().length === 0) {
+			throw new TypeError('Stanza accessibility status must be a non-empty string');
 		}
 		this.accessibilityStatusElement.textContent = message.trim();
 	}
@@ -806,7 +806,7 @@ export class View extends ViewEventHandler {
 			this.textMeasurer.measureLineWidth(line.slice(visualLine.startColumn, columnIndex)));
 		const caretRight = caretLeft + Math.max(
 			1,
-			this.textMeasurer.measureLineWidth(" "),
+			this.textMeasurer.measureLineWidth(' '),
 		);
 		let left = this.softWrapping ? 0 : layout.scrollPosition.left;
 		if (caretLeft < left + this.contentTextLeft) {
@@ -842,7 +842,7 @@ export class View extends ViewEventHandler {
 
 	/** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
 	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): Position | undefined {
-		if (!isFiniteNumber(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
+		if (!isFiniteNumber(horizontalOffset)) throw new RangeError('Stanza visual cursor horizontal offset must be finite');
 		if (this.editorTextDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		if (!visualLine) return undefined;
@@ -1041,8 +1041,8 @@ export class View extends ViewEventHandler {
 					}
 				}
 				const textLayout = this.viewport.layout;
-				this.domNode.domNode.classList.toggle("horizontally-scrollable", textLayout.maximumScrollPosition.left > 0);
-				this.domNode.domNode.classList.toggle("vertically-scrollable", textLayout.maximumScrollPosition.top > 0);
+				this.domNode.domNode.classList.toggle('horizontally-scrollable', textLayout.maximumScrollPosition.left > 0);
+				this.domNode.domNode.classList.toggle('vertically-scrollable', textLayout.maximumScrollPosition.top > 0);
 				this.contentNode.setWidth(textLayout.contentSize.width - contentOffsetLeft);
 				this.contentNode.setHeight(textLayout.contentSize.height);
 				// Text rendering can change scroll geometry. Bind the context and
@@ -1439,15 +1439,15 @@ function validateClientPoint(point: ClientPoint): void {
 		!isFiniteNumber(point.clientY)
 	) {
 		throw new RangeError(
-			"Stanza client point must contain finite coordinates",
+			'Stanza client point must contain finite coordinates',
 		);
 	}
 }
 
 function resolveEditorViewportPadding(padding: EditorViewportPadding | undefined): EditorViewportPadding {
 	return Object.freeze({
-		right: nonNegativePaddingValue(padding?.right ?? 12, "right"),
-		left: nonNegativePaddingValue(padding?.left ?? 12, "left"),
+		right: nonNegativePaddingValue(padding?.right ?? 12, 'right'),
+		left: nonNegativePaddingValue(padding?.left ?? 12, 'left'),
 	});
 }
 

@@ -5,6 +5,50 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('table browser component', () => {
 	const browserTests = useBrowserTests();
 
+	for (const [locale, presentation] of [['en', 'editor'], ['zh-CN', 'editor'], ['en', 'general'], ['zh-CN', 'general']] as const) {
+		test(`policy controls keep keyboard focus and explain equal-value management across themes (${locale}, ${presentation})`, async function () {
+			const { page } = browserTests;
+			const errors: string[] = [];
+			page.on('pageerror', error => errors.push(error.message));
+			await page.goto(`/table.html?locale=${locale}`);
+			await page.evaluate(presentation => window.ashTableIntegration.showPolicySettings(presentation), presentation);
+			const root = page.locator('#policy-settings');
+			const text = root.getByRole('textbox', { name: 'Text', exact: true });
+			const textRow = root.getByRole('group', { name: 'Text', exact: true });
+			const actions = textRow.getByRole('button', { name: locale === 'zh-CN' ? 'Text 的更多操作' : 'More actions for Text' });
+			const original = await page.evaluate(() => window.ashTableIntegration.readPolicySettings());
+			for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) {
+				await page.evaluate(name => window.ashTableIntegration.theme(name), theme);
+				await text.focus();
+				await page.evaluate(() => window.ashTableIntegration.setSettingsPolicy(true));
+				await expect(text).toBeDisabled();
+				await expect(actions).toBeFocused();
+				await expect(root.getByRole('switch', { name: 'Flag', exact: true })).toBeDisabled();
+				await expect(root.getByRole('spinbutton', { name: 'Count', exact: true })).toBeDisabled();
+				await expect(root.getByRole('combobox', { name: 'Channel', exact: true })).toBeDisabled();
+				const descriptions = root.locator('.ash-settings-policy');
+				await expect(descriptions).toHaveText(Array(4).fill(locale === 'zh-CN' ? '由管理员策略管理，无法在此更改。' : 'Managed by administrator policy. This value cannot be changed here.'));
+				await expect(textRow).toHaveAccessibleDescription(new RegExp(locale === 'zh-CN' ? '由管理员策略管理' : 'Managed by administrator policy'));
+				for (const width of [340, 720]) {
+					await root.evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+					await expect.poll(() => root.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+					await expect(descriptions.first()).toBeVisible();
+				}
+				await actions.press('Enter');
+				await expect(page.getByRole('menuitem', { name: locale === 'zh-CN' ? '重置设置' : 'Reset Setting', exact: true })).toBeDisabled();
+				await page.keyboard.press('Escape');
+				await page.evaluate(() => window.ashTableIntegration.setSettingsPolicy(false));
+				await expect(text).toBeEnabled();
+				await expect(descriptions.first()).toBeHidden();
+				expect(await page.evaluate(() => window.ashTableIntegration.readPolicySettings())).toBe(original);
+			}
+			await text.fill('new user value');
+			await text.press('Tab');
+			await expect.poll(() => page.evaluate(() => window.ashTableIntegration.readPolicySettings())).toContain('new user value');
+			expect(errors).toEqual([]);
+		});
+	}
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`credential storage failure preserves saved-key state and keyboard retry recovers (${locale})`, async function () {
 			const { page } = browserTests;
@@ -32,6 +76,30 @@ suite('table browser component', () => {
 				await expect(key).toHaveValue('••••••••');
 				await expect(key).toBeFocused();
 			}
+		});
+	}
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`memory credential fallback stays usable and keyboard authorization restores persistence (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/table.html?locale=${locale}`);
+			await page.evaluate(() => {
+				window.ashTableIntegration.setCredentialStorageMode('encrypted');
+				window.ashTableIntegration.setCredentialStorageType('in-memory');
+				window.ashTableIntegration.setCredentialStorage('accessDenied');
+				window.ashTableIntegration.showCredentialSettings();
+			});
+			const root = page.locator('#credential-settings');
+			await expect(root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '退出 Ash' : 'lost when Ash exits' })).toBeVisible();
+			await expect(root.locator('input[type="password"]')).toBeEnabled();
+			expect(await page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual([]);
+			const authorize = root.getByRole('button', { name: locale === 'zh-CN' ? '授权系统钥匙串' : 'Authorize system keyring' });
+			await authorize.focus();
+			await page.keyboard.press('Enter');
+			await expect(root.getByRole('status').filter({ hasText: locale === 'zh-CN' ? '系统钥匙串中的密钥加密' : 'encrypted using a key' })).toBeVisible();
+			await expect(authorize).toHaveCount(0);
+			await expect(root.getByRole('button', { name: locale === 'zh-CN' ? '使用文件存储' : 'Use file storage' })).toBeFocused();
+			expect(await page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual(['authorize']);
 		});
 	}
 

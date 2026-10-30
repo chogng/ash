@@ -1,6 +1,6 @@
-import { Emitter, Event } from "../../base/common/event.js";
-import { Disposable, DisposableStore } from "../../base/common/lifecycle.js";
-import type { INotification, INotificationActions, INotificationHandle, INotificationProgressProperties, IStatusHandle, IStatusMessageOptions } from "../../platform/notification/common/notification.js";
+import { Emitter, Event } from '../../base/common/event.js';
+import { Disposable, DisposableStore } from '../../base/common/lifecycle.js';
+import type { INotification, INotificationActions, INotificationHandle, INotificationProgressProperties, IStatusHandle, IStatusMessageOptions } from '../../platform/notification/common/notification.js';
 import type { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 
 export const enum NotificationsSettings {

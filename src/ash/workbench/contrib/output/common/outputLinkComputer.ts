@@ -1,7 +1,7 @@
-import { URI } from "../../../../base/common/uri.js";
-import { Position } from "../../../../editor/common/core/position.js";
-import { Range } from "../../../../editor/common/core/range.js";
-import { workspaceRelativePath, type IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
+import { URI } from '../../../../base/common/uri.js';
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range } from '../../../../editor/common/core/range.js';
+import { workspaceRelativePath, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 
 export interface OutputLink {
 	readonly startIndex: number;
@@ -37,16 +37,16 @@ export function detectOutputLinks(text: string, folders: readonly IWorkspaceFold
 }
 
 function resolveWorkspaceResource(candidate: string, folders: readonly IWorkspaceFolder[]): URI | undefined {
-	const normalized = candidate.replaceAll("\\", "/");
-	const absolute = normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized);
+	const normalized = candidate.replaceAll('\\', '/');
+	const absolute = normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized);
 	if (absolute) {
 		let resource: URI;
 		try { resource = URI.file(candidate); }
 		catch { return undefined; }
 		return folders.some(folder => belongsToWorkspace(folder.uri, resource)) ? resource : undefined;
 	}
-	const segments = normalized.split("/");
-	if (segments.some(segment => !segment || segment === "." || segment === "..")) return undefined;
+	const segments = normalized.split('/');
+	if (segments.some(segment => !segment || segment === '.' || segment === '..')) return undefined;
 	for (const folder of folders) {
 		const resource = URI.joinPath(folder.uri, ...segments);
 		if (belongsToWorkspace(folder.uri, resource)) return resource;

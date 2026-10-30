@@ -1,7 +1,7 @@
-import type { IContentSearchApi } from "../common/searchApi.js";
-import type { IContentSearchOptions, IContentSearchQuery, IContentSearchComplete, IContentSearchService } from "../common/search.js";
-import type { IWorkspaceFolder } from "../../workspace/common/workspace.js";
-import { raceCancellationError } from "../../../base/common/async.js";
+import type { IContentSearchApi } from '../common/searchApi.js';
+import type { IContentSearchOptions, IContentSearchQuery, IContentSearchComplete, IContentSearchService } from '../common/search.js';
+import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
+import { raceCancellationError } from '../../../base/common/async.js';
 import { FileKind, type IFileService } from '../../files/common/files.js';
 import { match } from '../../../base/common/glob.js';
 import { escapeRegExpCharacters } from '../../../base/common/strings.js';
@@ -94,7 +94,7 @@ export class BrowserContentSearchService implements IContentSearchService {
 			dirId: folder.id,
 			query: query.wholeWord ? `\\b(?:${query.patternKind === 'regex' ? query.text : escapeRegExpCharacters(query.text.replace(/\r\n|\r/g, '\n')).replaceAll('\n', '\\r?\\n')})\\b` : query.text,
 			patternKind: query.wholeWord ? 'regex' : query.patternKind,
-			freshness: query.freshness ?? "current",
+			freshness: query.freshness ?? 'current',
 			caseSensitivity: query.caseSensitivity,
 			includePatterns: [...query.includePatterns],
 			excludePatterns: [...query.excludePatterns],
@@ -169,13 +169,13 @@ function waitForNextPoll(signal: AbortSignal | undefined): Promise<void> {
 			reject(abortError());
 		};
 		const timeout = setTimeout(() => {
-			signal?.removeEventListener("abort", onAbort);
+			signal?.removeEventListener('abort', onAbort);
 			resolve();
 		}, IDLE_POLL_MILLIS);
-		signal?.addEventListener("abort", onAbort, { once: true });
+		signal?.addEventListener('abort', onAbort, { once: true });
 	});
 }
 
 function abortError(): DOMException {
-	return new DOMException("Workspace search was cancelled", "AbortError");
+	return new DOMException('Workspace search was cancelled', 'AbortError');
 }

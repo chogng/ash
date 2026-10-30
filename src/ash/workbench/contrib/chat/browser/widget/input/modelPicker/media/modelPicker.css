@@ -25,6 +25,16 @@
 	flex: 1 1 auto;
 }
 
+.ash-chat-input-model-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+}
+
+.ash-chat-input-model-icon > .ash-icon {
+	font-size: var(--ash-lxiconFontSize-compact);
+}
+
 .ash-chat-model-picker-control > .ash-chat-input-configuration-action {
 	max-width: 96px;
 	flex: 0 0 auto;
@@ -129,7 +139,14 @@
 	margin: 0;
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-body2);
-	white-space: pre-wrap;
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-model-card-context {
+	margin: var(--ash-spacing-size80) 0 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
 	overflow-wrap: anywhere;
 }
 
@@ -141,4 +158,89 @@
 .ash-chat-model-picker-error {
 	padding: var(--ash-spacing-size80);
 	color: var(--ash-error-foreground);
+}
+
+.ash-chat-model-picker-footer > .ash-switch {
+	box-sizing: border-box;
+	width: 100%;
+	min-height: var(--ash-spacing-size360);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+}
+
+.ash-chat-model-picker-footer > .ash-button {
+	width: 100%;
+}
+
+.ash-chat-model-card-configurable {
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size160)
+		var(--ash-spacing-size160);
+}
+
+.ash-chat-model-card-title {
+	margin: 0 0 var(--ash-spacing-size40);
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-model-card-identity {
+	margin: 0 0 var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-body2);
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-model-card-options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+	margin: var(--ash-spacing-size160) 0 0;
+	padding: 0;
+	border: 0;
+}
+
+.ash-chat-model-card-options > legend {
+	margin-bottom: var(--ash-spacing-size80);
+	padding: 0;
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-chat-model-card-choice {
+	position: relative;
+	min-width: 0;
+	cursor: pointer;
+}
+
+.ash-chat-model-card-choice > input {
+	position: absolute;
+	width: var(--ash-strokeThickness);
+	height: var(--ash-strokeThickness);
+	opacity: 0;
+}
+
+.ash-chat-model-card-choice > span {
+	display: block;
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size100);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-small);
+	font-size: var(--ash-fontSize-label1);
+	color: var(--ash-foreground);
+}
+
+.ash-chat-model-card-choice.checked > span {
+	border-color: var(--ash-focusBorder);
+	background: var(--ash-list-activeSelectionBackground);
+	color: var(--ash-list-activeSelectionForeground);
+}
+
+.ash-chat-model-card-choice > input:focus-visible + span {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}
+
+.ash-chat-model-card-choice > input:disabled + span {
+	cursor: default;
+	opacity: 0.5;
 }

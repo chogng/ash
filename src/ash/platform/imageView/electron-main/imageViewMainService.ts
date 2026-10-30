@@ -298,13 +298,13 @@ export class ImageViewMainService extends Disposable {
 		if (icon.isEmpty()) throw new Error('ImageViewUnavailable');
 		if (this.capture !== capture || this.owner.isDestroyed()) return;
 		const area = screen.getDisplayMatching(this.owner.getBounds()).workArea;
-		const width = Math.min(420, area.width);
-		const height = Math.min(480, area.height);
+		const width = Math.min(360, area.width);
+		const height = Math.min(168, area.height);
 		const guide = new BrowserWindow({
 			x: area.x + Math.min(24, area.width - width),
 			y: area.y + Math.max(0, area.height - height - 24),
-			width, height, minWidth: Math.min(360, width), minHeight: Math.min(400, height),
-			show: false, minimizable: false, maximizable: false, fullscreenable: false,
+			width, height, minWidth: width, minHeight: height,
+			show: false, opacity: 0, minimizable: false, maximizable: false, fullscreenable: false,
 			alwaysOnTop: true, skipTaskbar: true,
 			webPreferences: {
 				...this.options.webPreferences,
@@ -325,12 +325,24 @@ export class ImageViewMainService extends Disposable {
 		let complete!: (retry: boolean) => void;
 		const completed = new Promise<boolean>(resolve => { complete = resolve; });
 		const closed = (): void => { ready(); complete(false); };
+		const resumeIfGranted = (): void => {
+			// Returning from Settings replaces a separate Continue action. A drop alone never grants access.
+			if (this.capture === capture && !guide.isDestroyed() && systemPreferences.getMediaAccessStatus('screen') === 'granted') {
+				complete(true);
+			} else if (this.capture === capture && !guide.isDestroyed() && guide.isVisible() && this.owner.isFocused()) {
+				guide.focus();
+			}
+		};
 		guide.on('closed', closed);
+		guide.on('focus', resumeIfGranted);
+		this.owner.on('focus', resumeIfGranted);
 		guide.webContents.on('render-process-gone', closed);
 		resources.add(toDisposable(() => {
 			ready();
 			complete(false);
 			guide.off('closed', closed);
+			guide.off('focus', resumeIfGranted);
+			this.owner.off('focus', resumeIfGranted);
 			if (!guide.isDestroyed()) {
 				guide.webContents.off('will-navigate', navigating);
 				guide.webContents.off('render-process-gone', closed);
@@ -388,9 +400,43 @@ export class ImageViewMainService extends Disposable {
 			if (this.options.entry.useDevelopmentUrl) await guide.loadURL(this.options.entry.url);
 			else await guide.loadFile(this.options.entry.file);
 			await rendered;
+			// Order the companion first, then let the Settings launch activate its own application.
+			guide.showInactive();
+			await this.openPermissionSettings();
 			clearTimeout(timeout);
 			if (this.capture === capture && !guide.isDestroyed()) {
-				guide.show();
+				const placement = await import('./screenPermissionGuideWindow.js').catch(() => undefined);
+				if (this.capture !== capture || guide.isDestroyed()) { return; }
+				let lastBounds = '';
+				let recordingList: Electron.Rectangle | undefined;
+				let lastLayout = '';
+				let nextControlsRead = 0;
+				const followSettings = (): void => {
+					if (guide.isDestroyed()) { return; }
+					const info = placement?.getSystemSettingsWindowInfo();
+					if (!info) { return; }
+					const settings = info.bounds;
+					const layout = `${info.pid}:${settings.width}:${settings.height}`;
+					if (layout !== lastLayout || Date.now() >= nextControlsRead) {
+						const list = placement!.getScreenRecordingListBounds(info);
+						recordingList = list ? { ...list, x: list.x - settings.x, y: list.y - settings.y } : undefined;
+						lastLayout = layout;
+						nextControlsRead = Date.now() + 1_000;
+					}
+					const list = recordingList ? { ...recordingList, x: recordingList.x + settings.x, y: recordingList.y + settings.y } : undefined;
+					const workArea = screen.getDisplayMatching(settings).workArea;
+					const [guideWidth, guideHeight] = guide.getSize();
+					const key = JSON.stringify([settings, workArea, guideWidth, guideHeight, list]);
+					if (key === lastBounds) { return; }
+					lastBounds = key;
+					const position = placement!.getPermissionGuidePosition(settings, { width: guideWidth, height: guideHeight }, workArea, list);
+					guide.setPosition(position.x, position.y, false);
+				};
+				followSettings();
+				const tracking = setInterval(followSettings, 250);
+				resources.add(toDisposable(() => clearInterval(tracking)));
+				// Settings keeps keyboard focus; the card remains ready for a cross-application drag.
+				guide.setOpacity(1);
 				retry = await completed;
 			}
 		} finally {

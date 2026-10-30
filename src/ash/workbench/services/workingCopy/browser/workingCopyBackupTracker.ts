@@ -1,8 +1,8 @@
-import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
-import { DisposableMap, Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
-import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
-import { type IWorkingCopyBackupService } from "../common/workingCopyBackupService.js";
+import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
+import { DisposableMap, Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { type URI } from '../../../../base/common/uri.js';
+import { type IWorkingCopy, type IWorkingCopyService } from '../common/workingCopyService.js';
+import { type IWorkingCopyBackupService } from '../common/workingCopyBackupService.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
@@ -28,7 +28,7 @@ export class WorkingCopyBackupTracker extends Disposable {
 	private drainedGeneration = -1;
 	private shutdownPromise: Promise<void> | undefined;
 
-	constructor(private readonly workingCopies: IWorkingCopyService, private readonly backups: IWorkingCopyBackupService, private readonly ownerWindow: Window, private readonly onError: (error: unknown) => void = error => console.error("Failed to update working-copy backup", error), private readonly retainRecovery?: (resource: URI) => boolean) {
+	constructor(private readonly workingCopies: IWorkingCopyService, private readonly backups: IWorkingCopyBackupService, private readonly ownerWindow: Window, private readonly onError: (error: unknown) => void = error => console.error('Failed to update working-copy backup', error), private readonly retainRecovery?: (resource: URI) => boolean) {
 		super();
 		this.registrations.add(workingCopies.onDidRegister(copy => this.track(copy)));
 		this.registrations.add(workingCopies.onDidUnregister(copy => this.untrack(copy)));

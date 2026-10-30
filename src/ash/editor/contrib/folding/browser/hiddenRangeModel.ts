@@ -1,8 +1,8 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { Range } from "../../../common/core/range.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { EditorFoldingModel } from "./foldingModel.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Range } from '../../../common/core/range.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+import { EditorFoldingModel } from './foldingModel.js';
 
 /** Derives hidden physical lines from collapsed folding regions for visual consumers. */
 export class EditorHiddenRangeModel extends Disposable {
@@ -13,7 +13,7 @@ export class EditorHiddenRangeModel extends Disposable {
 
 	constructor(private readonly textModel: TextModel, private readonly folding: EditorFoldingModel) {
 		super();
-		if (folding.model !== textModel) throw new TypeError("Hidden range and folding models must share one text model");
+		if (folding.model !== textModel) throw new TypeError('Hidden range and folding models must share one text model');
 		this.rebuild();
 		this._register(folding.onDidChange(() => this.rebuild()));
 		this._register(textModel.onDidChangeContent(change => {

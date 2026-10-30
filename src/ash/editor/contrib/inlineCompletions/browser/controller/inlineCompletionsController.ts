@@ -1,14 +1,14 @@
-import { Position } from "../../../../common/core/position.js";
-import "../media/inlineCompletions.css";
-import { registerEditorContribution } from "../../../../browser/editorFeatureRegistration.js";
-import { h } from "../../../../../base/browser/dom.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { Range } from "../../../../common/core/range.js";
+import { Position } from '../../../../common/core/position.js';
+import '../media/inlineCompletions.css';
+import { registerEditorContribution } from '../../../../browser/editorFeatureRegistration.js';
+import { h } from '../../../../../base/browser/dom.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Range } from '../../../../common/core/range.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
-import { type View } from "../../../../browser/view.js";
-import { isCompletionsEnabledFromObject } from "../../../../common/services/completionsEnablement.js";
+import { type View } from '../../../../browser/view.js';
+import { isCompletionsEnabledFromObject } from '../../../../common/services/completionsEnablement.js';
 import { type Event } from '../../../../../base/common/event.js';
 import { type EditorCommandEvent } from '../../../../browser/editorFeatureRegistration.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
@@ -81,8 +81,8 @@ export class InlineCompletionsController extends Disposable {
 		if (editor.getModel() !== model || viewport.textModel !== model) throw new TypeError('Inline completion dependencies must share one text model');
 		this.debounce = debounceService.for(providers, 'Inline completions', { min: 50, max: 500 });
 		this.scheduler = this._register(new RunOnceScheduler(() => void this.trigger('automatic'), this.debounce.default()));
-		const element = this.element = h(viewport.domNode.domNode.ownerDocument, "span");
-		element.className = "stanza-editor-inline-completion";
+		const element = this.element = h(viewport.domNode.domNode.ownerDocument, 'span');
+		element.className = 'stanza-editor-inline-completion';
 		element.hidden = true;
 		viewport.domNode.domNode.append(element);
 		this._register(toDisposable(() => {
@@ -135,7 +135,7 @@ export class InlineCompletionsController extends Disposable {
 		this.scheduler.schedule(this.debounce.get(this.model));
 	}
 
-	public async trigger(triggerKind: "automatic" | "explicit" = "explicit"): Promise<void> {
+	public async trigger(triggerKind: 'automatic' | 'explicit' = 'explicit'): Promise<void> {
 		this.hide();
 		if (this.editor.getOption(EditorOption.readOnly) || (triggerKind === 'automatic' && !this.editor.getOption(EditorOption.inlineSuggest).enabled)) {
 			return;
@@ -216,7 +216,7 @@ export class InlineCompletionsController extends Disposable {
 		this.request = undefined;
 		this.item = undefined;
 		this.element.hidden = true;
-		this.element.textContent = "";
+		this.element.textContent = '';
 	}
 }
 
@@ -234,7 +234,7 @@ class AcceptInlineCompletionCommand implements ICommand {
 
 registerEditorContribution({
 	id: InlineCompletionsController.ID, install: context => {
-		if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.model.getLanguageId()))) return;
+		if (context.kind !== 'text' || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.model.getLanguageId()))) return;
 		return context.instantiationService.createInstance(InlineCompletionsController, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.onDidExecuteCommand, context.onLanguageError);
 	}
 });

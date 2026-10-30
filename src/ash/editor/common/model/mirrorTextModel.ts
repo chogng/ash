@@ -190,5 +190,3 @@ export class MirrorTextModel implements IMirrorTextModel {
 		}
 	}
 }
-
-

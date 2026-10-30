@@ -27,39 +27,39 @@ import { isRecord } from '../../base/common/types.js';
 import { Emitter, Event } from '../../base/common/event.js';
 import { BaseSecretStorageService } from '../../platform/secrets/common/secrets.js';
 import { TERMINAL_REVIVE_STATE_KEY } from '../../platform/terminal/common/terminal.js';
-import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
-import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
-import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/appServerBrowserHost.js";
-import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
-import { nativeImage, nativeTheme, shell } from "electron";
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, powerMonitor, safeStorage, type BrowserWindowConstructorOptions, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
+import { OAuthCallbackHost } from '../../platform/connectors/electron-main/oauthCallbackHost.js';
+import { RendererWorkspaceHost } from '../../platform/workspaces/electron-main/rendererWorkspaceHost.js';
+import { AppServerBrowserHost } from '../../platform/agentHost/electron-main/appServerBrowserHost.js';
+import { rendererSystemHostRoutes } from '../../platform/native/electron-main/rendererSystemHostRoutes.js';
+import { nativeImage, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, Menu, Tray, powerMonitor, safeStorage, type BrowserWindowConstructorOptions, type Event as ElectronEvent, type MenuItemConstructorOptions } from 'electron/main';
 import { IEncryptionMainService } from '../../platform/encryption/common/encryptionService.js';
 import { IBrowserPasswordMainService, BrowserPasswordMainService, browserPasswordChannel } from '../../platform/browserView/electron-main/browserPasswordMainService.js';
 import { EncryptionMainService } from '../../platform/encryption/electron-main/encryptionMainService.js';
 
-import { basename, dirname, isAbsolute, join, parse } from "node:path";
-import { homedir } from 'node:os';
-import { mkdir } from "node:fs/promises";
-import { readFileSync } from "node:fs";
-import { pathToFileURL, fileURLToPath } from "node:url";
-import { throwIfCancelled, type CancellationToken } from "../../base/common/cancellation.js";
-import { isCancellationError } from "../../base/common/errors.js";
-import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { basename, dirname, isAbsolute, join, parse } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import { throwIfCancelled, type CancellationToken } from '../../base/common/cancellation.js';
+import { isCancellationError } from '../../base/common/errors.js';
+import { Disposable, DisposableMap, DisposableStore, DisposableTracker, MutableDisposable, installDisposableTracker, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { Lazy } from '../../base/common/lazy.js';
-import { assertDefined } from "../../base/common/types.js";
+import { assertDefined } from '../../base/common/types.js';
 import { AshApplicationId, AshApplicationName } from '../common/application.js';
-import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
+import { ElectronContextMenu } from '../../base/parts/contextmenu/electron-main/contextmenu.js';
 import { ElectronMainClipboardService } from '../../platform/clipboard/electron-main/electronMainClipboardService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
-import { AppServerConnectionRelay } from "../../platform/agentHost/electron-main/appServerConnectionRelay.js";
-import { DevelopmentAppServerReloader } from "../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js";
-import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from "../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js";
-import { remoteExecutablePath } from "../../platform/remote/node/remotePackage.js";
-import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
-import { ipcBrowserViewChannelName } from "../../platform/browserView/common/browserView.js";
-import { browserViewChannel } from "../../platform/browserView/electron-main/browserViewIpc.js";
-import { BrowserViewMainService, IBrowserViewMainService } from "../../platform/browserView/electron-main/browserViewMainService.js";
-import { ChatGPTTransport } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTTransport.js';
+import { AppServerConnectionRelay } from '../../platform/agentHost/electron-main/appServerConnectionRelay.js';
+import { DevelopmentAppServerReloader } from '../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js';
+import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from '../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
+import { remoteExecutablePath } from '../../platform/remote/node/remotePackage.js';
+import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platform/ipc/electron-main/trustedIpcRouter.js';
+import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
+import { browserViewChannel } from '../../platform/browserView/electron-main/browserViewIpc.js';
+import { BrowserViewMainService, IBrowserViewMainService } from '../../platform/browserView/electron-main/browserViewMainService.js';
+import { ChatGPTTransport, type ChatGPTTransportOptions } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTTransport.js';
+import { ChatGPTAuthentication } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTAuthentication.js';
 import { ChatGPTVerificationRuntime } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTVerificationRuntime.js';
 import { chatGPTTransportChannel } from '../../sessions/contrib/chatgptweb/common/chatGPTTransport.js';
 import { readFile } from 'node:fs/promises';
@@ -80,64 +80,64 @@ import { METERED_CONNECTION_CHANNEL } from '../../platform/meteredConnection/com
 import { MeteredConnectionMainService } from '../../platform/meteredConnection/electron-main/meteredConnectionMainService.js';
 import { MeteredConnectionChannel } from '../../platform/meteredConnection/electron-main/meteredConnectionChannel.js';
 import { NATIVE_CONTEXT_MENU_CLOSE_CHANNEL, NATIVE_CONTEXT_MENU_POPUP_CHANNEL, validateNativeContextMenuClose, validateNativeContextMenuRequest, type INativeContextMenuRequest } from '../../base/parts/contextmenu/common/contextmenu.js';
-import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
+import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import { normalizeExternalUrl } from '../../platform/opener/common/opener.js';
-import { NativeKeyboardLayoutMainService, keyboardLayoutChannel } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
-import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
-import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
-import { clearElectronApplicationMenu, createElectronMenubarHost, Menubar } from "../../platform/menubar/electron-main/menubar.js";
-import { powerMonitorChannel, colorSchemeChannel, windowSplashIpcRoutes, nativeHostIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
+import { NativeKeyboardLayoutMainService, keyboardLayoutChannel } from '../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js';
+import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from '../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js';
+import { NativeMenubarMainService, nativeMenubarIpcRoutes } from '../../platform/menubar/electron-main/menubarMainService.js';
+import { clearElectronApplicationMenu, createElectronMenubarHost, Menubar } from '../../platform/menubar/electron-main/menubar.js';
+import { powerMonitorChannel, colorSchemeChannel, windowSplashIpcRoutes, nativeHostIpcRoutes, type INativeHostMainService } from '../../platform/native/electron-main/nativeHostIpc.js';
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
-import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
+import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { DialogMainService, IDialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
-import { StateService } from "../../platform/state/node/stateService.js";
+import { StateService } from '../../platform/state/node/stateService.js';
 import { IStateService } from '../../platform/state/node/state.js';
 import { WorkspacesHistoryMainService, workspacesHistoryChannel } from '../../platform/workspaces/electron-main/workspacesHistoryMainService.js';
 import { recentWorkspaceUri, type IRecent } from '../../platform/workspaces/common/workspaces.js';
 import { Schemas } from '../../base/common/network.js';
-import { resolveHome } from "../../platform/home/node/home.js";
-import { DiskFileSystemProviderChannel } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
-import { URI } from "../../base/common/uri.js";
+import { resolveHome } from '../../platform/home/node/home.js';
+import { DiskFileSystemProviderChannel } from '../../platform/files/electron-main/diskFileSystemProviderServer.js';
+import { URI } from '../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
-import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
-import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
-import { IWindowsMainService, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
+import { DiskFileSystemProvider } from '../../platform/files/node/diskFileSystemProvider.js';
+import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../platform/files/common/diskFileSystemProviderClient.js';
+import { IWindowsMainService, type IOpenConfiguration } from '../../platform/windows/electron-main/windows.js';
 import {
 	DEFAULT_STARTUP_WINDOW, RESTORE_WINDOWS_SETTING, STARTUP_WINDOW_SETTING, TitleBarSetting,
 	parseStartupWindow, parseTitleBarStyle, type StartupWindow, type TitleBarStyleConfiguration,
-} from "../../platform/window/common/window.js";
-import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
-import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
+} from '../../platform/window/common/window.js';
+import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from '../../platform/windows/electron-main/windowsStateHandler.js';
+import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from '../../platform/windows/electron-main/windowsMainService.js';
 import { LifecycleMainService, ILifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
-import { defaultWindowState, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
-import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from "../../platform/workspace/common/workspace.js";
-import { createEmptyWorkspaceIdentifier } from "../../platform/workspaces/node/workspaces.js";
-import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
-import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/remoteRuntimeInstaller.js";
-import { RemoteRuntimeProvisioner } from "../../platform/remote/electron-main/remoteRuntimeProvisioner.js";
-import { RemoteConnectionProfiles } from "../../platform/remote/electron-main/remoteConnectionProfiles.js";
-import { RemoteConnections } from "../../platform/remote/electron-main/remoteConnections.js";
-import { UnavailableRemoteConnectionApi, type IRemoteConnectionApi } from "../../platform/remote/common/remoteConnectionService.js";
-import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
-import { createSshRemoteAuthority, createSshRemoteWorkspaceUri, getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
+import { defaultWindowState, WorkspaceContextMainService, type IWindowState } from '../../platform/window/electron-main/window.js';
+import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from '../../platform/workspace/common/workspace.js';
+import { createEmptyWorkspaceIdentifier } from '../../platform/workspaces/node/workspaces.js';
+import { packagedRemoteRuntimeCatalogSource } from '../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js';
+import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from '../../platform/remote/electron-main/remoteRuntimeInstaller.js';
+import { RemoteRuntimeProvisioner } from '../../platform/remote/electron-main/remoteRuntimeProvisioner.js';
+import { RemoteConnectionProfiles } from '../../platform/remote/electron-main/remoteConnectionProfiles.js';
+import { RemoteConnections } from '../../platform/remote/electron-main/remoteConnections.js';
+import { UnavailableRemoteConnectionApi, type IRemoteConnectionApi } from '../../platform/remote/common/remoteConnectionService.js';
+import type { RemoteConnectionDefinition } from '../../platform/remote/common/remoteConnectionService.js';
+import { createSshRemoteAuthority, createSshRemoteWorkspaceUri, getRemoteAuthority, isRemoteResource } from '../../platform/remote/common/remote.js';
 import { remotePortForwardingChannel } from '../../platform/remote/electron-main/remotePortForwardingIpc.js';
-import { SshPortForwardingService } from "../../platform/remote/electron-main/sshPortForwardingService.js";
-import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
-import { RemoteRuntimeBootstrapMainService } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
-import { RemoteAppServerProcessLauncher } from "../../platform/remote/electron-main/remoteAppServerProcessLauncher.js";
-import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electron-main/electronRemoteRuntimeInstallWindow.js";
-import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
-import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
-import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
-import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { SshPortForwardingService } from '../../platform/remote/electron-main/sshPortForwardingService.js';
+import { createRemoteRuntimeInstallProgressLogger } from '../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js';
+import { RemoteRuntimeBootstrapMainService } from '../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js';
+import { RemoteAppServerProcessLauncher } from '../../platform/remote/electron-main/remoteAppServerProcessLauncher.js';
+import { ElectronRemoteRuntimeInstallWindow } from '../../platform/remote/electron-main/electronRemoteRuntimeInstallWindow.js';
+import { electronRemoteWindowMainHost } from '../../platform/remote/electron-main/electronRemoteWindowMainHost.js';
+import { RemoteWindowMainContext } from '../../platform/remote/electron-main/remoteWindowMainContext.js';
+import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
+import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace } from '../../platform/workspaces/electron-main/appServerWorkspaceTransition.js';
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
-import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
+import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from '../../platform/workspaces/electron-main/workspaceTransitionMainService.js';
 import { WorkspaceEditingMainService, WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { WORKSPACE_EDIT_CHANNEL, WORKSPACE_EDIT_ERROR_CHANNEL, validateWorkspaceEdit, WORKSPACE_CONFIGURATION_CHANNEL, WORKSPACE_CONFIGURATION_CHANGED_CHANNEL, validateWorkspaceConfigurationRequest } from '../../platform/workspace/common/workspaceIpc.js';
 import { StorageMainService, IApplicationStorageMainService } from '../../platform/storage/electron-main/storageMainService.js';
@@ -166,7 +166,7 @@ import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/la
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
 import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
-export type AppServerStartupMode = "required" | "disabled";
+export type AppServerStartupMode = 'required' | 'disabled';
 
 export interface AshApplicationOptions {
 	readonly rendererRoot: string;
@@ -409,7 +409,7 @@ export class AshApplication extends Disposable {
 			},
 			onError: error => console.error('Failed to handle a system-wide shortcut', error),
 		}));
-		this.nativeMenubar = process.platform === "darwin"
+		this.nativeMenubar = process.platform === 'darwin'
 			? this._register(new NativeMenubarMainService(createElectronMenubarHost()))
 			: undefined;
 		this.profileRoot = resolveHome();
@@ -450,18 +450,18 @@ export class AshApplication extends Disposable {
 			app.removeListener('activate', this.onActivate);
 			app.removeListener('window-all-closed', this.onWindowAllClosed);
 		}));
-		app.on("before-quit", this.onBeforeQuit);
-		app.on("will-quit", this.onWillQuit);
-		app.on("accessibility-support-changed", this.onAccessibilitySupportChanged);
+		app.on('before-quit', this.onBeforeQuit);
+		app.on('will-quit', this.onWillQuit);
+		app.on('accessibility-support-changed', this.onAccessibilitySupportChanged);
 		this._register(toDisposable(() => {
-			app.removeListener("before-quit", this.onBeforeQuit);
-			app.removeListener("will-quit", this.onWillQuit);
-			app.removeListener("accessibility-support-changed", this.onAccessibilitySupportChanged);
+			app.removeListener('before-quit', this.onBeforeQuit);
+			app.removeListener('will-quit', this.onWillQuit);
+			app.removeListener('accessibility-support-changed', this.onAccessibilitySupportChanged);
 		}));
 	}
 
 	static async create(options: AshApplicationOptions, mainServices: IInstantiationService): Promise<AshApplication> {
-		const state = await StateService.create(join(app.getPath("userData"), "state.json"));
+		const state = await StateService.create(join(app.getPath('userData'), 'state.json'));
 		const disposableTracker = app.isPackaged
 			? undefined
 			: new DisposableTracker();
@@ -482,10 +482,10 @@ export class AshApplication extends Disposable {
 
 	private async startupAfterReady(token: CancellationToken): Promise<void> {
 		if (!app.isReady()) {
-			throw new Error("Ash application startup requires Electron to be ready");
+			throw new Error('Ash application startup requires Electron to be ready');
 		}
 		this._register(new WebviewProtocolProvider(this.rendererRoot, process.env.ASH_RENDERER_URL));
-		if (process.platform === "darwin") {
+		if (process.platform === 'darwin') {
 			assertDefined(app.dock, 'macOS Dock API is unavailable');
 			// Dock customization must not gate creation of the first Workbench window.
 			if (!app.isPackaged) {
@@ -538,7 +538,11 @@ export class AshApplication extends Disposable {
 				if (!channel) { throw new Error('ChatGPT is unavailable in this window'); }
 				return channel.call<T>(context, command, arg);
 			},
-			listen: () => { throw new Error('ChatGPT transport has no events'); },
+			listen: <T>(context: string, event: string, arg: unknown) => {
+				const channel = this.chatGPTChannels.get(context);
+				if (!channel) { throw new Error('ChatGPT is unavailable in this window'); }
+				return channel.listen<T>(context, event, arg);
+			},
 		});
 		this.mainProcessIpcServer.registerChannel('browserHost', {
 			call: <T>(context: string, command: string, arg: unknown) => this.getBrowserHostChannel(context).call<T>(context, command, arg),
@@ -572,7 +576,12 @@ export class AshApplication extends Disposable {
 			}
 			return service;
 		}));
-		const remoteExecutable = remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath });
+		const remoteExecutable = remoteExecutablePath({
+			appPath: app.getAppPath(),
+			isPackaged: app.isPackaged,
+			platform: process.platform,
+			resourcesPath: process.resourcesPath
+		});
 		const tunnelServices = this._register(this.windowServices.createChild(new ServiceCollection([ILogService, this.logService])));
 		const coordinator = this._register(tunnelServices.createInstance(TunnelProcessCoordinator, {
 			executable: join(dirname(remoteExecutable), process.platform === 'win32' ? 'ash-remote-host.exe' : 'ash-remote-host'),
@@ -1045,16 +1054,16 @@ export class AshApplication extends Disposable {
 		// Main owns these system labels; use their English originals before applying
 		// the active window's catalog, independently of the renderer's NLS resolver.
 		const messages: Record<string, string> = {
-			'taskbar.newWindow': localize2('taskbar.newWindow', "New Window").original,
-			'shell.recentProjects': localize2('shell.recentProjects', "Recent Folders & Workspaces").original,
-			'shell.noRecentProjects': localize2('shell.noRecentProjects', "No Recent Projects").original,
-			'shell.clearRecentProjects': localize2('shell.clearRecentProjects', "Clear Recently Opened").original,
-			'tray.showWindow': localize2('tray.showWindow', "Show Ash").original,
-			'tray.quit': localize2('tray.quit', "Quit Ash").original,
-			'taskbar.newWindowDescription': localize2('taskbar.newWindowDescription', "Open a new Ash window").original,
-			'taskbar.agentsWindow': localize2('taskbar.agentsWindow', "Open Agents Window").original,
-			'taskbar.agentsWindowDescription': localize2('taskbar.agentsWindowDescription', "Open the Ash Agents window").original,
-			'taskbar.invalidAgentsArguments': localize2('taskbar.invalidAgentsArguments', "Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.").original,
+			'taskbar.newWindow': localize2('taskbar.newWindow', 'New Window').original,
+			'shell.recentProjects': localize2('shell.recentProjects', 'Recent Folders & Workspaces').original,
+			'shell.noRecentProjects': localize2('shell.noRecentProjects', 'No Recent Projects').original,
+			'shell.clearRecentProjects': localize2('shell.clearRecentProjects', 'Clear Recently Opened').original,
+			'tray.showWindow': localize2('tray.showWindow', 'Show Ash').original,
+			'tray.quit': localize2('tray.quit', 'Quit Ash').original,
+			'taskbar.newWindowDescription': localize2('taskbar.newWindowDescription', 'Open a new Ash window').original,
+			'taskbar.agentsWindow': localize2('taskbar.agentsWindow', 'Open Agents Window').original,
+			'taskbar.agentsWindowDescription': localize2('taskbar.agentsWindowDescription', 'Open the Ash Agents window').original,
+			'taskbar.invalidAgentsArguments': localize2('taskbar.invalidAgentsArguments', 'Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.').original,
 		};
 		// System menus consume only these labels; copying the entire product catalog
 		// on every recent-project or taskbar update creates thousands of unused entries.
@@ -1128,7 +1137,7 @@ export class AshApplication extends Disposable {
 			await configuration.initialize();
 			throwIfCancelled(token);
 			userKeyboardLayout = await UserKeyboardLayoutMainService.create({
-				filePath: join(this.profileRoot, "keyboard-layout.json"),
+				filePath: join(this.profileRoot, 'keyboard-layout.json'),
 				watchFile: (filePath, onChange) => {
 					const resource = URI.file(filePath);
 					const subscriptions = new DisposableStore();
@@ -1141,7 +1150,7 @@ export class AshApplication extends Disposable {
 				},
 				openResource: (filePath) => shell.openPath(filePath),
 				onError: (error) => {
-					console.error("Failed to process user keyboard layout", error);
+					console.error('Failed to process user keyboard layout', error);
 				},
 			});
 			throwIfCancelled(token);
@@ -1168,7 +1177,7 @@ export class AshApplication extends Disposable {
 				explicit: target !== undefined,
 			};
 		} catch (error) {
-			console.error("Failed to resolve startup workspace", error);
+			console.error('Failed to resolve startup workspace', error);
 			return { workspace: createEmptyWorkspaceIdentifier(), explicit: true };
 		}
 	}
@@ -1176,7 +1185,7 @@ export class AshApplication extends Disposable {
 	private workspaceLaunchArguments(arguments_: readonly string[]): string[] {
 		return parseMainProcessArgv({
 			arguments: arguments_,
-			packaging: app.isPackaged ? "packaged" : "development",
+			packaging: app.isPackaged ? 'packaged' : 'development',
 			appPath: app.getAppPath(),
 		});
 	}
@@ -1231,7 +1240,7 @@ export class AshApplication extends Disposable {
 			const workspaceContext = resources.add(new WorkspaceContextMainService(workspace, resolvedWorkspace));
 			const supervisor = resources.add(this.createAppServerConnectionRelay(workspace, resources));
 
-			if (this.appServerStartupMode === "required" && !await this.startAppServerWithRecovery(supervisor)) {
+			if (this.appServerStartupMode === 'required' && !await this.startAppServerWithRecovery(supervisor)) {
 				resources.dispose();
 				return undefined;
 			}
@@ -1320,7 +1329,7 @@ export class AshApplication extends Disposable {
 		role: 'workbench' | 'agents' = 'workbench',
 		connectionKind: AppServerConnectionTarget = 'workspace',
 	): AppServerConnectionRelay {
-		if (this.appServerStartupMode === "disabled") {
+		if (this.appServerStartupMode === 'disabled') {
 			return existing ?? new AppServerConnectionRelay({ enabled: false }, connectionKind);
 		}
 		const remote = (role === 'workbench' || typeof connectionKind === 'object') && getWorkspaceRemoteAuthority(workspace)?.startsWith('ssh+') === true;
@@ -1349,9 +1358,9 @@ export class AshApplication extends Disposable {
 
 	private createRemoteAppServerProcessLauncher(workspace: IAnyWorkspaceIdentifier, resources: DisposableStore, carrier: AppServerDaemonLauncher): RemoteAppServerProcessLauncher {
 		const remoteAuthority = getWorkspaceRemoteAuthority(workspace);
-		if (!remoteAuthority) throw new Error("SSH App Server launcher requires a Remote window");
+		if (!remoteAuthority) throw new Error('SSH App Server launcher requires a Remote window');
 		const remoteWorkspace = isSingleFolderWorkspaceIdentifier(workspace) ? workspace.uri : createSshRemoteAuthority(remoteAuthority.slice(4));
-		const sshExecutable = process.env.ASH_SSH_PATH ?? "ssh";
+		const sshExecutable = process.env.ASH_SSH_PATH ?? 'ssh';
 		const remoteExecutable = remoteExecutablePath({
 			appPath: app.getAppPath(),
 			isPackaged: app.isPackaged,
@@ -1366,7 +1375,7 @@ export class AshApplication extends Disposable {
 		const bootstrap = resources.add(new RemoteRuntimeBootstrapMainService({
 			workspace: remoteWorkspace,
 			sshExecutable,
-			remoteExecutable: configuredRuntime ?? "ash-remote-server",
+			remoteExecutable: configuredRuntime ?? 'ash-remote-server',
 			localEnvironment: process.env,
 			carrier,
 			runtimeInstaller: {
@@ -1378,7 +1387,7 @@ export class AshApplication extends Disposable {
 						? new RemoteRuntimeProvisioner({
 							source: packagedRemoteRuntimeCatalogSource(
 								{ appPath: app.getAppPath(), isPackaged: app.isPackaged, resourcesPath: process.resourcesPath },
-								join(app.getPath("userData"), "remote-runtime-downloads"),
+								join(app.getPath('userData'), 'remote-runtime-downloads'),
 							),
 							remoteExecutable,
 							sshExecutable,
@@ -1401,7 +1410,7 @@ export class AshApplication extends Disposable {
 		resources.add(new ElectronRemoteRuntimeInstallWindow({
 			productName: AshWorkbenchName,
 			icon: this.windowIconPath,
-			rendererEntry: this.resolveRendererEntry("remoteRuntimeInstall"),
+			rendererEntry: this.resolveRendererEntry('remoteRuntimeInstall'),
 			webPreferences: this.createSandboxWebPreferences(),
 			trustedIpcRouter: this.trustedIpcRouter,
 			progress: bootstrap.installProgress,
@@ -1417,7 +1426,7 @@ export class AshApplication extends Disposable {
 				await supervisor.start();
 				return true;
 			} catch (error) {
-				console.error("App Server failed the startup gate", error);
+				console.error('App Server failed the startup gate', error);
 				if (this.quitRequested) {
 					return false;
 				}
@@ -1427,17 +1436,17 @@ export class AshApplication extends Disposable {
 
 				const message = error instanceof Error
 					? error.message
-					: "The App Server failed to start";
+					: 'The App Server failed to start';
 				const diagnostics = supervisor.diagnostics().trim();
 				const detail = diagnostics
 					? `${message}\n\nDiagnostics:\n${diagnostics}`.slice(0, 8_000)
 					: message;
 				const result = await this.dialogs.showMessageBox({
-					type: "error",
+					type: 'error',
 					title: `${AshWorkbenchName} startup failed`,
-					message: "The App Server could not be validated.",
+					message: 'The App Server could not be validated.',
 					detail,
-					buttons: ["Retry", this.windowsMainService.getWindowCount() === 0 ? "Quit" : "Cancel"],
+					buttons: ['Retry', this.windowsMainService.getWindowCount() === 0 ? 'Quit' : 'Cancel'],
 					defaultId: 0,
 					cancelId: 1,
 					noLink: true,
@@ -1508,15 +1517,15 @@ export class AshApplication extends Disposable {
 				this.windowSessionStateHandler.windowFocused(record.id);
 			}
 		};
-		window.on("focus", onFocus);
-		resources.add(toDisposable(() => window.removeListener("focus", onFocus)));
-		window.once("closed", () => {
+		window.on('focus', onFocus);
+		resources.add(toDisposable(() => window.removeListener('focus', onFocus)));
+		window.once('closed', () => {
 			this.workbenchWindowData.delete(record.id);
 			this.windowSessionStateHandler.windowClosed({ kind: 'workbench', workspace: record.workspaceContext.getWorkspace(), windowSessionId: record.windowSessionId });
 		});
 		this.windowSessionStateHandler.windowOpened();
 
-		const rendererEntry = this.resolveRendererEntry("workbench");
+		const rendererEntry = this.resolveRendererEntry('workbench');
 
 		const windowDisposables = resources;
 		this.configureWindowNavigation(window, windowDisposables, titleBarStyle);
@@ -1524,7 +1533,7 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(record.windowStateTracking);
 		const remotePortForwardingService = new SshPortForwardingService({
 			getWorkspace: () => workspaceContext.getWorkspace(),
-			sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
+			sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
 			localEnvironment: process.env,
 		});
 		const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
@@ -1556,7 +1565,7 @@ export class AshApplication extends Disposable {
 			connections: record.remoteConnections,
 			tunnels: remotePortForwardingService,
 			host: electronRemoteWindowMainHost(window, this.dialogs),
-			prepareForRuntimeReplacement: () => windowHost.send("ash:terminal:prepareReplacement"),
+			prepareForRuntimeReplacement: () => windowHost.send('ash:terminal:prepareReplacement'),
 		}));
 		const performTransitionToFolder = async (folderPath: string, selectionRequired: boolean): Promise<void> => {
 			const currentWorkspace = workspaceContext.getWorkspace();
@@ -1570,12 +1579,12 @@ export class AshApplication extends Disposable {
 				return;
 			}
 			await record.windowsStateHandler.saveWindowState(window);
-			windowHost.send("ash:terminal:prepareReplacement");
+			windowHost.send('ash:terminal:prepareReplacement');
 			const transition = isRemoteWorkspaceIdentifier(nextWorkspace)
 				? await workspaceTransitions.transitionToWorkspace({ workspace: nextWorkspace, root: folderPath }, grant)
 				: await workspaceTransitions.transitionToFolder(folderPath, grant);
 			if (transition.status === WorkspaceTransitionStatus.Blocked) {
-				throw new Error("Finish the active request before opening another Workspace");
+				throw new Error('Finish the active request before opening another Workspace');
 			}
 			if (transition.status === WorkspaceTransitionStatus.Failed) {
 				throw workspaceTransitionError(transition.failure);
@@ -1719,7 +1728,7 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(this.trustedIpcRouter.register(
 			{
 				webContents: window.webContents,
-				allowedEntryUrls: new Set([normalizeEntryUrl(this.resolveRendererEntry("workbench").url)]),
+				allowedEntryUrls: new Set([normalizeEntryUrl(this.resolveRendererEntry('workbench').url)]),
 			},
 			ipcRoutes,
 		));
@@ -1735,10 +1744,15 @@ export class AshApplication extends Disposable {
 	}
 
 	private createRemoteConnections(workspaces: WorkspacesManagementMainService): IRemoteConnectionApi {
-		return this.appServerStartupMode === "disabled"
+		return this.appServerStartupMode === 'disabled'
 			? UnavailableRemoteConnectionApi
 			: new RemoteConnections({
-				remoteExecutable: remoteExecutablePath({ appPath: app.getAppPath(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath }),
+				remoteExecutable: remoteExecutablePath({
+					appPath: app.getAppPath(),
+					isPackaged: app.isPackaged,
+					platform: process.platform,
+					resourcesPath: process.resourcesPath
+				}),
 				environment: { ...process.env, ASH_HOME: this.profileRoot },
 				scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
 			});
@@ -1814,6 +1828,9 @@ export class AshApplication extends Disposable {
 			if (details.url !== 'about:blank') return;
 			const childResources = new DisposableStore();
 			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id, details.options));
+			const auxiliaryWindow = this.auxiliaryWindowsMainService.getWindowByWebContents(child.webContents);
+			assertDefined(auxiliaryWindow, 'Auxiliary window was not registered');
+			this.lifecycleMainService.registerAuxWindow(auxiliaryWindow);
 			auxiliaryWindows.set(child.id, childResources);
 			this.configureWindowNavigation(child, childResources, titleBarStyle, openerWindow);
 			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));
@@ -1934,7 +1951,7 @@ export class AshApplication extends Disposable {
 			this.sessionsWindow.value = sessions;
 		}
 		const session = sessions;
-		const sessionsEntry = this.resolveRendererEntry("sessions");
+		const sessionsEntry = this.resolveRendererEntry('sessions');
 		const sessionsWindowState = this.createWindowsStateHandler(UNKNOWN_EMPTY_WINDOW_WORKSPACE, {
 			storageKey: 'sessionsWindowState',
 			// Agents uses the user-requested 1200 × 800 workspace default even before a project is selected.
@@ -1995,13 +2012,23 @@ export class AshApplication extends Disposable {
 
 					const remotePortForwardingService = new SshPortForwardingService({
 						getWorkspace: () => session.workspaceContext.getWorkspace(),
-						sshExecutable: process.env.ASH_SSH_PATH ?? "ssh",
+						sshExecutable: process.env.ASH_SSH_PATH ?? 'ssh',
 						localEnvironment: process.env,
 					});
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables, sessionsRelay, systemContextMenu);
-					const chatGPT = windowDisposables.add(new ChatGPTTransport({
-						credentialFile: join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'auth.json'),
+					const authConnection = this.appServerStartupMode === 'disabled' ? undefined : createAppServerDaemonLauncher({
+						packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
+						sourceEnvironment: process.env, profileRoot: this.profileRoot, electronExecutable: process.execPath, role: 'credentials',
+					});
+					if (authConnection) { windowDisposables.add(authConnection.launcher); }
+					const authentication = windowDisposables.add(new ChatGPTAuthentication(authConnection ? { enabled: true, launcher: authConnection.launcher } : { enabled: false }));
+					if (authConnection?.generationFile) {
+						if (!this.developmentAppServerReloader.value) { this.developmentAppServerReloader.value = new DevelopmentAppServerReloader({ generationFile: authConnection.generationFile }); }
+						windowDisposables.add(this.developmentAppServerReloader.value.registerConnection(authConnection.launcher, authentication));
+					}
+					const chatGPT = windowDisposables.add(this.windowServices.createInstance(ChatGPTTransport, {
+						authentication,
 						readVerificationScript: async signal => {
 							const devURL = process.env.ASH_RENDERER_URL;
 							if (devURL) {
@@ -2012,7 +2039,7 @@ export class AshApplication extends Disposable {
 							return readFile(join(this.rendererRoot, 'browser/chatgpt/verification.js'), { encoding: 'utf8', signal });
 						},
 						createRuntime: authorize => new ChatGPTVerificationRuntime(authorize),
-					}));
+					} satisfies ChatGPTTransportOptions));
 					const chatGPTContext = `window:${window.id}`;
 					this.chatGPTChannels.set(chatGPTContext, chatGPT.getChannel());
 					windowDisposables.add(toDisposable(() => this.chatGPTChannels.delete(chatGPTContext)));
@@ -2023,7 +2050,7 @@ export class AshApplication extends Disposable {
 						connections: session.remoteConnections,
 						tunnels: remotePortForwardingService,
 						host: electronRemoteWindowMainHost(window, this.dialogs),
-						prepareForRuntimeReplacement: () => this.windowsMainService.getWindowById(window.id)?.send("ash:terminal:prepareReplacement"),
+						prepareForRuntimeReplacement: () => this.windowsMainService.getWindowById(window.id)?.send('ash:terminal:prepareReplacement'),
 					}));
 					const agentHostTarget = {
 						webContents: window.webContents,
@@ -2152,13 +2179,13 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall" | "imageView"): RendererEntry {
-		const entry = kind === "imageView" ? "imageView" : kind === "workbench"
-			? "workbench"
-			: kind === "sessions"
+	private resolveRendererEntry(kind: 'workbench' | 'sessions' | 'remoteRuntimeInstall' | 'imageView'): RendererEntry {
+		const entry = kind === 'imageView' ? 'imageView' : kind === 'workbench'
+			? 'workbench'
+			: kind === 'sessions'
 				? 'sessions'
-				: "remoteRuntimeInstall";
-		const directory = kind === "remoteRuntimeInstall" ? "remote-runtime-install" : kind;
+				: 'remoteRuntimeInstall';
+		const directory = kind === 'remoteRuntimeInstall' ? 'remote-runtime-install' : kind;
 		const relativePath = kind === 'sessions'
 			? `sessions/electron-browser/${entry}.html`
 			: `electron-browser/${directory}/${entry}.html`;
@@ -2184,17 +2211,17 @@ export class AshApplication extends Disposable {
 			nodeIntegration: false,
 			sandbox: true,
 			preload: app.isPackaged
-				? join(app.getAppPath(), "dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs")
-				: developmentArtifactsPath(app.getAppPath(), "preload", "src/ash/base/parts/sandbox/electron-browser/preload.cjs"),
-			additionalArguments: [],
+				? join(app.getAppPath(), 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs')
+				: developmentArtifactsPath(app.getAppPath(), 'preload', 'src/ash/base/parts/sandbox/electron-browser/preload.cjs'),
+			additionalArguments: app.isPackaged ? ['--ash-is-built'] : [],
 		};
 	}
 
 	private createWorkspaceTransitionRuntime(
 		supervisor: AppServerConnectionRelay,
 		workspaceHost: RendererWorkspaceHost,
-	): Pick<WorkspaceTransitionMainServiceOptions, "runtime" | "classifyRuntimeError" | "recovery"> {
-		if (this.appServerStartupMode === "disabled") {
+	): Pick<WorkspaceTransitionMainServiceOptions, 'runtime' | 'classifyRuntimeError' | 'recovery'> {
+		if (this.appServerStartupMode === 'disabled') {
 			return {
 				runtime: {
 					async switchWorkspace() {
@@ -2217,12 +2244,12 @@ export class AshApplication extends Disposable {
 		folderPath: string,
 	) {
 		const remoteAuthority = getWorkspaceRemoteAuthority(currentWorkspace);
-		if (!remoteAuthority) throw new Error("Remote Workspace resolution requires a Remote window");
+		if (!remoteAuthority) throw new Error('Remote Workspace resolution requires a Remote window');
 		const authority = createSshRemoteAuthority(remoteAuthority.slice(4));
-		if (!authority || authority.type !== "ssh") throw new Error("Unsupported Remote Workspace authority");
+		if (!authority || authority.type !== 'ssh') throw new Error('Unsupported Remote Workspace authority');
 		const workspace = await this.windowsMainService.resolveWorkspaceOpenTarget({ kind: WorkspaceOpenTargetKind.RemoteFolder, path: folderPath, sshHost: authority.host }, process.cwd());
 		if (!isSingleFolderWorkspaceIdentifier(workspace) || !isRemoteWorkspaceIdentifier(workspace)) {
-			throw new Error("Remote folder did not resolve to a Remote Workspace");
+			throw new Error('Remote folder did not resolve to a Remote Workspace');
 		}
 		return workspace;
 	}
@@ -2234,22 +2261,22 @@ export class AshApplication extends Disposable {
 	}
 
 	private async reportWindowOpenFailure(error: unknown): Promise<void> {
-		console.error("Failed to open Workbench window", error);
+		console.error('Failed to open Workbench window', error);
 		if (this.quitRequested) return;
-		const message = error instanceof Error ? error.message : "The requested Workspace could not be opened";
+		const message = error instanceof Error ? error.message : 'The requested Workspace could not be opened';
 		try {
 			await this.dialogs.showMessageBox({
-				type: "error",
+				type: 'error',
 				title: `${AshWorkbenchName} window failed`,
-				message: "The requested Workspace could not be opened.",
+				message: 'The requested Workspace could not be opened.',
 				detail: message.slice(0, 8_000),
-				buttons: ["OK"],
+				buttons: ['OK'],
 				defaultId: 0,
 				cancelId: 0,
 				noLink: true,
 			});
 		} catch (dialogError) {
-			console.error("Failed to report Workbench window open failure", dialogError);
+			console.error('Failed to report Workbench window open failure', dialogError);
 		}
 	}
 
@@ -2296,7 +2323,7 @@ export class AshApplication extends Disposable {
 					if (!placement.window.isDestroyed()) await placement.handler.saveWindowState(placement.window);
 				}
 			} catch (error) {
-				console.error("Failed to flush application state before quit", error);
+				console.error('Failed to flush application state before quit', error);
 			} finally {
 				this.quitAfterStateSaved = true;
 				app.quit();
@@ -2405,9 +2432,9 @@ export class AshApplication extends Disposable {
 	}
 
 	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string): Promise<WorkspaceTrustGrant | undefined> {
-		if (this.appServerStartupMode === "disabled") return { type: "config" };
+		if (this.appServerStartupMode === 'disabled') return { type: 'config' };
 		const persisted = await workspaceHost.readPermissions(path);
-		if (persisted !== undefined) return { type: "config" };
+		if (persisted !== undefined) return { type: 'config' };
 		const choice = await workspaceHost.selectPermissions(path);
 		if (choice === 'cancel') return undefined;
 		if (choice !== 'development' && choice !== 'readOnly') throw new Error('Invalid directory permission selection');
@@ -2419,12 +2446,12 @@ export class AshApplication extends Disposable {
 		return {
 			kind: 'prompt',
 			title: AshApplicationName,
-			primaryButton: translate('workspaceTrust.readOnly', localize2('workspaceTrust.readOnly', 'Open Read Only').original),
-			secondaryButton: translate('workspaceTrust.trust', localize2('workspaceTrust.trust', 'Trust Folder & Enable Features').original),
+			primaryButton: translate('workspaceTrust.readOnly', localize2('workspaceTrust.readOnly', 'Open Read-Only').original),
+			secondaryButton: translate('workspaceTrust.trust', localize2('workspaceTrust.trust', 'Trust Folder').original),
 			cancelButton: translate('dialog.cancel', localize2('dialog.cancel', 'Cancel').original),
 			message: translate('workspaceTrust.question', localize2('workspaceTrust.question', 'Do you trust the files in this folder?').original),
 			detail: formatNlsMessage(
-				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nTrusting this folder allows Ash to edit files, run commands, change the repository, and load project instructions and configuration. Read Only allows browsing, searching, and repository inspection.').original),
+				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nTrusting this folder allows Ash to edit files and run commands. Open read-only to browse and search without making changes.').original),
 				{ '0': path },
 			),
 		};
@@ -2456,13 +2483,13 @@ export class AshApplication extends Disposable {
 				getCursorDisplay: () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint()),
 			},
 			onError: (error) => {
-				console.error("Failed to save window state", error);
+				console.error('Failed to save window state', error);
 			},
 		});
 	}
 
 	private get services(): PersistentServices {
-		assertDefined(this.persistentServices, "Persistent application services are not initialized");
+		assertDefined(this.persistentServices, 'Persistent application services are not initialized');
 		return this.persistentServices;
 	}
 
@@ -2487,7 +2514,7 @@ function isWindowSessionEntry(entry: IWindowSessionEntry): entry is WindowSessio
 function workspaceTransitionError(
 	failure: IWorkspaceTransitionFailure | undefined,
 ): Error {
-	if (!failure) return new Error("Workspace transition failed without a classified failure");
+	if (!failure) return new Error('Workspace transition failed without a classified failure');
 	if (failure.error instanceof Error) return failure.error;
 	return new Error(`Workspace transition failed during ${failure.stage}`);
 }

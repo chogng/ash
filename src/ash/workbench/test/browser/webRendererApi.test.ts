@@ -3,19 +3,19 @@ import { createAppServerAgentThreadService } from '../../../platform/agentHost/b
 import type { ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../../platform/agentHost/common/agent.js';
 import { URI } from '../../../base/common/uri.js';
 import { createTestInitializeResult } from '../../../platform/agentHost/test/common/testAppServerProtocol.js';
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { CancellationError, isCancellationError } from "../../../base/common/errors.js";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { CancellationError, isCancellationError } from '../../../base/common/errors.js';
 import { AppServerProtocolDecodeError, decodeAppServerServerResponse } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { isRecord } from "../../../base/common/types.js";
-import { AppServerRemoteError } from "../../../platform/agentHost/common/appServerError.js";
-import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../../../../.build/protocol/typescript/index.js";
-import { connectWebRendererApi } from "../../browser/webRendererApi.js";
-import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../../platform/agentHost/common/appServerTransport.js";
-import { AppServerProtocolClient } from "../../../platform/agentHost/browser/appServerProtocolClient.js";
+import { isRecord } from '../../../base/common/types.js';
+import { AppServerRemoteError } from '../../../platform/agentHost/common/appServerError.js';
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from '../../../../../.build/protocol/typescript/index.js';
+import { connectWebRendererApi } from '../../browser/webRendererApi.js';
+import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../platform/agentHost/common/appServerTransport.js';
+import { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
-import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod } from '../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod, GitHubManagedSettingsReadMode } from '../../../platform/github/common/githubService.js';
 import type { BrowserCreateParams } from '../../../../../.build/protocol/typescript/index.js';
 import { createAppServerAppServerApi, createAppServerSkillOperations } from '../../../platform/agentHost/browser/appServerApi.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
@@ -500,6 +500,37 @@ test('GitHub rejects an unavailable contract before dispatching a mutation', asy
 	assert.equal(transport.requests.length, count);
 });
 
+test('GitHub managed settings forwards retry intent and preserves provider timestamps and failure categories', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const automatic = connected.api.github.readManagedSettings('primary');
+	assert.equal(transport.requests.at(-1)!.method, 'github/account/managedSettings');
+	assert.equal((transport.requests.at(-1)!.params as { mode: string; }).mode, 'automatic');
+	const ready = { settings: { model: 'managed' }, refresh: { state: 'ready', lastAttemptAt: 100, lastSuccessAt: 200 } };
+	transport.respondAt(-1, ready);
+	assert.deepEqual(await automatic, ready);
+	const retry = connected.api.github.readManagedSettings('primary', undefined, GitHubManagedSettingsReadMode.Retry);
+	assert.equal((transport.requests.at(-1)!.params as { mode: string; }).mode, 'retry');
+	transport.respondAt(-1, {
+		settings: ready.settings,
+		refresh: { state: 'failed', lastAttemptAt: 300, lastSuccessAt: 200, failure: 'updateRequired' },
+	});
+	assert.deepEqual(await retry, {
+		settings: ready.settings,
+		refresh: { state: 'failed', lastAttemptAt: 300, lastSuccessAt: 200, failure: GitHubErrorCode.ManagedSettingsUpdateRequired },
+	});
+});
+
+test('GitHub rejects the old refresh contract before issuing a request', async () => {
+	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, github: { version: 1 } } } }));
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	using cleanup = toDisposable(() => connected.dispose());
+	const before = transport.requests.length;
+	await assert.rejects(connected.api.github.readManagedSettings('primary'), (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Unavailable);
+	assert.equal(transport.requests.length, before);
+});
+
 const connectorHostServices = {
 	externalOpener: { openExternal: async () => true },
 	clipboardService: {
@@ -722,38 +753,38 @@ class FakeTransport implements AppServerTransport {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
 			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, {
 				protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION,
-				workspaceId: "web-dev:test",
-				workspaceRoot: "C:\\workspace",
+				workspaceId: 'web-dev:test',
+				workspaceRoot: 'C:\\workspace',
 			});
 			return;
 		}
-		if (event !== WEB_APP_SERVER_FRAME_EVENT || !isRecord(payload) || typeof payload.frame !== "string") return;
+		if (event !== WEB_APP_SERVER_FRAME_EVENT || !isRecord(payload) || typeof payload.frame !== 'string') return;
 		const request = JSON.parse(payload.frame) as Record<string, unknown>;
 		this.requests.push(request);
-		if (request.method === "initialize") {
+		if (request.method === 'initialize') {
 			const result = this.initialize(createTestInitializeResult());
 			if (this.initializeDelayMs > 0) {
 				setTimeout(() => this.respond(request, result), this.initializeDelayMs);
 			} else {
 				this.respond(request, result);
 			}
-		} else if (request.method === "env/dirs/set") {
+		} else if (request.method === 'env/dirs/set') {
 			this.respond(request, { dirs: [] });
-		} else if (request.method === "session/list") {
+		} else if (request.method === 'session/list') {
 			this.respond(request, { sessions: [] });
-		} else if (request.method === "syntax/open" || request.method === "syntax/update") {
+		} else if (request.method === 'syntax/open' || request.method === 'syntax/update') {
 			this.respond(request, null);
-		} else if (request.method === "syntax/analyze") {
+		} else if (request.method === 'syntax/analyze') {
 			this.respond(request, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
-		} else if (request.method === "syntax/selectionRanges") {
+		} else if (request.method === 'syntax/selectionRanges') {
 			this.respond(request, { revision: 4, ranges: [] });
-		} else if (request.method === "syntax/close") {
+		} else if (request.method === 'syntax/close') {
 			this.respond(request, null);
 		}
 	}
 
 	emitNotification(notification: ServerNotification): void {
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", ...notification }) });
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', ...notification }) });
 	}
 
 	close(message: string): void {
@@ -769,11 +800,11 @@ class FakeTransport implements AppServerTransport {
 	rejectAt(index: number, error: unknown): void {
 		const request = this.requests.at(index);
 		if (!request) throw new Error(`No request at index ${index}`);
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", id: request.id, error }) });
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, error }) });
 	}
 
 	private respond(request: Record<string, unknown>, result: unknown): void {
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", id: request.id, result }) });
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) });
 	}
 
 	public emit(event: string, payload: unknown): void {
@@ -938,55 +969,55 @@ test('a successful handshake does not authorize undeclared notifications', async
 	} finally { client.dispose(); }
 });
 
-test("connects, initializes, maps renderer requests, and disposes the Web connection", async () => {
+test('connects, initializes, maps renderer requests, and disposes the Web connection', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
-	assert.deepEqual(connected.metadata, { workspaceId: "web-dev:test", workspaceRoot: "C:\\workspace" });
-	assert.equal(await connected.api.appServer.getConnectionState(), "ready");
+	assert.deepEqual(connected.metadata, { workspaceId: 'web-dev:test', workspaceRoot: 'C:\\workspace' });
+	assert.equal(await connected.api.appServer.getConnectionState(), 'ready');
 	assert.deepEqual(await connected.api.appServer.getSlashCommands(), []);
 	assert.deepEqual(await connected.api.session.list(), { sessions: [] });
-	assert.deepEqual(hot.requests.map((request) => request.method), ["initialize", "session/list"]);
+	assert.deepEqual(hot.requests.map((request) => request.method), ['initialize', 'session/list']);
 	assert.equal((hot.requests[0]?.params as { capabilities: { directoryGrantsHost?: unknown; }; }).capabilities.directoryGrantsHost, undefined);
 	connected.dispose();
 	assert.equal(hot.sentEvents.at(-1), WEB_APP_SERVER_DISCONNECT_EVENT);
 });
 
-test("delivers App Server notifications and reports bridge closure", async () => {
+test('delivers App Server notifications and reports bridge closure', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const notifications: ServerNotification[] = [];
 	const states: string[] = [];
 	connected.api.events.subscribe((notification) => notifications.push(notification));
 	connected.api.appServer.onConnectionState((state) => states.push(state));
-	const notification: ServerNotification = { method: "fs/changed", params: { type: "pathsChanged", paths: ["README.md"] } };
+	const notification: ServerNotification = { method: 'fs/changed', params: { type: 'pathsChanged', paths: ['README.md'] } };
 	hot.emitNotification(notification);
-	hot.close("test bridge closed");
+	hot.close('test bridge closed');
 	assert.deepEqual(notifications, [notification]);
-	assert.deepEqual(states, ["crashed"]);
-	assert.equal(await connected.api.appServer.getConnectionState(), "crashed");
+	assert.deepEqual(states, ['crashed']);
+	assert.equal(await connected.api.appServer.getConnectionState(), 'crashed');
 	connected.dispose();
 });
 
-test("routes bounded syntax analysis through the connected renderer host", async () => {
+test('routes bounded syntax analysis through the connected renderer host', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 
-	await connected.api.syntax.open({ documentId: "model-1", language: "rust", revision: 4, text: "fn main() {}\n" });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/open");
-	await connected.api.syntax.update({ documentId: "model-1", previousRevision: 4, revision: 5, edits: [{ startOffset: 3, endOffset: 7, text: "entry" }] });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/update");
+	await connected.api.syntax.open({ documentId: 'model-1', language: 'rust', revision: 4, text: 'fn main() {}\n' });
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/open');
+	await connected.api.syntax.update({ documentId: 'model-1', previousRevision: 4, revision: 5, edits: [{ startOffset: 3, endOffset: 7, text: 'entry' }] });
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/update');
 	const result = await connected.api.syntax.analyze({
-		documentId: "model-1",
+		documentId: 'model-1',
 		revision: 4,
 	});
 
 	assert.deepEqual(result, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/analyze");
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/analyze');
 
-	assert.deepEqual(await connected.api.syntax.selectionRanges({ documentId: "model-1", revision: 4, ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/selectionRanges");
-	await connected.api.syntax.close({ documentId: "model-1" });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/close");
+	assert.deepEqual(await connected.api.syntax.selectionRanges({ documentId: 'model-1', revision: 4, ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/selectionRanges');
+	await connected.api.syntax.close({ documentId: 'model-1' });
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/close');
 	connected.dispose();
 });
 
@@ -995,7 +1026,7 @@ for (const operation of ['hover', 'formatOnType'] as const) test(`uses a stable 
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const cancellation = new AbortController();
 	const request = {
-		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
+		document: { path: 'src/main.rs', languageId: 'rust', revision: 1, text: 'fn main() {}' },
 		position: { lineIndex: 0, columnIndex: 3 },
 	};
 	const pending = operation === 'hover'
@@ -1006,52 +1037,52 @@ for (const operation of ['hover', 'formatOnType'] as const) test(`uses a stable 
 	assert.equal(languageRequest?.method, `language/${operation}`);
 	const languageParams = languageRequest?.params;
 	assert.ok(isRecord(languageParams));
-	assert.equal(typeof languageParams.operationId, "string");
+	assert.equal(typeof languageParams.operationId, 'string');
 	assert.ok(isRecord(languageParams.request));
 	assert.ok(isRecord(languageParams.request.document));
-	assert.equal(languageParams.request.document.path, "src/main.rs");
+	assert.equal(languageParams.request.document.path, 'src/main.rs');
 
 	cancellation.abort();
 	const cancelRequest = hot.requests.at(-1);
-	assert.equal(cancelRequest?.method, "language/cancel");
+	assert.equal(cancelRequest?.method, 'language/cancel');
 	assert.deepEqual(cancelRequest?.params, { operationId: languageParams.operationId });
-	hot.respondAt(-1, { status: "requested" });
+	hot.respondAt(-1, { status: 'requested' });
 
 	await assert.rejects(pending, isCancellationError);
 	connected.dispose();
 });
 
-test("keeps the language result when completion wins the cancel race", async () => {
+test('keeps the language result when completion wins the cancel race', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const cancellation = new AbortController();
 	const pending = connected.api.language.hover({
-		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
+		document: { path: 'src/main.rs', languageId: 'rust', revision: 1, text: 'fn main() {}' },
 		position: { lineIndex: 0, columnIndex: 3 },
 	}, { signal: cancellation.signal });
 
 	cancellation.abort();
-	hot.respondAt(-2, { revision: 1, contents: "main", range: null });
-	hot.respondAt(-1, { status: "completed" });
+	hot.respondAt(-2, { revision: 1, contents: 'main', range: null });
+	hot.respondAt(-1, { status: 'completed' });
 
-	assert.deepEqual(await pending, { revision: 1, contents: "main", range: null });
+	assert.deepEqual(await pending, { revision: 1, contents: 'main', range: null });
 	connected.dispose();
 });
 
-test("keeps the language failure when completion wins the cancel race", async () => {
+test('keeps the language failure when completion wins the cancel race', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const cancellation = new AbortController();
 	const pending = connected.api.language.hover({
-		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
+		document: { path: 'src/main.rs', languageId: 'rust', revision: 1, text: 'fn main() {}' },
 		position: { lineIndex: 0, columnIndex: 3 },
 	}, { signal: cancellation.signal });
 
 	cancellation.abort();
-	hot.rejectAt(-2, { code: -32072, message: "LanguageRequestFailed", data: { kind: "LanguageRequestFailed" } });
-	hot.respondAt(-1, { status: "completed" });
+	hot.rejectAt(-2, { code: -32072, message: 'LanguageRequestFailed', data: { kind: 'LanguageRequestFailed' } });
+	hot.respondAt(-1, { status: 'completed' });
 
-	await assert.rejects(pending, (error: unknown) => error instanceof AppServerRemoteError && error.errorName === "LanguageRequestFailed");
+	await assert.rejects(pending, (error: unknown) => error instanceof AppServerRemoteError && error.errorName === 'LanguageRequestFailed');
 	connected.dispose();
 });
 
@@ -1160,6 +1191,8 @@ test('extension backend routes validate generated parameters before dispatch', a
 });
 
 for (const operation of [
+	{ operation: 'createTerminal', name: 'Debug', cwd: '/workspace', env: {}, command: null },
+	{ operation: 'readTerminal', terminalId: 'owned-terminal', afterSequence: 0 },
 	{ operation: 'editorOperation', payload: { method: 'openEditorResources' } },
 	{ operation: 'backendRequest', capability: 'git.repository', method: 'repositories', params: {} },
 	{ operation: 'backendState', capability: 'git.repository', after: 0 },

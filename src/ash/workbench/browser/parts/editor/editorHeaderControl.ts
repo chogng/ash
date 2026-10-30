@@ -1,32 +1,31 @@
-import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
-import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
-import { h } from "../../../../base/browser/dom.js";
+import { isResourceDiffEditorInput, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
+import { h } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { RunOnceScheduler } from "../../../../base/common/async.js";
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import type { Position } from "../../../../editor/common/core/position.js";
-import type { Range } from "../../../../editor/common/core/range.js";
-import type { LanguageDocumentSymbol } from "../../../../editor/common/languages.js";
-import type { TextModel } from "../../../../editor/common/model/textModel.js";
-import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
-import { OutlineModel } from "../../../../editor/contrib/documentSymbols/browser/outlineModel.js";
-import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import { AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
-import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import type { Position } from '../../../../editor/common/core/position.js';
+import type { Range } from '../../../../editor/common/core/range.js';
+import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
+import type { TextModel } from '../../../../editor/common/model/textModel.js';
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { OutlineModel } from '../../../../editor/contrib/documentSymbols/browser/outlineModel.js';
+import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import { AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { type IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import {
 	Extensions as ConfigurationExtensions,
 	type IConfigurationRegistry,
 	type IRegisteredConfiguration,
-} from "../../../../platform/configuration/common/configurationRegistry.js";
-import { Registry } from "../../../../platform/registry/common/platform.js";
-import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, BreadcrumbsSymbolPathConfiguration, type BreadcrumbsPathMode, type IBreadcrumbsService } from "./breadcrumbs.js";
-import type { EditorGroupId } from "../../../services/editor/common/editorState.js";
-import { EditorBreadcrumbsControl } from "./breadcrumbsControl.js";
-import { BreadcrumbsModel, type FileElement, type SymbolElement } from "./breadcrumbsModel.js";
+} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, BreadcrumbsSymbolPathConfiguration, type BreadcrumbsPathMode, type IBreadcrumbsService } from './breadcrumbs.js';
+import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
+import { EditorBreadcrumbsControl } from './breadcrumbsControl.js';
+import { BreadcrumbsModel, type FileElement, type SymbolElement } from './breadcrumbsModel.js';
 
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
@@ -73,8 +72,8 @@ export class EditorHeaderControl extends Disposable {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		const actionsContainer = h(titleContainer.ownerDocument, "div");
-		actionsContainer.className = "ash-editor-title-actions";
+		const actionsContainer = h(titleContainer.ownerDocument, 'div');
+		actionsContainer.className = 'ash-editor-title-actions';
 		tabsRow.append(actionsContainer);
 		this.toolbar = this._register(actions
 			? new MenuWorkbenchToolBar(
@@ -106,8 +105,8 @@ export class EditorHeaderControl extends Disposable {
 		if (!configuration) throw new RangeError(`Unknown configuration: ${BreadcrumbsEnabledConfiguration}`);
 		this.breadcrumbsEnabled = configurationService?.getValue<boolean>(BreadcrumbsEnabledConfiguration)
 			?? configuration.defaultValue;
-		this.filePath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsFilePathConfiguration) ?? "on";
-		this.symbolPath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsSymbolPathConfiguration) ?? "on";
+		this.filePath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsFilePathConfiguration) ?? 'on';
+		this.symbolPath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsSymbolPathConfiguration) ?? 'on';
 		this.showEditorType = configurationService?.getValue<boolean>(BreadcrumbsShowEditorTypeConfiguration) ?? true;
 		this.breadcrumbs.setPathModes(this.filePath, this.symbolPath);
 		this.updateBreadcrumbVisibility();
@@ -180,19 +179,19 @@ export class EditorHeaderControl extends Disposable {
 			this.symbolRequest.clear();
 			this.outline = null;
 			this.breadcrumbs.setInput(input);
-			if (input && pane && this.languageFeatures) this.watchSymbols(pane);
+			if (input && !isResourceDiffEditorInput(input) && pane && this.languageFeatures) this.watchSymbols(pane);
 		}
 		this.updateBreadcrumbVisibility();
 	}
 
 	private watchSymbols(pane: IEditorPane): void {
 		const paneControl = pane.getControl?.();
-		const control = (paneControl instanceof DiffEditorWidget ? paneControl.modifiedEditor : paneControl) as Partial<{
+		const control = paneControl as Partial<{
 			getModel(): TextModel | null;
 			getPosition(): Position | null;
 			onDidChangeCursorSelection: Event<unknown>;
 		}> | undefined;
-		if (!control || typeof control.getModel !== "function" || typeof control.getPosition !== "function" || typeof control.onDidChangeCursorSelection !== "function") return;
+		if (!control || typeof control.getModel !== 'function' || typeof control.getPosition !== 'function' || typeof control.onDidChangeCursorSelection !== 'function') return;
 		const model = control.getModel();
 		if (!model) return;
 		const scheduler = this.symbolListeners.add(new RunOnceScheduler(() => void this.loadSymbols(model, control), 150));
@@ -207,12 +206,12 @@ export class EditorHeaderControl extends Disposable {
 		const controller = new AbortController();
 		this.symbolRequest.value = toDisposable(() => controller.abort());
 		try {
-			const outline = await OutlineModel.create(this.languageFeatures!.documentSymbolProvider, model, controller.signal, error => console.error("Could not load editor breadcrumb symbols", error));
+			const outline = await OutlineModel.create(this.languageFeatures!.documentSymbolProvider, model, controller.signal, error => console.error('Could not load editor breadcrumb symbols', error));
 			if (controller.signal.aborted || control.getModel?.() !== model) return;
 			this.outline = outline;
 			this.updateCurrentSymbol(control.getPosition?.() ?? null);
 		} catch (error) {
-			if (!controller.signal.aborted) console.error("Could not build editor breadcrumbs", error);
+			if (!controller.signal.aborted) console.error('Could not build editor breadcrumbs', error);
 		}
 	}
 
@@ -230,16 +229,16 @@ export class EditorHeaderControl extends Disposable {
 	}
 
 	private updateBreadcrumbVisibility(): void {
-		const wasVisible = this.titleContainer.classList.contains("ash-editor-title-with-breadcrumbs");
-		const visible = this.breadcrumbsEnabled && !!this.activeInput && this.activeInput.showBreadcrumbs !== false && !this.breadcrumbs.domNode.classList.contains("empty");
+		const wasVisible = this.titleContainer.classList.contains('ash-editor-title-with-breadcrumbs');
+		const visible = this.breadcrumbsEnabled && !!this.activeInput && this.activeInput.showBreadcrumbs !== false && !this.breadcrumbs.domNode.classList.contains('empty');
 		this.breadcrumbs.domNode.hidden = !visible;
-		this.titleContainer.classList.toggle("ash-editor-title-with-breadcrumbs", visible);
+		this.titleContainer.classList.toggle('ash-editor-title-with-breadcrumbs', visible);
 		if (visible !== wasVisible) this.heightEmitter.fire();
 	}
 }
 
 const emptyEditorToolbarContextMenuProvider: IContextMenuProvider = {
 	showContextMenu(): never {
-		throw new Error("The empty Editor toolbar cannot present secondary actions");
+		throw new Error('The empty Editor toolbar cannot present secondary actions');
 	},
 };

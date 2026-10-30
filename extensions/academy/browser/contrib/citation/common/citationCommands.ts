@@ -1,15 +1,15 @@
-import { findDocumentNode, type DocumentNode, type DocumentNodeId } from "../../../../common/model/document.js";
-import { createInsertInlineNodeAtSelectionCommand, type DocumentCommand } from "../../../../common/commands/documentCommands.js";
-import type { DocumentSchema } from "../../../../common/model/documentSchema.js";
-import { BIBLIOGRAPHY_NODE_TYPE, CITATION_NODE_TYPE, REFERENCE_NODE_TYPE } from "./schema.js";
-import { DocumentTransaction } from "../../../../common/model/documentTransaction.js";
-import { textSelection, type DocumentSelection } from "../../../../common/core/documentSelection.js";
+import { findDocumentNode, type DocumentNode, type DocumentNodeId } from '../../../../common/model/document.js';
+import { createInsertInlineNodeAtSelectionCommand, type DocumentCommand } from '../../../../common/commands/documentCommands.js';
+import type { DocumentSchema } from '../../../../common/model/documentSchema.js';
+import { BIBLIOGRAPHY_NODE_TYPE, CITATION_NODE_TYPE, REFERENCE_NODE_TYPE } from './schema.js';
+import { DocumentTransaction } from '../../../../common/model/documentTransaction.js';
+import { textSelection, type DocumentSelection } from '../../../../common/core/documentSelection.js';
 import { buildReferenceIndex } from './references.js';
 
 /** Creates a command that inserts one citation atom at the active inline selection. */
 export function createInsertCitationCommand(schema: DocumentSchema, document: DocumentNode, blockId: DocumentNodeId, selection: DocumentSelection, key: string, label?: string): DocumentCommand | undefined {
 	const normalizedKey = normalizeKey(key);
-	if (normalizedKey.length === 0 || schema.getNodeSpec(CITATION_NODE_TYPE)?.kind !== "inline") return undefined;
+	if (normalizedKey.length === 0 || schema.getNodeSpec(CITATION_NODE_TYPE)?.kind !== 'inline') return undefined;
 	const citation = schema.createNode(CITATION_NODE_TYPE, { attrs: { key: normalizedKey, ...(label === undefined ? {} : { label }) } });
 	const block = findDocumentNode(document, blockId)?.node;
 	if (block && block.content.length === 0 && schema.canContainChild(block.type, CITATION_NODE_TYPE) && selection.kind === 'text' && selection.anchor.nodeId === blockId && selection.head.nodeId === blockId && selection.anchor.offset === 0 && selection.head.offset === 0) {
@@ -21,9 +21,9 @@ export function createInsertCitationCommand(schema: DocumentSchema, document: Do
 /** Creates a command that appends a reference to the bibliography, creating it when needed. */
 export function createInsertReferenceCommand(schema: DocumentSchema, document: DocumentNode, key: string, label: string): DocumentCommand | undefined {
 	const normalizedKey = normalizeKey(key);
-	const normalizedLabel = typeof label === "string" ? label.trim() : "";
-	if (normalizedKey.length === 0 || findNodesByKey(document, REFERENCE_NODE_TYPE, normalizedKey).length > 0 || schema.getNodeSpec(REFERENCE_NODE_TYPE)?.kind !== "block" || !schema.canContainChild(document.type, BIBLIOGRAPHY_NODE_TYPE)) return undefined;
-	const paragraph = normalizedLabel.length > 0 ? schema.createNode("paragraph", { content: [schema.createText(normalizedLabel)] }) : schema.createNode("paragraph");
+	const normalizedLabel = typeof label === 'string' ? label.trim() : '';
+	if (normalizedKey.length === 0 || findNodesByKey(document, REFERENCE_NODE_TYPE, normalizedKey).length > 0 || schema.getNodeSpec(REFERENCE_NODE_TYPE)?.kind !== 'block' || !schema.canContainChild(document.type, BIBLIOGRAPHY_NODE_TYPE)) return undefined;
+	const paragraph = normalizedLabel.length > 0 ? schema.createNode('paragraph', { content: [schema.createText(normalizedLabel)] }) : schema.createNode('paragraph');
 	const reference = schema.createNode(REFERENCE_NODE_TYPE, { attrs: { key: normalizedKey }, content: [paragraph] });
 	const findBibliography = (node: DocumentNode): DocumentNode | undefined => node.type === BIBLIOGRAPHY_NODE_TYPE ? node : node.content.map(findBibliography).find(Boolean);
 	const bibliography = findBibliography(document);
@@ -44,13 +44,13 @@ export function createInsertReferenceCommand(schema: DocumentSchema, document: D
 export function createUpdateReferenceCommand(schema: DocumentSchema, document: DocumentNode, key: string, newKey: string, label: string): DocumentCommand | undefined {
 	const normalizedKey = normalizeKey(key);
 	const normalizedNewKey = normalizeKey(newKey);
-	if (!normalizedKey || !normalizedNewKey || typeof label !== "string") return undefined;
+	if (!normalizedKey || !normalizedNewKey || typeof label !== 'string') return undefined;
 	const references = findNodesByKey(document, REFERENCE_NODE_TYPE, normalizedKey);
 	if (references.length !== 1) return undefined;
 	const reference = references[0];
 	if (findNodesByKey(document, REFERENCE_NODE_TYPE, normalizedNewKey).some(node => node.id !== reference.id)) return undefined;
 	const paragraph = reference.content[0];
-	if (paragraph?.type !== "paragraph") return undefined;
+	if (paragraph?.type !== 'paragraph') return undefined;
 
 	let transaction = new DocumentTransaction();
 	if (reference.attrs.key !== normalizedNewKey) transaction = transaction.setNodeAttributes(reference.id, { ...reference.attrs, key: normalizedNewKey });
@@ -91,7 +91,7 @@ export function createDeleteReferenceCommand(schema: DocumentSchema, document: D
 }
 
 function normalizeKey(key: unknown): string {
-	return typeof key === "string" ? key.trim() : "";
+	return typeof key === 'string' ? key.trim() : '';
 }
 
 function findNodesByKey(document: DocumentNode, type: string, key: string): DocumentNode[] {
@@ -105,6 +105,6 @@ function findNodesByKey(document: DocumentNode, type: string, key: string): Docu
 }
 
 function findBibliographyInsertionIndex(schema: DocumentSchema, document: DocumentNode): number {
-	const firstFallbackBlock = document.content.findIndex(node => schema.getNodeSpec(node.type)?.groups?.includes("block") === true);
+	const firstFallbackBlock = document.content.findIndex(node => schema.getNodeSpec(node.type)?.groups?.includes('block') === true);
 	return firstFallbackBlock < 0 ? document.content.length : firstFallbackBlock;
 }

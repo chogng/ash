@@ -28,4 +28,4 @@ export interface ITaskService extends IDisposable {
 	terminate(run: ITaskRun): Promise<void>;
 }
 
-export const ITaskService = createServiceIdentifier<ITaskService>("taskService");
+export const ITaskService = createServiceIdentifier<ITaskService>('taskService');

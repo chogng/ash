@@ -6,6 +6,7 @@ import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/wo
 import { launchElectronApplication, type ElectronApplicationLaunchResult } from '../../../automation/playwrightElectron.js';
 import { Workbench } from '../../../automation/workbench.js';
 import type { ElectronLaunchOptions } from '../../../automation/electron.js';
+import type { EditorPartsState } from '../../../../src/ash/workbench/browser/parts/editor/editorParts.js';
 
 
 for (const scaleFactor of [1, 1.25, 1.5, 1.75, 2]) {
@@ -762,44 +763,56 @@ test('Workbench restores editor tabs unless editor restoration is disabled', { t
 	}
 });
 
-test('Workbench reopens detached editor windows with their tabs', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
-	test.setTimeout(90_000);
-	const userDataDirectory = testInfo.outputPath('user-data');
-	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
-	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.startupEditor":"none"}\n');
-	let application: ElectronApplication | undefined;
-	let session: ElectronApplicationLaunchResult | undefined;
-	try {
-		session = await launch(userDataDirectory);
-		application = session.application;
-		const page = await application.firstWindow();
-		await new Workbench(page).waitForReady();
-		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
-		await expect(page.locator('.ash-tab')).toHaveCount(1);
-		await page.keyboard.press('F1');
-		const command = page.locator('.ash-quick-pick').getByRole('combobox');
-		await command.fill('Move to New Window');
-		const opened = page.context().waitForEvent('page');
-		await command.press('Enter');
-		const detached = await opened;
-		await expect(detached.locator('.ash-auxiliary-window-container .ash-tab')).toHaveCount(1);
-		await expect.poll(async () => {
-			const saved = await readFile(join(userDataDirectory, 'workbench-state.json'), 'utf8');
-			return saved.includes('editorparts.state') && saved.includes('Untitled-1');
-		}).toBe(true);
-		await session.quit();
-		application = undefined;
+for (const dirty of [false, true]) {
+	test(`Workbench reopens detached editor windows with ${dirty ? 'unsaved content' : 'their tabs'}`, { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
+		test.setTimeout(90_000);
+		const userDataDirectory = testInfo.outputPath('user-data');
+		await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
+		await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.startupEditor":"none"}\n');
+		const readSavedParts = async (): Promise<EditorPartsState | undefined> => {
+			const saved = JSON.parse(await readFile(join(userDataDirectory, 'workbench-state.json'), 'utf8')) as {
+				storages: { identity: { scope: string; }; entries: Record<string, { value: string; }>; }[];
+			};
+			const entry = saved.storages.find(storage => storage.identity.scope === 'workspace')?.entries['editorparts.state'];
+			return entry ? JSON.parse(entry.value) as EditorPartsState : undefined;
+		};
+		let application: ElectronApplication | undefined;
+		let session: ElectronApplicationLaunchResult | undefined;
+		try {
+			session = await launch(userDataDirectory);
+			application = session.application;
+			const page = await application.firstWindow();
+			const workbench = new Workbench(page);
+			await workbench.waitForReady();
+			await page.keyboard.press(process.platform === 'darwin' ? 'Meta+N' : 'Control+N');
+			await expect(page.locator('.ash-tab')).toHaveCount(1);
+			const opened = page.context().waitForEvent('page');
+			await workbench.quickaccess.runCommand('workbench.action.moveEditorToNewWindow');
+			const detached = await opened;
+			await expect(detached.locator('.ash-auxiliary-window-container .ash-tab')).toHaveCount(1);
+			if (dirty) {
+				await detached.locator('.stanza-editor-input').focus();
+				await detached.locator('.stanza-editor-input').type('retained auxiliary draft');
+			}
+			await expect.poll(async () => (await readSavedParts())?.parts.length).toBe(2);
+			await session.quit();
+			application = undefined;
+			const saved = await readSavedParts();
+			expect(saved?.parts).toHaveLength(2);
+			expect(saved?.windows).toHaveLength(2);
 
-		session = await launch(userDataDirectory);
-		application = session.application;
-		await expect.poll(() => application!.windows().length).toBe(2);
-		const windows = application.windows();
-		const reopened = windows.find(window => window !== windows[0] && !window.isClosed());
-		await expect(reopened!.locator('.ash-auxiliary-window-container .ash-tab')).toHaveCount(1);
-	} finally {
-		await session?.close();
-	}
-});
+			session = await launch(userDataDirectory);
+			application = session.application;
+			await expect.poll(() => application!.windows().length).toBe(2);
+			const windows = application.windows();
+			const reopened = windows.find(window => window !== windows[0] && !window.isClosed());
+			await expect(reopened!.locator('.ash-auxiliary-window-container .ash-tab')).toHaveCount(1);
+			if (dirty) await expect(reopened!.locator('.stanza-editor')).toContainText('retained auxiliary draft');
+		} finally {
+			await session?.close();
+		}
+	});
+}
 
 test('updated version restores all windows once despite a none preference', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	test.setTimeout(90_000);

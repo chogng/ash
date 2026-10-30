@@ -1,9 +1,9 @@
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { MutableDisposable, toDisposable, DisposableStore } from "../../../../../base/common/lifecycle.js";
-import { addDisposableListener, h, isHTMLElement } from "../../../../../base/browser/dom.js";
-import { type ResourceEdit } from "../../../../../editor/browser/services/bulkEditService.js";
-import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
-import { type BulkEditPreviewEntry, BulkFileOperations } from "./bulkEditPreview.js";
+import { MutableDisposable, toDisposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
+import { type ResourceEdit } from '../../../../../editor/browser/services/bulkEditService.js';
+import { ViewPane, type IViewPaneOptions } from '../../../../browser/parts/views/viewPane.js';
+import { type BulkEditPreviewEntry, BulkFileOperations } from './bulkEditPreview.js';
 import { localize } from '../../../../../nls.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -66,34 +66,34 @@ export class BulkEditPane extends ViewPane {
 		this.checkedContext = BulkEditPane.ctxHasCheckedChanges.bindTo(context);
 		this.categoriesContext = BulkEditPane.ctxHasCategories.bindTo(context);
 		this.groupingContext = BulkEditPane.ctxGroupByFile.bindTo(context);
-		this.contentElement.classList.add("ash-bulk-edit");
+		this.contentElement.classList.add('ash-bulk-edit');
 		const document = container.ownerDocument;
-		const toolbar = h(document, "div");
-		toolbar.className = "ash-bulk-edit-toolbar";
-		this.selectAllButton = this.createButton(document, localize('bulkEdit.selectAll', 'Select all'), "ash-bulk-edit-select-all").domNode;
-		this.applyButton = this.createButton(document, localize('bulkEdit.applySelected', 'Apply selected'), "ash-bulk-edit-apply").domNode;
-		this.cancelButton = this.createButton(document, localize('bulkEdit.cancel', 'Cancel'), "ash-bulk-edit-cancel").domNode;
+		const toolbar = h(document, 'div');
+		toolbar.className = 'ash-bulk-edit-toolbar';
+		this.selectAllButton = this.createButton(document, localize('bulkEdit.selectAll', 'Select all'), 'ash-bulk-edit-select-all').domNode;
+		this.applyButton = this.createButton(document, localize('bulkEdit.applySelected', 'Apply selected'), 'ash-bulk-edit-apply').domNode;
+		this.cancelButton = this.createButton(document, localize('bulkEdit.cancel', 'Cancel'), 'ash-bulk-edit-cancel').domNode;
 		this.groupButtonControl = this.createButton(document, localize('bulkEdit.groupByType', 'Group by type'), 'ash-bulk-edit-group');
 		this.groupButton = this.groupButtonControl.domNode;
 		this.previewButton = this.createButton(document, localize('bulkEdit.openDiff', 'Open changes'), 'ash-bulk-edit-open-diff').domNode;
 		toolbar.append(this.selectAllButton, this.groupButton, this.previewButton, this.applyButton, this.cancelButton);
-		this.statusElement = h(document, "div");
-		this.statusElement.className = "ash-bulk-edit-status";
-		this.statusElement.setAttribute("role", "status");
-		this.statusElement.setAttribute("aria-live", "polite");
-		this.listElement = h(document, "ul");
-		this.listElement.className = "ash-bulk-edit-list";
-		this.listElement.setAttribute("aria-label", localize('bulkEdit.previewLabel', 'Bulk edit preview'));
+		this.statusElement = h(document, 'div');
+		this.statusElement.className = 'ash-bulk-edit-status';
+		this.statusElement.setAttribute('role', 'status');
+		this.statusElement.setAttribute('aria-live', 'polite');
+		this.listElement = h(document, 'ul');
+		this.listElement.className = 'ash-bulk-edit-list';
+		this.listElement.setAttribute('aria-label', localize('bulkEdit.previewLabel', 'Bulk edit preview'));
 		this.contentElement.append(toolbar, this.statusElement, this.listElement);
 		this.trackBodyMinimum(this.listElement, 22);
-		this._register(addDisposableListener(this.selectAllButton, "click", () => this.selectAll()));
-		this._register(addDisposableListener(this.applyButton, "click", () => this.accept()));
-		this._register(addDisposableListener(this.cancelButton, "click", () => this.discard()));
+		this._register(addDisposableListener(this.selectAllButton, 'click', () => this.selectAll()));
+		this._register(addDisposableListener(this.applyButton, 'click', () => this.accept()));
+		this._register(addDisposableListener(this.cancelButton, 'click', () => this.discard()));
 		this._register(addDisposableListener(this.groupButton, 'click', () => this.groupsByFile ? this.groupByType() : this.groupByFile()));
 		this._register(addDisposableListener(this.previewButton, 'click', () => {
 			void this.openPreview().catch(error => { this.statusElement.textContent = getErrorMessage(error); });
 		}));
-		this._register(addDisposableListener(this.listElement, "change", event => this.toggleSelection(event)));
+		this._register(addDisposableListener(this.listElement, 'change', event => this.toggleSelection(event)));
 		this._register(addDisposableListener(this.element, 'keydown', event => {
 			if (event.key === 'Escape') {
 				event.preventDefault();
@@ -280,27 +280,27 @@ export class BulkEditPane extends ViewPane {
 
 	private renderEntry(entry: BulkEditPreviewEntry): HTMLLIElement {
 		const document = this.element.ownerDocument;
-		const item = h(document, "li");
-		item.className = `ash-bulk-edit-entry${entry.error ? " has-error" : ""}`;
+		const item = h(document, 'li');
+		item.className = `ash-bulk-edit-entry${entry.error ? ' has-error' : ''}`;
 		item.dataset.bulkEditEntryIndex = String(entry.index);
-		const header = h(document, "div");
-		header.className = "ash-bulk-edit-entry-header";
-		const checkbox = h(document, "input");
-		checkbox.type = "checkbox";
+		const header = h(document, 'div');
+		header.className = 'ash-bulk-edit-entry-header';
+		const checkbox = h(document, 'input');
+		checkbox.type = 'checkbox';
 		checkbox.checked = this.model!.isChecked(entry.index);
 		checkbox.disabled = entry.error !== undefined;
 		checkbox.dataset.bulkEditIndex = String(entry.index);
-		checkbox.setAttribute("aria-label", localize('bulkEdit.selectResource', 'Select {0}', resourceLabel(entry.resource)));
-		const kind = h(document, "span");
-		kind.className = "ash-bulk-edit-kind";
+		checkbox.setAttribute('aria-label', localize('bulkEdit.selectResource', 'Select {0}', resourceLabel(entry.resource)));
+		const kind = h(document, 'span');
+		kind.className = 'ash-bulk-edit-kind';
 		kind.textContent = kindLabel(entry.kind);
-		const resource = h(document, "span");
-		resource.className = "ash-bulk-edit-resource";
+		const resource = h(document, 'span');
+		resource.className = 'ash-bulk-edit-resource';
 		resource.textContent = entry.secondaryResource ? `${resourceLabel(entry.resource)} → ${resourceLabel(entry.secondaryResource)}` : resourceLabel(entry.resource);
 		resource.title = entry.secondaryResource ? `${entry.resource.toString()} → ${entry.secondaryResource.toString()}` : entry.resource.toString();
 		header.append(checkbox, kind, resource);
-		const detail = h(document, "div");
-		detail.className = "ash-bulk-edit-detail";
+		const detail = h(document, 'div');
+		detail.className = 'ash-bulk-edit-detail';
 		detail.textContent = entry.error ?? entry.detail;
 		item.append(header, detail);
 		const edit = this.model!.edit.entries[entry.index];
@@ -337,11 +337,11 @@ export class BulkEditPane extends ViewPane {
 
 	private renderTextChange(index: number, before: string, after: string): HTMLElement {
 		const document = this.element.ownerDocument;
-		const details = h(document, "details");
-		details.className = "ash-bulk-edit-text-change";
-		const summary = h(document, "summary");
+		const details = h(document, 'details');
+		details.className = 'ash-bulk-edit-text-change';
+		const summary = h(document, 'summary');
 		summary.textContent = localize('bulkEdit.showTextChange', 'Show text change');
-		const content = h(document, "pre");
+		const content = h(document, 'pre');
 		content.dataset.previewIndex = String(index);
 		content.textContent = `- ${clipText(before)}\n+ ${clipText(after)}`;
 		details.append(summary, content);
@@ -428,8 +428,8 @@ export class BulkEditPane extends ViewPane {
 }
 
 function resourceLabel(resource: { readonly path: string; }): string {
-	const path = resource.path.replaceAll("\\", "/");
-	return path.split("/").filter(Boolean).pop() ?? path;
+	const path = resource.path.replaceAll('\\', '/');
+	return path.split('/').filter(Boolean).pop() ?? path;
 }
 
 function clipText(value: string): string {

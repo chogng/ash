@@ -52,7 +52,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Equal: ['́', '̀', '̧', '̨', 0],
 		BracketLeft: ['ü', 'Ü', '̈', '̊', 0],
 		BracketRight: ['+', '*', '~', '¯', 0],
-		Backslash: ['#', '\'', '’', '̆', 0],
+		Backslash: ['#', "'", '’', '̆', 0],
 		Semicolon: ['ö', 'Ö', '̋', '̣', 0],
 		Quote: ['ä', 'Ä', '̂', '̌', 0],
 		Backquote: ['̂', '°', '′', '″', 0],
@@ -180,4 +180,3 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		MailSend: []
 	}
 });
-

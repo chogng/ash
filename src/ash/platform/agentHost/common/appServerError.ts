@@ -7,7 +7,7 @@ export class AppServerRemoteError extends Error {
 
 	constructor(readonly code: number, message: string, readonly data: AppServerErrorData) {
 		super(data.kind === 'ServerShuttingDown' ? localize('appServer.shuttingDown', 'App Server is stopping. Wait for it to finish, then reconnect.') : message);
-		this.name = "AppServerRemoteError";
+		this.name = 'AppServerRemoteError';
 		this.errorName = data.kind;
 	}
 }

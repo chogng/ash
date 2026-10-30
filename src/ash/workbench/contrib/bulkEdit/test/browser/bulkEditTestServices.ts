@@ -94,7 +94,7 @@ export class MemoryResourceStore implements ITextResourceStore {
 		}
 		let entry = this.resources.get(request.resource.toString());
 		if (!entry) {
-			entry = { text: "", revision: 0 };
+			entry = { text: '', revision: 0 };
 			this.resources.set(request.resource.toString(), entry);
 		}
 		entry.text = request.text;
@@ -143,25 +143,25 @@ export class MemoryFileService implements IFileSystemProvider {
 	}
 	async createFile(resource: URI, existing: FileExistingTargetBehavior) {
 		if (this.has(resource)) {
-			if (existing === "error") throw new Error("FileSystemOperationFailed");
-			if (existing === "ignore") return this.stat(resource);
+			if (existing === 'error') throw new Error('FileSystemOperationFailed');
+			if (existing === 'ignore') return this.stat(resource);
 		}
-		this.resources.set(resource.toString(), "");
+		this.resources.set(resource.toString(), '');
 		return this.stat(resource);
 	}
 	async createDirectory(): Promise<never> { throw new Error('Workspace edit tests do not create directories'); }
-	async copy(): Promise<void> { throw new Error("Copy is not used in this test"); }
+	async copy(): Promise<void> { throw new Error('Copy is not used in this test'); }
 	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
-		if (this.failRename) throw new Error("injected rename failure");
+		if (this.failRename) throw new Error('injected rename failure');
 		const sourceText = this.text(source);
 		if (this.has(target)) {
-			if (existing === "error") throw new Error("FileSystemOperationFailed");
-			if (existing === "ignore") return;
+			if (existing === 'error') throw new Error('FileSystemOperationFailed');
+			if (existing === 'ignore') return;
 		}
 		this.resources.delete(source.toString());
 		this.resources.set(target.toString(), sourceText);
 	}
 	async delete(resource: URI, missing: FileMissingTargetBehavior, _mode: FileDeleteMode): Promise<void> {
-		if (!this.resources.delete(resource.toString()) && missing === "error") throw new Error("FileSystemOperationFailed");
+		if (!this.resources.delete(resource.toString()) && missing === 'error') throw new Error('FileSystemOperationFailed');
 	}
 }

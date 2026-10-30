@@ -112,7 +112,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
 		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
 		await page.locator('.ash-terminal-instance:visible').first().dispatchEvent('drop', {
-			dataTransfer: await page.evaluateHandle(() => { const transfer = new DataTransfer(); transfer.setData('text/uri-list', "file:///workspace/space%20%27%24%28literal%29.sh"); return transfer; }),
+			dataTransfer: await page.evaluateHandle(() => { const transfer = new DataTransfer(); transfer.setData('text/uri-list', 'file:///workspace/space%20%27%24%28literal%29.sh'); return transfer; }),
 		});
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(["'/workspace/space '\"'\"'$(literal).sh'"]);
 		await page.evaluate(() => { void window.ashTerminalInputIntegration.command('workbench.action.terminal.goToRecentDirectory'); });
@@ -357,7 +357,6 @@ test('terminal does not resize the process while its host has zero dimensions', 
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
 
-
 test('legacy mouse reports deliver their raw high bytes through xterm onBinary', async ({ page }) => {
 	await page.setViewportSize({ width: 1500, height: 600 });
 	await page.goto('/terminal.html?input');
@@ -390,7 +389,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(page.locator('.xterm')).toHaveCount(0);
 		await page.locator('#outside').focus();
 		await page.evaluate(() => window.ashTerminalStreamIntegration.start());
-		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe(`中文🙂\n\n${locale === 'zh-CN' ? '[进程已退出，代码为 0]' : '[process exited with code 0]'}`);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂');
 		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 		await expect(page.locator('.ash-terminal-instance')).toHaveCount(0);
 		expect(errors).toEqual([]);
@@ -430,7 +429,6 @@ test('an existing hidden Shell parses and completes without revealing the panel 
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
 
-
 test('runCommands shortcuts execute with Terminal focused and keep command keys out of the Shell', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -459,7 +457,6 @@ test('hidden terminal view exposes its retained output without changing focus or
 	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 0, creates: 0 });
 	await expect(page.locator('.ash-terminal-instance:visible')).toHaveCount(0);
 });
-
 
 test('terminal screen follows light, dark and high contrast themes after initialization', async ({ page }) => {
 	await page.goto('/terminal.html?browser');
@@ -644,7 +641,10 @@ for (const clipboardFirst of [false, true]) test(`terminal clipboard paste uses 
 	expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.reads())).toBe(1);
 	await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b[?2004h'));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.pasteMode())).toBe(true);
-	await page.evaluate(async () => { window.ashTerminalInputIntegration.clear(); await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste'); });
+	await page.evaluate(async () => {
+		window.ashTerminalInputIntegration.clear();
+		await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste');
+	});
 	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x1b[200~中文\rsecond\x1b[201~']);
 	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
 	await page.getByRole('textbox', { name: 'Outside terminal' }).focus();
@@ -808,7 +808,10 @@ for (const transition of ['close', 'switch', 'disconnect'] as const) {
 		expect(await page.evaluate(() => window.ashTerminalClipboardIntegration.finish())).toBeUndefined();
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
 		if (transition === 'switch') {
-			await page.evaluate(async () => { window.ashTerminalClipboardIntegration.setText('fresh'); await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste'); });
+			await page.evaluate(async () => {
+				window.ashTerminalClipboardIntegration.setText('fresh');
+				await window.ashTerminalClipboardIntegration.command('workbench.action.terminal.paste');
+			});
 			expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['fresh']);
 		}
 		if (transition !== 'close') await page.evaluate(() => window.ashTerminalInputIntegration.close());
@@ -860,7 +863,6 @@ for (const failed of [false, true]) {
 		await page.evaluate(() => window.ashTerminalInputIntegration.close());
 	});
 }
-
 
 for (const locale of ['en', 'zh-CN']) test(`terminal clipboard menu retains its target after active selection changes in ${locale}`, async ({ page }) => {
 	await page.goto(`/terminal.html?input&groups&clipboard&browser&locale=${locale}`);
@@ -1151,7 +1153,6 @@ test('terminal reuse keeps command decorations separate when the new PTY restart
 	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
 
-
 test('terminal font rendering updates the existing screen without replacing its content', async ({ page }) => {
 	await page.goto('/terminal.html');
 	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
@@ -1166,7 +1167,6 @@ test('terminal font rendering updates the existing screen without replacing its 
 	await expect(page.locator('.xterm-rows')).toContainText('font policy retained');
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
-
 
 test('terminal Split creates independent processes, preserves output and moves focus between panes', async ({ page }) => {
 	const errors: string[] = [];
@@ -1206,7 +1206,6 @@ test('terminal Split creates independent processes, preserves output and moves f
 	expect(errors).toEqual([]);
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
 });
-
 
 test('terminal split sash accepts keyboard resizing and Unsplit retains both processes', async ({ page }) => {
 	const errors: string[] = [];
@@ -1280,7 +1279,6 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(2);
 	});
 }
-
 
 test('terminal error tooltip explains a refused input operation and relaunch removes the old reason', async ({ page }) => {
 	await page.goto('/terminal.html?input&groups&clipboard&locale=zh-CN');
@@ -1372,7 +1370,6 @@ test('splitting an editor terminal opens an adjacent shell while retaining the o
 	await page.evaluate(() => window.ashTerminalEditorIntegration.close());
 	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().instances)).toBe(1);
 });
-
 
 test('terminal instance list restores its resized width after page reload', async ({ page }) => {
 	await page.goto('/terminal.html?input&groups');
@@ -1543,7 +1540,6 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
-
 async function seedSuggestPrompt(page: Page, prefix: string, locale = 'en', shell: 'bash' | 'zsh' = 'bash'): Promise<void> {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -1571,7 +1567,7 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 				'description.foreground': '#789abc',
 				'list.activeSelectionBackground': '#654321',
 				'list.activeSelectionForeground': '#fedcba',
-				'focusBorder': '#112233',
+				focusBorder: '#112233',
 			});
 			window.ashTerminalSuggestIntegration.history('echo accepted');
 		}, theme);
@@ -1778,7 +1774,6 @@ test('decoded shell boundaries own prompt input and command output on the origin
 	expect(errors).toEqual([]);
 });
 
-
 for (const chinese of [false, true]) {
 	test(`terminal dropdown wires settings and task configuration with keyboard access (${chinese ? 'Chinese' : 'English'})`, async ({ page }) => {
 		const errors: string[] = [];
@@ -1869,7 +1864,6 @@ test('terminal split profile submenu activates extension providers and joins the
 	expect(errors).toEqual([]);
 });
 
-
 test('new terminal window opens a focused compact terminal editor and retains input in its own window', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -1898,7 +1892,6 @@ test('new terminal window opens a focused compact terminal editor and retains in
 	await expect.poll(() => popup.isClosed()).toBe(true);
 	expect(errors).toEqual([]);
 });
-
 
 test('splitting a configured shell retains its launch configuration after profile edits', async ({ page }) => {
 	const errors: string[] = [];
@@ -1941,7 +1934,6 @@ test('screen reader textarea follows committed shell input and stops synchronizi
 	await expect(input).toHaveValue('echo 中文');
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 });
-
 
 for (const locale of ['en', 'zh-CN'] as const) {
 	test(`terminal split direction follows the real panel layout without replacing screens or sending input in ${locale}`, async ({ page }) => {

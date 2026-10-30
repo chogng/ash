@@ -1,16 +1,16 @@
 import { resolveDocumentParagraphAttributes } from './documentParagraph.js';
-import { type DocumentSelection } from "../core/documentSelection.js";
-import { isRecord } from "ash:editor/base/common/types.js";
-import { isFiniteNumber } from "ash:editor/base/common/numbers.js";
-import { getDocumentBodyContent, createDocumentNode, findDocumentNode, type DocumentNodeId, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode } from "./document.js";
-import { type DocumentSchema, type DocumentValidationOptions } from "./documentSchema.js";
-import { localize } from "ash:editor/nls.js";
+import { type DocumentSelection } from '../core/documentSelection.js';
+import { isRecord } from 'ash:editor/base/common/types.js';
+import { isFiniteNumber } from 'ash:editor/base/common/numbers.js';
+import { getDocumentBodyContent, createDocumentNode, findDocumentNode, type DocumentNodeId, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode } from './document.js';
+import { type DocumentSchema, type DocumentValidationOptions } from './documentSchema.js';
+import { localize } from 'ash:editor/nls.js';
 
-export const DOCUMENT_SERIALIZATION_FORMAT = "ash.document";
+export const DOCUMENT_SERIALIZATION_FORMAT = 'ash.document';
 export const DOCUMENT_SERIALIZATION_VERSION = 2;
-export const DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT = "ash.document.fragment";
+export const DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT = 'ash.document.fragment';
 export const DOCUMENT_FRAGMENT_SERIALIZATION_VERSION = 1;
-export const DOCUMENT_FRAGMENT_CLIPBOARD_MIME = "application/vnd.ash.document.fragment+json";
+export const DOCUMENT_FRAGMENT_CLIPBOARD_MIME = 'application/vnd.ash.document.fragment+json';
 
 /** JSON-safe representation of one Stanza node, including incomplete transaction fragments. */
 export interface SerializedDocumentNode {
@@ -29,7 +29,7 @@ export interface DocumentFragment {
 export class DocumentSerializationError extends Error {
 	constructor(message: string, options?: ErrorOptions) {
 		super(message, options);
-		this.name = "DocumentSerializationError";
+		this.name = 'DocumentSerializationError';
 	}
 }
 
@@ -38,7 +38,7 @@ export function encodeDocumentNode(node: DocumentNode, schema: DocumentSchema, o
 	try {
 		schema.validateFragment(node, options);
 	} catch (error) {
-		throw new DocumentSerializationError("Document node failed schema validation", { cause: error });
+		throw new DocumentSerializationError('Document node failed schema validation', { cause: error });
 	}
 	return encodeNode(node);
 }
@@ -51,7 +51,7 @@ export function decodeDocumentNode(value: unknown, schema: DocumentSchema, optio
 		return node;
 	} catch (error) {
 		if (error instanceof DocumentSerializationError) throw error;
-		throw new DocumentSerializationError("Document node failed schema validation", { cause: error });
+		throw new DocumentSerializationError('Document node failed schema validation', { cause: error });
 	}
 }
 
@@ -64,18 +64,18 @@ export function serializeDocument(document: DocumentNode, schema: DocumentSchema
 /** Parses, validates, and freezes a persisted document without trusting its JSON shape. */
 export function deserializeDocument(value: string | unknown, schema: DocumentSchema): DocumentNode {
 	let parsed: unknown = value;
-	if (typeof value === "string") {
+	if (typeof value === 'string') {
 		try {
 			parsed = JSON.parse(value) as unknown;
 		} catch (error) {
-			throw new DocumentSerializationError("Structured document JSON is invalid", { cause: error });
+			throw new DocumentSerializationError('Structured document JSON is invalid', { cause: error });
 		}
 	}
-	if (!isRecord(parsed) || parsed.format !== DOCUMENT_SERIALIZATION_FORMAT || (parsed.version !== 1 && parsed.version !== DOCUMENT_SERIALIZATION_VERSION)) throw new DocumentSerializationError("Unsupported structured document format or version");
+	if (!isRecord(parsed) || parsed.format !== DOCUMENT_SERIALIZATION_FORMAT || (parsed.version !== 1 && parsed.version !== DOCUMENT_SERIALIZATION_VERSION)) throw new DocumentSerializationError('Unsupported structured document format or version');
 	// Legacy files and collaboration snapshots had no kind. The receiving schema
 	// supplies it once; all subsequent persistence and snapshots use the v2 envelope.
 	if (parsed.version === 1) {
-		if ("documentType" in parsed) throw new DocumentSerializationError(localize('document.serialization.legacyType', "Legacy structured documents cannot declare a document type"));
+		if ('documentType' in parsed) throw new DocumentSerializationError(localize('document.serialization.legacyType', 'Legacy structured documents cannot declare a document type'));
 	} else if (parsed.documentType !== schema.documentType) {
 		throw new DocumentSerializationError(localize('document.serialization.typeMismatch', "Structured document type must be '{0}'", schema.documentType));
 	}
@@ -85,7 +85,7 @@ export function deserializeDocument(value: string | unknown, schema: DocumentSch
 		return document;
 	} catch (error) {
 		if (error instanceof DocumentSerializationError) throw error;
-		throw new DocumentSerializationError("Structured document failed schema validation", { cause: error });
+		throw new DocumentSerializationError('Structured document failed schema validation', { cause: error });
 	}
 }
 
@@ -98,29 +98,29 @@ export function serializeDocumentFragment(fragment: DocumentFragment, schema: Do
 /** Parses and validates a Stanza clipboard fragment without trusting its JSON shape. */
 export function deserializeDocumentFragment(value: string | unknown, schema: DocumentSchema): DocumentFragment {
 	let parsed: unknown = value;
-	if (typeof value === "string") {
+	if (typeof value === 'string') {
 		try {
 			parsed = JSON.parse(value) as unknown;
 		} catch (error) {
-			throw new DocumentSerializationError("Structured document fragment JSON is invalid", { cause: error });
+			throw new DocumentSerializationError('Structured document fragment JSON is invalid', { cause: error });
 		}
 	}
-	if (!isRecord(parsed) || parsed.format !== DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT || parsed.version !== DOCUMENT_FRAGMENT_SERIALIZATION_VERSION || !Array.isArray(parsed.content)) throw new DocumentSerializationError("Unsupported structured document fragment format or version");
+	if (!isRecord(parsed) || parsed.format !== DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT || parsed.version !== DOCUMENT_FRAGMENT_SERIALIZATION_VERSION || !Array.isArray(parsed.content)) throw new DocumentSerializationError('Unsupported structured document fragment format or version');
 	try {
 		const content = Object.freeze(parsed.content.map(decodeNode));
 		validateFragmentContent(content, schema);
 		return Object.freeze({ content });
 	} catch (error) {
 		if (error instanceof DocumentSerializationError) throw error;
-		throw new DocumentSerializationError("Structured document fragment failed schema validation", { cause: error });
+		throw new DocumentSerializationError('Structured document fragment failed schema validation', { cause: error });
 	}
 }
 
 /** Converts plain text into a schema-valid paragraph document. */
-export function documentFromPlainText(schema: DocumentSchema, text: string, documentId = "document-1"): DocumentNode {
-	if (typeof text !== "string") throw new TypeError("Plain document text must be a string");
-	const lines = text.replaceAll("\r\n", "\n").replaceAll("\r", "\n").split("\n");
-	const paragraphs = lines.map((line, index) => schema.createNode("paragraph", {
+export function documentFromPlainText(schema: DocumentSchema, text: string, documentId = 'document-1'): DocumentNode {
+	if (typeof text !== 'string') throw new TypeError('Plain document text must be a string');
+	const lines = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
+	const paragraphs = lines.map((line, index) => schema.createNode('paragraph', {
 		id: `${documentId}-paragraph-${index + 1}`,
 		content: line.length > 0 ? [schema.createText(line, { id: `${documentId}-text-${index + 1}` })] : [],
 	}));
@@ -129,8 +129,8 @@ export function documentFromPlainText(schema: DocumentSchema, text: string, docu
 
 /** Converts a supported text selection into clipboard-friendly plain text. */
 export function documentSelectionToText(document: DocumentNode, selection: DocumentSelection): string | undefined {
-	if (selection.kind === "all") return documentToPlainText(document);
-	if (selection.kind !== "text") return undefined;
+	if (selection.kind === 'all') return documentToPlainText(document);
+	if (selection.kind !== 'text') return undefined;
 	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);
 	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
 	if (!anchor || !head) return undefined;
@@ -150,14 +150,14 @@ export function documentSelectionToText(document: DocumentNode, selection: Docum
 	const parts: string[] = [textFromBlockRange(start.location.block, start.location.index, start.point.offset, start.location.block.content.length - 1, Number.MAX_SAFE_INTEGER)];
 	for (let index = start.location.parentIndex + 1; index < end.location.parentIndex; index += 1) parts.push(textFromBlock(start.location.parent.content[index]!));
 	parts.push(textFromBlockRange(end.location.block, 0, 0, end.location.index, end.point.offset));
-	return parts.join("\n");
+	return parts.join('\n');
 }
 
 /** Converts the complete structured document to interoperable plain text. */
 export function documentToPlainText(document: DocumentNode, schema?: DocumentSchema): string {
 	const blocks: string[] = [];
 	collectTextBearingBlocks(document, blocks, schema);
-	return blocks.join("\n");
+	return blocks.join('\n');
 }
 
 /** Extracts a validated block fragment from a text selection. */
@@ -178,8 +178,8 @@ export function extractDocumentFragment(schema: DocumentSchema, document: Docume
 }
 
 function extractDocumentFragmentContent(schema: DocumentSchema, document: DocumentNode, selection: DocumentSelection): DocumentFragment | undefined {
-	if (selection.kind === "all") return Object.freeze({ content: Object.freeze([...getDocumentBodyContent(document)]) });
-	if (selection.kind !== "text") return undefined;
+	if (selection.kind === 'all') return Object.freeze({ content: Object.freeze([...getDocumentBodyContent(document)]) });
+	if (selection.kind !== 'text') return undefined;
 	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);
 	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
 	if (!anchor || !head) return undefined;
@@ -213,11 +213,11 @@ function extractDocumentFragmentContent(schema: DocumentSchema, document: Docume
 }
 
 function decodeNode(value: unknown): DocumentNode {
-	if (!isRecord(value) || typeof value.id !== "string" || typeof value.type !== "string") throw new DocumentSerializationError("Serialized document node is invalid");
+	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.type !== 'string') throw new DocumentSerializationError('Serialized document node is invalid');
 	if (!Array.isArray(value.content)) throw new DocumentSerializationError(`Serialized node '${value.id}' must contain an array`);
 	const attrs = decodeAttributes(value.attrs, `node:${value.id}`);
 	const marks = value.marks === undefined ? [] : decodeMarks(value.marks, value.id);
-	if (value.text !== undefined && typeof value.text !== "string") throw new DocumentSerializationError(`Serialized text for '${value.id}' is invalid`);
+	if (value.text !== undefined && typeof value.text !== 'string') throw new DocumentSerializationError(`Serialized text for '${value.id}' is invalid`);
 	return createDocumentNode({ id: value.id, type: value.type, attrs, content: value.content.map(decodeNode), marks, ...(value.text === undefined ? {} : { text: value.text }) });
 }
 
@@ -233,15 +233,15 @@ function encodeNode(node: DocumentNode): SerializedDocumentNode {
 }
 
 function validateFragmentContent(content: readonly DocumentNode[], schema: DocumentSchema): void {
-	let rootId = "__ash_document_fragment_root__";
-	while (content.some(node => node.id === rootId)) rootId += "_";
+	let rootId = '__ash_document_fragment_root__';
+	while (content.some(node => node.id === rootId)) rootId += '_';
 	schema.createDocument(content, rootId);
 }
 
 function decodeMarks(value: unknown, nodeId: string): readonly DocumentMark[] {
 	if (!Array.isArray(value)) throw new DocumentSerializationError(`Serialized marks for '${nodeId}' must be an array`);
 	return value.map(mark => {
-		if (!isRecord(mark) || typeof mark.type !== "string") throw new DocumentSerializationError(`Serialized mark on '${nodeId}' is invalid`);
+		if (!isRecord(mark) || typeof mark.type !== 'string') throw new DocumentSerializationError(`Serialized mark on '${nodeId}' is invalid`);
 		return Object.freeze({ type: mark.type, attrs: decodeAttributes(mark.attrs, `mark:${mark.type}`) });
 	});
 }
@@ -257,11 +257,11 @@ function decodeAttributes(value: unknown, owner: string): DocumentAttributes {
 }
 
 function isAttributeValue(value: unknown): value is DocumentAttributeValue {
-	return value === null || typeof value === "string" || typeof value === "boolean" || isFiniteNumber(value);
+	return value === null || typeof value === 'string' || typeof value === 'boolean' || isFiniteNumber(value);
 }
 
 function collectTextBearingBlocks(node: DocumentNode, blocks: string[], schema: DocumentSchema | undefined): void {
-	if (isTextBearingBlock(node) || schema?.getNodeSpec(node.type)?.kind === "line") {
+	if (isTextBearingBlock(node) || schema?.getNodeSpec(node.type)?.kind === 'line') {
 		blocks.push(textFromBlock(node));
 		return;
 	}
@@ -292,7 +292,7 @@ function textFromBlock(block: DocumentNode): string {
 }
 
 function textFromBlockRange(block: DocumentNode, startIndex: number, startOffset: number, endIndex: number, endOffset: number): string {
-	if (block.content.length === 0 || startIndex > endIndex) return "";
+	if (block.content.length === 0 || startIndex > endIndex) return '';
 	const parts: string[] = [];
 	for (let index = startIndex; index <= endIndex; index += 1) {
 		const child = block.content[index]!;
@@ -300,19 +300,19 @@ function textFromBlockRange(block: DocumentNode, startIndex: number, startOffset
 			const from = index === startIndex ? Math.min(startOffset, child.text.length) : 0;
 			const to = index === endIndex ? Math.min(endOffset, child.text.length) : child.text.length;
 			if (to > from) parts.push(child.text.slice(from, to));
-		} else if (child.type === "hardBreak") {
-			parts.push("\n");
-		} else if (child.type === "image") {
-			parts.push(typeof child.attrs.alt === "string" ? child.attrs.alt : "\uFFFC");
+		} else if (child.type === 'hardBreak') {
+			parts.push('\n');
+		} else if (child.type === 'image') {
+			parts.push(typeof child.attrs.alt === 'string' ? child.attrs.alt : '\uFFFC');
 		} else {
-			parts.push(typeof child.attrs.label === "string" ? child.attrs.label : "\uFFFC");
+			parts.push(typeof child.attrs.label === 'string' ? child.attrs.label : '\uFFFC');
 		}
 	}
-	return parts.join("");
+	return parts.join('');
 }
 
 function isTextBearingBlock(node: DocumentNode): boolean {
-	return node.type === "paragraph" || node.type === "heading" || node.type === "codeBlock";
+	return node.type === 'paragraph' || node.type === 'heading' || node.type === 'codeBlock';
 }
 
 function sliceInlineContent(schema: DocumentSchema, block: DocumentNode, startIndex: number, startOffset: number, endIndex: number, endOffset: number): readonly DocumentNode[] {

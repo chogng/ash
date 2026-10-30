@@ -1,10 +1,10 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import type { ServerNotification, SlashCommandDefinition } from "../../../../../.build/protocol/typescript/index.js";
+import type { ServerNotification, SlashCommandDefinition } from '../../../../../.build/protocol/typescript/index.js';
 import type { Event } from '../../../base/common/event.js';
-import type { DisposableHandle } from "../../ipc/common/ipc.js";
+import type { DisposableHandle } from '../../ipc/common/ipc.js';
 import type { OperatingSystem } from '../../../base/common/platform.js';
 
-export type AppServerConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";
+export type AppServerConnectionState = 'stopped' | 'starting' | 'initializing' | 'ready' | 'stopping' | 'crashed' | 'restarting';
 
 /** Recovery scheduling belongs to the connection owner, independently of protocol state. */
 export interface IAppServerConnectionRecovery {

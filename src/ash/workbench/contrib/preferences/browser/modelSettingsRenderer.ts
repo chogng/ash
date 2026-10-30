@@ -10,24 +10,27 @@ import { createUuid } from '../../../../base/common/uuid.js';
 import { ModelProviderSettingsRenderer, ProviderApiKeyInput } from './modelProviderSettingsRenderer.js';
 import { SettingsSearchQuery } from './settingsSearch.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { DisposableStore, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { localize } from '../../../../nls.js';
 import { type ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
 import { ChatModelsWidget } from '../../chat/browser/chatManagement/chatModelsWidget.js';
 import type { ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
-import { ISecretStorageStatusService, SecretStorageError, secretStorageMessage, type SecretStorageStatus, type SecretStorageMode } from '../../../../platform/secrets/common/secrets.js';
+import { ISecretStorageStatusService, SecretStorageError, secretStorageStateMessage, type SecretStorageState, type SecretStorageMode } from '../../../../platform/secrets/common/secrets.js';
 
 /** Model and credential rows shared by Workbench and Sessions; the host owns navigation and search. */
 export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionReference> {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
+	private readonly reveal = this._register(new Emitter<void>());
+	public override readonly onDidRequestReveal = this.reveal.event;
 	private readonly document: Document;
 	private readonly providersStatus: HTMLElement;
 	private readonly storageStatus: HTMLElement;
@@ -43,19 +46,27 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 	private readonly providerTitle: HTMLElement;
 	private readonly modelsWidget: ChatModelsWidget;
 	private catalogQuery = new SettingsSearchQuery('');
+	private readonly customProviderSubscriptions = this._register(new DisposableMap<string, IDisposable>());
+	private readonly addProvider: Button;
 	private readonly customProviders = this._register(new DisposableMap<string, ModelProviderSettingsRenderer>());
 	private visible = false;
 	private apiLoadVersion = 0;
 	public readonly categoryId = 'models';
+	public override readonly sectionSearch = {
+		search: (query: string): void => this.modelsWidget.search(query, { focus: false }),
+		focus: (): void => this.modelsWidget.focusSearch(),
+	};
 
-	constructor(container: HTMLElement, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ISecretStorageStatusService private readonly secretStorage: ISecretStorageStatusService, @IAccessibleViewService accessibleView: IAccessibleViewService, @IConfigurationService configuration: IConfigurationService, @IInstantiationService private readonly instantiation: IInstantiationService, @INotificationService private readonly notifications: INotificationService, @IDialogService private readonly dialogs: IDialogService) {
+	constructor(container: HTMLElement, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ISecretStorageStatusService private readonly secretStorage: ISecretStorageStatusService, @IAccessibleViewService accessibleView: IAccessibleViewService, @IConfigurationService configuration: IConfigurationService, @IInstantiationService private readonly instantiation: IInstantiationService, @INotificationService private readonly notifications: INotificationService, @IDialogService private readonly dialogs: IDialogService, @ICommandService private readonly commands: ICommandService) {
 		super();
 		this.document = container.ownerDocument;
 		this.modelsWidget = this._register(instantiation.createInstance(ChatModelsWidget, this.document, {
 			compact: true,
 			matches: (entry: ModelCatalogEntry) => this.catalogQuery.matches({ title: entry.displayName, description: '', keywords: [`${entry.model.provider}/${entry.model.model}`] }),
+			matchesProvider: (connection: string, label: string) => this.catalogQuery.matches({ title: label, description: '', keywords: [connection] }),
 			isFiltering: () => !this.catalogQuery.isEmpty,
-			onStorageError: (error: SecretStorageError) => this.updateStorageStatus(error.status),
+			onStorageError: (error: SecretStorageError) => this.updateStorageStatus({ status: error.status }),
+			onConfigure: (connection: string, model?: string) => this.configure(connection, model),
 		}));
 		this.modelsWidget.element.hidden = true;
 		this._register(this.modelsWidget.onDidChangeItemCount(() => this.changed.fire()));
@@ -94,15 +105,15 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		const title = h(this.document, 'span');
 		title.textContent = localize('models.keys.title', 'API key');
 		this.providerTitle.append(title);
-		const add = this._register(new Button(this.providerTitle, {
+		this.addProvider = this._register(new Button(this.providerTitle, {
 			...defaultButtonStyles,
 			label: localize('models.provider.new', 'New provider'),
 			presentation: 'secondary',
 		}));
-		this._register(add.onDidClick(() => {
+		this._register(this.addProvider.onDidClick(() => {
 			const id = `custom-${createUuid()}`;
 			const card = this.instantiation.createInstance(ModelProviderSettingsRenderer, this.document, { id, name: '', baseUrl: '', apiFormat: 'responses', order: Date.now(), models: [] }, false, true);
-			this.customProviders.set(id, card);
+			this.trackProvider(id, card);
 			card.setCredentialStorageAvailable(this.storageAvailable);
 			void card.initialize();
 			this.changed.fire();
@@ -132,7 +143,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 					const nodes = [this.providerTitle, this.storageStatus, ...this.apiElements.map(provider => provider.row), ...[...this.customProviders].map(([, card]) => card.domNode)];
 					if (!nodes.some(node => node.contains(focused))) return undefined;
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
-						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n')].filter(Boolean).join('\n\n') : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to expand or collapse the full list. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
+						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n')].filter(Boolean).join('\n\n') : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to show the full list with provider groups, provider switches and Search filters, or return to the overview. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. If the system keyring is unavailable, credentials are stored only in memory until Ash exits. Authorizing the keyring saves the credentials entered during this run and restores persistent storage. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Delete provider removes its configuration and saved API key after confirmation. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
 						() => focused.focus(), AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},
 			}));
@@ -146,7 +157,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		});
 		if (query && query.key !== this.catalogQuery.key) {
 			this.catalogQuery = query;
-			this.modelsWidget.render();
+			this.modelsWidget.render({ expandGroups: true });
 		}
 		const customNodes = [...this.customProviders].reverse().map(([id, card]) => item(`models.providers.${id}`, card.title, card.domNode.textContent ?? '', card.domNode));
 		const providerNodes = this.apiElements.map(({ provider, row }) => item(`models.providers.${provider.connection}`, provider.displayName, provider.provider, row, ['API key']));
@@ -154,7 +165,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			{
 				element: { kind: 'group', id: 'models.catalog', title: localize('sessions.settings.chatModels', 'Chat models'), description: '' },
 				// The widget has already matched names and IDs; retain those matches in the outer Settings search.
-				children: [item('models.catalog.widget', localize('sessions.settings.chatModels', 'Chat models'), this.modelsWidget.element.textContent ?? '', this.modelsWidget.element, this.modelsWidget.itemCount ? [this.catalogQuery.text] : undefined)],
+				children: [item('models.catalog.widget', localize('sessions.settings.chatModels', 'Chat models'), this.modelsWidget.element.textContent ?? '', this.modelsWidget.element, this.modelsWidget.hasResults ? [this.catalogQuery.text] : undefined)],
 			},
 			{
 				element: { kind: 'group', id: `${this.categoryId}.providers`, title: localize('models.keys.title', 'API key'), header: this.retainElement(`${this.categoryId}.providers` + '.heading', this.providerTitle), description: '' },
@@ -181,6 +192,38 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		void this.loadApiConnections(++this.apiLoadVersion);
 	}
 
+	private trackProvider(id: string, card: ModelProviderSettingsRenderer): void {
+		this.customProviders.set(id, card);
+		this.customProviderSubscriptions.set(id, card.onDidDelete(() => this.forgetProvider(id)));
+	}
+
+	private async configure(connection: string, model?: string): Promise<void> {
+		this.reveal.fire();
+		await this.loadApiConnections(++this.apiLoadVersion);
+		if (this.isDisposed || !this.visible) { return; }
+		const card = this.customProviders.get(connection);
+		if (card) {
+			await card.initialize();
+			if (this.isDisposed || !this.visible) { return; }
+			card.domNode.scrollIntoView({ block: 'nearest' });
+			if (model) { card.focusModel(model); }
+			else { card.focus(); }
+			return;
+		}
+		const key = this.apiElements.find(entry => entry.provider.connection === connection)?.key;
+		if (key) { key.input.focus(); return; }
+		await this.commands.executeCommand('workbench.action.manageAccounts');
+	}
+
+	private forgetProvider(id: string): void {
+		const card = this.customProviders.get(id);
+		const focused = card?.isDeleting || card?.domNode.contains(this.document.activeElement);
+		this.customProviderSubscriptions.deleteAndDispose(id);
+		this.customProviders.deleteAndDispose(id);
+		this.changed.fire();
+		if (focused && this.visible) { this.addProvider.focus(); }
+	}
+
 	private async loadApiConnections(version: number): Promise<void> {
 		const storageFocused = this.document.activeElement;
 		const restoreStorageFocus = this.storageStatus.contains(storageFocused);
@@ -189,8 +232,8 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			const storage = await this.secretStorage.readState();
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			this.storageMode = storage.mode;
-			this.updateStorageStatus(storage.status);
-			if (storage.status !== 'available') {
+			this.updateStorageStatus(storage);
+			if (!this.storageAvailable) {
 				this.providersStatus.textContent = '';
 				this.changed.fire();
 				return;
@@ -198,6 +241,10 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			const [catalog, custom] = await Promise.all([this.languageModels.listModelProviders(), this.languageModels.listCustomModelProviders()]);
 			const providers = catalog.filter(provider => provider.apiKeyPolicy !== 'unsupported' && provider.connection !== 'openai-compatible' && !provider.connection.startsWith('custom-'));
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
+			const customIds = new Set(custom.map(provider => provider.id));
+			for (const [id, card] of this.customProviders) {
+				if (!customIds.has(id) && !card.isDraft) { this.forgetProvider(id); }
+			}
 			for (const provider of [...custom].sort((left, right) => left.order - right.order)) {
 				const configured = catalog.some(entry => entry.connection === provider.id && entry.apiKeyConfigured);
 				const existing = this.customProviders.get(provider.id);
@@ -205,7 +252,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 					existing.updateKeyConfigured(configured);
 				} else {
 					const card = this.instantiation.createInstance(ModelProviderSettingsRenderer, this.document, provider, configured, false);
-					this.customProviders.set(provider.id, card);
+					this.trackProvider(provider.id, card);
 					void card.initialize();
 				}
 			}
@@ -229,7 +276,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		} catch (error) {
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			if (error instanceof SecretStorageError) {
-				this.updateStorageStatus(error.status);
+				this.updateStorageStatus({ status: error.status });
 				this.providersStatus.textContent = '';
 				this.changed.fire();
 				return;
@@ -256,16 +303,17 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		}
 	}
 
-	private updateStorageStatus(status: SecretStorageStatus): void {
-		const available = status === 'available';
+	private updateStorageStatus(state: SecretStorageState): void {
+		const available = state.status === 'available' || state.storageType === 'in-memory';
+		const persisted = state.status === 'available' && state.storageType !== 'in-memory';
 		this.storageAvailable = available;
-		this.storageMessage.textContent = available ? this.storageMode === 'file'
+		this.storageMessage.textContent = persisted ? this.storageMode === 'file'
 			? localize('credentials.storage.file', 'Credentials are stored without encryption in private files protected by your account permissions.')
 			: this.storageMode === 'encrypted' ? localize('credentials.storage.encrypted', 'Credentials are encrypted using a key in your system keyring.') : ''
-			: secretStorageMessage(status);
-		this.storageStatus.hidden = available && !this.storageMode;
-		this.storageRetry.domNode.hidden = available;
-		this.storageAuthorize.domNode.hidden = this.storageMode !== 'encrypted' || available;
+			: secretStorageStateMessage(state);
+		this.storageStatus.hidden = persisted && !this.storageMode;
+		this.storageRetry.domNode.hidden = persisted;
+		this.storageAuthorize.domNode.hidden = this.storageMode !== 'encrypted' || persisted;
 		this.storageModeButton.domNode.hidden = !this.storageMode;
 		this.storageModeButton.label = this.storageMode === 'file' ? localize('credentials.storage.useEncrypted', 'Use encrypted storage') : localize('credentials.storage.useFile', 'Use file storage');
 		this.storageAuthorize.enabled = !this.storageBusy;
@@ -296,7 +344,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			const state = action === 'authorize' ? await this.secretStorage.authorizeAccess() : await this.secretStorage.setStorageMode(mode);
 			if (this.isDisposed) return;
 			this.storageMode = state.mode;
-			this.updateStorageStatus(state.status);
+			this.updateStorageStatus(state);
 		} catch (error) {
 			if (!this.isDisposed) this.notifications.error(error instanceof Error ? error.message : String(error));
 		} finally {

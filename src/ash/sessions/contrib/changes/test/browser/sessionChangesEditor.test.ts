@@ -131,7 +131,7 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 		if (implementation.type === AccessibleViewType.View) {
 			assert.equal(provider.provideContent(), pane.getAccessibleContent());
 		} else {
-			assert.match(provider.provideContent(), /Compare the selected conversation/u);
+			assert.match(provider.provideContent(), /The file list and comparisons share this card/u);
 		}
 		provider.dispose();
 		assert.equal(dom.window.document.activeElement, dom.window.document.querySelector('.ash-sessions-changes-editor'));

@@ -2,8 +2,6 @@
  * Layout belongs to workbench.css; page-specific appearances stay with their owners. */
 /* Font rendering is shared; visual weight is owned by the Agents Window. */
 .ash-sessions-window {
-	/* Sizes outside the shared ramp stay scoped to this window. */
-	--ash-sessions-size180: 18px;
 	/* Window-owned type roles also apply to shared widgets and anchored popups. */
 	--ash-fontSize-heading1: 26px;
 	--ash-fontSize-heading2: 18px;
@@ -13,10 +11,34 @@
 	--ash-fontSize-label1: 14px;
 	--ash-fontSize-label2: 11px;
 	--ash-fontSize-label3: 10px;
-	--ash-lxiconFontSize: var(--ash-spacing-size160);
 	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	--ash-icon-font-family: "Ash UI Variable";
 	--ash-icon-font-weight: 550;
+}
+
+.ash-sessions-window .ash-button .ash-icon-label-icon > .ash-icon,
+.ash-sessions-window .ash-action-label-icon > .ash-icon,
+.ash-sessions-window .ash-menu-leading-check > .ash-icon {
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-sessions-window .ash-chat-code-reference-icon > span {
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-sessions-window .ash-chat-attachment-source > img,
+.ash-sessions-window .ash-chat-code-reference-icon > span {
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+}
+
+.ash-sessions-window .ash-action-label-icon,
+.ash-sessions-window .ash-menu-leading-slot {
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+	flex-basis: var(--ash-lxiconFontSize-large);
 }
 
 /* Dedicated SVG artwork keeps its paints; normalize its linework in this host. */
@@ -104,10 +126,6 @@
 .ash-sessions-window .ash-menu .ash-button {
 	padding-inline: var(--ash-spacing-size120);
 	border-radius: var(--ash-cornerRadius-large);
-}
-
-.ash-sessions-window .ash-menu-leading-check > .ash-icon {
-	font-size: var(--ash-spacing-size200);
 }
 
 .ash-sessions-window .ash-keybinding-label-keycap kbd {

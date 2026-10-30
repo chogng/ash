@@ -1,5 +1,5 @@
-import { invoke, subscribe } from "../../ipc/electron-browser/rendererIpc.js";
-import { WORKSPACE_CONTEXT_CHANGED_CHANNEL, WORKSPACE_CONTEXT_READ_CHANNEL, WORKSPACE_EDIT_CHANNEL, type IWorkspaceContextApi } from "../common/workspaceIpc.js";
+import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
+import { WORKSPACE_CONTEXT_CHANGED_CHANNEL, WORKSPACE_CONTEXT_READ_CHANNEL, WORKSPACE_EDIT_CHANNEL, type IWorkspaceContextApi } from '../common/workspaceIpc.js';
 import { WORKSPACE_CONFIGURATION_CHANNEL, WORKSPACE_CONFIGURATION_CHANGED_CHANNEL } from '../common/workspaceIpc.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError, type IFileWriteResult } from '../../files/common/files.js';
 import type { URI } from '../../../base/common/uri.js';

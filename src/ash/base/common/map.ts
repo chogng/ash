@@ -1,4 +1,4 @@
-import { URI } from "./uri.js";
+import { URI } from './uri.js';
 
 /** Returns the value for a key, inserting the supplied value when the key is absent. */
 export function getOrSet<K, V>(map: Map<K, V>, key: K, value: V): V {
@@ -23,7 +23,7 @@ export class LRUCache<K, V> implements Map<K, V> {
 	private mutableLimit: number;
 	private mutableRatio: number;
 
-	readonly [Symbol.toStringTag] = "LRUCache";
+	readonly [Symbol.toStringTag] = 'LRUCache';
 
 	constructor(limit: number, ratio = 1) {
 		this.mutableLimit = validateCacheLimit(limit);
@@ -121,14 +121,14 @@ export class LRUCache<K, V> implements Map<K, V> {
 
 function validateCacheLimit(value: number): number {
 	if (!Number.isSafeInteger(value) || value < 0) {
-		throw new RangeError("LRU cache limit must be a non-negative safe integer");
+		throw new RangeError('LRU cache limit must be a non-negative safe integer');
 	}
 	return value;
 }
 
 function validateCacheRatio(value: number): number {
 	if (!Number.isFinite(value) || value < 0 || value > 1) {
-		throw new RangeError("LRU cache ratio must be between zero and one");
+		throw new RangeError('LRU cache ratio must be between zero and one');
 	}
 	return value;
 }
@@ -156,7 +156,7 @@ export class ResourceMap<T> implements Map<URI, T> {
 	private readonly _entries = new Map<string, ResourceMapEntry<T>>();
 	private readonly toKey: ResourceMapKeyFn;
 
-	readonly [Symbol.toStringTag] = "ResourceMap";
+	readonly [Symbol.toStringTag] = 'ResourceMap';
 
 	constructor(toKey: ResourceMapKeyFn = defaultResourceKey) {
 		this.toKey = toKey;
@@ -223,7 +223,7 @@ export class ResourceMap<T> implements Map<URI, T> {
 export class ResourceSet implements Set<URI> {
 	private readonly resources: ResourceMap<URI>;
 
-	readonly [Symbol.toStringTag] = "ResourceSet";
+	readonly [Symbol.toStringTag] = 'ResourceSet';
 
 	constructor(toKey: ResourceMapKeyFn = defaultResourceKey) {
 		this.resources = new ResourceMap(toKey);

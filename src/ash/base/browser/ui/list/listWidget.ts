@@ -1,14 +1,14 @@
 import './list.css';
-import { addDisposableListener, getWindow, isHTMLElement, stopEvent } from "../../dom.js";
-import { equals } from "../../../common/arrays.js";
-import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable, MutableDisposable, type IDisposable } from "../../../common/lifecycle.js";
+import { addDisposableListener, getWindow, isHTMLElement, stopEvent } from '../../dom.js';
+import { equals } from '../../../common/arrays.js';
+import { Emitter, type Event } from '../../../common/event.js';
+import { Disposable, MutableDisposable, type IDisposable } from '../../../common/lifecycle.js';
 import { disposableWindowTimeout } from '../../scheduler.js';
-import { rot } from "../../../common/numbers.js";
-import { isMacintosh } from "../../../common/platform.js";
-import { setAriaAttribute } from "../aria/aria.js";
-import type { IKeyboardNavigationLabelProvider, ListAccessibilityProvider, ListDragAndDrop, ListScrolling } from "./list.js";
-import { ListView } from "./listView.js";
+import { rot } from '../../../common/numbers.js';
+import { isMacintosh } from '../../../common/platform.js';
+import { setAriaAttribute } from '../aria/aria.js';
+import type { IKeyboardNavigationLabelProvider, ListAccessibilityProvider, ListDragAndDrop, ListScrolling } from './list.js';
+import { ListView } from './listView.js';
 
 /** Host-provided CSS colors, resolved through the containing theme root. */
 export interface IListStyles {
@@ -25,7 +25,7 @@ export interface IListStyles {
 export interface ListOptions<T> {
 	readonly styles?: IListStyles;
 	readonly ariaLabel?: string;
-	readonly role?: "listbox" | "tree";
+	readonly role?: 'listbox' | 'tree';
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
 	readonly loopNavigation?: boolean;
@@ -141,29 +141,29 @@ export class List<T> extends Disposable {
 		}
 		if (options.styles?.listBackground) this.element.style.backgroundColor = options.styles.listBackground;
 		if (options.styles?.listFocusOutline) this.element.style.outlineColor = options.styles.listFocusOutline;
-		if (options.multipleSelectionSupport) this.element.setAttribute("aria-multiselectable", "true");
+		if (options.multipleSelectionSupport) this.element.setAttribute('aria-multiselectable', 'true');
 		this.onDidScroll = this.view.onDidScroll;
 		this.onDidRenderRows = this.view.onDidRenderRows;
 		this._register(this.view.onDidRenderRows(() => this.syncActiveDescendant()));
 		if (options.mouseSupport !== false) {
-			this._register(addDisposableListener(this.element, "mousemove", (event: MouseEvent) => {
+			this._register(addDisposableListener(this.element, 'mousemove', (event: MouseEvent) => {
 				if (options.focusOnMouseMove === false) return;
 				const index = this.view.getRowIndex(event);
 				if (index !== undefined) this.setActiveIndex(index, event);
 			}));
-			this._register(addDisposableListener(this.element, "mousedown", (event: MouseEvent) => {
+			this._register(addDisposableListener(this.element, 'mousedown', (event: MouseEvent) => {
 				const index = this.view.getRowIndex(event);
 				if (index !== undefined) stopEvent(event, { preventDefault: this.view.row(index)?.draggable !== true });
 			}));
-			this._register(addDisposableListener(this.element, "click", (event: MouseEvent) => this.onClick(event)));
-			this._register(addDisposableListener(this.element, "auxclick", (event: MouseEvent) => this.onAuxClick(event)));
-			this._register(addDisposableListener(this.element, "dblclick", (event: MouseEvent) => this.onDoubleClick(event)));
+			this._register(addDisposableListener(this.element, 'click', (event: MouseEvent) => this.onClick(event)));
+			this._register(addDisposableListener(this.element, 'auxclick', (event: MouseEvent) => this.onAuxClick(event)));
+			this._register(addDisposableListener(this.element, 'dblclick', (event: MouseEvent) => this.onDoubleClick(event)));
 		}
-		if (options.keyboardNavigation === true) this._register(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => this.onKeyDown(event)));
+		if (options.keyboardNavigation === true) this._register(addDisposableListener(this.element, 'keydown', (event: KeyboardEvent) => this.onKeyDown(event)));
 		this._register(addDisposableListener(this.element, 'focusout', () => this.resetNavigationPrefix()));
 	}
 
-	updateOptions(options: Pick<ListOptions<T>, "smoothScrolling">): void { this.view.updateOptions(options); }
+	updateOptions(options: Pick<ListOptions<T>, 'smoothScrolling'>): void { this.view.updateOptions(options); }
 
 	get items(): readonly T[] { return this.view.items; }
 	clearRetainedRows(): void { this.view.clearRetainedRows(); }
@@ -289,16 +289,16 @@ export class List<T> extends Disposable {
 		if (isHTMLElement(event.target) && event.target.closest('input, textarea, select, [contenteditable="true"]')) return;
 		let index: number | undefined;
 		switch (event.key) {
-			case "ArrowDown":
+			case 'ArrowDown':
 				index = this.nextIndex(1);
 				break;
-			case "ArrowUp":
+			case 'ArrowUp':
 				index = this.nextIndex(-1);
 				break;
-			case "Home":
+			case 'Home':
 				index = this.items.length > 0 ? 0 : undefined;
 				break;
-			case "End":
+			case 'End':
 				index = this.items.length > 0 ? this.items.length - 1 : undefined;
 				break;
 			case 'PageDown':
@@ -376,7 +376,7 @@ export class List<T> extends Disposable {
 		this.selectionAnchor = index;
 		const toggleSelection = isMacintosh ? event.metaKey : event.ctrlKey;
 		if (this.options.multipleSelectionSupport && toggleSelection) {
-			if (event.type === "click") {
+			if (event.type === 'click') {
 				const indexes = this._selectionIndexes.includes(index)
 					? this._selectionIndexes.filter(selected => selected !== index)
 					: [...this._selectionIndexes, index];
@@ -401,8 +401,8 @@ export class List<T> extends Disposable {
 
 	private syncRows(): void {
 		// Logical focus survives virtualized rows leaving the DOM during scrolling.
-		this.element.classList.toggle("has-focused-item", this.activeItem !== undefined);
-		const rows = this.element.querySelectorAll<HTMLElement>(":scope > .ash-list-row");
+		this.element.classList.toggle('has-focused-item', this.activeItem !== undefined);
+		const rows = this.element.querySelectorAll<HTMLElement>(':scope > .ash-list-row');
 		rows.forEach((row) => {
 			const index = Number(row.dataset.index);
 			this.updateRowState(row, index);
@@ -412,18 +412,18 @@ export class List<T> extends Disposable {
 
 	private syncActiveDescendant(): void {
 		const activeRow = this.view.row(this._activeIndex);
-		if (this.element.getAttribute("aria-activedescendant") === (activeRow?.id ?? null)) return;
-		if (activeRow) this.element.setAttribute("aria-activedescendant", activeRow.id);
-		else this.element.removeAttribute("aria-activedescendant");
+		if (this.element.getAttribute('aria-activedescendant') === (activeRow?.id ?? null)) return;
+		if (activeRow) this.element.setAttribute('aria-activedescendant', activeRow.id);
+		else this.element.removeAttribute('aria-activedescendant');
 	}
 
 	private updateRowState(row: HTMLElement, index: number): void {
 		const focused = index === this._activeIndex;
 		const selected = this._selectionIndexes.includes(index);
-		row.classList.toggle("focused", focused);
-		row.classList.toggle("is-active", focused);
-		row.classList.toggle("selected", selected);
-		setAriaAttribute(row, "selected", selected);
+		row.classList.toggle('focused', focused);
+		row.classList.toggle('is-active', focused);
+		row.classList.toggle('selected', selected);
+		setAriaAttribute(row, 'selected', selected);
 	}
 
 	private emitFocus(browserEvent?: UIEvent): void {

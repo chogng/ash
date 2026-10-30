@@ -90,7 +90,7 @@ Object.defineProperty(globalThis, 'ash', {
 			},
 		},
 		ipcMessagePort: { acquire: () => ({ dispose() { } }) },
-		process: { platform: 'linux', arch: 'x64' },
+		process: { platform: 'linux', arch: 'x64' , isBuilt: false},
 		webUtils: { getPathForFile: () => '' },
 	} satisfies ISandboxGlobals
 });

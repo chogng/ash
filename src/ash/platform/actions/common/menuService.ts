@@ -1,12 +1,12 @@
 import {
 	Separator,
 	type IAction,
-} from "../../../base/common/actions.js";
-import { Emitter } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import { isCommandActionToggleInfo } from "../../action/common/action.js";
-import { ICommandService } from "../../commands/common/commands.js";
-import { type ContextKeyExpression, IContextKeyService } from "../../contextkey/common/contextkey.js";
+} from '../../../base/common/actions.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { isCommandActionToggleInfo } from '../../action/common/action.js';
+import { ICommandService } from '../../commands/common/commands.js';
+import { type ContextKeyExpression, IContextKeyService } from '../../contextkey/common/contextkey.js';
 import {
 	type IMenuActionOptions,
 	type IMenu,
@@ -20,7 +20,7 @@ import {
 	MenusRegistry,
 	type MenuRegistryItem,
 	SubmenuItemAction,
-} from "./actions.js";
+} from './actions.js';
 
 /** Resolves registered menu contributions for one workbench context. */
 export class MenuService implements IMenuService {
@@ -199,7 +199,7 @@ function resolveMenu(
 			nextAncestors,
 		);
 		if (!action) continue;
-		const group = item.group ?? "";
+		const group = item.group ?? '';
 		const actions = groups.get(group);
 		if (actions) actions.push(action);
 		else groups.set(group, [action]);
@@ -269,14 +269,14 @@ function compareGroups(
 	if (first === second) return 0;
 	if (!first) return 1;
 	if (!second) return -1;
-	if (first === "navigation") return -1;
-	if (second === "navigation") return 1;
+	if (first === 'navigation') return -1;
+	if (second === 'navigation') return 1;
 	return first.localeCompare(second);
 }
 
 function itemTitle(item: MenuRegistryItem): string {
-	if (!isMenuItem(item)) return typeof item.title === "string" ? item.title : item.title.original;
-	return typeof item.command.title === "string"
+	if (!isMenuItem(item)) return typeof item.title === 'string' ? item.title : item.title.original;
+	return typeof item.command.title === 'string'
 		? item.command.title
 		: item.command.title.original;
 }

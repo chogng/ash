@@ -323,17 +323,20 @@ test('PreferencesService passes graphical queries and sections while rejecting u
 	}
 	await preferences.openSettings({ target: ConfigurationTarget.USER });
 	assert.equal(opened.at(-1)!.resource.query, '');
-	for (const options of [null, [], true, { query: 1 }, { focusSearch: 'yes' }, { folderUri: '/not-a-uri' }, { target: ConfigurationTarget.WORKSPACE_FOLDER }, { groupId: "1" }, { groupId: -1 }, { groupId: 1.5 }, { openToSide: "yes" }, { section: '' }, { section: 1 }, { revealSetting: { key: 3 } }, { jsonEditor: 'json' }, { target: ConfigurationTarget.WORKSPACE }, { target: ConfigurationTarget.USER_REMOTE }]) {
+	await configuration.updateValue(WorkbenchConfiguration.settingsEditor, 'json');
+	await preferences.openSettings({ section: 'models', query: '', sectionQuery: '@provider:openai @capability:vision' });
+	assert.equal(requests.at(-1)?.sectionQuery, '@provider:openai @capability:vision');
+	for (const options of [null, [], true, { query: 1 }, { focusSearch: 'yes' }, { folderUri: '/not-a-uri' }, { target: ConfigurationTarget.WORKSPACE_FOLDER }, { groupId: '1' }, { groupId: -1 }, { groupId: 1.5 }, { openToSide: 'yes' }, { section: '' }, { section: 1 }, { sectionQuery: 'raw' }, { section: 'models', sectionQuery: 3 }, { section: 'models', sectionQuery: 'raw', jsonEditor: true }, { revealSetting: { key: 3 } }, { jsonEditor: 'json' }, { target: ConfigurationTarget.WORKSPACE }, { target: ConfigurationTarget.USER_REMOTE }]) {
 		await assert.rejects(preferences.openSettings(options as IOpenSettingsOptions));
 	}
-	assert.equal(opened.length, 4, 'rejected requests never reach EditorService');
-	assert.equal(requests.length, 4);
+	assert.equal(opened.length, 5, 'rejected requests never reach EditorService');
+	assert.equal(requests.length, 5);
 	assert.ok(opened.every(input => input === opened[0]), 'opening options retain the same Settings resource identity');
 	const input = opened[0]!;
 	assert.ok(input instanceof SettingsEditorInput);
 	preferences.dispose();
 	assert.equal(input.isDisposed, true);
-	assert.equal(requests.length, 4, 'disposal does not broadcast further pane options');
+	assert.equal(requests.length, 5, 'disposal does not broadcast further pane options');
 });
 
 test('Preferences routes UI and JSON to numeric groups, falls back for closed groups and prefers side opening', async () => {

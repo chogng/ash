@@ -58,7 +58,14 @@ fn resource_provider_registers_localizes_rejects_invalid_requests_and_shuts_down
             "registrationId":"editor.resource.v1", "kind":"dataChannel", "channelId":"editor.resource.v1"
         }])
     );
-    let invoke = |payload| json!({"extensionId":"ash.reference-manager","registrationId":"editor.resource.v1","operation":"receiveData","payload":payload,"deadlineUnixMillis":u64::MAX});
+    let invoke = |payload| {
+        let deadline = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+            + 60_000;
+        json!({"extensionId":"ash.reference-manager","registrationId":"editor.resource.v1","operation":"receiveData","payload":payload,"deadlineUnixMillis":deadline})
+    };
     for (id, language, expected) in [
         (3, "en", "Reference Library"),
         (4, "zh-CN", "文献库"),

@@ -628,5 +628,3 @@ function computeWrappedTextIndentLength(lineText: string, tabSize: number, first
 	}
 	return wrappedTextIndentLength;
 }
-
-

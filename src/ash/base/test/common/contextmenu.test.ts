@@ -1,11 +1,11 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import {
 	validateNativeContextMenuClose,
 	validateNativeContextMenuRequest,
-} from "../../parts/contextmenu/common/contextmenu.js";
+} from '../../parts/contextmenu/common/contextmenu.js';
 
-test("native context menu validation accepts bounded nested menus", () => {
+test('native context menu validation accepts bounded nested menus', () => {
 	assert.deepEqual(
 		validateNativeContextMenuRequest({
 			x: 12.5,
@@ -14,24 +14,24 @@ test("native context menu validation accepts bounded nested menus", () => {
 			positioningItem: 0,
 			items: [
 				{
-					type: "action",
-					id: "action-1",
-					label: "Open",
+					type: 'action',
+					id: 'action-1',
+					label: 'Open',
 					enabled: true,
 				},
-				{ type: "separator" },
+				{ type: 'separator' },
 				{
-					type: "submenu",
-					label: "More",
+					type: 'submenu',
+					label: 'More',
 					enabled: true,
 					items: [
 						{
-							type: "action",
-							id: "action-2",
-							label: "Pinned",
+							type: 'action',
+							id: 'action-2',
+							label: 'Pinned',
 							enabled: true,
 							checked: true,
-							accelerator: "Command+P",
+							accelerator: 'Command+P',
 						},
 					],
 				},
@@ -44,24 +44,24 @@ test("native context menu validation accepts bounded nested menus", () => {
 			positioningItem: 0,
 			items: [
 				{
-					type: "action",
-					id: "action-1",
-					label: "Open",
+					type: 'action',
+					id: 'action-1',
+					label: 'Open',
 					enabled: true,
 				},
-				{ type: "separator" },
+				{ type: 'separator' },
 				{
-					type: "submenu",
-					label: "More",
+					type: 'submenu',
+					label: 'More',
 					enabled: true,
 					items: [
 						{
-							type: "action",
-							id: "action-2",
-							label: "Pinned",
+							type: 'action',
+							id: 'action-2',
+							label: 'Pinned',
 							enabled: true,
 							checked: true,
-							accelerator: "Command+P",
+							accelerator: 'Command+P',
 						},
 					],
 				},
@@ -71,11 +71,11 @@ test("native context menu validation accepts bounded nested menus", () => {
 	assert.deepEqual(validateNativeContextMenuClose(undefined), {});
 });
 
-test("native context menu validation rejects unsafe payloads", () => {
+test('native context menu validation rejects unsafe payloads', () => {
 	const action = {
-		type: "action",
-		id: "duplicate",
-		label: "Action",
+		type: 'action',
+		id: 'duplicate',
+		label: 'Action',
 		enabled: true,
 	};
 

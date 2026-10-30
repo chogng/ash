@@ -284,5 +284,3 @@ export class InjectedTextInlineDecorationsComputer implements IInlineDecorations
 		return lineInlineDecorations;
 	}
 }
-
-

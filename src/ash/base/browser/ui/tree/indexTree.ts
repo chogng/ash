@@ -1,9 +1,9 @@
-import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable } from "../../../common/lifecycle.js";
-import type { ListScrolling } from "../list/list.js";
-import { AbstractTree } from "./abstractTree.js";
-import { IndexTreeModel, type IndexTreeModelOptions, type IndexTreeNode } from "./indexTreeModel.js";
-import { flattenTreeNodes, mapTreeDragData, type IndexTreeLocation, type TreeDragAndDrop, type TreeElement, type TreeFindMatchType, type TreeFindMode, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState, type TreeVisibleSplice } from "./tree.js";
+import { Emitter, type Event } from '../../../common/event.js';
+import { Disposable } from '../../../common/lifecycle.js';
+import type { ListScrolling } from '../list/list.js';
+import { AbstractTree } from './abstractTree.js';
+import { IndexTreeModel, type IndexTreeModelOptions, type IndexTreeNode } from './indexTreeModel.js';
+import { flattenTreeNodes, mapTreeDragData, type IndexTreeLocation, type TreeDragAndDrop, type TreeElement, type TreeFindMatchType, type TreeFindMode, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState, type TreeVisibleSplice } from './tree.js';
 
 export interface IndexTreeOptions<T> {
 	readonly ariaLabel?: string;
@@ -89,7 +89,7 @@ export class IndexTree<T> extends Disposable {
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			expandOnDoubleClick: options.expandOnDoubleClick,
-			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
+			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === 'function' ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
 			getHeight: options.getHeight ? (node) => options.getHeight!(node.element) : undefined,
 			dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
 			keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider,

@@ -1,3 +1,7 @@
+import { BrowserContextMenuService } from '../../../../../../platform/contextview/browser/contextMenuService.js';
+import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
+import { IMenuService } from '../../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
 import { IChangesViewService } from '../../../common/changesViewService.js';
 import { ILogService, NullLoggerService } from '../../../../../../platform/log/common/log.js';
 import { ChangesViewService } from '../../../browser/changesViewService.js';
@@ -10,7 +14,7 @@ import { SessionChangesEditorInput } from '../../../browser/sessionChangesEditor
 import { IDecorationsService } from '../../../../../../workbench/services/decorations/common/decorations.js';
 import { DecorationsService } from '../../../../../../workbench/services/decorations/browser/decorationsService.js';
 import { Event, Emitter } from '../../../../../../base/common/event.js';
-import { DisposableStore, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../../workbench/services/configuration/test/common/testServices.js';
@@ -34,7 +38,7 @@ import { IAccountService, type AccountState } from '../../../../../../platform/a
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { ICommandService, CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
-import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { IContextViewService, IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
 import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browser/themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
@@ -177,6 +181,15 @@ services.registerInstance(IEditorService, {
 	}
 } as unknown as IEditorService);
 services.registerInstance(INotificationService, { info: (message: string) => { notifications.push(message); }, error: (error: unknown) => { notifications.push(String(error)); } } as unknown as INotificationService);
+services.registerInstance(IKeybindingService, {
+	inChordMode: false, onDidUpdateKeybindings: Event.None,
+	getKeybindings: () => [], enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => Disposable.None,
+	resolveKeybinding() { throw new Error('No keybinding in this fixture'); },
+	resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
+});
+services.registerInstance(IMenuService, services.createInstance(MenuService));
+services.registerInstance(IContextMenuService, resources.add(services.createInstance(BrowserContextMenuService)));
+
 services.registerInstance(IQuickInputService, { input: async () => undefined } as unknown as IQuickInputService);
 services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.' } as unknown as IAccessibleViewService);
 const baseHost = createDisconnectedRendererApi();

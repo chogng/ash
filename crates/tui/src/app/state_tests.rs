@@ -1214,6 +1214,61 @@ fn enter_waits_for_final_dictation_text_before_sending() {
 }
 
 #[test]
+fn suspend_cancels_deferred_dictation_submission_and_ignores_late_results() {
+    use crate::terminal::ScreenMode;
+
+    for mode in [ScreenMode::Fullscreen, ScreenMode::Inline] {
+        for started in [false, true] {
+            let mut app = App::new();
+            let mut settings = TerminalSettings::default();
+            settings.set_screen_mode(mode);
+            settings.set_language(Language::Chinese);
+            app.update(ConfigEvent::SettingsReceived(settings));
+            let Some(AppCommand::DictationStart { resource_id }) = app.toggle_dictation() else {
+                panic!("expected dictation start");
+            };
+            if started {
+                app.update(AppEvent::DictationStarted {
+                    resource_id: resource_id.clone(),
+                    error: None,
+                });
+            }
+            app.insert_text("keep this draft");
+            app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+            assert_eq!(
+                app.handle_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL)),
+                Some(AppCommand::Suspend)
+            );
+            assert_eq!(app.prepare_suspend(), Some(resource_id.clone()));
+            app.update(AppEvent::DictationStopped {
+                resource_id: resource_id.clone(),
+                result: Ok(None),
+            });
+            app.update(AppEvent::DictationStarted {
+                resource_id: resource_id.clone(),
+                error: None,
+            });
+            app.dictation_transcript(&resource_id, "late final transcript", true);
+            assert_eq!(app.prepare_suspend(), None);
+            assert_eq!(app.take_dictation_submission(), None);
+            assert_eq!(app.take_dictation_stop_requested(), None);
+            assert_eq!(app.input(), "keep this draft");
+            if started {
+                crate::tui_assert_snapshot!(
+                    app = &app;
+                    "dictation_suspended_zh",
+                    render_dictation_frame(&app)
+                        .lines()
+                        .map(str::trim_end)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn failed_dictation_stop_keeps_the_draft_without_sending() {
     let mut app = App::new();
     app.dictation_shortcut_settings.enabled = true;
@@ -1494,6 +1549,7 @@ fn config_owns_the_advisor_model_picker() {
         advisor: advisor_choices(
             &config,
             &ash_app_server_protocol::protocol::model::ModelListResult {
+                catalog_statuses: Vec::new(),
                 catalog_scopes: None,
                 models: vec![],
             },

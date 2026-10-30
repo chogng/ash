@@ -14,6 +14,7 @@ request signing 和 Provider header materialization 均属于消费它的 domain
 | `SecretStore`            | availability、`load / store / delete` port | namespace isolation、sanitized error、完整三操作                                          |
 | `DeleteSecretOutcome`    | exact delete result                        | 区分 `Deleted` 与 `NotFound`                                                              |
 | `MemorySecretStore`      | process-local ephemeral backend            | replacement、delete、drop 时 zeroize stored bytes                                         |
+| `SessionSecretStore`     | profile 运行期间的活动存储                 | 钥匙串不可用或拒绝访问时共用内存存储，显式恢复后提交本次变更；原有密文不变                |
 | `UnavailableSecretStore` | explicit fail-closed backend               | 所有操作返回 `BackendUnavailable`                                                         |
 | `FileSecretStore`        | profile-scoped durable backend             | hashed filenames、私有权限、有界读取、同步 staging 与 replace；所有值路径逐级拒绝 symlink |
 | `ProfileSecretStore`     | profile 持久存储 backend                   | 默认加密文件、显式 file 选择、跨进程锁、可恢复迁移，无 fallback                           |
@@ -81,7 +82,7 @@ buffer 处理。
 
 ## 当前限制与演进
 
-当前具有 memory、unavailable、私有明文文件和认证加密文件 backend。`ProfileSecretStore` 是本地产品默认，host 注入 `ash-keyring-store::KeyringSecretStore` 只保存随机主密钥。文件使用 AES-256-GCM，随机 nonce、版本头与绑定文件名的 AAD；AES key schedule 和 `SecretValue` 在释放时清理。Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL、staging sync 与 atomic replacement。
+当前具有 memory、unavailable、私有明文文件和认证加密文件 backend。本地产品通过 `SessionSecretStore` 使用 `ProfileSecretStore`，host 注入 `ash-keyring-store::KeyringSecretStore` 只保存随机主密钥。文件使用 AES-256-GCM，随机 nonce、版本头与绑定文件名的 AAD；AES key schedule 和 `SecretValue` 在释放时清理。Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL、staging sync 与 atomic replacement。
 
 全新的空库执行读取或删除时直接返回不存在，不访问 keyring 或分配主密钥。首次写入和显式
 availability 检查仍初始化加密；已有 legacy value、密文或 key-check 的库继续验证原始主密钥，

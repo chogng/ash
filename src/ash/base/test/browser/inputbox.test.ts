@@ -1,7 +1,69 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { HistoryInputBox, InputBox } from "../../browser/ui/inputbox/inputbox.js";
+import assert from 'node:assert/strict';
+import { setup, suite, test } from 'mocha';
+import { expect } from '@playwright/test';
+import { JSDOM } from 'jsdom';
+import { HistoryInputBox, InputBox } from '../../browser/ui/inputbox/inputbox.js';
+import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
+
+suite('InputBox focus selection in the browser', () => {
+	const browser = useBrowserTests();
+	setup(async () => {
+		await browser.page.goto('/inputbox.html');
+		await expect(browser.page.locator('body')).toHaveAttribute('data-ready', 'true');
+	});
+
+	test('default and explicitly disabled selection preserve click positioning', async () => {
+		for (const name of ['Default', 'Disabled selection']) {
+			const input = browser.page.getByRole('textbox', { name, exact: true });
+			await input.click({ position: { x: 9, y: 12 } });
+			assert.deepEqual(await input.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd]), [0, 0]);
+		}
+	});
+
+	test('first click selects the value while subsequent clicks and drags place the caret normally', async () => {
+		const { page } = browser;
+		const input = page.getByRole('textbox', { name: 'Select text', exact: true });
+		await input.click({ position: { x: 9, y: 12 } });
+		assert.deepEqual(await input.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd]), [0, 6]);
+		await input.click({ position: { x: 9, y: 12 } });
+		assert.deepEqual(await input.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd]), [0, 0]);
+		const bounds = (await input.boundingBox())!;
+		await page.mouse.move(bounds.x + 9, bounds.y + 12);
+		await page.mouse.down();
+		await page.mouse.move(bounds.x + 30, bounds.y + 12, { steps: 5 });
+		await page.mouse.up();
+		const selection = await input.evaluate((element: HTMLInputElement) => [element.selectionStart!, element.selectionEnd!]);
+		assert.equal(selection[0], 0);
+		assert.ok(selection[1]! > 0 && selection[1]! < 6);
+		await page.getByRole('button', { name: 'Before inputs' }).click();
+		await input.click();
+		await page.keyboard.insertText('ABCDEF');
+		await expect(input).toHaveValue('ABCDEF');
+	});
+
+	test('Tab entry selects text and numeric values and programmatic focus selects multiline values', async () => {
+		const { page } = browser;
+		await page.getByRole('textbox', { name: 'Disabled selection', exact: true }).focus();
+		await page.keyboard.press('Tab');
+		const text = page.getByRole('textbox', { name: 'Select text', exact: true });
+		await expect(text).toBeFocused();
+		await page.keyboard.insertText('123456');
+		await expect(text).toHaveValue('123456');
+		await page.keyboard.press('Tab');
+		const numeric = page.getByRole('spinbutton', { name: 'Select number', exact: true });
+		await expect(numeric).toBeFocused();
+		await page.keyboard.insertText('42');
+		await expect(numeric).toHaveValue('42');
+		await page.getByRole('button', { name: 'Before inputs' }).click();
+		await numeric.click();
+		await page.keyboard.insertText('16');
+		await expect(numeric).toHaveValue('16');
+		const multiline = page.getByRole('textbox', { name: 'Select multiline', exact: true });
+		await multiline.focus();
+		await page.keyboard.insertText('new\nvalue');
+		await expect(multiline).toHaveValue('new\nvalue');
+	});
+});
 
 test('Flexible InputBox preserves multiline editing, selection and validation without changing default numeric inputs', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -37,11 +99,11 @@ test('Flexible history input retains multiline entries and restores the multilin
 	dom.window.close();
 });
 
-test("InputBox exposes value, keyboard, focus, and selection behavior", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('InputBox exposes value, keyboard, focus, and selection behavior', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const inputBox = new InputBox(dom.window.document.body, {
-		placeholder: "Search",
-		ariaLabel: "Search commands",
+		placeholder: 'Search',
+		ariaLabel: 'Search commands',
 	});
 	dom.window.document.body.append(inputBox.element);
 	const values: string[] = [];
@@ -53,13 +115,13 @@ test("InputBox exposes value, keyboard, focus, and selection behavior", () => {
 	inputBox.onDidFocus(() => focusCount += 1);
 	inputBox.onDidBlur(() => blurCount += 1);
 
-	inputBox.value = "command";
-	inputBox.value = "command";
-	assert.deepEqual(values, ["command"]);
-	assert.equal(inputBox.placeholder, "Search");
+	inputBox.value = 'command';
+	inputBox.value = 'command';
+	assert.deepEqual(values, ['command']);
+	assert.equal(inputBox.placeholder, 'Search');
 	assert.equal(
-		inputBox.inputElement.getAttribute("aria-label"),
-		"Search commands",
+		inputBox.inputElement.getAttribute('aria-label'),
+		'Search commands',
 	);
 
 	inputBox.focus();
@@ -68,11 +130,11 @@ test("InputBox exposes value, keyboard, focus, and selection behavior", () => {
 	assert.equal(inputBox.inputElement.selectionStart, 1);
 	assert.equal(inputBox.inputElement.selectionEnd, 4);
 	inputBox.inputElement.dispatchEvent(new dom.window.KeyboardEvent(
-		"keydown",
-		{ bubbles: true, key: "ArrowDown" },
+		'keydown',
+		{ bubbles: true, key: 'ArrowDown' },
 	));
 	inputBox.blur();
-	assert.deepEqual(keys, ["ArrowDown"]);
+	assert.deepEqual(keys, ['ArrowDown']);
 	assert.equal(focusCount, 1);
 	assert.equal(blurCount, 1);
 
@@ -80,28 +142,37 @@ test("InputBox exposes value, keyboard, focus, and selection behavior", () => {
 	dom.window.close();
 });
 
-test("InputBox owns enabled, read-only, and validation accessibility state", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('InputBox owns enabled, read-only, and validation accessibility state', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const inputBox = new InputBox(dom.window.document.body, {
 		enabled: false,
 		readOnly: true,
 	});
 
 	assert.equal(inputBox.enabled, false);
-	assert.equal(inputBox.element.classList.contains("is-disabled"), true);
+	assert.equal(inputBox.element.classList.contains('is-disabled'), true);
 	assert.equal(inputBox.inputElement.readOnly, true);
 	inputBox.enabled = true;
 	inputBox.readOnly = false;
 	assert.equal(inputBox.enabled, true);
 	assert.equal(inputBox.inputElement.readOnly, false);
 
-	inputBox.showValidation("A value is required");
-	assert.equal(inputBox.inputElement.getAttribute("aria-invalid"), "true");
-	assert.ok(inputBox.inputElement.getAttribute("aria-describedby"));
-	inputBox.showValidation("");
-	assert.equal(inputBox.inputElement.hasAttribute("aria-invalid"), false);
+	inputBox.showValidation('A value is required');
+	assert.equal(inputBox.inputElement.getAttribute('aria-invalid'), 'true');
+	assert.ok(inputBox.inputElement.getAttribute('aria-describedby'));
+	const message = dom.window.document.getElementById(inputBox.inputElement.getAttribute('aria-describedby')!)!;
+	assert.equal(message.hidden, false);
+	inputBox.showValidation('A valid number is required', 'accessible');
+	assert.equal(message.hidden, true);
+	assert.equal(message.textContent, 'A valid number is required');
+	assert.equal(inputBox.inputElement.getAttribute('aria-describedby'), message.id);
+	assert.equal(inputBox.inputElement.getAttribute('aria-invalid'), 'true');
+	inputBox.showValidation('A value is required');
+	assert.equal(message.hidden, false);
+	inputBox.showValidation('');
+	assert.equal(inputBox.inputElement.hasAttribute('aria-invalid'), false);
 	assert.equal(
-		inputBox.inputElement.hasAttribute("aria-describedby"),
+		inputBox.inputElement.hasAttribute('aria-describedby'),
 		false,
 	);
 
@@ -109,17 +180,17 @@ test("InputBox owns enabled, read-only, and validation accessibility state", () 
 	dom.window.close();
 });
 
-test("InputBox supports numeric field presentation", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('InputBox supports numeric field presentation', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const inputBox = new InputBox(dom.window.document.body, {
-		type: "number",
-		presentation: "field",
+		type: 'number',
+		presentation: 'field',
 	});
 
-	assert.equal(inputBox.inputElement.type, "number");
-	inputBox.step = "1";
-	assert.equal(inputBox.step, "1");
-	assert.equal(inputBox.element.classList.contains("ash-input-box-field"), true);
+	assert.equal(inputBox.inputElement.type, 'number');
+	inputBox.step = '1';
+	assert.equal(inputBox.step, '1');
+	assert.equal(inputBox.element.classList.contains('ash-input-box-field'), true);
 	dom.window.close();
 });
 

@@ -257,7 +257,7 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 	registerMany(providers: readonly LanguageCompletionProvider[]): IDisposable {
 		this.assertNotDisposed();
 		if (!isNonEmptyArray(providers)) {
-			throw new TypeError("Language completion provider batch must not be empty");
+			throw new TypeError('Language completion provider batch must not be empty');
 		}
 		return this.registerGroup(providers);
 	}
@@ -273,7 +273,7 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 			if (this.deleteOwner(owner) && !this.isDisposed) this.updateCatalog();
 		}) as LanguageCompletionProviderRegistration;
 		registration.replace = replacement => {
-			if (disposed) throw new ReferenceError("Language completion provider registration is already disposed");
+			if (disposed) throw new ReferenceError('Language completion provider registration is already disposed');
 			this.assertNotDisposed();
 			this.replace(owner, replacement);
 		};
@@ -299,7 +299,7 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 
 	getProvider(providerId: string): RegisteredLanguageCompletionProvider | undefined {
 		this.assertNotDisposed();
-		assertLanguageProviderId(providerId, "Language completion provider ID");
+		assertLanguageProviderId(providerId, 'Language completion provider ID');
 		return this.providers.get(providerId)?.provider ?? this.parent?.getProvider(providerId);
 	}
 
@@ -317,7 +317,7 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 	}
 
 	private replace(owner: object, providers: readonly LanguageCompletionProvider[]): void {
-		if (!Array.isArray(providers)) throw new TypeError("Language completion providers must be an array");
+		if (!Array.isArray(providers)) throw new TypeError('Language completion providers must be an array');
 		const registered = providers.map(normalizeCompletionProvider);
 		const identities = new Set<string>();
 		for (const provider of registered) {
@@ -440,5 +440,5 @@ export class SyntaxProviderRegistry extends Disposable {
 
 
 function matchesLanguage(provider: RegisteredSyntaxProvider, languageId: string): boolean {
-	return provider.languageIds.includes("*") || provider.languageIds.includes(languageId);
+	return provider.languageIds.includes('*') || provider.languageIds.includes(languageId);
 }

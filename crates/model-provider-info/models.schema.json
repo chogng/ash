@@ -114,6 +114,13 @@
     "ModelCapabilitiesDeclaration": {
       "type": "object",
       "properties": {
+        "agent_mode": {
+          "description": "Explicit Agent-loop support; omission stays unknown even when tools are supported.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "fast_mode": {
           "description": "Whether acceleration is supported; settings.acceleration declares the request mechanism.",
           "type": [

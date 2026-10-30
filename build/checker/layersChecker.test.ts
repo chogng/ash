@@ -64,7 +64,7 @@ test('native IPC checks identify inferred receivers without a native type name i
 
 test('unrelated same-name types, host adapters and excluded test fixtures remain valid', t => {
 	const project = fixture(t);
-	project.write('workbench/browser/local.ts', "interface IMainProcessService { getChannel(): void; } declare const local: IMainProcessService; local.getChannel(); export {};");
+	project.write('workbench/browser/local.ts', 'interface IMainProcessService { getChannel(): void; } declare const local: IMainProcessService; local.getChannel(); export {};');
 	project.write('platform/ipc/electron-browser/client.ts', "import type { IMainProcessService } from '../common/mainProcessService.js'; export const use = (host: IMainProcessService) => host.getChannel('logger');");
 	project.write('base/node/client.ts', "import 'node:fs';");
 	project.write('base/test/browser/invalid.ts', "import 'node:fs';");

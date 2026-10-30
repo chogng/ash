@@ -12,6 +12,19 @@
 	overflow: hidden;
 }
 
+.ash-scm-history-filter {
+	min-width: 0;
+	max-width: 8em;
+}
+
+.ash-scm-history-filter > .ash-button {
+	min-width: 0;
+	max-width: 100%;
+	padding-inline: var(--ash-spacing-size40);
+	font-size: var(--ash-fontSize-label2);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
 .ash-scm-empty {
 	margin: 0;
 	padding: 8px;
@@ -184,6 +197,16 @@
 	--scm-graph-lane-color: var(--scm-graph-lane-7);
 }
 
+.ash-scm-graph-path[data-lane-color="8"],
+.ash-scm-graph-node[data-lane-color="8"] {
+	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRefColor);
+}
+
+.ash-scm-graph-path[data-lane-color="9"],
+.ash-scm-graph-node[data-lane-color="9"] {
+	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRemoteRefColor);
+}
+
 .ash-scm-graph-row:hover .ash-scm-graph-node:is(.outer, .single),
 .ash-scm-graph-commit.focused.selected .ash-scm-graph-node:is(.outer, .single) {
 	stroke: transparent;
@@ -254,10 +277,13 @@
 	outline-color: var(--ash-focusBorder);
 }
 
-.ash-scm-graph-label > .ash-icon {
-	width: var(--ash-lxiconFontSize-compact);
-	height: var(--ash-lxiconFontSize-compact);
-	flex: 0 0 auto;
+.ash-scm-graph-label.icon-only {
+	width: 18px;
+	justify-content: center;
+	padding: 0;
+}
+
+.ash-scm-graph-label > .ash-icon-git-branch {
 	font-size: var(--ash-lxiconFontSize-compact);
 }
 
@@ -269,7 +295,15 @@
 }
 
 .ash-scm-graph-label.head {
+	gap: 0;
+	padding-inline-start: 0;
 	background: var(--ash-scmGraph-historyItemRefColor);
+}
+
+.ash-scm-graph-label.head > .ash-icon {
+	/* Center the rings in the capsule's square end cap to follow its curve. */
+	width: 18px;
+	height: 18px;
 }
 
 .ash-scm-graph-label.remote {
@@ -642,32 +676,30 @@
 	display: none;
 }
 
-.ash-scm-commit-actions > .ash-scm-commit {
+.ash-scm-commit-actions > .ash-button,
+.ash-scm-commit-actions > .ash-button-dropdown {
 	flex: 1;
 	min-width: 0;
 }
 
-.ash-scm-commit-actions.has-dropdown > .ash-scm-commit {
-	border-top-right-radius: 0;
-	border-bottom-right-radius: 0;
-}
-
-.ash-scm-commit-dropdown.ash-button {
-	flex: 0 0 var(--ash-toolbar-actionSize);
-	padding: 0;
-	border-left-color: currentColor;
-	border-top-left-radius: 0;
-	border-bottom-left-radius: 0;
-	color: var(--ash-button-primaryForeground);
-	background: var(--ash-button-primaryBackground);
-}
-
-.ash-scm-commit-dropdown.ash-button:not(:disabled):hover {
-	background: var(--ash-button-primaryHoverBackground);
-}
-
 .ash-scm-commit .ash-icon-label-container {
 	min-width: 0;
+}
+
+.ash-scm-commit-spinning .ash-icon-label-icon {
+	animation: ash-scm-commit-spin 1.5s linear infinite;
+}
+
+@keyframes ash-scm-commit-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ash-scm-commit-spinning .ash-icon-label-icon {
+		animation: none;
+	}
 }
 
 .ash-scm-commit .ash-button-label {
@@ -676,22 +708,13 @@
 	text-overflow: ellipsis;
 }
 
-.ash-scm-commit.ash-button,
 .ash-scm-find-issues.ash-button {
 	width: 100%;
 	color: var(--ash-button-primaryForeground);
 }
 
-.ash-scm-commit.ash-button {
-	background: var(--ash-button-primaryBackground);
-}
-
 .ash-scm-find-issues.ash-button {
 	background: var(--ash-files-emptyExplorerOpenFolderBackground);
-}
-
-.ash-scm-commit.ash-button:not(:disabled):hover {
-	background: var(--ash-button-primaryHoverBackground);
 }
 
 .ash-scm-find-issues.ash-button:not(:disabled):hover {
@@ -725,7 +748,7 @@
 	margin: 0;
 	padding: 0;
 	font-size: var(--ash-fontSize-label1);
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-weight: var(--ash-fontWeight-regular);
 	gap: var(--ash-spacing-size40);
 	line-height: var(--ash-list-rowHeight);
 }
@@ -763,6 +786,7 @@
 }
 
 .ash-scm-section-count {
+	display: flex;
 	grid-area: 1 / 2;
 }
 

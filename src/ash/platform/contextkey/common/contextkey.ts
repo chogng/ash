@@ -1,4 +1,4 @@
-import type { Event } from "../../../base/common/event.js";
+import type { Event } from '../../../base/common/event.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { localize } from '../../../nls.js';
 import { isWindows } from '../../../base/common/platform.js';
@@ -66,7 +66,7 @@ export class RawContextKey<T extends ContextKeyValue> {
 		readonly key: string,
 		readonly defaultValue: T,
 	) {
-		if (!key) throw new TypeError("Context key must not be empty");
+		if (!key) throw new TypeError('Context key must not be empty');
 	}
 
 	bindTo(service: IContextKeyService): IContextKey<T> {

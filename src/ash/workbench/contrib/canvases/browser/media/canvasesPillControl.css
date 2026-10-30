@@ -1,0 +1,41 @@
+.ash-canvas-pills {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	padding-block: var(--ash-spacing-size40);
+}
+
+.ash-canvas-pills[hidden] {
+	display: none;
+}
+
+.ash-canvas-pill {
+	display: flex;
+	min-width: 0;
+	max-width: 100%;
+	align-items: center;
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-canvas-pill > :first-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-canvas-pill > .ash-button.icon-only {
+	box-sizing: border-box;
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	flex: 0 0 var(--ash-toolbar-actionSize);
+	margin-inline-end: var(--ash-spacing-size20);
+	padding: 0;
+}
+
+.ash-canvas-pill > .ash-button[aria-disabled="true"] {
+	opacity: 0.5;
+	cursor: default;
+}

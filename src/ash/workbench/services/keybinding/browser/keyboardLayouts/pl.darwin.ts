@@ -52,7 +52,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BracketRight: [']', '}', '‚', '’', 0],
 		Backslash: ['\\', '|', '«', '»', 0],
 		Semicolon: [';', ':', '…', 'Ú', 0],
-		Quote: ['\'', '"', 'ĺ', 'ģ', 0],
+		Quote: ["'", '"', 'ĺ', 'ģ', 0],
 		Backquote: ['`', '~', '`', 'Ŕ', 4],
 		Comma: [',', '<', '≤', 'Ý', 0],
 		Period: ['.', '>', '≥', 'ý', 0],

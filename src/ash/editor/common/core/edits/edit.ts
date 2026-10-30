@@ -1,4 +1,4 @@
-import { OffsetRange } from "../ranges/offsetRange.js";
+import { OffsetRange } from '../ranges/offsetRange.js';
 
 /** Common contract for a replacement whose input and output have measurable length. */
 export abstract class BaseReplacement<TSelf extends BaseReplacement<TSelf>> {
@@ -21,7 +21,7 @@ export abstract class BaseEdit<T extends BaseReplacement<T>, TEdit extends BaseE
 	constructor(readonly replacements: readonly T[]) {
 		let previousEnd = -1;
 		for (const replacement of replacements) {
-			if (replacement.replaceRange.start < previousEnd) throw new RangeError("Edits must be sorted and disjoint");
+			if (replacement.replaceRange.start < previousEnd) throw new RangeError('Edits must be sorted and disjoint');
 			previousEnd = replacement.replaceRange.endExclusive;
 		}
 	}
@@ -35,7 +35,7 @@ export abstract class BaseEdit<T extends BaseReplacement<T>, TEdit extends BaseE
 	isEmpty(): boolean { return this.replacements.length === 0; }
 	getLengthDelta(): number { return this.replacements.reduce((sum, replacement) => sum + replacement.getLengthDelta(), 0); }
 	getNewDataLength(dataLength: number): number { return dataLength + this.getLengthDelta(); }
-	toString() { return `[${this.replacements.map(replacement => replacement.toString()).join(", ")}]`; }
+	toString() { return `[${this.replacements.map(replacement => replacement.toString()).join(', ')}]`; }
 
 	normalize(): TEdit {
 		const normalized: T[] = [];
@@ -96,7 +96,7 @@ export abstract class BaseEdit<T extends BaseReplacement<T>, TEdit extends BaseE
 			const newReplaceRangeStart = Math.min(firstIntersecting.replaceRange.start, secondReplacement.replaceRange.start - deltaBeforeIntersecting);
 			const prefixLength = secondReplacement.replaceRange.start - (firstIntersecting.replaceRange.start + deltaBeforeIntersecting);
 			if (prefixLength > 0) result.push(firstIntersecting.slice(OffsetRange.emptyAt(newReplaceRangeStart), new OffsetRange(0, prefixLength)));
-			if (!lastIntersecting) throw new Error("Edit composition invariant violated");
+			if (!lastIntersecting) throw new Error('Edit composition invariant violated');
 
 			const suffixLength = lastIntersecting.replaceRange.endExclusive + delta - secondReplacement.replaceRange.endExclusive;
 			if (suffixLength > 0) {
@@ -198,7 +198,7 @@ export class Edit<T extends BaseReplacement<T>> extends BaseEdit<T, Edit<T>> {
 export class AnnotationReplacement<TAnnotation> extends BaseReplacement<AnnotationReplacement<TAnnotation>> {
 	constructor(range: OffsetRange, readonly newLength: number, readonly annotation: TAnnotation) {
 		super(range);
-		if (!Number.isSafeInteger(newLength) || newLength < 0) throw new RangeError("Replacement length must be non-negative");
+		if (!Number.isSafeInteger(newLength) || newLength < 0) throw new RangeError('Replacement length must be non-negative');
 	}
 
 	getNewLength(): number { return this.newLength; }

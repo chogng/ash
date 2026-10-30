@@ -25,6 +25,16 @@ import { CodeEditorConfiguration } from '../../../workbench/contrib/codeEditor/c
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+test('folding budgets normalize standalone inputs and expose the supported setting bounds', () => {
+	const option = EditorOptions.foldingMaximumRegions;
+	for (const [input, expected] of [[1, 10], [10, 10], [20.9, 20], ['30', 30], [65001, 65000], [undefined, 5000], [NaN, 5000]] as const) {
+		assert.equal(option.validate(input), expected);
+	}
+	const schema = editorConfiguration.properties!['editor.foldingMaximumRegions'];
+	assert.equal(schema.minimum, 10);
+	assert.equal(schema.maximum, 65000);
+});
+
 test('Tree-sitter telemetry participates in effective editor configuration and defaults off', () => {
 	for (const key of ['editor.experimental.treeSitterTelemetry']) {
 		const setting = configurationRegistry.getConfiguration(key);

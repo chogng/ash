@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StateService } from '../../../state/node/stateService.js';
 import { ThemeMainService } from '../../electron-main/themeMainServiceImpl.js';
-import { resolveBrowserWindowOptions } from '../../../windows/electron-main/windows.js';
+import { resolveBrowserWindowOptions } from '../../../windows/electron-main/windowImpl.js';
 import { defaultWindowState } from '../../../window/electron-main/window.js';
 import { ColorScheme } from '../../common/theme.js';
 import { WorkbenchState } from '../../../workspace/common/workspace.js';

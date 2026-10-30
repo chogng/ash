@@ -247,7 +247,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/stale.ts'], 2, 150));
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/first.ts', 'src/second.ts', 'src/latest.ts'], 3));
 		await expect(sections).toHaveCount(3);
-		await expect(host.locator('.stanza-multi-diff-editor-title')).toHaveText(['src/first.ts', 'src/second.ts', 'src/latest.ts']);
+		await expect(host.locator('.stanza-multi-diff-editor-title .ash-icon-label-text')).toHaveText(['first.ts', 'second.ts', 'latest.ts']);
+		await expect(host.locator('.stanza-multi-diff-editor-title .ash-icon-label-description')).toHaveText(['src', 'src', 'src']);
 		await expect(sections.first().locator('.stanza-multi-diff-editor-header-toggle')).toHaveAttribute('aria-expanded', 'false');
 		expect(await page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().active)).toBe('src/second.ts');
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/second.ts revision 3\nshared', 'src/latest.ts revision 3\nshared']);
@@ -257,7 +258,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await expect(sections).toHaveCount(0);
 		await expect(host.locator('.stanza-multi-diff-editor-empty')).toHaveText(localized(locale, 'No changes in this selection.', '此选择中没有更改。'));
 		await page.evaluate(() => window.ashDiffIntegration.updateTitleGit(['src/returned.ts'], 5));
-		await expect(host.locator('.stanza-multi-diff-editor-title')).toHaveText(['src/returned.ts']);
+		await expect(host.locator('.stanza-multi-diff-editor-title .ash-icon-label-text')).toHaveText(['returned.ts']);
 		await expect(host.locator('.stanza-multi-diff-editor-empty')).toBeHidden();
 		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.readMultiDiffFoundation().contents)).toEqual(['src/returned.ts revision 5\nshared']);
 	});
@@ -322,9 +323,12 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes keeps Viewe
 	const viewed = first.getByRole('button', { name: localized(locale, 'Viewed', '已查看'), exact: true });
 	await clickFileAction(first, localized(locale, 'Viewed', '已查看'));
 	await expect(viewed).toHaveAttribute('aria-pressed', 'true');
+	await viewed.focus();
 	await page.evaluate(() => window.ashDiffIntegration.advanceSessionRevision());
 	await expect(message).toContainText(localized(locale, 'This Turn capture changed while loading.', '此回合的更改在加载期间已更新。'));
 	await expect(page.locator('#session-changes .stanza-multi-diff-editor-section')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashDiffIntegration.readSessionComparisonState())).toEqual({ hasControl: false, accessibleContent: await message.textContent() });
+	await expect(page.locator('#session-changes .ash-sessions-changes-editor')).toBeFocused();
 	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change'));
 	await expect(message).toBeHidden();
 	await expect(viewed).toHaveAttribute('aria-pressed', 'false');
@@ -345,10 +349,13 @@ for (const locale of ['en', 'zh-CN'] as const) test(`session Changes rejects con
 	page.on('pageerror', error => errors.push(error.message));
 	await openDiffPage(page, locale);
 	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
+	await page.locator('#modified').focus();
 	await page.evaluate(() => window.ashDiffIntegration.changeSessionCaptureDuringRead());
 	const message = page.locator('#session-changes .ash-sessions-editor-message');
 	await expect(message).toContainText(localized(locale, 'This Turn capture changed while loading.', '此回合的更改在加载期间已更新。'));
 	await expect(page.locator('#session-changes .stanza-multi-diff-editor-section')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashDiffIntegration.readSessionComparisonState())).toEqual({ hasControl: false, accessibleContent: await message.textContent() });
+	await expect(page.locator('#modified')).toBeFocused();
 	await page.evaluate(() => window.ashDiffIntegration.selectSessionCapture('review-change'));
 	await expect(message).toBeHidden();
 	const first = page.locator('#session-changes .stanza-multi-diff-editor-section').filter({ has: page.getByText('file-0.ts', { exact: true }) });
@@ -417,10 +424,10 @@ test('diff feature revert buttons support keyboard, undo, read-only and live opt
 	await expect(button).toBeVisible();
 	await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ readOnly: true }));
 	await expect(button).toHaveCount(0);
-	await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ readOnly: false, renderMarginRevertIcon: false, renderOverviewRuler: false }));
+	await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ readOnly: false, renderGutterMenu: false, renderMarginRevertIcon: false, renderOverviewRuler: false }));
 	await expect(button).toHaveCount(0);
 	await expect(page.locator('#single .stanza-diff-overview')).toBeHidden();
-	await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ renderMarginRevertIcon: true, renderOverviewRuler: true }));
+	await page.evaluate(() => window.ashDiffIntegration.setEditorFeatures({ renderGutterMenu: true, renderMarginRevertIcon: true, renderOverviewRuler: true }));
 	await expect(button).toBeVisible();
 	await button.click();
 	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().moves)).toBe(0);

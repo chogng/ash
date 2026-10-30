@@ -121,7 +121,7 @@ suite('Builtin dictation ownership', () => {
 		readonly ended = this._register(new Emitter<{ error?: string; }>());
 		readonly onDidEnd = this.ended.event;
 		readonly onDidChangeModels = Event.None;
-		readonly modelStatus = this._register(new Emitter<import("../../../../../platform/localTranscription/common/localTranscription.js").ILocalTranscriptionModelStatus>());
+		readonly modelStatus = this._register(new Emitter<import('../../../../../platform/localTranscription/common/localTranscription.js').ILocalTranscriptionModelStatus>());
 		readonly onDidChangeModelStatus = this.modelStatus.event;
 		readonly starts: Parameters<ILocalTranscriptionService['start']>[0][] = [];
 		readonly reads: string[] = [];
@@ -133,7 +133,7 @@ suite('Builtin dictation ownership', () => {
 		cancelPending = Promise.resolve();
 		finalText = 'final local text';
 		async getModelStatus() { return { state: LocalTranscriptionModelState.Idle }; }
-		async getCacheDirectory() { return "C:/models"; }
+		async getCacheDirectory() { return 'C:/models'; }
 		async getModel(model: string): Promise<ILocalTranscriptionModelSnapshot> {
 			this.reads.push(model);
 			return { model, available: true, sizeBytes: 1024 };
@@ -143,7 +143,7 @@ suite('Builtin dictation ownership', () => {
 		async deleteModel() { assert.fail('Input must not delete models'); }
 		prepareModel(): never { assert.fail('Input must not prepare models'); }
 		importPackage(): never { assert.fail('Input must not import models'); }
-		async importModel(): Promise<never> { assert.fail("Input must not import models"); }
+		async importModel(): Promise<never> { assert.fail('Input must not import models'); }
 		async start(options: Parameters<ILocalTranscriptionService['start']>[0]) { this.starts.push(options); void this.acquired.complete(); await this.pending; }
 		async pushAudio() { }
 		async stop() { this.stops++; await this.stopPending; this.transcribed.fire({ text: this.finalText, isFinal: true }); this.modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); return this.finalText; }

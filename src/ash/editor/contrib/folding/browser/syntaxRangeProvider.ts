@@ -1,14 +1,14 @@
-import { StandardTokenType } from "../../../common/encodedTokenAttributes.js";
-import { EditorFoldingRangeSource, type EditorFoldingRange } from "./foldingRanges.js";
+import { StandardTokenType } from '../../../common/encodedTokenAttributes.js';
+import { EditorFoldingRangeSource, type EditorFoldingRange } from './foldingRanges.js';
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { assertLanguageId } from '../../../common/languages/language.js';
-import { type TextModel } from "../../../common/model/textModel.js";
+import { type TextModel } from '../../../common/model/textModel.js';
 
 /** Computes structural folds from model brackets and configured region markers. */
 export function computeEditorLanguageFoldingRanges(model: TextModel, languageId: string, configurations: ILanguageConfigurationService): readonly EditorFoldingRange[] {
 	assertLanguageId(languageId);
-	if (!configurations || typeof configurations.getLanguageConfiguration !== "function") {
-		throw new TypeError("Language folding requires language configurations");
+	if (!configurations || typeof configurations.getLanguageConfiguration !== 'function') {
+		throw new TypeError('Language folding requires language configurations');
 	}
 	const configuration = configurations.getLanguageConfiguration(languageId);
 	const markerStarts: number[] = [];
@@ -48,12 +48,12 @@ function matchesMarker(pattern: RegExp | undefined, line: string): boolean {
 	if (!pattern) return false;
 	// Configuration patterns are frozen at registration time. Recreate a
 	// stateless matcher so global/sticky contributions cannot mutate `lastIndex`.
-	return new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, "")).test(line);
+	return new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, '')).test(line);
 }
 
 /** Merges independently-derived provider ranges while retaining only nested or disjoint spans. */
 export function mergeEditorFoldingRanges(...sources: readonly (readonly EditorFoldingRange[])[]): readonly EditorFoldingRange[] {
-	if (sources.some(source => !Array.isArray(source))) throw new TypeError("Folding range sources must be arrays");
+	if (sources.some(source => !Array.isArray(source))) throw new TypeError('Folding range sources must be arrays');
 	const ranges = sources.flat().map(range => Object.freeze({
 		startLineIndex: range.startLineIndex,
 		endLineIndex: range.endLineIndex,
@@ -64,7 +64,7 @@ export function mergeEditorFoldingRanges(...sources: readonly (readonly EditorFo
 }
 
 function isFoldOpeningToken(token: string): boolean {
-	return token === "{" || token === "[";
+	return token === '{' || token === '[';
 }
 
 function appendRange(ranges: EditorFoldingRange[], startLineIndex: number, endLineIndex: number): void {

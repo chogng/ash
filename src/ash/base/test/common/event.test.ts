@@ -1,7 +1,7 @@
-import { strict as assert } from "node:assert";
-import { suite, test } from "mocha";
-import { createEventDeliveryQueue, Emitter, Event, PauseableEmitter, runWithBufferedEvents, ValueWithChangeEvent } from "../../common/event.js";
-import { DisposableStore, toDisposable, type IDisposable, noneDisposable } from "../../common/lifecycle.js";
+import { strict as assert } from 'node:assert';
+import { suite, test } from 'mocha';
+import { createEventDeliveryQueue, Emitter, Event, PauseableEmitter, runWithBufferedEvents, ValueWithChangeEvent } from '../../common/event.js';
+import { DisposableStore, toDisposable, type IDisposable, noneDisposable } from '../../common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from './utils.js';
 
 suite('Event.once lifetime', () => {
@@ -41,7 +41,7 @@ suite('Event.once lifetime', () => {
 	});
 });
 
-test("Event.None returns the reusable empty disposable", () => {
+test('Event.None returns the reusable empty disposable', () => {
 	assert.equal(Event.None(() => undefined), noneDisposable);
 });
 
@@ -71,7 +71,7 @@ test('Event.any cleans up earlier subscriptions when a later source rejects regi
 	assert.equal(first.hasListeners(), false);
 });
 
-test("Emitter binds listener context and registers subscriptions with their owner", () => {
+test('Emitter binds listener context and registers subscriptions with their owner', () => {
 	using emitter = new Emitter<number>();
 	const context = { total: 1 };
 	const subscriptions: IDisposable[] = [];
@@ -92,7 +92,7 @@ test("Emitter binds listener context and registers subscriptions with their owne
 	assert.equal(emitter.hasListeners(), false);
 });
 
-test("Emitter delivers synchronously and subscriptions are disposable", () => {
+test('Emitter delivers synchronously and subscriptions are disposable', () => {
 	const emitter = new Emitter<number>();
 	const received: number[] = [];
 	const subscription = emitter.event((event) => received.push(event));
@@ -109,7 +109,7 @@ test("Emitter delivers synchronously and subscriptions are disposable", () => {
 	emitter.fire(3);
 });
 
-test("Emitter treats repeated listener registrations independently", () => {
+test('Emitter treats repeated listener registrations independently', () => {
 	const emitter = new Emitter<void>();
 	let calls = 0;
 	const listener = (): void => {
@@ -129,30 +129,30 @@ test("Emitter treats repeated listener registrations independently", () => {
 	emitter.dispose();
 });
 
-test("Emitter reports listener lifecycle in registration order", () => {
+test('Emitter reports listener lifecycle in registration order', () => {
 	const lifecycle: string[] = [];
 	const emitter = new Emitter<void>({
-		onWillAddFirstListener: () => lifecycle.push("will-first"),
-		onDidAddFirstListener: () => lifecycle.push("did-first"),
-		onDidAddListener: () => lifecycle.push("did-add"),
-		onWillRemoveListener: () => lifecycle.push("will-remove"),
-		onDidRemoveLastListener: () => lifecycle.push("did-remove-last"),
+		onWillAddFirstListener: () => lifecycle.push('will-first'),
+		onDidAddFirstListener: () => lifecycle.push('did-first'),
+		onDidAddListener: () => lifecycle.push('did-add'),
+		onWillRemoveListener: () => lifecycle.push('will-remove'),
+		onDidRemoveLastListener: () => lifecycle.push('did-remove-last'),
 	});
 	const first = emitter.event(() => undefined);
 	const second = emitter.event(() => undefined);
-	assert.deepEqual(lifecycle, ["will-first", "did-first", "did-add", "did-add"]);
+	assert.deepEqual(lifecycle, ['will-first', 'did-first', 'did-add', 'did-add']);
 
 	first.dispose();
-	assert.deepEqual(lifecycle, ["will-first", "did-first", "did-add", "did-add", "will-remove"]);
+	assert.deepEqual(lifecycle, ['will-first', 'did-first', 'did-add', 'did-add', 'will-remove']);
 	second.dispose();
-	assert.deepEqual(lifecycle, ["will-first", "did-first", "did-add", "did-add", "will-remove", "will-remove", "did-remove-last"]);
+	assert.deepEqual(lifecycle, ['will-first', 'did-first', 'did-add', 'did-add', 'will-remove', 'will-remove', 'did-remove-last']);
 
 	emitter.event(() => undefined);
 	emitter.dispose();
-	assert.deepEqual(lifecycle.slice(-4), ["will-first", "did-first", "did-add", "did-remove-last"]);
+	assert.deepEqual(lifecycle.slice(-4), ['will-first', 'did-first', 'did-add', 'did-remove-last']);
 });
 
-test("Emitter snapshots registrations before delivering an event", () => {
+test('Emitter snapshots registrations before delivering an event', () => {
 	const emitter = new Emitter<number>();
 	const received: string[] = [];
 	let second: IDisposable;
@@ -164,17 +164,17 @@ test("Emitter snapshots registrations before delivering an event", () => {
 	second = emitter.event((event) => received.push(`second:${event}`));
 
 	emitter.fire(1);
-	assert.deepEqual(received, ["first:1"]);
+	assert.deepEqual(received, ['first:1']);
 
 	emitter.fire(2);
-	assert.deepEqual(received, ["first:1", "first:2"]);
+	assert.deepEqual(received, ['first:1', 'first:2']);
 
 	first.dispose();
 	second.dispose();
 	emitter.dispose();
 });
 
-test("Emitter queues reentrant events in FIFO order", () => {
+test('Emitter queues reentrant events in FIFO order', () => {
 	const emitter = new Emitter<number>();
 	const received: string[] = [];
 	const first = emitter.event((event) => {
@@ -188,18 +188,18 @@ test("Emitter queues reentrant events in FIFO order", () => {
 	emitter.fire(1);
 
 	assert.deepEqual(received, [
-		"first:1",
-		"second:1",
-		"first:2",
-		"second:2",
+		'first:1',
+		'second:1',
+		'first:2',
+		'second:2',
 	]);
 	first.dispose();
 	second.dispose();
 	emitter.dispose();
 });
 
-test("Emitter reports listener errors and continues delivery", () => {
-	const expected = new Error("listener failed");
+test('Emitter reports listener errors and continues delivery', () => {
+	const expected = new Error('listener failed');
 	const errors: unknown[] = [];
 	const emitter = new Emitter<void>({
 		onListenerError: (error) => errors.push(error),
@@ -221,7 +221,7 @@ test("Emitter reports listener errors and continues delivery", () => {
 	emitter.dispose();
 });
 
-test("runWithBufferedEvents publishes only after every state mutation completes", () => {
+test('runWithBufferedEvents publishes only after every state mutation completes', () => {
 	const first = new Emitter<void>();
 	const second = new Emitter<void>();
 	const state = { first: 0, second: 0 };
@@ -237,26 +237,26 @@ test("runWithBufferedEvents publishes only after every state mutation completes"
 		assert.deepEqual(observations, []);
 	});
 
-	assert.deepEqual(observations, ["1:1", "1:1"]);
+	assert.deepEqual(observations, ['1:1', '1:1']);
 	first.dispose();
 	second.dispose();
 });
 
-test("runWithBufferedEvents discards notifications from failed mutations", () => {
+test('runWithBufferedEvents discards notifications from failed mutations', () => {
 	const emitter = new Emitter<void>();
 	let calls = 0;
 	emitter.event(() => { calls += 1; });
 
 	assert.throws(() => runWithBufferedEvents(() => {
 		emitter.fire();
-		throw new Error("failed");
+		throw new Error('failed');
 	}), /failed/);
 
 	assert.equal(calls, 0);
 	emitter.dispose();
 });
 
-test("shared delivery queues keep nested cross-emitter delivery in FIFO order", () => {
+test('shared delivery queues keep nested cross-emitter delivery in FIFO order', () => {
 	const deliveryQueue = createEventDeliveryQueue();
 	const first = new Emitter<number>({ deliveryQueue });
 	const second = new Emitter<number>({ deliveryQueue });
@@ -270,12 +270,12 @@ test("shared delivery queues keep nested cross-emitter delivery in FIFO order", 
 
 	first.fire(1);
 
-	assert.deepEqual(received, ["first-a:1", "first-b:1", "second:1"]);
+	assert.deepEqual(received, ['first-a:1', 'first-b:1', 'second:1']);
 	first.dispose();
 	second.dispose();
 });
 
-test("PauseableEmitter preserves nesting and optionally merges queued events", () => {
+test('PauseableEmitter preserves nesting and optionally merges queued events', () => {
 	const plain = new PauseableEmitter<number>();
 	const received: number[] = [];
 	plain.event(value => received.push(value));
@@ -299,7 +299,7 @@ test("PauseableEmitter preserves nesting and optionally merges queued events", (
 	merged.dispose();
 });
 
-test("ValueWithChangeEvent emits only for changed values", () => {
+test('ValueWithChangeEvent emits only for changed values', () => {
 	const value = new ValueWithChangeEvent(1);
 	let changes = 0;
 	value.onDidChange(() => changes += 1);
@@ -307,5 +307,5 @@ test("ValueWithChangeEvent emits only for changed values", () => {
 	value.value = 2;
 	assert.equal(value.value, 2);
 	assert.equal(changes, 1);
-	assert.equal(ValueWithChangeEvent.const("fixed").value, "fixed");
+	assert.equal(ValueWithChangeEvent.const('fixed').value, 'fixed');
 });

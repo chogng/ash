@@ -1,9 +1,9 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { mock } from 'node:test';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
-import type { IViewPaneOptions } from "../../../../../../workbench/browser/parts/views/viewPane.js";
+import type { IViewPaneOptions } from '../../../../../../workbench/browser/parts/views/viewPane.js';
 
 test('ViewPane progress follows delay, body visibility, completion and disposal', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -87,19 +87,19 @@ test('ViewPane keeps progress until all overlapping promises settle, including f
 	}
 });
 
-test("ViewPane title chevron tracks collapsed state", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ViewPane title chevron tracks collapsed state', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(dom);
 	try {
-		const { ViewPane } = await import("../../../../../../workbench/browser/parts/views/viewPane.js");
+		const { ViewPane } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
 		class TestViewPane extends ViewPane {
 			constructor(container: HTMLElement, options: IViewPaneOptions) {
 				super(container, options);
 			}
 		}
 		using pane = new TestViewPane(dom.window.document.body, {
-			id: "test.pane",
-			title: "Test Pane",
+			id: 'test.pane',
+			title: 'Test Pane',
 			collapsed: true,
 		});
 
@@ -110,22 +110,22 @@ test("ViewPane title chevron tracks collapsed state", async () => {
 		pane.setVisible(true);
 		assert.deepEqual(visibility, []);
 
-		const title = pane.element.querySelector(".ash-pane-view-header-title");
-		const button = pane.element.querySelector<HTMLButtonElement>(".ash-pane-view-header-button");
-		const content = pane.element.querySelector<HTMLElement>(".ash-pane-view-content");
-		assert.equal(title?.textContent, "Test Pane");
-		assert.equal(button?.getAttribute("aria-expanded"), "false");
-		assert.equal(button?.getAttribute("aria-controls"), content?.id);
-		assert.equal(button?.classList.contains("expanded"), false);
-		assert.equal(pane.element.classList.contains("collapsed"), true);
+		const title = pane.element.querySelector('.ash-pane-view-header-title');
+		const button = pane.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button');
+		const content = pane.element.querySelector<HTMLElement>('.ash-pane-view-content');
+		assert.equal(title?.textContent, 'Test Pane');
+		assert.equal(button?.getAttribute('aria-expanded'), 'false');
+		assert.equal(button?.getAttribute('aria-controls'), content?.id);
+		assert.equal(button?.classList.contains('expanded'), false);
+		assert.equal(pane.element.classList.contains('collapsed'), true);
 		assert.equal(content?.hidden, true);
-		assert.equal(button?.querySelectorAll(".ash-icon").length, 2);
+		assert.equal(button?.querySelectorAll('.ash-icon').length, 2);
 
 		button?.click();
 		assert.equal(pane.isCollapsed(), false);
-		assert.equal(button?.getAttribute("aria-expanded"), "true");
-		assert.equal(button?.classList.contains("expanded"), true);
-		assert.equal(pane.element.classList.contains("collapsed"), false);
+		assert.equal(button?.getAttribute('aria-expanded'), 'true');
+		assert.equal(button?.classList.contains('expanded'), true);
+		assert.equal(pane.element.classList.contains('collapsed'), false);
 		assert.equal(content?.hidden, false);
 
 		assert.equal(pane.isBodyVisible(), true);
@@ -139,9 +139,9 @@ test("ViewPane title chevron tracks collapsed state", async () => {
 		pane.setVisible(true);
 		assert.deepEqual(visibility, [true, false, true]);
 
-		pane.setTitle("Renamed Pane");
-		assert.equal(title?.textContent, "Renamed Pane");
-		assert.equal(button?.querySelectorAll(".ash-icon").length, 2);
+		pane.setTitle('Renamed Pane');
+		assert.equal(title?.textContent, 'Renamed Pane');
+		assert.equal(button?.querySelectorAll('.ash-icon').length, 2);
 	} finally {
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
 		dom.window.close();

@@ -1,18 +1,17 @@
-import { defaultButtonStyles, defaultCountBadgeStyles } from '../../../platform/theme/browser/defaultStyles.js';
-import { addDisposableListener, h } from "../../../base/browser/dom.js";
-import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import { ActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
-import { IconLabel } from "../../../base/browser/ui/iconlabel/iconlabel.js";
-import { CountBadge } from '../../../base/browser/ui/countBadge/countBadge.js';
-import type { IAction } from "../../../base/common/actions.js";
-import type { Icon } from "../../../base/common/icon.js";
-import { assertDefined } from "../../../base/common/types.js";
+import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
+import { addDisposableListener, h } from '../../../base/browser/dom.js';
+import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
+import { ActionViewItem, type ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import { IconLabel } from '../../../base/browser/ui/iconlabel/iconlabel.js';
+import type { IAction } from '../../../base/common/actions.js';
+import type { Icon } from '../../../base/common/icon.js';
+import { assertDefined } from '../../../base/common/types.js';
 import type { IDelayedHoverOptions } from '../../../base/browser/ui/hover/hover.js';
 import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
 import { ActivityBarPosition, type SideBarLocation } from '../../common/configuration.js';
 
@@ -139,8 +138,8 @@ export class CompositeActionViewItem extends ActionViewItem {
 			this.setupDelayedHover(this.button.domNode, this.action.tooltip);
 			return;
 		}
-		container.classList.add("ash-composite-bar-item");
-		container.classList.add("ash-composite-bar-destination");
+		container.classList.add('ash-composite-bar-item');
+		container.classList.add('ash-composite-bar-destination');
 		if (!(this.compositeAction instanceof CompositeBarAction)) { throw new TypeError('Composite tabs require a CompositeBarAction'); }
 		const options = this.compositeAction.options;
 		const updateSelection = (): void => {
@@ -150,12 +149,12 @@ export class CompositeActionViewItem extends ActionViewItem {
 		updateSelection();
 		this._register(this.compositeAction.onDidChange(updateSelection));
 		container.id = options.tabId;
-		container.setAttribute("role", "tab");
-		container.setAttribute("aria-label", options.badge ? `${options.label}, ${options.badge.description}` : options.label);
-		if (options.panelId) container.setAttribute("aria-controls", options.panelId);
+		container.setAttribute('role', 'tab');
+		container.setAttribute('aria-label', options.badge ? `${options.label}, ${options.badge.description}` : options.label);
+		if (options.panelId) container.setAttribute('aria-controls', options.panelId);
 		this.setupDelayedHover(container, options.badge ? `${this.compositeAction.tooltip}, ${options.badge.description}` : this.compositeAction.tooltip);
-		const action = h(container.ownerDocument, "span");
-		action.className = "ash-composite-bar-action";
+		const action = h(container.ownerDocument, 'span');
+		action.className = 'ash-composite-bar-action';
 		const label = this._register(new IconLabel(action, {
 			label: options.label,
 			icon: options.icon,
@@ -168,21 +167,25 @@ export class CompositeActionViewItem extends ActionViewItem {
 		container.append(focusRing);
 		if (options.badge && options.badgeEnabled && options.badge.count > 0) {
 			const count = options.badge.count;
-			const countFormat = count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : undefined;
-			const badge = this._register(new CountBadge(container, {
-				count, countFormat, size: 'small'
-			}, defaultCountBadgeStyles));
-			badge.domNode.classList.add('ash-composite-bar-badge');
-			badge.domNode.classList.toggle('long-count', (countFormat ?? String(count)).length >= 3);
-			badge.domNode.setAttribute('aria-hidden', 'true');
+			const text = count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : String(count);
+			// Activity badges are part of the navigation item's presentation: abbreviated text,
+			// overlay geometry, region colors and the tab's accessible description belong together.
+			// Using the inline CountBadge here would require overriding its internal presentation.
+			const badge = h(container.ownerDocument, 'span', {
+				className: 'ash-composite-bar-badge',
+				attributes: { 'aria-hidden': 'true' },
+			}, text);
+			badge.classList.toggle('long-count', text.length >= 3);
+			container.append(badge);
+			this._register(toDisposable(() => badge.remove()));
 		}
-		this._register(addDisposableListener(container, "click", (event) => {
+		this._register(addDisposableListener(container, 'click', (event) => {
 			event.preventDefault();
 			event.stopPropagation();
 			this.compositeAction.run();
 		}));
-		this._register(addDisposableListener(container, "keydown", (event) => {
-			if (event.key !== "Enter" && event.key !== " ") return;
+		this._register(addDisposableListener(container, 'keydown', (event) => {
+			if (event.key !== 'Enter' && event.key !== ' ') return;
 			event.preventDefault();
 			event.stopPropagation();
 			this.compositeAction.run();
@@ -226,28 +229,28 @@ export class CompositeOverflowActivityActionViewItem extends ActionViewItem {
 			throw new Error(`CompositeBar overflow action is already rendered: ${this.action.id}`);
 		}
 		this.renderedContainer = container;
-		container.classList.add("ash-composite-bar-item");
-		container.classList.add("ash-composite-bar-overflow");
-		container.setAttribute("role", "tab");
-		container.setAttribute("aria-selected", "false");
-		container.setAttribute("aria-label", this.action.label);
-		container.setAttribute("aria-haspopup", "menu");
-		container.setAttribute("aria-expanded", "false");
+		container.classList.add('ash-composite-bar-item');
+		container.classList.add('ash-composite-bar-overflow');
+		container.setAttribute('role', 'tab');
+		container.setAttribute('aria-selected', 'false');
+		container.setAttribute('aria-label', this.action.label);
+		container.setAttribute('aria-haspopup', 'menu');
+		container.setAttribute('aria-expanded', 'false');
 		this.setupDelayedHover(container, this.action.tooltip);
-		const action = h(container.ownerDocument, "span");
-		action.className = "ash-composite-bar-action";
+		const action = h(container.ownerDocument, 'span');
+		action.className = 'ash-composite-bar-action';
 		const label = this._register(new IconLabel(action, {
 			label: this.action.label,
 			icon: this.action.icon,
 		}));
 		container.append(action);
-		this._register(addDisposableListener(container, "click", (event) => {
+		this._register(addDisposableListener(container, 'click', (event) => {
 			event.preventDefault();
 			event.stopPropagation();
 			this.show();
 		}));
-		this._register(addDisposableListener(container, "keydown", (event) => {
-			if (event.key !== "Enter" && event.key !== " " && event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+		this._register(addDisposableListener(container, 'keydown', (event) => {
+			if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
 			event.preventDefault();
 			event.stopPropagation();
 			this.show();
@@ -264,16 +267,16 @@ export class CompositeOverflowActivityActionViewItem extends ActionViewItem {
 
 	private show(): void {
 		const actions = this.getActions();
-		if (actions.length === 0 || this.container.getAttribute("aria-expanded") === "true") return;
-		this.container.setAttribute("aria-expanded", "true");
+		if (actions.length === 0 || this.container.getAttribute('aria-expanded') === 'true') return;
+		this.container.setAttribute('aria-expanded', 'true');
 		try {
 			this.contextMenuProvider.showContextMenu({
 				getAnchor: () => this.container,
 				getActions: () => actions,
-				onHide: () => this.container.setAttribute("aria-expanded", "false"),
+				onHide: () => this.container.setAttribute('aria-expanded', 'false'),
 			});
 		} catch (error) {
-			this.container.setAttribute("aria-expanded", "false");
+			this.container.setAttribute('aria-expanded', 'false');
 			throw error;
 		}
 	}
@@ -285,7 +288,7 @@ export class CompositeOverflowActivityActionViewItem extends ActionViewItem {
 }
 
 export class CompositeOverflowActivityAction implements IAction {
-	readonly id = "ash.compositeBar.overflow";
+	readonly id = 'ash.compositeBar.overflow';
 	readonly icon = Lxicon.ellipsis;
 	readonly enabled = true;
 	readonly tooltip: string;

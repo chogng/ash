@@ -11,7 +11,7 @@ import { createDisconnectedRendererApi } from '../../../browser/rendererApi.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryFileSystemProvider } from '../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
-import { IFileService, FileKind } from '../../../../platform/files/common/files.js';
+import { IFileService, FileKind, FileSystemProviderCapabilities } from '../../../../platform/files/common/files.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { FileDialogService } from '../../../services/dialogs/browser/fileDialogService.js';
@@ -25,7 +25,22 @@ import type { IWorkbenchThemeService } from '../../../services/themes/common/wor
 import { productLanguagePackCatalogs } from '../../../services/localization/common/localizationCatalogs.js';
 import { parseUserColorTheme } from '../../../services/themes/common/colorThemeData.js';
 import { getThemeColorReferences, themePreviewConfigurationKeys } from './themePreview.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { createDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
+import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
+
+/** Host seeding writes directly; workbench consumers receive a fixed, read-only workspace. */
+class PreviewFileSystemProvider extends InMemoryFileSystemProvider {
+	override readonly capabilities =
+		FileSystemProviderCapabilities.FileReadWrite |
+		FileSystemProviderCapabilities.PathCaseSensitive |
+		FileSystemProviderCapabilities.Readonly;
+
+	override async stat(resource: URI) {
+		return { ...(await super.stat(resource)), readonly: true };
+	}
+}
 
 /** Both product previews borrow the same memory-only host; no platform bridge is installed. */
 export async function createThemePreviewHost() {
@@ -46,12 +61,13 @@ export async function createThemePreviewHost() {
 		return lifecycle;
 	};
 	const root = document.getElementById('app')!;
-	const workspaceFiles = resources.add(new InMemoryFileSystemProvider());
+	const workspaceFiles = resources.add(new PreviewFileSystemProvider());
 	const workspaceRoot = URI.file('/theme-preview');
 	const samples = [
 		{
-			name: 'palette.ts', text: `// A small workspace for exploring interface and syntax colors.
-// Changes here stay in the theme preview.
+			name: 'palette.ts',
+			text: `// A small workspace for exploring interface and syntax colors.
+// Fixed sample for the theme preview.
 
 export interface Palette {
   readonly name: string;
@@ -128,13 +144,6 @@ console.log(describeTheme(palette));
 		...disconnected,
 		// The fixed preview has no accounts or account-managed settings.
 		github: { ...disconnected.github, listAccounts: async () => [] },
-		language: { ...disconnected.language, servers: async () => ({ servers: [] }) },
-		// Editor overlays have no backend consumer in this host.
-		codebaseSymbols: {
-			...disconnected.codebaseSymbols,
-			synchronize: async () => ({ generation: 0, dirtyDocumentCount: 0 }),
-			close: async () => ({ generation: 0, dirtyDocumentCount: 0 }),
-		},
 	};
 	let clipboardText = '';
 	let findText = '';
@@ -152,7 +161,7 @@ console.log(describeTheme(palette));
 		hasResources: async () => clipboardResources.resources.length > 0,
 	};
 	const serviceCollection = new ServiceCollection([IClipboardService, clipboard], [IHostService, {
-		hasFocus: true, onDidChangeFocus: Event.None,
+		hasFocus: true, onDidChangeFocus: Event.None, getWindows: async () => [],
 		openWindow: async () => { }, restart: async () => { }, reload: async () => { }, getScreenshot: async () => undefined,
 	} satisfies IHostService]);
 	const fileDialogDescriptor = (services: () => IInstantiationService): SyncDescriptor<FileDialogService> => new SyncDescriptor(FileDialogService, [{
@@ -180,6 +189,86 @@ console.log(describeTheme(palette));
 		}));
 	};
 	return { resources, root, workspaceFiles, workspaceRoot, samples, storage, api, clipboard, serviceCollection, fileDialogDescriptor, restrictOpeners, createLifecycleService };
+}
+
+/** Open fixed read-only samples through the selected product's own editor service. */
+export async function openThemePreviewEditors(
+	host: Awaited<ReturnType<typeof createThemePreviewHost>>,
+	services: IInstantiationService,
+	scene: 'code' | 'diff',
+): Promise<void> {
+	const editorService = services.get(IEditorService);
+	// The isolated host has no extension catalog. Register only its sample languages;
+	// the production syntax service still owns parsing and token color resolution.
+	const languages = services.get(ILanguageService);
+	host.resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'], aliases: ['TypeScript'] }));
+	host.resources.add(languages.registerLanguage({ id: 'json', extensions: ['.json'], aliases: ['JSON'] }));
+	if (scene === 'diff') {
+		// Use the production comparison over memory files so every diff token is
+		// rendered by its real owner, including line and word-level decorations.
+		const original = URI.joinPath(host.workspaceRoot, 'palette.before.ts');
+		const modified = URI.joinPath(host.workspaceRoot, 'palette.after.ts');
+		const before = `export const palette = {
+  name: "Ocean",
+  accent: "#0078d4",
+  opacity: 0.85,
+};
+
+export function formatColor(value: string): string {
+  return value.toUpperCase();
+}
+
+export function legacyColor(): string {
+  return "gray";
+}
+
+export const spacing = [4, 8, 12, 16];
+`;
+		const after = `export const palette = {
+  name: "Forest",
+  accent: "#107c10",
+  opacity: 0.95,
+};
+
+export function formatColor(value: string): string {
+  return value.toLowerCase();
+}
+
+export const spacing = [4, 8, 12, 16];
+
+export function withOpacity(color: string): string {
+  return color + "cc";
+}
+`;
+		for (const [resource, text] of [
+			[original, before],
+			[modified, after],
+		] as const) {
+			await host.workspaceFiles.writeFile(resource, new TextEncoder().encode(text), {
+				create: true,
+				overwrite: false,
+			});
+		}
+		await editorService.openEditor(
+			createDiffEditorInput(
+				{ resource: original, readOnly: true },
+				{ resource: modified, readOnly: true },
+				localize('themeEditor.diffSample', 'Color changes'),
+			),
+			{ pinned: true, preserveFocus: true },
+		);
+	} else {
+		for (const sample of [...host.samples].reverse()) {
+			await editorService.openEditor(
+				{
+					resource: URI.joinPath(host.workspaceRoot, sample.name),
+					languageId: sample.name.endsWith('.ts') ? 'typescript' : 'json',
+					readOnly: true,
+				},
+				{ pinned: true, preserveFocus: true },
+			);
+		}
+	}
 }
 
 /** The owning preview document applies themes and exposes only presentation data to its editor. */

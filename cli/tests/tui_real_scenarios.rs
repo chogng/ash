@@ -3,6 +3,10 @@ mod scenario_http;
 #[path = "support/tui_process.rs"]
 mod tui_process;
 
+#[cfg(target_os = "macos")]
+#[path = "support/subscription_catalog.rs"]
+mod subscription_catalog;
+
 #[cfg(unix)]
 #[path = "support/issue_server.rs"]
 mod issue_server;

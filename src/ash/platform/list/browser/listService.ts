@@ -1,18 +1,18 @@
 import { defaultListStyles, defaultFindWidgetStyles } from '../../theme/browser/defaultStyles.js';
-import { AsyncDataTree, CompressibleAsyncDataTree, type CompressibleAsyncDataTreeOptions, type AsyncDataTreeOptions } from "../../../base/browser/ui/tree/asyncDataTree.js";
-import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeOptions, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "../../../base/browser/ui/tree/objectTree.js";
-import type { AsyncTreeDataSource, TreeIndentGuides } from "../../../base/browser/ui/tree/tree.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import { localize } from "../../../nls.js";
-import type { IConfigurationService } from "../../configuration/common/configuration.js";
-import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../configuration/common/configurationRegistry.js";
-import type { IEditorOptions } from "../../editor/common/editor.js";
-import { toOpenEditorOptions, type IOpenEditorOptions } from "../../editor/browser/editor.js";
-import { Registry } from "../../registry/common/platform.js";
+import { AsyncDataTree, CompressibleAsyncDataTree, type CompressibleAsyncDataTreeOptions, type AsyncDataTreeOptions } from '../../../base/browser/ui/tree/asyncDataTree.js';
+import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeOptions, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from '../../../base/browser/ui/tree/objectTree.js';
+import type { AsyncTreeDataSource, TreeIndentGuides } from '../../../base/browser/ui/tree/tree.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { localize } from '../../../nls.js';
+import type { IConfigurationService } from '../../configuration/common/configuration.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
+import type { IEditorOptions } from '../../editor/common/editor.js';
+import { toOpenEditorOptions, type IOpenEditorOptions } from '../../editor/browser/editor.js';
+import { Registry } from '../../registry/common/platform.js';
 
-type ListOpenMode = "doubleClick" | "singleClick";
-export type TreeExpandMode = "doubleClick" | "singleClick";
+type ListOpenMode = 'doubleClick' | 'singleClick';
+export type TreeExpandMode = 'doubleClick' | 'singleClick';
 
 export interface ResourceOpenEvent<T> {
 	readonly element: T;
@@ -109,10 +109,10 @@ export class WorkbenchCompressibleAsyncDataTree<TInput, T> extends CompressibleA
 }
 
 interface ResourceNavigationTree<T> {
-	readonly onPointer: Event<Pick<ObjectTreePointerEvent<T>, "element" | "target" | "browserEvent">>;
-	readonly onDidDoubleClick: Event<Pick<ObjectTreePointerEvent<T>, "element" | "target" | "browserEvent">>;
-	readonly onDidAccept: Event<Pick<ObjectTreeAcceptEvent<T>, "element" | "browserEvent">>;
-	readonly onDidChangeSelection: Event<Pick<ObjectTreeSelectionChangeEvent<T>, "elements" | "browserEvent">>;
+	readonly onPointer: Event<Pick<ObjectTreePointerEvent<T>, 'element' | 'target' | 'browserEvent'>>;
+	readonly onDidDoubleClick: Event<Pick<ObjectTreePointerEvent<T>, 'element' | 'target' | 'browserEvent'>>;
+	readonly onDidAccept: Event<Pick<ObjectTreeAcceptEvent<T>, 'element' | 'browserEvent'>>;
+	readonly onDidChangeSelection: Event<Pick<ObjectTreeSelectionChangeEvent<T>, 'elements' | 'browserEvent'>>;
 }
 
 /** Shared interaction policy behind every Platform List resource-capable wrapper. */
@@ -129,29 +129,29 @@ class TreeResourceNavigator<T> extends Disposable {
 		this._register(tree.onDidChangeSelection((event) => this.onSelection(event)));
 	}
 
-	private onPointer(event: Pick<ObjectTreePointerEvent<T>, "element" | "target" | "browserEvent">): void {
+	private onPointer(event: Pick<ObjectTreePointerEvent<T>, 'element' | 'target' | 'browserEvent'>): void {
 		if (!this.shouldOpenOnSingleClick() || event.browserEvent.detail === 2) return;
 		this.open(event.element, toOpenEditorOptions(event.browserEvent), event.browserEvent);
 	}
 
-	private onDoubleClick(event: Pick<ObjectTreePointerEvent<T>, "element" | "target" | "browserEvent">): void {
+	private onDoubleClick(event: Pick<ObjectTreePointerEvent<T>, 'element' | 'target' | 'browserEvent'>): void {
 		this.open(event.element, toOpenEditorOptions(event.browserEvent, true), event.browserEvent);
 	}
 
-	private onAccept(event: Pick<ObjectTreeAcceptEvent<T>, "element" | "browserEvent">): void {
+	private onAccept(event: Pick<ObjectTreeAcceptEvent<T>, 'element' | 'browserEvent'>): void {
 		this.open(event.element, {
-			editorOptions: { pinned: event.browserEvent.key !== " ", preserveFocus: event.browserEvent.key === " " },
+			editorOptions: { pinned: event.browserEvent.key !== ' ', preserveFocus: event.browserEvent.key === ' ' },
 			openToSide: event.browserEvent.ctrlKey || event.browserEvent.metaKey || event.browserEvent.altKey,
 		}, event.browserEvent);
 	}
 
-	private onSelection(event: Pick<ObjectTreeSelectionChangeEvent<T>, "elements" | "browserEvent">): void {
-		if (!isKeyboardEvent(event.browserEvent) || event.elements.length !== 1 || event.browserEvent.key === "Enter" || event.browserEvent.key === " ") return;
+	private onSelection(event: Pick<ObjectTreeSelectionChangeEvent<T>, 'elements' | 'browserEvent'>): void {
+		if (!isKeyboardEvent(event.browserEvent) || event.elements.length !== 1 || event.browserEvent.key === 'Enter' || event.browserEvent.key === ' ') return;
 		this.open(event.elements[0]!, { editorOptions: { pinned: false, preserveFocus: true }, openToSide: false }, event.browserEvent);
 	}
 
 	private shouldOpenOnSingleClick(): boolean {
-		return this.openOnSingleClick ?? this.configurationService.getValue<ListOpenMode>(ListConfiguration.openMode) === "singleClick";
+		return this.openOnSingleClick ?? this.configurationService.getValue<ListOpenMode>(ListConfiguration.openMode) === 'singleClick';
 	}
 
 	private open(element: T, options: IOpenEditorOptions, browserEvent: MouseEvent | KeyboardEvent): void {
@@ -160,19 +160,19 @@ class TreeResourceNavigator<T> extends Disposable {
 }
 
 function isKeyboardEvent(event: UIEvent | undefined): event is KeyboardEvent {
-	return event !== undefined && typeof (event as KeyboardEvent).key === "string";
+	return event !== undefined && typeof (event as KeyboardEvent).key === 'string';
 }
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
 export const ListConfiguration = Object.freeze({
 	smoothScrolling: configurationRegistry.registerConfiguration<boolean>({
-		key: "workbench.list.smoothScrolling",
+		key: 'workbench.list.smoothScrolling',
 		defaultValue: false,
 		scope: ConfigurationScope.WINDOW,
 		schema: { type: 'boolean' },
 		parse(value: unknown): boolean {
-			if (typeof value !== "boolean") throw new TypeError(localize('list.smoothScrollingInvalid', 'List smooth scrolling must be a boolean'));
+			if (typeof value !== 'boolean') throw new TypeError(localize('list.smoothScrollingInvalid', 'List smooth scrolling must be a boolean'));
 			return value;
 		},
 		setting: {
@@ -182,12 +182,12 @@ export const ListConfiguration = Object.freeze({
 		},
 	}),
 	treeIndent: configurationRegistry.registerConfiguration<number>({
-		key: "workbench.tree.indent",
+		key: 'workbench.tree.indent',
 		defaultValue: 8,
 		scope: ConfigurationScope.WINDOW,
 		schema: { type: 'number', minimum: 4, maximum: 40 },
 		parse(value: unknown): number {
-			if (typeof value !== "number" || !Number.isFinite(value) || value < 4 || value > 40) throw new TypeError(localize('list.treeIndentInvalid', 'Tree indent must be between 4 and 40 pixels'));
+			if (typeof value !== 'number' || !Number.isFinite(value) || value < 4 || value > 40) throw new TypeError(localize('list.treeIndentInvalid', 'Tree indent must be between 4 and 40 pixels'));
 			return value;
 		},
 		setting: {
@@ -198,13 +198,13 @@ export const ListConfiguration = Object.freeze({
 			maximum: 40,
 		},
 	}),
-	treeRenderIndentGuides: configurationRegistry.registerConfiguration<"none" | "onHover" | "always">({
-		key: "workbench.tree.renderIndentGuides",
-		defaultValue: "onHover",
+	treeRenderIndentGuides: configurationRegistry.registerConfiguration<'none' | 'onHover' | 'always'>({
+		key: 'workbench.tree.renderIndentGuides',
+		defaultValue: 'onHover',
 		scope: ConfigurationScope.WINDOW,
 		schema: { type: 'string', enum: ['none', 'onHover', 'always'] },
-		parse(value: unknown): "none" | "onHover" | "always" {
-			if (value !== "none" && value !== "onHover" && value !== "always") throw new TypeError(localize('list.treeGuidesInvalid', 'Unknown tree indent guide mode: {0}', String(value)));
+		parse(value: unknown): 'none' | 'onHover' | 'always' {
+			if (value !== 'none' && value !== 'onHover' && value !== 'always') throw new TypeError(localize('list.treeGuidesInvalid', 'Unknown tree indent guide mode: {0}', String(value)));
 			return value;
 		},
 		setting: {
@@ -221,18 +221,18 @@ export const ListConfiguration = Object.freeze({
 		},
 	}),
 	openMode: configurationRegistry.registerConfiguration<ListOpenMode>({
-		key: "workbench.list.openMode",
-		defaultValue: "singleClick",
+		key: 'workbench.list.openMode',
+		defaultValue: 'singleClick',
 		parse(value: unknown): ListOpenMode {
-			if (value !== "singleClick" && value !== "doubleClick") throw new TypeError(`Unknown list open mode: ${String(value)}`);
+			if (value !== 'singleClick' && value !== 'doubleClick') throw new TypeError(`Unknown list open mode: ${String(value)}`);
 			return value;
 		},
 	}),
 	treeExpandMode: configurationRegistry.registerConfiguration<TreeExpandMode>({
-		key: "workbench.tree.expandMode",
-		defaultValue: "singleClick",
+		key: 'workbench.tree.expandMode',
+		defaultValue: 'singleClick',
 		parse(value: unknown): TreeExpandMode {
-			if (value !== "singleClick" && value !== "doubleClick") throw new TypeError(`Unknown tree expand mode: ${String(value)}`);
+			if (value !== 'singleClick' && value !== 'doubleClick') throw new TypeError(`Unknown tree expand mode: ${String(value)}`);
 			return value;
 		},
 	}),

@@ -7,6 +7,8 @@ import { generateUuid } from '../../../../base/common/uuid.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { localize } from '../../../../nls.js';
+import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import type { IView } from '../../../common/views.js';
 
 const viewCustomizationsKey = 'views.customizations';
 const generatedContainerPrefix = 'workbench.views.service.';
@@ -18,6 +20,8 @@ interface ViewCustomizations {
 
 interface ViewDescriptorServiceOptions {
 	readonly registry?: WorkbenchViewRegistry;
+	/** A host may replace a view's presentation without registering its actions again. */
+	readonly viewConstructors?: ReadonlyMap<string, SyncDescriptor<IView>>;
 	/** Initial window state, decoded by the host's persistence boundary. */
 	readonly viewContainerLocations?: Readonly<Record<string, ViewContainerLocation>>;
 }
@@ -30,6 +34,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 		return this.registry.registerViews(containerId, views);
 	}
 	private readonly registry: WorkbenchViewRegistry;
+	private readonly presentations = new WeakMap<IViewDescriptor, IViewDescriptor>();
 	private readonly models = this._register(new DisposableMap<string, ViewContainerModel>());
 	private readonly containerOrders = new Map<ViewContainerLocation, string[]>();
 	private readonly locations: Map<string, ViewContainerLocation>;
@@ -48,7 +53,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	public readonly onDidChangeViewContainerOrder =
 		this._onDidChangeViewContainerOrder.event;
 
-	constructor(options: ViewDescriptorServiceOptions, @IInstantiationService private readonly instantiation: IInstantiationService, @IStorageService private readonly storage: IStorageService) {
+	constructor(private readonly options: ViewDescriptorServiceOptions, @IInstantiationService private readonly instantiation: IInstantiationService, @IStorageService private readonly storage: IStorageService) {
 		super();
 		this.registry = options.registry ?? ViewsRegistry;
 		this.locations = new Map(Object.entries(options.viewContainerLocations ?? {}));
@@ -110,7 +115,16 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	}
 
 	public getViewDescriptorById(id: string): IViewDescriptor | null {
-		return this.registry.getView(id) ?? null;
+		const view = this.registry.getView(id);
+		if (!view) return null;
+		const ctorDescriptor = this.options.viewConstructors?.get(id);
+		if (!ctorDescriptor) return view;
+		let presentation = this.presentations.get(view);
+		if (!presentation) {
+			presentation = { ...view, ctorDescriptor };
+			this.presentations.set(view, presentation);
+		}
+		return presentation;
 	}
 
 	public getDefaultViewContainer(
@@ -215,7 +229,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	}
 
 	private syncViewModels(): void {
-		const all = this.registry.getViewContainers().flatMap(container => this.registry.getViews(container.id));
+		const all = this.registry.getViewContainers().flatMap(container => this.registry.getViews(container.id)).map(view => this.getViewDescriptorById(view.id)!);
 		for (const [id, location] of this.generatedLocations) {
 			if (this.generatedContainers.has(id)) continue;
 			const primary = [...this.viewLocations].find(([viewId, target]) => target === id && this.registry.getView(viewId)?.canMoveView);
@@ -229,7 +243,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 		}
 		// Remove old ownership before adding the destination so visibility context keys have one writer.
 		for (const [id, model] of this.models) {
-			model.remove(model.allViewDescriptors.filter(view => this.getViewContainerForView(view.id)?.id !== id || this.registry.getView(view.id) !== view));
+			model.remove(model.allViewDescriptors.filter(view => this.getViewContainerForView(view.id)?.id !== id || this.getViewDescriptorById(view.id) !== view));
 		}
 		for (const view of all) {
 			const container = this.getViewContainerForView(view.id);

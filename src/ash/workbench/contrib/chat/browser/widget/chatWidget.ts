@@ -8,24 +8,24 @@ import { approvalModeDefinition } from '../../../../../platform/agentHost/common
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { localize } from '../../../../../nls.js';
 import './media/chat.css';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { canceled, isCancellationError } from "../../../../../base/common/errors.js";
-import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Emitter, type Event } from '../../../../../base/common/event.js';
+import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
+import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
-import type { ChatInputDelegate } from "./input/chatInput.js";
-import type { SkillReference } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from "./input/chatInputPart.js";
-import type { ChatTurnErrorAction } from "./chatListItems.js";
-import { ChatListWidget } from "./chatListWidget.js";
-import type { ChatInputState } from "./input/chatInput.js";
-import type { ModelReasoningEffort } from "../../../../services/chat/common/modelCatalog.js";
-import type { IChatListItem } from "./chatListItems.js";
-import { resolveChatContextAttachment, type ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
-import { getActiveWindow, h } from "../../../../../base/browser/dom.js";
+import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../services/chat/common/chatService.js';
+import type { ChatInputDelegate } from './input/chatInput.js';
+import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './input/chatInputPart.js';
+import type { ChatTurnErrorAction } from './chatListItems.js';
+import { ChatListWidget } from './chatListWidget.js';
+import type { ChatInputState } from './input/chatInput.js';
+import type { ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
+import type { IChatListItem } from './chatListItems.js';
+import { resolveChatContextAttachment, type ResolvedChatContext } from '../../../../services/chat/common/chatContextService.js';
+import { getActiveWindow, h } from '../../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { AgentsVoiceWidget } from '../../../agentsVoice/browser/agentsVoiceWidget.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -33,13 +33,13 @@ import type { IChatSessionHistoryStatus } from '../../../../../platform/chat/com
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
-import type { ChatContextAttachment, ChatImageCapture } from "../../../../services/chat/common/chatContextService.js";
-import type { IOpenerService } from "../../../../../platform/opener/common/opener.js";
-import type { IEditorService } from "../../../../services/editor/common/editorService.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { Schemas } from "../../../../../base/common/network.js";
+import type { ChatContextAttachment, ChatImageCapture } from '../../../../services/chat/common/chatContextService.js';
+import type { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import type { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { Schemas } from '../../../../../base/common/network.js';
 import { ASH_REMOTE_SCHEME, createSshRemoteWorkspaceUri, getRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
-import { OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from "../../common/chat.js";
+import { OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../common/chat.js';
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
@@ -85,6 +85,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	readonly element: HTMLElement;
 	private readonly hidden = this._register(new Emitter<void>());
 	readonly onDidHide = this.hidden.event;
+	private readonly visibilityChanged = this._register(new Emitter<void>());
+	readonly onDidChangeVisibility = this.visibilityChanged.event;
 	private readonly voiceSessionController: VoiceSessionController;
 	private readonly voiceWidget: AgentsVoiceWidget;
 	readonly model: TModel;
@@ -132,14 +134,14 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			return source;
 		} : undefined));
 		const ownerDocument = container.ownerDocument;
-		this.element = h(ownerDocument, "div");
+		this.element = h(ownerDocument, 'div');
 		this.element.id = panelId;
-		this.element.className = "ash-chat";
-		this.element.setAttribute("role", "tabpanel");
+		this.element.className = 'ash-chat';
+		this.element.setAttribute('role', 'tabpanel');
 		this.element.hidden = true;
 		container.append(this.element);
-		this.goalElement = h(ownerDocument, "div");
-		this.goalElement.className = "ash-chat-goal";
+		this.goalElement = h(ownerDocument, 'div');
+		this.goalElement.className = 'ash-chat-goal';
 		this.goalElement.hidden = true;
 		this.olderHistoryElement = h(ownerDocument, 'div');
 		this.olderHistoryElement.className = 'ash-chat-history-pagination';
@@ -215,7 +217,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				},
 			} satisfies IChatMcpAppDelegate,
 			onDidRequestLink: (target: string) => {
-				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error("Could not open Markdown link", error));
+				void openChatMarkdownLink(target, openerService, editorService).catch(error => console.error('Could not open Markdown link', error));
 			},
 			onDidRequestMemoryReference: (reference: string) => { void commandService.executeCommand('ash.memories.openReference', reference).catch(error => console.error('Could not open memory reference', error)); },
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
@@ -238,7 +240,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-			executeServerCommand: (invocation, submissionSignal) => invocation.name === "advisor" && !invocation.argumentsText.trim()
+			executeServerCommand: (invocation, submissionSignal) => invocation.name === 'advisor' && !invocation.argumentsText.trim()
 				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
 				: this.model.executeServerCommand(invocation.name, invocation.argumentsText, submissionSignal),
 			interrupt: () => this.model.interrupt(),
@@ -324,17 +326,18 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	setTabId(tabId: string | undefined): void {
 		if (tabId) {
-			this.element.setAttribute("aria-labelledby", tabId);
-			this.element.removeAttribute("aria-label");
+			this.element.setAttribute('aria-labelledby', tabId);
+			this.element.removeAttribute('aria-label');
 		} else {
-			this.element.removeAttribute("aria-labelledby");
-			this.element.setAttribute("aria-label", "Chat");
+			this.element.removeAttribute('aria-labelledby');
+			this.element.setAttribute('aria-label', 'Chat');
 		}
 	}
 
 	setVisible(visible: boolean): void {
 		const wasVisible = this.visible;
 		this.element.hidden = !visible;
+		if (wasVisible !== visible) { this.visibilityChanged.fire(); }
 		if (wasVisible && !visible) this.hidden.fire();
 		if (!visible && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
 		this.inputPart.setVisible(visible);
@@ -347,6 +350,10 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	/** A floating control starts through this Chat's original source and task dispatcher. */
 	startVoiceConversation(): Promise<void> {
 		return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+	}
+
+	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]> {
+		return this.inputPart.acquireContext(prepare, signal);
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
@@ -411,16 +418,16 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	private async handleTurnErrorAction(action: ChatTurnErrorAction): Promise<void> {
 		switch (action.type) {
-			case "retry":
+			case 'retry':
 				await this.model.retryFailedTurn(action.turnId);
 				return;
-			case "chooseModel":
+			case 'chooseModel':
 				this.inputPart.openModelSelector();
 				return;
-			case "startNewChat":
+			case 'startNewChat':
 				this.createUntitledSession();
 				return;
-			case "revise":
+			case 'revise':
 				this.inputPart.focus();
 				return;
 		}
@@ -453,7 +460,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
-		this.inputPart.render(this.model.inputState);
+		this.inputPart.render({ ...this.model.inputState, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
 	}
 
 	private renderHistoryStatus(): void {
@@ -525,7 +532,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const goal = this.model.goal;
 		if (!goal) {
 			this.goalElement.hidden = true;
-			this.goalElement.textContent = "";
+			this.goalElement.textContent = '';
 			return;
 		}
 		this.goalElement.hidden = false;
@@ -537,8 +544,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	private updateConversationState(hasTranscript = this.model.items.length > 0): void {
 		const hasConversation = this.submittedMessage || hasTranscript;
-		this.element.classList.toggle("empty", !hasConversation);
-		this.element.classList.toggle("has-conversation", hasConversation);
+		this.element.classList.toggle('empty', !hasConversation);
+		this.element.classList.toggle('has-conversation', hasConversation);
 	}
 
 	private syncIdentity(): void {
@@ -546,11 +553,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const threadId = this.model.threadId;
 		const untitledSessionId = this.model.untitledSessionId;
 		if (sessionId) this.element.dataset.sessionId = sessionId;
-		else this.element.removeAttribute("data-session-id");
+		else this.element.removeAttribute('data-session-id');
 		if (threadId) this.element.dataset.threadId = threadId;
-		else this.element.removeAttribute("data-thread-id");
+		else this.element.removeAttribute('data-thread-id');
 		if (untitledSessionId) this.element.dataset.untitledSessionId = untitledSessionId;
-		else this.element.removeAttribute("data-untitled-session-id");
+		else this.element.removeAttribute('data-untitled-session-id');
 	}
 }
 
@@ -559,7 +566,7 @@ export async function openChatMarkdownLink(
 	openerService: IOpenerService | undefined,
 	editorService: IEditorService | undefined,
 ): Promise<void> {
-	if (target.startsWith("#") || target.startsWith(`${Schemas.internal}:`)) return;
+	if (target.startsWith('#') || target.startsWith(`${Schemas.internal}:`)) return;
 	if (target.startsWith(`${Schemas.command}:`)) {
 		if (openerService) await openerService.open(target, { allowCommands: true, fromUserGesture: true });
 		return;
@@ -610,4 +617,4 @@ export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined
 	return undefined;
 }
 
-function formatNumber(value: number): string { return new Intl.NumberFormat("en-US").format(value); }
+function formatNumber(value: number): string { return new Intl.NumberFormat('en-US').format(value); }

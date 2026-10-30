@@ -416,6 +416,7 @@ fn browser_upload_authorizes_before_host_dispatch_and_transports_only_approved_f
         let create = scope.spawn(|| {
             host.create_target(
                 core_api::CreateBrowserTargetRequest {
+                    canvas: None,
                     url: "about:blank".into(),
                 },
                 &CancellationSource::new().token(),

@@ -7,16 +7,16 @@ import { IFileService } from '../../../../../platform/files/common/files.js';
 import { IContextKeyService, ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { TestEditorService, BulkEditTestServices } from './bulkEditTestServices.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
-import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { Position } from "../../../../../editor/common/core/position.js";
-import { Range } from "../../../../../editor/common/core/range.js";
-import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { Position } from '../../../../../editor/common/core/position.js';
+import { Range } from '../../../../../editor/common/core/range.js';
+import { type LanguageWorkspaceEdit } from '../../../../../editor/common/languages.js';
 import { BulkEditPane } from '../../browser/preview/bulkEditPane.js';
 import { registerWindow } from '../../../../../base/browser/window.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
@@ -33,22 +33,22 @@ import { Extensions, type IConfigurationRegistry } from '../../../../../platform
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-test("bulk edit preview applies only the selected valid entries", async () => {
-	const browser = new JSDOM("<!doctype html><body></body>");
+test('bulk edit preview applies only the selected valid entries', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
-	const first = URI.file("C:\\workspace\\first.ts");
-	const second = URI.file("C:\\workspace\\second.ts");
+	const first = URI.file('C:\\workspace\\first.ts');
+	const second = URI.file('C:\\workspace\\second.ts');
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
-			{ kind: "textDocument", resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "one" }] },
-			{ kind: "textDocument", resource: second, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "two" }] },
+			{ kind: 'textDocument', resource: first, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'one' }] },
+			{ kind: 'textDocument', resource: second, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'two' }] },
 		],
 	};
 	const model = {
 		edit,
 		entries: [
-			{ index: 0, kind: "textDocument", resource: first, detail: "1 text edit" },
-			{ index: 1, kind: "textDocument", resource: second, detail: "1 text edit" },
+			{ index: 0, kind: 'textDocument', resource: first, detail: '1 text edit' },
+			{ index: 1, kind: 'textDocument', resource: second, detail: '1 text edit' },
 		],
 		canApply: true,
 	};
@@ -69,11 +69,11 @@ test("bulk edit preview applies only the selected valid entries", async () => {
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorService, new TestEditorService());
-		using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: "Refactor Preview" });
+		using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 		browser.window.document.body.append(pane.element);
 		const pending = pane.setInput(ResourceEdit.convert(model.edit), new AbortController().signal);
 		await previewReady(pane);
-		const checkboxes = [...pane.element.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
+		const checkboxes = [...pane.element.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
 		assert.equal(checkboxes.length, 2);
 		assert.equal(checkboxes[1] instanceof browser.window.HTMLInputElement, false, 'adopted controls retain the main window constructor');
 		assert.equal(checkboxes[0]!.checked, true);
@@ -81,8 +81,8 @@ test("bulk edit preview applies only the selected valid entries", async () => {
 
 		checkboxes[1]!.click();
 		assert.equal(checkboxes[1]!.checked, false);
-		assert.match(pane.element.querySelector(".ash-bulk-edit-status")?.textContent ?? "", /1 selected/);
-		pane.element.querySelector<HTMLButtonElement>(".ash-bulk-edit-apply")!.click();
+		assert.match(pane.element.querySelector('.ash-bulk-edit-status')?.textContent ?? '', /1 selected/);
+		pane.element.querySelector<HTMLButtonElement>('.ash-bulk-edit-apply')!.click();
 
 		const accepted = await pending;
 		assert.deepEqual(accepted, ResourceEdit.convert({ entries: [edit.entries[0]!] }));
@@ -92,14 +92,14 @@ test("bulk edit preview applies only the selected valid entries", async () => {
 	}
 });
 
-test("disposing a bulk edit preview settles the pending approval", async () => {
-	const browser = new JSDOM("<!doctype html><body></body>");
+test('disposing a bulk edit preview settles the pending approval', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
-	const resource = URI.file("C:\\workspace\\first.ts");
-	const edit: LanguageWorkspaceEdit = { entries: [{ kind: "textDocument", resource, edits: [] }] };
+	const resource = URI.file('C:\\workspace\\first.ts');
+	const edit: LanguageWorkspaceEdit = { entries: [{ kind: 'textDocument', resource, edits: [] }] };
 	const model = {
 		edit,
-		entries: [{ index: 0, kind: "textDocument", resource, detail: "0 text edits" }],
+		entries: [{ index: 0, kind: 'textDocument', resource, detail: '0 text edits' }],
 		canApply: true,
 	};
 
@@ -119,7 +119,7 @@ test("disposing a bulk edit preview settles the pending approval", async () => {
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorService, new TestEditorService());
-		const pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: "Refactor Preview" });
+		const pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 		const pending = pane.setInput(ResourceEdit.convert(model.edit), new AbortController().signal);
 		pane.dispose();
 		assert.equal(await pending, undefined);
@@ -129,24 +129,24 @@ test("disposing a bulk edit preview settles the pending approval", async () => {
 	}
 });
 
-test("bulk edit preview keeps resource operations linked to dependent text edits", async () => {
-	const browser = new JSDOM("<!doctype html><body></body>");
+test('bulk edit preview keeps resource operations linked to dependent text edits', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
-	const created = URI.file("C:\\workspace\\created.ts");
-	const independent = URI.file("C:\\workspace\\independent.ts");
+	const created = URI.file('C:\\workspace\\created.ts');
+	const independent = URI.file('C:\\workspace\\independent.ts');
 	const edit: LanguageWorkspaceEdit = {
 		entries: [
-			{ kind: "create", resource: created, existing: "error" },
-			{ kind: "textDocument", resource: created, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "created" }] },
-			{ kind: "textDocument", resource: independent, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "independent" }] },
+			{ kind: 'create', resource: created, existing: 'error' },
+			{ kind: 'textDocument', resource: created, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'created' }] },
+			{ kind: 'textDocument', resource: independent, edits: [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'independent' }] },
 		],
 	};
 	const model = {
 		edit,
 		entries: [
-			{ index: 0, kind: "create", resource: created, detail: "Create file" },
-			{ index: 1, kind: "textDocument", resource: created, detail: "1 text edit" },
-			{ index: 2, kind: "textDocument", resource: independent, detail: "1 text edit" },
+			{ index: 0, kind: 'create', resource: created, detail: 'Create file' },
+			{ index: 1, kind: 'textDocument', resource: created, detail: '1 text edit' },
+			{ index: 2, kind: 'textDocument', resource: independent, detail: '1 text edit' },
 		],
 		canApply: true,
 	};
@@ -167,17 +167,17 @@ test("bulk edit preview keeps resource operations linked to dependent text edits
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorService, new TestEditorService());
-		using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: "Refactor Preview" });
+		using pane = services.createInstance(BulkEditPane, browser.window.document.body, { id: BulkEditPane.ID, title: 'Refactor Preview' });
 		const pending = pane.setInput(ResourceEdit.convert(model.edit), new AbortController().signal);
 		await previewReady(pane);
-		const createCheckbox = pane.element.querySelectorAll<HTMLInputElement>("input[type=checkbox]")[0]!;
+		const createCheckbox = pane.element.querySelectorAll<HTMLInputElement>('input[type=checkbox]')[0]!;
 		createCheckbox.checked = false;
-		createCheckbox.dispatchEvent(new browser.window.Event("change", { bubbles: true }));
-		const checkboxes = [...pane.element.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
+		createCheckbox.dispatchEvent(new browser.window.Event('change', { bubbles: true }));
+		const checkboxes = [...pane.element.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
 		assert.equal(checkboxes[0]!.checked, false);
 		assert.equal(checkboxes[1]!.checked, false);
 		assert.equal(checkboxes[2]!.checked, true);
-		pane.element.querySelector<HTMLButtonElement>(".ash-bulk-edit-apply")!.click();
+		pane.element.querySelector<HTMLButtonElement>('.ash-bulk-edit-apply')!.click();
 
 		const accepted = await pending;
 		assert.deepEqual(accepted, ResourceEdit.convert({ entries: [edit.entries[2]!] }));

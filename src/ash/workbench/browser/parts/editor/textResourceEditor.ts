@@ -6,43 +6,43 @@ import { CancellationError, isCancellationError } from '../../../../base/common/
 import { TextResourceEditorInput } from '../../../common/editor/textResourceEditorInput.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import type { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
-import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { type IDimension } from "../../../../base/browser/dom.js";
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { assertDefined } from "../../../../base/common/types.js";
+import { addDisposableListener, stopEvent, h } from '../../../../base/browser/dom.js';
+import { type IDimension } from '../../../../base/browser/dom.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { assertDefined } from '../../../../base/common/types.js';
 import * as strings from '../../../../base/common/strings.js';
-import type { URI } from "../../../../base/common/uri.js";
+import type { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService, type IConfigurationOverrides } from '../../../../platform/configuration/common/configuration.js';
 import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput, type ISaveOptions, type EditorPaneStatus } from '../../../common/editor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
+import { type ITextResourceStore } from '../../../services/textmodelResolver/common/textResourceStore.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { type ICodeEditorViewState, type IEditorDecorationsCollection } from '../../../../editor/common/editorCommon.js';
-import { ITextModelResourceService, type TextModelReference } from "../../../services/textmodelResolver/common/textModelResourceService.js";
-import { type EditorTextDirection } from "../../../../editor/browser/view.js";
-import { EditorLineWrapping, type ConfigurationChangedEvent, type EditorLayoutInfo, type IEditorOptions } from "../../../../editor/common/config/editorOptions.js";
+import { ITextModelResourceService, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { type EditorTextDirection } from '../../../../editor/browser/view.js';
+import { EditorLineWrapping, type ConfigurationChangedEvent, type EditorLayoutInfo, type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
 import { EditorMinimapConfiguration } from '../../../../editor/common/config/editorConfigurationSchema.js';
-import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import { type Range } from "../../../../editor/common/core/range.js";
-import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
-import { type ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
-import type { Selection } from "../../../../editor/common/core/selection.js";
+import { type IWorkingCopy, type IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
+import { type Range } from '../../../../editor/common/core/range.js';
+import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../../editor/common/languages.js';
+import { type ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
+import type { Selection } from '../../../../editor/common/core/selection.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import type { IModelDeltaDecoration } from '../../../../editor/common/model.js';
 import type { IViewZoneChangeAccessor } from '../../../../editor/browser/editorBrowser.js';
-import type { ICursorSelectionChangedEvent } from "../../../../editor/common/cursorEvents.js";
+import type { ICursorSelectionChangedEvent } from '../../../../editor/common/cursorEvents.js';
 
-import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
+import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { AbstractTextCodeEditor, type ITextCodeEditorControl } from './textCodeEditor.js';
 import { toEditorPaneSelectionChangeReason } from './textEditor.js';
 
-const lineNumbersConfiguration = "editor.lineNumbers";
-const wordWrapConfiguration = "editor.wordWrap";
-const renderWhitespaceConfiguration = "editor.renderWhitespace";
-const renderControlCharactersConfiguration = "editor.renderControlCharacters";
+const lineNumbersConfiguration = 'editor.lineNumbers';
+const wordWrapConfiguration = 'editor.wordWrap';
+const renderWhitespaceConfiguration = 'editor.renderWhitespace';
+const renderControlCharactersConfiguration = 'editor.renderControlCharacters';
 
 export { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
@@ -93,8 +93,8 @@ export interface EditorPaneOptions {
 	readonly fontSize?: number;
 	readonly lineHeight?: number;
 	readonly fontLigatures?: boolean;
-	readonly experimentalGpuAcceleration?: CodeEditorWidgetOptions["experimentalGpuAcceleration"];
-	readonly minimap?: CodeEditorWidgetOptions["minimap"];
+	readonly experimentalGpuAcceleration?: CodeEditorWidgetOptions['experimentalGpuAcceleration'];
+	readonly minimap?: CodeEditorWidgetOptions['minimap'];
 	readonly renderLineHighlight?: CodeEditorWidgetOptions['renderLineHighlight'];
 	readonly renderLineHighlightOnlyWhenFocus?: CodeEditorWidgetOptions['renderLineHighlightOnlyWhenFocus'];
 	readonly cursorStyle?: CodeEditorWidgetOptions['cursorStyle'];
@@ -105,23 +105,23 @@ export interface EditorPaneOptions {
 	readonly lineNumbers?: CodeEditorWidgetOptions['lineNumbers'];
 	readonly guides?: CodeEditorWidgetOptions['guides'];
 	readonly bracketPairColorization?: CodeEditorWidgetOptions['bracketPairColorization'];
-	readonly matchBrackets?: CodeEditorWidgetOptions["matchBrackets"];
+	readonly matchBrackets?: CodeEditorWidgetOptions['matchBrackets'];
 	readonly stickyScroll?: CodeEditorWidgetOptions['stickyScroll'];
-	readonly suggestions?: CodeEditorWidgetOptions["suggestions"];
-	readonly inlineCompletions?: CodeEditorWidgetOptions["inlineCompletions"];
+	readonly suggestions?: CodeEditorWidgetOptions['suggestions'];
+	readonly inlineCompletions?: CodeEditorWidgetOptions['inlineCompletions'];
 	readonly parameterHints?: boolean;
 	readonly inlayHints?: CodeEditorWidgetOptions['inlayHints'];
 	readonly codeLens?: boolean;
-	readonly colorDecorators?: CodeEditorWidgetOptions["colorDecorators"];
-	readonly colorDecoratorsActivatedOn?: CodeEditorWidgetOptions["colorDecoratorsActivatedOn"];
-	readonly colorDecoratorsLimit?: CodeEditorWidgetOptions["colorDecoratorsLimit"];
-	readonly defaultColorDecorators?: CodeEditorWidgetOptions["defaultColorDecorators"];
+	readonly colorDecorators?: CodeEditorWidgetOptions['colorDecorators'];
+	readonly colorDecoratorsActivatedOn?: CodeEditorWidgetOptions['colorDecoratorsActivatedOn'];
+	readonly colorDecoratorsLimit?: CodeEditorWidgetOptions['colorDecoratorsLimit'];
+	readonly defaultColorDecorators?: CodeEditorWidgetOptions['defaultColorDecorators'];
 	readonly formatOnSave?: boolean;
-	readonly find?: CodeEditorWidgetOptions["find"];
-	readonly indentation?: CodeEditorWidgetOptions["indentation"];
+	readonly find?: CodeEditorWidgetOptions['find'];
+	readonly indentation?: CodeEditorWidgetOptions['indentation'];
 	/** Browser paragraph direction forwarded to every created editor part. */
 	readonly textDirection?: EditorTextDirection;
-	readonly onExecuteEditorCommand?: CodeEditorWidgetOptions["onExecuteEditorCommand"];
+	readonly onExecuteEditorCommand?: CodeEditorWidgetOptions['onExecuteEditorCommand'];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
 	readonly placeholder?: string;
@@ -134,7 +134,7 @@ export interface EditorPaneOptions {
 /** Workbench pane that composes the text model, input, view, and language services. */
 export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> implements IEditorPaneWithSelection {
 	readonly id = CODE_EDITOR_ID;
-	readonly viewStateTypeId = "stanza.code.textView";
+	readonly viewStateTypeId = 'stanza.code.textView';
 	private readonly selectionChangeEmitter = this._register(new Emitter<EditorPaneSelectionChangeReason>());
 	readonly onDidChangeSelection = this.selectionChangeEmitter.event;
 	private readonly providedModel = this._register(new MutableDisposable<TextResourceEditorInput>());
@@ -177,9 +177,9 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		@IStorageService storageService: IStorageService,
 	) {
 		super(CODE_EDITOR_ID, themeService, storageService);
-		if (!resourceStore || typeof resourceStore.resolve !== "function" || typeof resourceStore.save !== "function" || typeof resourceStore.onDidChange !== "function") {
+		if (!resourceStore || typeof resourceStore.resolve !== 'function' || typeof resourceStore.save !== 'function' || typeof resourceStore.onDidChange !== 'function') {
 			this.dispose();
-			throw new TypeError("Code editor pane requires a text resource store");
+			throw new TypeError('Code editor pane requires a text resource store');
 		}
 		this.createPart = options.createPart ?? (partOptions => this.instantiationService.createInstance(CodeEditorWidget, partOptions));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
@@ -285,13 +285,13 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	}
 
 	public override create(parent: HTMLElement): void {
-		if (this.container) throw new ReferenceError("EditorPane has already been created");
-		const container = h(parent.ownerDocument, "div");
-		container.className = "stanza-editor-pane";
+		if (this.container) throw new ReferenceError('EditorPane has already been created');
+		const container = h(parent.ownerDocument, 'div');
+		container.className = 'stanza-editor-pane';
 		parent.append(container);
 		super.create(container);
 		this.container = container;
-		this._register(addDisposableListener<KeyboardEvent>(container, "keydown", event => this.handleSaveKeydown(event)));
+		this._register(addDisposableListener<KeyboardEvent>(container, 'keydown', event => this.handleSaveKeydown(event)));
 		this._register(toDisposable(() => {
 			container.remove();
 			this.container = undefined;
@@ -300,7 +300,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const container = this.requireContainer();
-		throwIfCancelled(signal, "Code editor input loading was cancelled");
+		throwIfCancelled(signal, 'Code editor input loading was cancelled');
 		const isProvidedResource = input.resource.scheme !== Schemas.file && this.textModelService.canHandleResource(input.resource);
 		// Requests can be shared by groups. Each pane owns its resolved input so closing
 		// one view releases only that view's reference, including an unfinished load.
@@ -315,7 +315,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		try {
 			modelReference = isProvidedResource ? undefined : await this.modelService.acquire(input, signal);
 			const model = providedInput ? (await providedInput.resolve()).textEditorModel : modelReference!.model;
-			throwIfCancelled(signal, "Code editor input loading was cancelled");
+			throwIfCancelled(signal, 'Code editor input loading was cancelled');
 			if (!(model instanceof TextModel)) throw new TypeError('Text resource editor requires a TextModel');
 			resolvedModel = model;
 			const fontOverrides = { resource: model.uri, overrideIdentifier: model.getLanguageId() };
@@ -385,9 +385,9 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				modelReference,
 				input,
 				this.options.workingCopyService,
-				input.resource.scheme === "untitled" ? this.options.onSave : undefined,
+				input.resource.scheme === 'untitled' ? this.options.onSave : undefined,
 			);
-			throwIfCancelled(signal, "Code editor input loading was cancelled");
+			throwIfCancelled(signal, 'Code editor input loading was cancelled');
 		} catch (error) {
 			part?.dispose();
 			workingCopy?.dispose();
@@ -430,7 +430,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			this.selectionChangeEmitter.fire(EditorPaneSelectionChangeReason.EDIT);
 		}));
 		if (modelReference) statusListeners.add(modelReference.onDidChangeExternalChange(() => {
-			if (modelReference.hasExternalChange) part.announceAccessibilityStatus?.("File changed on disk. Local edits are preserved.");
+			if (modelReference.hasExternalChange) part.announceAccessibilityStatus?.('File changed on disk. Local edits are preserved.');
 			this.statusChangeEmitter.fire();
 		}));
 		if (input.onDidChangeLabel) statusListeners.add(input.onDidChangeLabel(() => part.updateOptions({ ariaLabel: input.label })));
@@ -506,15 +506,15 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	}
 
 	private handleSaveKeydown(event: KeyboardEvent): void {
-		if (this.providedModel.value || event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
-		if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "s") return;
+		if (this.providedModel.value || event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph')) return;
+		if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 's') return;
 		stopEvent(event);
 		if (this.saving) return;
 		this.saving = true;
 		void this.save().then(() => {
-			this.part.value?.announceAccessibilityStatus?.("Saved");
+			this.part.value?.announceAccessibilityStatus?.('Saved');
 		}).catch(error => {
-			const message = error instanceof Error && error.message.trim().length > 0 ? error.message.trim() : "unknown error";
+			const message = error instanceof Error && error.message.trim().length > 0 ? error.message.trim() : 'unknown error';
 			this.part.value?.announceAccessibilityStatus?.(`Save failed: ${message}`);
 		}).finally(() => {
 			this.saving = false;
@@ -522,23 +522,23 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	}
 
 	private requireContainer(): HTMLDivElement {
-		assertDefined(this.container, new ReferenceError("EditorPane has not been created"));
+		assertDefined(this.container, new ReferenceError('EditorPane has not been created'));
 		return this.container;
 	}
 }
 
 function reportSaveError(error: unknown): void {
-	console.error("Code editor save failed", error);
+	console.error('Code editor save failed', error);
 }
 
 export class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	readonly resource: URI;
-	readonly backupKind = "text" as const;
+	readonly backupKind = 'text' as const;
 	readonly backupLanguageId: string | undefined;
 	readonly backupContentType: string | undefined;
-	readonly onDidChangeDirty: IWorkingCopy["onDidChangeDirty"];
-	readonly onDidChangeExternalChange: IWorkingCopy["onDidChangeExternalChange"];
-	readonly onDidChangeContent: IWorkingCopy["onDidChangeContent"];
+	readonly onDidChangeDirty: IWorkingCopy['onDidChangeDirty'];
+	readonly onDidChangeExternalChange: IWorkingCopy['onDidChangeExternalChange'];
+	readonly onDidChangeContent: IWorkingCopy['onDidChangeContent'];
 
 	constructor(
 		private readonly reference: TextModelReference,
@@ -578,8 +578,8 @@ export class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 
 	save(signal: AbortSignal, options?: ISaveOptions): Promise<void> {
-		throwIfCancelled(signal, "Code editor working-copy save was cancelled");
-		if (this.resource.scheme === "untitled") return this.saveUntitledDocument();
+		throwIfCancelled(signal, 'Code editor working-copy save was cancelled');
+		if (this.resource.scheme === 'untitled') return this.saveUntitledDocument();
 		return this.reference.save(signal, options);
 	}
 
@@ -594,6 +594,6 @@ export class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	private async saveUntitledDocument(): Promise<void> {
 		const result = await this.saveUntitled?.();
 		if (result === false) return;
-		if (!this.saveUntitled) throw new Error("Untitled code editor has no save handler");
+		if (!this.saveUntitled) throw new Error('Untitled code editor has no save handler');
 	}
 }

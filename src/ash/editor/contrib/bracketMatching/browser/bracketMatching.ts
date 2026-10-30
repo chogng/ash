@@ -1,7 +1,7 @@
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type IBracketPairsTextModelPart } from "../../../common/textModelBracketPairs.js";
-import { Range } from "../../../common/core/range.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
+import { type IBracketPairsTextModelPart } from '../../../common/textModelBracketPairs.js';
+import { Range } from '../../../common/core/range.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
@@ -25,12 +25,12 @@ export class BracketMatchingController extends Disposable {
 		private readonly editor: ICodeEditor,
 		private readonly bracketPairs: IBracketPairsTextModelPart,
 		private readonly decorations: TextDecorationCollection<void>,
-		private readonly mode: "never" | "near" | "always",
+		private readonly mode: 'never' | 'near' | 'always',
 	) {
 		super();
 		try {
 			if (editor.getModel()?.bracketPairs !== bracketPairs || editor.getModel() !== decorations.textModel) {
-				throw new TypeError("Stanza bracket matching dependencies must share one text model");
+				throw new TypeError('Stanza bracket matching dependencies must share one text model');
 			}
 			this._register(editor.onDidChangeCursorSelection(() => this.update()));
 			this._register(decorations.textModel.onDidChangeContent(() => this.update()));
@@ -43,7 +43,7 @@ export class BracketMatchingController extends Disposable {
 	}
 
 	private update(): void {
-		if (this.mode === "never") {
+		if (this.mode === 'never') {
 			this.decorations.replaceAll([]);
 			return;
 		}
@@ -51,7 +51,7 @@ export class BracketMatchingController extends Disposable {
 		for (const selection of this.editor.getSelections()!) {
 			if (!selection.isEmpty()) continue;
 			const match = this.bracketPairs.matchBracket(selection.getPosition())
-				?? (this.mode === "always" ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);
+				?? (this.mode === 'always' ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);
 			if (!match) continue;
 			ranges.set(rangeKey(match[0]), match[0]);
 			ranges.set(rangeKey(match[1]), match[1]);

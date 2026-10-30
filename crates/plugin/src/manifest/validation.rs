@@ -239,6 +239,7 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
                     | super::EditorExtensionCapability::SourceControl
                     | super::EditorExtensionCapability::TreeView
                     | super::EditorExtensionCapability::CustomTextEditor
+                    | super::EditorExtensionCapability::DataChannel
                     | super::EditorExtensionCapability::LanguageProvider
                     | super::EditorExtensionCapability::StatusBar
                     | super::EditorExtensionCapability::TaskProvider

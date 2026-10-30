@@ -39,6 +39,28 @@ const storageKey = 'sessions.singlePane.layoutState';
 suite('DesktopLayoutController', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('hidden Canvas retention preserves split geometry while still capturing new tabs', async () => {
+		using fixture = await createFixture();
+		const initial = {
+			...workingSet('initial'), groups: [
+				{ ...workingSet('left', 'one.ts').groups[0]!, id: 1, size: 0.25 },
+				{ ...workingSet('right', 'two.ts').groups[0]!, id: 2, size: 0.75 },
+			]
+		};
+		fixture.editor.set(initial);
+		await fixture.open('b'); await fixture.open('a');
+		const retained = { resource: URI.parse('session-canvas:/live') };
+		fixture.editor.groups = [{ inputs: [retained] }];
+		using lease = fixture.controller.retainEditor(retained);
+		fixture.editor.set({ ...initial, groups: initial.groups.map((group, index) => ({ ...group, size: 0.5, editors: index ? group.editors : [...group.editors, workingSet('new', 'new.ts').groups[0]!.editors[0]!] })) });
+		fixture.editorVisible = false;
+		await fixture.open('b'); await fixture.open('a');
+		assert.notEqual(fixture.editor.current, 'empty');
+		const restored = fixture.editor.current as EditorWorkingSet;
+		assert.deepEqual(restored.groups.map(group => group.size), [0.25, 0.75]);
+		assert.equal(restored.groups[0]!.editors.length, 2);
+	});
+
 	test('a new layout scope adopts live documents before it has a saved working set', async () => {
 		using fixture = await createFixture();
 		fixture.editor.set(workingSet('live', 'unsaved.ts'));
@@ -382,6 +404,7 @@ suite('DesktopLayoutController', () => {
 });
 
 class TestEditors extends Disposable {
+	public groups: { inputs: { resource: URI; }[]; }[] = [];
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidVisibleEditorsChange = this.changed.event;
 	public started = new DeferredPromise<void>();

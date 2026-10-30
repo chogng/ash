@@ -436,8 +436,15 @@ suite('changes browser component', () => {
 		await form.getByRole('textbox', { name: 'Title', exact: true }).fill('Agent reviewed PR');
 		await form.getByRole('textbox', { name: 'Description', exact: true }).fill('Changes to review');
 		await form.getByRole('combobox', { name: 'Merge mode' }).selectOption('SQUASH');
-		await form.getByRole('combobox', { name: 'Pull request action' }).selectOption('sendToChat');
-		await form.getByRole('button', { name: 'Send to agent' }).click();
+		const actionMenu = form.getByRole('button', { name: 'Pull request action', exact: true });
+		await actionMenu.focus();
+		await actionMenu.press('ArrowDown');
+		await expect(page.getByRole('menu')).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(form).toBeVisible();
+		await expect(actionMenu).toBeFocused();
+		await actionMenu.click();
+		await page.getByRole('menuitemcheckbox', { name: 'Ask agent to create', exact: true }).click();
 		await expect(form).toBeHidden();
 		await expect.poll(() => page.evaluate(() => window.ashChangesIntegration.agentRequests())).toEqual([{
 			action: 'start', request: expect.objectContaining({ sessionId: 'session', threadId: 'thread', expectedSequence: 7, mode: 'agent', text: expect.stringContaining('Title: Agent reviewed PR\nDescription:\nChanges to review') }),
@@ -446,7 +453,7 @@ suite('changes browser component', () => {
 		await create.click();
 		await expect(form.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('feature');
 		await expect(form.getByRole('combobox', { name: 'Merge mode' })).toHaveValue('SQUASH');
-		await expect(form.getByRole('combobox', { name: 'Pull request action' })).toHaveValue('sendToChat');
+		await expect(form.getByRole('button', { name: 'Send to agent', exact: true })).toBeVisible();
 		await page.evaluate(() => window.ashChangesIntegration.activeTurn(true));
 		await form.getByRole('button', { name: 'Send to agent' }).click();
 		await expect(form).toBeHidden();

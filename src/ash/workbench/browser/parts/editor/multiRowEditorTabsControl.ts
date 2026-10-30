@@ -1,11 +1,11 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
-import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from './editorTabsControl.js';
+import { MultiEditorTabsControl } from './multiEditorTabsControl.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import { StickyEditorGroupModel, UnstickyEditorGroupModel } from '../../../common/editor/filteredEditorGroupModel.js';
 
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Keeps sticky editors above ordinary editors while both rows share one group. */
 export class MultiRowEditorControl extends EditorTabsControl {
@@ -21,11 +21,11 @@ export class MultiRowEditorControl extends EditorTabsControl {
 		super(container);
 		this.stickyModel = new StickyEditorGroupModel(model);
 		this.ordinaryModel = new UnstickyEditorGroupModel(model);
-		this.domNode.classList.add("ash-multi-row-editor-tabs-control");
+		this.domNode.classList.add('ash-multi-row-editor-tabs-control');
 		this.stickyRow = this._register(instantiationService.createInstance(MultiEditorTabsControl, this.domNode, delegate, model));
-		this.stickyRow.domNode.classList.add("ash-sticky-editor-tabs-row");
+		this.stickyRow.domNode.classList.add('ash-sticky-editor-tabs-row');
 		this.ordinaryRow = this._register(instantiationService.createInstance(MultiEditorTabsControl, this.domNode, delegate, model));
-		this.ordinaryRow.domNode.classList.add("ash-ordinary-editor-tabs-row");
+		this.ordinaryRow.domNode.classList.add('ash-ordinary-editor-tabs-row');
 		this.stickyRow.domNode.hidden = true;
 		this.ordinaryRow.domNode.hidden = true;
 	}

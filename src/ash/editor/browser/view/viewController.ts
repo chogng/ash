@@ -669,7 +669,7 @@ export class KeyboardNavigationController extends Disposable {
 		if (viewport.textModel !== viewModel.model) {
 			this.dispose();
 			throw new TypeError(
-				"Stanza keyboard and selection controllers must share one text model",
+				'Stanza keyboard and selection controllers must share one text model',
 			);
 		}
 		this._register(userInputEvents.onKeyDown(event => {
@@ -797,7 +797,7 @@ function isVisualVerticalCommand(command: EditorCursorNavigationCommand): comman
 		command === EditorCursorNavigationCommand.PageDown;
 }
 
-export function resolveStanzaKeyboardNavigation(event: Pick<IKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
+export function resolveStanzaKeyboardNavigation(event: Pick<IKeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey' | 'altGraphKey' | 'isComposing'>, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
 	if (event.isComposing || event.altGraphKey) return undefined;
 	const mode = event.shiftKey
 		? EditorCursorNavigationMode.Extend
@@ -811,10 +811,10 @@ export function resolveStanzaKeyboardNavigation(event: Pick<IKeyboardEvent, "key
 
 	if (targetOperatingSystem === OperatingSystem.Macintosh) {
 		if (event.altKey && !event.ctrlKey && !event.metaKey) {
-			if (event.key === "ArrowLeft") {
+			if (event.key === 'ArrowLeft') {
 				return { command: EditorCursorNavigationCommand.WordLeft, mode };
 			}
-			if (event.key === "ArrowRight") {
+			if (event.key === 'ArrowRight') {
 				return { command: EditorCursorNavigationCommand.WordRight, mode };
 			}
 		}
@@ -834,21 +834,21 @@ export function resolveStanzaKeyboardNavigation(event: Pick<IKeyboardEvent, "key
 
 function unmodifiedCommand(key: string): EditorCursorNavigationCommand | undefined {
 	switch (key) {
-		case "ArrowLeft":
+		case 'ArrowLeft':
 			return EditorCursorNavigationCommand.CharacterLeft;
-		case "ArrowRight":
+		case 'ArrowRight':
 			return EditorCursorNavigationCommand.CharacterRight;
-		case "ArrowUp":
+		case 'ArrowUp':
 			return EditorCursorNavigationCommand.LineUp;
-		case "ArrowDown":
+		case 'ArrowDown':
 			return EditorCursorNavigationCommand.LineDown;
-		case "Home":
+		case 'Home':
 			return EditorCursorNavigationCommand.LineStart;
-		case "End":
+		case 'End':
 			return EditorCursorNavigationCommand.LineEnd;
-		case "PageUp":
+		case 'PageUp':
 			return EditorCursorNavigationCommand.PageUp;
-		case "PageDown":
+		case 'PageDown':
 			return EditorCursorNavigationCommand.PageDown;
 		default:
 			return undefined;
@@ -857,13 +857,13 @@ function unmodifiedCommand(key: string): EditorCursorNavigationCommand | undefin
 
 function controlCommand(key: string): EditorCursorNavigationCommand | undefined {
 	switch (key) {
-		case "ArrowLeft":
+		case 'ArrowLeft':
 			return EditorCursorNavigationCommand.WordLeft;
-		case "ArrowRight":
+		case 'ArrowRight':
 			return EditorCursorNavigationCommand.WordRight;
-		case "Home":
+		case 'Home':
 			return EditorCursorNavigationCommand.DocumentStart;
-		case "End":
+		case 'End':
 			return EditorCursorNavigationCommand.DocumentEnd;
 		default:
 			return undefined;
@@ -872,15 +872,15 @@ function controlCommand(key: string): EditorCursorNavigationCommand | undefined 
 
 function macCommandCommand(key: string): EditorCursorNavigationCommand | undefined {
 	switch (key) {
-		case "ArrowLeft":
+		case 'ArrowLeft':
 			return EditorCursorNavigationCommand.LineStart;
-		case "ArrowRight":
+		case 'ArrowRight':
 			return EditorCursorNavigationCommand.LineEnd;
-		case "ArrowUp":
-		case "Home":
+		case 'ArrowUp':
+		case 'Home':
 			return EditorCursorNavigationCommand.DocumentStart;
-		case "ArrowDown":
-		case "End":
+		case 'ArrowDown':
+		case 'End':
 			return EditorCursorNavigationCommand.DocumentEnd;
 		default:
 			return undefined;
@@ -890,7 +890,7 @@ function macCommandCommand(key: string): EditorCursorNavigationCommand | undefin
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
 	const resolved = value ?? operatingSystem;
 	if (!Object.values(OperatingSystem).includes(resolved)) {
-		throw new TypeError("Unknown Stanza keyboard operating system");
+		throw new TypeError('Unknown Stanza keyboard operating system');
 	}
 	return resolved;
 }

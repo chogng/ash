@@ -1,11 +1,11 @@
-import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
-import { REMOTE_CONNECTION_CONNECT_CHANNEL } from "../common/remoteConnectionIpc.js";
-import { REMOTE_CONNECTION_LIST_CHANNEL } from "../common/remoteConnectionIpc.js";
-import { REMOTE_CONNECTION_REMOVE_CHANNEL } from "../common/remoteConnectionIpc.js";
-import { REMOTE_CONNECTION_SAVE_CHANNEL } from "../common/remoteConnectionIpc.js";
-import { REMOTE_CONNECTION_UPDATE_CHANNEL } from "../common/remoteConnectionIpc.js";
-import type { IRemoteConnectionApi } from "../common/remoteConnectionService.js";
-import type { RemoteConnectionDefinition } from "../common/remoteConnectionService.js";
+import { invoke } from '../../ipc/electron-browser/rendererIpc.js';
+import { REMOTE_CONNECTION_CONNECT_CHANNEL } from '../common/remoteConnectionIpc.js';
+import { REMOTE_CONNECTION_LIST_CHANNEL } from '../common/remoteConnectionIpc.js';
+import { REMOTE_CONNECTION_REMOVE_CHANNEL } from '../common/remoteConnectionIpc.js';
+import { REMOTE_CONNECTION_SAVE_CHANNEL } from '../common/remoteConnectionIpc.js';
+import { REMOTE_CONNECTION_UPDATE_CHANNEL } from '../common/remoteConnectionIpc.js';
+import type { IRemoteConnectionApi } from '../common/remoteConnectionService.js';
+import type { RemoteConnectionDefinition } from '../common/remoteConnectionService.js';
 
 /** Renderer adapter for the Electron Main-owned named Remote connection lifecycle. */
 export function createRemoteConnectionApi(): IRemoteConnectionApi {

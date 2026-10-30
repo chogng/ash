@@ -1,8 +1,8 @@
-import { findLastIdxMonotonous } from "../../../../base/common/arraysFind.js";
-import { CharCode } from "../../../../base/common/charCode.js";
-import { Position } from "../position.js";
-import { Range } from "../range.js";
-import { OffsetRange } from "../ranges/offsetRange.js";
+import { findLastIdxMonotonous } from '../../../../base/common/arraysFind.js';
+import { CharCode } from '../../../../base/common/charCode.js';
+import { Position } from '../position.js';
+import { Range } from '../range.js';
+import { OffsetRange } from '../ranges/offsetRange.js';
 import { TextLength } from '../text/textLength.js';
 import { StringEdit, StringReplacement } from '../edits/stringEdit.js';
 import type { TextEdit, TextReplacement } from '../edits/textEdit.js';

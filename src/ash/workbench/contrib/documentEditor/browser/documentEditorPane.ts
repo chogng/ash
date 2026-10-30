@@ -12,19 +12,19 @@ import type { DocumentCollaborationRoom } from '../../../services/documentCollab
 import { CollaborationContribution, type CollaborationStartResult } from './collaborationContribution.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import type { TextModelWorkingCopyReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
-import { assertDefined } from "../../../../base/common/types.js";
-import { DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IDimension } from "../../../../base/browser/dom.js";
-import type { URI } from "../../../../base/common/uri.js";
+import { assertDefined } from '../../../../base/common/types.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IDimension } from '../../../../base/browser/dom.js';
+import type { URI } from '../../../../base/common/uri.js';
 import type { DocumentSelection } from '../../../services/documentEditor/common/documentCodec.js';
 import type { DocumentNode } from '../../../services/documentEditor/common/documentCodec.js';
 import type { DocumentOutline } from '../../../services/documentEditor/common/documentCodec.js';
 import type { IDocumentCollaborationService } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IDocumentEditorTextModelService } from '../../../services/documentEditor/common/documentTypes.js';
-import type { IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
-import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
-import { h } from "../../../../base/browser/dom.js";
+import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
+import { DOCUMENT_EDITOR_ID } from './documentEditorInput.js';
+import { h } from '../../../../base/browser/dom.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { CallDocument } from '../../../../platform/call/common/callService.js';
@@ -119,9 +119,9 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	public override create(parent: HTMLElement): void {
-		if (this.container) throw new ReferenceError("Document editor pane has already been created");
-		const container = h(parent.ownerDocument, "div");
-		container.className = "stanza-structured-editor-pane";
+		if (this.container) throw new ReferenceError('Document editor pane has already been created');
+		const container = h(parent.ownerDocument, 'div');
+		container.className = 'stanza-structured-editor-pane';
 		parent.append(container);
 		super.create(container);
 		this.container = container;
@@ -355,13 +355,13 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private requireContainer(): HTMLDivElement {
-		assertDefined(this.container, new ReferenceError("Document editor pane has not been created"));
+		assertDefined(this.container, new ReferenceError('Document editor pane has not been created'));
 		return this.container;
 	}
 
 	private requireEditor(): DocumentEditorWidget {
 		const editor = this.editor;
-		assertDefined(editor, new ReferenceError("Document editor pane has not been created"));
+		assertDefined(editor, new ReferenceError('Document editor pane has not been created'));
 		return editor;
 	}
 }

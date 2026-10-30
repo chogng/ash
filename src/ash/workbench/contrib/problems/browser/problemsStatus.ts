@@ -1,10 +1,10 @@
-import { localize } from "../../../../nls.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import { type IMarkerService } from "../../../../platform/markers/common/markers.js";
-import type { IWorkbenchContribution } from "../../../common/contributions.js";
-import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
-import type { IViewsService } from "../../../services/views/common/viewsService.js";
+import { localize } from '../../../../nls.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { type IMarkerService } from '../../../../platform/markers/common/markers.js';
+import type { IWorkbenchContribution } from '../../../common/contributions.js';
+import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
+import type { IViewsService } from '../../../services/views/common/viewsService.js';
 
 const ProblemsPriority = 700;
 
@@ -21,7 +21,7 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 	constructor(private readonly options: ProblemsStatusContributionOptions) {
 		super();
 		this.status = this._register(options.statusbarService.addEntry(this.entry(), {
-			id: "ash.status.problems",
+			id: 'ash.status.problems',
 			alignment: StatusbarAlignment.Left,
 			priority: ProblemsPriority,
 		}));
@@ -41,20 +41,20 @@ export class ProblemsStatusContribution extends Disposable implements IWorkbench
 			? localize('problems.noProblems', 'No Problems')
 			: summaries.length === 1 ? summaries[0]! : localize('problems.summary', '{0}, {1}', summaries[0]!, summaries[1]!);
 		return {
-			text: "",
+			text: '',
 			segments: [
 				{ icon: Lxicon.error, text: packNumber(errors) },
 				{ icon: Lxicon.warning, text: packNumber(warnings) },
 			],
 			ariaLabel: tooltip,
 			tooltip,
-			run: () => this.options.viewsService.focusView("ash.problems"),
+			run: () => this.options.viewsService.focusView('ash.problems'),
 		};
 	}
 }
 
 function packNumber(count: number): string {
-	if (count > 9_999) return "10K+";
+	if (count > 9_999) return '10K+';
 	if (count > 999) return `${String(count)[0]}K`;
 	return String(count);
 }

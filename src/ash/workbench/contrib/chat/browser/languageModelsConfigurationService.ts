@@ -9,14 +9,14 @@ import { modelRefIdentity } from '../../../services/chat/common/modelCatalog.js'
 import { ModelCatalogConfiguration, isModelVisibleByDefault, type ModelVisibilityPreference } from '../common/languageModelsConfiguration.js';
 import type { ILanguageModelsConfigurationService } from '../common/languageModelsConfiguration.js';
 
-export const ChatModelPreferences = Object.freeze({ defaultModelSetting: ModelCatalogConfiguration.defaultModel, selectedModelStorageKey: 'chat.currentLanguageModel.chat' });
+export const ChatModelPreferences = Object.freeze({ selectedModelStorageKey: 'chat.currentLanguageModel.chat' });
 
 export class LanguageModelsConfigurationService extends Disposable implements ILanguageModelsConfigurationService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeModels = this.changed.event;
 	private readonly modelVisibility = new Map<string, ModelVisibilityPreference>();
 	private readonly visibilityUpdates = new TaskQueue();
-	constructor(private readonly preferences: { readonly defaultModelSetting: string; readonly selectedModelStorageKey: string; }, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService) {
+	constructor(private readonly preferences: { readonly selectedModelStorageKey: string; }, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService) {
 		super();
 		this._register(toDisposable(() => this.visibilityUpdates.clearPending()));
 		this.acceptHiddenModels(configuration.getValue(ModelCatalogConfiguration.hiddenModels));
@@ -25,24 +25,18 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ModelCatalogConfiguration.hiddenModels)) { this.acceptHiddenModels(configuration.getValue(ModelCatalogConfiguration.hiddenModels)); }
-			if (event.affectsConfiguration(this.preferences.defaultModelSetting)) { this.changed.fire(); }
 		}));
 	}
 	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[], savedModel?: ModelRef | null): ModelRef | undefined {
-		const configured = this.configuration.getValue<string>(this.preferences.defaultModelSetting).trim();
 		const remembered = this.storage.get(this.preferences.selectedModelStorageKey, StorageScope.PROFILE);
-		// Backend snapshots replace legacy manual remembrance; Auto is an intent to inherit that configured runtime.
-		const backendDefault = savedModel ? `${savedModel.provider}/${savedModel.model}` : savedModel === null ? 'auto' : remembered;
-		const defaultChoice = remembered?.toLowerCase() === 'auto' ? remembered : backendDefault;
-		for (const requested of [configured, defaultChoice]) {
-			if (!requested) { continue; }
-			if (requested.toLowerCase() === 'auto') { return undefined; }
-			const match = models.find(entry => `${entry.model.provider}/${entry.model.model}`.toLowerCase() === requested.toLowerCase());
-			if (match) { return match.model; }
-			const unqualified = models.filter(entry => entry.model.model.toLowerCase() === requested.toLowerCase());
-			if (unqualified.length === 1) { return unqualified[0].model; }
-		}
-		return savedModel ?? undefined;
+		// Manual picker choices are saved in the backend; the UI profile only overrides that choice with Auto.
+		if (remembered?.toLowerCase() === 'auto') { return undefined; }
+		if (savedModel !== undefined) { return savedModel ?? undefined; }
+		if (!remembered) { return undefined; }
+		const match = models.find(entry => `${entry.model.provider}/${entry.model.model}`.toLowerCase() === remembered.toLowerCase());
+		if (match) { return match.model; }
+		const unqualified = models.filter(entry => entry.model.model.toLowerCase() === remembered.toLowerCase());
+		return unqualified.length === 1 ? unqualified[0].model : undefined;
 	}
 
 	public rememberSelectedModel(model: ModelRef | undefined | null): void {
@@ -67,6 +61,14 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 		});
 	}
 
+	public removeProviderPreferences(connection: string): Promise<void> {
+		return this.visibilityUpdates.schedule(async () => {
+			const models = this.configuration.getValue<readonly ModelVisibilityPreference[]>(ModelCatalogConfiguration.hiddenModels);
+			const retained = models.filter(model => model.provider !== connection);
+			if (retained.length !== models.length) { await this.configuration.updateValue(ModelCatalogConfiguration.hiddenModels, retained); }
+		});
+	}
+
 	private acceptHiddenModels(models: readonly ModelVisibilityPreference[]): void {
 		const next = new Map(models.map(model => [modelRefIdentity(model), Object.freeze({ ...model })]));
 		if (sameVisibility(this.modelVisibility, next)) { return; }
@@ -79,4 +81,3 @@ export class LanguageModelsConfigurationService extends Disposable implements IL
 function sameVisibility(left: ReadonlyMap<string, ModelVisibilityPreference>, right: ReadonlyMap<string, ModelVisibilityPreference>): boolean {
 	return left.size === right.size && [...left].every(([key, model]) => right.has(key) && right.get(key)!.visible === model.visible);
 }
-

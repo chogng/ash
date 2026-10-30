@@ -1,14 +1,14 @@
-import { commonPrefixLength, commonSuffixLength, isHighSurrogate, isLowSurrogate } from "../../../../base/common/strings.js";
-import { Position } from "../position.js";
-import { Range } from "../range.js";
-import { TextLength } from "../text/textLength.js";
-import { AbstractText, StringText } from "../text/abstractText.js";
-import type { ISingleEditOperation } from "../editOperation.js";
-import { BaseStringEdit, StringEdit, StringReplacement } from "./stringEdit.js";
+import { commonPrefixLength, commonSuffixLength, isHighSurrogate, isLowSurrogate } from '../../../../base/common/strings.js';
+import { Position } from '../position.js';
+import { Range } from '../range.js';
+import { TextLength } from '../text/textLength.js';
+import { AbstractText, StringText } from '../text/abstractText.js';
+import type { ISingleEditOperation } from '../editOperation.js';
+import { BaseStringEdit, StringEdit, StringReplacement } from './stringEdit.js';
 
 /** A text-coordinate replacement using one-based editor positions. */
 export class TextReplacement {
-	static delete(range: Range): TextReplacement { return new TextReplacement(range, ""); }
+	static delete(range: Range): TextReplacement { return new TextReplacement(range, ''); }
 	static joinReplacements(replacements: TextReplacement[], initialValue: AbstractText): TextReplacement {
 		if (replacements.length === 0) throw new RangeError('Cannot join an empty replacement list');
 		if (replacements.length === 1) return replacements[0]!;
@@ -75,14 +75,14 @@ export class TextReplacement {
 /** A sorted, disjoint set of text-coordinate replacements. */
 export class TextEdit {
 	static replace(range: Range, text: string): TextEdit { return new TextEdit([new TextReplacement(range, text)]); }
-	static delete(range: Range): TextEdit { return TextEdit.replace(range, ""); }
+	static delete(range: Range): TextEdit { return TextEdit.replace(range, ''); }
 	static insert(position: Position, text: string): TextEdit { return TextEdit.replace(Range.fromPositions(position), text); }
 	static fromStringEdit(edit: BaseStringEdit, initialState: AbstractText): TextEdit { return new TextEdit(edit.replacements.map(replacement => TextReplacement.fromStringReplacement(replacement, initialState))); }
 	static fromParallelReplacementsUnsorted(replacements: readonly TextReplacement[]): TextEdit { return new TextEdit([...replacements].sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()))); }
 
 	constructor(readonly replacements: readonly TextReplacement[]) {
 		for (let index = 1; index < replacements.length; index += 1) {
-			if (Position.isBefore(replacements[index]!.range.getStartPosition(), replacements[index - 1]!.range.getEndPosition())) throw new RangeError("Text edits must be sorted and disjoint");
+			if (Position.isBefore(replacements[index]!.range.getStartPosition(), replacements[index - 1]!.range.getEndPosition())) throw new RangeError('Text edits must be sorted and disjoint');
 		}
 	}
 
@@ -145,11 +145,11 @@ export class TextEdit {
 	}
 
 	toReplacement(initialValue: AbstractText): TextReplacement {
-		if (this.replacements.length === 0) throw new RangeError("Cannot convert an empty edit to a replacement");
+		if (this.replacements.length === 0) throw new RangeError('Cannot convert an empty edit to a replacement');
 		if (this.replacements.length === 1) return this.replacements[0]!;
 		const start = this.replacements[0]!.range.getStartPosition();
 		const end = this.replacements.at(-1)!.range.getEndPosition();
-		let text = "";
+		let text = '';
 		for (let index = 0; index < this.replacements.length; index += 1) {
 			const replacement = this.replacements[index]!;
 			text += replacement.text;
@@ -194,7 +194,7 @@ function createSyntheticSource(first: TextEdit, second: TextEdit): string {
 	const insertedLength = replacements.reduce((sum, replacement) => sum + replacement.text.length, 0);
 	const lineCount = maxLine + 2 + replacements.reduce((sum, replacement) => sum + countNewlines(replacement.text), 0);
 	const lineLength = Math.max(1, maxColumn + insertedLength + 2);
-	return Array.from({ length: lineCount }, () => "x".repeat(lineLength)).join("\n");
+	return Array.from({ length: lineCount }, () => 'x'.repeat(lineLength)).join('\n');
 }
 
-function countNewlines(value: string): number { let count = 0; for (const character of value) if (character === "\n") count += 1; return count; }
+function countNewlines(value: string): number { let count = 0; for (const character of value) if (character === '\n') count += 1; return count; }

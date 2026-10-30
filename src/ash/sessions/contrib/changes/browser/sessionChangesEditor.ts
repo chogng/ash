@@ -1,3 +1,4 @@
+import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
@@ -29,6 +30,15 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { MultiDiffEditorViewState } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorViewModel.js';
 import type { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { SplitView } from '../../../../base/browser/ui/splitview/splitview.js';
+import { ChangesViewPane } from './changesView.js';
+import { CHANGES_VIEW_ID } from '../common/changes.js';
+
+interface SessionChangesEditorOptions extends EditorPaneCreationOptions {
+	readonly showChangesView?: boolean;
+}
+
 export const CHANGESET_REVIEW_ACTION_ID = 'changeset.review';
 
 /** Resolves the selected conversation's changes only while its editor content is visible. */
@@ -38,6 +48,11 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	public readonly viewStateTypeId = 'ash.sessions.changesEditor';
 	private readonly comparison = this._register(new MutableDisposable<IEditorPane>());
 	private domNode!: HTMLDivElement;
+	private comparisonDomNode!: HTMLElement;
+	private detailsDomNode: HTMLElement | undefined;
+	private details: ChangesViewPane | undefined;
+	private readonly split = this._register(new MutableDisposable<SplitView>());
+	private comparisonDimension: IDimension = Dimension.Zero;
 	private messageDomNode!: HTMLParagraphElement;
 	private skeleton!: LoadingSkeleton;
 	private input: IResourceEditorInput | undefined;
@@ -45,12 +60,13 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	private viewState: unknown;
 	private dimension: IDimension = Dimension.Zero;
 	private visible = false;
+	private detailsFocused = false;
 	private revision = 0;
 	private inputRequest = 0;
 	private readonly pending = this._register(new MutableDisposable<IDisposable & { readonly signal: AbortSignal; completion?: Promise<void>; }>());
 
 	constructor(
-		private readonly options: EditorPaneCreationOptions,
+		private readonly options: SessionChangesEditorOptions,
 		@IChatService private readonly chat: IChatService,
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
@@ -59,6 +75,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@ISessionChangesService private readonly changesService: ISessionChangesService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super(SessionChangesEditor.ID, themeService, storageService);
 		this._register(chat.onDidUpdateTurnChanges(event => {
@@ -74,6 +91,9 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		this.messageDomNode = h(parent.ownerDocument, 'p', { className: 'ash-sessions-editor-message' });
 		this.messageDomNode.setAttribute('role', 'status');
 		this.domNode.tabIndex = 0;
+		this._register(addDisposableListener(this.domNode, 'focusin', () => {
+			this.detailsFocused = this.details?.element.contains(this.domNode.ownerDocument.activeElement) ?? false;
+		}));
 		this.domNode.setAttribute('aria-label', localize('sessions.changes.title', 'Changes'));
 		const context = this._register(this.contextKeys.createScoped(this.domNode));
 		context.createKey('sessionsChangesEditorFocused', true);
@@ -91,8 +111,20 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			}
 		}));
 		updateHint();
-		this.domNode.append(this.messageDomNode);
-		this.skeleton = this._register(new LoadingSkeleton(this.domNode, localize('sessions.changes.loading', 'Loading changes…'), 'diff', 6));
+		this.comparisonDomNode = this.options.showChangesView
+			? h(parent.ownerDocument, 'div', { className: 'ash-sessions-changes-comparison' }) : this.domNode;
+		this.comparisonDomNode.append(this.messageDomNode);
+		if (this.options.showChangesView) {
+			this.detailsDomNode = h(parent.ownerDocument, 'div', { className: 'ash-sessions-changes-card-details' });
+			const scope = this._register(this.instantiation.createChild());
+			scope.registerInstance(IContextKeyService, context);
+			this.details = this._register(scope.createInstance(ChangesViewPane, this.detailsDomNode, {
+				id: CHANGES_VIEW_ID, title: localize('sessions.changes.title', 'Changes'),
+			}));
+			this.details.setHeaderVisible(false);
+			this.details.setVisible(false);
+		}
+		this.skeleton = this._register(new LoadingSkeleton(this.comparisonDomNode, localize('sessions.changes.loading', 'Loading changes…'), 'diff', 6));
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -105,6 +137,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			this.clearInput();
 		}
 		this.input = input;
+		this.details?.setVisible(this.visible);
 		const inputRequest = ++this.inputRequest;
 		let loading = this.refresh(signal);
 		for (; ;) {
@@ -130,6 +163,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	public override clearInput(): void {
 		this.inputRequest++;
 		this.input = undefined;
+		this.details?.setVisible(false);
 		this.comparisonInput = undefined;
 		this.viewState = undefined;
 		this.revision++;
@@ -146,10 +180,12 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	}
 
 	public getAccessibleContent(): string {
+		if (this.details && !this.comparisonInput) { return this.details.getAccessibleContent(); }
 		if (!this.comparisonInput) {
 			return this.messageDomNode.textContent ?? '';
 		}
-		return this.comparisonInput.items.map(item => localize('sessions.changes.editorComparison', '{0}\nBefore:\n{1}\nAfter:\n{2}', item.label ?? item.modified.resource.path, item.original.initialText ?? '', item.modified.initialText ?? '')).join('\n\n');
+		const comparison = this.comparisonInput.items.map(item => localize('sessions.changes.editorComparison', '{0}\nBefore:\n{1}\nAfter:\n{2}', item.label ?? item.modified.resource.path, item.original.initialText ?? '', item.modified.initialText ?? '')).join('\n\n');
+		return [this.details?.getAccessibleContent(), comparison].filter(Boolean).join('\n\n');
 	}
 
 	public override setVisible(visibility: boolean): void {
@@ -162,6 +198,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			return;
 		}
 		this.visible = visible;
+		this.details?.setVisible(visible && this.input !== undefined);
 		if (this.visible) {
 			void this.refresh();
 		} else {
@@ -174,13 +211,43 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
-		this.comparison.value?.layout(dimension);
+		if (!this.details || !this.detailsDomNode) {
+			this.comparisonDimension = dimension;
+			this.comparison.value?.layout(dimension);
+			return;
+		}
+		const stacked = dimension.width < 720;
+		const orientation = stacked ? Orientation.VERTICAL : Orientation.HORIZONTAL;
+		if (this.split.value?.orientation !== orientation) {
+			this.split.clear();
+			const split = new SplitView(this.domNode, { proportionalLayout: false, orientation: orientation });
+			this.split.value = split;
+			const details = this.details;
+			split.addView({
+				element: this.detailsDomNode,
+				get minimumSize() { return stacked ? details.minimumSize : 220; },
+				maximumSize: Infinity,
+				onDidChange: details.onDidChange,
+				layout: (size, _offset, orthogonalSize) => details.layout(stacked ? size : orthogonalSize, 0, stacked ? orthogonalSize : size),
+			}, stacked ? Math.min(300, dimension.height * 0.4) : 240);
+			split.addView({
+				element: this.comparisonDomNode, minimumSize: stacked ? 120 : 300, maximumSize: Infinity,
+				layout: (size, _offset, orthogonalSize) => {
+					this.comparisonDimension = new Dimension(stacked ? orthogonalSize : size, stacked ? size : orthogonalSize);
+					this.comparison.value?.layout(this.comparisonDimension);
+				},
+			}, stacked ? Math.max(120, dimension.height * 0.6) : Math.max(300, dimension.width - 240));
+		}
+		this.split.value!.setViewVisible(1, this.comparisonInput !== undefined);
+		this.split.value!.layout(stacked ? dimension.height : dimension.width, stacked ? dimension.width : dimension.height);
 	}
 	public override focus(): void {
-		if (this.comparison.value) {
+		if (this.detailsFocused && this.details) {
+			this.details.focus();
+		} else if (this.comparison.value) {
 			this.comparison.value.focus();
 		} else {
-			this.domNode.focus();
+			if (this.details) { this.details.focus(); } else { this.domNode.focus(); }
 		}
 	}
 
@@ -264,6 +331,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		const threadId = new URLSearchParams(input.resource.query).get('thread');
 		if (!threadId) {
 			this.messageDomNode.textContent = localize('sessions.changes.draft', 'Changes appear after the agent edits files.');
+			this.layout(this.dimension);
 			return;
 		}
 		const session = this.sessions.sessions.find(session => input.resource.path === `/${session.sessionId}`);
@@ -340,25 +408,31 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { pane.dispose(); return; }
 			this.comparisonInput = comparison;
 			this.comparison.value = pane;
-			pane.create(this.domNode);
+			pane.create(this.comparisonDomNode);
+			this.layout(this.dimension);
 			// setInput waits for visible diff models, which need a nonzero viewport first.
-			pane.layout(this.dimension);
+			pane.layout(this.comparisonDimension);
 			await raceCancellationError(pane.setInput(comparison, controller.signal), controller.signal);
 			if (this.isDisposed || revision !== this.revision || controller.signal.aborted) {
 				return;
 			}
 			this.messageDomNode.hidden = true;
 			this.changesService.setChangesCount(input.resource, comparison.items.length);
-			pane.layout(this.dimension);
+			pane.layout(this.comparisonDimension);
 			// A new conversation starts at the header; cancel deferred first-change
 			// navigation just as restoring an existing conversation's state does.
 			this.restoreViewState(this.viewState ?? { scrollTop: 0, collapsedItemIds: [], itemViewStates: [] });
 			pane.setVisible(true);
 		} catch (error) {
 			if (!this.isDisposed && revision === this.revision && !controller.signal.aborted) {
+				const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
+				// A failed capture cannot keep the previous comparison available for review.
+				this.comparisonInput = undefined;
+				this.comparison.clear();
 				this.changesService.setChangesCount(input.resource, undefined);
 				this.messageDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', String(error));
 				this.messageDomNode.hidden = false;
+				if (hadFocus) { this.domNode.focus(); }
 			}
 		} finally {
 			// The caller's open operation ends here; the child pane retains its own controller until hidden or cleared.
@@ -366,6 +440,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			if (!this.isDisposed && revision === this.revision) {
 				this.skeleton.setVisible(false);
 				this.domNode.setAttribute('aria-busy', 'false');
+				this.layout(this.dimension);
 			}
 		}
 	}

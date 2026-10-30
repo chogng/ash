@@ -1,20 +1,21 @@
-import { addDisposableListener, Dimension, h, type IDimension } from "../../../../base/browser/dom.js";
-import { cloneDocumentStyles } from "../../../../base/browser/domStylesheets.js";
-import { observeMutations } from "../../../../base/browser/observer.js";
-import { setIconResolver } from "../../../../base/browser/ui/lxicons/lxicon.js";
-import { getWindowId, registerWindow } from "../../../../base/browser/window.js";
-import { generateUuid } from "../../../../base/common/uuid.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableMap, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
-import { getIconDefinition } from "../../../../platform/theme/common/iconRegistry.js";
-import { IThemeService } from "../../../../platform/theme/common/themeService.js";
+import { addDisposableListener, Dimension, h, type IDimension } from '../../../../base/browser/dom.js';
+import { cloneDocumentStyles } from '../../../../base/browser/domStylesheets.js';
+import { observeMutations } from '../../../../base/browser/observer.js';
+import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { getWindowId, registerWindow } from '../../../../base/browser/window.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { DisposableMap, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IAuxiliaryWindowState } from '../../../../platform/window/common/window.js';
 import { localize } from '../../../../nls.js';
+import { getContainerDimension } from '../../../../platform/layout/browser/layoutService.js';
 
-const WORKBENCH_ROOT_CLASSES = ["ash-reduce-motion", "ash-enable-motion", "ash-reduce-transparency", "ash-underline-links", "hc-black", "hc-light", "ash-high-contrast"] as const;
-const WORKBENCH_ROOT_ATTRIBUTES = ["data-os", "data-runtime", "data-workbench-state", "data-color-theme", "data-color-scheme"] as const;
+const WORKBENCH_ROOT_CLASSES = ['ash-reduce-motion', 'ash-enable-motion', 'ash-reduce-transparency', 'ash-underline-links', 'hc-black', 'hc-light', 'ash-high-contrast'] as const;
+const WORKBENCH_ROOT_ATTRIBUTES = ['data-os', 'data-runtime', 'data-workbench-state', 'data-color-theme', 'data-color-scheme'] as const;
 const AUXILIARY_WINDOW_STATE_KEY = 'auxiliaryEditorWindowState';
 
 export interface AuxiliaryWindowBounds {
@@ -49,6 +50,8 @@ export interface IAuxiliaryWindow extends Disposable {
 	readonly id: number;
 	readonly window: Window;
 	readonly container: HTMLElement;
+	/** Participants lay out hosted Parts before completion is published. */
+	readonly onWillLayout: Event<IDimension>;
 	readonly onDidLayout: Event<IDimension>;
 	readonly onBeforeUnload: Event<AuxiliaryWindowBeforeUnloadEvent>;
 	readonly onDidClose: Event<void>;
@@ -69,7 +72,7 @@ export interface IAuxiliaryWindowService extends Disposable {
 	getWindow(id: number): IAuxiliaryWindow | undefined;
 }
 
-export const IAuxiliaryWindowService = createServiceIdentifier<IAuxiliaryWindowService>("auxiliaryWindowService");
+export const IAuxiliaryWindowService = createServiceIdentifier<IAuxiliaryWindowService>('auxiliaryWindowService');
 
 /** Browser implementation used by both the web and Electron renderer workbenches. */
 export class BrowserAuxiliaryWindowService extends Disposable implements IAuxiliaryWindowService {
@@ -98,7 +101,7 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 			? ['x', 'y'] as const
 			: ['left', 'top'] as const;
 		const features = [
-			"popup=yes",
+			'popup=yes',
 			options.zoomLevel === undefined ? undefined : `window-zoom-level=${options.zoomLevel}`,
 			options.alwaysOnTop ? 'window-always-on-top=yes' : undefined,
 			options.mode === 'maximized' ? 'window-maximized=yes' : undefined,
@@ -107,9 +110,9 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 			`height=${height}`,
 			left === undefined ? undefined : `${positionKeys[0]}=${Math.round(left)}`,
 			top === undefined ? undefined : `${positionKeys[1]}=${Math.round(top)}`,
-		].filter((feature): feature is string => feature !== undefined).join(",");
-		const target = this.opener.open("about:blank", `ash-auxiliary-${generateUuid()}`, features);
-		if (!target) throw new Error("The browser blocked opening an auxiliary editor window");
+		].filter((feature): feature is string => feature !== undefined).join(',');
+		const target = this.opener.open('about:blank', `ash-auxiliary-${generateUuid()}`, features);
+		if (!target) throw new Error('The browser blocked opening an auxiliary editor window');
 		try {
 			target.opener = null;
 		} catch {
@@ -146,9 +149,11 @@ export class BrowserAuxiliaryWindowService extends Disposable implements IAuxili
 
 export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	readonly alwaysOnTop: IAuxiliaryWindow['alwaysOnTop'] = undefined;
+	private readonly willLayoutEmitter = this._register(new Emitter<IDimension>());
 	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
 	private readonly beforeUnloadEmitter = this._register(new Emitter<AuxiliaryWindowBeforeUnloadEvent>());
 	private readonly closeEmitter = this._register(new Emitter<void>());
+	readonly onWillLayout = this.willLayoutEmitter.event;
 	readonly onDidLayout = this.layoutEmitter.event;
 	readonly onBeforeUnload = this.beforeUnloadEmitter.event;
 	readonly onDidClose = this.closeEmitter.event;
@@ -170,21 +175,21 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		super();
 		this._register(registerWindow(window));
 		const id = getWindowId(window);
-		if (id === undefined) throw new Error("Auxiliary window registration did not produce an identity");
+		if (id === undefined) throw new Error('Auxiliary window registration did not produce an identity');
 		this.id = id;
 		this.whenStylesHaveLoaded = this._register(cloneDocumentStyles(sourceWindow.document, window.document)).whenStylesHaveLoaded;
 		window.document.documentElement.lang = sourceWindow.document.documentElement.lang;
 		window.document.documentElement.dir = sourceWindow.document.documentElement.dir;
 		window.document.body.replaceChildren();
-		window.document.documentElement.classList.add("ash-auxiliary-window");
-		window.document.body.classList.add("ash-auxiliary-window-body");
-		this.container = h(sourceWindow.document, "main");
-		this.container.className = "ash-auxiliary-window-container ash-workbench";
-		this.container.setAttribute("aria-label", title);
+		window.document.documentElement.classList.add('ash-auxiliary-window');
+		window.document.body.classList.add('ash-auxiliary-window-body');
+		this.container = h(sourceWindow.document, 'main');
+		this.container.className = 'ash-auxiliary-window-container ash-workbench';
+		this.container.setAttribute('aria-label', title);
 		window.document.body.append(this.container);
 		this._register(observeMutations(workbenchRoot, () => this.syncWorkbenchRoot(workbenchRoot), {
 			attributes: true,
-			attributeFilter: ["class", ...WORKBENCH_ROOT_ATTRIBUTES],
+			attributeFilter: ['class', ...WORKBENCH_ROOT_ATTRIBUTES],
 		}));
 		this.syncWorkbenchRoot(workbenchRoot);
 		const targetDocument = window.document;
@@ -195,23 +200,27 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		updateIcons();
 		this._register(themeService.onDidProductIconThemeChange(updateIcons));
 		this._register(toDisposable(() => setIconResolver(targetDocument, icon => getIconDefinition(icon))));
-		this._register(addDisposableListener(window, "resize", () => this.layout()));
-		this._register(addDisposableListener(window, "beforeunload", event => this.handleBeforeUnload(event as BeforeUnloadEvent)));
-		this._register(addDisposableListener(window, "unload", () => this.publishClosed()));
+		this._register(addDisposableListener(window, 'resize', () => this.layout()));
+		this._register(addDisposableListener(window, 'beforeunload', event => this.handleBeforeUnload(event as BeforeUnloadEvent)));
+		this._register(addDisposableListener(window, 'unload', () => this.publishClosed()));
 		this._register(toDisposable(() => {
 			this.closingState ??= this.readCurrentState();
 			this.container.remove();
-			window.document.documentElement.classList.remove("ash-auxiliary-window");
-			window.document.body.classList.remove("ash-auxiliary-window-body");
+			window.document.documentElement.classList.remove('ash-auxiliary-window');
+			window.document.body.classList.remove('ash-auxiliary-window-body');
 			if (!this.closed && !window.closed) window.close();
 			this.publishClosed();
 		}));
 	}
 
 	layout(): void {
-		const width = Math.max(0, this.container.clientWidth || this.window.innerWidth || 0);
-		const height = Math.max(0, this.container.clientHeight || this.window.innerHeight || 0);
-		this.layoutEmitter.fire(new Dimension(width, height));
+		const measured = getContainerDimension(this.container);
+		const dimension = new Dimension(
+			Math.max(0, measured.width || this.window.innerWidth || 0),
+			Math.max(0, measured.height || this.window.innerHeight || 0),
+		);
+		this.willLayoutEmitter.fire(dimension);
+		this.layoutEmitter.fire(dimension);
 	}
 
 	recordFrameOffsets(): void {
@@ -274,7 +283,7 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 }
 
 function finiteDimension(value: number | undefined, fallback: number): number {
-	return typeof value === "number" && Number.isFinite(value) ? Math.max(320, Math.round(value)) : fallback;
+	return typeof value === 'number' && Number.isFinite(value) ? Math.max(320, Math.round(value)) : fallback;
 }
 
 export function parseAuxiliaryWindowState(raw: string | undefined): AuxiliaryWindowState | undefined {

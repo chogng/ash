@@ -1,4 +1,4 @@
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 export interface WorkbenchTextDownload {
 	readonly fileName: string;
@@ -13,4 +13,4 @@ export interface IWorkbenchHostService {
 	readonly editUserConfiguration?: () => Promise<void>;
 }
 
-export const IWorkbenchHostService = createServiceIdentifier<IWorkbenchHostService>("workbenchHostService");
+export const IWorkbenchHostService = createServiceIdentifier<IWorkbenchHostService>('workbenchHostService');

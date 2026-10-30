@@ -1,16 +1,16 @@
 import type {
 	IContextMenuDelegate,
 	IContextMenuProvider,
-} from "../../contextmenu.js";
-import { addDisposableListener, stopEvent, h } from "../../dom.js";
-import type { IAction } from "../../../common/actions.js";
-import { CancellationTokenSource } from "../../../common/cancellation.js";
-import { Emitter } from "../../../common/event.js";
-import { MutableDisposable } from "../../../common/lifecycle.js";
-import { Lxicon } from "../../../common/lxicons.js";
-import { ActionViewItem, type ActionViewItemOptions } from "../actionbar/actionViewItems.js";
-import { Button } from "../button/button.js";
-import { appendIcon } from "../lxicons/lxicon.js";
+} from '../../contextmenu.js';
+import { addDisposableListener, stopEvent, h } from '../../dom.js';
+import type { IAction } from '../../../common/actions.js';
+import { CancellationTokenSource } from '../../../common/cancellation.js';
+import { Emitter } from '../../../common/event.js';
+import { MutableDisposable } from '../../../common/lifecycle.js';
+import { Lxicon } from '../../../common/lxicons.js';
+import { ActionViewItem, type ActionViewItemOptions } from '../actionbar/actionViewItems.js';
+import { Button } from '../button/button.js';
+import { appendIcon } from '../lxicons/lxicon.js';
 
 export type DropdownMenuActions =
 	| readonly IAction[]
@@ -62,15 +62,15 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 			},
 		});
 		this.button = button;
-		container.classList.add("ash-dropdown-menu-action-view-item");
-		button.domNode.setAttribute("aria-haspopup", "menu");
-		button.domNode.setAttribute("aria-expanded", "false");
-		const indicator = h(container.ownerDocument, "span");
-		indicator.className = "ash-dropdown-menu-indicator";
+		container.classList.add('ash-dropdown-menu-action-view-item');
+		button.domNode.setAttribute('aria-haspopup', 'menu');
+		button.domNode.setAttribute('aria-expanded', 'false');
+		const indicator = h(container.ownerDocument, 'span');
+		indicator.className = 'ash-dropdown-menu-indicator';
 		appendIcon(Lxicon.chevronDown, indicator);
 		button.domNode.append(indicator);
-		this._register(addDisposableListener(button.domNode, "keydown", (event) => {
-			if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+		this._register(addDisposableListener(button.domNode, 'keydown', (event) => {
+			if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
 			stopEvent(event);
 			this.show();
 		}));
@@ -87,7 +87,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 	show(): void {
 		const button = this.button;
 		if (this.isDisposed || !button?.enabled || this.visible) return;
-		const actions = typeof this.actions === "function"
+		const actions = typeof this.actions === 'function'
 			? this.actions()
 			: this.actions;
 		if (actions.length === 0) return;
@@ -126,8 +126,8 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 	private setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;
-		this.button?.domNode.setAttribute("aria-expanded", String(visible));
-		this.button?.toggleClassName("active", visible);
+		this.button?.domNode.setAttribute('aria-expanded', String(visible));
+		this.button?.toggleClassName('active', visible);
 		this._onDidChangeVisibility.fire(visible);
 	}
 }

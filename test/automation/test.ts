@@ -1,24 +1,26 @@
-import { test as base, expect } from "@playwright/test";
-import { mkdtemp, mkdir, rm, readFile, writeFile, readdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { launchBrowser } from "./playwrightBrowser.js";
-import { launchElectron } from "./playwrightElectron.js";
+import { test as base, expect } from '@playwright/test';
+import { mkdtemp, mkdir, rm, readFile, writeFile, readdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { launchBrowser } from './playwrightBrowser.js';
+import { launchElectron } from './playwrightElectron.js';
 import { launchWeb, type WebLaunchResult, type GitHubBrowserTestConfiguration } from './playwrightWeb.js';
-import type { PlaywrightApplication, PlaywrightDriver, WorkbenchDiagnostics } from "./playwrightDriver.js";
-import { playwrightTargetForProject, supportsTestTarget, type PlaywrightTarget } from "./testTarget.js";
-import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "./testWorkspace.js";
-import type { Workbench } from "./workbench.js";
+import type { PlaywrightApplication, PlaywrightDriver, WorkbenchDiagnostics } from './playwrightDriver.js';
+import { playwrightTargetForProject, supportsTestTarget, type PlaywrightTarget } from './testTarget.js';
+import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from './testWorkspace.js';
+import type { Workbench } from './workbench.js';
 import type { ElectronWindowMode } from './electron.js';
 import { isProcessRunning } from '../../build/processes.ts';
 
 interface RunningApplication {
 	driver: PlaywrightDriver;
-	diagnostics: Pick<WorkbenchDiagnostics, 'pageErrors' | 'consoleErrors' | 'errors'>;
+	diagnostics: Pick<WorkbenchDiagnostics, 'pageErrors' | 'consoleErrors' | 'resourceErrors' | 'errors'>;
 	deferRestart(): Promise<void>;
 	restartMessage(): Promise<string>;
 	reload(reason?: 'windowClose' | 'quit'): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
 	restart(): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
+	/** Ends clients before a scenario tears down additional test-owned backends. */
+	close(): Promise<void>;
 }
 
 interface PlaywrightFixtures {
@@ -111,6 +113,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		const diagnostics = {
 			get pageErrors(): string[] { return generations.flatMap(generation => generation.pageErrors); },
 			get consoleErrors(): string[] { return generations.flatMap(generation => generation.consoleErrors); },
+			get resourceErrors(): string[] { return generations.flatMap(generation => generation.resourceErrors); },
 			get errors(): readonly string[] { return generations.flatMap(generation => generation.errors); },
 		};
 		const useApplication = async (running: RunningApplication): Promise<void> => {
@@ -119,24 +122,24 @@ export const test = base.extend<PlaywrightFixtures>({
 			await use(running);
 
 			page = running.driver.workbench.page;
-			const { pageErrors, consoleErrors } = running.diagnostics;
+			const { pageErrors, consoleErrors, resourceErrors } = running.diagnostics;
 			const errors = running.diagnostics.errors;
 			const failed = testInfo.status !== testInfo.expectedStatus || errors.length > 0;
-			if (failed) { await testInfo.attach("diagnostics", { body: JSON.stringify({ url: page.url(), pageErrors, consoleErrors }), contentType: "application/json" }); }
+			if (failed) { await testInfo.attach('diagnostics', { body: JSON.stringify({ url: page.url(), pageErrors, consoleErrors, resourceErrors }), contentType: 'application/json' }); }
 			if (failed && !page.isClosed()) {
-				const screenshotPath = testInfo.outputPath("workbench.png");
+				const screenshotPath = testInfo.outputPath('workbench.png');
 				await page.screenshot({ path: screenshotPath }).catch(() => undefined);
-				await testInfo.attach("workbench", { path: screenshotPath, contentType: "image/png" }).catch(() => undefined);
+				await testInfo.attach('workbench', { path: screenshotPath, contentType: 'image/png' }).catch(() => undefined);
 			}
 			if (failed) {
-				const tracePath = testInfo.outputPath("trace.zip");
+				const tracePath = testInfo.outputPath('trace.zip');
 				await page.context().tracing.stop({ path: tracePath }).catch(() => undefined);
-				await testInfo.attach("trace", { path: tracePath, contentType: "application/zip" }).catch(() => undefined);
+				await testInfo.attach('trace', { path: tracePath, contentType: 'application/zip' }).catch(() => undefined);
 			} else {
 				await page.context().tracing.stop().catch(() => undefined);
 			}
 			if (errors.length > 0 && testInfo.status === 'passed') {
-				throw new Error(`Workbench errors:\n${errors.join("\n\n")}`);
+				throw new Error(`Workbench errors:\n${errors.join('\n\n')}`);
 			}
 		};
 		if (target.kind === 'browser') {
@@ -146,6 +149,7 @@ export const test = base.extend<PlaywrightFixtures>({
 			generations.push(driver.diagnostics);
 			const running: RunningApplication = {
 				driver, diagnostics,
+				close: () => application.close(),
 				reload: async () => {
 					await driver.workbench.page.context().tracing.stop();
 					await driver.workbench.reloadWindow();
@@ -207,6 +211,7 @@ export const test = base.extend<PlaywrightFixtures>({
 				let generation = 0;
 				const running: RunningApplication = {
 					driver: current.driver, diagnostics,
+					close: () => current.close(),
 					reload: async (reason = 'windowClose') => {
 						await current.driver.workbench.page.context().tracing.stop();
 						if (reason === 'quit') await current.quit();
@@ -314,7 +319,7 @@ async function captureRestartDialogs(application: import('@playwright/test').Ele
 	});
 }
 
-export { expect } from "@playwright/test";
+export { expect } from '@playwright/test';
 
 /** Writes an Ash SDK package alongside its Plugin authority envelope. */
 export async function writeEditorExtensionFixture(root: string, source: string, debuggerDefaults?: readonly unknown[]): Promise<void> {
@@ -324,7 +329,7 @@ export async function writeEditorExtensionFixture(root: string, source: string, 
 		if (match[1] === 'acme.debugCancellation.') return ['before.undefined', 'before.null', 'after.undefined', 'after.null'].map(value => match[1] + value);
 		return [match[1]];
 	});
-	const types = (method: string): string[] => [...source.matchAll(new RegExp(method + "\\(['\"]([^'\"]+)['\"]", 'g'))].map(match => match[1]).filter(value => value !== '*');
+	const types = (method: string): string[] => [...source.matchAll(new RegExp(method + '\\([\'"]([^\'"]+)[\'"]', 'g'))].map(match => match[1]).filter(value => value !== '*');
 	const contribution = plugin.contributions.editorExtensions[0];
 	await writeFile(join(root, 'package.json'), JSON.stringify({
 		publisher: plugin.id.split('/')[0], name: plugin.id.split('/')[1], version: plugin.version, main: 'extension.js', engines: { ash: '*' },

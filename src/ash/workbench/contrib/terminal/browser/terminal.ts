@@ -2,13 +2,13 @@ import type { ITerminalAutoReply } from '../../../../platform/terminal/common/te
 import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { localize } from '../../../../nls.js';
 import type { URI } from '../../../../base/common/uri.js';
-import type { Terminal } from '@xterm/xterm';
+import type { IMarker, Terminal } from '@xterm/xterm';
 import type { ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
 import type { ITerminalConfiguration } from '../common/terminal.js';
-import type { IView } from "../../../common/views.js";
-import type { Event } from "../../../../base/common/event.js";
-import type { IDisposable } from "../../../../base/common/lifecycle.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { IView } from '../../../common/views.js';
+import type { Event } from '../../../../base/common/event.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection, TerminalLocation, ProcessPropertyType, IProcessPropertyMap } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ITerminalStatusList } from './terminalStatusList.js';
@@ -39,7 +39,7 @@ export interface ITerminalDimensions {
 }
 
 /** Lifecycle state of one Workbench terminal instance. */
-export type TerminalInstanceState = "running" | "reconnecting" | "exited" | "disconnected" | "error";
+export type TerminalInstanceState = 'running' | 'reconnecting' | 'exited' | 'disconnected' | 'error';
 
 /** The screen needs no process, membership, persistence, or launch authority. */
 export interface ITerminalScreenHost {
@@ -57,7 +57,7 @@ export interface ITerminalScreenHost {
 
 
 /** Renderer-independent lifecycle state of one shell command. */
-export type TerminalCommandStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
+export type TerminalCommandStatus = 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled';
 
 /** One command lifecycle transition positioned relative to terminal output. */
 export interface ITerminalCommandStatusEvent {
@@ -94,6 +94,7 @@ export type ITerminalProfileSelection = TerminalProcessProfileSelection;
 
 /** Complete caller-facing input for creating one terminal. */
 export type ITerminalCreateOptions = {
+	readonly type?: IShellLaunchConfig['type'];
 	/** UI-resolved launch metadata; native profile selection still belongs to the execution host. */
 	readonly resolvedShellLaunchConfig?: Readonly<Pick<IShellLaunchConfig, 'executable' | 'args'>>;
 	readonly environmentVariableCollections?: import('../../../../platform/terminal/common/environmentVariable.js').ISerializableEnvironmentVariableCollections;
@@ -197,7 +198,8 @@ export interface ITerminalInstance extends IDisposable {
 	clearBuffer(): void;
 	reuseTerminal(shell: IShellLaunchConfig): Promise<void>;
 	refreshProperty<T extends ProcessPropertyType>(property: T): Promise<IProcessPropertyMap[T]>;
-	serializeState(): Promise<ITerminalSerializedState>;
+	/** Revival starts a new shell, so its checkpoint excludes the old idle prompt. */
+	serializeState(options?: { readonly revive?: boolean; }): Promise<ITerminalSerializedState>;
 	close(): Promise<void>;
 }
 
@@ -216,7 +218,7 @@ export interface IXtermTerminal extends IDisposable {
 	fit(): void;
 	dimensions(): ITerminalDimensions;
 	clearBuffer(): void;
-	getRangeAsVT(): Promise<string>;
+	getRangeAsVT(startMarker?: IMarker, endMarker?: IMarker, skipLastLine?: boolean): Promise<string>;
 	getBufferText(maxCharacters: number, signal: AbortSignal): Promise<string | undefined>;
 	findNext(term: string, searchOptions: ISearchOptions): Promise<boolean>;
 	findPrevious(term: string, searchOptions: ISearchOptions): Promise<boolean>;
@@ -257,7 +259,7 @@ export interface ITerminalService extends IDisposable {
 	safeDisposeTerminal(instance: ITerminalInstance): Promise<void>;
 }
 
-export const ITerminalService = createServiceIdentifier<ITerminalService>("terminalService");
+export const ITerminalService = createServiceIdentifier<ITerminalService>('terminalService');
 
 /** Panel grouping owns membership and geometry; instances retain their process and screen. */
 export interface ITerminalGroup extends IDisposable {

@@ -22,6 +22,9 @@ use github::GitHubCredentialProvider;
 use github::GitHubProvider;
 use github::GitHubRequest;
 use github::GitHubResponse;
+use github::ManagedSettingsFailure;
+use github::ManagedSettingsReadMode;
+use github::ManagedSettingsRefresh;
 use github::Repository;
 use host::GitHubExtensionRuntime;
 use std::collections::VecDeque;
@@ -252,6 +255,75 @@ fn actual_executable_registers_lazily_and_serves_shared_consumers() {
     f.set_enabled(true, 2);
     assert!(!f.runtime.is_running());
     assert!(f.request(read()).is_ok());
+}
+
+#[test]
+fn managed_settings_history_is_shared_by_consumers_of_the_real_extension_process() {
+    let f = Fixture::new();
+    f.http.responses.lock().unwrap().extend([
+        (200, serde_json::json!({"model":"managed"})),
+        (466, serde_json::json!({"private":"never-forwarded"})),
+        (404, serde_json::Value::Null),
+    ]);
+    let grant = f.credentials.authorization().unwrap();
+    let source = CancellationSource::new();
+    let other = f
+        .runtime
+        .provider(Some(f.credentials.clone()), f.http.clone());
+    let request = |provider: &dyn GitHubProvider, mode| match provider
+        .call(
+            Some(grant.clone()),
+            GitHubRequest::ManagedSettings { mode },
+            &source.token(),
+        )
+        .unwrap()
+    {
+        GitHubResponse::ManagedSettings(snapshot) => snapshot,
+        _ => panic!("unexpected managed settings response"),
+    };
+    let ready = request(f.provider.as_ref(), ManagedSettingsReadMode::Automatic);
+    assert_eq!(ready.settings, Some(serde_json::json!({"model":"managed"})));
+    assert_eq!(
+        request(other.as_ref(), ManagedSettingsReadMode::Automatic),
+        ready
+    );
+    let failed = request(other.as_ref(), ManagedSettingsReadMode::Retry);
+    assert_eq!(failed.settings, ready.settings);
+    assert!(matches!(
+        failed.refresh,
+        ManagedSettingsRefresh::Failed {
+            failure: ManagedSettingsFailure::UpdateRequired,
+            last_success_at: Some(_),
+            ..
+        }
+    ));
+    assert_eq!(
+        request(f.provider.as_ref(), ManagedSettingsReadMode::Automatic),
+        failed
+    );
+    assert_eq!(f.http.requests.lock().unwrap().len(), 2);
+    let withdrawn = request(f.provider.as_ref(), ManagedSettingsReadMode::Retry);
+    assert_eq!(withdrawn.settings, None);
+    assert!(matches!(
+        withdrawn.refresh,
+        ManagedSettingsRefresh::Ready { .. }
+    ));
+    assert_eq!(
+        request(other.as_ref(), ManagedSettingsReadMode::Automatic),
+        withdrawn
+    );
+    f.credentials.revoked.store(true, Ordering::Release);
+    assert!(matches!(
+        f.provider.call(
+            Some(grant),
+            GitHubRequest::ManagedSettings {
+                mode: ManagedSettingsReadMode::Automatic,
+            },
+            &source.token()
+        ),
+        Err(Error::AuthenticationRequired)
+    ));
+    assert_eq!(f.http.requests.lock().unwrap().len(), 3);
 }
 #[test]
 fn cancelled_reads_join_the_original_host_http_attempt() {

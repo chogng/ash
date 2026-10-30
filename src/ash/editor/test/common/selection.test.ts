@@ -1,10 +1,10 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { SelectionDirection, Selection } from "../../common/core/selection.js";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { SelectionDirection, Selection } from '../../common/core/selection.js';
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
 
-test("Selection preserves anchor direction and ordered range", () => {
+test('Selection preserves anchor direction and ordered range', () => {
 	const start = new Position((1) + 1, (2) + 1);
 	const end = new Position((3) + 1, (4) + 1);
 	const forward = Selection.fromPositions(start, end);
@@ -46,7 +46,7 @@ test("Selection preserves anchor direction and ordered range", () => {
 	});
 });
 
-test("Selection arrays keep the primary cursor first", () => {
+test('Selection arrays keep the primary cursor first', () => {
 	const first = Selection.fromPositions(new Position((0) + 1, (1) + 1));
 	const second = Selection.fromPositions(new Position((2) + 1, (3) + 1));
 	const selections = [first, second];

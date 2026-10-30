@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
@@ -10,6 +10,40 @@ import { pathToFileURL } from 'node:url';
 import { isProcessRunning, ProcessRun, withProcessRun } from './processes.ts';
 
 const repository = resolve(import.meta.dirname, '..');
+
+for (const fails of [false, true]) {
+	test(`process runs remove worker temporary files after ${fails ? 'failure' : 'success'}`, async () => {
+		let temporary = '';
+		let directory = '';
+		const failure = new Error('deliberate worker failure');
+		const action = withProcessRun(repository, async (run, environment) => {
+			directory = environment.ASH_SMOKE_RUN_DIRECTORY!;
+			const result = await run.command(process.execPath, ['--input-type=module', '-e', `
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+const directory = await mkdtemp(join(tmpdir(), 'ash-abandoned-worker-'));
+await writeFile(join(directory, 'fixture.txt'), 'test-owned contents');
+console.log(directory);
+process.exit(${fails ? 17 : 0});
+`], environment, true);
+			assert.equal(result.code, fails ? 17 : 0);
+			temporary = result.output.trim();
+			assert.ok(temporary);
+			assert.equal(await readFile(join(temporary, 'fixture.txt'), 'utf8'), 'test-owned contents');
+			if (fails) throw failure;
+		});
+		try {
+			if (fails) await assert.rejects(action, error => error === failure);
+			else await action;
+			await assert.rejects(readFile(join(temporary, 'fixture.txt')), { code: 'ENOENT' });
+			await assert.rejects(stat(directory), { code: 'ENOENT' });
+		} finally {
+			// Remove the deliberate orphan too if this regression fails before the fix.
+			if (temporary) await rm(temporary, { recursive: true, force: true });
+		}
+	});
+}
 
 test('process runs propagate worker failures after cleanup', async () => {
 	const failure = new Error('worker failed after cleanup');

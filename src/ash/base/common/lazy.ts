@@ -19,7 +19,7 @@ export class Lazy<T> {
 
 	get value(): T {
 		if (this.state === LazyState.Initializing) {
-			throw new Error("Cannot read a lazy value while it is being initialized");
+			throw new Error('Cannot read a lazy value while it is being initialized');
 		}
 		if (this.state === LazyState.Uninitialized) {
 			this.state = LazyState.Initializing;

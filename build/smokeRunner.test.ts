@@ -107,7 +107,9 @@ for (const [signal, exitCode] of [['SIGINT', 130], ['SIGTERM', 143]] as const) {
 		const fixture = await createFixture(`
 import { test } from '@playwright/test';
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { registerRunResource } from ${JSON.stringify(join(repository, 'build/processes.ts'))};
 test('running', async () => {
   const resource = await registerRunResource();
@@ -122,19 +124,22 @@ test('running', async () => {
   const ready = new Promise(resolveReady => child.once('message', resolveReady));
   await resource.process(child);
   const pids = await ready;
-  await writeFile(process.env.ASH_RUNNER_MARKER, JSON.stringify(pids));
+  const temporary = await mkdtemp(join(tmpdir(), 'ash-abandoned-worker-'));
+  await writeFile(join(temporary, 'fixture.txt'), 'test-owned contents');
+  await writeFile(process.env.ASH_RUNNER_MARKER, JSON.stringify({ ...pids, temporary }));
   await new Promise(() => {});
 });
 `, 120_000);
 		const sentinel = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
 		const child = start(fixture, []);
 		const result = completion(child);
-		let pids: { parent: number; child: number; } | undefined;
+		let pids: { parent: number; child: number; temporary: string; } | undefined;
 		t.after(async () => {
 			for (const pid of [child.pid, sentinel.pid, pids?.parent, pids?.child]) {
 				if (pid) try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
 			}
 			await result;
+			if (pids?.temporary) await rm(pids.temporary, { recursive: true, force: true });
 			await rm(fixture.directory, { recursive: true, force: true });
 		});
 		pids = JSON.parse(await waitForFile(fixture.marker));
@@ -142,6 +147,7 @@ test('running', async () => {
 		const stopped = await result;
 		assert.equal(stopped.code, exitCode, stopped.output);
 		for (const pid of [pids!.parent, pids!.child]) assert.equal(await alive(pid), false, `Leaked test PID ${pid}`);
+		await assert.rejects(readFile(join(pids!.temporary, 'fixture.txt')), { code: 'ENOENT' });
 		assert.equal(await alive(sentinel.pid!), true, 'Unrelated process was stopped');
 	});
 }
@@ -190,7 +196,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { ${surface === 'Electron' ? 'launchElectron' : 'launchWeb'} } from ${JSON.stringify(join(repository, `test/automation/playwright${surface}.ts`))};
 test('running product', async () => {
-  ${surface === 'Electron' ? `const running = await launchElectron({ appServerMode: 'required', userDataDirectory: ${JSON.stringify(join(directory, 'home'))} }); const root = running.application.process().pid;` : `await launchWeb(${JSON.stringify(directory)}); const root = process.pid;`}
+  ${surface === 'Electron' ? `const running = await launchElectron({ appServerMode: 'required', userDataDirectory: ${JSON.stringify(join(directory, 'home'))} }); const root = running.application.process().pid;` : `await launchWeb(${JSON.stringify(directory)}, { preparedBackend: true }); const root = process.pid;`}
   const directory = process.env.ASH_SMOKE_RUN_DIRECTORY;
   const resources = await Promise.all((await readdir(directory)).filter(name => name.endsWith('.json')).map(async name => JSON.parse(await readFile(join(directory, name), 'utf8'))));
   const daemon = resources.find(resource => resource.daemon).daemon;

@@ -1,14 +1,16 @@
+import { Orientation } from '../../../base/browser/ui/sash/sash.js';
+import { Direction } from '../../../base/browser/ui/grid/grid.js';
 import { createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { sessionsPartIds } from '../../common/layoutConstants.js';
 import { Position, positionToString } from '../../../workbench/services/layout/browser/layoutService.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
-import { h } from "../../../base/browser/dom.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { h } from '../../../base/browser/dom.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -22,20 +24,20 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { Dimension } = await import("../../../base/browser/dom.js");
-const { Part } = await import("../../../workbench/browser/part.js");
-const { WorkbenchWindowBarHeight } = await import("../../../workbench/browser/parts/workbenchPartDimensions.js");
-const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
-const { IStorageService, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
+const { Dimension } = await import('../../../base/browser/dom.js');
+const { Part } = await import('../../../workbench/browser/part.js');
+const { WorkbenchWindowBarHeight } = await import('../../../workbench/browser/parts/workbenchPartDimensions.js');
+const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
+const { IStorageService, WillSaveStateReason } = await import('../../../platform/storage/common/storage.js');
 const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
-const { DesktopWorkbenchLayout } = await import("../../../sessions/browser/desktopWorkbench.js");
+const { DesktopWorkbenchLayout } = await import('../../../sessions/browser/desktopWorkbench.js');
 const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
 const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
-const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../workbench/services/configuration/test/common/testServices.js");
+const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/test/common/testServices.js');
 
-type SessionsPartId = import("../../common/layoutConstants.js").SessionsPartId;
-type WorkbenchPartInstance = import("../../../workbench/browser/part.js").Part;
+type SessionsPartId = import('../../common/layoutConstants.js').SessionsPartId;
+type WorkbenchPartInstance = import('../../../workbench/browser/part.js').Part;
 
 class TestSessionsPart extends Part {
 	public getTabsHeight(): number { return 35; }
@@ -57,9 +59,9 @@ class TestSessionsPart extends Part {
 	}
 
 	override get minimumWidth(): number {
-		if (this.id === "sidebar") return 170;
-		if (this.id === "sessions") return 320;
-		if (this.id === "auxiliarybar") return 270;
+		if (this.id === 'sidebar') return 170;
+		if (this.id === 'sessions') return 320;
+		if (this.id === 'auxiliarybar') return 270;
 		if (this.id === 'editor') return 300;
 		return 0;
 	}
@@ -68,13 +70,45 @@ class TestSessionsPart extends Part {
 		return Number.POSITIVE_INFINITY;
 	}
 
-	override get minimumHeight(): number { return this.id === "banner" ? 32 : this.id === "titlebar" ? WorkbenchWindowBarHeight : 0; }
-	override get maximumHeight(): number { return this.id === "banner" ? 32 : this.id === "titlebar" ? WorkbenchWindowBarHeight : Number.POSITIVE_INFINITY; }
+	override get minimumHeight(): number {
+		return this.id === 'titlebar' ? WorkbenchWindowBarHeight : 0;
+	}
+	override get maximumHeight(): number {
+		return this.id === 'titlebar' ? WorkbenchWindowBarHeight : Number.POSITIVE_INFINITY;
+	}
 }
 
 function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPartInstance> {
 	return new Map(sessionsPartIds.map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
 }
+
+test('Sessions Grid follows viewport resize synchronously and retains fractional root dimensions', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = dom.window.document.querySelector('main')!;
+	const parts = createParts(dom.window.document);
+	let bounds = { width: 1_200.2, height: 800.8 };
+	container.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, bounds.width, bounds.height);
+	Object.defineProperties(container, {
+		clientWidth: { get: () => Math.round(bounds.width) },
+		clientHeight: { get: () => Math.round(bounds.height) },
+	});
+	try {
+		using layout = createLayout(container, parts);
+		assert.deepEqual(layout.mainContainerDimension, new Dimension(1_200.2, 800.8));
+		for (const next of [
+			{ width: 1_000.6, height: 700.4 },
+			{ width: 1_300.2, height: 900.8 },
+		]) {
+			bounds = next;
+			dom.window.dispatchEvent(new dom.window.Event('resize'));
+			assert.deepEqual(layout.mainContainerDimension, new Dimension(next.width, next.height));
+			assert.equal(layout.getPartSize('titlebar').width, next.width);
+		}
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
 
 test('Sessions sidebar clamps at its minimum, snaps closed and restores from the window edge', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -151,6 +185,7 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_600, 1_000) });
 		assert.equal(layout.getSideBarPosition(), Position.LEFT);
 		layout.layout(new Dimension(1_600, 1_000));
+		layout.setPanelPosition(Position.BOTTOM);
 		layout.showPart('panel');
 		layout.resizePart('panel', new Dimension(layout.getPartSize('panel').width, 280));
 		input.focus();
@@ -166,7 +201,7 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 			assert.equal(layout.isPartVisible('sessions'), true);
 			const panelFrame = parts.get('panel')!.domNode.parentElement!;
 			const parentSplit = panelFrame.parentElement!.parentElement!;
-			assert.equal(parentSplit.classList.contains(position === Position.TOP || position === Position.BOTTOM ? 'ash-split-view-vertical' : 'ash-split-view-horizontal'), true);
+			assert.equal(parentSplit.classList.contains('ash-split-view-vertical'), true);
 			const leading = position === Position.TOP || position === Position.LEFT;
 			const sessionsFrame = parts.get('sessions')!.domNode.parentElement!;
 			assert.equal(!!(panelFrame.compareDocumentPosition(sessionsFrame) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING), leading);
@@ -203,7 +238,7 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 		layout.showPart('editor');
 		layout.showPart('auxiliarybar');
 		layout.setPanelPosition(Position.RIGHT);
-		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), true);
+		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
 		layout.setPrimaryPart('editor');
 		layout.setPanelPosition(Position.LEFT);
 		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
@@ -220,6 +255,7 @@ test('Sessions restores Panel position and both axis sizes from the profile whil
 	const storage = createStorage();
 	const first = createLayout(dom.window.document.body, firstParts, { storageService: storage, initialDimension: new Dimension(1_600, 1_000) });
 	first.layout(new Dimension(1_600, 1_000));
+	first.setPanelPosition(Position.BOTTOM);
 	first.showPart('panel');
 	first.resizePart('panel', new Dimension(first.getPartSize('panel').width, 280));
 	first.setPanelPosition(Position.RIGHT);
@@ -283,54 +319,181 @@ test('Custom Views cover retained content without changing its desired visibilit
 	}
 });
 
-test('Code docks Details below one tab strip and preserves the side pane boundary when Details toggles', () => {
+test('Code stacks Terminal and the complete Files card and restores their retained Parts across modes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);
-	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 800) });
-	const editor = parts.get('editor') as TestSessionsPart;
-	layout.layout(new Dimension(1600, 800));
-	assert.equal(editor.contentVisible, false);
-	assert.equal(editor.domNode.contains(parts.get('auxiliarybar')!.domNode), true);
-	assert.equal(editor.domNode.querySelector<HTMLElement>('.ash-sessions-docked-details')!.style.top, '35px');
-	layout.showPart('editor');
-	layout.resizePart('editor', new Dimension(700, 800));
-	layout.showPart('auxiliarybar');
-	layout.resizePart('auxiliarybar', new Dimension(280, 800));
-	const width = layout.getPartSize('editor').width;
-	assert.equal(editor.contentInset, 280);
-	layout.hidePart('auxiliarybar');
-	assert.equal(editor.contentInset, 0);
-	assert.equal(layout.getPartSize('editor').width, width);
-	layout.showPart('auxiliarybar');
-	layout.layout(new Dimension(1000, 800));
-	assert.equal(layout.getPartSize('editor').width - editor.contentInset >= 300, true);
-	layout.hidePart('editor');
-	assert.equal(editor.contentVisible, false);
-	const editorFrame = editor.domNode.parentElement!;
-	const editorInsets = Number.parseFloat(editorFrame.style.paddingLeft) + Number.parseFloat(editorFrame.style.paddingRight);
-	assert.equal(layout.getPartSize('editor').width - editorInsets, 300);
-	layout.hidePart('auxiliarybar');
-	assert.equal(layout.isPartVisible('editor'), false);
-	assert.equal(layout.isPartVisible('auxiliarybar'), false);
-	for (const part of parts.values()) part.dispose();
-	dom.window.close();
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 1000) });
+		layout.layout(new Dimension(1600, 1000));
+		assert.equal(layout.getPanelPosition(), Position.RIGHT);
+		assert.equal(layout.isPartVisible('editor'), false);
+		assert.equal(layout.isPartVisible('auxiliarybar'), true);
+		layout.showPart('editor');
+		layout.resizePart('editor', new Dimension(600, 1000));
+		layout.showPart('panel');
+		layout.resizePart('panel', new Dimension(300, 280));
+		const editorWidth = layout.getPartSize('editor').width;
+		const stackParent = () => parts.get('panel')!.domNode.parentElement!.parentElement!.parentElement!;
+		assert.equal(stackParent(), layout.files.element.parentElement!.parentElement!);
+		assert.equal(layout.files.card.contains(parts.get('auxiliarybar')!.domNode), true);
+		assert.equal(layout.files.card.contains(parts.get('editor')!.domNode), true);
+		assert.equal(stackParent().classList.contains('ash-split-view-vertical'), true);
+		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
+		assert.equal(layout.getPartSize('panel').width, layout.getPartSize('auxiliarybar').width);
+		assert.equal(layout.getPartSize('panel').height, 280);
+		assert.equal(
+			layout.getPartSize('panel').height + layout.getPartSize('auxiliarybar').height,
+			1000 - WorkbenchWindowBarHeight,
+		);
+		layout.hidePart('auxiliarybar');
+		assert.equal(layout.getPartSize('editor').width, editorWidth);
+		layout.showPart('auxiliarybar');
+		assert.equal(layout.getPartSize('panel').height, 280);
+		const input = dom.window.document.createElement('input');
+		parts.get('auxiliarybar')!.domNode.append(input);
+		input.focus();
+		layout.setPrimaryPart('editor');
+		assert.equal(stackParent().classList.contains('ash-split-view-horizontal'), true);
+		assert.equal(dom.window.document.activeElement, input);
+		layout.setPrimaryPart('sessions');
+		assert.equal(stackParent(), layout.files.element.parentElement!.parentElement!);
+		assert.equal(layout.files.card.contains(parts.get('auxiliarybar')!.domNode), true);
+		assert.equal(layout.files.card.contains(parts.get('editor')!.domNode), true);
+		assert.equal(stackParent().classList.contains('ash-split-view-vertical'), true);
+		assert.equal(dom.window.document.activeElement, input);
+		assert.equal(layout.getPartSize('panel').height, 280);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
 });
 
-test("Sessions layout owns a fixed Sessions-first Part topology", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const container = h(dom.window.document, "main");
+test('Files moves and hides its tree and retained editor as one card', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 1000) });
+		const document = dom.window.document.createElement('textarea');
+		document.value = 'unsaved file content';
+		parts.get('editor')!.domNode.append(document);
+		layout.hidePart('auxiliarybar');
+		layout.showPart('editor');
+		assert.equal(layout.isCardVisible('files'), true);
+		assert.equal(layout.files.card.contains(document), true);
+		assert.equal(layout.files.card.contains(parts.get('auxiliarybar')!.domNode), true);
+		layout.showPart('panel');
+		layout.moveCard('files', 'terminal', Direction.Left);
+		layout.closeCard('files');
+		assert.equal(layout.isPartVisible('editor'), false);
+		assert.equal(layout.isPartVisible('auxiliarybar'), false);
+		layout.showPart('auxiliarybar');
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.equal(document.value, 'unsaved file content');
+		assert.equal(layout.files.card.contains(document), true);
+		layout.expandCard('files');
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.equal(layout.isPartVisible('auxiliarybar'), true);
+		layout.expandCard('files');
+		layout.detachCard('files', true);
+		assert.equal(layout.files.card.hidden, false);
+		assert.equal(parts.get('editor')!.domNode.hidden, false);
+		layout.detachCard('files', false);
+		assert.equal(layout.files.card.contains(document), true);
+	} finally {
+		for (const part of parts.values()) { part.dispose(); }
+		dom.window.close();
+	}
+});
+
+test('Files changes orientation in one Grid while retaining editor state and tree width', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	const input = dom.window.document.createElement('textarea');
+	input.value = 'retained unsaved file';
+	parts.get('editor')!.domNode.append(input);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(2000, 1000) });
+		layout.showPart('editor');
+		layout.resizePart('auxiliarybar', new Dimension(1000, 1000));
+		const grid = layout.files.grid!;
+		const element = grid.element;
+		const treeSize = (): number => {
+			const descriptor = grid.serialize();
+			assert.equal(descriptor.type, 'branch');
+			return descriptor.type === 'branch' ? descriptor.children[0]!.size : 0;
+		};
+		assert.equal(grid.orientation, Orientation.HORIZONTAL);
+		const sash = grid.element.querySelector<HTMLElement>('.ash-sash-vertical')!;
+		const previousWidth = treeSize();
+		sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 200 }));
+		for (const type of ['pointermove', 'pointerup']) {
+			dom.window.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX: 250 }));
+		}
+		assert.equal(treeSize(), previousWidth + 50);
+		const treeWidth = treeSize();
+		input.focus();
+		input.setSelectionRange(2, 8);
+		input.scrollTop = 70;
+
+		for (const width of [900, 800, 700, 600, 500, 350]) {
+			layout.resizePart('auxiliarybar', new Dimension(width, 1000));
+		}
+		assert.equal(layout.files.grid, grid);
+		assert.equal(grid.orientation, Orientation.VERTICAL);
+		assert.equal(dom.window.document.activeElement, input);
+		assert.equal(layout.isPartVisible('editor'), true);
+		for (const width of [500, 650, 800, 1000]) {
+			layout.resizePart('auxiliarybar', new Dimension(width, 1000));
+		}
+		assert.equal(layout.files.grid, grid);
+		assert.equal(grid.element, element);
+		assert.equal(grid.orientation, Orientation.HORIZONTAL);
+		assert.equal(treeSize(), treeWidth);
+		assert.equal(dom.window.document.activeElement, input);
+		assert.deepEqual([input.selectionStart, input.selectionEnd, input.scrollTop], [2, 8, 70]);
+		assert.equal(input.value, 'retained unsaved file');
+
+		layout.hidePart('editor');
+		layout.resizePart('auxiliarybar', new Dimension(350, 1000));
+		assert.equal(grid.orientation, Orientation.VERTICAL);
+		assert.equal(layout.isPartVisible('editor'), false);
+		layout.resizePart('auxiliarybar', new Dimension(1000, 1000));
+		assert.equal(grid.orientation, Orientation.HORIZONTAL);
+		assert.equal(layout.isPartVisible('editor'), false, 'orientation changes keep a closed editor hidden');
+		assert.equal(layout.files.grid, grid);
+		layout.showPart('editor');
+		assert.equal(layout.files.card.contains(input), true);
+		assert.equal(input.value, 'retained unsaved file');
+		assert.equal(treeSize(), treeWidth, 'reopening the editor retains the user-established tree width');
+		grid.element.querySelector<HTMLElement>('.ash-sash-vertical')!
+			.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
+		const resetWidth = treeSize();
+		layout.resizePart('auxiliarybar', new Dimension(350, 1000));
+		layout.resizePart('auxiliarybar', new Dimension(1000, 1000));
+		assert.equal(treeSize(), resetWidth, 'a user reset becomes the preferred tree width');
+	} finally {
+		for (const part of parts.values()) {
+			part.dispose();
+		}
+		dom.window.close();
+	}
+});
+
+test('Sessions layout owns a fixed Sessions-first Part topology', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const container = h(dom.window.document, 'main');
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
 	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
 
 	layout.layout(new Dimension(1_200, 800));
 
-	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, WorkbenchWindowBarHeight));
+	assert.deepEqual(layout.getPartSize('titlebar'), new Dimension(1_200, WorkbenchWindowBarHeight));
 	assert.equal(container.querySelector('[data-part="activitybar"]'), null);
-	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 300) <= 1, true);
-	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 340) <= 1, true);
-	assert.equal(layout.getPartSize("sessions").height, 800 - WorkbenchWindowBarHeight);
-	assert.equal(layout.getPartSize("sessions").width > 400, true);
+	assert.equal(Math.abs(layout.getPartSize('sidebar').width - 300) <= 1, true);
+	assert.equal(Math.abs(layout.getPartSize('auxiliarybar').width - 340) <= 1, true);
+	assert.equal(layout.getPartSize('sessions').height, 800 - WorkbenchWindowBarHeight);
+	assert.equal(layout.getPartSize('sessions').width > 400, true);
 	assert.equal(layout.isPartVisible('editor'), false);
 	assert.equal(layout.state.editor.width, 600);
 	assert.equal(layout.state.panel.height, 300);
@@ -378,9 +541,9 @@ test('Sessions layout style changes without changing the IDE preference or visib
 	}
 });
 
-test("Sessions layout toggles the sidebar and auxiliary Part while keeping the primary Part visible", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const container = h(dom.window.document, "main");
+test('Sessions layout toggles the sidebar and auxiliary Part while keeping the primary Part visible', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const container = h(dom.window.document, 'main');
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
 	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_000, 700) });
@@ -397,14 +560,14 @@ test("Sessions layout toggles the sidebar and auxiliary Part while keeping the p
 	layout.showPart('sidebar');
 	assert.equal(layout.isPartVisible('sidebar'), true);
 	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
-	layout.showPart("auxiliarybar");
-	layout.hidePart("auxiliarybar");
+	layout.showPart('auxiliarybar');
+	layout.hidePart('auxiliarybar');
 
-	assert.equal(layout.isPartVisible("auxiliarybar"), false);
-	assert.equal(layout.getPartSize("sessions").width > 500, true);
-	assert.equal(changes.at(-1)?.partId, "auxiliarybar");
+	assert.equal(layout.isPartVisible('auxiliarybar'), false);
+	assert.equal(layout.getPartSize('sessions').width > 500, true);
+	assert.equal(changes.at(-1)?.partId, 'auxiliarybar');
 	assert.equal(changes.at(-1)?.visible, false);
-	assert.throws(() => layout.hidePart("sessions"), /Required Sessions Part/);
+	assert.throws(() => layout.hidePart('sessions'), /Required Sessions Part/);
 	assert.throws(() => layout.hidePart('titlebar'), /Required Sessions Part/);
 
 	subscription.dispose();
@@ -502,11 +665,11 @@ test('Sessions navigation collapses with the sidebar without reserving an icon r
 	}
 });
 
-test("Sessions layout validates its complete Part set", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const container = h(dom.window.document, "main");
+test('Sessions layout validates its complete Part set', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const container = h(dom.window.document, 'main');
 	const parts = createParts(dom.window.document);
-	parts.delete("auxiliarybar");
+	parts.delete('auxiliarybar');
 
 	assert.throws(() => createLayout(container, parts), /missing Parts: auxiliarybar/);
 	parts.set('auxiliarybar', new TestSessionsPart('auxiliarybar', dom.window.document.body));
@@ -517,25 +680,26 @@ test("Sessions layout validates its complete Part set", () => {
 	dom.window.close();
 });
 
-test("Sessions layout restores its profile-scoped geometry and auxiliary visibility", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
+test('Sessions layout restores its profile-scoped geometry and auxiliary visibility', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const createStorage = () => new BrowserStorageService({
 		ownerWindow: dom.window as unknown as Window,
-		workspaceId: "sessions",
-		profileId: "code-sessions",
+		workspaceId: 'sessions',
+		profileId: 'code-sessions',
 		backend: dom.window.localStorage,
 		flushInterval: 0,
 	});
 	const firstStorage = createStorage();
-	const firstContainer = h(dom.window.document, "main");
+	const firstContainer = h(dom.window.document, 'main');
 	const firstParts = createParts(dom.window.document);
 	const first = createLayout(firstContainer, firstParts, { initialDimension: new Dimension(1_100, 700), storageService: firstStorage });
 	first.layout(new Dimension(1_100, 700));
-	first.resizePart("sidebar", new Dimension(320, first.getPartSize("sidebar").height));
-	first.resizePart("auxiliarybar", new Dimension(360, first.getPartSize("auxiliarybar").height));
+	first.resizePart('sidebar', new Dimension(320, first.getPartSize('sidebar').height));
+	first.resizePart('auxiliarybar', new Dimension(360, first.getPartSize('auxiliarybar').height));
 	first.hidePart('sidebar');
-	first.hidePart("auxiliarybar");
+	first.hidePart('auxiliarybar');
 	first.showPart('editor');
+	first.resizePart('auxiliarybar', new Dimension(720, first.getPartSize('auxiliarybar').height));
 	first.resizePart('editor', new Dimension(420, first.getPartSize('editor').height));
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	first.dispose();
@@ -543,17 +707,17 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	firstStorage.dispose();
 
 	const restoredStorage = createStorage();
-	const restoredContainer = h(dom.window.document, "main");
+	const restoredContainer = h(dom.window.document, 'main');
 	const restoredParts = createParts(dom.window.document);
 	const restored = createLayout(restoredContainer, restoredParts, { initialDimension: new Dimension(1_100, 700), storageService: restoredStorage });
 	restored.layout(new Dimension(1_100, 700));
 
-	assert.equal(Math.abs(restored.getPartSize("sidebar").width - 320) <= 1, true);
+	assert.equal(Math.abs(restored.getPartSize('sidebar').width - 320) <= 1, true);
 	assert.equal(restored.isPartVisible('sidebar'), false);
 	assert.equal(restoredContainer.querySelector('[data-part="activitybar"]'), null, 'Restoring a closed sidebar does not create an icon rail');
-	assert.equal(restored.getPartSize('sessions').width + restored.getPartSize('editor').width, 1_100);
-	assert.equal(Math.abs(restored.getPartSize("auxiliarybar").width - 360) <= 1, true);
-	assert.equal(restored.isPartVisible("auxiliarybar"), false);
+	assert.equal(restored.getPartSize('sessions').width + restored.getPartSize('auxiliarybar').width, 1_100);
+	assert.equal(Math.abs(restored.getPartSize('auxiliarybar').width - 720) <= 1, true);
+	assert.equal(restored.isPartVisible('auxiliarybar'), true, 'Restoring a visible editor also restores its Files card');
 	assert.equal(restored.isPartVisible('editor'), true);
 	assert.equal(Math.abs(restored.getPartSize('editor').width - 420) <= 1, true);
 
@@ -601,12 +765,18 @@ test('Sessions Part availability preserves user visibility and cached widths dur
 	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800), storageService: storage });
 	layout.layout(new Dimension(1_200, 800));
 	layout.showPart('auxiliarybar');
-	layout.resizePart('auxiliarybar', new Dimension(280, 800));
+	layout.resizePart('auxiliarybar', new Dimension(320, 800));
 	layout.setPartAvailable('auxiliarybar', false);
 	await storage.flush(WillSaveStateReason.SHUTDOWN);
-	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar }, { visible: false, desired: { width: 280, visible: true } });
+	assert.deepEqual(
+		{ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar },
+		{ visible: false, desired: { width: 320, visible: true } },
+	);
 	layout.setPartAvailable('auxiliarybar', true);
-	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), width: layout.getPartSize('auxiliarybar').width }, { visible: true, width: 280 });
+	assert.deepEqual(
+		{ visible: layout.isPartVisible('auxiliarybar'), width: layout.getPartSize('auxiliarybar').width },
+		{ visible: true, width: 320 },
+	);
 	layout.setPartAvailable('auxiliarybar', false);
 	layout.hidePart('auxiliarybar');
 	layout.setPartAvailable('auxiliarybar', true);
@@ -770,22 +940,172 @@ function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId,
 	return layout;
 }
 
-test('Sessions banner stays above conversation and panel compositions without entering saved state', () => {
+test('Sessions compositions keep the content directly below the titlebar without a window banner', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);
 	try {
 		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_600, 1_000) });
 		layout.layout(new Dimension(1_600, 1_000));
-		assert.equal(layout.isPartVisible('banner'), false);
-		layout.showPart('banner');
-		assert.equal(layout.mainContainerOffset.top, WorkbenchWindowBarHeight + 32);
-		layout.setPanelPosition(Position.RIGHT);
-		assert.equal(layout.isPartVisible('banner'), true);
-		assert.equal(layout.getPartSize('banner').height, 32);
-		layout.toggleMaximizedPanel();
-		assert.equal(layout.isPartVisible('banner'), true);
-		layout.hidePart('banner');
 		assert.equal(layout.mainContainerOffset.top, WorkbenchWindowBarHeight);
+		layout.setPanelPosition(Position.RIGHT);
+		assert.equal(layout.mainContainerOffset.top, WorkbenchWindowBarHeight);
+		layout.toggleMaximizedPanel();
+		assert.equal(layout.mainContainerOffset.top, WorkbenchWindowBarHeight);
+		assert.equal(layout.domNode.querySelector('[data-part="banner"]'), null);
 		assert.equal('banner' in layout.state, false);
-	} finally { for (const part of parts.values()) part.dispose(); dom.window.close(); }
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Code cards move in the Grid and restore exact dimensions after expanding every card', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 1000) });
+		const info = dom.window.document.createElement('aside');
+		layout.setInformation(info);
+		layout.toggleInformation();
+		layout.showPart('panel');
+		layout.showPart('editor');
+		layout.moveCard('info', 'files', Direction.Down);
+		layout.moveCard('files', 'terminal', Direction.Up);
+		layout.resizeCard('files', 0, 60);
+		const terminal = layout.getPartSize('panel');
+		const files = layout.getPartSize('auxiliarybar');
+		for (const id of ['terminal', 'files', 'info'] as const) {
+			layout.expandCard(id);
+			assert.equal(layout.expandedCard, id);
+			assert.equal(layout.isPartVisible('sessions'), false);
+			layout.expandCard(id);
+			assert.equal(layout.expandedCard, undefined);
+			assert.equal(layout.isPartVisible('sessions'), true);
+			assert.deepEqual(layout.getPartSize('panel'), terminal, `terminal geometry after restoring ${id}`);
+			assert.deepEqual(layout.getPartSize('auxiliarybar'), files, `Files geometry after restoring ${id}`);
+			assert.equal(layout.information.body.firstElementChild, info);
+		}
+		layout.detachCard('terminal', true);
+		assert.equal(layout.isCardVisible('terminal'), true, 'toolbar stays selected for a detached terminal');
+		assert.equal(parts.get('panel')!.domNode.hidden, false, 'the retained part remains usable in another document');
+		layout.detachCard('terminal', false);
+		assert.deepEqual(layout.getPartSize('panel'), terminal);
+		assert.deepEqual(layout.getPartSize('auxiliarybar'), files);
+		layout.detachCard('terminal', true);
+		layout.moveCard('info', 'files', Direction.Up);
+		layout.detachCard('terminal', false);
+		assert.ok(
+			layout.information.element.compareDocumentPosition(parts.get('auxiliarybar')!.domNode.parentElement!) &
+			dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
+		);
+		layout.expandCard('info');
+		layout.toggleInformation();
+		assert.equal(layout.expandedCard, undefined);
+		assert.equal(layout.isPartVisible('sessions'), true);
+		layout.detachCard('terminal', true);
+		layout.setPrimaryPart('editor');
+		layout.showPart('editor');
+		layout.detachCard('terminal', false);
+		assert.equal(layout.isPartVisible('editor'), true);
+		layout.setPrimaryPart('sessions');
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Code card topology survives product composition, hide/show and profile reload', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://cards.test' });
+	using storage = new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		workspaceId: 'cards',
+		profileId: 'cards',
+		backend: dom.window.localStorage,
+		flushInterval: 0,
+	});
+	const parts = createParts(dom.window.document);
+	const layout = createLayout(dom.window.document.body, parts, {
+		storageService: storage,
+		initialDimension: new Dimension(1600, 1000),
+	});
+	layout.showPart('panel');
+	layout.moveCard('files', 'terminal', Direction.Up);
+	layout.resizeCard('files', 0, -50);
+	const files = layout.getPartSize('auxiliarybar');
+	layout.setPrimaryPart('editor');
+	layout.setPrimaryPart('sessions');
+	assert.deepEqual(layout.getPartSize('auxiliarybar'), files);
+	layout.hidePart('auxiliarybar');
+	layout.showPart('auxiliarybar');
+	assert.deepEqual(layout.getPartSize('auxiliarybar'), files);
+	layout.expandCard('terminal');
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	layout.dispose();
+	for (const part of parts.values()) part.dispose();
+	const restoredParts = createParts(dom.window.document);
+	try {
+		using restored = createLayout(dom.window.document.body, restoredParts, {
+			storageService: storage,
+			initialDimension: new Dimension(1600, 1000),
+		});
+		assert.equal(restored.expandedCard, undefined, 'expanded geometry never replaces the saved arrangement');
+		assert.deepEqual(restored.getPartSize('auxiliarybar'), files);
+		const fileFrame = restoredParts.get('auxiliarybar')!.domNode.parentElement!;
+		const terminalFrame = restoredParts.get('panel')!.domNode.parentElement!;
+		assert.ok(fileFrame.compareDocumentPosition(terminalFrame) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+	} finally {
+		for (const part of restoredParts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Saved Code card layouts reject duplicate, missing and malformed leaves', async () => {
+	const { readCodeCardLayout } = await import('../../browser/codeCardLayout.js');
+	const leaf = { type: 'leaf', data: 'panel', size: 300, visible: true, priority: 'normal' };
+	assert.ok(readCodeCardLayout(JSON.stringify(leaf), ['panel']));
+	assert.equal(readCodeCardLayout(JSON.stringify(leaf), ['panel', 'info']), undefined);
+	assert.equal(
+		readCodeCardLayout(
+			JSON.stringify({
+				type: 'branch',
+				orientation: 'vertical',
+				size: 300,
+				priority: 'normal',
+				children: [leaf, leaf],
+			}),
+			['panel'],
+		),
+		undefined,
+	);
+	assert.equal(readCodeCardLayout(JSON.stringify({ ...leaf, size: -1 }), ['panel']), undefined);
+	assert.equal(readCodeCardLayout('{broken', ['panel']), undefined);
+});
+
+test('A legacy editor-only layout migrates into Files and keeps the grouped identity when closed', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'legacy-files', flushInterval: 0 });
+	try {
+		using layout = createLayout(dom.window.document.body, parts, {
+			storageService: storage,
+			initialDimension: new Dimension(1600, 1000),
+			initialState: {
+				version: 1,
+				sidebar: { width: 300, visible: true },
+				auxiliarybar: { width: 340, visible: false },
+				editor: { width: 600, visible: true },
+				panel: { position: Position.RIGHT, width: 300, height: 280, visible: false },
+			},
+		});
+		assert.equal(layout.isCardVisible('files'), true);
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.equal(layout.files.card.contains(parts.get('editor')!.domNode), true);
+		layout.closeCard('files');
+		assert.equal(layout.isPartVisible('editor'), false);
+		assert.equal(layout.state.editor.visible, true, 'Closing Files retains the editor visibility to restore inside it');
+		assert.equal(layout.state.auxiliarybar.visible, false);
+	} finally {
+		for (const part of parts.values()) { part.dispose(); }
+		dom.window.close();
+	}
 });

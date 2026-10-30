@@ -1,17 +1,17 @@
 import type { WorkspaceTrustGrant } from '../../workspace/common/workspaceTrust.js';
 
-import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
-import { AppServerRemoteError } from "../../agentHost/common/appServerError.js";
-import type { AppServerConnectionRelay } from "../../agentHost/electron-main/appServerConnectionRelay.js";
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
+import type { AppServerConnectionRelay } from '../../agentHost/electron-main/appServerConnectionRelay.js';
 import { AppServerDaemonLauncher } from '../../app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { RemoteAppServerProcessLauncher } from '../../remote/electron-main/remoteAppServerProcessLauncher.js';
 import type { RendererWorkspaceHost } from './rendererWorkspaceHost.js';
-import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from "./workspaceTransitionMainService.js";
+import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from './workspaceTransitionMainService.js';
 
 export interface IAppServerWorkspaceTransitionHost {
 	getState(): AppServerConnectionState;
-	switchWorkspace(root: string, grant: IWorkspaceTransitionContext["grant"], workspaceId: string, previousWorkspaceId: string): Promise<void>;
+	switchWorkspace(root: string, grant: IWorkspaceTransitionContext['grant'], workspaceId: string, previousWorkspaceId: string): Promise<void>;
 	onStateChange(listener: (state: AppServerConnectionState) => void): IDisposable;
 }
 
@@ -31,17 +31,17 @@ export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwi
 	classifyRuntimeError(error: unknown): WorkspaceTransitionFailureKind {
 		if (error instanceof AppServerRemoteError) {
 			switch (error.errorName) {
-				case "EnvironmentBusy":
+				case 'EnvironmentBusy':
 					return WorkspaceTransitionFailureKind.RuntimeBusy;
-				case "EnvironmentUnavailable":
-				case "MethodNotFound":
+				case 'EnvironmentUnavailable':
+				case 'MethodNotFound':
 					return WorkspaceTransitionFailureKind.RuntimeUnsupported;
 				default:
 					return WorkspaceTransitionFailureKind.RuntimeRejected;
 			}
 		}
 		if (
-			this.host.getState() !== "ready"
+			this.host.getState() !== 'ready'
 			|| (error instanceof Error && /connection closed|stdout ended|exited|not ready/i.test(error.message))
 		) {
 			return WorkspaceTransitionFailureKind.RuntimeUnavailable;
@@ -63,8 +63,8 @@ export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwi
 
 	private waitUntilReady(options: IWaitUntilReadyOptions): Promise<void> {
 		const state = this.host.getState();
-		if (state === "ready") return Promise.resolve();
-		if (state === "stopped" || state === "stopping") {
+		if (state === 'ready') return Promise.resolve();
+		if (state === 'stopped' || state === 'stopping') {
 			return Promise.reject(new Error(`App Server cannot recover from ${state}`));
 		}
 		return new Promise<void>((resolve, reject) => {
@@ -79,13 +79,13 @@ export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwi
 				else resolve();
 			};
 			const timeout = setTimeout(() => {
-				finish(new Error("Timed out waiting for App Server recovery"));
+				finish(new Error('Timed out waiting for App Server recovery'));
 			}, options.timeoutMs);
 			timeout.unref();
 			subscription = this.host.onStateChange((nextState) => {
-				if (nextState === "ready") {
+				if (nextState === 'ready') {
 					finish();
-				} else if (nextState === "stopped" || nextState === "stopping") {
+				} else if (nextState === 'stopped' || nextState === 'stopping') {
 					finish(new Error(`App Server recovery stopped in ${nextState}`));
 				}
 			});

@@ -1,12 +1,12 @@
-import "./indentGuides.css";
-import { h } from "../../../../base/browser/dom.js";
+import './indentGuides.css';
+import { h } from '../../../../base/browser/dom.js';
 import { EditorOption, type InternalGuidesOptions } from '../../../common/config/editorOptions.js';
 import { Position } from '../../../common/core/position.js';
 import { HorizontalGuidesState, type IndentGuide } from '../../../common/textModelGuides.js';
 import { type IViewModel, type TextMeasurer } from '../../../common/viewModel.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
-import { type RenderingContext } from "../../view/renderingContext.js";
+import { type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { renderViewPartRows } from '../../view/viewLayer.js';
 import * as viewEvents from '../../../common/viewEvents.js';

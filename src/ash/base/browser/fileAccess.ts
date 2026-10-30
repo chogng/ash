@@ -2,11 +2,11 @@ import {
 	DisposableStore,
 	type IDisposable,
 	toDisposable,
-} from "../common/lifecycle.js";
-import { addDisposableListener, h } from "./dom.js";
-import type { BrowserWindow } from "./window.js";
+} from '../common/lifecycle.js';
+import { addDisposableListener, h } from './dom.js';
+import type { BrowserWindow } from './window.js';
 
-export type FileSelection = "single" | "multiple";
+export type FileSelection = 'single' | 'multiple';
 
 export interface FilePickerOptions {
 	readonly ownerDocument: Document;
@@ -23,13 +23,13 @@ export function pickFiles(
 ): Promise<readonly File[] | undefined> {
 	const ownerDocument = options.ownerDocument;
 	requireOwnerWindow(ownerDocument);
-	const input = h(ownerDocument, "input");
-	input.type = "file";
+	const input = h(ownerDocument, 'input');
+	input.type = 'file';
 	input.hidden = true;
-	input.multiple = options.selection === "multiple";
-	input.accept = options.accept?.join(",") ?? "";
-	if (options.ariaLabel) input.setAttribute("aria-label", options.ariaLabel);
-	if (options.directory) input.setAttribute("webkitdirectory", "");
+	input.multiple = options.selection === 'multiple';
+	input.accept = options.accept?.join(',') ?? '';
+	if (options.ariaLabel) input.setAttribute('aria-label', options.ariaLabel);
+	if (options.directory) input.setAttribute('webkitdirectory', '');
 	ownerDocument.body.append(input);
 
 	return new Promise((resolve, reject) => {
@@ -46,10 +46,10 @@ export function pickFiles(
 			}
 		};
 
-		registrations.add(addDisposableListener(input, "change", () =>
+		registrations.add(addDisposableListener(input, 'change', () =>
 			finish(input.files ? [...input.files] : undefined),
 		));
-		registrations.add(addDisposableListener(input, "cancel", () =>
+		registrations.add(addDisposableListener(input, 'cancel', () =>
 			finish(undefined),
 		));
 
@@ -60,9 +60,9 @@ export function pickFiles(
 		}
 		if (signal) {
 			const onAbort = (): void => finish(undefined);
-			signal.addEventListener("abort", onAbort, { once: true });
+			signal.addEventListener('abort', onAbort, { once: true });
 			registrations.add(toDisposable(() =>
-				signal.removeEventListener("abort", onAbort),
+				signal.removeEventListener('abort', onAbort),
 			));
 		}
 
@@ -86,11 +86,11 @@ export function triggerDownload(
 	const objectUrl = isBlob(source)
 		? targetWindow.URL.createObjectURL(source)
 		: undefined;
-	const link = h(ownerDocument, "a");
+	const link = h(ownerDocument, 'a');
 	link.download = name;
 	link.href = objectUrl ?? source.toString();
-	link.rel = "noopener";
-	link.style.display = "none";
+	link.rel = 'noopener';
+	link.style.display = 'none';
 	ownerDocument.body.append(link);
 	link.click();
 	link.remove();
@@ -114,11 +114,11 @@ export function createObjectUrl(ownerWindow: Window, blob: Blob): {
 
 function requireOwnerWindow(ownerDocument: Document): BrowserWindow {
 	const ownerWindow = ownerDocument.defaultView;
-	if (!ownerWindow) throw new Error("Browser file access requires an owner window");
+	if (!ownerWindow) throw new Error('Browser file access requires an owner window');
 	return ownerWindow as BrowserWindow;
 }
 
 function isBlob(value: Blob | URL): value is Blob {
-	return typeof (value as Blob).arrayBuffer === "function" &&
-		typeof (value as Blob).stream === "function";
+	return typeof (value as Blob).arrayBuffer === 'function' &&
+		typeof (value as Blob).stream === 'function';
 }

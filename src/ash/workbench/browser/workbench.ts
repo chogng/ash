@@ -5,7 +5,7 @@ import '../services/configuration/common/jsonEditingService.js';
 import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../services/workspaces/common/workspaceEditing.js';
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
-import { IChannelService } from "../../platform/collab/common/channelService.js";
+import { IChannelService } from '../../platform/collab/common/channelService.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { UserSettings } from '../../platform/configuration/common/configurationModels.js';
@@ -57,9 +57,9 @@ import { ExtensionColorThemeService } from '../services/extensions/browser/exten
 import { IWorkbenchThemeService } from '../services/themes/common/workbenchThemeService.js';
 import { IHostColorSchemeService, type IHostColorSchemeService as HostColorSchemeService } from '../services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../services/themes/browser/browserHostColorSchemeService.js';
-import { getActivityHoverPosition } from "./parts/compositeBarActions.js";
-import { IAppServerHookApi, IAppServerSkillApi } from "../../platform/agentHost/common/appServerApi.js";
-import { ILanguageServerService } from "../../platform/language/common/languageServerService.js";
+import { getActivityHoverPosition } from './parts/compositeBarActions.js';
+import { IAppServerHookApi, IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
+import { ILanguageServerService } from '../../platform/language/common/languageServerService.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
 import { ICallService } from '../../platform/call/common/callService.js';
@@ -71,27 +71,27 @@ import { IMarkerDecorationsService } from '../../editor/common/services/markerDe
 import { IApprovalEnvironmentService } from '../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IMemoriesService } from '../../platform/memories/common/memoriesService.js';
 import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDiagnosticsService.js';
-import "./style.js";
-import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
+import './style.js';
+import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
 import { getWindow } from '../../base/browser/dom.js';
 import { TextFileSaveErrorHandler } from '../contrib/files/browser/editors/textFileSaveErrorHandler.js';
-import { mainWindow } from "../../base/browser/window.js";
+import { mainWindow } from '../../base/browser/window.js';
 import { PixelRatio } from '../../base/browser/pixelRatio.js';
 import {
 	type IDisposable,
 	Disposable,
 	DisposableStore,
 	toDisposable,
-} from "../../base/common/lifecycle.js";
-import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from "../../base/common/errors.js";
-import { assertDefined } from "../../base/common/types.js";
-import { URI } from "../../base/common/uri.js";
-import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
-import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
-import { ILoggerService, ILogService } from "../../platform/log/common/log.js";
-import type { LogService } from "../../platform/log/common/logServiceImpl.js";
-import { ILifecycleService, LifecyclePhase, type ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
-import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
+} from '../../base/common/lifecycle.js';
+import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { assertDefined } from '../../base/common/types.js';
+import { URI } from '../../base/common/uri.js';
+import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
+import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
+import { ILoggerService, ILogService } from '../../platform/log/common/log.js';
+import type { LogService } from '../../platform/log/common/logServiceImpl.js';
+import { ILifecycleService, LifecyclePhase, type ShutdownReason } from '../services/lifecycle/common/lifecycle.js';
+import { IDebugAdapterProcessService } from '../../platform/debug/common/debugAdapterProcessService.js';
 import { ITestExecutionService } from '../../platform/testing/common/testExecutionService.js';
 import { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
 import { WebWorkerExtensionHost } from '../services/extensions/browser/webWorkerExtensionHost.js';
@@ -99,8 +99,8 @@ import { withEnabledBuiltInExtensions } from '../../platform/extensions/browser/
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITelemetryService } from '../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../platform/telemetry/common/telemetryUtils.js';
-import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
-import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { ISyntaxApi } from '../../platform/syntax/common/syntaxApi.js';
+import { IRendererHostService, type IRendererHost } from '../../platform/renderer/common/rendererHost.js';
 import { AgentHostConnectionsService } from '../../platform/agentHost/browser/agentHostConnectionsService.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
 import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../platform/localTranscription/common/localTranscription.js';
@@ -110,131 +110,132 @@ import { IAgentToolsApi } from '../../platform/agentHost/common/agentToolsApi.js
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServerManagementService.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
-import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
-import { UnavailableRemoteConnectionApi } from "../../platform/remote/common/remoteConnectionService.js";
+import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from '../../platform/remote/common/remoteConnectionService.js';
+import { UnavailableRemoteConnectionApi } from '../../platform/remote/common/remoteConnectionService.js';
 import type {
 	INativeHostApi,
-} from "../../platform/native/common/nativeHost.js";
-import { MenuId } from "../../platform/actions/common/actions.js";
-import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
-import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from "../../platform/storage/common/storage.js";
-import "../../platform/layout/browser/zIndexRegistry.js";
-import { InstantiationService } from "../../platform/instantiation/common/instantiationService.js";
-import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
+} from '../../platform/native/common/nativeHost.js';
+import { MenuId } from '../../platform/actions/common/actions.js';
+import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
+import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from '../../platform/storage/common/storage.js';
+import '../../platform/layout/browser/zIndexRegistry.js';
+import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
+import { type IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { getSingletonServiceDescriptors, InstantiationType } from '../../platform/instantiation/common/extensions.js';
 import { IEmbedderTerminalService, type IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
-import { NotificationService } from "../services/notification/common/notificationService.js";
-import { IAccessibleViewService, AccessibilityVerbositySettingId } from "../../platform/accessibility/browser/accessibleView.js";
-import { INotificationsCenter, NotificationsCenter } from "./parts/notifications/notificationsCenter.js";
-import { NotificationActionRunner } from "./parts/notifications/notificationsCommands.js";
-import { INotificationService } from "../../platform/notification/common/notification.js";
-import { ProgressService } from "../services/progress/browser/progressService.js";
-import { IProgressService } from "../../platform/progress/common/progress.js";
+import { NotificationService } from '../services/notification/common/notificationService.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../platform/accessibility/browser/accessibleView.js';
+import { INotificationsCenter, NotificationsCenter } from './parts/notifications/notificationsCenter.js';
+import { NotificationActionRunner } from './parts/notifications/notificationsCommands.js';
+import { INotificationService } from '../../platform/notification/common/notification.js';
+import { ProgressService } from '../services/progress/browser/progressService.js';
+import { IProgressService } from '../../platform/progress/common/progress.js';
 import { StatusbarHeight } from './parts/workbenchPartDimensions.js';
-import { IMarkerService } from "../../platform/markers/common/markers.js";
-import { MarkerService } from "../../platform/markers/common/markerService.js";
-import type { IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
+import { IMarkerService } from '../../platform/markers/common/markers.js';
+import { MarkerService } from '../../platform/markers/common/markerService.js';
+import type { IKeyboardLayoutProvider } from '../../platform/keyboardLayout/common/keyboardLayout.js';
 import {
 	BrowserDialogHandler,
-} from "./parts/dialogs/dialog.js";
+} from './parts/dialogs/dialog.js';
 import {
 	IDialogService,
 	IFileDialogService,
 	type IDialogHandler,
-} from "../../platform/dialogs/common/dialogs.js";
+} from '../../platform/dialogs/common/dialogs.js';
 import {
 	AgentHostFileSystemProvider,
-} from "../../platform/agentHost/common/agentHostFileSystemProvider.js";
+} from '../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../services/agentHost/common/agentHostFileSystemService.js';
-import { FileService } from "../../platform/files/common/fileService.js";
-import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
+import { FileService } from '../../platform/files/common/fileService.js';
+import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
 import {
 	IFileService,
-} from "../../platform/files/common/files.js";
-import { DecorationsService } from "../services/decorations/browser/decorationsService.js";
-import { IDecorationsService } from "../services/decorations/common/decorations.js";
+} from '../../platform/files/common/files.js';
+import { DecorationsService } from '../services/decorations/browser/decorationsService.js';
+import { IDecorationsService } from '../services/decorations/common/decorations.js';
 import {
 	IThemeService,
-} from "../../platform/theme/common/themeService.js";
-import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace, workspaceOpenTarget } from "../../platform/workspace/common/workspace.js";
-import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from "../common/configuration.js";
+} from '../../platform/theme/common/themeService.js';
+import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace, workspaceOpenTarget } from '../../platform/workspace/common/workspace.js';
+import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../common/configuration.js';
 import {
 	type WorkbenchContributionHost,
 	WorkbenchContributionsRegistry,
 	WorkbenchPhase,
-} from "../common/contributions.js";
+} from '../common/contributions.js';
 import {
 	IDialogsModel,
 	IWorkbenchDialogHandler,
-} from "../common/dialogs.js";
-import { INativeHostService } from "../common/services.js";
+} from '../common/dialogs.js';
+import { INativeHostService } from '../common/services.js';
 import { FileDialogService } from '../services/dialogs/electron-browser/fileDialogService.js';
 import { FileDialogService as BrowserFileDialogService } from '../services/dialogs/browser/fileDialogService.js';
-import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from "../common/userThemes.js";
+import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from '../common/userThemes.js';
 import {
 	ViewContainerLocation,
-} from "../common/views.js";
-import { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
+	type IView,
+} from '../common/views.js';
+import { IStatusbarService } from '../services/statusbar/browser/statusbar.js';
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { IHostService } from '../services/host/browser/host.js';
 import { BrowserHostService } from '../services/host/browser/browserHostService.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
-import { IViewDescriptorService } from "../common/views.js";
-import { ViewDescriptorService } from "../services/views/browser/viewDescriptorService.js";
+import { IViewDescriptorService } from '../common/views.js';
+import { ViewDescriptorService } from '../services/views/browser/viewDescriptorService.js';
 import { ViewDragAndDropController } from './dnd.js';
-import { IViewsService } from "../services/views/common/viewsService.js";
-import { ViewsService } from "../services/views/browser/viewsService.js";
+import { IViewsService } from '../services/views/common/viewsService.js';
+import { ViewsService } from '../services/views/browser/viewsService.js';
 import {
 	WorkspaceService,
-} from "../services/configuration/browser/configurationService.js";
-import type { DialogService } from "../services/dialogs/common/dialogService.js";
+} from '../services/configuration/browser/configurationService.js';
+import type { DialogService } from '../services/dialogs/common/dialogService.js';
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
-import { WorkbenchThemeService } from "../services/themes/browser/workbenchThemeService.js";
-import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from "./labels.js";
-import { ILabelService } from "../../platform/label/common/label.js";
-import "../services/label/common/labelService.js";
-import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
-import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
-import type { BrowserStorageServiceOptions } from "../services/storage/browser/storageService.js";
-import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
-import { IContentSearchService, IContentSearchConfigurationService } from "../../platform/search/common/search.js";
-import { BrowserContentSearchService, FileContentSearchService } from "../../platform/search/browser/searchService.js";
-import type { Part } from "./part.js";
-import { AuxiliaryBarPart } from "./parts/auxiliarybar/auxiliaryBarPart.js";
+import { WorkbenchThemeService } from '../services/themes/browser/workbenchThemeService.js';
+import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from './labels.js';
+import { ILabelService } from '../../platform/label/common/label.js';
+import '../services/label/common/labelService.js';
+import { WorkbenchLayout, type WorkbenchDefaultLayout } from './layout.js';
+import { IWorkbenchLayoutService, type WorkbenchPartId } from '../services/layout/browser/layoutService.js';
+import type { BrowserStorageServiceOptions } from '../services/storage/browser/storageService.js';
+import { SystemOutputService } from '../services/output/browser/systemOutputService.js';
+import { IContentSearchService, IContentSearchConfigurationService } from '../../platform/search/common/search.js';
+import { BrowserContentSearchService, FileContentSearchService } from '../../platform/search/browser/searchService.js';
+import type { Part } from './part.js';
+import { AuxiliaryBarPart } from './parts/auxiliarybar/auxiliaryBarPart.js';
 import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
-import { EditorPart, IEditorPart, type IEditorPartOptions } from "./parts/editor/editorPart.js";
-import { BreadcrumbsFilePicker, BreadcrumbsSymbolPicker } from "./parts/editor/breadcrumbsPicker.js";
-import { BreadcrumbsService, IBreadcrumbsService } from "./parts/editor/breadcrumbs.js";
-import { EditorParts, IEditorPartsService } from "./parts/editor/editorParts.js";
+import { EditorPart, IEditorPart, type IEditorPartOptions } from './parts/editor/editorPart.js';
+import { BreadcrumbsFilePicker, BreadcrumbsSymbolPicker } from './parts/editor/breadcrumbsPicker.js';
+import { BreadcrumbsService, IBreadcrumbsService } from './parts/editor/breadcrumbs.js';
+import { EditorParts, IEditorPartsService } from './parts/editor/editorParts.js';
 import { HistoryService } from '../services/history/browser/historyService.js';
 import { IHistoryService } from '../services/history/common/history.js';
 import { EditorPanes } from './editor.js';
-import { PanelPart } from "./parts/panel/panelPart.js";
-import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
-import { ActivitybarPart } from "./parts/activitybar/activitybarPart.js";
+import { PanelPart } from './parts/panel/panelPart.js';
+import { SidebarPart } from './parts/sidebar/sidebarPart.js';
+import { ActivitybarPart } from './parts/activitybar/activitybarPart.js';
 import { GlobalCompositeBar } from './parts/globalCompositeBar.js';
-import { StatusbarPart, StatusbarService } from "./parts/statusbar/statusbarPart.js";
+import { StatusbarPart, StatusbarService } from './parts/statusbar/statusbarPart.js';
 import { BannerPart } from './parts/banner/bannerPart.js';
 import { IBannerService } from '../services/banner/browser/bannerService.js';
 import {
 	type BrowserTitleService,
-} from "./parts/titlebar/titlebarPart.js";
-import { PaneCompositePartService } from "./parts/paneCompositePartService.js";
-import { IPaneCompositePartService } from "../services/panecomposite/browser/panecomposite.js";
-import { WorkbenchWindow } from "./window.js";
-import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from "../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
-import { ITerminalProcessService } from "../../platform/terminal/common/terminal.js";
-import { ITextFileService } from "../services/textfile/common/textfiles.js";
-import { TextFileService } from "../services/textfile/browser/textFileService.js";
-import { Event } from "../../base/common/event.js";
-import { AppServerExtensionService } from "../services/extensions/browser/appServerExtensionService.js";
-import { IExtensionService } from "../services/extensions/common/extensionService.js";
+} from './parts/titlebar/titlebarPart.js';
+import { PaneCompositePartService } from './parts/paneCompositePartService.js';
+import { IPaneCompositePartService } from '../services/panecomposite/browser/panecomposite.js';
+import { WorkbenchWindow } from './window.js';
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { ITerminalProcessService } from '../../platform/terminal/common/terminal.js';
+import { ITextFileService } from '../services/textfile/common/textfiles.js';
+import { TextFileService } from '../services/textfile/browser/textFileService.js';
+import { Event } from '../../base/common/event.js';
+import { AppServerExtensionService } from '../services/extensions/browser/appServerExtensionService.js';
+import { IExtensionService } from '../services/extensions/common/extensionService.js';
 import { ISnippetsService } from '../contrib/snippets/browser/snippets.js';
-import { AppServerRemoteAgentService } from "../services/remote/browser/appServerRemoteAgentService.js";
-import { IAppServerRemoteAgentService } from "../services/remote/common/appServerRemoteAgentService.js";
+import { AppServerRemoteAgentService } from '../services/remote/browser/appServerRemoteAgentService.js';
+import { IAppServerRemoteAgentService } from '../services/remote/common/appServerRemoteAgentService.js';
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
 import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../services/editor/browser/codeEditorService.js';
@@ -242,97 +243,97 @@ import { LanguageFeaturesService } from '../../editor/common/services/languageFe
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
 import { ILanguageConfigurationService } from '../../editor/common/languages/languageConfigurationRegistry.js';
-import { ChatService } from "../services/chat/browser/chatService.js";
-import { IChatService } from "../services/chat/common/chatService.js";
-import { ICodebaseService } from "../../platform/codebase/common/codebaseService.js";
-import { AppServerCodebaseService } from "../services/codebase/browser/appServerCodebaseService.js";
-import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
-import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
+import { ChatService } from '../services/chat/browser/chatService.js';
+import { IChatService } from '../services/chat/common/chatService.js';
+import { ICodebaseService } from '../../platform/codebase/common/codebaseService.js';
+import { AppServerCodebaseService } from '../services/codebase/browser/appServerCodebaseService.js';
+import { IToolSearchService } from '../../platform/toolSearch/common/toolSearchService.js';
+import { IKeyboardLayoutService } from '../../platform/keyboardLayout/common/keyboardLayout.js';
 import { IWorkspaceTrustApi, IWorkspaceTrustManagementService } from '../../platform/workspace/common/workspaceTrust.js';
 import { WorkspaceTrustManagementService } from '../services/workspaces/common/workspaceTrust.js';
-import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
-import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
-import { IAccountService } from "../../platform/accounts/common/accountService.js";
-import { AppServerAccountService } from "../services/accounts/browser/appServerAccountService.js";
+import { IConnectorService } from '../../platform/connectors/common/connectorService.js';
+import { AppServerConnectorService } from '../services/connectors/browser/appServerConnectorService.js';
+import { IAccountService } from '../../platform/accounts/common/accountService.js';
+import { AppServerAccountService } from '../services/accounts/browser/appServerAccountService.js';
 import { IIssueReporterService } from '../../platform/issue/common/issue.js';
 import { IGitHubService } from '../../platform/github/common/githubService.js';
-import { GitHubConnectionService } from "../services/accounts/browser/gitHubConnectionService.js";
-import { IGitHubConnectionService } from "../services/accounts/common/gitHubConnectionService.js";
-import { IPluginManagementService } from "../../platform/extensionManagement/common/pluginManagementService.js";
+import { GitHubConnectionService } from '../services/accounts/browser/gitHubConnectionService.js';
+import { IGitHubConnectionService } from '../services/accounts/common/gitHubConnectionService.js';
+import { IPluginManagementService } from '../../platform/extensionManagement/common/pluginManagementService.js';
 import { ILocalGitService } from '../../platform/git/common/localGitService.js';
-import { AppServerPluginManagementService } from "../services/extensionManagement/browser/appServerPluginManagementService.js";
-import { IExtensionManagementService } from "../../platform/extensionManagement/common/extensionManagementService.js";
-import { AppServerExtensionManagementService } from "../services/extensionManagement/browser/appServerExtensionManagementService.js";
-import { WebLanguagePacksService } from "../../platform/languagePacks/browser/languagePacks.js";
-import { ILanguagePackService } from "../../platform/languagePacks/common/languagePacks.js";
-import { ILocaleService } from "../services/localization/common/locale.js";
-import { WorkbenchLocaleService } from "../services/localization/browser/localeService.js";
-import { ILocalizationService } from "../services/localization/common/localizationService.js";
-import { WorkbenchLocalizationService } from "../services/localization/browser/workbenchLocalizationService.js";
-import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from "../services/localization/common/localizationCatalogs.js";
-import { AppServerToolSearchService } from "../services/toolSearch/browser/appServerToolSearchService.js";
-import { ICodebaseSymbolsApi } from "../../platform/codebaseSymbols/common/codebaseSymbolsApi.js";
-import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
-import { NativeAccessibilityService } from "../services/accessibility/electron-browser/accessibilityService.js";
-import { IUntitledTextEditorService, UntitledTextEditorService } from "../services/untitled/common/untitledTextEditorService.js";
-import { UntitledTextEditorInput } from "../services/untitled/common/untitledTextEditorInput.js";
-import { BrowserWorkingCopyService } from "../services/workingCopy/browser/browserWorkingCopyService.js";
+import { AppServerPluginManagementService } from '../services/extensionManagement/browser/appServerPluginManagementService.js';
+import { IExtensionManagementService } from '../../platform/extensionManagement/common/extensionManagementService.js';
+import { AppServerExtensionManagementService } from '../services/extensionManagement/browser/appServerExtensionManagementService.js';
+import { WebLanguagePacksService } from '../../platform/languagePacks/browser/languagePacks.js';
+import { ILanguagePackService } from '../../platform/languagePacks/common/languagePacks.js';
+import { ILocaleService } from '../services/localization/common/locale.js';
+import { WorkbenchLocaleService } from '../services/localization/browser/localeService.js';
+import { ILocalizationService } from '../services/localization/common/localizationService.js';
+import { WorkbenchLocalizationService } from '../services/localization/browser/workbenchLocalizationService.js';
+import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from '../services/localization/common/localizationCatalogs.js';
+import { AppServerToolSearchService } from '../services/toolSearch/browser/appServerToolSearchService.js';
+import { ICodebaseSymbolsApi } from '../../platform/codebaseSymbols/common/codebaseSymbolsApi.js';
+import { AccessibleViewInformationService, IAccessibleViewInformationService } from '../services/accessibility/common/accessibleViewInformationService.js';
+import { NativeAccessibilityService } from '../services/accessibility/electron-browser/accessibilityService.js';
+import { IUntitledTextEditorService, UntitledTextEditorService } from '../services/untitled/common/untitledTextEditorService.js';
+import { UntitledTextEditorInput } from '../services/untitled/common/untitledTextEditorInput.js';
+import { BrowserWorkingCopyService } from '../services/workingCopy/browser/browserWorkingCopyService.js';
 import { ITitleService } from '../services/title/browser/titleService.js';
-import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
+import { IWorkingCopyService } from '../services/workingCopy/common/workingCopyService.js';
 import { IActivityService } from '../services/activity/common/activity.js';
 import { ActivityService } from '../services/activity/browser/activityService.js';
-import { WorkingCopyBackupTracker } from "../services/workingCopy/browser/workingCopyBackupTracker.js";
-import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/workingCopy/common/workingCopyBackupService.js";
-import { IFileTextModelService, ITextModelResourceService } from "../services/textmodelResolver/common/textModelResourceService.js";
+import { WorkingCopyBackupTracker } from '../services/workingCopy/browser/workingCopyBackupTracker.js';
+import { IWorkingCopyBackupService, type WorkingCopyBackup } from '../services/workingCopy/common/workingCopyBackupService.js';
+import { IFileTextModelService, ITextModelResourceService } from '../services/textmodelResolver/common/textModelResourceService.js';
 import { IDocumentEditorTextModelService } from '../services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../services/documentEditor/browser/documentEditorTextModelService.js';
 import { ITextModelService } from '../../editor/common/services/resolverService.js';
 import { TextModelResolverService } from '../services/textmodelResolver/common/textModelResolverService.js';
-import { IBulkEditService } from "../../editor/browser/services/bulkEditService.js";
-import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
-import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
+import { IBulkEditService } from '../../editor/browser/services/bulkEditService.js';
+import { getBrowserTextModelService } from '../services/textmodelResolver/browser/browserTextModelService.js';
+import { getBrowserTextResourceStore } from '../contrib/codeEditor/browser/browserTextResourceStore.js';
 import { ILanguageServerLifecycleService } from '../services/language/common/languageServerLifecycleService.js';
 import { AppServerLanguageLifecycleService } from '../services/language/browser/appServerLanguageLifecycleService.js';
-import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
-import { DiffService } from "../services/diff/browser/diffService.js";
-import { IDiffService } from "../services/diff/common/diffService.js";
-import { AppServerLanguageDiagnosticsService } from "../services/language/browser/appServerLanguageDiagnosticsService.js";
-import { AppServerCodeIntelligenceDocumentService } from "../services/codeIntelligence/browser/appServerCodeIntelligenceDocumentService.js";
-import { ICodeIntelligenceDocumentService } from "../services/codeIntelligence/common/codeIntelligenceDocumentService.js";
-import { AppServerLanguageServerStatusService } from "../services/language/browser/appServerLanguageServerStatusService.js";
-import { ILanguageDiagnosticsService } from "../services/language/common/languageDiagnosticsService.js";
-import { LanguageDiagnosticsMarkerBridge } from "../services/language/browser/languageDiagnosticsMarkerBridge.js";
-import { IOutputService } from "../services/output/common/output.js";
-import { IWorkbenchHostService } from "../services/host/common/workbenchHostService.js";
-import { BrowserEditorService } from "../services/editor/browser/browserEditorService.js";
-import { IEditorService } from "../services/editor/common/editorService.js";
+import { AppServerLanguageProviders } from '../services/language/browser/appServerLanguageProviders.js';
+import { DiffService } from '../services/diff/browser/diffService.js';
+import { IDiffService } from '../services/diff/common/diffService.js';
+import { AppServerLanguageDiagnosticsService } from '../services/language/browser/appServerLanguageDiagnosticsService.js';
+import { AppServerCodeIntelligenceDocumentService } from '../services/codeIntelligence/browser/appServerCodeIntelligenceDocumentService.js';
+import { ICodeIntelligenceDocumentService } from '../services/codeIntelligence/common/codeIntelligenceDocumentService.js';
+import { AppServerLanguageServerStatusService } from '../services/language/browser/appServerLanguageServerStatusService.js';
+import { ILanguageDiagnosticsService } from '../services/language/common/languageDiagnosticsService.js';
+import { LanguageDiagnosticsMarkerBridge } from '../services/language/browser/languageDiagnosticsMarkerBridge.js';
+import { IOutputService } from '../services/output/common/output.js';
+import { IWorkbenchHostService } from '../services/host/common/workbenchHostService.js';
+import { BrowserEditorService } from '../services/editor/browser/browserEditorService.js';
+import { IEditorService } from '../services/editor/common/editorService.js';
 import { IEditorGroupsService, type IEditorGroupsContainer } from '../services/editor/common/editorGroupsService.js';
-import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
-import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
-import { IMenuService } from "../../platform/actions/common/actions.js";
-import { MenuService } from "../../platform/actions/common/menuService.js";
-import { ICommandService } from "../../platform/commands/common/commands.js";
-import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
-import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
-import { BrowserContextViewService } from "../../platform/contextview/browser/contextViewService.js";
-import { HoverService, IHoverService } from "../../platform/hover/browser/hoverService.js";
-import { IKeybindingService } from "../../platform/keybinding/common/keybinding.js";
-import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
-import { IOpenerService } from "../../platform/opener/common/opener.js";
+import { installWorkbenchServiceContributions } from './workbenchServiceContributions.js';
+import { setHoverDelegate } from '../../base/browser/ui/hover/hoverDelegate.js';
+import { IMenuService } from '../../platform/actions/common/actions.js';
+import { MenuService } from '../../platform/actions/common/menuService.js';
+import { ICommandService } from '../../platform/commands/common/commands.js';
+import { IContextKeyService, ContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService, IContextViewService } from '../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../platform/contextview/browser/contextViewService.js';
+import { HoverService, IHoverService } from '../../platform/hover/browser/hoverService.js';
+import { IKeybindingService } from '../../platform/keybinding/common/keybinding.js';
+import { IUserKeyboardLayoutService, UnavailableUserKeyboardLayoutService } from '../../platform/keyboardLayout/common/userKeyboardLayout.js';
+import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { IMarkdownRendererService } from '../../platform/markdown/browser/markdownRenderer.js';
 import { EditorMarkdownCodeBlockRenderer } from '../../editor/browser/widget/markdownRenderer/browser/editorMarkdownCodeBlockRenderer.js';
 import { OpenerService } from '../../editor/browser/services/openerService.js';
 import { IURLService } from '../../platform/url/common/url.js';
-import { CommandService } from "../services/commands/common/commandService.js";
-import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
-import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
-import { IKeyboardShortcutTroubleshootingService } from "../services/keybinding/common/keyboardShortcutTroubleshooting.js";
-import { IPreferencesService } from "../services/preferences/common/preferences.js";
-import { PreferencesService } from "../services/preferences/browser/preferencesService.js";
-import "../services/quickinput/browser/quickInputService.js";
-import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
-import { BrowserClipboardService } from "../services/clipboard/browser/clipboardService.js";
-import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
+import { CommandService } from '../services/commands/common/commandService.js';
+import { BrowserKeyboardLayoutService } from '../services/keybinding/browser/keyboardLayoutService.js';
+import { WorkbenchKeybindingService } from '../services/keybinding/browser/keybindingService.js';
+import { IKeyboardShortcutTroubleshootingService } from '../services/keybinding/common/keyboardShortcutTroubleshooting.js';
+import { IPreferencesService } from '../services/preferences/common/preferences.js';
+import { PreferencesService } from '../services/preferences/browser/preferencesService.js';
+import '../services/quickinput/browser/quickInputService.js';
+import type { IUserKeyboardLayoutApi } from '../../platform/keyboardLayout/common/userKeyboardLayout.js';
+import { BrowserClipboardService } from '../services/clipboard/browser/clipboardService.js';
+import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -343,6 +344,8 @@ export interface IStartWorkbenchOptions {
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	/** An embedded host may initialize only the contributions used by its UI. */
 	readonly contributionIds?: readonly string[];
+	/** Host-specific presentations share the registered views' identity, commands and layout. */
+	readonly viewConstructors?: ReadonlyMap<string, SyncDescriptor<IView>>;
 	readonly api: IRendererHost;
 	/** Optional host-owned execution boundary; declarative extension assets remain available. */
 	readonly extensionHost?: IExtensionHostApi;
@@ -382,6 +385,7 @@ export async function startWorkbench({
 	environmentService,
 	defaultLayout,
 	contributionIds,
+	viewConstructors,
 	api,
 	extensionHost,
 	browserFileSystemProvider,
@@ -476,6 +480,7 @@ export async function startWorkbench({
 			environmentService,
 			serviceCollection,
 			contributionIds,
+			viewConstructors,
 		);
 		await themesReady;
 		return workbench;
@@ -552,6 +557,7 @@ export class Workbench extends Disposable {
 		environmentService: IWorkbenchEnvironmentService,
 		serviceCollection = new ServiceCollection(),
 		contributionIds?: readonly string[],
+		viewConstructors?: IStartWorkbenchOptions['viewConstructors'],
 	) {
 		super();
 		performance.mark('ash.workbench.constructor-start');
@@ -661,9 +667,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAppServerHookApi, api.hooks);
 		const commandService = this._register(new CommandService(services));
 		services.registerInstance(ICommandService, commandService);
-		// Hosts can disable executable extensions while keeping declarative assets.
-		// Otherwise browser packages execute in Workers and server packages keep their process host.
-		services.registerInstance(IExtensionHostApi, extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, api.extensionHost)));
 		services.registerInstance(ITelemetryService, NullTelemetryService);
 		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
@@ -713,6 +716,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceTrustApi, api.workspaceTrust);
 		const workspaceTrustService = this._register(services.createInstance(WorkspaceTrustManagementService));
 		services.registerInstance(IWorkspaceTrustManagementService, workspaceTrustService);
+		// Hosts can disable executable extensions while keeping declarative assets.
+		// Otherwise browser packages execute in Workers and server packages keep their process host.
+		services.registerInstance(IExtensionHostApi, extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, api.extensionHost)));
 		const workspaceFileService = new AgentHostFileSystemProvider({
 			configurationFiles: api.workspaceConfigurationFiles,
 			configuration: () => workspaceContext.getWorkspace().configuration,
@@ -720,13 +726,17 @@ export class Workbench extends Disposable {
 			resourceApi: api.resource,
 			directories: () => workspaceContext.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			onDidChange: listener => {
+				const subscriptions = new DisposableStore();
 				const subscription = api.events.subscribe(event => {
-					if (event.method === "fs/changed") listener(event.params);
+					if (event.method === 'fs/changed') listener(event.params);
 				});
-				return {
-					dispose: () => subscription.dispose(),
-					[Symbol.dispose]: () => subscription.dispose(),
-				};
+				subscriptions.add(toDisposable(() => subscription.dispose()));
+				const recovery = api.appServer.recovery;
+				if (recovery) subscriptions.add(recovery.onDidChange(() => {
+					// Directory authorization can recover without replacing the file connection.
+					if (recovery.status === 'idle') listener({ type: 'rescanRequired' });
+				}));
+				return subscriptions;
 			},
 		});
 		this._register(workspaceFileService);
@@ -789,24 +799,26 @@ export class Workbench extends Disposable {
 		// are authorized by the server for the authenticated workspace.
 		const checkWorkspaceTrust = !!nativeHostApi;
 		services.registerInstance(ILanguageServerService, api.languageServers);
-		const languageLifecycle = this._register(services.createInstance(AppServerLanguageLifecycleService));
-		services.registerInstance(ILanguageServerLifecycleService, languageLifecycle);
+		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));
+		const languageLifecycle = api.hasAppServer ? services.get(ILanguageServerLifecycleService) : undefined;
 		const languageProviders = api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
-		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
-		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
-		const languageDiagnosticsService = this._register(services.createInstance(AppServerLanguageDiagnosticsService, api.language, codeIntelligenceDocuments, checkWorkspaceTrust));
-		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
+		services.registerSingleton(ICodeIntelligenceDocumentService, () => new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols));
+		// Disconnected hosts render local syntax without backend document synchronization.
+		const createDiagnostics = () => services.createInstance(AppServerLanguageDiagnosticsService, api.language, services.get(ICodeIntelligenceDocumentService), checkWorkspaceTrust);
+		const languageDiagnosticsService = api.hasAppServer ? this._register(createDiagnostics()) : undefined;
+		if (languageDiagnosticsService) services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
+		else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
 		const markerService = this._register(new MarkerService());
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
-		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
+		if (languageDiagnosticsService) this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
 		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService }));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
-		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
+		void extensionReady.catch(error => logService.error('extensions', 'Declarative extension activation failed', error));
 		services.registerInstance(IFileSearchService, api.hasAppServer ? api.fileSearch : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(
 			IContentSearchService,
@@ -838,7 +850,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILocalizationService, localizationService);
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) {
-			throw new Error("Workbench requires an owner window");
+			throw new Error('Workbench requires an owner window');
 		}
 		this.ownerWindow = ownerWindow;
 		const feedbackHost = ownerDocument.createElement('div');
@@ -935,8 +947,8 @@ export class Workbench extends Disposable {
 		}));
 		this._register(lifecycleService.onWillShutdown(event => {
 			// UI state is best effort; unsaved content has its own required backup join below.
-			event.join(storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logService.error('storage', 'Could not save Workbench state during shutdown', error)), "Workbench storage flush");
-			event.join(() => workingCopyBackupTracker.shutdown(), "Working-copy backup drain", () => workingCopyBackupTracker.isShutdownCurrent);
+			event.join(storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logService.error('storage', 'Could not save Workbench state during shutdown', error)), 'Workbench storage flush');
+			event.join(() => workingCopyBackupTracker.shutdown(), 'Working-copy backup drain', () => workingCopyBackupTracker.isShutdownCurrent);
 		}));
 		this._register(lifecycleService.onDidShutdown(() => workingCopyBackupTracker.completeShutdown()));
 		this._register(lifecycleService.onDidShutdownError(reason => {
@@ -1002,9 +1014,9 @@ export class Workbench extends Disposable {
 		// Language-server initialization consumes extension-contributed defaults too.
 		// Starting earlier can launch expensive server work with upstream defaults.
 		serviceContributionReady.push(Promise.all([configuration.initialize(fileService, policies, workingCopyService), extensionReady]).then(() => {
-			languageLifecycle.start();
+			languageLifecycle?.start();
 			languageProviders?.start();
-			languageDiagnosticsService.start();
+			languageDiagnosticsService?.start();
 		}));
 		const accessibilityService = this._register(nativeHostApi
 			? services.createInstance(NativeAccessibilityService, workbenchRoot)
@@ -1028,7 +1040,7 @@ export class Workbench extends Disposable {
 			}
 			return parsed as Record<string, ViewContainerLocation>;
 		};
-		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { viewContainerLocations: readViewContainerLocations() }));
+		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { viewConstructors, viewContainerLocations: readViewContainerLocations() }));
 		let restoringViewContainerLocations = false;
 		this._register(viewDescriptors.onDidChangeContainerLocation(({ viewContainer, to }) => {
 			if (restoringViewContainerLocations) return;
@@ -1076,8 +1088,8 @@ export class Workbench extends Disposable {
 			compositeBarContextMenuProvider: contextMenus,
 			contextKeyService: contextKeys,
 			localizationService,
-			ariaLabelKey: { bundle: "ash.regions", key: "primarySidebar" },
-			viewsAriaLabelKey: { bundle: "ash.regions", key: "primarySidebarViews" },
+			ariaLabelKey: { bundle: 'ash.regions', key: 'primarySidebar' },
+			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'primarySidebarViews' },
 			titleActions: {
 				menuService: menus,
 				contextMenuProvider: contextMenus,
@@ -1095,12 +1107,12 @@ export class Workbench extends Disposable {
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
 			localizationService,
-			id: "agentSidebar",
+			id: 'agentSidebar',
 			location: ViewContainerLocation.AgentSidebar,
-			ariaLabel: "Agent sidebar",
-			ariaLabelKey: { bundle: "ash.regions", key: "agentSidebar" },
-			viewsAriaLabel: "Agent sidebar views",
-			viewsAriaLabelKey: { bundle: "ash.regions", key: "agentSidebarViews" },
+			ariaLabel: 'Agent sidebar',
+			ariaLabelKey: { bundle: 'ash.regions', key: 'agentSidebar' },
+			viewsAriaLabel: 'Agent sidebar views',
+			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'agentSidebarViews' },
 			compositeBarContainerFilter: () => false,
 			titleActions: {
 				menuService: menus,
@@ -1152,7 +1164,7 @@ export class Workbench extends Disposable {
 				const picker = instantiationService.createInstance(BreadcrumbsFilePicker, element, openFile);
 				void picker.show().catch(error => {
 					picker.dispose();
-					console.error("Could not show breadcrumb files", error);
+					console.error('Could not show breadcrumb files', error);
 				});
 			},
 		};
@@ -1218,15 +1230,15 @@ export class Workbench extends Disposable {
 		}));
 		services.registerInstance(IBannerService, banner);
 		const parts = new Map<WorkbenchPartId, Part>([
-			["titlebar", titlebar],
+			['titlebar', titlebar],
 			['banner', banner],
-			["statusbar", statusbar],
-			["activitybar", activitybar],
-			["sidebar", sidebar],
-			["auxiliarybar", auxiliarybar],
-			["agentSidebar", agentSidebar],
-			["editor", editor],
-			["panel", panel],
+			['statusbar', statusbar],
+			['activitybar', activitybar],
+			['sidebar', sidebar],
+			['auxiliarybar', auxiliarybar],
+			['agentSidebar', agentSidebar],
+			['editor', editor],
+			['panel', panel],
 		]);
 		const layout = layoutService;
 		layout.createParts(parts);
@@ -1257,7 +1269,7 @@ export class Workbench extends Disposable {
 		this._register(layout.onDidChangePartVisibility(({ partId, visible }) => {
 			if (partId === 'sidebar') activitybar.setSidebarVisible(visible);
 		}));
-		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined));
+		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService, nativeHostApi !== undefined || webWorkspaceClient !== undefined, browserFileSystemProvider !== undefined, services.get(IWorkbenchEnvironmentService)));
 		const paneParts = new Map<ViewContainerLocation, PaneCompositePart>([
 			[ViewContainerLocation.Sidebar, sidebar],
 			[ViewContainerLocation.Panel, panel],
@@ -1273,7 +1285,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
-		services.get(ILanguageServerStatusService);
+		if (api.hasAppServer) services.get(ILanguageServerStatusService);
 		this._register(services.createInstance(ViewDragAndDropController, workbenchRoot));
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
@@ -1337,7 +1349,7 @@ export class Workbench extends Disposable {
 	}
 
 	private registerErrorHandler(logService: ILogService): void {
-		mainWindow.addEventListener("unhandledrejection", event => {
+		mainWindow.addEventListener('unhandledrejection', event => {
 			onUnexpectedError(event.reason);
 			event.preventDefault();
 		});
@@ -1351,7 +1363,7 @@ export class Workbench extends Disposable {
 		const now = Date.now();
 		if (message === this.previousUnexpectedError.message && now - this.previousUnexpectedError.time <= 1_000) return;
 		this.previousUnexpectedError = { message, time: now };
-		logService.error("runtime", message);
+		logService.error('runtime', message);
 	}
 
 	shutdown(reason: ShutdownReason): Promise<void> {
@@ -1384,9 +1396,9 @@ export class Workbench extends Disposable {
 	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart): Promise<void> {
 		let pending: readonly WorkingCopyBackup[];
 		try { pending = await backups.list(); }
-		catch (error) { this.logService.error("workingCopy", "Failed to list working-copy backups", error); return; }
+		catch (error) { this.logService.error('workingCopy', 'Failed to list working-copy backups', error); return; }
 		for (const backup of pending) {
-			if (backup.kind === "text" && this.untitledTextEditorService.isUntitled(backup.resource) && !this.workingCopies.get(backup.resource).some(copy => copy.backupKind === backup.kind)) {
+			if (backup.kind === 'text' && this.untitledTextEditorService.isUntitled(backup.resource) && !this.workingCopies.get(backup.resource).some(copy => copy.backupKind === backup.kind)) {
 				this.untitledTextEditorService.create({ untitledResource: backup.resource, initialValue: backup.content, languageId: backup.languageId, label: backup.label });
 			}
 		}
@@ -1400,21 +1412,21 @@ export class Workbench extends Disposable {
 					continue;
 				}
 				let pane;
-				const untitled = backup.kind === "text" ? this.untitledTextEditorService.get(backup.resource) : undefined;
+				const untitled = backup.kind === 'text' ? this.untitledTextEditorService.get(backup.resource) : undefined;
 				if (untitled) {
 					pane = await editor.openEditor(new UntitledTextEditorInput(untitled));
 				} else {
 					try {
 						pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
 					} catch {
-						pane = await editor.openEditor({ resource: backup.resource, initialText: "", ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
+						pane = await editor.openEditor({ resource: backup.resource, initialText: '', ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
 					}
 				}
 				const workingCopy = pane.workingCopy;
 				if (!workingCopy || workingCopy.backupKind !== backup.kind) throw new Error(`Restored editor does not support ${backup.kind} backups`);
 				workingCopy.restoreBackup(backup.content);
 			} catch (error) {
-				this.logService.error("workingCopy", `Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
+				this.logService.error('workingCopy', `Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
 			}
 		}
 	}
@@ -1458,7 +1470,7 @@ export class Workbench extends Disposable {
 		await this.workingCopyBackupTracker.flush();
 		await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 		using editorStatePause = this.editor.pauseStatePersistence();
-		if (!await this.editor.closeAllEditors({ reason: "reset" })) throw new CancellationError("Workspace switch was cancelled");
+		if (!await this.editor.closeAllEditors({ reason: 'reset' })) throw new CancellationError('Workspace switch was cancelled');
 		await this.workingCopyBackupTracker.flush();
 		this.untitledTextEditorService.reset();
 		this.workingCopyBackups.switchWorkspace(workspace.id);

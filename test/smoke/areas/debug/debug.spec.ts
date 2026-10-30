@@ -262,7 +262,7 @@ test('debugging routes colliding adapter IDs to their own workspace folders', { 
 	for (const { directory } of folders) {
 		const prompt = page.getByRole('dialog', { name: 'Ash', exact: true });
 		await expect(prompt.locator('.ash-dialog-detail')).toContainText(directory);
-		await prompt.getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+		await prompt.getByRole('button', { name: 'Trust Folder', exact: true }).click();
 	}
 	const workbench = new Workbench(page);
 	await workbench.waitForReady();
@@ -834,7 +834,7 @@ exports.activate = function(context) {
  );}`);
 	const peer = adapter.replace("  if (request.command === 'launch') event('initialized', {});", "  if (request.command === 'launch') { event('builderReady', null); event('initialized', {}); }").replace("  if (request.command === 'next') {", "  if (request.command === 'next') { event('breakpoint', line === 2 ? { reason: 'new', breakpoint: { id: 777, source: { path: source }, line: 5, verified: true } } : { reason: 'removed', breakpoint: { id: 777, verified: false } });");
 	expect(peer).not.toBe(adapter);
-	await writeFile(join(directory, 'debug-adapter.cjs'), "require('node:fs').writeFileSync(" + JSON.stringify(join(directory, 'debug-events-pid.txt')) + ", String(process.pid));\n" + peer);
+	await writeFile(join(directory, 'debug-adapter.cjs'), "require('node:fs').writeFileSync(" + JSON.stringify(join(directory, 'debug-events-pid.txt')) + ', String(process.pid));\n' + peer);
 	const configuration = JSON.parse(await readFile(join(directory, '.vscode', 'launch.json'), 'utf8'));
 	configuration.configurations[0].type = 'event-observer';
 	await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify(configuration));
@@ -1544,6 +1544,62 @@ exports.activate = function(context) {
 	await manage('Uninstall');
 });
 
+
+test('Shift+F5 cancels the first Debug session waiting for an extension adapter descriptor', { tag: ['@browser-app-server', '@electron-app-server', '@darwin'] }, async ({ application, workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	const root = join(directory, 'debug-pending-descriptor');
+	await mkdir(join(root, '.ash-plugin'), { recursive: true });
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
+		schemaVersion: 1, id: 'acme/debug-pending-descriptor', version: '1.0.0', displayName: 'Debug pending descriptor', compatibility: { ash: '>=0.1.0' },
+		contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'pending-descriptor' }], capabilities: ['command', 'debugAdapter'] }] },
+		permissions: [{ type: 'directory', access: 'read' }],
+	}));
+	await writeEditorExtensionFixture(root, `
+const ash = require('@ash/sdk');
+exports.activate = function(context) {
+ let release;
+ const events = [];
+ context.subscriptions.push(ash.debug.onDidStartDebugSession(() => events.push('start')));
+ context.subscriptions.push(ash.debug.onDidTerminateDebugSession(() => {
+  events.push('end');
+  void ash.window.showInformationMessage('ASH_DEBUG_DESCRIPTOR_ENDED');
+ }));
+ context.subscriptions.push(ash.debug.registerDebugAdapterDescriptorFactory('pending-descriptor', {
+  createDebugAdapterDescriptor() {
+   void ash.window.showInformationMessage('ASH_DEBUG_DESCRIPTOR_WAITING');
+   return new Promise(resolve => { release = () => resolve(new ash.DebugAdapterExecutable(${JSON.stringify(process.execPath)}, ${JSON.stringify([join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')])})); });
+  }
+ }));
+ context.subscriptions.push(ash.commands.register('acme.debugPending.release', async () => {
+  release();
+  await ash.window.showInformationMessage('ASH_DEBUG_DESCRIPTOR_RELEASED:' + events.join(','));
+ }));
+};`, [{ type: 'pending-descriptor', label: 'Pending descriptor' }]);
+	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+	const installation = workbench.page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+	await installation.getByRole('textbox').fill('debug-pending-descriptor');
+	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
+	expect(installed.message).toContain('Installed acme/debug-pending-descriptor 1.0.0');
+	await manageDebugExtension(application, workbench, 'Debug pending descriptor', 'Grant permissions');
+	const enablement = workbench.page.locator('.ash-extension-editor').filter({ has: workbench.page.getByRole('heading', { name: 'Debug pending descriptor', exact: true }) }).getByRole('switch');
+	await expect(enablement).not.toBeChecked();
+	await enablement.press('Space');
+	await expect(enablement).toBeChecked();
+	await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Debug smoke', type: 'pending-descriptor', request: 'launch' }] }));
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	const page = workbench.page;
+	await expect(page.locator('.ash-notification', { hasText: 'ASH_DEBUG_DESCRIPTOR_WAITING' })).toBeVisible();
+	await page.keyboard.press('Shift+F5');
+	await expect(page.locator('.ash-notification', { hasText: 'ASH_DEBUG_DESCRIPTOR_ENDED' })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.debugPending.release');
+	await expect(page.locator('.ash-notification', { hasText: 'ASH_DEBUG_DESCRIPTOR_RELEASED:end' })).toBeVisible();
+	expect(await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).toBe('');
+	await expect(page.locator('[data-view-container-id="ash.debug"]').getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+	await manageDebugExtension(application, workbench, 'Debug pending descriptor', 'Revoke permissions');
+	await enablement.press('Space');
+	await expect(enablement).not.toBeChecked();
+	await manageDebugExtension(application, workbench, 'Debug pending descriptor', 'Uninstall');
+});
 
 test('Debug configure command reopens the existing launch document in the selected display language', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, restartWorkbench }) => {
 	const resource = join(testWorkspace.directory, '.vscode', 'launch.json');

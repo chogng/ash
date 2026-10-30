@@ -2,6 +2,92 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "Prepare Ash Code Debug",
+			"type": "process",
+			"command": "node",
+			"args": ["build/python.ts", "-B", "build/code/debug.py"],
+			"options": { "cwd": "${workspaceFolder}" },
+			"problemMatcher": [],
+			"runOptions": { "instanceLimit": 1 }
+		},
+		{
+			"label": "Build Ash Debug Backend",
+			"type": "shell",
+			"command": "pnpm debug:backend",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "Watch Ash Backend",
+			"type": "process",
+			"command": "node",
+			"args": ["build/desktop/watch-app-server.ts", "--skip-initial"],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "rust",
+				"pattern": {
+					"regexp": "^(.+?):(\\d+):(\\d+):\\s+(error|warning)\\s+(.*)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"severity": 4,
+					"message": 5
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "^\\[app-server\\] Watching Rust App Server sources$",
+					"endsPattern": "^\\[app-server\\] Watching Rust App Server sources$"
+				}
+			},
+			"presentation": {
+				"panel": "dedicated",
+				"group": "ash-desktop-debug"
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "Run Ash Desktop Renderer",
+			"type": "shell",
+			"command": "pnpm dev:renderer --port 5183",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "vite",
+				"pattern": {
+					"regexp": "^(.+?):(\\d+):(\\d+):\\s+(error|warning)\\s+(.*)$",
+					"file": 1,
+					"line": 2,
+					"column": 3,
+					"severity": 4,
+					"message": 5
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": ".*VITE.*",
+					"endsPattern": "Local:.*http://127\\.0\\.0\\.1:5183/"
+				}
+			},
+			"presentation": {
+				"panel": "dedicated",
+				"group": "ash-desktop-debug"
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
 			"label": "Prepare Ash Web",
 			"type": "shell",
 			"command": "pnpm prepare:generated",

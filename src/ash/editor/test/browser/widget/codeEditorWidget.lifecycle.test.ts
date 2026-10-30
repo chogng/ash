@@ -9,18 +9,18 @@ import { ILanguageConfigurationService } from '../../../common/languages/languag
 import { createTestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../common/services/languageFeaturesService.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { browserEnvironment } from '../testEditorDom.js';
 import { Event as EditorEvent } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget } from '../../../browser/editorBrowser.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
-import { TextModel } from "../../../common/model/textModel.js";
-import { IContextKeyService, ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { TextModel } from '../../../common/model/textModel.js';
+import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
@@ -29,12 +29,12 @@ import { type TextEditorContributionContext } from '../../../browser/editorExten
 import { IInstantiationService, createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 
-const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
+const { CodeEditorWidget } = await import('../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
-const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
+const { InstantiationService } = await import('../../../../platform/instantiation/common/instantiationService.js');
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
-const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
+const { PlaceholderTextContribution } = await import('../../../contrib/placeholderText/browser/placeholderTextContribution.js');
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
 const { EditorWorker } = await import('../../../common/services/editorWebWorker.js');
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
@@ -290,11 +290,11 @@ test('CodeEditorWidget clears its model state when contribution disposal fails d
 	}
 });
 
-test("CodeEditorWidget stages and owns per-instance contributions", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('CodeEditorWidget stages and owns per-instance contributions', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
 	const events: string[] = [];
 	let restoredState: unknown;
 	class EagerContribution extends Disposable {
@@ -321,28 +321,28 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 		lineHeight: 20,
 		contributions: [
 			{
-				id: "test.eager",
+				id: 'test.eager',
 				instantiation: EditorContributionInstantiation.Eager,
 				ctor: EagerContribution,
 			},
 			{
-				id: "test.lazy",
+				id: 'test.lazy',
 				instantiation: EditorContributionInstantiation.Lazy,
 				ctor: LazyContribution,
 			},
 		],
 	});
 
-	assert.deepEqual(events, ["eager:create"]);
+	assert.deepEqual(events, ['eager:create']);
 	const saved = editor.saveViewState();
 	assert.ok(saved);
 	assert.deepEqual(saved.contributionsState, { 'test.eager': { marker: 'saved' } });
 	editor.restoreViewState({ ...saved, contributionsState: { 'test.eager': { marker: 'restored' } } });
 	assert.deepEqual(restoredState, { marker: 'restored' });
-	assert.ok(editor.getContribution("test.lazy"));
-	assert.deepEqual(events, ["eager:create", "lazy:create"]);
+	assert.ok(editor.getContribution('test.lazy'));
+	assert.deepEqual(events, ['eager:create', 'lazy:create']);
 	editor.dispose();
-	assert.deepEqual(events, ["eager:create", "lazy:create", "lazy:dispose", "eager:dispose"]);
+	assert.deepEqual(events, ['eager:create', 'lazy:create', 'lazy:dispose', 'eager:dispose']);
 	dom.window.close();
 });
 

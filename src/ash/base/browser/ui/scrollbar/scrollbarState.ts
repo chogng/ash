@@ -1,4 +1,4 @@
-import { clamp } from "../../../common/numbers.js";
+import { clamp } from '../../../common/numbers.js';
 
 export interface ScrollbarAxisMetrics {
 	readonly viewportSize: number;

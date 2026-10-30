@@ -22,6 +22,43 @@ fn configuration_changes_refresh_session_skills() {
     assert!(refresh.config);
 }
 
+#[test]
+fn subscription_notifications_invalidate_the_global_model_catalog() {
+    use crate::config::SubscriptionEvent;
+    use ash_app_server_protocol::protocol::account::AccountReadResult;
+    use ash_app_server_protocol::protocol::provider::ProviderModelsAuthorityDto;
+    use ash_app_server_protocol::protocol::provider::ProviderModelsListResult;
+    use ash_app_server_protocol::protocol::provider::ProviderModelsUpdated;
+
+    for event in [
+        SubscriptionEvent::Updated(AccountReadResult {
+            revision: "2".into(),
+            accounts: Vec::new(),
+        }),
+        SubscriptionEvent::ModelsUpdated(ProviderModelsUpdated {
+            connection: "chatgpt-subscription".into(),
+            authority: ProviderModelsAuthorityDto::Subscription {
+                account_id: "catalog-account".into(),
+                organization: None,
+                plan: Some("plus".into()),
+            },
+            result: ProviderModelsListResult::Empty,
+        }),
+    ] {
+        let mut app = App::new();
+        let refresh = super::refresh_server_event(
+            crate::client::ClientEvent::Subscription(event),
+            None,
+            &mut app,
+        );
+        assert!(
+            refresh.config,
+            "an open model picker must reread model/list"
+        );
+        assert!(!refresh.skills, "a model update does not invalidate skills");
+    }
+}
+
 fn scheduled(command: AppCommand) -> ScheduledCommand {
     ScheduledCommand {
         command,
@@ -66,6 +103,104 @@ use ratatui::backend::TestBackend;
 use std::collections::VecDeque;
 #[cfg(feature = "in-process-tests")]
 use std::sync::Arc;
+
+#[test]
+#[cfg(feature = "in-process-tests")]
+fn suspend_discards_queued_dictation_and_requires_cancellation_acknowledgement() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let session = AppServerSession::start_embedded(crate::test_support::in_process_options(
+        root.path(),
+        ClientInfo {
+            name: "ash-tui-suspend-test".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let mut client = session.client();
+    let model_picker = crate::models::ModelPickerData::new(
+        client.list_models().unwrap(),
+        client.read_config().unwrap(),
+    );
+    let runtime = state::StateRuntime::open(root.path()).unwrap();
+    let local_settings = Arc::new(
+        crate::config::LocalTuiSettings::open(root.path(), runtime.database_path()).unwrap(),
+    );
+    let mut driver = AppDriver::new(
+        App::new(),
+        client,
+        None,
+        AppDriverResources {
+            file_search: None,
+            host_dir_root: root.path().to_path_buf(),
+            theme_resource: crate::theme::ThemeResource::in_product_root(
+                root.path().to_path_buf(),
+                None,
+            ),
+            server_slash_commands: Vec::new(),
+            plugins_enabled: false,
+            local_settings,
+            model_picker,
+        },
+    )
+    .unwrap();
+    driver.queued_commands.clear();
+    driver.app_mut().insert_text("/voice");
+    let start = driver
+        .app_mut()
+        .handle_key(crate::keymap::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ))
+        .unwrap();
+    driver.queued_commands.push_back(scheduled(start));
+    let command = driver
+        .next_command(Some(AppCommand::Suspend), false)
+        .unwrap();
+    assert!(matches!(
+        driver.execute(command),
+        super::CommandEffect::Suspend
+    ));
+    assert!(driver.queued_commands.is_empty());
+    assert!(driver.app_mut().prepare_suspend().is_none());
+    assert!(driver.next_command(None, false).is_none());
+
+    // A rejected cancellation must keep terminal ownership and the recording state.
+    // No real microphone is acquired: only the presentation believes start succeeded.
+    driver.app_mut().insert_text("/voice");
+    let Some(AppCommand::DictationStart { resource_id }) =
+        driver.app_mut().handle_key(crate::keymap::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ))
+    else {
+        panic!("expected dictation start");
+    };
+    driver.app_mut().update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    let stop = driver
+        .app_mut()
+        .handle_key(crate::keymap::KeyEvent::new(
+            crossterm::event::KeyCode::Char('c'),
+            crossterm::event::KeyModifiers::CONTROL,
+        ))
+        .unwrap();
+    driver.queued_commands.push_back(scheduled(stop));
+    assert!(matches!(
+        driver.execute(scheduled(AppCommand::Suspend)),
+        super::CommandEffect::None
+    ));
+    assert_eq!(
+        driver.app_mut().prepare_suspend(),
+        Some(resource_id.clone())
+    );
+    assert_eq!(
+        driver.next_command(None, false).unwrap().command,
+        AppCommand::DictationStop { resource_id }
+    );
+}
 
 #[test]
 #[cfg(feature = "in-process-tests")]
@@ -230,6 +365,104 @@ fn effort_command_opens_the_supported_selector_without_loading() {
 }
 
 #[test]
+#[cfg(feature = "in-process-tests")]
+fn subscription_notification_discards_an_inflight_catalog_before_refreshing() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let codex_home = root.path().join("codex");
+    std::fs::create_dir(&codex_home).unwrap();
+    let session = AppServerSession::start_embedded(
+        crate::test_support::in_process_options(
+            root.path(),
+            ClientInfo {
+                name: "ash-tui-catalog-invalidation-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_codex_home(codex_home),
+    )
+    .unwrap();
+    let mut client = session.client();
+    let config = client.read_config().unwrap();
+    let catalog = client.list_models().unwrap();
+    let runtime = state::StateRuntime::open(root.path()).unwrap();
+    let local_settings = Arc::new(
+        crate::config::LocalTuiSettings::open(root.path(), runtime.database_path()).unwrap(),
+    );
+    let mut driver = AppDriver::new(
+        App::new(),
+        client,
+        None,
+        AppDriverResources {
+            file_search: None,
+            host_dir_root: root.path().to_path_buf(),
+            theme_resource: crate::theme::ThemeResource::in_product_root(
+                root.path().to_path_buf(),
+                None,
+            ),
+            server_slash_commands: Vec::new(),
+            plugins_enabled: false,
+            local_settings,
+            model_picker: crate::models::ModelPickerData::new(catalog.clone(), config.clone()),
+        },
+    )
+    .unwrap();
+    driver.queued_commands.clear();
+    let choices = driver.model_picker.choices().unwrap();
+    driver
+        .app_mut()
+        .update(crate::models::Event::PickerOpened(choices));
+
+    let mut retired = catalog.clone();
+    retired.models[0].display_name = "Retired account catalog".into();
+    let (started, reading) = std::sync::mpsc::sync_channel(0);
+    let (release, wait) = std::sync::mpsc::sync_channel(0);
+    driver.requests.spawn(
+        Some(RequestKey::Config),
+        "ash-tui-delayed-catalog-test",
+        move || {
+            started.send(()).unwrap();
+            wait.recv().unwrap();
+            Completion::ConfigRefreshed(Ok((config, retired)))
+        },
+        &mut driver.app,
+        origin(),
+    );
+    reading.recv().unwrap();
+    driver.handle_client_event(crate::client::ClientEvent::Subscription(
+        crate::config::SubscriptionEvent::Updated(
+            ash_app_server_protocol::protocol::account::AccountReadResult {
+                revision: "2".into(),
+                accounts: Vec::new(),
+            },
+        ),
+    ));
+    release.send(()).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !driver.requests.is_idle(Some(RequestKey::Config)) {
+        assert!(std::time::Instant::now() < deadline);
+        driver.poll_request_completions();
+        std::thread::yield_now();
+    }
+    assert_eq!(driver.model_picker.catalog(), &catalog);
+    assert!(driver.refresh.config, "a newer read remains queued");
+
+    driver.schedule_refreshes();
+    while !driver.requests.is_idle(Some(RequestKey::Config)) {
+        assert!(std::time::Instant::now() < deadline);
+        driver.poll_request_completions();
+        std::thread::yield_now();
+    }
+    assert!(!driver.refresh.config);
+    assert_eq!(driver.model_picker.catalog(), &catalog);
+    assert!(matches!(
+        driver.app().command_panel(),
+        Some(crate::app::command_panel::CommandPanel::Model(_))
+    ));
+    session.shutdown().unwrap();
+}
+
+#[test]
 fn unrelated_actions_bypass_a_busy_request_without_losing_same_domain_order() {
     let mut app = App::new();
     let mut requests = RequestTasks::default();
@@ -350,6 +583,54 @@ fn quit_bypasses_a_pending_request() {
         Some(AppCommand::Quit)
     ));
     assert!(queued.is_empty());
+}
+
+#[test]
+fn suspend_waits_for_dictation_requests_and_precedes_queued_capture() {
+    let mut app = App::new();
+    let mut requests = RequestTasks::default();
+    let (release, wait) = std::sync::mpsc::sync_channel(0);
+    requests.spawn(
+        Some(RequestKey::Dictation),
+        "ash-tui-test-dictation-suspend",
+        move || {
+            wait.recv().unwrap();
+            Completion::Presentation(Err("finished".into()))
+        },
+        &mut app,
+        origin(),
+    );
+    let mut queued = VecDeque::from([scheduled(AppCommand::DictationStop {
+        resource_id: "recording".into(),
+    })]);
+    assert_eq!(
+        schedule_command(Some(AppCommand::Suspend), &requests, &mut queued),
+        None
+    );
+    assert!(matches!(
+        queued.front().unwrap().command,
+        AppCommand::Suspend
+    ));
+    release.send(()).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !requests.is_idle(Some(RequestKey::Dictation)) {
+        assert!(std::time::Instant::now() < deadline);
+        requests.poll();
+        std::thread::yield_now();
+    }
+    assert_eq!(
+        schedule_command(None, &requests, &mut queued),
+        Some(AppCommand::Suspend)
+    );
+
+    queued.clear();
+    queued.push_back(scheduled(AppCommand::DictationStart {
+        resource_id: "not-started".into(),
+    }));
+    assert_eq!(
+        schedule_command(Some(AppCommand::Suspend), &requests, &mut queued),
+        Some(AppCommand::Suspend)
+    );
 }
 
 #[test]

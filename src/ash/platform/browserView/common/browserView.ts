@@ -29,6 +29,7 @@ export enum BrowserViewCommandId {
 	HideFind = 'workbench.action.browser.hideFind',
 	FindNext = 'workbench.action.browser.findNext',
 	FindPrevious = 'workbench.action.browser.findPrevious',
+	ToggleDevTools = 'workbench.action.browser.toggleDevTools',
 }
 
 export const IBrowserViewService = createServiceIdentifier<IBrowserViewService>('browserViewService');
@@ -146,6 +147,7 @@ export interface IBrowserViewNavigateRequest
 
 /** Serializable host-authoritative state for one embedded browser. */
 export interface IBrowserViewState {
+	readonly isDevToolsOpen: boolean;
 	readonly permissions?: ISerializedBrowserPermissionsSnapshot;
 	readonly browserZoomIndex?: number;
 	readonly deviceEmulation?: IBrowserDeviceProfile;
@@ -157,6 +159,10 @@ export interface IBrowserViewState {
 	readonly canGoForward: boolean;
 	readonly visible: boolean;
 	readonly errorDescription?: string;
+}
+
+export interface IBrowserViewDevToolsStateEvent {
+	readonly isDevToolsOpen: boolean;
 }
 
 export type BrowserViewEvent =
@@ -174,34 +180,35 @@ export type BrowserViewEvent =
 	| { readonly type: 'selectionStopped'; readonly targetId: string; }
 	| { readonly type: 'networkRequested'; readonly targetId: string; readonly requestId: string; readonly networkToken: string; readonly url: string; readonly method: string; }
 	| { readonly type: 'created'; readonly info: IBrowserViewInfo; }
+	| { readonly type: 'canvasOpened'; readonly targetId: string; readonly info: IBrowserViewInfo; }
 	| { readonly type: 'sharingChanged'; readonly targetId: string; readonly threadIds: readonly string[]; }
 	| { readonly type: 'permissionRequested'; readonly targetId: string; readonly requestId: string; readonly origin: string; readonly permission: string; }
 	| { readonly type: 'permissionRequestClosed'; readonly targetId: string; readonly requestId: string; }
 	| { readonly type: 'downloadProgress'; readonly targetId: string; readonly filename: string; readonly receivedBytes: number; readonly totalBytes: number; readonly state: 'progressing' | 'completed' | 'cancelled' | 'interrupted'; }
-	| { readonly type: "focusAddress"; readonly targetId: BrowserViewTargetId; }
+	| { readonly type: 'focusAddress'; readonly targetId: BrowserViewTargetId; }
 	| {
-		readonly type: "stateChanged";
+		readonly type: 'stateChanged';
 		readonly state: IBrowserViewState;
 	}
 	| {
-		readonly type: "loadFailed";
+		readonly type: 'loadFailed';
 		readonly targetId: BrowserViewTargetId;
 		readonly url: string;
 		readonly errorCode: number;
 		readonly errorDescription: string;
 	}
 	| {
-		readonly type: "openRequested";
+		readonly type: 'openRequested';
 		readonly targetId: BrowserViewTargetId;
 		readonly url: string;
 	}
 	| {
-		readonly type: "renderProcessGone";
+		readonly type: 'renderProcessGone';
 		readonly targetId: BrowserViewTargetId;
 		readonly reason: string;
 	}
 	| {
-		readonly type: "closed";
+		readonly type: 'closed';
 		readonly targetId: BrowserViewTargetId;
 	};
 
@@ -209,6 +216,17 @@ export interface IBrowserViewCreateOptions {
 	readonly initialUrl: string;
 	readonly owner: IBrowserViewOwner;
 	readonly session: IBrowserViewSessionOptions;
+	readonly canvas?: IBrowserCanvasPresentation;
+}
+
+/** Live Canvas identity is independent of its temporary page URL. */
+export interface IBrowserCanvasPresentation {
+	readonly sessionId: string;
+	readonly threadId?: string;
+	readonly extensionId?: string;
+	readonly canvasId?: string;
+	readonly instanceId: string;
+	readonly title: string;
 }
 
 export type IBrowserViewOwner = { readonly type: 'user'; } | { readonly type: 'agent'; readonly sessionId: string; };
@@ -230,6 +248,7 @@ export type IBrowserViewSessionOptions =
 	| { readonly scope: BrowserViewStorageScope.Agent; readonly affinity: string; };
 
 export interface IBrowserViewInfo {
+	readonly canvas?: IBrowserCanvasPresentation;
 	readonly remoteAuthority?: string;
 	readonly id: string;
 	readonly host: { readonly windowId: number; };
@@ -259,6 +278,8 @@ export interface IBrowserViewService {
 	updateWindowConfiguration(windowId: number, configuration: IBrowserViewWindowConfiguration): Promise<void>;
 	getConsoleLogs(id: string): Promise<string>;
 	getSelectedText(id: string): Promise<string>;
+	/** Window-owned accessibility inspection grants no Agent control or network authority. */
+	getAccessibilityTree(id: string): Promise<string>;
 	findInPage(id: string, text: string, options?: IBrowserViewFindInPageOptions): Promise<void>;
 	stopFindInPage(id: string, keepSelection?: boolean): Promise<void>;
 	toggleElementSelection(id: string, enabled?: boolean, options?: IBrowserElementSelectionOptions): Promise<void>;
@@ -340,13 +361,30 @@ export function validateBrowserViewCreateRequest(
 	value: unknown,
 ): IBrowserViewCreateRequest {
 	const request = exactRecord(value, ['targetId', 'options'], 'browser view create request');
-	const options = exactRecord(request.options, ['initialUrl', 'owner', 'session'], 'browser view options');
+	const options = exactRecord(request.options, ['initialUrl', 'owner', 'session'], 'browser view options', ['canvas']);
 	const owner = validateBrowserViewOwner(options.owner);
 	const session = validateBrowserViewSessionOptions(options.session);
 	if (owner.type === 'agent' && (session.scope !== BrowserViewStorageScope.Agent || session.affinity !== owner.sessionId)) {
 		throw new Error('Agent browser storage must belong to its session');
 	}
-	return { targetId: validateTargetId(request.targetId), options: { initialUrl: normalizeBrowserViewUrl(options.initialUrl), owner, session } };
+	let canvas: IBrowserCanvasPresentation | undefined;
+	if (options.canvas !== undefined) {
+		const value = exactRecord(options.canvas, ['sessionId', 'instanceId', 'title'], 'Canvas presentation', ['threadId', 'extensionId', 'canvasId']);
+		if (typeof value.instanceId !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(value.instanceId)
+			|| typeof value.sessionId !== 'string' || !value.sessionId.trim() || value.sessionId.length > 1024
+			|| typeof value.title !== 'string' || !value.title.trim() || value.title.length > 256
+			|| owner.type === 'user' && (session.scope !== BrowserViewStorageScope.Ephemeral || typeof value.threadId !== 'string' || !value.threadId || value.threadId.length > 1024 || typeof value.extensionId !== 'string' || typeof value.canvasId !== 'string')
+			|| ['threadId', 'extensionId', 'canvasId'].some(key => value[key] !== undefined && (typeof value[key] !== 'string' || !(value[key] as string).trim() || (value[key] as string).length > 1024))) {
+			throw new TypeError('Invalid Canvas presentation');
+		}
+		canvas = {
+			sessionId: value.sessionId, instanceId: value.instanceId, title: value.title,
+			...(value.threadId === undefined ? {} : { threadId: value.threadId as string }),
+			...(value.extensionId === undefined ? {} : { extensionId: value.extensionId as string }),
+			...(value.canvasId === undefined ? {} : { canvasId: value.canvasId as string }),
+		};
+	}
+	return { targetId: validateTargetId(request.targetId), options: { initialUrl: normalizeBrowserViewUrl(options.initialUrl), owner, session, ...(canvas ? { canvas } : {}) } };
 }
 
 function validateBrowserViewOwner(value: unknown): IBrowserViewOwner {
@@ -383,8 +421,8 @@ export function validateBrowserViewTargetRequest(
 ): IBrowserViewTargetRequest {
 	const request = exactRecord(
 		value,
-		["targetId"],
-		"browser view target request",
+		['targetId'],
+		'browser view target request',
 	);
 	return { targetId: validateTargetId(request.targetId) };
 }
@@ -394,21 +432,21 @@ export function validateBrowserViewLayoutRequest(
 ): IBrowserViewLayoutRequest {
 	const request = exactRecord(
 		value,
-		["bounds", "targetId"],
-		"browser view layout request",
+		['bounds', 'targetId'],
+		'browser view layout request',
 	);
 	const bounds = exactRecord(
 		request.bounds,
-		["height", "width", "x", "y"],
-		"browser view bounds",
+		['height', 'width', 'x', 'y'],
+		'browser view bounds',
 	);
 	return {
 		targetId: validateTargetId(request.targetId),
 		bounds: {
-			x: boundedInteger(bounds.x, "bounds.x", true),
-			y: boundedInteger(bounds.y, "bounds.y", true),
-			width: boundedInteger(bounds.width, "bounds.width", false),
-			height: boundedInteger(bounds.height, "bounds.height", false),
+			x: boundedInteger(bounds.x, 'bounds.x', true),
+			y: boundedInteger(bounds.y, 'bounds.y', true),
+			width: boundedInteger(bounds.width, 'bounds.width', false),
+			height: boundedInteger(bounds.height, 'bounds.height', false),
 		},
 	};
 }
@@ -418,11 +456,11 @@ export function validateBrowserViewVisibilityRequest(
 ): IBrowserViewVisibilityRequest {
 	const request = exactRecord(
 		value,
-		["targetId", "visible"],
-		"browser view visibility request",
+		['targetId', 'visible'],
+		'browser view visibility request',
 	);
-	if (typeof request.visible !== "boolean") {
-		throw new Error("browser view visible must be a boolean");
+	if (typeof request.visible !== 'boolean') {
+		throw new Error('browser view visible must be a boolean');
 	}
 	return {
 		targetId: validateTargetId(request.targetId),
@@ -435,8 +473,8 @@ export function validateBrowserViewNavigateRequest(
 ): IBrowserViewNavigateRequest {
 	const request = exactRecord(
 		value,
-		["targetId", "url"],
-		"browser view navigate request",
+		['targetId', 'url'],
+		'browser view navigate request',
 	);
 	return {
 		targetId: validateTargetId(request.targetId),
@@ -446,42 +484,42 @@ export function validateBrowserViewNavigateRequest(
 
 /** Normalizes URLs accepted by the embedded browser origin policy. */
 export function normalizeBrowserViewUrl(value: unknown): string {
-	if (typeof value !== "string" || value.length === 0) {
-		throw new Error("browser view URL must be a non-empty string");
+	if (typeof value !== 'string' || value.length === 0) {
+		throw new Error('browser view URL must be a non-empty string');
 	}
 	if (value.length > MAX_URL_LENGTH) {
-		throw new Error("browser view URL is too long");
+		throw new Error('browser view URL is too long');
 	}
 	let url: URL;
 	try {
 		url = new URL(value);
 	} catch {
-		throw new Error("browser view URL is invalid");
+		throw new Error('browser view URL is invalid');
 	}
 	if (url.username || url.password) {
-		throw new Error("browser view URL credentials are not allowed");
+		throw new Error('browser view URL credentials are not allowed');
 	}
 	const localHttpHost =
-		url.hostname === "localhost" ||
-		url.hostname === "127.0.0.1" ||
-		url.hostname === "[::1]";
+		url.hostname === 'localhost' ||
+		url.hostname === '127.0.0.1' ||
+		url.hostname === '[::1]';
 	const localFile = url.protocol === 'file:' && (url.hostname === '' || url.hostname === 'localhost');
 	if (
-		url.protocol !== "https:" &&
-		!(url.protocol === "http:" && localHttpHost) &&
+		url.protocol !== 'https:' &&
+		!(url.protocol === 'http:' && localHttpHost) &&
 		!localFile &&
-		url.href !== "about:blank"
+		url.href !== 'about:blank'
 	) {
 		throw new Error(
-			"browser view URL must use HTTPS, loopback HTTP, a local file, or about:blank",
+			'browser view URL must use HTTPS, loopback HTTP, a local file, or about:blank',
 		);
 	}
 	return url.href;
 }
 
 function validateTargetId(value: unknown): BrowserViewTargetId {
-	if (typeof value !== "string" || !TARGET_ID_PATTERN.test(value)) {
-		throw new Error("browser view targetId is invalid");
+	if (typeof value !== 'string' || !TARGET_ID_PATTERN.test(value)) {
+		throw new Error('browser view targetId is invalid');
 	}
 	return value;
 }
@@ -505,18 +543,19 @@ function exactRecord(
 	value: unknown,
 	keys: readonly string[],
 	label: string,
+	optionalKeys: readonly string[] = [],
 ): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 		throw new Error(`${label} must be an object`);
 	}
 	const result = value as Record<string, unknown>;
 	const actual = Object.keys(result).sort();
 	const expected = [...keys].sort();
 	if (
-		actual.length !== expected.length ||
-		actual.some((key, index) => key !== expected[index])
+		expected.some(key => !Object.hasOwn(result, key)) ||
+		actual.some(key => !expected.includes(key) && !optionalKeys.includes(key))
 	) {
-		throw new Error(`${label} must contain exactly: ${expected.join(", ")}`);
+		throw new Error(`${label} must contain exactly: ${expected.join(', ')}`);
 	}
 	return result;
 }

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { expect, test } from '../../../automation/test.js';
 
-test('Markdown preview loads an image relative to a workspace document', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Markdown preview loads an image relative to a workspace document', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, runningApplication }) => {
 	const documents = join(testWorkspace.directory, 'preview-docs');
 	const assets = join(testWorkspace.directory, 'preview-assets');
 	await mkdir(documents);
@@ -27,10 +27,12 @@ test('Markdown preview loads an image relative to a workspace document', { tag: 
 		await transfer.dispose();
 	}
 	await source.editor.waitForEditorContents(text => text.includes('# Workspace resources'));
-	await workbench.quickaccess.runCommand('markdown.reopenAsPreview');
-	const content = source.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
-	await expect(content.getByRole('heading', { name: 'Workspace resources', exact: true })).toBeVisible();
-	await expect.poll(() => content.getByRole('img', { name: 'Workspace diagram', exact: true }).evaluate((image: HTMLImageElement) => ({ width: image.naturalWidth, height: image.naturalHeight }))).toEqual({ width: 24, height: 16 });
+	await runningApplication.driver.diagnostics.waitFor(async () => {
+		await workbench.quickaccess.runCommand('markdown.reopenAsPreview');
+		const content = source.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
+		await expect(content.getByRole('heading', { name: 'Workspace resources', exact: true })).toBeVisible();
+		await expect.poll(() => content.getByRole('img', { name: 'Workspace diagram', exact: true }).evaluate((image: HTMLImageElement) => ({ width: image.naturalWidth, height: image.naturalHeight }))).toEqual({ width: 24, height: 16 });
+	});
 });
 
 test('Markdown extension owns preview commands and shares unsaved text across editor views', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, application }) => {

@@ -1,6 +1,6 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type ExtensionDebugAdapterContribution } from "./extensionManifest.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { type ExtensionDebugAdapterContribution } from './extensionManifest.js';
 
 export interface ExtensionDebugAdapterDefinition extends ExtensionDebugAdapterContribution {
 	readonly extensionId: string;

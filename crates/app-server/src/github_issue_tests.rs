@@ -388,6 +388,80 @@ fn github_account_rpc_connects_without_oauth_selects_host_credentials_and_logs_o
     assert_eq!(remaining["result"]["accounts"][0]["id"], "ghe.example/42");
 }
 
+#[test]
+fn github_managed_settings_rpc_shares_backend_history_across_connections_and_withdraws_policy() {
+    let http = Arc::new(RepositoryHttp::default());
+    let accounts = github_authentication::GitHubOAuth::tokens(
+        http.clone(),
+        Arc::new(ash_secrets::MemorySecretStore::default()),
+    );
+    let login = Arc::new(ash_login::LoginService::deferred(accounts.clone()));
+    let events: Arc<dyn ash_login::extension::AuthenticationEvents> = login.clone();
+    accounts.install_events(&events);
+    let server = server()
+        .with_login_service(login)
+        .with_github_accounts(accounts.clone())
+        .with_github_http(accounts, http.clone())
+        .unwrap();
+    let mut first = server.connection();
+    let mut second = server.connection();
+    initialize(&server, &mut first);
+    initialize(&server, &mut second);
+    http.reply(200, serde_json::json!({"id":42,"login":"policy-user"}));
+    let connected = call(
+        &server,
+        &mut first,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":2, "method":"github/account/connect",
+            "params":{"operationId":"connect-policy", "host":"github.com", "token":"policy-token"}
+        }),
+    );
+    assert_eq!(connected["result"]["id"], "42");
+    let request = |id: u64, operation: &str, mode: &str| {
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":id, "method":"github/account/managedSettings",
+            "params":{"operationId":operation, "accountId":"42", "mode":mode}
+        })
+    };
+    http.reply(200, serde_json::json!({"model":"managed"}));
+    let ready = call(&server, &mut first, request(3, "first", "automatic"));
+    assert_eq!(ready["result"]["refresh"]["state"], "ready");
+    assert_eq!(ready["result"]["settings"]["model"], "managed");
+    assert_eq!(
+        call(&server, &mut second, request(3, "second", "automatic"))["result"],
+        ready["result"]
+    );
+    http.reply(
+        466,
+        serde_json::json!({"message":"private-compatibility-body"}),
+    );
+    let failed = call(&server, &mut first, request(4, "retry", "retry"));
+    assert_eq!(
+        failed["result"]["refresh"]["failure"], "updateRequired",
+        "{failed}"
+    );
+    assert_eq!(
+        failed["result"]["refresh"]["lastSuccessAt"],
+        ready["result"]["refresh"]["lastSuccessAt"]
+    );
+    assert_eq!(failed["result"]["settings"], ready["result"]["settings"]);
+    assert!(!failed.to_string().contains("private"));
+    server.close_connection(first);
+    assert_eq!(
+        call(&server, &mut second, request(4, "after-close", "automatic"))["result"],
+        failed["result"]
+    );
+    assert_eq!(http.requests.lock().unwrap().len(), 3);
+    http.reply(404, serde_json::Value::Null);
+    let withdrawn = call(&server, &mut second, request(5, "withdraw", "retry"));
+    assert!(withdrawn["result"]["settings"].is_null());
+    assert_eq!(withdrawn["result"]["refresh"]["state"], "ready");
+    let invalid = call(&server, &mut second, request(6, "invalid", "unknown"));
+    assert_eq!(invalid["error"]["code"], -32602);
+    assert_eq!(http.requests.lock().unwrap().len(), 4);
+    server.close_connection(second);
+}
+
 struct CancelledRepositoryHttp {
     entered: std::sync::mpsc::Sender<()>,
     confirmed: bool,
@@ -639,6 +713,18 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
             ],
         ),
         (
+            "github/repository/tree",
+            json!({"reference":"feature/links"}),
+            vec![
+                json!({"sha":commit,"truncated":false,"tree":[{"path":"main.rs","mode":"100644","type":"blob","sha":commit,"size":4}]}),
+            ],
+        ),
+        (
+            "github/repository/blob",
+            json!({"sha":commit}),
+            vec![json!({"sha":commit,"size":4,"encoding":"base64","content":"bmV3Cg=="})],
+        ),
+        (
             "github/file/read",
             json!({"commit":commit,"path":"main.rs"}),
             vec![json!({"type":"file","size":4,"encoding":"base64","content":"bmV3Cg=="})],
@@ -723,6 +809,18 @@ fn github_repository_rpc_supports_issue_and_pr_management_without_a_local_checko
         let response =
             repository_request(&server, &mut connection, index as u32 + 2, method, params);
         assert!(response.get("result").is_some(), "{method}: {response}");
+        if method == "github/repository/tree" {
+            assert_eq!(
+                response["result"],
+                json!({"sha":commit,"entries":[{"path":"main.rs","kind":"file","sha":commit,"size":4}]})
+            );
+        }
+        if method == "github/repository/blob" {
+            assert_eq!(
+                response["result"],
+                json!({"sha":commit,"contentBase64":"bmV3Cg=="})
+            );
+        }
         if method == "github/commit/read" {
             assert_eq!(
                 response["result"],

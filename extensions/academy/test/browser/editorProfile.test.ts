@@ -4,10 +4,10 @@ import { prepareAcademyExtension, startAcademyExtension } from '../../../../test
 import { MainThreadClientEditors } from '../../../../src/ash/workbench/api/browser/mainThreadClientEditors.js';
 import type { IExtensionHostApi, ExtensionHostFleetSnapshot } from '../../../../src/ash/platform/agentHost/common/extensionHostApi.js';
 import { AdapterManager } from '../../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
-import assert from "node:assert/strict";
-import { before, test } from "mocha";
-import { academyProfile } from "../../browser/editorProfile.js";
-import { createDocumentEditorPaneOptions } from "../../../../src/ash/workbench/contrib/documentEditor/browser/editorProfile.js";
+import assert from 'node:assert/strict';
+import { before, test } from 'mocha';
+import { academyProfile } from '../../browser/editorProfile.js';
+import { createDocumentEditorPaneOptions } from '../../../../src/ash/workbench/contrib/documentEditor/browser/editorProfile.js';
 import { generalProfile } from '../../browser/generalProfile.js';
 
 before(function () {
@@ -15,7 +15,7 @@ before(function () {
 	prepareAcademyExtension();
 });
 
-test("Stanza profile materialization keeps schema and browser extensions together", () => {
+test('Stanza profile materialization keeps schema and browser extensions together', () => {
 	const options = createDocumentEditorPaneOptions(academyProfile);
 	assert.equal(options.codec.documentType, 'academy');
 	assert.equal('schema' in options, false, 'Package schema and UI configuration do not cross the host boundary');

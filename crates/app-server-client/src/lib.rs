@@ -1597,6 +1597,15 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         )
     }
 
+    /// Cancels dictation and discards its final transcript. If a stop request is already
+    /// running, wait for that response as well to confirm capture has been released.
+    pub fn cancel_dictation(&mut self, resource_id: String) -> Result<(), ClientError> {
+        self.call(
+            ClientMethod::DictationCancel,
+            DictationResourceParams { resource_id },
+        )
+    }
+
     pub fn read_dictation_model(
         &mut self,
         model_id: String,

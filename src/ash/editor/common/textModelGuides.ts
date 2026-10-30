@@ -65,5 +65,3 @@ export class IndentGuideHorizontalLine {
 		public readonly endColumn: number,
 	) { }
 }
-
-

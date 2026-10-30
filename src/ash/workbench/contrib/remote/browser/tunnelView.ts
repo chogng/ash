@@ -1,15 +1,15 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize } from '../../../../nls.js';
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
-import type { IAction } from "../../../../base/common/actions.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import type { RemoteAgentConnection } from "../../../../platform/remote/common/remoteAgentApi.js";
-import { ITunnelService, type RemoteTunnel } from "../../../../platform/tunnel/common/tunnel.js";
-import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import { IAppServerRemoteAgentService } from "../../../services/remote/common/appServerRemoteAgentService.js";
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import type { RemoteAgentConnection } from '../../../../platform/remote/common/remoteAgentApi.js';
+import { ITunnelService, type RemoteTunnel } from '../../../../platform/tunnel/common/tunnel.js';
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../browser/parts/views/viewPane.js';
+import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import "./media/tunnelView.css";
+import './media/tunnelView.css';
 
 /** Renders the Electron Main-owned SSH tunnel catalog and forwarding actions. */
 export class TunnelPanel extends ViewPane {
@@ -39,48 +39,48 @@ export class TunnelPanel extends ViewPane {
 	) {
 		super(container, options);
 		this.activeConnectionIdentity = remoteConnectionIdentity(remoteAgentService.connection);
-		this.contentElement.classList.add("ash-remote-ports");
-		this.formElement = h(container.ownerDocument, "form");
-		this.formElement.className = "ash-remote-ports-form";
-		const label = h(container.ownerDocument, "label");
-		label.className = "ash-remote-ports-label";
+		this.contentElement.classList.add('ash-remote-ports');
+		this.formElement = h(container.ownerDocument, 'form');
+		this.formElement.className = 'ash-remote-ports-form';
+		const label = h(container.ownerDocument, 'label');
+		label.className = 'ash-remote-ports-label';
 		label.htmlFor = `${options.id}-remote-port`;
-		label.textContent = localize({ bundle: 'ash.workbench', key: 'ports.remotePort' }, "Remote port");
-		this.portInput = h(container.ownerDocument, "input");
+		label.textContent = localize({ bundle: 'ash.workbench', key: 'ports.remotePort' }, 'Remote port');
+		this.portInput = h(container.ownerDocument, 'input');
 		this.portInput.id = label.htmlFor;
-		this.portInput.className = "ash-remote-ports-input";
-		this.portInput.type = "number";
-		this.portInput.min = "1";
-		this.portInput.max = "65535";
-		this.portInput.step = "1";
-		this.portInput.placeholder = "3000";
+		this.portInput.className = 'ash-remote-ports-input';
+		this.portInput.type = 'number';
+		this.portInput.min = '1';
+		this.portInput.max = '65535';
+		this.portInput.step = '1';
+		this.portInput.placeholder = '3000';
 		this.portInput.required = true;
 		this.titleActions = this._register(new ActionBar(this.headerActionsElement, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-			ariaLabel: localize({ bundle: 'ash.workbench', key: 'ports.actions' }, "Ports actions"),
+			ariaLabel: localize({ bundle: 'ash.workbench', key: 'ports.actions' }, 'Ports actions'),
 		}));
-		this.titleActions.element.classList.add("ash-toolbar");
-		this.forwardButton = h(container.ownerDocument, "button");
-		this.forwardButton.className = "ash-remote-ports-forward";
-		this.forwardButton.type = "submit";
-		this.forwardButton.textContent = localize({ bundle: 'ash.workbench', key: 'ports.forward' }, "Forward Port");
-		this.stopAllButton = h(container.ownerDocument, "button");
-		this.stopAllButton.className = "ash-remote-ports-stop-all";
-		this.stopAllButton.type = "button";
-		this.stopAllButton.textContent = localize({ bundle: 'ash.workbench', key: 'ports.stopAll' }, "Stop All");
+		this.titleActions.element.classList.add('ash-toolbar');
+		this.forwardButton = h(container.ownerDocument, 'button');
+		this.forwardButton.className = 'ash-remote-ports-forward';
+		this.forwardButton.type = 'submit';
+		this.forwardButton.textContent = localize({ bundle: 'ash.workbench', key: 'ports.forward' }, 'Forward Port');
+		this.stopAllButton = h(container.ownerDocument, 'button');
+		this.stopAllButton.className = 'ash-remote-ports-stop-all';
+		this.stopAllButton.type = 'button';
+		this.stopAllButton.textContent = localize({ bundle: 'ash.workbench', key: 'ports.stopAll' }, 'Stop All');
 		this.formElement.append(label, this.portInput, this.forwardButton, this.stopAllButton);
-		this.statusElement = h(container.ownerDocument, "div");
-		this.statusElement.className = "ash-remote-ports-status";
-		this.statusElement.setAttribute("role", "status");
-		this.listElement = h(container.ownerDocument, "ul");
-		this.listElement.className = "ash-remote-ports-list";
-		this.listElement.setAttribute("aria-label", localize({ bundle: 'ash.workbench', key: 'ports.forwarded' }, "Forwarded ports"));
+		this.statusElement = h(container.ownerDocument, 'div');
+		this.statusElement.className = 'ash-remote-ports-status';
+		this.statusElement.setAttribute('role', 'status');
+		this.listElement = h(container.ownerDocument, 'ul');
+		this.listElement.className = 'ash-remote-ports-list';
+		this.listElement.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'ports.forwarded' }, 'Forwarded ports'));
 		this.contentElement.append(this.formElement, this.statusElement, this.listElement);
 		this.trackBodyMinimum(this.listElement, 22);
 
-		this._register(addDisposableListener(this.formElement, "submit", event => this.forward(event)));
-		this._register(addDisposableListener(this.stopAllButton, "click", () => this.stopAll()));
-		this._register(addDisposableListener(this.listElement, "click", event => this.activate(event)));
+		this._register(addDisposableListener(this.formElement, 'submit', event => this.forward(event)));
+		this._register(addDisposableListener(this.stopAllButton, 'click', () => this.stopAll()));
+		this._register(addDisposableListener(this.listElement, 'click', event => this.activate(event)));
 		this._register(tunnelService.onTunnelOpened(tunnel => this.acceptTunnelChange(tunnel)));
 		this._register(tunnelService.onTunnelClosed(address => this.acceptTunnelRemoval(address)));
 		this._register(remoteAgentService.onDidChangeConnection(connection => this.acceptConnection(connection)));
@@ -98,7 +98,7 @@ export class TunnelPanel extends ViewPane {
 		if (!this.canForward() || this.opening) return;
 		const remotePort = this.portInput.valueAsNumber;
 		if (!Number.isSafeInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
-			this.error = localize({ bundle: 'ash.workbench', key: 'ports.invalidPort' }, "Remote port must be an integer from 1 to 65535.");
+			this.error = localize({ bundle: 'ash.workbench', key: 'ports.invalidPort' }, 'Remote port must be an integer from 1 to 65535.');
 			this.render();
 			return;
 		}
@@ -106,19 +106,19 @@ export class TunnelPanel extends ViewPane {
 		this.opening = true;
 		this.error = undefined;
 		this.render();
-		void Promise.resolve(this.tunnelService.openTunnel(undefined, "127.0.0.1", remotePort)).then(async tunnel => {
-			if (!tunnel || typeof tunnel === "string") {
-				throw new Error(tunnel || localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, "Could not forward the remote port."));
+		void Promise.resolve(this.tunnelService.openTunnel(undefined, '127.0.0.1', remotePort)).then(async tunnel => {
+			if (!tunnel || typeof tunnel === 'string') {
+				throw new Error(tunnel || localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, 'Could not forward the remote port.'));
 			}
 			if (!this.isCurrentConnection(connectionRevision)) {
 				await tunnel.dispose();
 				return;
 			}
 			this.tunnels.set(tunnelKey(tunnel), tunnel);
-			this.portInput.value = "";
+			this.portInput.value = '';
 		}).catch(error => {
 			if (this.isCurrentConnection(connectionRevision)) {
-				this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, "Could not forward the remote port."));
+				this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.forwardFailed' }, 'Could not forward the remote port.'));
 			}
 		}).finally(() => {
 			if (!this.isCurrentConnection(connectionRevision)) return;
@@ -130,7 +130,7 @@ export class TunnelPanel extends ViewPane {
 	private activate(event: Event): void {
 		const target = event.target;
 		if (!(target instanceof this.element.ownerDocument.defaultView!.Element)) return;
-		const id = target.closest<HTMLButtonElement>(".ash-remote-port-stop")?.dataset.tunnelId;
+		const id = target.closest<HTMLButtonElement>('.ash-remote-port-stop')?.dataset.tunnelId;
 		if (!id || this.closing.has(id)) return;
 		const tunnel = this.tunnels.get(id);
 		if (!tunnel) return;
@@ -161,7 +161,7 @@ export class TunnelPanel extends ViewPane {
 			if (this.isCurrentConnection(connectionRevision)) this.tunnels.clear();
 		}, error => {
 			if (this.isCurrentConnection(connectionRevision)) {
-				this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.stopAllFailed' }, "Could not stop all forwarded ports."));
+				this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.stopAllFailed' }, 'Could not stop all forwarded ports.'));
 			}
 		}).finally(() => {
 			if (!this.isCurrentConnection(connectionRevision)) return;
@@ -198,7 +198,7 @@ export class TunnelPanel extends ViewPane {
 		if (connectionIdentity !== this.activeConnectionIdentity) this.tunnels.clear();
 		this.activeConnectionIdentity = connectionIdentity;
 		this.render();
-		if (connection.kind === "ssh") this.refresh();
+		if (connection.kind === 'ssh') this.refresh();
 	}
 
 	private refresh(): void {
@@ -224,7 +224,7 @@ export class TunnelPanel extends ViewPane {
 			this.render();
 		}, error => {
 			if (!this.isCurrentConnection(connectionRevision) || readRevision !== this.readRevision) return;
-			this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.readFailed' }, "Could not read forwarded ports."));
+			this.error = errorMessage(error, localize({ bundle: 'ash.workbench', key: 'ports.readFailed' }, 'Could not read forwarded ports.'));
 			this.render();
 		});
 	}
@@ -233,18 +233,18 @@ export class TunnelPanel extends ViewPane {
 		const remote = this.isRemoteWorkspace();
 		const canForward = this.canForward();
 		const forwardPortAction: IAction = {
-			id: "ash.ports.focusForwardPort",
-			label: localize({ bundle: 'ash.workbench', key: 'ports.focusForward' }, "Forward a Port"),
-			tooltip: localize({ bundle: 'ash.workbench', key: 'ports.focusForward' }, "Forward a Port"),
+			id: 'ash.ports.focusForwardPort',
+			label: localize({ bundle: 'ash.workbench', key: 'ports.focusForward' }, 'Forward a Port'),
+			tooltip: localize({ bundle: 'ash.workbench', key: 'ports.focusForward' }, 'Forward a Port'),
 			icon: Lxicon.add,
 			enabled: canForward && !this.opening,
 			checked: undefined,
 			run: () => this.portInput.focus(),
 		};
 		const refreshPortsAction: IAction = {
-			id: "ash.ports.refresh",
-			label: localize({ bundle: 'ash.workbench', key: 'ports.refresh' }, "Refresh Ports"),
-			tooltip: localize({ bundle: 'ash.workbench', key: 'ports.refresh' }, "Refresh Ports"),
+			id: 'ash.ports.refresh',
+			label: localize({ bundle: 'ash.workbench', key: 'ports.refresh' }, 'Refresh Ports'),
+			tooltip: localize({ bundle: 'ash.workbench', key: 'ports.refresh' }, 'Refresh Ports'),
 			icon: Lxicon.refresh,
 			enabled: remote,
 			checked: undefined,
@@ -254,57 +254,57 @@ export class TunnelPanel extends ViewPane {
 		this.portInput.disabled = !canForward || this.opening;
 		this.forwardButton.disabled = !canForward || this.opening;
 		this.forwardButton.textContent = this.opening
-			? localize({ bundle: 'ash.workbench', key: 'ports.forwarding' }, "Forwarding…")
-			: localize({ bundle: 'ash.workbench', key: 'ports.forward' }, "Forward Port");
+			? localize({ bundle: 'ash.workbench', key: 'ports.forwarding' }, 'Forwarding…')
+			: localize({ bundle: 'ash.workbench', key: 'ports.forward' }, 'Forward Port');
 		this.stopAllButton.disabled = !remote || this.tunnels.size === 0 || this.closingAll;
 		this.stopAllButton.textContent = this.closingAll
-			? localize({ bundle: 'ash.workbench', key: 'ports.stopping' }, "Stopping…")
-			: localize({ bundle: 'ash.workbench', key: 'ports.stopAll' }, "Stop All");
+			? localize({ bundle: 'ash.workbench', key: 'ports.stopping' }, 'Stopping…')
+			: localize({ bundle: 'ash.workbench', key: 'ports.stopAll' }, 'Stop All');
 		const tunnels = remote ? [...this.tunnels.values()].sort(compareTunnels) : [];
 		this.listElement.replaceChildren(...tunnels.map(tunnel => this.renderTunnel(tunnel)));
-		this.statusElement.classList.toggle("error", this.error !== undefined && remote);
+		this.statusElement.classList.toggle('error', this.error !== undefined && remote);
 		this.statusElement.textContent = this.statusText(remote, tunnels.length);
 	}
 
 	private renderTunnel(tunnel: RemoteTunnel): HTMLLIElement {
-		const item = h(this.element.ownerDocument, "li");
-		item.className = `ash-remote-port ${tunnel.state ?? "open"}`;
+		const item = h(this.element.ownerDocument, 'li');
+		item.className = `ash-remote-port ${tunnel.state ?? 'open'}`;
 		item.dataset.tunnelId = tunnelKey(tunnel);
-		const endpoints = h(this.element.ownerDocument, "div");
-		endpoints.className = "ash-remote-port-endpoints";
-		const local = h(this.element.ownerDocument, "code");
-		local.className = "ash-remote-port-local";
+		const endpoints = h(this.element.ownerDocument, 'div');
+		endpoints.className = 'ash-remote-port-endpoints';
+		const local = h(this.element.ownerDocument, 'code');
+		local.className = 'ash-remote-port-local';
 		local.textContent = tunnel.localAddress;
-		const arrow = h(this.element.ownerDocument, "span");
-		arrow.className = "ash-remote-port-arrow";
-		arrow.setAttribute("aria-hidden", "true");
-		arrow.textContent = "→";
-		const remote = h(this.element.ownerDocument, "code");
-		remote.className = "ash-remote-port-remote";
+		const arrow = h(this.element.ownerDocument, 'span');
+		arrow.className = 'ash-remote-port-arrow';
+		arrow.setAttribute('aria-hidden', 'true');
+		arrow.textContent = '→';
+		const remote = h(this.element.ownerDocument, 'code');
+		remote.className = 'ash-remote-port-remote';
 		remote.textContent = `${tunnel.tunnelRemoteHost}:${tunnel.tunnelRemotePort}`;
 		endpoints.append(local, arrow, remote);
-		const state = h(this.element.ownerDocument, "span");
-		state.className = "ash-remote-port-state";
-		state.textContent = tunnelStateLabel(tunnel.state ?? "open");
-		const stop = h(this.element.ownerDocument, "button");
-		stop.className = "ash-remote-port-stop";
-		stop.type = "button";
+		const state = h(this.element.ownerDocument, 'span');
+		state.className = 'ash-remote-port-state';
+		state.textContent = tunnelStateLabel(tunnel.state ?? 'open');
+		const stop = h(this.element.ownerDocument, 'button');
+		stop.className = 'ash-remote-port-stop';
+		stop.type = 'button';
 		stop.dataset.tunnelId = tunnelKey(tunnel);
 		stop.disabled = this.closingAll || this.closing.has(tunnelKey(tunnel));
 		stop.textContent = this.closing.has(tunnelKey(tunnel))
-			? localize({ bundle: 'ash.workbench', key: 'ports.stopping' }, "Stopping…")
-			: localize({ bundle: 'ash.workbench', key: 'ports.stop' }, "Stop");
-		stop.setAttribute("aria-label", localize({ bundle: 'ash.workbench', key: 'ports.stopLabel' }, 'Stop forwarding remote port {0}', tunnel.tunnelRemotePort));
+			? localize({ bundle: 'ash.workbench', key: 'ports.stopping' }, 'Stopping…')
+			: localize({ bundle: 'ash.workbench', key: 'ports.stop' }, 'Stop');
+		stop.setAttribute('aria-label', localize({ bundle: 'ash.workbench', key: 'ports.stopLabel' }, 'Stop forwarding remote port {0}', tunnel.tunnelRemotePort));
 		item.append(endpoints, state, stop);
 		return item;
 	}
 
 	private statusText(remote: boolean, tunnelCount: number): string {
-		if (!remote) return localize({ bundle: 'ash.workbench', key: 'ports.sshRequired' }, "Forwarded ports are available in an SSH Remote Workspace.");
+		if (!remote) return localize({ bundle: 'ash.workbench', key: 'ports.sshRequired' }, 'Forwarded ports are available in an SSH Remote Workspace.');
 		if (this.error) return this.error;
-		if (this.remoteAgentService.connectionState !== "connected") {
+		if (this.remoteAgentService.connectionState !== 'connected') {
 			return tunnelCount === 0
-				? localize({ bundle: 'ash.workbench', key: 'ports.waiting' }, "Waiting for the Remote connection.")
+				? localize({ bundle: 'ash.workbench', key: 'ports.waiting' }, 'Waiting for the Remote connection.')
 				: localize(
 					{ bundle: 'ash.workbench', key: 'ports.disconnectedCount' },
 					'{0} forwarded ports; the Remote connection is {1}.',
@@ -312,18 +312,18 @@ export class TunnelPanel extends ViewPane {
 					remoteStateLabel(this.remoteAgentService.connectionState),
 				);
 		}
-		if (tunnelCount === 0) return localize({ bundle: 'ash.workbench', key: 'ports.empty' }, "No forwarded ports.");
+		if (tunnelCount === 0) return localize({ bundle: 'ash.workbench', key: 'ports.empty' }, 'No forwarded ports.');
 		return tunnelCount === 1
 			? localize({ bundle: 'ash.workbench', key: 'ports.singleCount' }, '1 forwarded port.')
 			: localize({ bundle: 'ash.workbench', key: 'ports.count' }, '{0} forwarded ports.', tunnelCount);
 	}
 
 	private isRemoteWorkspace(): boolean {
-		return this.remoteAgentService.connection?.kind === "ssh";
+		return this.remoteAgentService.connection?.kind === 'ssh';
 	}
 
 	private canForward(): boolean {
-		return this.isRemoteWorkspace() && this.remoteAgentService.connectionState === "connected";
+		return this.isRemoteWorkspace() && this.remoteAgentService.connectionState === 'connected';
 	}
 
 	private isCurrentConnection(revision: number): boolean {
@@ -336,14 +336,14 @@ function compareTunnels(first: RemoteTunnel, second: RemoteTunnel): number {
 }
 
 function remoteConnectionIdentity(connection: RemoteAgentConnection | undefined): string | undefined {
-	return connection?.kind === "ssh" ? connection.authority : connection?.kind;
+	return connection?.kind === 'ssh' ? connection.authority : connection?.kind;
 }
 
-function tunnelStateLabel(state: NonNullable<RemoteTunnel["state"]>): string {
+function tunnelStateLabel(state: NonNullable<RemoteTunnel['state']>): string {
 	switch (state) {
-		case "open": return localize({ bundle: 'ash.workbench', key: 'ports.open' }, "Open");
-		case "recovering": return localize({ bundle: 'ash.workbench', key: 'ports.recovering' }, "Recovering");
-		case "failed": return localize({ bundle: 'ash.workbench', key: 'ports.failed' }, "Failed");
+		case 'open': return localize({ bundle: 'ash.workbench', key: 'ports.open' }, 'Open');
+		case 'recovering': return localize({ bundle: 'ash.workbench', key: 'ports.recovering' }, 'Recovering');
+		case 'failed': return localize({ bundle: 'ash.workbench', key: 'ports.failed' }, 'Failed');
 	}
 }
 
@@ -355,7 +355,7 @@ function tunnelKey(tunnel: RemoteTunnel): string {
 	return `${tunnel.tunnelRemoteHost}:${tunnel.tunnelRemotePort}`;
 }
 
-function remoteStateLabel(state: IAppServerRemoteAgentService["connectionState"]): string {
+function remoteStateLabel(state: IAppServerRemoteAgentService['connectionState']): string {
 	switch (state) {
 		case 'connecting': return localize({ bundle: 'ash.workbench', key: 'ports.connection.connecting' }, 'connecting');
 		case 'connected': return localize({ bundle: 'ash.workbench', key: 'ports.connection.connected' }, 'connected');

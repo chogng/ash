@@ -258,6 +258,11 @@ impl AppDriver {
                     self.publish_memory_status(previous);
                 }
                 Ok(RequestCompletion { completion, origin }) => {
+                    // A notification received during this read requires a newer catalog. In
+                    // particular, never restore the previous account's rows while rereading.
+                    if self.refresh.config && matches!(completion, Completion::ConfigRefreshed(_)) {
+                        continue;
+                    }
                     if let Completion::ConfigRefreshed(Ok((config, catalog))) = &completion {
                         self.model_picker.update_config(config.clone());
                         self.model_picker.update_catalog(catalog.clone());
@@ -761,7 +766,12 @@ pub(super) fn schedule_command(
             _ => false,
         };
         if !duplicate {
-            queued.push_back(command);
+            if matches!(command.command, AppCommand::Suspend) {
+                // Do not start queued capture on the way to suspending the UI.
+                queued.push_front(command);
+            } else {
+                queued.push_back(command);
+            }
         }
     }
     let runnable = queued
@@ -794,7 +804,12 @@ fn refresh_server_event(
         }
         client::ClientEvent::Subscription(event) => {
             app.update(crate::config::Event::Subscription(event));
-            ServerRefresh::default()
+            // Subscription payloads describe one authority, not the global model list.
+            // Reread the catalog through the same owner as configuration changes.
+            ServerRefresh {
+                config: true,
+                ..ServerRefresh::default()
+            }
         }
         client::ClientEvent::QueueChanged => ServerRefresh::default(),
         client::ClientEvent::ConfigChanged => ServerRefresh {

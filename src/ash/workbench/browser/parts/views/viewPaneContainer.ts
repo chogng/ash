@@ -1,20 +1,20 @@
 import './media/paneviewlet.css';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Emitter } from "../../../../base/common/event.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
-import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
-import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor } from "../../../common/views.js";
+import { localize, type ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor } from '../../../common/views.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
-import { ViewPane } from "./viewPane.js";
-import { h } from "../../../../base/browser/dom.js";
-import { PaneView } from "../../../../base/browser/ui/splitview/paneview.js";
-import { observeElementSize } from "../../../../base/browser/observer.js";
-import type { IDimension } from "../../../../base/browser/dom.js";
-import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
+import { ViewPane } from './viewPane.js';
+import { h } from '../../../../base/browser/dom.js';
+import { PaneView } from '../../../../base/browser/ui/splitview/paneview.js';
+import { observeElementSize } from '../../../../base/browser/observer.js';
+import type { IDimension } from '../../../../base/browser/dom.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { Composite } from '../../composite.js';
 import { IMenuService, MenuId, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
 import { ViewMenuActions } from './viewMenuActions.js';
@@ -26,9 +26,9 @@ export interface IViewPaneContainerOptions {
 	readonly viewContainer: IViewContainerDescriptor;
 	readonly localizationService?: ILocalizationService;
 	readonly model: IViewContainerModel;
-	readonly paneHeaders?: "visible" | "hidden";
+	readonly paneHeaders?: 'visible' | 'hidden';
 	/** Content layout uses each pane's minimum size in one scrolling viewport; other layouts retain resizable allocations. */
-	readonly paneLayout?: "stack" | "fill" | "content";
+	readonly paneLayout?: 'stack' | 'fill' | 'content';
 	/** Layout state follows the workspace unless the contribution explicitly chooses another UI state scope. */
 	readonly stateScope?: StorageScope;
 	readonly onDidFailCreateView?: (
@@ -87,10 +87,10 @@ export class ViewPaneContainer extends Composite {
 	) {
 		super(options.viewContainer.id, themeService, storageService);
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "div");
+		const element = h(ownerDocument, 'div');
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = "ash-view-pane-container";
+		element.className = 'ash-view-pane-container';
 		// One inherited presentation policy covers retained and newly created views.
 		const updateHeaderActions = (): void => {
 			element.classList.toggle('always-show-header-actions', configurationService.getValue<boolean>(WorkbenchConfiguration.alwaysShowHeaderActions));
@@ -113,7 +113,7 @@ export class ViewPaneContainer extends Composite {
 		)));
 		this.menuActions = this._register(menuServices.createInstance(ViewMenuActions, MenuId.ViewContainerTitle, MenuId.ViewContainerTitleContext, { arg: this.id }, undefined));
 		this._register(this.menuActions.onDidChange(() => this.updateTitleArea()));
-		this.headersVisible = options.paneHeaders !== "hidden";
+		this.headersVisible = options.paneHeaders !== 'hidden';
 		this.contentSized = options.paneLayout === 'content';
 		this.stateScope = options.stateScope ?? StorageScope.WORKSPACE;
 		element.classList.toggle('content-sized', this.contentSized);
@@ -132,7 +132,7 @@ export class ViewPaneContainer extends Composite {
 			this._panes.clearAndDisposeAll();
 			this.mountedPanes.length = 0;
 		}));
-		this._register(this.paneView.onDidSashChange(() => this.saveState()));
+		this._register(Event.any(this.paneView.onDidSashChange, this.paneView.onDidSashReset)(() => this.saveState()));
 		this._register(this.model.onDidChangeAllViewDescriptors(() => this.syncPanes()));
 		this._register(this.model.onDidChangeVisibleViewDescriptors(() => {
 			this.syncPanes();
@@ -168,6 +168,7 @@ export class ViewPaneContainer extends Composite {
 
 	resizeView(view: ViewPane, size: number): void {
 		this.paneView.resizePane(view, size);
+		this.saveState();
 	}
 
 	get panes(): readonly ViewPane[] {
@@ -316,12 +317,12 @@ export class ViewPaneContainer extends Composite {
 		this.notifyConstraintsChanged();
 	}
 
-	protected stateKey(viewId: string, field: "size" | "collapsed"): string {
+	protected stateKey(viewId: string, field: 'size' | 'collapsed'): string {
 		return `workbench.viewContainer.${this.id}.${viewId}.${field}`;
 	}
 
 	private readSize(viewId: string): number | undefined {
-		const size = this.storageService.getNumber(this.stateKey(viewId, "size"), this.stateScope);
+		const size = this.storageService.getNumber(this.stateKey(viewId, 'size'), this.stateScope);
 		return size !== undefined && size >= 0 ? size : undefined;
 	}
 
@@ -329,11 +330,11 @@ export class ViewPaneContainer extends Composite {
 		if (this.syncing || !this.didLayout) return;
 		for (const pane of this.mountedPanes) {
 			// A merged header is presentation only and must not overwrite the user's collapse choice.
-			if (pane.isHeaderVisible()) this.storageService.store(this.stateKey(pane.id, "collapsed"), pane.isCollapsed(), this.stateScope, StorageTarget.MACHINE);
+			if (pane.isHeaderVisible()) this.storageService.store(this.stateKey(pane.id, 'collapsed'), pane.isCollapsed(), this.stateScope, StorageTarget.MACHINE);
 			if (!this.contentSized && !pane.isCollapsed()) {
 				const size = this.getViewSize(pane);
 				this._panes.get(pane.id)!.size = size;
-				this.storageService.store(this.stateKey(pane.id, "size"), size, this.stateScope, StorageTarget.MACHINE);
+				this.storageService.store(this.stateKey(pane.id, 'size'), size, this.stateScope, StorageTarget.MACHINE);
 			}
 		}
 	}
@@ -353,7 +354,7 @@ export class ViewPaneContainer extends Composite {
 				id: descriptor.id,
 				canMoveView: descriptor.canMoveView,
 				title: localize(this.localizationService, descriptor.localizationKey, descriptor.title),
-				collapsed: this.storageService.getBoolean(this.stateKey(descriptor.id, "collapsed"), this.stateScope) ?? descriptor.collapsed,
+				collapsed: this.storageService.getBoolean(this.stateKey(descriptor.id, 'collapsed'), this.stateScope) ?? descriptor.collapsed,
 			},
 		);
 		if (!(view instanceof ViewPane)) {

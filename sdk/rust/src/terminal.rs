@@ -8,6 +8,23 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+/// A terminal owned by this activation; user closure is reported by `read_terminal`.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalHandle {
+    pub id: String,
+}
+
+/// Bounded output since the caller's cursor, including closure without new output.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalRead {
+    pub output: String,
+    pub next_sequence: u64,
+    pub output_gap: bool,
+    pub closed: bool,
+}
+
 #[derive(Default)]
 pub struct Terminal {
     pub(crate) registrations: BTreeMap<String, Registration>,

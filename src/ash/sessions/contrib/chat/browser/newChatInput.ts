@@ -35,7 +35,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
 
 /** Sessions owns its composer layout and editor policy while sharing input operations.
- * 
+ *
  */
 export class NewChatInputWidget extends ChatInputPart {
 	private submittedMessage = false;

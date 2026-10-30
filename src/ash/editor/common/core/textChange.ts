@@ -1,6 +1,6 @@
-import { Range } from "./range.js";
-import type { Selection } from "./selection.js";
-import { decodeUTF16LE } from "./stringBuilder.js";
+import { Range } from './range.js';
+import type { Selection } from './selection.js';
+import { decodeUTF16LE } from './stringBuilder.js';
 
 /** A compact offset change used by incremental buffers and worker protocols. */
 export class TextChange {
@@ -16,7 +16,7 @@ export class TextChange {
 	get newEnd(): number { return this.newPosition + this.newText.length; }
 
 	constructor(readonly oldPosition: number, readonly oldText: string, readonly newPosition: number, readonly newText: string) {
-		if (!Number.isSafeInteger(oldPosition) || !Number.isSafeInteger(newPosition) || oldPosition < 0 || newPosition < 0) throw new RangeError("Text change positions must be non-negative safe integers");
+		if (!Number.isSafeInteger(oldPosition) || !Number.isSafeInteger(newPosition) || oldPosition < 0 || newPosition < 0) throw new RangeError('Text change positions must be non-negative safe integers');
 	}
 
 	toString(): string {
@@ -54,14 +54,14 @@ export function compressConsecutiveTextChanges(previous: TextChange[] | null, cu
 
 /** The operation that committed one text-model version. */
 export enum TextModelChangeReason {
-	Edit = "edit",
-	EOL = "eol",
+	Edit = 'edit',
+	EOL = 'eol',
 	/** Text changed as part of an atomic rich-document transaction. */
-	Extension = "extension",
-	Reset = "reset",
-	Undo = "undo",
-	Redo = "redo",
-	HistoryCancellation = "historyCancellation",
+	Extension = 'extension',
+	Reset = 'reset',
+	Undo = 'undo',
+	Redo = 'redo',
+	HistoryCancellation = 'historyCancellation',
 }
 
 /** One normalized replacement reported after a transaction commits. */
@@ -106,14 +106,14 @@ export interface TextSnapshot {
 }
 
 export function normalizeTextLineEndings(text: string): string {
-	return text.replace(/\r\n?|\u2028|\u2029/g, "\n");
+	return text.replace(/\r\n?|\u2028|\u2029/g, '\n');
 }
 
-function escapeNewline(text: string): string { return text.replace(/\n/g, "\\n").replace(/\r/g, "\\r"); }
+function escapeNewline(text: string): string { return text.replace(/\n/g, '\\n').replace(/\r/g, '\\r'); }
 function encodedStringSize(text: string): number { return 4 + text.length * 2; }
 
 function writeUInt32BE(buffer: Uint8Array, value: number, offset: number): void {
-	if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff || offset < 0 || offset + 4 > buffer.length) throw new RangeError("Invalid uint32 write");
+	if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff || offset < 0 || offset + 4 > buffer.length) throw new RangeError('Invalid uint32 write');
 	buffer[offset] = value >>> 24;
 	buffer[offset + 1] = value >>> 16;
 	buffer[offset + 2] = value >>> 8;
@@ -121,14 +121,14 @@ function writeUInt32BE(buffer: Uint8Array, value: number, offset: number): void 
 }
 
 function readUInt32BE(buffer: Uint8Array, offset: number): number {
-	if (!Number.isSafeInteger(offset) || offset < 0 || offset + 4 > buffer.length) throw new RangeError("Invalid uint32 read");
+	if (!Number.isSafeInteger(offset) || offset < 0 || offset + 4 > buffer.length) throw new RangeError('Invalid uint32 read');
 	return buffer[offset]! * 0x1000000 + buffer[offset + 1]! * 0x10000 + buffer[offset + 2]! * 0x100 + buffer[offset + 3]!;
 }
 
 function writeString(buffer: Uint8Array, text: string, offset: number): number {
 	writeUInt32BE(buffer, text.length, offset);
 	offset += 4;
-	if (offset + text.length * 2 > buffer.length) throw new RangeError("Text change buffer is too small");
+	if (offset + text.length * 2 > buffer.length) throw new RangeError('Text change buffer is too small');
 	for (let index = 0; index < text.length; index += 1) {
 		const code = text.charCodeAt(index);
 		buffer[offset++] = code;
@@ -223,14 +223,14 @@ class TextChangeCompressor {
 	private static splitPrevious(change: TextChange, offset: number): [TextChange, TextChange] {
 		return [
 			new TextChange(change.oldPosition, change.oldText, change.newPosition, change.newText.slice(0, offset)),
-			new TextChange(change.oldEnd, "", change.newPosition + offset, change.newText.slice(offset)),
+			new TextChange(change.oldEnd, '', change.newPosition + offset, change.newText.slice(offset)),
 		];
 	}
 
 	private static splitCurrent(change: TextChange, offset: number): [TextChange, TextChange] {
 		return [
 			new TextChange(change.oldPosition, change.oldText.slice(0, offset), change.newPosition, change.newText),
-			new TextChange(change.oldPosition + offset, change.oldText.slice(offset), change.newEnd, ""),
+			new TextChange(change.oldPosition + offset, change.oldText.slice(offset), change.newEnd, ''),
 		];
 	}
 

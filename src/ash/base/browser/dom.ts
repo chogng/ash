@@ -1,7 +1,7 @@
-import { IntervalTimer, type IntervalTimerContext } from "../common/async.js";
-import { Emitter, type Event as BaseEvent } from "../common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../common/lifecycle.js";
-import { type BrowserWindow, getWindowId, getWindows, isWindow, mainWindow } from "./window.js";
+import { IntervalTimer, type IntervalTimerContext } from '../common/async.js';
+import { Emitter, type Event as BaseEvent } from '../common/event.js';
+import { Disposable, type IDisposable, toDisposable } from '../common/lifecycle.js';
+import { type BrowserWindow, getWindowId, getWindows, isWindow, mainWindow } from './window.js';
 
 type DomListenerOptions = boolean | AddEventListenerOptions;
 type DomChild = Node | string;
@@ -16,9 +16,9 @@ type DomTreeChild =
 
 const DOCUMENT_NODE_TYPE = 9;
 const ELEMENT_NODE_TYPE = 1;
-const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
+const HTML_NAMESPACE = 'http://www.w3.org/1999/xhtml';
 
-export { runAtThisOrScheduleAtNextAnimationFrame, scheduleAtNextAnimationFrame } from "./scheduler.js";
+export { runAtThisOrScheduleAtNextAnimationFrame, scheduleAtNextAnimationFrame } from './scheduler.js';
 export { getWindowById, getWindowId } from './window.js';
 
 export interface IDimension {
@@ -37,7 +37,7 @@ export class Dimension implements IDimension {
 	}
 
 	static is(value: unknown): value is IDimension {
-		return typeof value === "object" && value !== null && typeof (value as IDimension).width === "number" && typeof (value as IDimension).height === "number";
+		return typeof value === 'object' && value !== null && typeof (value as IDimension).width === 'number' && typeof (value as IDimension).height === 'number';
 	}
 
 	static lift(value: IDimension): Dimension {
@@ -66,7 +66,7 @@ export function getClientArea(element: HTMLElement, defaultValue?: Dimension, fa
 	if (documentElement.clientWidth && documentElement.clientHeight) return new Dimension(documentElement.clientWidth, documentElement.clientHeight);
 	if (fallbackElement) return getClientArea(fallbackElement, defaultValue);
 	if (defaultValue) return defaultValue;
-	throw new Error("Unable to determine browser client area");
+	throw new Error('Unable to determine browser client area');
 }
 
 export function getDomNodePagePosition(element: HTMLElement): IDomNodePagePosition {
@@ -206,10 +206,10 @@ export function getActiveElement(root: Document | ShadowRoot = getActiveDocument
 export function getWindow(source?: Node | Document | UIEvent | Window | null): BrowserWindow {
 	if (!source) return getMainWindow();
 	if (isWindow(source)) return source as BrowserWindow;
-	if ("nodeType" in source && source.nodeType === DOCUMENT_NODE_TYPE) {
+	if ('nodeType' in source && source.nodeType === DOCUMENT_NODE_TYPE) {
 		return ((source as Document).defaultView ?? getMainWindow()) as BrowserWindow;
 	}
-	if ("ownerDocument" in source) {
+	if ('ownerDocument' in source) {
 		return (source.ownerDocument?.defaultView ?? getMainWindow()) as BrowserWindow;
 	}
 	return (source.view ?? getMainWindow()) as BrowserWindow;
@@ -249,7 +249,7 @@ export function computeScreenAwareSize(targetWindow: Window, cssPixels: number):
 
 function getMainWindow(): BrowserWindow {
 	getWindows();
-	if (!mainWindow) throw new Error("A browser window is required");
+	if (!mainWindow) throw new Error('A browser window is required');
 	return mainWindow;
 }
 
@@ -270,11 +270,11 @@ export class ModifierKeyEmitter extends Disposable {
 
 	private constructor(targetWindow: Window) {
 		super();
-		this._register(addDisposableListener(targetWindow, "keydown", (event: KeyboardEvent) => this.update(event), true));
-		this._register(addDisposableListener(targetWindow, "keyup", (event: KeyboardEvent) => this.update(event), true));
-		this._register(addDisposableListener(targetWindow, "mousedown", (event: MouseEvent) => this.update(event), true));
-		this._register(addDisposableListener(targetWindow, "mouseup", (event: MouseEvent) => this.update(event), true));
-		this._register(addDisposableListener(targetWindow, "blur", () => this.reset()));
+		this._register(addDisposableListener(targetWindow, 'keydown', (event: KeyboardEvent) => this.update(event), true));
+		this._register(addDisposableListener(targetWindow, 'keyup', (event: KeyboardEvent) => this.update(event), true));
+		this._register(addDisposableListener(targetWindow, 'mousedown', (event: MouseEvent) => this.update(event), true));
+		this._register(addDisposableListener(targetWindow, 'mouseup', (event: MouseEvent) => this.update(event), true));
+		this._register(addDisposableListener(targetWindow, 'blur', () => this.reset()));
 	}
 
 	static getInstance(targetWindow: Window): ModifierKeyEmitter {
@@ -354,7 +354,7 @@ export function addDisposableListener(
 ): IDisposable {
 	const eventListener = listener as EventListener;
 	target.addEventListener(type, eventListener, options);
-	const capture = typeof options === "boolean" ? options : options?.capture ?? false;
+	const capture = typeof options === 'boolean' ? options : options?.capture ?? false;
 	let activeTarget: EventTarget | undefined = target;
 	let activeListener: EventListener | undefined = eventListener;
 	return toDisposable(() => {
@@ -383,11 +383,11 @@ export function isAncestor(
 }
 
 export function isNode(value: unknown): value is Node {
-	if (typeof value !== "object" || value === null) {
+	if (typeof value !== 'object' || value === null) {
 		return false;
 	}
 	// Adoption changes ownerDocument without changing the node's constructor.
-	if (typeof Node !== "undefined" && value instanceof Node) return true;
+	if (typeof Node !== 'undefined' && value instanceof Node) return true;
 	const nodeConstructor = getNodeConstructor(value);
 	return nodeConstructor !== undefined && value instanceof nodeConstructor;
 }
@@ -402,9 +402,9 @@ export function isHTMLElement(value: unknown): value is HTMLElement {
 	if (!isElement(value)) {
 		return false;
 	}
-	if (typeof HTMLElement !== "undefined" && value instanceof HTMLElement) return true;
+	if (typeof HTMLElement !== 'undefined' && value instanceof HTMLElement) return true;
 	const htmlElementConstructor = value.ownerDocument?.defaultView?.HTMLElement;
-	return typeof htmlElementConstructor === "function"
+	return typeof htmlElementConstructor === 'function'
 		? value instanceof htmlElementConstructor
 		: value.namespaceURI === HTML_NAMESPACE;
 }
@@ -439,7 +439,7 @@ export function stopEvent(
 type PrimitiveDomProperty = string | number | boolean | null | undefined;
 
 type SafeDomPropertyName<TElement> = {
-	[TKey in keyof TElement]-?: TKey extends "innerHTML" | "outerHTML"
+	[TKey in keyof TElement]-?: TKey extends 'innerHTML' | 'outerHTML'
 	? never
 	: TElement[TKey] extends PrimitiveDomProperty ? TKey
 	: never;
@@ -490,7 +490,7 @@ export function svg<K extends keyof SVGElementTagNameMap>(
 ): SVGElementTagNameMap[K] {
 	const args = splitElementArguments(optionsOrChild, children);
 	const element = creationDocument(ownerDocument).createElementNS(
-		"http://www.w3.org/2000/svg",
+		'http://www.w3.org/2000/svg',
 		tag,
 	);
 	applyElementOptions(element, args.options);
@@ -528,7 +528,7 @@ function applyElementOptions<TElement extends HTMLElement | SVGElement>(
 	element: TElement,
 	options: DomElementOptions<TElement>,
 ): void {
-	const classNames = typeof options.className === "string"
+	const classNames = typeof options.className === 'string'
 		? options.className.split(/\s+/)
 		: options.className;
 	if (classNames) {
@@ -558,7 +558,7 @@ function applyElementOptions<TElement extends HTMLElement | SVGElement>(
 function isDomElementOptions<TElement extends HTMLElement | SVGElement>(
 	value: DomElementOptions<TElement> | DomTreeChild,
 ): value is DomElementOptions<TElement> {
-	return typeof value === "object" && value !== null && !Array.isArray(value) && !isNode(value);
+	return typeof value === 'object' && value !== null && !Array.isArray(value) && !isNode(value);
 }
 
 function getNodeConstructor(value: object): typeof Node | undefined {
@@ -567,7 +567,7 @@ function getNodeConstructor(value: object): typeof Node | undefined {
 		? value as Document
 		: candidate.ownerDocument;
 	const nodeConstructor = ownerDocument?.defaultView?.Node;
-	return typeof nodeConstructor === "function" ? nodeConstructor : undefined;
+	return typeof nodeConstructor === 'function' ? nodeConstructor : undefined;
 }
 
 function splitElementArguments<TElement extends HTMLElement | SVGElement>(
@@ -583,7 +583,7 @@ function splitElementArguments<TElement extends HTMLElement | SVGElement>(
 }
 
 function toCssPropertyName(name: string): string {
-	return name.startsWith("--") ? name : name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
+	return name.startsWith('--') ? name : name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
 }
 
 function appendDomChildren(
@@ -595,7 +595,7 @@ function appendDomChildren(
 			appendDomChildren(parent, child);
 		} else if (child !== false && child !== null && child !== undefined) {
 			parent.append(
-				typeof child === "string" || typeof child === "number"
+				typeof child === 'string' || typeof child === 'number'
 					? String(child)
 					: child as Node,
 			);

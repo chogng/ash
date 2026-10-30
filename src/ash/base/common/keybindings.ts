@@ -1,8 +1,8 @@
 import {
 	operatingSystem,
 	OperatingSystem,
-} from "./platform.js";
-import { KeyCode, KeyCodeUtils, type ScanCode } from "./keyCodes.js";
+} from './platform.js';
+import { KeyCode, KeyCodeUtils, type ScanCode } from './keyCodes.js';
 
 /**
  * Modifiers for a keybinding chord.
@@ -27,8 +27,8 @@ export type KeybindingModifiers =
 	};
 
 export enum KeybindingChordKind {
-	Logical = "logical",
-	Physical = "physical",
+	Logical = 'logical',
+	Physical = 'physical',
 }
 
 /** A layout-aware key chord matched against `KeyboardEvent.key`. */
@@ -58,7 +58,7 @@ export function logicalKey(
 	modifiers: KeybindingModifiers = {},
 ): LogicalKeybindingChord {
 	const normalizedKey = normalizeLogicalKey(key);
-	if (!normalizedKey) throw new TypeError("Logical key must not be empty");
+	if (!normalizedKey) throw new TypeError('Logical key must not be empty');
 	return {
 		kind: KeybindingChordKind.Logical,
 		key: normalizedKey,
@@ -72,7 +72,7 @@ export function physicalKey(
 	modifiers: KeybindingModifiers = {},
 ): PhysicalKeybindingChord {
 	const normalizedCode = code.trim();
-	if (!normalizedCode) throw new TypeError("Physical key code must not be empty");
+	if (!normalizedCode) throw new TypeError('Physical key code must not be empty');
 	return {
 		kind: KeybindingChordKind.Physical,
 		code: normalizedCode,
@@ -86,7 +86,7 @@ export class Keybinding {
 
 	constructor(chords: readonly KeybindingChord[]) {
 		if (chords.length === 0) {
-			throw new TypeError("A keybinding requires at least one chord");
+			throw new TypeError('A keybinding requires at least one chord');
 		}
 		if (chords.length > MAX_KEYBINDING_CHORDS) {
 			throw new TypeError(
@@ -110,7 +110,7 @@ export class Keybinding {
 }
 
 export function decodeKeybinding(keybinding: number | readonly number[], targetOperatingSystem: OperatingSystem): Keybinding | null {
-	const encodedChords = typeof keybinding === "number"
+	const encodedChords = typeof keybinding === 'number'
 		? [keybinding & 0x0000FFFF, (keybinding & 0xFFFF0000) >>> 16]
 		: keybinding;
 	const chords = encodedChords
@@ -224,7 +224,7 @@ function resolveChord(
 			(primaryKey && primaryIsMeta),
 	};
 	const label = chord.kind === KeybindingChordKind.Physical
-		? typeof physicalKeyLabels === "function"
+		? typeof physicalKeyLabels === 'function'
 			? physicalKeyLabels(chord.code, resolvedModifiers)
 			: physicalKeyLabels?.get(chord.code)
 		: undefined;
@@ -240,8 +240,8 @@ function resolveChord(
 
 export function normalizeLogicalKey(key: string): string {
 	const trimmed = key.trim();
-	if (key === " " || trimmed.toLocaleLowerCase("en-US") === "space") {
-		return " ";
+	if (key === ' ' || trimmed.toLocaleLowerCase('en-US') === 'space') {
+		return ' ';
 	}
-	return trimmed.toLocaleLowerCase("en-US");
+	return trimmed.toLocaleLowerCase('en-US');
 }

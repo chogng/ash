@@ -1,36 +1,36 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { URI } from "../../../../base/common/uri.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { URI } from '../../../../base/common/uri.js';
 import { MarkerService } from '../../../../platform/markers/common/markerService.js';
 import { MarkerSeverity, MarkerTag, type IMarkerData, type IResourceMarker } from '../../../../platform/markers/common/markers.js';
 
-test("marker service replaces an owner atomically and reports affected resources", () => {
+test('marker service replaces an owner atomically and reports affected resources', () => {
 	using service = new MarkerService();
-	const first = URI.file("C:\\project\\src\\main.rs");
-	const second = URI.file("C:\\project\\src\\lib.rs");
+	const first = URI.file('C:\\project\\src\\main.rs');
+	const second = URI.file('C:\\project\\src\\lib.rs');
 	const changes: string[][] = [];
 	service.onMarkerChanged(resources => changes.push(resources.map(resource => resource.toString())));
 
-	service.changeAll("language", [createMarker(first, MarkerSeverity.Error, "first")]);
-	assert.equal(service.read({ resource: first, owner: "language" }).length, 1);
+	service.changeAll('language', [createMarker(first, MarkerSeverity.Error, 'first')]);
+	assert.equal(service.read({ resource: first, owner: 'language' }).length, 1);
 	assert.equal(service.read({ resource: second }).length, 0);
 
-	service.changeAll("language", [createMarker(second, MarkerSeverity.Warning, "second")]);
-	assert.equal(service.read({ resource: first, owner: "language" }).length, 0);
-	assert.deepEqual(service.read({ resource: second, owner: "language" }).map(marker => marker.message), ["second"]);
+	service.changeAll('language', [createMarker(second, MarkerSeverity.Warning, 'second')]);
+	assert.equal(service.read({ resource: first, owner: 'language' }).length, 0);
+	assert.deepEqual(service.read({ resource: second, owner: 'language' }).map(marker => marker.message), ['second']);
 	assert.deepEqual(changes, [[first.toString()], [first.toString(), second.toString()]]);
 });
 
-test("marker service keeps owners isolated and supports resource removal", () => {
+test('marker service keeps owners isolated and supports resource removal', () => {
 	using service = new MarkerService();
-	const resource = URI.file("C:\\project\\src\\main.rs");
-	service.changeAll("language", [createMarker(resource, MarkerSeverity.Error, "language")]);
-	service.changeAll("tasks", [createMarker(resource, MarkerSeverity.Warning, "task")]);
+	const resource = URI.file('C:\\project\\src\\main.rs');
+	service.changeAll('language', [createMarker(resource, MarkerSeverity.Error, 'language')]);
+	service.changeAll('tasks', [createMarker(resource, MarkerSeverity.Warning, 'task')]);
 
-	service.remove("language", [resource]);
-	assert.deepEqual(service.read().map(marker => marker.message), ["task"]);
+	service.remove('language', [resource]);
+	assert.deepEqual(service.read().map(marker => marker.message), ['task']);
 
-	service.changeAll("tasks", []);
+	service.changeAll('tasks', []);
 	assert.deepEqual(service.read(), []);
 });
 

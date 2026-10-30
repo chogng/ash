@@ -185,8 +185,13 @@
 	display: inline-flex;
 	align-items: center;
 	flex: 0 0 auto;
-	width: 16px;
-	height: 16px;
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+}
+
+.ash-sessions-list-section-icon > .ash-icon,
+.ash-sessions-list-item > .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
 }
 
 .ash-sessions-list-section-label {

@@ -1,18 +1,18 @@
-import { ActionRunner, type IAction } from "../../../../base/common/actions.js";
-import { getErrorMessage, isCancellationError } from "../../../../base/common/errors.js";
-import { Keybinding, logicalKey } from "../../../../base/common/keybindings.js";
-import { localize, localize2 } from "../../../../nls.js";
-import { Action2, MenuId, registerAction2 } from "../../../../platform/actions/common/actions.js";
+import { ActionRunner, type IAction } from '../../../../base/common/actions.js';
+import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
+import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
+import { localize, localize2 } from '../../../../nls.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { NotificationsPosition, NotificationsSettings } from '../../../common/notifications.js';
-import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { INotificationService, NotificationsFilter, type INotificationSourceFilter } from "../../../../platform/notification/common/notification.js";
-import { INotificationsCenter } from "./notificationsCenter.js";
-import "./notificationAccessibleView.js";
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService, NotificationsFilter, type INotificationSourceFilter } from '../../../../platform/notification/common/notification.js';
+import { INotificationsCenter } from './notificationsCenter.js';
+import './notificationAccessibleView.js';
 
 /** One window's error boundary for notification actions in both presentations. */
 export class NotificationActionRunner extends ActionRunner {
@@ -35,22 +35,22 @@ export class NotificationActionRunner extends ActionRunner {
 registerAction2(class ShowNotificationsAction extends Action2 {
 	constructor() {
 		super({
-			id: "notifications.showList",
-			title: localize2("notifications.showList", "Show Notifications"),
+			id: 'notifications.showList',
+			title: localize2('notifications.showList', 'Show Notifications'),
 			f1: true,
-			keybinding: { primary: Keybinding.chord(logicalKey("k", { primaryKey: true }), logicalKey("n", { primaryKey: true, shiftKey: true })) },
+			keybinding: { primary: Keybinding.chord(logicalKey('k', { primaryKey: true }), logicalKey('n', { primaryKey: true, shiftKey: true })) },
 		});
 	}
 	override run(accessor: ServicesAccessor): void { accessor.get(INotificationsCenter).show(); }
 });
 
 registerAction2(class HideNotificationsAction extends Action2 {
-	constructor() { super({ id: "notifications.hideList", title: localize2("notifications.hideList", "Hide Notifications"), f1: true }); }
+	constructor() { super({ id: 'notifications.hideList', title: localize2('notifications.hideList', 'Hide Notifications'), f1: true }); }
 	override run(accessor: ServicesAccessor): void { accessor.get(INotificationsCenter).hide(); }
 });
 
 registerAction2(class ClearNotificationsAction extends Action2 {
-	constructor() { super({ id: "notifications.clearAll", title: localize2("notifications.clearAllCommand", "Clear All Notifications"), f1: true }); }
+	constructor() { super({ id: 'notifications.clearAll', title: localize2('notifications.clearAllCommand', 'Clear All Notifications'), f1: true }); }
 	override run(accessor: ServicesAccessor): void { accessor.get(INotificationsCenter).clearAll(); }
 });
 

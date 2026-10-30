@@ -251,14 +251,16 @@ test.describe('Git Fetch', () => {
 		} finally { await rm(remotes, { recursive: true, force: true }); }
 	});
 
-	test('reports a failed local remote fetch and preserves local changes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	test('reports a failed local remote fetch and preserves local changes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		const cwd = testWorkspace.directory;
 		await run('git', ['remote', 'add', 'broken', join(cwd, 'missing-remote.git')], { cwd });
 		await writeFile(testWorkspace.file, 'const dirty = true;\n');
 		const head = (await run('git', ['rev-parse', 'HEAD'], { cwd })).stdout;
 		await workbench.git.open();
-		await workbench.quickaccess.runCommand('git.fetchAll');
+		await workbench.git.selectTitleMenu(application, ['Fetch']);
 		await expect(workbench.page.locator('[data-view-id="ash.gitView"] .ash-scm-status')).toContainText('GitOperationFailed', { timeout: 30_000 });
+		await expect(workbench.page.locator('.ash-notification-host .ash-notification-message').filter({ hasText: 'GitOperationFailed' })).toHaveCount(1);
+		await expect(workbench.page.locator('.ash-notification-host .ash-notification-message').filter({ hasText: 'extension process reported an internal failure' })).toHaveCount(0);
 		await expect(workbench.page.locator('[data-view-id="ash.gitView"] [data-action-id="git.refresh"] button')).toBeEnabled();
 		expect((await run('git', ['rev-parse', 'HEAD'], { cwd })).stdout).toBe(head);
 		expect((await run('git', ['diff', '--cached'], { cwd })).stdout).toBe('');

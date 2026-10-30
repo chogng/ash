@@ -1,8 +1,9 @@
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { SelectBox } from '../../../../../base/browser/ui/selectbox/selectbox.js';
 import { ActionListItemKind, type IActionListItem, type IActionListOptions } from '../../../browser/actionList.js';
+import { TabbedActionListWidget } from '../../../browser/tabbedActionListWidget.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../browser/actionWidget.js';
 import { IConfigurationService } from '../../../../configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../configuration/common/inMemoryConfigurationService.js';
@@ -65,10 +66,18 @@ window.ashActionWidgetIntegration = {
 	},
 	showTabs(): void {
 		source.focus();
-		widget.show('tabs', false, [], delegate, source, {}, {
+		const tabbed = resources.add(services.createInstance(TabbedActionListWidget));
+		tabbed.show<string>({ user: 'tabs', anchor: source, delegate,
 			tabs: [{ id: 'short', label: 'Short' }, { id: 'long', label: 'Long' }],
 			initialTab: 'short',
 			createActionList: tab => ({ items: createItems([tab === 'short' ? 'Run' : 'Run the selected action with a longer descriptive label']) }),
+			openItemDetails: item => {
+				tabbed.showDetails({ label: item.label, backLabel: 'Back', render: container => {
+					container.textContent = `Details for ${item.label}`;
+					return toDisposable(() => { container.textContent = ''; });
+				} });
+				return true;
+			},
 		});
 	},
 	mountSelect(): void {

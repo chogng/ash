@@ -17,10 +17,10 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { DebugTitleContribution } from './debugTitle.js';
 import { DebugContentProvider } from '../common/debugContentProvider.js';
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import { SyncDescriptor } from "../../../../platform/instantiation/common/descriptors.js";
-import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
-import { BREAKPOINT_EDITOR_CONTRIBUTION_ID, LOADED_SCRIPTS_VIEW_ID, CONTEXT_DISASSEMBLY_VIEW_FOCUS, DEBUG_CONSOLE_VIEW_ID, DISASSEMBLY_VIEW_ID } from "../common/debug.js";
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from '../../../common/views.js';
+import { BREAKPOINT_EDITOR_CONTRIBUTION_ID, LOADED_SCRIPTS_VIEW_ID, CONTEXT_DISASSEMBLY_VIEW_FOCUS, DEBUG_CONSOLE_VIEW_ID, DISASSEMBLY_VIEW_ID } from '../common/debug.js';
 import { VariablesView } from './variablesView.js';
 import { WatchExpressionsView } from './watchExpressionsView.js';
 import { CallStackView } from './callStackView.js';
@@ -29,9 +29,9 @@ import { WelcomeView } from './welcomeView.js';
 import { VARIABLES_VIEW_ID, WATCH_VIEW_ID, CALLSTACK_VIEW_ID, BREAKPOINTS_VIEW_ID, CONTEXT_DEBUG_UX, CONTEXT_BREAKPOINTS_EXIST } from '../common/debug.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { DebugViewPaneContainer } from './debugViewlet.js';
-import { Repl } from "./repl.js";
-import { BreakpointEditorContribution } from "./breakpointEditorContribution.js";
-import { EditorContributionInstantiation, registerEditorContribution } from "../../../../editor/browser/editorExtensions.js";
+import { Repl } from './repl.js';
+import { BreakpointEditorContribution } from './breakpointEditorContribution.js';
+import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
 import { localize } from '../../../../nls.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
@@ -162,7 +162,7 @@ QuickAccessRegistry.register({
 });
 
 export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Debug, title: "Run and Debug", localizationKey: { bundle: "ash.views", key: "runAndDebug" }, location: ViewContainerLocation.Sidebar, icon: Lxicon.debugAlt, order: 3, ctorDescriptor: new SyncDescriptor(DebugViewPaneContainer) });
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Debug, title: 'Run and Debug', localizationKey: { bundle: 'ash.views', key: 'runAndDebug' }, location: ViewContainerLocation.Sidebar, icon: Lxicon.debugAlt, order: 3, ctorDescriptor: new SyncDescriptor(DebugViewPaneContainer) });
 	const inspection = CONTEXT_DEBUG_UX.isEqualTo('default');
 	registry.registerStaticViews(WorkbenchViewContainerId.Debug, [
 		{ id: WelcomeView.ID, title: 'Run', localizationKey: { bundle: 'ash', key: 'debug.run' }, order: 1, when: CONTEXT_DEBUG_UX.isEqualTo('simple'), canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(WelcomeView) },
@@ -172,8 +172,8 @@ export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistr
 		{ id: LOADED_SCRIPTS_VIEW_ID, title: 'Loaded Scripts', localizationKey: { bundle: 'ash', key: 'debug.loadedSources' }, order: 50, when: inspection, hideByDefault: true, canMoveView: true, ctorDescriptor: new SyncDescriptor(LoadedScriptsView) },
 		{ id: BREAKPOINTS_VIEW_ID, title: 'Breakpoints', localizationKey: { bundle: 'ash', key: 'debug.breakpoints' }, order: 40, when: ContextKeyExpr.or(inspection, CONTEXT_BREAKPOINTS_EXIST.isEqualTo(true)), canMoveView: true, ctorDescriptor: new SyncDescriptor(BreakpointsView) },
 	]);
-	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.DebugConsole, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, location: ViewContainerLocation.Panel, order: 2.75 });
-	registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, order: 1, canToggleVisibility: false, canMoveView: true, ctorDescriptor: new SyncDescriptor(Repl) }]);
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.DebugConsole, title: 'Debug Console', localizationKey: { bundle: 'ash.views', key: 'debugConsole' }, location: ViewContainerLocation.Panel, order: 2.75 });
+	registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: 'Debug Console', localizationKey: { bundle: 'ash.views', key: 'debugConsole' }, order: 1, canToggleVisibility: false, canMoveView: true, ctorDescriptor: new SyncDescriptor(Repl) }]);
 }
 
 registerDebugView();

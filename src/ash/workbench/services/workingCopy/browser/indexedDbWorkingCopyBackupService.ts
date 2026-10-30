@@ -1,6 +1,6 @@
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { URI } from "../../../../base/common/uri.js";
-import { type IWorkingCopyBackupService, type WorkingCopyBackup } from "../common/workingCopyBackupService.js";
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
+import { type IWorkingCopyBackupService, type WorkingCopyBackup } from '../common/workingCopyBackupService.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { type IBackupWorkspace, BackupError } from '../../../../platform/backup/common/backup.js';
 
@@ -8,7 +8,7 @@ interface StoredBackup {
 	readonly key: string;
 	readonly workspaceId: string;
 	readonly resource: string;
-	readonly kind: WorkingCopyBackup["kind"];
+	readonly kind: WorkingCopyBackup['kind'];
 	readonly content: string;
 	readonly updatedAt: number;
 	readonly revision?: string;
@@ -17,9 +17,9 @@ interface StoredBackup {
 	readonly label?: string;
 }
 
-const DATABASE_NAME = "ash-working-copy-backups";
+const DATABASE_NAME = 'ash-working-copy-backups';
 const DATABASE_VERSION = 1;
-const STORE_NAME = "backups";
+const STORE_NAME = 'backups';
 
 /** IndexedDB-backed backups for browser and disconnected UI runtimes. */
 export class IndexedDbWorkingCopyBackupService extends Disposable implements IWorkingCopyBackupService {
@@ -31,7 +31,7 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 
 	constructor(private workspaceId: string, factory: IDBFactory | undefined = globalThis.indexedDB) {
 		super();
-		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
+		if (!workspaceId.trim()) throw new TypeError('Working-copy backup service requires a workspace id');
 		this.database = factory ? openDatabase(factory) : Promise.resolve(undefined);
 		this._register(toDisposable(() => { void this.database.then(database => database?.close()).catch(() => undefined); }));
 	}
@@ -40,7 +40,7 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		const workspaceId = this.workspaceId;
 		const database = await this.database;
 		const records = database
-			? await request<StoredBackup[]>(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).index("workspaceId").getAll(workspaceId))
+			? await request<StoredBackup[]>(database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).index('workspaceId').getAll(workspaceId))
 			: [...this.fallback.values()].filter(record => record.workspaceId === workspaceId);
 		const result = deserialize(records);
 		const byResource = new Map(records.map(record => [record.resource, record]));
@@ -137,7 +137,7 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 	}
 
 	switchWorkspace(workspaceId: string): void {
-		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
+		if (!workspaceId.trim()) throw new TypeError('Working-copy backup service requires a workspace id');
 		this.workspaceId = workspaceId;
 		this.observed.clear();
 		if (this.movedRecords?.workspaceId === workspaceId) for (const record of this.movedRecords.records) this.observed.set(record.key, record);
@@ -189,11 +189,11 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
 		const opening = factory.open(DATABASE_NAME, DATABASE_VERSION);
 		opening.onupgradeneeded = () => {
 			if (opening.result.objectStoreNames.contains(STORE_NAME)) return;
-			opening.result.createObjectStore(STORE_NAME, { keyPath: "key" }).createIndex("workspaceId", "workspaceId", { unique: false });
+			opening.result.createObjectStore(STORE_NAME, { keyPath: 'key' }).createIndex('workspaceId', 'workspaceId', { unique: false });
 		};
 		opening.onsuccess = () => resolve(opening.result);
-		opening.onerror = () => reject(opening.error ?? new Error("Failed to open working-copy backup database"));
-		opening.onblocked = () => reject(new Error("Working-copy backup database upgrade is blocked"));
+		opening.onerror = () => reject(opening.error ?? new Error('Failed to open working-copy backup database'));
+		opening.onblocked = () => reject(new Error('Working-copy backup database upgrade is blocked'));
 	});
 }
 
@@ -212,20 +212,20 @@ function deserialize(records: readonly StoredBackup[]): readonly WorkingCopyBack
 function request<T>(value: IDBRequest<T>): Promise<T> {
 	return new Promise((resolve, reject) => {
 		value.onsuccess = () => resolve(value.result);
-		value.onerror = () => reject(value.error ?? new Error("Working-copy backup database request failed"));
+		value.onerror = () => reject(value.error ?? new Error('Working-copy backup database request failed'));
 	});
 }
 
 function transactionDone(transaction: IDBTransaction): Promise<void> {
 	return new Promise((resolve, reject) => {
 		transaction.oncomplete = () => resolve();
-		transaction.onerror = () => reject(transaction.error ?? new Error("Working-copy backup transaction failed"));
-		transaction.onabort = () => reject(transaction.error ?? new Error("Working-copy backup transaction was aborted"));
+		transaction.onerror = () => reject(transaction.error ?? new Error('Working-copy backup transaction failed'));
+		transaction.onabort = () => reject(transaction.error ?? new Error('Working-copy backup transaction was aborted'));
 	});
 }
 
 function validateBackup(backup: WorkingCopyBackup): void {
-	if (!backup.resource || typeof backup.content !== "string") throw new TypeError("Working-copy backup requires a resource and serialized content");
-	if (backup.kind !== "text" && backup.kind !== "structuredDocument") throw new TypeError("Working-copy backup kind is invalid");
-	if (!Number.isSafeInteger(backup.updatedAt) || backup.updatedAt < 0) throw new RangeError("Working-copy backup timestamp is invalid");
+	if (!backup.resource || typeof backup.content !== 'string') throw new TypeError('Working-copy backup requires a resource and serialized content');
+	if (backup.kind !== 'text' && backup.kind !== 'structuredDocument') throw new TypeError('Working-copy backup kind is invalid');
+	if (!Number.isSafeInteger(backup.updatedAt) || backup.updatedAt < 0) throw new RangeError('Working-copy backup timestamp is invalid');
 }

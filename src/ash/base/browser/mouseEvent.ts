@@ -1,5 +1,5 @@
-import { stopEvent } from "./dom.js";
-import { isFiniteNumber } from "../common/numbers.js";
+import { stopEvent } from './dom.js';
+import { isFiniteNumber } from '../common/numbers.js';
 
 export interface IMouseEvent {
 	readonly browserEvent: MouseEvent;
@@ -66,7 +66,7 @@ export class StandardMouseEvent implements IMouseEvent {
 		this.middleButton = browserEvent.button === 1;
 		this.rightButton = browserEvent.button === 2;
 		this.buttons = browserEvent.buttons;
-		this.detail = browserEvent.type === "dblclick"
+		this.detail = browserEvent.type === 'dblclick'
 			? 2
 			: browserEvent.detail || 1;
 		this.clientX = browserEvent.clientX;
@@ -105,12 +105,12 @@ function eventWindow(event: UIEvent): Window | undefined {
 	const target = event.target;
 	if (
 		target &&
-		typeof target === "object" &&
-		"ownerDocument" in target
+		typeof target === 'object' &&
+		'ownerDocument' in target
 	) {
 		return (target as Node).ownerDocument?.defaultView ?? undefined;
 	}
-	return typeof window === "undefined" ? undefined : window;
+	return typeof window === 'undefined' ? undefined : window;
 }
 
 export class StandardPointerEvent extends StandardMouseEvent {
@@ -126,7 +126,7 @@ export class StandardPointerEvent extends StandardMouseEvent {
 	constructor(override readonly browserEvent: PointerEvent) {
 		super(browserEvent);
 		this.pointerId = browserEvent.pointerId ?? 0;
-		this.pointerType = browserEvent.pointerType || "mouse";
+		this.pointerType = browserEvent.pointerType || 'mouse';
 		this.pressure = browserEvent.pressure ?? (
 			browserEvent.buttons === 0 ? 0 : 0.5
 		);

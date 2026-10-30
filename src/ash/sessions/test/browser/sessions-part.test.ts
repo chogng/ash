@@ -33,21 +33,21 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../platform/rendere
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { observableValue } from '../../../base/common/observable.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
-import { Emitter, Event } from "../../../base/common/event.js";
-import { DisposableStore, toDisposable, Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { DisposableStore, toDisposable, Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import type { ICommandEvent, ICommandService } from "../../../platform/commands/common/commands.js";
-import { IContextMenuService, IContextViewService } from "../../../platform/contextview/browser/contextView.js";
+import type { ICommandEvent, ICommandService } from '../../../platform/commands/common/commands.js';
+import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
-import { IChatService, type ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
-import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
-import type { IUntitledChatSession } from "../../services/sessions/common/session.js";
-import { SessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
+import { IChatService, type ThreadUpdateEnvelope } from '../../../workbench/services/chat/common/chatService.js';
+import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import type { IUntitledChatSession } from '../../services/sessions/common/session.js';
+import { SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
@@ -58,7 +58,7 @@ import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { NewChatContextAttachments } from '../../contrib/chat/browser/newChatContextAttachments.js';
 import { NewChatInputPasteTarget } from '../../contrib/chat/browser/newChatInputPasteTarget.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>", { url: 'http://localhost/' });
+const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -72,7 +72,7 @@ for (const [name, value] of Object.entries({
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
-const { SessionsPart } = await import("../../browser/parts/sessionsPart.js");
+const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
@@ -81,10 +81,10 @@ const { createCodeEditorServices } = await import('../../../editor/test/browser/
 
 suiteTeardown(() => {
 	browserEnvironment.window.close();
-	for (const name of ["window", "document", "Node", "Element", "HTMLElement", "Event", "MouseEvent", "FileReader", "navigator"]) Reflect.deleteProperty(globalThis, name);
+	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent', 'FileReader', 'navigator']) Reflect.deleteProperty(globalThis, name);
 });
 
-test("SessionsPart remains owned by the Sessions product layer", async () => {
+test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const dom = browserEnvironment;
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	dom.window.document.body.replaceChildren();
@@ -95,12 +95,12 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const sessionService: ISessionsManagementService = {
 		navigationRevision: 0,
 		onDidChange: onDidChange.event,
-		materializedSessions: observableValue("materialized drafts", new Map()),
+		materializedSessions: observableValue('materialized drafts', new Map()),
 		sessions: [],
 		active: undefined,
 		get untitledSessions() { return untitledSessions; },
 		get activeUntitledSession() { return untitledSessions.find(session => session.untitledSessionId === activeUntitledSessionId); },
-		state: "ready",
+		state: 'ready',
 		error: undefined,
 		whenDirectoriesReady(): Promise<void> { return Promise.resolve(); },
 		async initialize() { },
@@ -109,7 +109,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		selectThread() { },
 		async interruptThread() { },
 		createUntitledSession() {
-			const untitledSession = { untitledSessionId: `untitled-${++nextUntitledSessionId}`, title: "New code session", model: undefined, agent: undefined, workspace: { type: 'current' as const } };
+			const untitledSession = { untitledSessionId: `untitled-${++nextUntitledSessionId}`, title: 'New code session', model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 			untitledSessions = [...untitledSessions, untitledSession];
 			activeUntitledSessionId = untitledSession.untitledSessionId;
 			onDidChange.fire();
@@ -132,32 +132,32 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		setUntitledSessionDefaultModel() { },
 		setUntitledSessionAgent() { },
 		async materializeUntitledSession() {
-			throw new Error("Session creation is unavailable");
+			throw new Error('Session creation is unavailable');
 		},
 		promoteUntitledSession() { },
 		async ensureActiveThread() {
-			throw new Error("No active thread");
+			throw new Error('No active thread');
 		},
 		async startNewSession() {
-			throw new Error("Session creation is unavailable");
+			throw new Error('Session creation is unavailable');
 		},
 		async stopSession() {
-			throw new Error("Session stopping is unavailable");
+			throw new Error('Session stopping is unavailable');
 		},
 		async setModel() {
-			throw new Error("Model selection is unavailable");
+			throw new Error('Model selection is unavailable');
 		},
 		async archiveSession() {
-			throw new Error("Session archiving is unavailable");
+			throw new Error('Session archiving is unavailable');
 		},
 		async renameSession() { throw new Error('Unexpected rename'); },
 		async deleteSession() { throw new Error('Unexpected deletion'); },
 		async restoreSession() {
-			throw new Error("Session restoration is unavailable");
+			throw new Error('Session restoration is unavailable');
 		},
 	};
 	const threadUpdates = new Emitter<ThreadUpdateEnvelope>();
-	const transcriptUpdates = new Emitter<import("../../../workbench/services/chat/common/chatService.js").ThreadTranscriptUpdateEnvelope>();
+	const transcriptUpdates = new Emitter<import('../../../workbench/services/chat/common/chatService.js').ThreadTranscriptUpdateEnvelope>();
 	const ready = new Emitter<void>();
 	const chatService: IChatService & ILanguageModelsService = {
 		rewriteRequest: async () => { throw new Error('Unexpected request rewrite'); },
@@ -188,6 +188,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
 		setApprovalReviewModel: async () => { },
 		listCustomModelProviders: async () => [],
+		removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		async setModelProviderApiKey() { },
@@ -201,8 +202,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async readHistoryState() { return { sequence: 0, canUndo: false, canRedo: false }; },
 		async moveHistory() { throw new Error('History is not configured in this fixture'); },
 		async restoreCheckpoint() { throw new Error('Checkpoint restore is not configured in this fixture'); },
-		async readThread() { throw new Error("No active Thread"); },
-		async subscribeThread() { throw new Error("No active Thread"); },
+		async readThread() { throw new Error('No active Thread'); },
+		async subscribeThread() { throw new Error('No active Thread'); },
 		async unsubscribeThread() { },
 		async startTurn() { },
 		async queueTurn() { },
@@ -214,8 +215,8 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		async listTurnChanges() { return []; },
 		async readThreadChanges() { throw new Error('No Thread changes'); },
 		async readThreadChangeFile() { throw new Error('No Thread change file'); },
-		async readTurnChange() { throw new Error("No ChangeSet"); },
-		async readTurnChangeFile() { throw new Error("No ChangeSet file"); },
+		async readTurnChange() { throw new Error('No ChangeSet'); },
+		async readTurnChangeFile() { throw new Error('No ChangeSet file'); },
 		async generateTurnChangeMessage() { return []; },
 		async updateTurnChangeDraft() { return []; },
 		async prepareTurnCommit() { throw new Error('No selected changes'); },
@@ -242,7 +243,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const commandService: ICommandService = {
 		onWillExecuteCommand: commandEvents.event,
 		onDidExecuteCommand: commandEvents.event,
-		async executeCommand() { throw new Error("No commands registered"); },
+		async executeCommand() { throw new Error('No commands registered'); },
 	};
 	using resources = new DisposableStore();
 	const editorRoot = createCodeEditorServices(resources);
@@ -265,7 +266,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IChatService, chatService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { assert.fail('Unexpected editor navigation'); }, focusActiveEditor: () => { } });
-	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: ready.event, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { } });
+	services.registerInstance(IAppServerSkillApi, { onDidChangeSkills: ready.event, readTextResource: async () => { throw new Error('No Skill body in this test fixture'); }, list: async () => ({ generation: 0, skills: [] }), read: async () => ({ revision: 0, catalog: { generation: 0, skills: [] }, diagnostics: [] }), registerSource: async () => { throw new Error('Unexpected skill source registration'); }, setEnabled: async () => { } });
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
@@ -346,11 +347,11 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	updatePart();
 
 	await part.captureActiveDraft();
-	assert.equal(part.domNode.dataset.part, "sessions");
-	assert.equal(part.domNode.querySelector(".ash-sessions-surface-header"), null);
-	assert.ok(part.domNode.querySelector(".ash-sessions-chat-view"));
-	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 2);
-	assert.equal(part.domNode.querySelectorAll(".ash-chat-input-part").length, 2);
+	assert.equal(part.domNode.dataset.part, 'sessions');
+	assert.equal(part.domNode.querySelector('.ash-sessions-surface-header'), null);
+	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view'));
+	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-slot').length, 2);
+	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 2);
 	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-input .ash-chat-input-editor').length, 2);
 	assert.equal(part.domNode.querySelectorAll('.ash-sessions-loading:not([hidden])').length, 0);
 	await new Promise(resolve => setTimeout(resolve, 0));
@@ -370,7 +371,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	assert.equal(part.domNode.querySelector('.ash-editor-group, .ash-editor-title-control, [role=tab]'), null);
 	viewService.closeVisibleSelection(viewService.activeSelection!);
 	await part.captureActiveDraft();
-	assert.equal(part.domNode.querySelectorAll(".ash-sessions-chat-slot").length, 1);
+	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-slot').length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
 	const retainedInput = part.domNode.querySelector('.ash-chat-input-part');
 	const draft = { mode: 'plan' as const, text: 'Keep this Chat draft chat.txt Tool selection: 1 disabled ', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', reference: { start: 21, end: 29 } }, { id: 'tool-selection', kind: 'toolSelection', name: 'Tool selection: 1 disabled', content: '["read_file"]', reference: { start: 30, end: 56 } }] };

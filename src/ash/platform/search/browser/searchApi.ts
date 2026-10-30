@@ -1,23 +1,23 @@
-import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
-import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
-import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { IContentSearchApi } from "../common/searchApi.js";
+import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
+import { appServerRequest, voidResult } from '../../agentHost/browser/appServerRequest.js';
+import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { IContentSearchApi } from '../common/searchApi.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { IContentSearchConfigurationService } from '../common/search.js';
 
 export function createDisconnectedContentSearchApi(unavailable: UnavailableOperation): IContentSearchApi {
 	return {
-		start: () => unavailable("contentSearch.start"),
-		read: () => unavailable("contentSearch.read"),
-		cancel: () => unavailable("contentSearch.cancel"),
+		start: () => unavailable('contentSearch.start'),
+		read: () => unavailable('contentSearch.read'),
+		cancel: () => unavailable('contentSearch.cancel'),
 	};
 }
 
 export function createAppServerContentSearchApi(connection: AppServerProtocolClient): IContentSearchApi {
 	return {
-		start: (params) => appServerRequest(connection, "grep/search/start", params),
-		read: (params) => appServerRequest(connection, "grep/search/read", params),
-		cancel: (params) => voidResult(appServerRequest(connection, "grep/search/cancel", params)),
+		start: (params) => appServerRequest(connection, 'grep/search/start', params),
+		read: (params) => appServerRequest(connection, 'grep/search/read', params),
+		cancel: (params) => voidResult(appServerRequest(connection, 'grep/search/cancel', params)),
 	};
 }
 

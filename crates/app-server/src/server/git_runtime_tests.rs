@@ -759,10 +759,13 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
             .current_dir(consumer.root())
             .output()
             .unwrap();
-        notified |= queue
-            .drain()
-            .iter()
-            .any(|notification| notification["method"] == "git/statusChanged");
+        for notification in queue.drain() {
+            if notification["method"] == "git/statusChanged"
+                && notification["params"]["status"]["historyChangeSilent"] == true
+            {
+                notified = true;
+            }
+        }
         if output.status.success() && notified {
             assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), expected);
             break;
@@ -1746,6 +1749,122 @@ fn worktree_and_index_changes_preserve_history_revision_and_graph_cursor() {
 }
 
 #[test]
+fn status_publications_capture_upstream_commits_and_preserve_missing_refs() {
+    let repository = TestRepository::init();
+    repository.write("file.txt", "first\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "first"]);
+    let base = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.write("file.txt", "second\n");
+    repository.git(&["commit", "-am", "second"]);
+    let tip = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.git(&["remote", "add", "origin", "/unused-synthetic-remote"]);
+    repository.git(&["update-ref", "refs/remotes/origin/main", &base]);
+    repository.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let mut previous_revision = 0;
+    for expected in [Some(base.as_str()), Some(tip.as_str()), None] {
+        if let Some(object_id) = expected {
+            repository.git(&["update-ref", "refs/remotes/origin/main", object_id]);
+        } else {
+            repository.git(&["update-ref", "-d", "refs/remotes/origin/main"]);
+        }
+        let status = runtime.status().unwrap();
+        let ash_app_server_protocol::protocol::git::GitHeadDto::Branch {
+            upstream: Some(upstream),
+            ..
+        } = status.head
+        else {
+            panic!("Expected a configured upstream, including after its ref is deleted");
+        };
+        assert_eq!(upstream.object_id.as_deref(), expected);
+        assert!(status.history_revision > previous_revision);
+        previous_revision = status.history_revision;
+    }
+}
+
+#[test]
+fn history_refresh_reads_metadata_without_scanning_or_replacing_working_tree_state() {
+    let repository = TestRepository::init();
+    for message in ["first", "second"] {
+        repository.write("file.txt", message);
+        repository.git(&["add", "."]);
+        repository.git(&["commit", "-m", message]);
+    }
+    repository.write("file.txt", "modified\n");
+    let broker = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    broker.register(1, false, &queue);
+    let runtime = GitRuntime::new(mutation_authorization(repository.root()), broker).unwrap();
+    let initial = runtime.status().unwrap();
+    queue.drain();
+    repository.write("new.txt", "not scanned by history\n");
+    repository.git(&["tag", "new-label", "HEAD"]);
+    let ((refs, graph), timings) = crate::git_service::with_process_timings(|| {
+        let refs = runtime.history_refs_for(None).unwrap();
+        let graph = runtime
+            .graph(1, std::num::NonZeroUsize::new(1).unwrap(), None)
+            .unwrap();
+        (refs, graph)
+    });
+    assert_eq!(
+        refs.status.changes, initial.changes,
+        "History preserves the last authoritative path snapshot"
+    );
+    assert!(
+        refs.references
+            .iter()
+            .any(|reference| reference.name == "new-label")
+    );
+    assert_eq!(graph.commits[0].subject, "second");
+    assert!(!timings.records.is_empty());
+    assert!(
+        timings
+            .records
+            .iter()
+            .all(|record| !matches!(record.kind, ash_git::GitProcessKind::Status)),
+        "{timings:?}"
+    );
+    assert_eq!(
+        queue.drain().len(),
+        1,
+        "Reference changes still notify other history consumers"
+    );
+    let updated = runtime.status().unwrap();
+    assert!(
+        updated
+            .changes
+            .iter()
+            .any(|change| change.path == "new.txt")
+    );
+    queue.drain();
+    let ((refs, _), timings) = crate::git_service::with_process_timings(|| {
+        (
+            runtime.history_refs_for(None).unwrap(),
+            runtime
+                .graph(1, std::num::NonZeroUsize::new(1).unwrap(), None)
+                .unwrap(),
+        )
+    });
+    assert_eq!(refs.status, updated);
+    assert!(
+        queue.drain().is_empty(),
+        "An unchanged history refresh publishes no status update"
+    );
+    assert!(
+        timings
+            .records
+            .iter()
+            .all(|record| !matches!(record.kind, ash_git::GitProcessKind::Status)),
+        "{timings:?}"
+    );
+}
+
+#[test]
 fn new_graph_observes_external_changes_before_a_late_watcher_refresh() {
     let repository = TestRepository::init();
     for message in ["first", "second"] {
@@ -2146,6 +2265,10 @@ fn fetch_then_pull_reuses_fetched_history_and_ref_only_fetch_preserves_cursors()
     let third = source.git_output(&["rev-parse", "HEAD"]);
     let fetched = runtime.fetch(&cancellation.token()).unwrap();
     assert!(fetched.history_revision > status.history_revision);
+    assert!(
+        !fetched.history_change_silent,
+        "Explicit fetch is an active history update"
+    );
     assert!(matches!(
         runtime.graph(1, limit, Some(&cursor)),
         Err(super::GitRuntimeError::InvalidGraphCursor)

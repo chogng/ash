@@ -6,82 +6,112 @@ import { TestWorkspaceService } from '../../../configuration/test/common/testSer
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { type ITestExecutionService } from '../../../../../platform/testing/common/testExecutionService.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { Emitter } from "../../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { type ITaskService } from "../../../../contrib/tasks/common/taskService.js";
-import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../contrib/tasks/common/tasks.js";
-import type { ITerminalInstance } from "../../../../contrib/terminal/browser/terminal.js";
-import { TestingService } from "../../browser/testingService.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { Emitter } from '../../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { type ITaskService } from '../../../../contrib/tasks/common/taskService.js';
+import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from '../../../../contrib/tasks/common/tasks.js';
+import type { ITerminalInstance } from '../../../../contrib/terminal/browser/terminal.js';
+import { TestingService } from '../../browser/testingService.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
-test("TestingService exposes only test tasks and projects passed and failed runs", async () => {
+test('TestingService exposes only test tasks and projects passed and failed runs', async () => {
 	using tasks = new FakeTaskService([
-		task("build", "Build", "build"),
-		task("unit", "Unit", "test"),
-		task("integration", "Integration", "test"),
+		task('build', 'Build', 'build'),
+		task('unit', 'Unit', 'test'),
+		task('integration', 'Integration', 'test'),
 	]);
 	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
-	assert.deepEqual(service.profiles.map(profile => profile.label), ["Unit", "Integration"]);
+	assert.deepEqual(service.profiles.map(profile => profile.label), ['Unit', 'Integration']);
 
 	const run = await service.run(service.profiles[0]!);
 	assert.equal(tasks.runs.length, 1);
-	assert.equal(run.status, "running");
-	tasks.runs[0]!.finish("succeeded");
-	assert.equal(run.status, "passed");
+	assert.equal(run.status, 'running');
+	tasks.runs[0]!.finish('succeeded');
+	assert.equal(run.status, 'passed');
 
 	const rerun = await service.rerun(run);
-	tasks.runs[1]!.finish("failed");
-	assert.equal(rerun.status, "failed");
+	tasks.runs[1]!.finish('failed');
+	assert.equal(rerun.status, 'failed');
 	assert.equal(service.runs.length, 2);
 
 	const all = await service.runAllScripts();
 	assert.equal(all.length, 2);
 });
 
-test("TestingService owns dynamic Test Profile providers and maps profiles to test tasks", async () => {
-	using tasks = new FakeTaskService([task("unit", "Unit", "test"), task("build", "Build", "build")]);
+test('TestingService owns dynamic Test Profile providers and maps profiles to test tasks', async () => {
+	using tasks = new FakeTaskService([task('unit', 'Unit', 'test'), task('build', 'Build', 'build')]);
 	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
-	const registration = service.registerTestProfileProviders([{ id: "demo.tests", provideTestProfiles: () => [{ id: "focused", label: "Focused", taskId: "unit", detail: "Extension profile" }] }]);
+	const registration = service.registerTestProfileProviders([{ id: 'demo.tests', provideTestProfiles: () => [{ id: 'focused', label: 'Focused', taskId: 'unit', detail: 'Extension profile' }] }]);
 
 	await service.refresh();
-	const profile = service.profiles.find(candidate => candidate.id === "extension-profile:demo.tests:focused")!;
-	assert.deepEqual(profile, { id: "extension-profile:demo.tests:focused", label: "Focused", source: "demo.tests", taskId: "unit", detail: "Extension profile" });
+	const profile = service.profiles.find(candidate => candidate.id === 'extension-profile:demo.tests:focused')!;
+	assert.deepEqual(profile, { id: 'extension-profile:demo.tests:focused', label: 'Focused', source: 'demo.tests', taskId: 'unit', detail: 'Extension profile' });
 	const run = await service.run(profile);
-	assert.equal(run.taskRun.task.id, "unit");
+	assert.equal(run.taskRun.task.id, 'unit');
 
-	assert.throws(() => service.registerTestProfileProvider({ id: "demo.tests", provideTestProfiles: () => [] }), /already registered/);
+	assert.throws(() => service.registerTestProfileProvider({ id: 'demo.tests', provideTestProfiles: () => [] }), /already registered/);
 	registration.dispose();
-	assert.deepEqual(service.profiles.map(candidate => candidate.id), ["unit"]);
+	assert.deepEqual(service.profiles.map(candidate => candidate.id), ['unit']);
 	await assert.rejects(service.run(profile), /no longer present/);
 	await service.refresh();
-	assert.deepEqual(service.profiles.map(candidate => candidate.id), ["unit"]);
+	assert.deepEqual(service.profiles.map(candidate => candidate.id), ['unit']);
 });
 
-test("TestingService rejects profiles that do not reference a current test task", async () => {
-	using tasks = new FakeTaskService([task("unit", "Unit", "test")]);
+test('TestingService rejects profiles that do not reference a current test task', async () => {
+	using tasks = new FakeTaskService([task('unit', 'Unit', 'test')]);
 	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using debug = new TestDebugService();
 	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
-	using registration = service.registerTestProfileProvider({ id: "invalid", provideTestProfiles: () => [{ id: "missing", label: "Missing", taskId: "missing" }] });
+	using registration = service.registerTestProfileProvider({ id: 'invalid', provideTestProfiles: () => [{ id: 'missing', label: 'Missing', taskId: 'missing' }] });
 
 	await assert.rejects(service.refresh(), /unavailable test task/);
 
-	assert.deepEqual(service.profiles.map(candidate => candidate.id), ["unit"]);
+	assert.deepEqual(service.profiles.map(candidate => candidate.id), ['unit']);
 });
 
-function task(id: string, label: string, group: IWorkspaceTask["group"]): IWorkspaceTask {
-	return Object.freeze({ id, label, group, command: `run ${id}`, source: "vscode" });
+test('TestingService capability follows test tasks and provider lifetimes before discovery', () => {
+	using tasks = new FakeTaskService([task('build', 'Build', 'build')]);
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
+	using debug = new TestDebugService();
+	using service = new TestingService(tasks, noExecution, workspace, copies, new NullLoggerService(), debug.service);
+	const capabilities: boolean[] = [];
+	using listener = service.onDidChangeTestCapability(() => capabilities.push(service.hasTestCapability));
+	assert.equal(service.hasTestCapability, false);
+
+	tasks.setTasks([task('unit', 'Unit', 'test')]);
+	assert.equal(service.hasTestCapability, true);
+	assert.deepEqual(service.tests, []);
+	tasks.setTasks([]);
+	assert.equal(service.hasTestCapability, false);
+
+	using registration = service.registerTestProfileProviders([{ id: 'empty.tests', provideTestProfiles: () => [] }]);
+	assert.equal(service.hasTestCapability, true);
+	assert.deepEqual(service.profiles, []);
+	registration.replace([{ id: 'replacement.tests', provideTestProfiles: () => [] }]);
+	assert.equal(service.hasTestCapability, true);
+	registration.replace([]);
+	assert.equal(service.hasTestCapability, false);
+	registration.replace([{ id: 'empty.tests', provideTestProfiles: () => [] }]);
+	registration.dispose();
+	assert.equal(service.hasTestCapability, false);
+	assert.deepEqual(capabilities, [true, false, true, true, false, true, false]);
+	assert.deepEqual(tasks.runs, []);
+});
+
+function task(id: string, label: string, group: IWorkspaceTask['group']): IWorkspaceTask {
+	return Object.freeze({ id, label, group, command: `run ${id}`, source: 'vscode' });
 }
 
 class FakeTaskService extends Disposable implements ITaskService {
@@ -99,13 +129,14 @@ class FakeTaskService extends Disposable implements ITaskService {
 	readonly onDidChangeTaskRun = this.runEmitter.event;
 	readonly runs: FakeTaskRun[] = [];
 	lastRun: ITaskRun | undefined;
-	constructor(readonly tasks: readonly IWorkspaceTask[]) { super(); }
-	get activeRuns(): readonly ITaskRun[] { return this.runs.filter(run => run.status === "running"); }
+	constructor(public tasks: readonly IWorkspaceTask[]) { super(); }
+	setTasks(tasks: readonly IWorkspaceTask[]): void { this.tasks = tasks; this.tasksEmitter.fire(tasks); }
+	get activeRuns(): readonly ITaskRun[] { return this.runs.filter(run => run.status === 'running'); }
 	registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
 	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
 	async refresh() { return this.tasks; }
 	async run(task: IWorkspaceTask): Promise<ITaskRun> { const run = this._register(new FakeTaskRun(task)); this.runs.push(run); this.lastRun = run; this.startEmitter.fire(run); return run; }
-	async terminate(run: ITaskRun) { (run as FakeTaskRun).finish("canceled"); }
+	async terminate(run: ITaskRun) { (run as FakeTaskRun).finish('canceled'); }
 }
 
 class FakeTaskRun extends Disposable implements ITaskRun {
@@ -116,10 +147,10 @@ class FakeTaskRun extends Disposable implements ITaskRun {
 	readonly onDidChangeStatus = this.emitter.event;
 	readonly terminalId = 'task-terminal';
 	get terminal(): ITerminalInstance { throw new Error('TestingService must observe task status without accessing its terminal'); }
-	status: TaskRunStatus = "running";
+	status: TaskRunStatus = 'running';
 	exitCode: number | undefined;
 	constructor(readonly task: IWorkspaceTask) { super(); }
-	finish(status: TaskRunStatus): void { this.status = status; this.exitCode = status === "failed" ? 1 : status === "succeeded" ? 0 : undefined; this.emitter.fire(status); }
+	finish(status: TaskRunStatus): void { this.status = status; this.exitCode = status === 'failed' ? 1 : status === 'succeeded' ? 0 : undefined; this.emitter.fire(status); }
 }
 
 const noExecution: ITestExecutionService = {

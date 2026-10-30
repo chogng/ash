@@ -10,5 +10,3 @@ export interface ISimpleModel {
 	getValueLengthInRange(range: Range, eol: EndOfLinePreference): number;
 	modifyPosition(position: Position, offset: number): Position;
 }
-
-

@@ -1,15 +1,15 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Selection } from "../../common/core/selection.js";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
-import { createStanzaVisualSelectionGeometry } from "../../common/viewModel/visualSelectionGeometry.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Selection } from '../../common/core/selection.js';
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
+import { createStanzaVisualSelectionGeometry } from '../../common/viewModel/visualSelectionGeometry.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
-test("visual selection geometry splits one logical range across wrapped fragments", () => {
-	using model = new TextModel("abcdef\ngh");
+test('visual selection geometry splits one logical range across wrapped fragments', () => {
+	using model = new TextModel('abcdef\ngh');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6], [2]]);
 	const selections = [Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (1) + 1))];
 	const geometry = createStanzaVisualSelectionGeometry(model, selections, projection, {
@@ -31,8 +31,8 @@ test("visual selection geometry splits one logical range across wrapped fragment
 	}]);
 });
 
-test("visual selection geometry offsets continuation rows by their wrapping indent", () => {
-	using model = new TextModel("abcdef");
+test('visual selection geometry offsets continuation rows by their wrapping indent', () => {
+	using model = new TextModel('abcdef');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6]], [20]);
 	const selections = [Selection.fromPositions(new Position((0) + 1, (4) + 1), new Position((0) + 1, (2) + 1))];
 	const geometry = createStanzaVisualSelectionGeometry(model, selections, projection, {
@@ -54,10 +54,10 @@ test("visual selection geometry offsets continuation rows by their wrapping inde
 	}]);
 });
 
-test("visual selection geometry rejects a projection from another model version", () => {
-	using model = new TextModel("abc");
+test('visual selection geometry rejects a projection from another model version', () => {
+	using model = new TextModel('abc');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3]]);
-	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (3) + 1)), text: "d" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (3) + 1)), text: 'd' }]);
 	assert.throws(() => createStanzaVisualSelectionGeometry(model, [Selection.fromPositions(new Position(1, 1), new Position(1, 2))], projection, { startLineIndex: 0, endLineIndexExclusive: 1 }, 0, new FixedTextMeasurer()), /current text model projection/);
 });
 

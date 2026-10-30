@@ -206,7 +206,12 @@ test('contribution global shortcut falls back while a non-owner window has focus
 
 test('renderer navigation clears user bindings while contribution leases can register again', () => {
 	const shortcuts = new TestShortcuts();
-	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 1, runCommand: () => { }, onError: error => { throw error; } });
+	using service = new GlobalKeybindingsMainService({
+		shortcuts,
+		activeWindowId: () => 1,
+		runCommand: () => { },
+		onError: error => { throw error; }
+	});
 	using owner = service.createOwner(1, () => { });
 	for (let navigation = 0; navigation < 2; navigation++) {
 		owner.update(binding('Control+A'));

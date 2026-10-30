@@ -1,12 +1,12 @@
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { isCancellationError } from "../../../../base/common/errors.js";
-import { registerEditorContribution } from "../../../browser/editorFeatureRegistration.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Selection } from "../../../common/core/selection.js";
-import { type Range } from "../../../common/core/range.js";
-import { type TextSnapshot } from "../../../common/core/textChange.js";
-import { type View } from "../../../browser/view.js";
-import { expandSmartSelection } from "../common/smartSelectionExpansion.js";
+import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { registerEditorContribution } from '../../../browser/editorFeatureRegistration.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Selection } from '../../../common/core/selection.js';
+import { type Range } from '../../../common/core/range.js';
+import { type TextSnapshot } from '../../../common/core/textChange.js';
+import { type View } from '../../../browser/view.js';
+import { expandSmartSelection } from '../common/smartSelectionExpansion.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../common/languages.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -24,8 +24,8 @@ export class SmartSelectController extends Disposable {
 		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 	) {
 		super();
-		if (viewport.textModel !== editor.getModel()) throw new TypeError("Stanza smart select dependencies must share a text model");
-		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
+		if (viewport.textModel !== editor.getModel()) throw new TypeError('Stanza smart select dependencies must share a text model');
+		this._register(addDisposableListener(input, 'keydown', event => this.handleKeydown(event), true));
 		this._register(editor.onDidChangeCursorSelection(event => {
 			if (event.source !== 'editor.action.smartSelect.expand' && event.source !== 'editor.action.smartSelect.shrink') {
 				this.reset();
@@ -47,7 +47,7 @@ export class SmartSelectController extends Disposable {
 
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey) return;
-		if (event.key === "ArrowRight") {
+		if (event.key === 'ArrowRight') {
 			stopEvent(event, { immediate: true });
 			const before = this.editor.getSelections()!;
 			this.request?.abort();
@@ -59,7 +59,7 @@ export class SmartSelectController extends Disposable {
 			const request = this.request = new AbortController();
 			const snapshot = this.viewport.textModel.createVersionedSnapshot();
 			void this.expand(request, before, snapshot);
-		} else if (event.key === "ArrowLeft") {
+		} else if (event.key === 'ArrowLeft') {
 			stopEvent(event, { immediate: true });
 			this.request?.abort();
 			this.request = undefined;
@@ -112,9 +112,9 @@ export class SmartSelectController extends Disposable {
 }
 
 registerEditorContribution({
-	id: "editor.contrib.smartSelect",
+	id: 'editor.contrib.smartSelect',
 	install: context => {
-		if (context.kind !== "text") return;
+		if (context.kind !== 'text') return;
 		return context.instantiationService.createInstance(SmartSelectController,
 			context.controller.element,
 			context.editor,

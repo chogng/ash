@@ -2,43 +2,246 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Ash",
+			"name": "Ash Dev Terminal",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "bash ./scripts/ash.sh",
-			"windows": {
-				"command": "cmd /d /c .\\scripts\\ash.bat"
-			},
+			"command": "pnpm dev",
+			"autoAttachChildProcesses": true,
+			"cwd": "${workspaceFolder}",
+			"presentation": { "group": "0_ash", "order": 20 }
+		},
+		{
+			"name": "Ash Agents Dev Terminal",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "pnpm dev:agents",
+			"autoAttachChildProcesses": true,
+			"cwd": "${workspaceFolder}",
+			"presentation": { "group": "0_ash", "order": 21 }
+		},
+		{
+			"name": "Ash Hot Reload Dev Terminal",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "pnpm dev:ui:connected",
+			"autoAttachChildProcesses": true,
+			"cwd": "${workspaceFolder}",
+			"presentation": { "group": "0_ash", "order": 22 }
+		},
+		{
+			"name": "Ash",
+			"type": "node",
+			"request": "launch",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "0_ash",
 				"order": 1
+			},
+			"runtimeExecutable": "node",
+			"program": "${workspaceFolder}/build/desktop/launch/electron.ts",
+			"args": [
+				"--watch",
+				"--dev-services",
+				"--inspect-brk=127.0.0.1:9229",
+				"--remote-debugging-address=127.0.0.1",
+				"--remote-debugging-port=9222",
+				"--user-data-dir=${workspaceFolder}/.build/desktop/debug/user-data",
+				"--folder=${workspaceFolder}"
+			],
+			"autoAttachChildProcesses": false,
+			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],
+			"console": "integratedTerminal",
+			"env": {
+				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
+				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
+				"ASH_DEV_APP_SERVER_RELOAD": "1"
+			},
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"action": "startDebugging",
+				"pattern": "Ash Electron debug target: 127[.]0[.]0[.]1:(9229)",
+				"name": "Ash Main Process",
+				"killOnServerStop": true
 			}
 		},
 		{
 			"name": "Ash Agents",
-			"type": "node-terminal",
+			"type": "node",
 			"request": "launch",
-			"command": "pnpm dev:agents",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "0_ash",
 				"order": 2
+			},
+			"runtimeExecutable": "node",
+			"program": "${workspaceFolder}/build/desktop/launch/electron.ts",
+			"args": [
+				"--watch",
+				"--dev-services",
+				"--inspect-brk=127.0.0.1:9229",
+				"--remote-debugging-address=127.0.0.1",
+				"--remote-debugging-port=9222",
+				"--user-data-dir=${workspaceFolder}/.build/desktop/debug/user-data",
+				"--folder=${workspaceFolder}"
+			],
+			"autoAttachChildProcesses": false,
+			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],
+			"console": "integratedTerminal",
+			"env": {
+				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
+				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
+				"ASH_DEV_AGENTS_WINDOW": "1",
+				"ASH_DEV_APP_SERVER_RELOAD": "1"
+			},
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"action": "startDebugging",
+				"pattern": "Ash Electron debug target: 127[.]0[.]0[.]1:(9229)",
+				"name": "Ash Main Process",
+				"killOnServerStop": true
 			}
 		},
 		{
 			"name": "Ash (Hot Reload)",
-			"type": "node-terminal",
+			"type": "node",
 			"request": "launch",
-			"command": "bash ./scripts/ash.sh --connected",
-			"windows": {
-				"command": "cmd /d /c .\\scripts\\ash.bat --connected"
-			},
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "0_ash",
 				"order": 3
+			},
+			"runtimeExecutable": "node",
+			"program": "${workspaceFolder}/build/desktop/launch/electron.ts",
+			"args": [
+				"--watch",
+				"--dev-services",
+				"--inspect-brk=127.0.0.1:9229",
+				"--remote-debugging-address=127.0.0.1",
+				"--remote-debugging-port=9222",
+				"--user-data-dir=${workspaceFolder}/.build/desktop/debug/user-data",
+				"--folder=${workspaceFolder}"
+			],
+			"autoAttachChildProcesses": false,
+			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],
+			"console": "integratedTerminal",
+			"env": {
+				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
+				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
+				"ASH_DEV_APP_SERVER_RELOAD": "0"
+			},
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"action": "startDebugging",
+				"pattern": "Ash Electron debug target: 127[.]0[.]0[.]1:(9229)",
+				"name": "Ash Main Process",
+				"killOnServerStop": true
 			}
+		},
+		{
+			"name": "Ash Main Process",
+			"type": "node",
+			"request": "attach",
+			"address": "127.0.0.1",
+			"port": 9229,
+			"continueOnAttach": true,
+			"autoAttachChildProcesses": false,
+			"sourceMaps": true,
+			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],
+			"presentation": {
+				"group": "0_ash",
+				"order": 4
+			},
+			"cwd": "${workspaceFolder}",
+			"runtimeSourcemapPausePatterns": [
+				"${workspaceFolder}/.build/desktop/main/**/*.js"
+			],
+			"restart": true
+		},
+		{
+			"name": "Ash Renderer",
+			"type": "chrome",
+			"request": "attach",
+			"address": "127.0.0.1",
+			"port": 9222,
+			"urlFilter": "*electron-browser/workbench/workbench.html*",
+			"webRoot": "${workspaceFolder}/src/ash/code",
+			"sourceMaps": true,
+			"timeout": 30000,
+			"presentation": {
+				"group": "0_ash",
+				"order": 4
+			}
+		},
+		{
+			"name": "Ash Agents Renderer",
+			"type": "chrome",
+			"request": "attach",
+			"address": "127.0.0.1",
+			"port": 9222,
+			"urlFilter": "*sessions/electron-browser/sessions.html*",
+			"webRoot": "${workspaceFolder}/src/ash/code",
+			"sourceMaps": true,
+			"timeout": 30000,
+			"presentation": {
+				"group": "0_ash",
+				"order": 5
+			}
+		},
+		{
+			"name": "Ash (Native Debug)",
+			"type": "node",
+			"request": "launch",
+			"runtimeExecutable": "node",
+			"program": "${workspaceFolder}/build/desktop/launch/electron.ts",
+			"args": [
+				"--watch",
+				"--dev-services",
+				"--inspect-brk=127.0.0.1:9229",
+				"--remote-debugging-address=127.0.0.1",
+				"--remote-debugging-port=9222",
+				"--user-data-dir=${workspaceFolder}/.build/desktop/debug/user-data",
+				"--folder=${workspaceFolder}"
+			],
+			"cwd": "${workspaceFolder}",
+			"env": {
+				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
+				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
+				"ASH_DEV_APP_SERVER_RELOAD": "0",
+				"ASH_DEV_APP_SERVER_GENERATION": "${workspaceFolder}/.build/desktop/debug/app-server/current.json"
+			},
+			"autoAttachChildProcesses": false,
+			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],
+			"console": "integratedTerminal",
+			"preLaunchTask": "Build Ash Debug Backend",
+			"presentation": {
+				"group": "0_ash",
+				"order": 6
+			},
+			"outputCapture": "std",
+			"serverReadyAction": {
+				"action": "startDebugging",
+				"pattern": "Ash Electron debug target: 127[.]0[.]0[.]1:(9229)",
+				"name": "Ash Main Process",
+				"killOnServerStop": true
+			}
+		},
+		{
+			"name": "Ash App Server (Attach)",
+			"type": "lldb",
+			"request": "attach",
+			"pid": "${input:ashAppServerPid}",
+			"sourceLanguages": ["rust"],
+			"presentation": {
+				"group": "0_ash",
+				"order": 7
+			},
+			"stopOnEntry": false,
+			"_adapterSettings": {
+				"dereferencePointers": false
+			},
+			"preRunCommands": [
+				"script import lldb_lookup; lldb_lookup.RUST_CATEGORY.DeleteTypeSummary(lldb.SBTypeNameSpecifier(lldb_lookup.MOD_PREFIX + 'is_udt', lldb.eFormatterMatchCallback))"
+			]
 		},
 		{
 			"name": "Ash Server (Web)",
@@ -49,7 +252,9 @@
 				"--config",
 				"build/desktop/vite/vite.config.ts",
 				"--mode",
-				"web"
+				"web",
+				"--port",
+				"5185"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
@@ -73,7 +278,9 @@
 				"--config",
 				"build/desktop/vite/vite.config.ts",
 				"--mode",
-				"web"
+				"web",
+				"--port",
+				"5185"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
@@ -87,7 +294,7 @@
 				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
 				"action": "debugWithChrome",
 				"uriFormat": "%s",
-				"webRoot": "${workspaceFolder}",
+				"webRoot": "${workspaceFolder}/src/ash/code",
 				"killOnServerStop": true
 			},
 			"presentation": {
@@ -104,7 +311,9 @@
 				"--config",
 				"build/desktop/vite/vite.config.ts",
 				"--mode",
-				"web"
+				"web",
+				"--port",
+				"5185"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
@@ -118,7 +327,7 @@
 				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
 				"action": "debugWithEdge",
 				"uriFormat": "%s",
-				"webRoot": "${workspaceFolder}",
+				"webRoot": "${workspaceFolder}/src/ash/code",
 				"killOnServerStop": true
 			},
 			"presentation": {
@@ -135,7 +344,9 @@
 				"--config",
 				"build/desktop/vite/vite.config.ts",
 				"--mode",
-				"web"
+				"web",
+				"--port",
+				"5187"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
@@ -150,7 +361,7 @@
 				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
 				"action": "debugWithChrome",
 				"uriFormat": "%s",
-				"webRoot": "${workspaceFolder}",
+				"webRoot": "${workspaceFolder}/src/ash/code",
 				"killOnServerStop": true
 			},
 			"presentation": {
@@ -167,7 +378,9 @@
 				"--config",
 				"build/desktop/vite/vite.config.ts",
 				"--mode",
-				"web"
+				"web",
+				"--port",
+				"5187"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
@@ -182,7 +395,7 @@
 				"pattern": "Open Ash: (http://[^\\s\\u001b]+)",
 				"action": "debugWithEdge",
 				"uriFormat": "%s",
-				"webRoot": "${workspaceFolder}",
+				"webRoot": "${workspaceFolder}/src/ash/code",
 				"killOnServerStop": true
 			},
 			"presentation": {
@@ -199,7 +412,9 @@
 				"--config",
 				"build/desktop/vite/vite.config.ts",
 				"--mode",
-				"web"
+				"web",
+				"--port",
+				"5184"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
@@ -210,7 +425,7 @@
 			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
-				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
+				"pattern": "Local:.*(http://127[.]0[.]0[.]1:5184/)",
 				"action": "startDebugging",
 				"name": "Ash Web Browser (Chrome)",
 				"killOnServerStop": true
@@ -229,7 +444,9 @@
 				"--config",
 				"build/desktop/vite/vite.config.ts",
 				"--mode",
-				"web"
+				"web",
+				"--port",
+				"5184"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
@@ -240,7 +457,7 @@
 			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
-				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5173/)",
+				"pattern": "Local:.*(http://127[.]0[.]0[.]1:5184/)",
 				"action": "startDebugging",
 				"name": "Ash Web Browser (Edge)",
 				"killOnServerStop": true
@@ -259,7 +476,9 @@
 				"--config",
 				"build/desktop/vite/vite.config.ts",
 				"--mode",
-				"web"
+				"web",
+				"--port",
+				"5186"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
@@ -271,7 +490,7 @@
 			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
-				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5175/)",
+				"pattern": "Local:.*(http://127[.]0[.]0[.]1:5186/)",
 				"action": "startDebugging",
 				"name": "Ash Agents Web Browser (Chrome)",
 				"killOnServerStop": true
@@ -290,7 +509,9 @@
 				"--config",
 				"build/desktop/vite/vite.config.ts",
 				"--mode",
-				"web"
+				"web",
+				"--port",
+				"5186"
 			],
 			"cwd": "${workspaceFolder}",
 			"env": {
@@ -302,7 +523,7 @@
 			"console": "integratedTerminal",
 			"outputCapture": "std",
 			"serverReadyAction": {
-				"pattern": "Local:\\s+(http://127\\.0\\.0\\.1:5175/)",
+				"pattern": "Local:.*(http://127[.]0[.]0[.]1:5186/)",
 				"action": "startDebugging",
 				"name": "Ash Agents Web Browser (Edge)",
 				"killOnServerStop": true
@@ -314,9 +535,27 @@
 		},
 		{
 			"name": "Ash Code (TUI)",
-			"type": "node-terminal",
+			"envFile": "${workspaceFolder}/.build/code/debug.env",
+			"type": "lldb",
 			"request": "launch",
-			"command": "just ash-code",
+			"program": "${workspaceFolder}/.build/cargo/ci-test/ash",
+			"windows": {
+				"program": "${workspaceFolder}/.build/cargo/ci-test/ash.exe",
+				"env": {
+					"ASH_APP_SERVER_PATH": "${workspaceFolder}/.build/cargo/ci-test/ash-app-server.exe",
+					"ASH_CODE_MODE_HOST_BIN": "${workspaceFolder}/.build/cargo/ci-test/ash-code-mode-host.exe",
+					"ASH_PRODUCT_SERVICES_PATH": "${workspaceFolder}/resources/product-services/product-services.json"
+				}
+			},
+			"env": {
+				"ASH_APP_SERVER_PATH": "${workspaceFolder}/.build/cargo/ci-test/ash-app-server",
+				"ASH_CODE_MODE_HOST_BIN": "${workspaceFolder}/.build/cargo/ci-test/ash-code-mode-host",
+				"ASH_PRODUCT_SERVICES_PATH": "${workspaceFolder}/resources/product-services/product-services.json"
+			},
+			"args": [],
+			"terminal": "integrated",
+			"sourceLanguages": ["rust"],
+			"preLaunchTask": "Prepare Ash Code Debug",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "1_ash_code",
@@ -351,45 +590,64 @@
 			"name": "Ash Web Browser (Chrome)",
 			"type": "chrome",
 			"request": "launch",
-			"url": "http://127.0.0.1:5173/browser/workbench/workbench.html",
-			"webRoot": "${workspaceFolder}",
+			"url": "http://127.0.0.1:5184/browser/workbench/workbench.html",
+			"webRoot": "${workspaceFolder}/src/ash/code",
 			"cascadeTerminateToConfigurations": ["Ash Web (Chrome)"],
 			"presentation": {
 				"hidden": true
+			},
+			"osx": {
+				"runtimeArgs": ["--use-mock-keychain"]
 			}
 		},
 		{
 			"name": "Ash Web Browser (Edge)",
 			"type": "msedge",
 			"request": "launch",
-			"url": "http://127.0.0.1:5173/browser/workbench/workbench.html",
-			"webRoot": "${workspaceFolder}",
+			"url": "http://127.0.0.1:5184/browser/workbench/workbench.html",
+			"webRoot": "${workspaceFolder}/src/ash/code",
 			"cascadeTerminateToConfigurations": ["Ash Web (Edge)"],
 			"presentation": {
 				"hidden": true
+			},
+			"osx": {
+				"runtimeArgs": ["--use-mock-keychain"]
 			}
 		},
 		{
 			"name": "Ash Agents Web Browser (Chrome)",
 			"type": "chrome",
 			"request": "launch",
-			"url": "http://127.0.0.1:5175/browser/sessions/sessions.html",
-			"webRoot": "${workspaceFolder}",
+			"url": "http://127.0.0.1:5186/browser/sessions/sessions.html",
+			"webRoot": "${workspaceFolder}/src/ash/code",
 			"cascadeTerminateToConfigurations": ["Ash Agents Web (Chrome)"],
 			"presentation": {
 				"hidden": true
+			},
+			"osx": {
+				"runtimeArgs": ["--use-mock-keychain"]
 			}
 		},
 		{
 			"name": "Ash Agents Web Browser (Edge)",
 			"type": "msedge",
 			"request": "launch",
-			"url": "http://127.0.0.1:5175/browser/sessions/sessions.html",
-			"webRoot": "${workspaceFolder}",
+			"url": "http://127.0.0.1:5186/browser/sessions/sessions.html",
+			"webRoot": "${workspaceFolder}/src/ash/code",
 			"cascadeTerminateToConfigurations": ["Ash Agents Web (Edge)"],
 			"presentation": {
 				"hidden": true
+			},
+			"osx": {
+				"runtimeArgs": ["--use-mock-keychain"]
 			}
+		}
+	],
+	"inputs": [
+		{
+			"id": "ashAppServerPid",
+			"type": "promptString",
+			"description": "PID of the isolated Ash (Native Debug) App Server; see pnpm debug:backend:status"
 		}
 	]
 }

@@ -1,4 +1,4 @@
-import type { ElectronApplication } from '@playwright/test';
+import type { ElectronApplication, Locator } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -162,6 +162,32 @@ test('SCM history respects saved page size and manual loading settings', { tag: 
 	await test.info().attach('scm-history-configured-pages', { body: await history.screenshot(), contentType: 'image/png' });
 });
 
+test('SCM commit cards keep nested action hints and copy through the desktop clipboard', { tag: ['@electron-app-server'] }, async ({ testWorkspace, reloadWorkbench }) => {
+	const cwd = testWorkspace.directory;
+	await run('git', ['commit', '--allow-empty', '-m', 'Hover details'], { cwd });
+	const { stdout } = await run('git', ['rev-parse', 'HEAD'], { cwd });
+	const restarted = await reloadWorkbench();
+	const page = restarted.workbench.page;
+	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+	const history = page.locator('[data-view-id="ash.gitGraph"]');
+	await history.locator('.ash-pane-view-header').click();
+	const row = history.getByRole('treeitem').filter({ hasText: 'Hover details' });
+	await row.locator('.ash-scm-graph-subject').hover();
+	const card = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
+	await expect(card).toBeVisible();
+	const copy = card.getByRole('button', { name: 'Copy Commit Hash', exact: true });
+	await copy.hover();
+	const hint = page.getByRole('tooltip', { name: 'Copy Commit Hash', exact: true });
+	await expect(hint).toBeVisible();
+	await expect(card).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(hint).toHaveCount(0);
+	await expect(card).toBeVisible();
+	await copy.click();
+	await expect.poll(() => (restarted.application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())).toBe(stdout.trim());
+	await expect(card).toBeVisible();
+});
+
 test('SCM startup keeps commit hover targets stable in a large history', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, reloadWorkbench }) => {
 	const cwd = testWorkspace.directory;
 	const { stdout } = await run('git', ['rev-parse', 'HEAD'], { cwd });
@@ -180,19 +206,36 @@ test('SCM startup keeps commit hover targets stable in a large history', { tag: 
 	await history.locator('.ash-pane-view-header').click();
 	const graph = history.locator('.ash-scm-graph');
 	const viewport = graph.locator('.ash-scrollbar-viewport');
+	const tree = graph.locator('.ash-scm-graph-tree');
+	const focusCommit = async (index: number): Promise<void> => {
+		await tree.focus();
+		await tree.press('Home');
+		for (let step = 0; step < index; step++) {
+			await tree.press('ArrowDown');
+		}
+	};
+	const expectFocusedRow = async (row: Locator): Promise<void> => {
+		await expect(tree).toBeFocused();
+		await expect(tree).toHaveAttribute('aria-activedescendant', (await row.getAttribute('id'))!);
+	};
 	await expect(graph).toHaveAttribute('aria-busy', 'false');
 	const row = graph.getByRole('treeitem').filter({ hasText: 'Startup history 1997' });
-	await expect(row).toHaveAttribute('aria-setsize', '50');
+	const pageSize = 50;
+	const rowHeight = 22;
+	// Automatic paging keeps an extra page ready before the first page is exhausted.
+	const initialCount = pageSize * 2;
+	await expect(row).toHaveAttribute('aria-setsize', String(initialCount));
 	const original = await row.elementHandle();
 	try {
 		await row.locator('.ash-scm-graph-subject').hover({ position: { x: 3, y: 8 } });
 		const tooltip = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 		await expect(tooltip.locator('.ash-scm-graph-hover-subject')).toHaveText('Startup history 1997');
-		await expect(tooltip.locator('.ash-scm-graph-hover-author > span')).toHaveText('History Author');
-		await expect(row).toHaveAttribute('aria-describedby', (await tooltip.getAttribute('id'))!);
+		await expect(tooltip.locator('.ash-scm-graph-hover-author > span[title]')).toHaveText('History Author');
+		await expect(tooltip.locator('.ash-scm-graph-hover-author > span[title]')).toHaveAttribute('title', 'history@example.invalid');
+		await expect(row.locator('.ash-scm-graph-commit')).toHaveAttribute('aria-describedby', (await tooltip.getAttribute('id'))!);
 		await restarted.workbench.waitForUiIdle();
 		expect(await original!.evaluate(element => element.isConnected)).toBe(true);
-		await expect(row).toHaveAttribute('aria-setsize', '50');
+		await expect(row).toHaveAttribute('aria-setsize', String(initialCount));
 		await expect(tooltip).toBeVisible();
 		await page.getByRole('tab', { name: /^Explorer(?:,|$)/u }).hover();
 		await expect(tooltip).toHaveCount(0);
@@ -203,9 +246,10 @@ test('SCM startup keeps commit hover targets stable in a large history', { tag: 
 	await expect(page.getByRole('tooltip')).toHaveCount(0);
 	// Keep the pointer outside the graph so viewport changes do not hover another commit.
 	await page.mouse.move(900, 100);
-	await row.focus();
-	await page.keyboard.press('Alt+ArrowDown');
-	const tooltip = page.getByRole('tooltip');
+	await focusCommit(2);
+	await expectFocusedRow(row);
+	await tree.press('Alt+ArrowDown');
+	const tooltip = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 	const tooltipId = await tooltip.getAttribute('id');
 	const copy = tooltip.getByRole('button', { name: 'Copy Commit Hash', exact: true });
 	await expect(copy).toBeFocused();
@@ -233,46 +277,54 @@ test('SCM startup keeps commit hover targets stable in a large history', { tag: 
 		await expect(tooltip).toHaveAttribute('id', tooltipId!);
 		await expect(copy).toBeFocused();
 		await page.keyboard.press('Escape');
-		await expect(row).toBeFocused();
-		await row.press('Enter');
+		await expectFocusedRow(row);
+		await tree.press('Enter');
 		await expect(row).toHaveAttribute('aria-expanded', 'true');
-		await expect(row.locator('.ash-scm-graph-change-state')).toHaveText('No changed files.');
+		const emptyFiles = tree.locator('.ash-scm-graph-change-state');
+		await expect(emptyFiles).toHaveText('No changed files.');
+		await expect(emptyFiles.locator('xpath=ancestor::*[@role="treeitem"]')).toHaveAttribute('aria-level', '2');
 		expect(await retainedRow!.evaluate(element => element.isConnected)).toBe(true);
 		expect(await retainedToolbar!.evaluate(element => element.isConnected)).toBe(true);
-		await expect(row).toBeFocused();
-		await row.press('Enter');
+		await expectFocusedRow(row);
+		await tree.press('Enter');
 		await expect(row).toHaveAttribute('aria-expanded', 'false');
 	} finally {
 		await retainedRow?.dispose();
 		await retainedToolbar?.dispose();
 	}
 	await page.keyboard.press('Escape');
-	await expect(row).toBeFocused();
+	await expectFocusedRow(row);
 
 	// Keep an overlapping commit's focused actions attached while prefetch appends another page.
-	await viewport.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight - 260; });
-	const paginationRow = graph.getByRole('treeitem').filter({ hasText: 'Startup history 1960' });
-	await paginationRow.focus();
-	await expect(paginationRow).toHaveAttribute('aria-setsize', '50');
-	await paginationRow.press('Alt+ArrowDown');
-	const paginationTooltip = page.getByRole('tooltip');
+	const pagingPosition = await viewport.evaluate((element, { initialCount, pageSize, rowHeight }) => {
+		const boundary = (initialCount - pageSize) * rowHeight - element.clientHeight;
+		const after = boundary + rowHeight * 2;
+		return { before: boundary - rowHeight * 2, after, anchorIndex: Math.ceil(after / rowHeight) + 1 };
+	}, { initialCount, pageSize, rowHeight });
+	const paginationRow = graph.getByRole('treeitem').filter({ hasText: `Startup history ${1999 - pagingPosition.anchorIndex}` });
+	await focusCommit(pagingPosition.anchorIndex);
+	await viewport.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, pagingPosition.before);
+	await expectFocusedRow(paginationRow);
+	await expect(paginationRow).toHaveAttribute('aria-setsize', String(initialCount));
+	await tree.press('Alt+ArrowDown');
+	const paginationTooltip = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
 	const paginationTooltipId = await paginationTooltip.getAttribute('id');
 	const paginationCopy = paginationTooltip.getByRole('button', { name: 'Copy Commit Hash', exact: true });
 	await expect(paginationCopy).toBeFocused();
 	const paginationActions = await paginationRow.locator('.ash-scm-graph-actions').elementHandle();
 	try {
-		// Prefetch while several commits remain below the viewport.
-		await viewport.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight - 120; });
-		await expect(paginationRow).toHaveAttribute('aria-setsize', '100');
+		// Cross the full-page prefetch boundary while the focused card's row stays visible.
+		await viewport.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, pagingPosition.after);
+		await expect(paginationRow).toHaveAttribute('aria-setsize', String(initialCount + pageSize));
 		expect(await paginationActions!.evaluate(element => element.isConnected)).toBe(true);
 		await expect(paginationTooltip).toHaveAttribute('id', paginationTooltipId!);
 		await expect(paginationCopy).toBeFocused();
 		await page.keyboard.press('Escape');
-		await expect(paginationRow).toBeFocused();
+		await expectFocusedRow(paginationRow);
 	} finally { await paginationActions?.dispose(); }
 	await viewport.evaluate(element => { element.scrollTop = 50 * 22 - element.clientHeight; });
 	await expect(row).toHaveCount(0);
-	await expect(graph.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '100');
+	await expect(graph.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', String(initialCount + pageSize));
 	await expect(graph).toHaveAttribute('aria-busy', 'false');
 	for (const scrollTop of [700, 22, 900, 400, 0]) {
 		await viewport.evaluate((element, scrollTop) => { element.scrollTop = scrollTop; }, scrollTop);
@@ -286,8 +338,8 @@ test('SCM startup keeps commit hover targets stable in a large history', { tag: 
 		expect(coverage).toEqual({ topCovered: true, bottomCovered: true });
 	}
 	// Cached rows must release their active hover when ListView takes them out of the render range.
-	await row.focus();
-	await row.press('Alt+ArrowDown');
+	await focusCommit(2);
+	await tree.press('Alt+ArrowDown');
 	await expect(page.getByRole('tooltip').getByRole('button', { name: 'Copy Commit Hash', exact: true })).toBeFocused();
 	await viewport.evaluate(element => { element.scrollTop = element.scrollHeight - element.clientHeight; });
 	await expect(row).toHaveCount(0);

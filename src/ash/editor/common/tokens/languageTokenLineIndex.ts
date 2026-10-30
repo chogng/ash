@@ -1,15 +1,15 @@
 import { resolveSemanticTokenStyling } from '../services/semanticTokensProviderStyling.js';
 import { type ResolvedSemanticToken, type SemanticTokenLine, type SemanticTokenModelSource, type SemanticTokenSource, type LanguageToken, type LanguageTokenResult } from './languageTokens.js';
-import { arraysEqual, pushMany } from "../../../base/common/arrays.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, combinedDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { arraysEqual, pushMany } from '../../../base/common/arrays.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable, combinedDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { type VersionedLanguageResult } from '../model/languageRequestCoordinator.js';
 import { LanguageResultStoreChangeReason, type VersionedLanguageResultStore } from '../model/languageResultStore.js';
 import { getLanguageTokenResultDelta, type LanguageTokenResultDelta, type LanguageTokenResultSplice } from '../services/semanticTokensDto.js';
-import { Position } from "../core/position.js";
-import { Range } from "../core/range.js";
-import { type TextModelChange } from "../core/textChange.js";
-import { type TextModel } from "../model/textModel.js";
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
+import { type TextModelChange } from '../core/textChange.js';
+import { type TextModel } from '../model/textModel.js';
 
 export interface LanguageTokenLine {
 	readonly lineIndex: number;
@@ -30,9 +30,9 @@ interface RelativeLanguageToken {
 	readonly endColumn: number;
 	readonly tokenType: string;
 	readonly modifiers: readonly string[];
-	readonly languageId?: LanguageToken["languageId"];
-	readonly balancedBrackets?: LanguageToken["balancedBrackets"];
-	readonly presentation?: LanguageToken["presentation"];
+	readonly languageId?: LanguageToken['languageId'];
+	readonly balancedBrackets?: LanguageToken['balancedBrackets'];
+	readonly presentation?: LanguageToken['presentation'];
 }
 
 interface LanguageTokenLinePayload {
@@ -403,7 +403,7 @@ function lineMatchesResult(payload: LanguageTokenLinePayload, lineIndex: number,
 	});
 }
 
-function presentationsEqual(left: LanguageToken["presentation"], right: LanguageToken["presentation"]): boolean {
+function presentationsEqual(left: LanguageToken['presentation'], right: LanguageToken['presentation']): boolean {
 	return left?.foreground === right?.foreground && left?.background === right?.background && arraysEqual(left?.fontStyle ?? [], right?.fontStyle ?? []);
 }
 
@@ -417,7 +417,7 @@ const EMPTY_STATE: LanguageTokenIndexState = Object.freeze({
 });
 
 function assertLineIndex(lineIndex: number): void {
-	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) throw new RangeError("Language token line index must be a non-negative safe integer");
+	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) throw new RangeError('Language token line index must be a non-negative safe integer');
 }
 
 /** Lazily styles one model token index and invalidates its cached lines with that index. */

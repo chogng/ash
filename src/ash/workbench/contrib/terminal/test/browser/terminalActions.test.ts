@@ -21,6 +21,10 @@ import { TerminalCommandId } from '../../common/terminal.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Event } from '../../../../../base/common/event.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService, READ_DIR_PERMISSIONS } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
+import { TestWorkspaceTrustManagementService } from '../../../../test/common/workbenchTestServices.js';
 
 registerTerminalActions();
 
@@ -261,6 +265,48 @@ suite('Terminal run selected text', () => {
 suite('Terminal dropdown commands', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	for (const result of [true, false, undefined]) {
+		test(`New Terminal waits for initialized permissions and the trust decision ${result}`, async () => {
+			using services = new InstantiationService();
+			using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
+			const initialized = new DeferredPromise<void>();
+			const requested = new DeferredPromise<void>();
+			const response = new DeferredPromise<boolean | undefined>();
+			using trust = Object.assign(new TestWorkspaceTrustManagementService(), {
+				workspaceTrustInitialized: initialized.p,
+				getUriTrustInfo: async (uri: URI) => ({ uri, trusted: false, permissions: READ_DIR_PERMISSIONS }),
+			});
+			services.registerInstance(IWorkspaceContextService, workspace);
+			services.registerInstance(IWorkspaceTrustManagementService, trust);
+			const effects: string[] = [];
+			services.registerInstance(IWorkspaceTrustRequestService, {
+				onDidInitiateWorkspaceTrustRequest: Event.None, onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
+				requestWorkspaceTrust: async () => { effects.push('request'); await requested.complete(); return response.p; },
+				requestWorkspaceTrustOnStartup() { }, cancelWorkspaceTrustRequest() { }, completeWorkspaceTrustRequest: async () => { },
+			});
+			const terminal = { xterm: { focus: () => effects.push('focus') } } as unknown as ITerminalInstance;
+			let active: ITerminalInstance | undefined;
+			services.registerSingleton(ITerminalService, () => {
+				effects.push('construct');
+				return {
+					get activeInstance() { return active; }, createTerminal: async () => { effects.push('create'); return terminal; },
+					setActiveInstance: (instance: ITerminalInstance) => { active = instance; },
+				} as unknown as ITerminalService;
+			});
+			services.registerInstance(IQuickInputService, { onShow: Event.None, currentQuickInput: undefined } as unknown as IQuickInputService);
+			services.registerInstance(ITerminalGroupService, { showPanel: async () => { effects.push('panel'); } } as unknown as ITerminalGroupService);
+			using commands = new CommandService(services);
+			const operation = commands.executeCommand(TerminalCommandId.New);
+			assert.deepEqual(effects, []);
+			await initialized.complete();
+			await requested.p;
+			assert.deepEqual(effects, ['request']);
+			await response.complete(result);
+			await operation;
+			assert.deepEqual(effects, result ? ['request', 'construct', 'create', 'panel', 'focus'] : ['request']);
+		});
+	}
+
 	test('settings opens the graphical editor filtered to terminal settings', async () => {
 		using services = new InstantiationService();
 		const requests: unknown[] = [];
@@ -275,6 +321,15 @@ suite('Terminal dropdown commands', () => {
 			using services = new InstantiationService();
 			const effects: unknown[] = [];
 			const terminal = { xterm: { focus: () => { effects.push('focus'); } } } as ITerminalInstance;
+			using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
+			using trust = new TestWorkspaceTrustManagementService();
+			services.registerInstance(IWorkspaceContextService, workspace);
+			services.registerInstance(IWorkspaceTrustManagementService, trust);
+			services.registerInstance(IWorkspaceTrustRequestService, {
+				onDidInitiateWorkspaceTrustRequest: Event.None, onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
+				requestWorkspaceTrust: async () => { throw new Error('An authorized terminal does not need a trust request'); },
+				requestWorkspaceTrustOnStartup() { }, cancelWorkspaceTrustRequest() { }, completeWorkspaceTrustRequest: async () => { },
+			});
 			const instances: ITerminalInstance[] = initialized ? [new InputTerminal().instance] : [];
 			let active: ITerminalInstance | undefined;
 			services.registerInstance(ITerminalService, {

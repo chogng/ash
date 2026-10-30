@@ -1,7 +1,7 @@
-import { LineRange } from "../ranges/lineRange.js";
-import { OffsetRange } from "../ranges/offsetRange.js";
-import { Position } from "../position.js";
-import { Range } from "../range.js";
+import { LineRange } from '../ranges/lineRange.js';
+import { OffsetRange } from '../ranges/offsetRange.js';
+import { Position } from '../position.js';
+import { Range } from '../range.js';
 
 /**
  * A non-negative text length represented as line breaks plus the final column.
@@ -20,7 +20,7 @@ export class TextLength {
 	}
 
 	static betweenPositions(start: Position, end: Position): TextLength {
-		if (end.isBefore(start)) throw new RangeError("TextLength end must not precede its start");
+		if (end.isBefore(start)) throw new RangeError('TextLength end must not precede its start');
 		return start.lineNumber === end.lineNumber
 			? new TextLength(0, end.column - start.column)
 			: new TextLength(end.lineNumber - start.lineNumber, end.column - 1);
@@ -49,7 +49,7 @@ export class TextLength {
 
 	constructor(readonly lineCount: number, readonly columnCount: number) {
 		if (!Number.isSafeInteger(lineCount) || !Number.isSafeInteger(columnCount) || lineCount < 0 || columnCount < 0) {
-			throw new RangeError("TextLength values must be non-negative safe integers");
+			throw new RangeError('TextLength values must be non-negative safe integers');
 		}
 	}
 

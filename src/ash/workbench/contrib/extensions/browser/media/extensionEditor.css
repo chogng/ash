@@ -40,6 +40,7 @@
 	width: 100%;
 	height: 100%;
 	object-fit: contain;
+	padding: var(--ash-spacing-size160);
 }
 
 .ash-extension-editor .extension-detail-heading {
@@ -253,4 +254,99 @@
 .ash-extension-editor.compact .extension-detail-body {
 	grid-template-columns: minmax(0, 1fr);
 	gap: 32px;
+}
+
+/* A full-page detail surface shares content and actions with the editor presentation. */
+.ash-extension-editor.page {
+	padding: 0 var(--ash-spacing-size320) var(--ash-spacing-size320);
+}
+
+.ash-extension-editor.page .extension-detail-header {
+	grid-template-columns: 48px minmax(0, 1fr);
+	gap: var(--ash-spacing-size160);
+	margin-bottom: var(--ash-spacing-size240);
+}
+
+.ash-extension-editor.page .extension-detail-icon {
+	width: 48px;
+	height: 48px;
+	border-color: var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-sideBar-background);
+	font-size: var(--ash-fontSize-heading2);
+}
+
+.ash-extension-editor.page .extension-detail-identity-row {
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-extension-editor.page .extension-detail-identity {
+	flex: 1 1 240px;
+}
+
+.ash-extension-editor.page .extension-detail-identity > h1 {
+	font-size: var(--ash-fontSize-heading2);
+}
+
+.ash-extension-editor.page .extension-actions {
+	margin-top: 0;
+}
+
+.ash-extension-editor.page .extension-detail-tabs {
+	--ash-tab-height: var(--ash-spacing-size400);
+	--ash-tabList-itemContentInset: var(--ash-spacing-size120);
+	--ash-actionBar-gap: var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-extension-editor.page .extension-detail-body {
+	grid-template-columns: minmax(0, 1fr) minmax(200px, 25%);
+	gap: var(--ash-spacing-size320);
+	align-items: start;
+}
+
+.ash-extension-editor.page .extension-detail-info {
+	padding: var(--ash-spacing-size200);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-sideBar-background);
+}
+
+.ash-extension-editor.page dl {
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-extension-editor.page dd + dt {
+	margin-top: var(--ash-spacing-size120);
+}
+
+.ash-extension-editor.page .extension-info-section,
+.ash-extension-editor.page .extension-detail-links {
+	padding: 0;
+	margin: 0 0 var(--ash-spacing-size200);
+	border: 0;
+}
+
+.ash-extension-editor.page .extension-info-section:last-of-type,
+.ash-extension-editor.page .extension-detail-links:last-child {
+	margin-bottom: 0;
+}
+
+.ash-extension-editor.page .extension-detail-content > section > h2,
+.ash-extension-editor.page .extension-detail-info h2 {
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-regular);
+	color: var(--ash-description-foreground);
+}
+
+.ash-extension-editor.page.compact {
+	padding: 0 var(--ash-spacing-size200) var(--ash-spacing-size200);
+}
+
+.ash-extension-editor.page.compact .extension-detail-body {
+	grid-template-columns: minmax(0, 1fr);
 }

@@ -1,28 +1,28 @@
 import { IActivityService } from '../../services/activity/common/activity.js';
-import { Separator } from "../../../base/common/actions.js";
-import { SeparatorActionViewItem } from "../../../base/browser/ui/actionbar/actionViewItems.js";
+import { Separator } from '../../../base/common/actions.js';
+import { SeparatorActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { PaneCompositeOptions } from '../panecomposite.js';
 import type { PaneComposite } from '../panecomposite.js';
-import { HoverPosition } from "../../../base/browser/ui/hover/hoverWidget.js";
-import type { IActivityHoverOptions } from "./compositeBarActions.js";
-import { toDisposable } from "../../../base/common/lifecycle.js";
-import "./media/paneCompositePart.css";
-import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import type { IDimension } from "../../../base/browser/dom.js";
-import { localize, type ILocalizationService, type LocalizationKey } from "../../services/localization/common/localizationService.js";
-import { MenuWorkbenchToolBar } from "../../../platform/actions/browser/toolbar.js";
-import type { IMenuService, MenuId } from "../../../platform/actions/common/actions.js";
-import type { IContextKey } from "../../../platform/contextkey/common/contextkey.js";
-import type { IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
+import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
+import type { IActivityHoverOptions } from './compositeBarActions.js';
+import { toDisposable } from '../../../base/common/lifecycle.js';
+import './media/paneCompositePart.css';
+import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
+import type { IDimension } from '../../../base/browser/dom.js';
+import { localize, type ILocalizationService, type LocalizationKey } from '../../services/localization/common/localizationService.js';
+import { MenuWorkbenchToolBar } from '../../../platform/actions/browser/toolbar.js';
+import type { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
+import type { IContextKey } from '../../../platform/contextkey/common/contextkey.js';
+import type { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { ActiveAgentSidebarContext, ActiveAuxiliaryContext, ActivePanelContext, ActiveViewletContext } from '../../common/contextkeys.js';
-import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
-import type { IViewDescriptorService } from "../../common/views.js";
-import { CompositePart } from "./compositePart.js";
-import { CompositeBar, type CompositeBarPresentation, type ICompositeBarOptions } from "./compositeBar.js";
-import type { PartTitleProjection } from "./views/viewPane.js";
-import { h } from "../../../base/browser/dom.js";
-import { IStorageService, StorageScope, StorageTarget } from "../../../platform/storage/common/storage.js";
+import { ViewContainerLocation, type IViewContainerDescriptor } from '../../common/views.js';
+import type { IViewDescriptorService } from '../../common/views.js';
+import { CompositePart } from './compositePart.js';
+import { CompositeBar, type CompositeBarPresentation, type ICompositeBarOptions } from './compositeBar.js';
+import type { PartTitleProjection } from './views/viewPane.js';
+import { h } from '../../../base/browser/dom.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 
 /** Menu-backed actions rendered at the right edge of a Pane Composite title. */
 export interface PaneCompositeTitleActions {
@@ -46,7 +46,7 @@ export interface PaneCompositePartOptions {
 	readonly viewsAriaLabel: string;
 	readonly viewsAriaLabelKey?: LocalizationKey;
 	readonly compositeBarPresentation?: CompositeBarPresentation;
-	readonly compositeBarOrientation?: "horizontal" | "vertical";
+	readonly compositeBarOrientation?: 'horizontal' | 'vertical';
 	readonly compositeBarContextMenuProvider?: IContextMenuProvider;
 	/** Selects which registered containers receive items in the hosted CompositeBar. */
 	readonly compositeBarContainerFilter?: (container: IViewContainerDescriptor) => boolean;
@@ -105,10 +105,10 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 		const ownerDocument = container.ownerDocument;
 		const ariaLabel = localize(options.localizationService, options.ariaLabelKey, options.ariaLabel);
 		const viewsAriaLabel = localize(options.localizationService, options.viewsAriaLabelKey, options.viewsAriaLabel);
-		this.domNode.setAttribute("aria-label", ariaLabel);
-		this.titleDomNode.classList.add("ash-pane-composite-title");
-		this.titleContentDomNode = h(ownerDocument, "div");
-		this.titleContentDomNode.className = "ash-pane-composite-title-content";
+		this.domNode.setAttribute('aria-label', ariaLabel);
+		this.titleDomNode.classList.add('ash-pane-composite-title');
+		this.titleContentDomNode = h(ownerDocument, 'div');
+		this.titleContentDomNode.className = 'ash-pane-composite-title-content';
 		this.compositeBar = this._register(new CompositeBar(this.titleContentDomNode, {
 			overflowActionSize: 22,
 			openComposite: options.openComposite,
@@ -123,12 +123,12 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 			storageService,
 			containerFilter: options.compositeBarContainerFilter,
 		}, activityService));
-		this.titleActionsSlotDomNode = h(ownerDocument, "div");
-		this.titleActionsSlotDomNode.className = "ash-pane-composite-title-actions";
-		this.viewTitleActionsDomNode = h(ownerDocument, "div");
-		this.viewTitleActionsDomNode.className = "ash-pane-composite-title-view-actions";
-		this.partTitleActionsDomNode = h(ownerDocument, "div");
-		this.partTitleActionsDomNode.className = "ash-pane-composite-title-part-actions";
+		this.titleActionsSlotDomNode = h(ownerDocument, 'div');
+		this.titleActionsSlotDomNode.className = 'ash-pane-composite-title-actions';
+		this.viewTitleActionsDomNode = h(ownerDocument, 'div');
+		this.viewTitleActionsDomNode.className = 'ash-pane-composite-title-view-actions';
+		this.partTitleActionsDomNode = h(ownerDocument, 'div');
+		this.partTitleActionsDomNode.className = 'ash-pane-composite-title-part-actions';
 		this.titleActionsSlotDomNode.append(this.viewTitleActionsDomNode, this.partTitleActionsDomNode);
 		this.titleDomNode.append(this.titleContentDomNode, this.titleActionsSlotDomNode);
 		const compositeActions = h(ownerDocument, 'div');
@@ -145,12 +145,12 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 				options.titleActions.menuId,
 				{ highlightToggledItems: true, toolbarOptions: { primaryGroup: options.titleActions.primaryGroup } },
 			));
-			actions.element.classList.add("ash-pane-composite-title-menu-actions");
+			actions.element.classList.add('ash-pane-composite-title-menu-actions');
 			if (options.location === ViewContainerLocation.Panel || options.location === ViewContainerLocation.AuxiliaryBar) {
-				const separator = h(ownerDocument, "div");
+				const separator = h(ownerDocument, 'div');
 				this._register(new SeparatorActionViewItem(new Separator())).render(separator);
-				separator.classList.add("ash-pane-composite-title-separator");
-				separator.setAttribute("aria-orientation", "vertical");
+				separator.classList.add('ash-pane-composite-title-separator');
+				separator.setAttribute('aria-orientation', 'vertical');
 				this.partTitleActionsDomNode.prepend(separator);
 				const updateSeparator = () => { separator.hidden = actions.element.hidden; };
 				this._register(actions.onDidChangeMenuItems(updateSeparator));
@@ -240,10 +240,10 @@ export class PaneCompositePart extends CompositePart<PaneComposite> {
 }
 
 const activeCompositeStorageKeys = {
-	[ViewContainerLocation.Sidebar]: "workbench.sidebar.activeViewContainer",
-	[ViewContainerLocation.Panel]: "workbench.panel.activeViewContainer",
-	[ViewContainerLocation.AuxiliaryBar]: "workbench.auxiliarybar.activeViewContainer",
-	[ViewContainerLocation.AgentSidebar]: "workbench.agentSidebar.activeViewContainer",
+	[ViewContainerLocation.Sidebar]: 'workbench.sidebar.activeViewContainer',
+	[ViewContainerLocation.Panel]: 'workbench.panel.activeViewContainer',
+	[ViewContainerLocation.AuxiliaryBar]: 'workbench.auxiliarybar.activeViewContainer',
+	[ViewContainerLocation.AgentSidebar]: 'workbench.agentSidebar.activeViewContainer',
 } as const satisfies Record<ViewContainerLocation, string>;
 
 const activeCompositeContextKeys = {

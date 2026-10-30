@@ -145,7 +145,7 @@ fn inline_transport_uses_the_same_pairing_and_cannot_impersonate_an_adapter_proc
 fn observation_pages_report_gaps_and_never_advance_past_the_returned_page() {
     let manager = manager();
     let id = manager.open_client_transport().unwrap();
-    for seq in 0..600 {
+    for seq in 0..super::MAX_OBSERVATIONS as u64 + 88 {
         manager.input(&id, DebugAdapterRead {
             messages: vec![ash_debug_adapter::DebugAdapterMessage { sequence: seq, message: json!({"seq":seq,"type":"event","event":"output","body":{"output":"line"}}) }],
             next_sequence: seq + 1, output_gap: false, stderr: String::new(), exited: false, exit_code: None, protocol_error: None,
@@ -163,6 +163,73 @@ fn observation_pages_report_gaps_and_never_advance_past_the_returned_page() {
     );
     manager.terminate_all();
     assert!(manager.read(&id, 0, 1).is_err());
+}
+
+#[test]
+fn self_hosting_connections_fit_the_bounded_budget_and_release_their_slots() {
+    let manager = manager();
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let mut sessions = Vec::new();
+    let mut peers = Vec::new();
+    for _ in 0..16 {
+        sessions.push(
+            manager
+                .connect(DebugAdapterConnection::Server { port, host: None })
+                .unwrap(),
+        );
+        peers.push(listener.accept().unwrap().0);
+    }
+    assert!(
+        manager
+            .connect(DebugAdapterConnection::Server { port, host: None })
+            .is_err()
+    );
+    manager.close(&sessions.pop().unwrap()).unwrap();
+    let replacement = manager
+        .connect(DebugAdapterConnection::Server { port, host: None })
+        .unwrap();
+    peers.push(listener.accept().unwrap().0);
+    manager.terminate_all();
+    assert!(manager.read(&replacement, 0, 1).is_err());
+}
+
+#[test]
+fn source_catalog_observations_remain_available_through_a_startup_stop() {
+    let manager = manager();
+    let id = manager.open_client_transport().unwrap();
+    for sequence in 0..5001 {
+        let message = if sequence == 5000 {
+            json!({"seq":sequence,"type":"event","event":"stopped","body":{"threadId":1,"reason":"breakpoint"}})
+        } else {
+            json!({"seq":sequence,"type":"event","event":"loadedSource","body":{"reason":"new","source":{"path":format!("/workspace/{sequence}.ts")}}})
+        };
+        manager
+            .input(
+                &id,
+                DebugAdapterRead {
+                    messages: vec![ash_debug_adapter::DebugAdapterMessage { sequence, message }],
+                    next_sequence: sequence + 1,
+                    output_gap: false,
+                    stderr: String::new(),
+                    exited: false,
+                    exit_code: None,
+                    protocol_error: None,
+                },
+            )
+            .unwrap();
+    }
+    let mut cursor = 0;
+    loop {
+        let page = manager.read(&id, cursor, 128).unwrap();
+        assert!(!page.output_gap);
+        if page.messages.is_empty() {
+            break;
+        }
+        cursor = page.next_sequence;
+    }
+    assert_eq!(cursor, 5001);
+    manager.close(&id).unwrap();
 }
 
 #[test]

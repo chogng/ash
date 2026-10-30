@@ -6,20 +6,20 @@ import {
 import {
 	type ContextMenuAnchor,
 	type IContextMenuDelegate,
-} from "../../../base/browser/contextmenu.js";
-import { isNode } from "../../../base/browser/dom.js";
+} from '../../../base/browser/contextmenu.js';
+import { isNode } from '../../../base/browser/dom.js';
 import {
 	AnchorPosition,
 	ContextViewFocusRestore,
-} from "../../../base/browser/ui/contextview/contextview.js";
-import { Menu } from "../../../base/browser/ui/menu/menu.js";
-import { ActionRunner, type IAction } from "../../../base/common/actions.js";
+} from '../../../base/browser/ui/contextview/contextview.js';
+import { Menu } from '../../../base/browser/ui/menu/menu.js';
+import { ActionRunner, type IAction } from '../../../base/common/actions.js';
 import { toErrorMessage } from '../../../base/common/errorMessage.js';
-import { Disposable, DisposableMap, DisposableStore } from "../../../base/common/lifecycle.js";
-import type { IRectangle } from "../../../base/common/layout.js";
-import type { IKeybindingService } from "../../keybinding/common/keybinding.js";
-import type { INotificationService } from "../../notification/common/notification.js";
-import type { IContextViewService } from "./contextView.js";
+import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
+import type { IRectangle } from '../../../base/common/layout.js';
+import type { IKeybindingService } from '../../keybinding/common/keybinding.js';
+import type { INotificationService } from '../../notification/common/notification.js';
+import type { IContextViewService } from './contextView.js';
 
 /** Owns browser menu rendering and action lifecycle for one context-view host. */
 export class ContextMenuHandler extends Disposable {
@@ -140,7 +140,7 @@ export class ContextMenuHandler extends Disposable {
 				anchorAlignment: delegate.anchorAlignment,
 				anchorPosition: delegate.anchorPosition ?? AnchorPosition.Below,
 				gap: delegate.gap,
-				presentation: "menu",
+				presentation: 'menu',
 				focusRestore: ContextViewFocusRestore.Previous,
 				layer: delegate.layer ?? 10,
 				isTargetWithin: (target) => menu.contains(target),

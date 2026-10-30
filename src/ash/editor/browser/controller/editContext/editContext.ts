@@ -1,25 +1,25 @@
-import { stopEvent } from "../../../../base/browser/dom.js";
+import { stopEvent } from '../../../../base/browser/dom.js';
 import { type FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { type IKeyboardEvent } from "../../../../base/browser/keyboardEvent.js";
-import { Emitter, Event, type Event as EditorEvent } from "../../../../base/common/event.js";
-import { IME } from "../../../../base/common/ime.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type Position } from "../../../common/core/position.js";
+import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+import { Emitter, Event, type Event as EditorEvent } from '../../../../base/common/event.js';
+import { IME } from '../../../../base/common/ime.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { type Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type Selection } from '../../../common/core/selection.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
-import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
+import { normalizeTextLineEndings } from '../../../common/core/textChange.js';
 import { type IEditorAriaOptions } from '../../editorBrowser.js';
-import { type View } from "../../view.js";
+import { type View } from '../../view.js';
 import { ViewPart } from '../../view/viewPart.js';
-import { type EditorViewTextUpdateEvent } from "../../view/viewController.js";
+import { type EditorViewTextUpdateEvent } from '../../view/viewController.js';
 import { type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type IViewModel } from '../../../common/viewModel.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { isFirefox } from '../../../../base/browser/browser.js';
-import { createClipboardCopyEvent, createClipboardPasteEvent, type IClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
+import { createClipboardCopyEvent, createClipboardPasteEvent, type IClipboardCopyEvent, type IClipboardPasteEvent } from './clipboardUtils.js';
 
 /** The state that the browser editing surface mirrors from the common editor. */
 export interface EditContextState {
@@ -259,51 +259,51 @@ export abstract class AbstractEditContext extends ViewPart {
 		if (event.defaultPrevented) return;
 
 		switch (event.inputType) {
-			case "insertText":
-			case "insertReplacementText":
+			case 'insertText':
+			case 'insertReplacementText':
 				return;
-			case "insertLineBreak":
-			case "insertParagraph":
+			case 'insertLineBreak':
+			case 'insertParagraph':
 				stopEvent(event);
 				this.clear();
 				viewController.enter(event.inputType);
 				return;
-			case "deleteContentBackward":
+			case 'deleteContentBackward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteBackward(event.inputType);
 				return;
-			case "deleteContentForward":
+			case 'deleteContentForward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteForward(event.inputType);
 				return;
-			case "deleteWordBackward":
+			case 'deleteWordBackward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteWordBackward(event.inputType);
 				return;
-			case "deleteWordForward":
+			case 'deleteWordForward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteWordForward(event.inputType);
 				return;
-			case "deleteSoftLineBackward":
+			case 'deleteSoftLineBackward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteSoftLineBackward(event.inputType);
 				return;
-			case "deleteSoftLineForward":
+			case 'deleteSoftLineForward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteSoftLineForward(event.inputType);
 				return;
-			case "historyUndo":
+			case 'historyUndo':
 				stopEvent(event);
 				this.clear();
 				viewController.undo();
 				return;
-			case "historyRedo":
+			case 'historyRedo':
 				stopEvent(event);
 				this.clear();
 				viewController.redo();
@@ -342,14 +342,14 @@ export abstract class AbstractEditContext extends ViewPart {
 				return;
 			}
 		}
-		if (!event.isComposing && event.key === "Insert" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+		if (!event.isComposing && event.key === 'Insert' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			event.stop();
 			viewController.toggleOvertype();
 			return;
 		}
 		if (
 			event.isComposing ||
-			event.key !== "Tab" ||
+			event.key !== 'Tab' ||
 			event.shiftKey ||
 			event.ctrlKey ||
 			event.altKey ||
@@ -397,17 +397,17 @@ function makeTextUpdateEvent(update: EditContextTextUpdate): EditorViewTextUpdat
 	};
 }
 
-function isUndoKeybinding(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {
-	return hasPrimaryModifier(event) && !event.shiftKey && event.key.toLowerCase() === "z";
+function isUndoKeybinding(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>): boolean {
+	return hasPrimaryModifier(event) && !event.shiftKey && event.key.toLowerCase() === 'z';
 }
 
-function isRedoKeybinding(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {
+function isRedoKeybinding(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>): boolean {
 	if (!hasPrimaryModifier(event)) return false;
 	const key = event.key.toLowerCase();
-	return (key === "z" && event.shiftKey) || (key === "y" && !event.shiftKey);
+	return (key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey);
 }
 
-function hasPrimaryModifier(event: Pick<KeyboardEvent, "ctrlKey" | "altKey" | "metaKey">): boolean {
+function hasPrimaryModifier(event: Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'metaKey'>): boolean {
 	return !event.altKey && event.ctrlKey !== event.metaKey;
 }
 
@@ -441,7 +441,7 @@ export class CompositionController extends Disposable {
 		if (viewport.textModel !== viewModel.model) {
 			this.dispose();
 			throw new TypeError(
-				"Stanza composition and view model must share one text model",
+				'Stanza composition and view model must share one text model',
 			);
 		}
 		this.input = input;
@@ -456,7 +456,7 @@ export class CompositionController extends Disposable {
 		this._register(input.onDidCompositionEnd(event => this.handleCompositionEnd(event)));
 		this._register(onType(event => this.handleType(event)));
 		this._register(input.onKeyDown(event => {
-			if (event.key === "Escape" && this.activeComposition) {
+			if (event.key === 'Escape' && this.activeComposition) {
 				this.activeComposition.cancelRequested = true;
 			}
 		}));
@@ -491,7 +491,7 @@ export class CompositionController extends Disposable {
 			length: 0,
 			cancelRequested: false,
 		};
-		this.viewport.domNode.domNode.classList.add("composing");
+		this.viewport.domNode.domNode.classList.add('composing');
 		this._onDidChange.fire(true);
 		this.viewport.revealPosition(startPosition);
 		this.positionInput(startPosition);
@@ -570,9 +570,9 @@ export class CompositionController extends Disposable {
 	}
 
 	private clearPresentation(): boolean {
-		const changed = this.viewport.domNode.domNode.classList.contains("composing") ||
-			this.input.domNode.domNode.classList.contains("ime-input");
-		this.viewport.domNode.domNode.classList.remove("composing");
+		const changed = this.viewport.domNode.domNode.classList.contains('composing') ||
+			this.input.domNode.domNode.classList.contains('ime-input');
+		this.viewport.domNode.domNode.classList.remove('composing');
 		this.input.clearComposition();
 		this.setCompositionRange(undefined);
 		return changed;

@@ -1,14 +1,14 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import {
 	getKeybindingLabel,
 	getKeybindingLabelParts,
 	KeybindingLabelStyle,
-} from "../../common/keybindingLabels.js";
+} from '../../common/keybindingLabels.js';
 import {
 	parseKeybinding,
 	serializeKeybinding,
-} from "../../common/keybindingParser.js";
+} from '../../common/keybindingParser.js';
 import {
 	decodeKeybinding,
 	Keybinding,
@@ -17,9 +17,9 @@ import {
 	matchesResolvedChord,
 	physicalKey,
 	resolveKeybinding,
-} from "../../common/keybindings.js";
-import { OperatingSystem } from "../../common/platform.js";
-import { loadKeybindingConformanceFixtures } from "./keybindingConformanceFixtures.js";
+} from '../../common/keybindings.js';
+import { OperatingSystem } from '../../common/platform.js';
+import { loadKeybindingConformanceFixtures } from './keybindingConformanceFixtures.js';
 import {
 	EVENT_KEY_CODE_MAP,
 	IMMUTABLE_CODE_TO_KEY_CODE,
@@ -30,7 +30,7 @@ import {
 	NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE,
 	ScanCode,
 	ScanCodeUtils,
-} from "../../common/keyCodes.js";
+} from '../../common/keyCodes.js';
 
 interface ParserFixture {
 	readonly input: string;
@@ -43,13 +43,13 @@ interface ConformanceFixtures {
 	readonly parser: readonly ParserFixture[];
 }
 
-test("canonical key codes distinguish logical keys from physical scan codes", () => {
-	assert.equal(KeyCodeUtils.fromString("ArrowLeft"), KeyCode.LeftArrow);
-	assert.equal(KeyCodeUtils.fromString("KeyZ"), KeyCode.KeyZ);
-	assert.equal(KeyCodeUtils.toUserSettings(KeyCode.Slash), "/");
-	assert.equal(ScanCodeUtils.toEnum("IntlYen"), ScanCode.IntlYen);
-	assert.equal(ScanCodeUtils.lowerCaseToEnum("intlyen"), ScanCode.IntlYen);
-	assert.equal(ScanCodeUtils.toString(ScanCode.NumpadEnter), "NumpadEnter");
+test('canonical key codes distinguish logical keys from physical scan codes', () => {
+	assert.equal(KeyCodeUtils.fromString('ArrowLeft'), KeyCode.LeftArrow);
+	assert.equal(KeyCodeUtils.fromString('KeyZ'), KeyCode.KeyZ);
+	assert.equal(KeyCodeUtils.toUserSettings(KeyCode.Slash), '/');
+	assert.equal(ScanCodeUtils.toEnum('IntlYen'), ScanCode.IntlYen);
+	assert.equal(ScanCodeUtils.lowerCaseToEnum('intlyen'), ScanCode.IntlYen);
+	assert.equal(ScanCodeUtils.toString(ScanCode.NumpadEnter), 'NumpadEnter');
 	assert.equal(EVENT_KEY_CODE_MAP[38], KeyCode.UpArrow);
 	assert.equal(NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE.VK_F12, KeyCode.F12);
 	assert.equal(IMMUTABLE_CODE_TO_KEY_CODE[ScanCode.ArrowUp], KeyCode.UpArrow);
@@ -83,8 +83,8 @@ test('function keys retain their physical identities without replacing editing k
 	}
 });
 
-test("keybinding parser distinguishes logical and physical chords", () => {
-	const parsed = parseKeybinding("ctrl+k shift+[KeyP]");
+test('keybinding parser distinguishes logical and physical chords', () => {
+	const parsed = parseKeybinding('ctrl+k shift+[KeyP]');
 
 	assert.ok(parsed);
 	assert.equal(parsed.chords.length, 2);
@@ -94,17 +94,17 @@ test("keybinding parser distinguishes logical and physical chords", () => {
 		parsed.chords[1].kind === KeybindingChordKind.Physical
 			? parsed.chords[1].code
 			: undefined,
-		"KeyP",
+		'KeyP',
 	);
-	assert.equal(parseKeybinding("ctrl+shift"), undefined);
-	assert.equal(parseKeybinding("primary+ctrl+k"), undefined);
-	assert.equal(parseKeybinding("ctrl+k+v"), undefined);
-	assert.equal(parseKeybinding("ctrl+banana"), undefined);
-	assert.equal(parseKeybinding("ctrl+[Banana]"), undefined);
+	assert.equal(parseKeybinding('ctrl+shift'), undefined);
+	assert.equal(parseKeybinding('primary+ctrl+k'), undefined);
+	assert.equal(parseKeybinding('ctrl+k+v'), undefined);
+	assert.equal(parseKeybinding('ctrl+banana'), undefined);
+	assert.equal(parseKeybinding('ctrl+[Banana]'), undefined);
 });
 
-test("portable primary modifiers resolve and format for each OS", () => {
-	const keybinding = Keybinding.single(logicalKey("n", {
+test('portable primary modifiers resolve and format for each OS', () => {
+	const keybinding = Keybinding.single(logicalKey('n', {
 		primaryKey: true,
 	}));
 	const windows = resolveKeybinding(
@@ -116,41 +116,41 @@ test("portable primary modifiers resolve and format for each OS", () => {
 		OperatingSystem.Macintosh,
 	);
 
-	assert.equal(getKeybindingLabel(windows), "Ctrl+N");
-	assert.equal(getKeybindingLabel(mac), "⌘N");
+	assert.equal(getKeybindingLabel(windows), 'Ctrl+N');
+	assert.equal(getKeybindingLabel(mac), '⌘N');
 	assert.equal(
 		getKeybindingLabel(mac, KeybindingLabelStyle.Aria),
-		"Command+N",
+		'Command+N',
 	);
 	assert.equal(
 		getKeybindingLabel(mac, KeybindingLabelStyle.UserSettings),
-		"cmd+n",
+		'cmd+n',
 	);
 });
 
-test("keycap labels preserve individual keys and chord boundaries across platforms", () => {
+test('keycap labels preserve individual keys and chord boundaries across platforms', () => {
 	const binding = Keybinding.chord(
-		logicalKey("+", { primaryKey: true, shiftKey: true }),
-		logicalKey("PageUp"),
+		logicalKey('+', { primaryKey: true, shiftKey: true }),
+		logicalKey('PageUp'),
 	);
 	for (const [os, modifiers] of [
-		[OperatingSystem.Macintosh, ["⇧", "⌘"]],
-		[OperatingSystem.Windows, ["Ctrl", "Shift"]],
-		[OperatingSystem.Linux, ["Ctrl", "Shift"]],
+		[OperatingSystem.Macintosh, ['⇧', '⌘']],
+		[OperatingSystem.Windows, ['Ctrl', 'Shift']],
+		[OperatingSystem.Linux, ['Ctrl', 'Shift']],
 	] as const) {
 		const parts = getKeybindingLabelParts(resolveKeybinding(binding, os));
-		assert.deepEqual(parts.map(part => part.keys), [[...modifiers, "+"], ["Page Up"]]);
+		assert.deepEqual(parts.map(part => part.keys), [[...modifiers, '+'], ['Page Up']]);
 	}
 });
 
-test("VS Code numeric keybindings decode into the canonical keybinding model", () => {
+test('VS Code numeric keybindings decode into the canonical keybinding model', () => {
 	const windows = decodeKeybinding(KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyM, OperatingSystem.Windows);
 	const mac = decodeKeybinding(KeyMod.CtrlCmd | KeyMod.WinCtrl | KeyCode.KeyM, OperatingSystem.Macintosh);
 
 	assert.ok(windows);
 	assert.deepEqual(resolveKeybinding(windows, OperatingSystem.Windows).chords[0], {
 		kind: KeybindingChordKind.Logical,
-		key: "m",
+		key: 'm',
 		label: undefined,
 		ctrlKey: true,
 		shiftKey: true,
@@ -162,26 +162,26 @@ test("VS Code numeric keybindings decode into the canonical keybinding model", (
 	assert.equal(resolveKeybinding(mac, OperatingSystem.Macintosh).chords[0].metaKey, true);
 });
 
-test("resolved chords match their declared logical or physical identity", () => {
+test('resolved chords match their declared logical or physical identity', () => {
 	const resolved = resolveKeybinding(
 		Keybinding.chord(
-			logicalKey("z", { ctrlKey: true }),
-			physicalKey("KeyY", { ctrlKey: true }),
+			logicalKey('z', { ctrlKey: true }),
+			physicalKey('KeyY', { ctrlKey: true }),
 		),
 		OperatingSystem.Windows,
 	);
 
 	assert.equal(matchesResolvedChord(resolved.chords[0], {
-		key: "Z",
-		code: "KeyY",
+		key: 'Z',
+		code: 'KeyY',
 		ctrlKey: true,
 		shiftKey: false,
 		altKey: false,
 		metaKey: false,
 	}), true);
 	assert.equal(matchesResolvedChord(resolved.chords[1], {
-		key: "z",
-		code: "KeyY",
+		key: 'z',
+		code: 'KeyY',
 		ctrlKey: true,
 		shiftKey: false,
 		altKey: false,
@@ -189,18 +189,18 @@ test("resolved chords match their declared logical or physical identity", () => 
 	}), true);
 });
 
-test("space has a stable user representation", () => {
-	const parsed = parseKeybinding("ctrl+space");
+test('space has a stable user representation', () => {
+	const parsed = parseKeybinding('ctrl+space');
 	assert.ok(parsed);
 	assert.equal(
 		getKeybindingLabel(
 			resolveKeybinding(parsed, OperatingSystem.Windows),
 		),
-		"Ctrl+Space",
+		'Ctrl+Space',
 	);
 });
 
-test("shared keybinding parser fixtures match the TypeScript implementation", () => {
+test('shared keybinding parser fixtures match the TypeScript implementation', () => {
 	const fixtures = loadKeybindingConformanceFixtures<ConformanceFixtures>();
 
 	for (const fixture of fixtures.parser) {

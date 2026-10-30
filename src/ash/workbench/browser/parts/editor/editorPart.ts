@@ -1,3 +1,5 @@
+import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
+import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
 import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
 import { EditorInputCapabilities } from '../../../common/editor.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -7,69 +9,69 @@ import type { IAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
 import { getEditorWorkingCopies, createEditorOpenError, isEditorOpenError, type IResourceEditorInput, type IEditorIdentifier, type IEditorPane } from '../../../common/editor.js';
-import "./media/editorpart.css";
-import { isNonEmptyArray } from "../../../../base/common/arrays.js";
-import { basename } from "../../../../base/common/resources.js";
-import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import { URI } from "../../../../base/common/uri.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { CancellationError } from "../../../../base/common/errors.js";
-import { validateJsonValue } from "../../../../base/common/jsonValue.js";
-import { computeScreenAwareSize, Dimension, type IDimension } from "../../../../base/browser/dom.js";
-import { type IPositionedRectangle } from "../../../../base/browser/geometry.js";
-import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, type GridDescriptor, type ISerializableView as ISerializableGridView } from "../../../../base/browser/ui/grid/grid.js";
-import { DisposableMap, Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { rot } from "../../../../base/common/numbers.js";
-import { Schemas } from "../../../../base/common/network.js";
-import type { IMenuService } from "../../../../platform/actions/common/actions.js";
+import './media/editorpart.css';
+import { isNonEmptyArray } from '../../../../base/common/arrays.js';
+import { basename } from '../../../../base/common/resources.js';
+import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import { URI } from '../../../../base/common/uri.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { CancellationError } from '../../../../base/common/errors.js';
+import { validateJsonValue } from '../../../../base/common/jsonValue.js';
+import { computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
+import { type IPositionedRectangle } from '../../../../base/browser/geometry.js';
+import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView as ISerializableGridView } from '../../../../base/browser/ui/grid/grid.js';
+import { DisposableMap, Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { rot } from '../../../../base/common/numbers.js';
+import { Schemas } from '../../../../base/common/network.js';
+import type { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { EditorOpenSource, TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
-import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { ConfirmResult, DialogSeverity, type IDialogService, type IFileDialogService } from "../../../../platform/dialogs/common/dialogs.js";
-import { TextFileBinaryError, TextFileTooLargeError } from "../../../services/textfile/common/textFileService.js";
-import { type ITextFileService } from "../../../services/textfile/common/textfiles.js";
-import { FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
-import type { IDiffService } from "../../../services/diff/common/diffService.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
-import type { IDocumentCollaborationApi } from "../../../../platform/collab/common/documentCollaborationApi.js";
-import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { Part } from "../../part.js";
-import { EditorGroupView, EditorOpenSupersededError, type EditorGroupOptions } from "./editorGroupView.js";
-import type { IEditorGroupView } from "./editor.js";
-import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from "./editorConfiguration.js";
-import type { FileElement } from "./breadcrumbsModel.js";
-import type { IBreadcrumbsService } from "./breadcrumbs.js";
-import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
-import type { LanguageDocumentSymbol } from "../../../../editor/common/languages.js";
-import type { Range } from "../../../../editor/common/core/range.js";
-import { EditorDropTarget } from "./editorDropTarget.js";
-import { EditorsObserver } from "./editorsObserver.js";
-import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import type { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ConfirmResult, DialogSeverity, type IDialogService, type IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { TextFileBinaryError, TextFileTooLargeError } from '../../../services/textfile/common/textFileService.js';
+import { type ITextFileService } from '../../../services/textfile/common/textfiles.js';
+import { FileNotFoundError, type IFileService } from '../../../../platform/files/common/files.js';
+import type { IDiffService } from '../../../services/diff/common/diffService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import type { IDocumentCollaborationApi } from '../../../../platform/collab/common/documentCollaborationApi.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { Part } from '../../part.js';
+import { EditorGroupView, EditorOpenSupersededError, type EditorGroupOptions } from './editorGroupView.js';
+import type { IEditorGroupView } from './editor.js';
+import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from './editorConfiguration.js';
+import type { FileElement } from './breadcrumbsModel.js';
+import type { IBreadcrumbsService } from './breadcrumbs.js';
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
+import type { Range } from '../../../../editor/common/core/range.js';
+import { EditorDropTarget } from './editorDropTarget.js';
+import { EditorsObserver } from './editorsObserver.js';
+import { EditorTabDragAndDropController, type EditorTabDropEvent } from './editorTabDragAndDrop.js';
 import { GroupDirection, GroupLocation, type IEditorGroup, type IEditorGroupsContainer, type IFindGroupScope } from '../../../services/editor/common/editorGroupsService.js';
-import type { EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
-import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
-import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
+import type { EditorOpenOptions, EditorOpenTarget } from '../../../services/editor/common/editorService.js';
+import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
+import type { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 
-import { EditorPanes, type IEditorPaneDescriptor, type IEditorPaneRegistry } from "../../editor.js";
-import type { IBulkEditService } from "../../../../editor/browser/services/bulkEditService.js";
-import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
-import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput, UnknownEditorInputSerializerError } from "../../../services/editor/common/editorInputSerializer.js";
-import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
+import { EditorPanes, type IEditorPaneDescriptor, type IEditorPaneRegistry } from '../../editor.js';
+import type { IBulkEditService } from '../../../../editor/browser/services/bulkEditService.js';
+import type { ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
+import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput, UnknownEditorInputSerializerError } from '../../../services/editor/common/editorInputSerializer.js';
+import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from '../../../services/editor/common/editorWorkingSet.js';
 import { parseEditorWorkingSetLayout } from '../../../services/editor/common/editorWorkingSet.js';
-import { ModalEditorPart, type ModalEditorPartOptions } from "./modalEditorPart.js";
-import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from "../../../services/editor/common/editorState.js";
-import { WorkbenchConfiguration } from "../../../common/configuration.js";
+import { ModalEditorPart, type ModalEditorPartOptions } from './modalEditorPart.js';
+import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
+import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { EditorCloseEmptyGroupsConfiguration, EditorOpenSideBySideDirectionConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 import { EditorPartMaximizedEditorGroupContext, EditorPartMultipleEditorGroupsContext } from '../../../common/contextkeys.js';
 
-export { EditorOpenSupersededError } from "./editorGroupView.js";
+export { EditorOpenSupersededError } from './editorGroupView.js';
 
 /** Keep the CSS variable reference so theme changes recolor existing Grid boundaries without restyling the Grid. */
-const EDITOR_GROUP_GRID_STYLES = { separatorBorder: "var(--ash-editorGroup-border)" } as const;
+const EDITOR_GROUP_GRID_STYLES = { separatorBorder: 'var(--ash-editorGroup-border)' } as const;
 
 // Matches the standard stroke token used by modernUI/browser/media/editorBorder.css.
 const EDITOR_FRAME_BORDER_WIDTH = 1;
@@ -80,7 +82,7 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent>;
 	readonly groups: readonly IEditorGroupView[];
 	readonly activeGroup: IEditorGroupView;
-	addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView;
+	addGroup(reference: EditorGroupId, direction: Direction): IEditorGroupView;
 	removeGroup(group: IEditorGroupView | EditorGroupId): Promise<boolean>;
 	activateGroup(id: EditorGroupId): void;
 	findGroup(scope: IFindGroupScope, source?: IEditorGroup): IEditorGroup | undefined;
@@ -105,9 +107,9 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	moveActiveEditorTo(target: IEditorPart): Promise<boolean>;
 	saveActiveEditor(): Promise<void>;
 	setContent(content: Element): Promise<void>;
-	splitActiveGroup(direction: GridDirection): Promise<void>;
+	splitActiveGroup(direction: Direction): Promise<void>;
 	/** Copies the requested tabs beside their source group without activating a source tab. */
-	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: GridDirection): Promise<void>;
+	splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: Direction): Promise<void>;
 	splitActiveGroupHorizontal(): Promise<void>;
 	splitActiveGroupVertical(): Promise<void>;
 	getEditorPaneChoices(input?: IResourceEditorInput): readonly IEditorPaneDescriptor[];
@@ -120,12 +122,12 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 
 export interface EditorCloseAllOptions {
 	readonly excludeSticky?: boolean;
-	readonly reason?: "close" | "reset";
+	readonly reason?: 'close' | 'reset';
 	readonly skipConfirmation?: boolean;
 }
 
 export const IEditorPart =
-	createServiceIdentifier<IEditorPart>("editorPart");
+	createServiceIdentifier<IEditorPart>('editorPart');
 
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
@@ -180,7 +182,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	public readonly onDidLayout = this.layoutEmitter.event;
 	private readonly groupHosts = this._register(new DisposableMap<EditorGroupId, EditorGroupHost>());
 	private readonly modalEditor: ModalEditorPart;
-	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "dragAndDrop">;
+	private readonly groupOptions: Omit<EditorGroupOptions, 'onDidActivate' | 'dragAndDrop'>;
 	private readonly _groups: EditorGroupHost[] = [];
 	/** Grid retains hidden sizes; retain only the visibility and layout needed to restore this operation. */
 	private maximizedGroup: { id: EditorGroupId; visible: readonly EditorGroupId[]; layout: EditorWorkingSetLayout; } | undefined;
@@ -209,7 +211,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		@IStorageService storageService: IStorageService,
 		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
 	) {
-		super(container, "editor", themeService, storageService, {
+		super(container, 'editor', themeService, storageService, {
 			borderWidth: () => this.getFloatingBorderWidth() * 2,
 		});
 		const ownerDocument = container.ownerDocument;
@@ -264,7 +266,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this._groups.push(initial);
 		this._activeGroup = initial.group;
 		this.gridSlot.value = new SerializableGrid(this.contentDomNode, {
-			type: "leaf",
+			type: 'leaf',
 			view: initial.view,
 			size: 1,
 		}, { styles: EDITOR_GROUP_GRID_STYLES });
@@ -321,7 +323,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return this._activeGroup;
 	}
 
-	public addGroup(reference: EditorGroupId, direction: GridDirection): IEditorGroupView {
+	public addGroup(reference: EditorGroupId, direction: Direction): IEditorGroupView {
 		return this.insertGroup(this.groupHosts.get(reference)!.group, direction).group;
 	}
 
@@ -349,11 +351,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const mapped = new Set(groupMapping.values());
 		if (mapped.size !== groupMapping.size || [...mapped].some(id => !this.groupHosts.has(id))) throw new TypeError('Invalid Editor Grid group mapping');
 		const missing = this._groups.filter(host => !mapped.has(host.group.id));
-		const extra: EditorWorkingSetLayout[] = missing.map(host => ({ type: 'leaf', data: { groupId: host.group.id }, size: this.editorGrid.getViewSize(host.view).width, visible: true, priority: 'normal' }));
+		const extra: EditorWorkingSetLayout[] = missing.map(host => ({ type: 'leaf', data: { groupId: host.group.id }, size: this.editorGrid.getViewSize(host.view).width, visible: true, priority: LayoutPriority.Normal }));
 		const rebound = remapWorkingSetLayout(retained, groupMapping);
 		const combined: EditorWorkingSetLayout = extra.length ? {
-			type: 'branch', orientation: 'horizontal', size: this.dimension.width, priority: 'normal',
-			children: [...(rebound.type === 'branch' && rebound.orientation === 'horizontal' ? rebound.children : [rebound]), ...extra],
+			type: 'branch', orientation: Orientation.HORIZONTAL, size: this.dimension.width, priority: LayoutPriority.Normal,
+			children: [...(rebound.type === 'branch' && rebound.orientation === Orientation.HORIZONTAL ? rebound.children : [rebound]), ...extra],
 		} : rebound;
 		this.preserveFocus(() => {
 			this.gridSlot.clear();
@@ -467,7 +469,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 
 	private get editorGrid(): SerializableGrid<EditorGroupGridView> {
 		const grid = this.gridSlot.value;
-		if (!grid) throw new Error("Editor Grid is unavailable");
+		if (!grid) throw new Error('Editor Grid is unavailable');
 		return grid;
 	}
 
@@ -519,16 +521,16 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			throw error;
 		}
 		this.assertNotDisposed();
-		if (target === "modalGroup") {
+		if (target === 'modalGroup') {
 			const modalInput = this.modalEditor.activeInput;
 			if (modalInput && !this.isSameEditor(modalInput, input) && !await this.closeEditor(modalInput)) {
-				throw new CancellationError("Opening the modal editor was cancelled");
+				throw new CancellationError('Opening the modal editor was cancelled');
 			}
 			const pane = await this.modalEditor.openEditor(input, options);
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: true }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'modalEditorChanged', visible: true }));
 			return pane;
 		}
-		if (!await this.closeActiveModalEditor()) throw new CancellationError("Opening the editor was cancelled");
+		if (!await this.closeActiveModalEditor()) throw new CancellationError('Opening the editor was cancelled');
 		if ((target === undefined && options.revealIfOpened) || ((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton)) {
 			const group = [this._activeGroup, ...this._groups.map(({ group }) => group)].find(group => group.inputs.some(candidate => this.isSameEditor(candidate, input)));
 			if (group) {
@@ -558,7 +560,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				throw error;
 			}
 		}
-		if (target === undefined || target === "activeGroup") return await this._activeGroup.openEditor(input, options);
+		if (target === undefined || target === 'activeGroup') return await this._activeGroup.openEditor(input, options);
 		const source = this._activeGroup;
 		const { host, created } = this.resolveSideGroup(source);
 		try {
@@ -579,37 +581,37 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private resolveEditorOpenError(error: unknown, input: IResourceEditorInput, options: EditorOpenOptions, open: (options: EditorOpenOptions) => Promise<IEditorPane>): unknown {
-		console.error("Could not open editor", error);
+		console.error('Could not open editor', error);
 		let displayError = error;
 		if (error instanceof TextFileBinaryError) {
-			const editorId = this.groupOptions.configurationService?.getValue<string>(DefaultBinaryEditorConfiguration) || "ash.editor.binary";
+			const editorId = this.groupOptions.configurationService?.getValue<string>(DefaultBinaryEditorConfiguration) || 'ash.editor.binary';
 			const binaryEditor = this.groupOptions.registry.getEditorPanesForInput(input).find(candidate => candidate.id === editorId);
 			const actions: IAction[] = binaryEditor ? [{
-				id: "workbench.editor.openAsBinary",
-				label: localize("workbench.editorOpenAsBinary", "Open as Binary"),
-				tooltip: "",
+				id: 'workbench.editor.openAsBinary',
+				label: localize('workbench.editorOpenAsBinary', 'Open as Binary'),
+				tooltip: '',
 				enabled: true,
 				run: () => open({ ...options, preferredEditorId: binaryEditor.id }),
 			}] : [];
-			displayError = createEditorOpenError(localize("workbench.editorOpenBinaryMessage", "This file cannot be displayed as text because it is binary or uses an unsupported text encoding."), actions, {
+			displayError = createEditorOpenError(localize('workbench.editorOpenBinaryMessage', 'This file cannot be displayed as text because it is binary or uses an unsupported text encoding.'), actions, {
 				forceMessage: true,
 				forceSeverity: Severity.Warning,
 			});
 		} else if (error instanceof FileNotFoundError) {
 			const files = this.groupOptions.fileService;
 			const actions: IAction[] = files && input.readOnly !== true ? [{
-				id: "workbench.editor.createMissingFile",
-				label: localize("workbench.editorOpenCreateFile", "Create file"),
-				tooltip: "",
+				id: 'workbench.editor.createMissingFile',
+				label: localize('workbench.editorOpenCreateFile', 'Create file'),
+				tooltip: '',
 				enabled: true,
 				run: async () => {
-					await files.createFile(input.resource, "error");
+					await files.createFile(input.resource, 'error');
 					await open({ ...options, pinned: true });
 				},
 			}] : [];
-			displayError = createEditorOpenError(localize("workbench.editorOpenNotFound", "The file could not be opened because it was not found."), actions, { forceMessage: true, allowDialog: true });
+			displayError = createEditorOpenError(localize('workbench.editorOpenNotFound', 'The file could not be opened because it was not found.'), actions, { forceMessage: true, allowDialog: true });
 		} else if (error instanceof TextFileTooLargeError) {
-			displayError = createEditorOpenError(localize("workbench.editorOpenTooLarge", "This file is too large to open as text ({0} MiB).", (error.sizeBytes / 1024 / 1024).toFixed(1)), [], { forceMessage: true, forceSeverity: Severity.Warning });
+			displayError = createEditorOpenError(localize('workbench.editorOpenTooLarge', 'This file is too large to open as text ({0} MiB).', (error.sizeBytes / 1024 / 1024).toFixed(1)), [], { forceMessage: true, forceSeverity: Severity.Warning });
 		}
 		return displayError;
 	}
@@ -619,7 +621,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		if (this.groupOptions.configurationService?.getValue<boolean>(EditorOpenErrorDialogConfiguration) === false) return;
 		const openError = isEditorOpenError(error) ? error : undefined;
 		if (openError && !openError.allowDialog) return;
-		const title = localize("workbench.editorOpenFailure", "Unable to open {0}", input.label || basename(input.resource));
+		const title = localize('workbench.editorOpenFailure', 'Unable to open {0}', input.label || basename(input.resource));
 		const severity = openError?.forceSeverity === Severity.Warning ? DialogSeverity.Warning
 			: openError?.forceSeverity === Severity.Info ? DialogSeverity.Info : DialogSeverity.Error;
 		const actions = openError?.actions ?? [];
@@ -629,7 +631,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			detail: openError?.forceMessage ? undefined : error instanceof Error ? error.message : String(error),
 			severity,
 			buttons: actions.filter(action => action.enabled).map(action => ({ label: action.label, run: () => action })),
-			cancelButton: localize("workbench.editorOpenDismiss", "Dismiss"),
+			cancelButton: localize('workbench.editorOpenDismiss', 'Dismiss'),
 		});
 		if (result) {
 			try {
@@ -644,18 +646,18 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const fileService = this.groupOptions.fileService;
 		const configuration = this.groupOptions.configurationService;
 		const dialogService = this.dialogService;
-		if (!fileService || !configuration || !dialogService || input.resource.scheme !== "file" || this._groups.some(({ group }) => group.inputs.some(open => this.isSameEditor(open, input)))) return undefined;
+		if (!fileService || !configuration || !dialogService || input.resource.scheme !== 'file' || this._groups.some(({ group }) => group.inputs.some(open => this.isSameEditor(open, input)))) return undefined;
 		const thresholdMiB = configuration.getValue<number>(EditorLargeFileConfirmationConfiguration);
 		return fileService.stat(input.resource).then(async stat => {
 			if (stat.sizeBytes < thresholdMiB * 1024 * 1024) return;
 			const confirmed = await dialogService.confirm({
-				title: "Open Large File",
+				title: 'Open Large File',
 				message: `Open ${input.label ?? (basename(input.resource) || input.resource.path)}?`,
 				detail: `This file is ${(stat.sizeBytes / 1024 / 1024).toFixed(1)} MiB. Opening it may take time and use substantial memory.`,
-				primaryButton: "Open File",
-				cancelButton: "Cancel",
+				primaryButton: 'Open File',
+				cancelButton: 'Cancel',
 			});
-			if (!confirmed.confirmed) throw new CancellationError("Opening the large file was cancelled");
+			if (!confirmed.confirmed) throw new CancellationError('Opening the large file was cancelled');
 		});
 	}
 
@@ -682,7 +684,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	activateEditorMru(offset: number): IEditorPane | undefined {
-		if (!Number.isInteger(offset) || offset === 0) throw new TypeError("Editor MRU offset must be a non-zero integer");
+		if (!Number.isInteger(offset) || offset === 0) throw new TypeError('Editor MRU offset must be a non-zero integer');
 		const editors = this.editorsMru;
 		if (editors.length === 0) return undefined;
 		const index = rot(offset, editors.length);
@@ -694,7 +696,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			const pane = this.modalEditor.activePane;
 			if (pane && !await this.confirmEditorClose(undefined, input, pane)) return false;
 			if (!this.modalEditor.closeEditor(input)) return false;
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: false, closedEditor: pane ? { input, paneId: pane.id } : undefined }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'modalEditorChanged', visible: false, closedEditor: pane ? { input, paneId: pane.id } : undefined }));
 			return true;
 		}
 		return await this._activeGroup.closeEditor(input);
@@ -722,11 +724,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		if (!options.skipConfirmation && !await this.confirmCloseAllEditors(options, closingEditors)) return false;
 		if (modalInput && closingEditors.some(candidate => candidate.groupId === -1 && candidate.editor === modalInput)) {
 			this.modalEditor.closeEditor(modalInput);
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: false, closedEditor: (options.reason ?? "close") === "close" && modalPane ? { input: modalInput, paneId: modalPane.id } : undefined }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'modalEditorChanged', visible: false, closedEditor: (options.reason ?? 'close') === 'close' && modalPane ? { input: modalInput, paneId: modalPane.id } : undefined }));
 		}
 		for (const { group, inputs } of inputsByGroup) {
 			for (const input of inputs) {
-				await group.closeEditor(input, { skipConfirmation: true, reason: options.reason ?? "close" });
+				await group.closeEditor(input, { skipConfirmation: true, reason: options.reason ?? 'close' });
 			}
 			if ((options.reason ?? 'close') === 'close') this.removeEmptyGroup(group);
 		}
@@ -775,7 +777,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.openingIdentities.get(this._activeGroup.id)?.abort();
 		this.openingIdentities.get('modalGroup')?.abort();
 		if (!await this.closeActiveModalEditor() || !await this._activeGroup.setContent(content)) {
-			throw new CancellationError("Replacing editor content was cancelled");
+			throw new CancellationError('Replacing editor content was cancelled');
 		}
 	}
 
@@ -787,11 +789,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		await this.splitActiveGroup(Direction.Down);
 	}
 
-	async splitActiveGroup(direction: GridDirection): Promise<void> {
+	async splitActiveGroup(direction: Direction): Promise<void> {
 		await this.splitEditors(this._activeGroup.id, this._activeGroup.activeInput ? [this._activeGroup.activeInput] : [], direction);
 	}
 
-	async splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: GridDirection): Promise<void> {
+	async splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: Direction): Promise<void> {
 		const splittable = inputs.filter(input => !((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton));
 		if (inputs.length > 0 && splittable.length === 0) return;
 		const source = this.groupHosts.get(groupId)!.group;
@@ -820,11 +822,11 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	async reopenActiveEditorWith(preferredEditorId: string): Promise<IEditorPane | undefined> {
 		const input = this.activeInput;
 		if (!input) return undefined;
-		return await this.openEditor(input, { preferredEditorId, pinned: true }, this.modalEditor.isVisible ? "modalGroup" : "activeGroup");
+		return await this.openEditor(input, { preferredEditorId, pinned: true }, this.modalEditor.isVisible ? 'modalGroup' : 'activeGroup');
 	}
 
 	protected getFloatingBorderWidth(): number {
-		return this.groupOptions.configurationService?.getValue(WorkbenchConfiguration.layoutStyle) === "modern"
+		return this.groupOptions.configurationService?.getValue(WorkbenchConfiguration.layoutStyle) === 'modern'
 			? computeScreenAwareSize(this.domNode.ownerDocument.defaultView!, EDITOR_FRAME_BORDER_WIDTH)
 			: 0;
 	}
@@ -923,12 +925,18 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		if (!this.fileDialogService) return false;
 		const labels = [...new Set(dirty.map(copy => editorInputLabel({ resource: copy.resource, label: copy.backupLabel })))];
 		const decision = await this.fileDialogService.showSaveConfirm(labels, dirty.some(copy => copy.hasExternalChange)
-			? "The file has also changed on disk. Saving may require resolving a conflict." : undefined);
+			? 'The file has also changed on disk. Saving may require resolving a conflict.' : undefined);
 		if (decision === ConfirmResult.CANCEL) return false;
 		const controller = new AbortController();
 		if (decision === ConfirmResult.DONT_SAVE) {
 			for (const copy of dirty) await copy.revert(controller.signal);
 			return dirty.every(copy => !copy.isDirty);
+		}
+		if (input.resource.scheme === 'untitled' && pane.saveDraft) {
+			const saved = await pane.saveDraft();
+			if (!saved) return false;
+			// Saving can replace the draft tab; finish the close against that saved resource.
+			return group ? group.closeEditor(saved) : true;
 		}
 		if (group && input.resource.scheme === 'untitled') return !!await this.saveEditor(group, input, pane);
 		for (const copy of dirty) await copy.save(controller.signal);
@@ -937,8 +945,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	private async saveEditor(group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane): Promise<IResourceEditorInput | undefined> {
-		if (!this.saveAsResource) throw new Error("Editor Save As is unavailable in this host");
-		if (!pane.saveAs) throw new Error("The active editor cannot save this document");
+		if (!this.saveAsResource) throw new Error('Editor Save As is unavailable in this host');
+		if (!pane.saveAs) throw new Error('The active editor cannot save this document');
 		const target = await this.saveAsResource(editorInputLabel(input));
 		if (!target || this.isDisposed || !group.inputs.includes(input)) return undefined;
 		await pane.saveAs(target);
@@ -969,7 +977,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		} satisfies EditorGroupOptions);
 		const host = new EditorGroupHost(group, group.onDidChangeEditors(event => {
 			this.handleEditorGroupChange(event);
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "groupChanged", groupId: group.id, event }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupChanged', groupId: group.id, event }));
 		}));
 		if (this.groupHosts.has(group.id)) {
 			host.dispose();
@@ -992,7 +1000,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return { host: this.insertGroup(source, direction), created: true };
 	}
 
-	protected insertGroup(source: IEditorGroupView, direction: GridDirection, id?: EditorGroupId): EditorGroupHost {
+	protected insertGroup(source: IEditorGroupView, direction: Direction, id?: EditorGroupId): EditorGroupHost {
 		this.restoreMaximizedGroup();
 		const sourceIndex = this.groupIndex(source);
 		const sourceHost = this._groups[sourceIndex]!;
@@ -1002,7 +1010,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.preserveFocus(() => this.editorGrid.addView(created.view, Sizing.Split, sourceHost.view, direction));
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();
-		this.editorChangeEmitter.fire(Object.freeze({ kind: "groupAdded", group: created.group.getEditorState() }));
+		this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupAdded', group: created.group.getEditorState() }));
 		return created;
 	}
 
@@ -1010,7 +1018,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.restoreMaximizedGroup();
 		const index = this._groups.indexOf(host);
 		if (index < 0) return;
-		if (this._groups.length === 1) throw new Error("EditorPart cannot remove its last group");
+		if (this._groups.length === 1) throw new Error('EditorPart cannot remove its last group');
 		this.preserveFocus(() => this.editorGrid.removeView(host.view));
 		this._groups.splice(index, 1);
 		this.layoutEditorContent();
@@ -1019,13 +1027,13 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			const recent = this.editorsMru.find(editor => editor.groupId !== host.group.id);
 			this.setActiveGroup((this._groups.find(candidate => candidate.group.id === recent?.groupId) ?? this._groups[index] ?? this._groups[index - 1])!.group);
 		}
-		this.editorChangeEmitter.fire(Object.freeze({ kind: "groupRemoved", groupId: host.group.id }));
+		this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupRemoved', groupId: host.group.id }));
 		this.groupHosts.deleteAndDispose(host.group.id);
 	}
 
 	private groupIndex(group: IEditorGroupView): number {
 		const index = this._groups.findIndex((host) => host.group === group);
-		if (index < 0) throw new Error("EditorGroupView is not owned by EditorPart");
+		if (index < 0) throw new Error('EditorGroupView is not owned by EditorPart');
 		return index;
 	}
 
@@ -1041,7 +1049,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		// Independent editor hosts can have different pane registries. Reject a transfer
 		// the receiving host cannot render before moving or closing its source input.
 		if (!this.groupOptions.registry.getEditorPanesForInput(event.input).length) return;
-		if (event.splitDirection) {
+		if (event.splitDirection !== undefined) {
 			if (this.groupOptions.editorLimit === 1 && this.groupHosts.get(event.source.id)?.group === event.source) {
 				// A single-content tab represents its whole group. Move that group
 				// to retain its pane and identity instead of leaving an empty source.
@@ -1059,7 +1067,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				})
 				.catch(error => {
 					if (this._groups.includes(created)) this.removeGroupHost(created);
-					console.error("Failed to split Editor tab", error);
+					console.error('Failed to split Editor tab', error);
 				});
 			return;
 		}
@@ -1076,12 +1084,12 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				event.target.focus();
 			})
 			.catch((error) => {
-				console.error("Failed to move Editor tab", error);
+				console.error('Failed to move Editor tab', error);
 			});
 	}
 
 	saveWorkingSet(id: string, excludedGroups: readonly EditorGroupId[] = []): EditorWorkingSet {
-		if (!id.trim()) throw new TypeError("Editor working set requires a non-empty ID");
+		if (!id.trim()) throw new TypeError('Editor working set requires a non-empty ID');
 		const areas = this._groups.map(({ view }) => {
 			const size = this.editorGrid.getViewSize(view);
 			return size.width * size.height;
@@ -1117,7 +1125,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async applyWorkingSet(workingSet: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
-		const target = workingSet === "empty" ? emptyWorkingSet() : validateWorkingSet(workingSet, Math.max(...this._groups.map(host => host.group.id)));
+		const target = workingSet === 'empty' ? emptyWorkingSet() : validateWorkingSet(workingSet, Math.max(...this._groups.map(host => host.group.id)));
 		this.restoreMaximizedGroup();
 		const restoredGroups = target.groups.map(group => {
 			const restored = group.editors.flatMap((editor, index) => {
@@ -1193,7 +1201,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.gridSlot.clear();
 		for (const host of previous) {
 			if (retained.includes(host)) continue;
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "groupRemoved", groupId: host.group.id }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupRemoved', groupId: host.group.id }));
 			this.groupHosts.deleteAndDispose(host.group.id);
 		}
 		const hosts = groups.map(group => {
@@ -1207,8 +1215,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		}
 		this._groups.push(...retained, ...hosts);
 		const hostById = new Map(this._groups.map(host => [host.group.id, host]));
-		const documentLayout = layout ?? { type: 'branch' as const, orientation: 'horizontal' as const, priority: 'normal' as const, size: this.dimension.width, children: hosts.map((host, index) => ({ type: 'leaf' as const, data: { groupId: host.group.id }, size: groups[index]!.size * this.dimension.width, visible: true, priority: 'normal' as const })) };
-		const combinedLayout = retainedLayout ? { type: 'branch' as const, orientation: 'horizontal' as const, priority: 'normal' as const, size: this.dimension.width, children: [retainedLayout, documentLayout].flatMap(child => child.type === 'branch' && child.orientation === 'horizontal' ? child.children : [child]) } : layout;
+		const documentLayout = layout ?? { type: 'branch' as const, orientation: Orientation.HORIZONTAL as const, priority: LayoutPriority.Normal as const, size: this.dimension.width, children: hosts.map((host, index) => ({ type: 'leaf' as const, data: { groupId: host.group.id }, size: groups[index]!.size * this.dimension.width, visible: true, priority: LayoutPriority.Normal as const })) };
+		const combinedLayout = retainedLayout ? { type: 'branch' as const, orientation: Orientation.HORIZONTAL as const, priority: LayoutPriority.Normal as const, size: this.dimension.width, children: [retainedLayout, documentLayout].flatMap(child => child.type === 'branch' && child.orientation === Orientation.HORIZONTAL ? child.children : [child]) } : layout;
 		const grid = combinedLayout
 			? SerializableGrid.deserialize<EditorGroupGridView>(this.contentDomNode, combinedLayout, {
 				fromJSON: data => {
@@ -1225,12 +1233,12 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		this.layoutEditorContent();
 		this.notifyConstraintsChanged();
 		for (const host of hosts) {
-			this.editorChangeEmitter.fire(Object.freeze({ kind: "groupAdded", group: host.group.getEditorState() }));
+			this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupAdded', group: host.group.getEditorState() }));
 		}
 	}
 
 	private handleEditorGroupChange(event: EditorGroupChangeEvent): void {
-		if (event.kind === "editorOpened" && this._groups.length > 1) {
+		if (event.kind === 'editorOpened' && this._groups.length > 1) {
 			const group = this._groups.find(host => host.group.id === event.editor.groupId)?.group;
 			const autoLock = this.groupOptions.configurationService?.getValue<AutoLockGroups>(AutoLockGroupsConfiguration);
 			if (group?.inputs.length === 1 && autoLock?.[event.editor.paneId]) group.setLocked(true);
@@ -1259,7 +1267,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		if (this.maximizedGroup && group.id !== this.maximizedGroup.id) this.restoreMaximizedGroup();
 		if (this._activeGroup === group) return;
 		this._activeGroup = group;
-		this.editorChangeEmitter.fire(Object.freeze({ kind: "activeGroupChanged", groupId: group.id }));
+		this.editorChangeEmitter.fire(Object.freeze({ kind: 'activeGroupChanged', groupId: group.id }));
 	}
 
 	private activeEditorIdentifier(): EditorIdentifier | undefined {
@@ -1285,47 +1293,47 @@ function remapWorkingSetLayout(layout: EditorWorkingSetLayout, groups: ReadonlyM
 
 function emptyWorkingSet(): EditorWorkingSet {
 	return Object.freeze({
-		id: "empty",
+		id: 'empty',
 		activeGroupIndex: 0,
 		groups: Object.freeze([Object.freeze({ editors: Object.freeze([]), activeEditorIndex: -1, size: 1 })]),
 	});
 }
 
 function validateWorkingSet(value: EditorWorkingSet, lastGroupId: number): EditorWorkingSet {
-	if (!value || typeof value !== "object" || typeof value.id !== "string" || !value.id.trim()) {
-		throw new TypeError("Invalid editor working set");
+	if (!value || typeof value !== 'object' || typeof value.id !== 'string' || !value.id.trim()) {
+		throw new TypeError('Invalid editor working set');
 	}
 	if (!isNonEmptyArray(value.groups) || !Number.isInteger(value.activeGroupIndex) || value.activeGroupIndex < 0 || value.activeGroupIndex >= value.groups.length) {
-		throw new TypeError("Invalid editor working set groups");
+		throw new TypeError('Invalid editor working set groups');
 	}
 	value = migrateWorkingSetGroupIds(value, lastGroupId);
 	let sizeTotal = 0;
 	const groupIds = new Set<EditorGroupId>();
 	for (const group of value.groups) {
-		if (!group || typeof group !== "object" || !Array.isArray(group.editors) || !Number.isInteger(group.activeEditorIndex) || group.activeEditorIndex < -1 || group.activeEditorIndex >= group.editors.length || (group.locked !== undefined && typeof group.locked !== "boolean") || !Number.isFinite(group.size) || group.size < 0) {
-			throw new TypeError("Invalid editor group working set");
+		if (!group || typeof group !== 'object' || !Array.isArray(group.editors) || !Number.isInteger(group.activeEditorIndex) || group.activeEditorIndex < -1 || group.activeEditorIndex >= group.editors.length || (group.locked !== undefined && typeof group.locked !== 'boolean') || !Number.isFinite(group.size) || group.size < 0) {
+			throw new TypeError('Invalid editor group working set');
 		}
 		if (group.id !== undefined) {
-			if (!isEditorGroupId(group.id) || groupIds.has(group.id)) throw new TypeError("Invalid editor working set group ID");
+			if (!isEditorGroupId(group.id) || groupIds.has(group.id)) throw new TypeError('Invalid editor working set group ID');
 			groupIds.add(group.id);
 		}
 		for (const editor of group.editors) {
-			if (!editor || typeof editor !== "object" || typeof editor.preview !== "boolean" || (editor.sticky !== undefined && typeof editor.sticky !== "boolean") || (editor.sticky === true && editor.preview) || !isSerializedEditorInput(editor.input)) {
-				throw new TypeError("Invalid editor working set entry");
+			if (!editor || typeof editor !== 'object' || typeof editor.preview !== 'boolean' || (editor.sticky !== undefined && typeof editor.sticky !== 'boolean') || (editor.sticky === true && editor.preview) || !isSerializedEditorInput(editor.input)) {
+				throw new TypeError('Invalid editor working set entry');
 			}
 			if (editor.paneId !== undefined && (typeof editor.paneId !== 'string' || !editor.paneId.trim() || editor.paneId.length > 256)) {
 				throw new TypeError('Invalid editor working set pane ID');
 			}
 			if (editor.viewState !== undefined) {
-				if (!editor.viewState || typeof editor.viewState !== "object" || typeof editor.viewState.typeId !== "string" || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/u.test(editor.viewState.typeId) || !("value" in editor.viewState)) {
-					throw new TypeError("Invalid editor working set view state");
+				if (!editor.viewState || typeof editor.viewState !== 'object' || typeof editor.viewState.typeId !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/u.test(editor.viewState.typeId) || !('value' in editor.viewState)) {
+					throw new TypeError('Invalid editor working set view state');
 				}
-				validateJsonValue(editor.viewState.value, { path: "editor working set view state" });
+				validateJsonValue(editor.viewState.value, { path: 'editor working set view state' });
 			}
 		}
 		sizeTotal += group.size;
 	}
-	if (sizeTotal <= 0) throw new TypeError("Invalid editor working set layout");
+	if (sizeTotal <= 0) throw new TypeError('Invalid editor working set layout');
 	if (value.layout !== undefined) {
 		if (groupIds.size !== value.groups.length) throw new TypeError('Editor Grid layout requires an ID for every group');
 		parseEditorWorkingSetLayout(value.layout, groupIds);
@@ -1360,12 +1368,12 @@ function migrateWorkingSetGroupIds(value: EditorWorkingSet, lastGroupId: number)
 }
 
 function isEditorGroupId(value: unknown): value is EditorGroupId {
-	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 function editorGroupIdFromGridData(value: unknown): EditorGroupId {
-	if (!value || typeof value !== "object" || Array.isArray(value) || !("groupId" in value) || !isEditorGroupId(value.groupId)) {
-		throw new TypeError("Invalid Editor Grid group data");
+	if (!value || typeof value !== 'object' || Array.isArray(value) || !('groupId' in value) || !isEditorGroupId(value.groupId)) {
+		throw new TypeError('Invalid Editor Grid group data');
 	}
 	return value.groupId;
 }
@@ -1377,18 +1385,18 @@ function legacyGridDescriptor(
 ): GridDescriptor<EditorGroupGridView> {
 	const width = Math.max(1, dimension.width);
 	return {
-		type: "branch",
-		orientation: "horizontal",
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
 		size: width,
 		children: hosts.map((host, index) => ({
-			type: "leaf",
+			type: 'leaf',
 			view: host.view,
 			size: width * groups[index]!.size,
 		})),
 	};
 }
 
-function editorInputLabel(input: Pick<IResourceEditorInput, "resource" | "label">): string {
+function editorInputLabel(input: Pick<IResourceEditorInput, 'resource' | 'label'>): string {
 	if (input.label?.trim()) return input.label;
 	return basename(input.resource) || input.resource.toString();
 }
@@ -1426,5 +1434,5 @@ class EditorGroupGridView implements ISerializableGridView {
 }
 
 function reportEditorCloseError(error: unknown): void {
-	console.error("Failed to close editor", error);
+	console.error('Failed to close editor', error);
 }

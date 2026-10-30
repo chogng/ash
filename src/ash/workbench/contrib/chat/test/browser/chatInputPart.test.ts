@@ -159,6 +159,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => [],
 		listCustomModelProviders: async () => [],
+		removeCustomModelProvider: async () => { },
 		saveCustomModelProvider: async () => { },
 		testProviderModel: async () => ({ type: 'passed' }),
 		listModelProviders: async () => [],
@@ -517,12 +518,12 @@ test('Chat keeps model preparation in settings and reads it only when dictation 
 		onDidChangeModels: changed.event, onDidChangeModelStatus: AshEvent.None,
 		onDidTranscribe: AshEvent.None,
 		getModel: async () => { reads++; return snapshot; },
-		getCacheDirectory: async () => "C:/models",
-		getModelStatus: async () => ({ state: "idle" as import("../../../../../platform/localTranscription/common/localTranscription.js").LocalTranscriptionModelState }),
+		getCacheDirectory: async () => 'C:/models',
+		getModelStatus: async () => ({ state: 'idle' as import('../../../../../platform/localTranscription/common/localTranscription.js').LocalTranscriptionModelState }),
 		listModels: async () => [],
 		prepareModel: () => { prepared++; throw new Error('Unexpected model preparation'); },
 		importPackage: () => { throw new Error('Unexpected model import'); },
-		importModel: async () => { throw new Error("Unexpected model import"); },
+		importModel: async () => { throw new Error('Unexpected model import'); },
 		cancelModel: async () => { cancelled++; }, deleteModel: async () => { },
 		pushAudio: async () => { }, start: async () => { starts++; }, stop: async () => '', cancel: async () => { },
 	});
@@ -3142,52 +3143,42 @@ suite('chatInput browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const chinese = locale === 'zh-CN';
 			const trigger = page.locator('.ash-chat-input-configuration-action');
-			const menu = page.locator('.ash-chat-model-configuration-menu');
+			const menu = page.locator('.ash-chat-model-card-configurable');
 			const lowCopy = chinese ? '较轻的推理，更快的响应' : 'Fast responses with lighter reasoning';
 			const highCopy = chinese ? '为复杂问题提供更深入的推理' : 'Greater reasoning depth for complex problems';
 			await expect(trigger).toHaveAttribute('aria-description', lowCopy);
 			await expect(trigger).toHaveText(chinese ? '低' : 'Low');
 			await trigger.press('ArrowDown');
-			await expect(menu.locator('.ash-chat-model-configuration-heading')).toHaveText(chinese ? ['推理强度', '上下文大小'] : ['Thinking Level', 'Context Size']);
-			await expect(menu.getByRole('separator')).toHaveCount(1);
-			const contextDefault = menu.locator('[data-action-id="ash.chat.input.context.false"] button');
-			const expanded = menu.locator('[data-action-id="ash.chat.input.context.true"] button');
-			await expect(contextDefault).toHaveAttribute('aria-checked', 'true');
-			await expect(contextDefault).toHaveText(chinese ? '关闭长上下文' : 'Long context off');
-			await expect(expanded).toHaveText(chinese ? '开启长上下文' : 'Long context on');
-			const high = menu.locator('[data-action-id="ash.chat.input.effort.high"] button');
-			await expect(menu.locator('[data-action-id="ash.chat.input.effort.low"] button')).toHaveAttribute('aria-description', lowCopy);
+			await expect(menu.locator('legend')).toHaveText(chinese ? ['推理强度', '上下文大小', '速度'] : ['Thinking Level', 'Context Size', 'Speed']);
+			const contextDefault = menu.getByRole('radio', { name: chinese ? '272K（默认）' : '272K (Default)', exact: true });
+			const expanded = menu.getByRole('radio', { name: '872K', exact: true });
+			const low = menu.getByRole('radio', { name: chinese ? '低' : 'Low', exact: true });
+			const high = menu.getByRole('radio', { name: chinese ? '高' : 'High', exact: true });
+			await expect(contextDefault).toBeChecked();
+			await expect(low).toHaveAttribute('aria-description', lowCopy);
 			await expect(high).toHaveAttribute('aria-description', highCopy);
-			await page.keyboard.press('ArrowDown');
-			await expect(high).toBeFocused();
-			await page.keyboard.press('Enter');
+			await low.focus();
+			await low.press('ArrowRight');
+			await expect(high).toBeChecked();
 			await expect(trigger).toHaveAttribute('aria-description', highCopy);
 			await expect(trigger).toHaveText(chinese ? '高' : 'High');
-			await expect(trigger).toBeFocused();
-			await trigger.press('ArrowDown');
-			await expect(high).toBeFocused();
-			await page.keyboard.press('ArrowDown');
-			await expect(contextDefault).toBeFocused();
-			await page.keyboard.press('ArrowDown');
-			await expect(expanded).toBeFocused();
-			await page.keyboard.press('Enter');
-			await expect(trigger).toHaveText(chinese ? '高' : 'High');
-			await expect(trigger).toBeFocused();
-			await trigger.press('ArrowDown');
-			await expect(high).toHaveAttribute('aria-checked', 'true');
-			await expect(expanded).toHaveAttribute('aria-checked', 'true');
-			await expect(contextDefault).toHaveAttribute('aria-checked', 'false');
-			await expect(menu.getByRole('menuitemradio')).toHaveCount(4);
+			await expect(menu).toBeVisible();
+			await expanded.focus();
+			await expanded.press('Space');
+			await expect(expanded).toBeChecked();
+			await expect(high).toBeChecked();
+			await expect(contextDefault).not.toBeChecked();
+			await expect(menu.getByRole('radio')).toHaveCount(6);
 			const geometry = await menu.evaluate(element => ({ overflow: element.scrollWidth - element.clientWidth, left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right }));
 			expect(geometry.overflow).toBe(0);
 			expect(geometry.left).toBeGreaterThanOrEqual(0);
 			expect(geometry.right).toBeLessThanOrEqual(page.viewportSize()!.width);
-			await contextDefault.click();
+			await contextDefault.focus();
+			await contextDefault.press('Space');
 			await expect(trigger).toHaveText(chinese ? '高' : 'High');
-			await trigger.press('ArrowDown');
-			await menu.locator('[data-action-id="ash.chat.input.effort.low"] button').click();
+			await low.focus();
+			await low.press('Space');
 			await expect(trigger).toHaveText(chinese ? '低' : 'Low');
-			await trigger.press('ArrowDown');
 			await page.keyboard.press('Escape');
 			await expect(trigger).toBeFocused();
 			await expect(trigger).toHaveAttribute('aria-expanded', 'false');
@@ -3208,16 +3199,15 @@ suite('chatInput browser component', () => {
 			await expect(trigger).toHaveText(modelOptions === 'effort' ? 'Low' : 'Model options');
 			await expect(trigger).toHaveAccessibleName(modelOptions === 'effort' ? 'Model options: Low' : 'Model options');
 			await trigger.press('ArrowDown');
-			const menu = page.locator('.ash-chat-model-configuration-menu');
-			await expect(menu.locator('.ash-chat-model-configuration-heading')).toHaveText(modelOptions === 'effort' ? 'Thinking Level' : 'Context Size');
-			await expect(menu.getByRole('separator')).toHaveCount(0);
-			await expect(menu.getByRole('menuitemradio')).toHaveCount(2);
-			await page.keyboard.press('End');
-			await page.keyboard.press('Enter');
+			const menu = page.locator('.ash-chat-model-card-configurable');
+			await expect(menu.locator('legend')).toHaveText(modelOptions === 'effort' ? 'Thinking Level' : 'Context Size');
+			await expect(menu.getByRole('radiogroup')).toHaveCount(1);
+			await expect(menu.getByRole('radio')).toHaveCount(2);
+			const last = menu.getByRole('radio').last();
+			await last.focus();
+			await last.press('Space');
 			await expect(trigger).toHaveText(modelOptions === 'effort' ? 'High' : 'Model options');
-			await expect(trigger).toBeFocused();
-			await trigger.press('ArrowDown');
-			await expect(menu.getByRole('menuitemradio').last()).toHaveAttribute('aria-checked', 'true');
+			await expect(last).toBeChecked();
 			await page.keyboard.press('Escape');
 		});
 	}
@@ -3323,7 +3313,7 @@ suite('chatInput browser component', () => {
 			const trigger = page.locator('.ash-chat-input-model-action');
 			await trigger.press('ArrowDown');
 			const picker = page.getByRole('dialog', { name: 'Choose a chat model' });
-			const search = picker.getByRole('combobox');
+			const search = picker.locator('input[role=combobox]');
 			const width = await picker.evaluate(element => element.getBoundingClientRect().width);
 			expect(width).toBeGreaterThan(320);
 			expect(width).toBeLessThanOrEqual(page.viewportSize()!.width * 0.8);
@@ -3333,7 +3323,7 @@ suite('chatInput browser component', () => {
 			const edges = await picker.evaluate(element => {
 				const items = element.querySelector<HTMLElement>('.ash-action-widget-items')!;
 				items.style.maxHeight = '28px';
-				const row = items.querySelector('.ash-button')!.getBoundingClientRect();
+				const row = items.querySelector('.ash-action-widget-action')!.getBoundingClientRect();
 				const footer = element.querySelector('.ash-chat-model-picker-footer .ash-button')!.getBoundingClientRect();
 				const result = { scrolls: items.scrollHeight > items.clientHeight, rowLeft: row.left, rowRight: row.right, footerLeft: footer.left, footerRight: footer.right };
 				items.style.removeProperty('max-height');
@@ -3344,7 +3334,7 @@ suite('chatInput browser component', () => {
 			expect(edges.rowRight).toBe(edges.footerRight);
 			await search.fill('test-model');
 			await expect(picker.getByRole('menuitemradio')).toHaveCount(1);
-			await expect(picker.getByRole('menuitemradio')).toHaveText('Test Model');
+			await expect(picker.getByRole('menuitemradio')).toHaveAccessibleName('Test Model');
 			expect(await picker.evaluate(element => element.getBoundingClientRect().width)).toBe(width);
 			await search.press('ArrowRight');
 			const card = picker.getByRole('region', { name: 'Test Model', exact: true });
@@ -3376,6 +3366,8 @@ suite('chatInput browser component', () => {
 			await expect(search).toBeVisible();
 			await expect(picker.getByRole('menuitemradio')).toHaveCount(2);
 			await page.locator('.ash-chat-input-configuration-action').click();
+			await expect(picker.locator('.ash-chat-model-card-configurable')).toBeVisible();
+			await page.keyboard.press('Escape');
 			await expect(picker).toHaveCount(0);
 			await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 			await trigger.click();
@@ -3398,16 +3390,16 @@ suite('chatInput browser component', () => {
 			const card = page.locator('.ash-chat-model-card');
 			await expect(card).toBeFocused();
 			await page.evaluate(() => window.ashChatInputIntegration.setDescription('Updated provider description'));
-			await expect(card).toHaveText('Updated provider description');
+			await expect(card.locator('.ash-chat-model-card-description')).toHaveText('Updated provider description');
 			await expect(card).toHaveAttribute('aria-description', 'Updated provider description');
 			await expect(card).toBeFocused();
 			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(initial);
 			await page.evaluate(() => window.ashChatInputIntegration.setDescription(null));
-			await expect(page.locator('.ash-chat-model-picker-details-menu')).toBeHidden();
-			await expect(search).toBeFocused();
+			await expect(card.locator('.ash-chat-model-card-description')).toBeHidden();
+			await expect(card.getByRole('radio')).toHaveCount(7);
+			await expect(card).toBeFocused();
 			await page.evaluate(() => window.ashChatInputIntegration.setDescription('Restored provider description'));
-			await search.press('ArrowRight');
-			await expect(card).toHaveText('Restored provider description');
+			await expect(card.locator('.ash-chat-model-card-description')).toHaveText('Restored provider description');
 			await expect(card).toBeFocused();
 			await page.setViewportSize({ width: 320, height: 600 });
 			expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -3430,9 +3422,9 @@ suite('chatInput browser component', () => {
 			await search.press('ArrowRight');
 			await expect(page.locator('.ash-chat-model-card')).toBeFocused();
 			await page.evaluate(() => window.ashChatInputIntegration.setModelsAvailable(false));
-			await expect(page.locator('.ash-chat-model-picker-details-menu')).toBeHidden();
+			await expect(page.locator('.ash-chat-model-card-configurable')).toHaveCount(0);
 			await expect(page.getByRole('menuitemradio')).toHaveCount(0);
-			await expect(search).toBeFocused();
+			await expect(page.getByRole('button', { name: locale === 'en' ? 'Open Settings' : '打开设置', exact: true })).toBeFocused();
 			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ selectedModel: { provider: 'openai', model: 'test-model' }, automatic: false, preferenceWrites: [] });
 			await page.evaluate(() => window.ashChatInputIntegration.setModelsAvailable(true));
 			await search.press('ArrowRight');
@@ -3456,7 +3448,7 @@ suite('chatInput browser component', () => {
 			await page.keyboard.press('Escape');
 			for (const { trigger, popup } of [
 				{ trigger: control.locator('.ash-chat-input-model-action'), popup: page.getByRole('dialog', { name: 'Choose a chat model' }) },
-				{ trigger: control.locator('.ash-chat-input-configuration-action'), popup: page.getByRole('menu', { name: 'Model options', exact: true }) },
+				{ trigger: control.locator('.ash-chat-input-configuration-action'), popup: page.getByRole('dialog', { name: 'Choose a chat model' }) },
 			]) {
 				await trigger.hover();
 				await page.mouse.down({ button: 'right' });
@@ -3551,7 +3543,9 @@ suite('chatInput browser component', () => {
 			await expect(model).toHaveAttribute('tabindex', '0');
 			await expect(options).toHaveAccessibleName('Model options: Low');
 			await options.press('ArrowDown');
-			await page.getByRole('menuitemradio', { name: 'High', exact: true }).click();
+			await page.getByRole('radio', { name: 'High', exact: true }).focus();
+			await page.keyboard.press('Space');
+			await page.keyboard.press('Escape');
 			await expect(options).toHaveText('High');
 			await expect(options).toBeFocused();
 			expect(await options.evaluate((current, retained) => current === retained, retainedOptions)).toBe(true);

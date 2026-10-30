@@ -1,22 +1,22 @@
 import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
 import { after as afterCodeFeatures } from 'mocha';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { DeleteOperations } from "../../common/cursor/cursorDeleteOperations.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
 import { WordNavigationType, WordOperations } from '../../common/cursor/cursorWordOperations.js';
 import { ReplaceCommand } from '../../common/commands/replaceCommand.js';
-import { CursorsController } from "../../common/cursor/cursor.js";
+import { CursorsController } from '../../common/cursor/cursor.js';
 import { EditOperationType } from '../../common/cursorCommon.js';
-import { Selection } from "../../common/core/selection.js";
-import { Position } from "../../common/core/position.js";
-import { TextModel } from "../../common/model/textModel.js";
+import { Selection } from '../../common/core/selection.js';
+import { Position } from '../../common/core/position.js';
+import { TextModel } from '../../common/model/textModel.js';
 import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { createTestCursorConfiguration, createTestCursorsController, createTestDeleteWordContext, executeTestDeleteOperation, executeTestEditOperation } from './testCursorConfiguration.js';
 import { ViewModelEventsCollector } from '../../common/viewModelEventDispatcher.js';
 
-test("Typing replaces multiple selections and coalesces with following text", () => {
-	using model = new TextModel("abcd efgh");
+test('Typing replaces multiple selections and coalesces with following text', () => {
+	using model = new TextModel('abcd efgh');
 	const initial = primaryFirst([
 		Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (1) + 1)),
 		caret(0, 8),
@@ -28,7 +28,7 @@ test("Typing replaces multiple selections and coalesces with following text", ()
 		text: model.getText(),
 		selections: controller.getSelections(),
 	}, {
-		text: "aXd efgXh",
+		text: 'aXd efgXh',
 		selections: primaryFirst([
 			caret(0, 2),
 			caret(0, 8),
@@ -36,19 +36,19 @@ test("Typing replaces multiple selections and coalesces with following text", ()
 	});
 
 	typeText(controller, 'Y');
-	assert.equal(model.getText(), "aXYd efgXYh");
+	assert.equal(model.getText(), 'aXYd efgXYh');
 	controller.context.model.undo();
 	assert.deepEqual({
 		text: model.getText(),
 		selections: controller.getSelections(),
 	}, {
-		text: "abcd efgh",
+		text: 'abcd efgh',
 		selections: initial,
 	});
 });
 
-test("Backspace deletes graphemes and joins lines", () => {
-	using model = new TextModel("a😀b\ncd");
+test('Backspace deletes graphemes and joins lines', () => {
+	using model = new TextModel('a😀b\ncd');
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
 	using controller = createTestCursorsController(
@@ -61,7 +61,7 @@ test("Backspace deletes graphemes and joins lines", () => {
 		text: model.getText(),
 		selection: controller.getSelections()[0]!,
 	}, {
-		text: "ab\ncd",
+		text: 'ab\ncd',
 		selection: caret(0, 1),
 	});
 
@@ -71,13 +71,13 @@ test("Backspace deletes graphemes and joins lines", () => {
 		text: model.getText(),
 		selection: controller.getSelections()[0]!,
 	}, {
-		text: "abcd",
+		text: 'abcd',
 		selection: caret(0, 2),
 	});
 });
 
-test("Forward Delete removes graphemes and line breaks", () => {
-	using model = new TextModel("a😀b\ncd");
+test('Forward Delete removes graphemes and line breaks', () => {
+	using model = new TextModel('a😀b\ncd');
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
 	using controller = createTestCursorsController(
@@ -90,7 +90,7 @@ test("Forward Delete removes graphemes and line breaks", () => {
 		text: model.getText(),
 		selection: controller.getSelections()[0]!,
 	}, {
-		text: "ab\ncd",
+		text: 'ab\ncd',
 		selection: caret(0, 1),
 	});
 
@@ -100,31 +100,31 @@ test("Forward Delete removes graphemes and line breaks", () => {
 		text: model.getText(),
 		selection: controller.getSelections()[0]!,
 	}, {
-		text: "abcd",
+		text: 'abcd',
 		selection: caret(0, 2),
 	});
 });
 
-test("Word deletion uses shared editor word boundaries and coalesces by direction", () => {
-	using model = new TextModel("alpha beta gamma");
+test('Word deletion uses shared editor word boundaries and coalesces by direction', () => {
+	using model = new TextModel('alpha beta gamma');
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
 	using controller = createTestCursorsController(model, [caret(0, 10)]);
 
 	deleteTestWord(controller, config, model, 'left');
 	deleteTestWord(controller, config, model, 'left');
-	assert.equal(model.getText(), " gamma");
+	assert.equal(model.getText(), ' gamma');
 	assert.deepEqual(controller.getSelections()[0]!, caret(0, 0));
 	controller.context.model.undo();
-	assert.equal(model.getText(), "alpha beta gamma");
+	assert.equal(model.getText(), 'alpha beta gamma');
 
 	controller.setSelections([caret(0, 0)]);
 	deleteTestWord(controller, config, model, 'right');
-	assert.equal(model.getText(), " beta gamma");
+	assert.equal(model.getText(), ' beta gamma');
 });
 
-test("Selection deletion is multi-cursor aware and preserves selected ranges", () => {
-	using model = new TextModel("alpha\nbeta");
+test('Selection deletion is multi-cursor aware and preserves selected ranges', () => {
+	using model = new TextModel('alpha\nbeta');
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
 	using controller = createTestCursorsController(model, primaryFirst([
@@ -134,22 +134,22 @@ test("Selection deletion is multi-cursor aware and preserves selected ranges", (
 
 	executeTestDeleteOperation(controller, DeleteOperations.deleteLeft(EditOperationType.Other, config, model, [...controller.getSelections()], []), EditOperationType.DeletingLeft);
 	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, {
-		text: "ha\neta",
+		text: 'ha\neta',
 		selections: primaryFirst([caret(0, 0), caret(1, 0)], 1),
 	});
 	controller.context.model.undo();
-	assert.equal(model.getText(), "alpha\nbeta");
+	assert.equal(model.getText(), 'alpha\nbeta');
 
 	controller.setSelections([Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((1) + 1, (2) + 1))]);
 	executeTestDeleteOperation(controller, DeleteOperations.deleteRight(EditOperationType.Other, config, model, [...controller.getSelections()]), EditOperationType.DeletingRight);
 	assert.deepEqual({ text: model.getText(), selection: controller.getSelections()[0]! }, {
-		text: "ata",
+		text: 'ata',
 		selection: caret(0, 1),
 	});
 });
 
-test("Typing normalizes line endings before calculating carets", () => {
-	using model = new TextModel("ab");
+test('Typing normalizes line endings before calculating carets', () => {
+	using model = new TextModel('ab');
 	using controller = createTestCursorsController(
 		model,
 		[caret(0, 1)],
@@ -160,7 +160,7 @@ test("Typing normalizes line endings before calculating carets", () => {
 		text: model.getText(),
 		selection: controller.getSelections()[0]!,
 	}, {
-		text: "a\nb",
+		text: 'a\nb',
 		selection: caret(1, 0),
 	});
 });
@@ -269,8 +269,8 @@ test('Composition typing replaces a selected range and restores it on undo', () 
 	assert.deepEqual(controller.getSelections()[0], selection);
 });
 
-test("Delete boundaries are no-ops and overlapping selections fail early", () => {
-	using model = new TextModel("abc");
+test('Delete boundaries are no-ops and overlapping selections fail early', () => {
+	using model = new TextModel('abc');
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
 	using controller = createTestCursorsController(
@@ -294,8 +294,8 @@ test("Delete boundaries are no-ops and overlapping selections fail early", () =>
 	assert.equal(model.getText(), 'Xc');
 });
 
-test("Adjacent deletions merge converged carets while history restores sources", () => {
-	using model = new TextModel("abc");
+test('Adjacent deletions merge converged carets while history restores sources', () => {
+	using model = new TextModel('abc');
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
 	const initial = primaryFirst([
@@ -309,7 +309,7 @@ test("Adjacent deletions merge converged carets while history restores sources",
 		text: model.getText(),
 		selections: controller.getSelections(),
 	}, {
-		text: "c",
+		text: 'c',
 		selections: [caret(0, 0)],
 	});
 
@@ -318,15 +318,15 @@ test("Adjacent deletions merge converged carets while history restores sources",
 		text: model.getText(),
 		selections: controller.getSelections(),
 	}, {
-		text: "abc",
+		text: 'abc',
 		selections: initial,
 	});
 	controller.context.model.redo();
 	assert.deepEqual(controller.getSelections(), [caret(0, 0)]);
 });
 
-test("Paste commands support shared and distributed isolated text", () => {
-	using model = new TextModel("ab cd");
+test('Paste commands support shared and distributed isolated text', () => {
+	using model = new TextModel('ab cd');
 	using controller = createTestCursorsController(
 		model,
 		primaryFirst([
@@ -340,7 +340,7 @@ test("Paste commands support shared and distributed isolated text", () => {
 		text: model.getText(),
 		selections: controller.getSelections(),
 	}, {
-		text: "A\nB C",
+		text: 'A\nB C',
 		selections: primaryFirst([
 			caret(1, 1),
 			caret(1, 3),
@@ -348,18 +348,18 @@ test("Paste commands support shared and distributed isolated text", () => {
 	});
 
 	controller.paste(new ViewModelEventsCollector(), '!', false, null, 'test');
-	assert.equal(model.getText(), "A\nB! C!");
+	assert.equal(model.getText(), 'A\nB! C!');
 	controller.context.model.undo();
-	assert.equal(model.getText(), "A\nB C");
+	assert.equal(model.getText(), 'A\nB C');
 	controller.context.model.undo();
-	assert.equal(model.getText(), "ab cd");
+	assert.equal(model.getText(), 'ab cd');
 
 	controller.paste(new ViewModelEventsCollector(), 'only one', false, ['only one'], 'test');
 	assert.equal(model.getText(), 'only one only one');
 });
 
-test("Cut preserves collapsed cursors and restores history", () => {
-	using model = new TextModel("abc def");
+test('Cut preserves collapsed cursors and restores history', () => {
+	using model = new TextModel('abc def');
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages, { emptySelectionClipboard: false });
 	const initial = primaryFirst([
@@ -373,7 +373,7 @@ test("Cut preserves collapsed cursors and restores history", () => {
 		text: model.getText(),
 		selections: controller.getSelections(),
 	}, {
-		text: "c def",
+		text: 'c def',
 		selections: primaryFirst([
 			caret(0, 0),
 			caret(0, 5),
@@ -385,7 +385,7 @@ test("Cut preserves collapsed cursors and restores history", () => {
 		text: model.getText(),
 		selections: controller.getSelections(),
 	}, {
-		text: "abc def",
+		text: 'abc def',
 		selections: initial,
 	});
 });

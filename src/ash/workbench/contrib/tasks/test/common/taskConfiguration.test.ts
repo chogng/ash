@@ -1,12 +1,12 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from "../../common/taskConfiguration.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from '../../common/taskConfiguration.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 
-test("workspace tasks parse supported VS Code shell tasks and preserve explicit execution", () => {
+test('workspace tasks parse supported VS Code shell tasks and preserve explicit execution', () => {
 	const tasks = parseWorkspaceTasks(`{
     // Compatible VS Code task configuration.
     "version": "2.0.0",
@@ -16,21 +16,21 @@ test("workspace tasks parse supported VS Code shell tasks and preserve explicit 
     ],
   }`);
 	assert.deepEqual(tasks.map(task => ({ label: task.label, command: task.command, group: task.group, source: task.source })), [
-		{ label: "Build app", command: 'cargo build --package "ash code"', group: "build", source: "vscode" },
-		{ label: "Check", command: "cargo check", group: "other", source: "vscode" },
+		{ label: 'Build app', command: 'cargo build --package "ash code"', group: 'build', source: 'vscode' },
+		{ label: 'Check', command: 'cargo check', group: 'other', source: 'vscode' },
 	]);
 	assert.deepEqual(tasks[1].unsupportedFeatures, []);
 	assert.deepEqual(tasks[1].execution, { type: 'process', program: 'cargo check', args: [] });
 });
 
-test("package and Cargo task discovery stays deterministic", () => {
-	const packageTasks = parsePackageTasks('{"scripts":{"test":"node --test","build":"vite build","dev":"vite","bad name":"ignored"}}', "pnpm");
+test('package and Cargo task discovery stays deterministic', () => {
+	const packageTasks = parsePackageTasks('{"scripts":{"test":"node --test","build":"vite build","dev":"vite","bad name":"ignored"}}', 'pnpm');
 	assert.deepEqual(packageTasks.map(task => [task.label, task.command, task.group]), [
-		["test", "pnpm run test", "test"],
-		["build", "pnpm run build", "build"],
-		["dev", "pnpm run dev", "run"],
+		['test', 'pnpm run test', 'test'],
+		['build', 'pnpm run build', 'build'],
+		['dev', 'pnpm run dev', 'run'],
 	]);
-	assert.deepEqual(cargoWorkspaceTasks().map(task => task.command), ["cargo check", "cargo build", "cargo test", "cargo run"]);
+	assert.deepEqual(cargoWorkspaceTasks().map(task => task.command), ['cargo check', 'cargo build', 'cargo test', 'cargo run']);
 });
 
 

@@ -19,8 +19,8 @@ export interface DocumentNodeLocation {
 /** Creates an immutable node whose child nodes are structurally shared. */
 export function createDocumentNode(options: DocumentNodeOptions): DocumentNode {
 	assertNodeIdentity(options.id);
-	if (typeof options.type !== "string" || options.type.length === 0) {
-		throw new TypeError("Document node type must be a non-empty string");
+	if (typeof options.type !== 'string' || options.type.length === 0) {
+		throw new TypeError('Document node type must be a non-empty string');
 	}
 	const content = Object.freeze([...(options.content ?? [])]);
 	const marks = Object.freeze(
@@ -58,14 +58,14 @@ export function createTextNode(
 	text: string,
 	marks: readonly DocumentMark[] = [],
 ): DocumentNode {
-	return createDocumentNode({ id, type: "text", text, marks });
+	return createDocumentNode({ id, type: 'text', text, marks });
 }
 
 /** Creates the root node for one structured document. */
 export function createDocumentRoot(
 	id: DocumentNodeId,
 	content: readonly DocumentNode[] = [],
-	type = "doc",
+	type = 'doc',
 ): DocumentNode {
 	return createDocumentNode({ id, type, content });
 }
@@ -124,7 +124,7 @@ export function removeDocumentNode(
 	root: DocumentNode,
 	id: DocumentNodeId,
 ): RemovedDocumentNode {
-	if (root.id === id) throw new RangeError("The document root cannot be removed");
+	if (root.id === id) throw new RangeError('The document root cannot be removed');
 	const result = removeFromChildren(root, id);
 	if (!result) throw new RangeError(`Document node '${id}' does not exist`);
 	return result;
@@ -222,8 +222,8 @@ function recreateNode(
 }
 
 function assertNodeIdentity(id: string): void {
-	if (typeof id !== "string" || id.trim().length === 0) {
-		throw new TypeError("Document node id must be a non-empty string");
+	if (typeof id !== 'string' || id.trim().length === 0) {
+		throw new TypeError('Document node id must be a non-empty string');
 	}
 }
 

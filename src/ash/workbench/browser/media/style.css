@@ -181,23 +181,16 @@ textarea {
 .ash-workbench
 	:where(
 		.ash-action-bar:not(.vertical)
-			> .ash-dropdown-with-primary-action-view-item
-			> :is(
-				.ash-dropdown-with-primary-primary,
-				.ash-dropdown-with-primary-dropdown
-			)
+			> .ash-split-action
+			> :is(.ash-split-action-primary, .ash-split-action-dropdown)
 			> .ash-button-quiet:not(:disabled):hover
 	),
 .ash-workbench
 	:where(
-		.ash-action-bar:not(.vertical)
-			> .ash-dropdown-with-primary-action-view-item:not(.disabled):hover
+		.ash-action-bar:not(.vertical) > .ash-split-action:not(.disabled):hover
 	),
 .ash-workbench
-	:where(
-		.ash-action-bar:not(.vertical)
-			> .ash-dropdown-with-primary-action-view-item.active
-	) {
+	:where(.ash-action-bar:not(.vertical) > .ash-split-action.active) {
 	background: var(--ash-toolbar-hoverBackground);
 }
 

@@ -175,7 +175,7 @@ export class PlaywrightService extends Disposable implements IPlaywrightService 
 						try {
 							const focused = await cdp.send('Runtime.callFunctionOn', {
 								objectId,
-								functionDeclaration: "function () { if (!this.isConnected || this.disabled || this.readOnly) return false; this.focus(); return this.getRootNode().activeElement === this; }", returnByValue: true
+								functionDeclaration: 'function () { if (!this.isConnected || this.disabled || this.readOnly) return false; this.focus(); return this.getRootNode().activeElement === this; }', returnByValue: true
 							});
 							if (focused.exceptionDetails || focused.result.value !== true) { throw new Error('BrowserNodeNotEditable'); }
 						} finally { await cdp.send('Runtime.releaseObject', { objectId }).catch(() => { }); }

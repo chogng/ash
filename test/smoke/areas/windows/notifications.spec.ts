@@ -345,10 +345,20 @@ for (const waitForShow of [false, true]) {
 			expect(await clipboard.read()).toBe('ash-notification-copy-fixture');
 			await failure.assertUnchanged();
 		} finally {
-			try { await testInfo.attach('notification-real-popup', { body: JSON.stringify(await probe.read()), contentType: 'application/json' }); }
+			try {
+				await testInfo.attach('notification-real-popup', { body: JSON.stringify(await probe.read()), contentType: 'application/json' });
+			}
 			finally {
-				try { await probe.restore(); }
-				finally { try { await failure.assertUnchanged(); } finally { await failure.dispose(); } }
+				try {
+					await probe.restore();
+				}
+				finally {
+					try {
+						await failure.assertUnchanged();
+					} finally {
+						await failure.dispose();
+					}
+				}
 			}
 		}
 	});

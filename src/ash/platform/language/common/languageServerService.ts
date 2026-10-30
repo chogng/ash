@@ -1,4 +1,4 @@
-import type { JsonValue } from "../../../base/common/jsonValue.js";
+import type { JsonValue } from '../../../base/common/jsonValue.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export interface LanguageServerConfiguration {

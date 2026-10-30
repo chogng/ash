@@ -2,10 +2,10 @@ import {
 	Disposable,
 
 	toDisposable,
-} from "../../../../base/common/lifecycle.js";
-import type { URI } from "../../../../base/common/uri.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { MarkdownPreview } from "./markdownPreview.js";
+} from '../../../../base/common/lifecycle.js';
+import type { URI } from '../../../../base/common/uri.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { MarkdownPreview } from './markdownPreview.js';
 
 export interface MarkdownDocumentViewOptions {
 	readonly markdown?: string;
@@ -36,10 +36,10 @@ export class MarkdownDocumentView extends Disposable {
 			baseUri: options.baseUri,
 		}));
 		this.element = this.preview.element;
-		this.element.classList.add("ash-markdown-document-view");
+		this.element.classList.add('ash-markdown-document-view');
 		this._register(this.preview.onDidOpenLink((href) => {
 			void Promise.resolve(this.openLink(href)).catch((error: unknown) => {
-				console.error("Unable to open Markdown link", error);
+				console.error('Unable to open Markdown link', error);
 			});
 		}));
 		this._register(toDisposable(() => {
@@ -59,7 +59,7 @@ export class MarkdownDocumentView extends Disposable {
 
 	private requireActive(): void {
 		if (!this.active) {
-			throw new ReferenceError("MarkdownDocumentView is already disposed");
+			throw new ReferenceError('MarkdownDocumentView is already disposed');
 		}
 	}
 }

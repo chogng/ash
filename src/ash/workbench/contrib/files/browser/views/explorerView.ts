@@ -5,22 +5,22 @@ import { isRecord } from '../../../../../base/common/types.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { EditorOpenSource } from '../../../../../platform/editor/common/editor.js';
-import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
-import { FileKind, IFileService } from "../../../../../platform/files/common/files.js";
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { FileKind, IFileService } from '../../../../../platform/files/common/files.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
-import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { IResourceIconRenderer } from "../../../../browser/labels.js";
-import { ListConfiguration, WorkbenchCompressibleAsyncDataTree, type ResourceOpenEvent, type TreeExpandMode } from "../../../../../platform/list/browser/listService.js";
-import { IEditorService } from "../../../../services/editor/common/editorService.js";
-import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
-import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
-import { appendIcon } from "../../../../../base/browser/ui/lxicons/lxicon.js";
-import { Lxicon } from "../../../../../base/common/lxicons.js";
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IResourceIconRenderer } from '../../../../browser/labels.js';
+import { ListConfiguration, WorkbenchCompressibleAsyncDataTree, type ResourceOpenEvent, type TreeExpandMode } from '../../../../../platform/list/browser/listService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { ViewPane, type IViewPaneOptions } from '../../../../browser/parts/views/viewPane.js';
+import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
+import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
-import { ExplorerItem } from "../../common/explorerModel.js";
+import { ExplorerItem } from '../../common/explorerModel.js';
 import { ExplorerFileNestingSettingId } from '../../common/explorerFileNestingTrie.js';
-import { ExplorerDataSource, ExplorerFindProvider, FileDragAndDrop, FileSorter, FilesRenderer } from "./explorerViewer.js";
-import { dirname, extUriBiasedIgnorePathCase } from "../../../../../base/common/resources.js";
+import { ExplorerDataSource, ExplorerFindProvider, FileDragAndDrop, FileSorter, FilesRenderer } from './explorerViewer.js';
+import { dirname, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { IExplorerService, type IExplorerView } from '../files.js';
 import { ExplorerFocusedContext } from '../files.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -100,9 +100,9 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.editorService = editorService;
 		this.explorerService = explorerService;
 		const renderer = this._register(instantiationService.createInstance(FilesRenderer, container.ownerDocument));
-		this.element.classList.add("ash-explorer-view-pane");
-		this.headerElement.classList.add("ash-explorer-title");
-		this.contentElement.classList.add("ash-explorer");
+		this.element.classList.add('ash-explorer-view-pane');
+		this.headerElement.classList.add('ash-explorer-title');
+		this.contentElement.classList.add('ash-explorer');
 		this.scrollContent = h(container.ownerDocument, 'div');
 		this.scrollContent.className = 'ash-explorer-scroll-content';
 		this.contentElement.append(this.scrollContent);
@@ -120,7 +120,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				const segment = focused && this.tree.getCompressedTreeNode(focused)?.elements[this.compressedFocusIndex];
 				return items.map(item => item === focused && segment ? segment : item);
 			})),
-			scrolling: "managed",
+			scrolling: 'managed',
 			configurationService,
 			getHeight: () => 22,
 			findMode: 'filter',
@@ -129,7 +129,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			isIncompressible: item => item.kind !== FileKind.Directory || workspaceContextService.getWorkspace().folders.some(folder =>
 				extUriBiasedIgnorePathCase.isEqual(folder.uri, item.resource) || extUriBiasedIgnorePathCase.isEqual(folder.uri, dirname(item.resource))),
 			collapseByDefault: item => item.kind !== FileKind.File,
-			expandOnlyOnTwistieClick: () => configurationService.getValue<TreeExpandMode>(ListConfiguration.treeExpandMode) === "doubleClick",
+			expandOnlyOnTwistieClick: () => configurationService.getValue<TreeExpandMode>(ListConfiguration.treeExpandMode) === 'doubleClick',
 			identityProvider: { getId: (node) => node.resource.toString() },
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.name, getCompressedNodeKeyboardNavigationLabel: elements => elements.map(item => item.name).join('/') },
 			openOnSingleClick: true,
@@ -138,8 +138,8 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			renderCompressedElements: items => renderer.renderCompressedElements(items),
 			renderTwistie: (_item, state, twistie) => {
 				if (state.loading) {
-					const loading = h(twistie.ownerDocument, "span");
-					loading.className = "ash-explorer-tree-loading";
+					const loading = h(twistie.ownerDocument, 'span');
+					loading.className = 'ash-explorer-tree-loading';
 					twistie.append(loading);
 				} else if (state.collapsible) appendIcon(state.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
 			},
@@ -263,7 +263,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this._register(this.tree.onDidError(({ element, error }) => {
 			this.treeError = true;
 			this.treeErrorElement = element;
-			this.error = error instanceof Error ? error.message : "Unable to read workspace files.";
+			this.error = error instanceof Error ? error.message : 'Unable to read workspace files.';
 			this.render();
 		}));
 		this._register(this.tree.onDidOpen((event) => {
@@ -560,7 +560,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.render();
 		const workspace = this.workspaceContextService.getWorkspace();
 		if (workspace.folders.length === 0) {
-			this.error = "Open a folder to browse files.";
+			this.error = 'Open a folder to browse files.';
 			this.render();
 			return;
 		}
@@ -576,7 +576,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			if (this.isDisposed || generation !== this.workspaceGeneration) return;
 			this.error = error instanceof Error
 				? error.message
-				: "Unable to load workspace files.";
+				: 'Unable to load workspace files.';
 			this.render();
 		}
 	}
@@ -676,7 +676,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 			this.render();
 		} catch (error) {
 			if (generation !== this.workspaceGeneration || this.isDisposed) return;
-			this.error = error instanceof Error ? error.message : "Unable to refresh workspace files.";
+			this.error = error instanceof Error ? error.message : 'Unable to refresh workspace files.';
 			this.treeError = true;
 			this.treeErrorElement = item;
 			this.render();
@@ -700,7 +700,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private async openFile(event: ResourceOpenEvent<ExplorerItem>): Promise<void> {
 		const node = event.element;
 		try {
-			await this.editorService.openEditor(new FileEditorInput(node.resource, { label: node.name }), { ...event.editorOptions, source: EditorOpenSource.USER }, event.sideBySide ? "sideGroup" : "activeGroup");
+			await this.editorService.openEditor(new FileEditorInput(node.resource, { label: node.name }), { ...event.editorOptions, source: EditorOpenSource.USER }, event.sideBySide ? 'sideGroup' : 'activeGroup');
 		} catch (error) {
 			if (!isCancellationError(error)) throw error;
 		}
@@ -713,18 +713,18 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		if (!this.root) {
 			// Directory loading measures the virtual viewport, including during workspace switches.
 			if (this.tree.domNode.parentElement !== this.scrollContent) this.scrollContent.append(this.tree.domNode);
-			const status = h(document, "div");
-			status.className = "ash-explorer-status";
-			status.setAttribute("role", "status");
-			status.textContent = this.error ?? "Loading files…";
+			const status = h(document, 'div');
+			status.className = 'ash-explorer-status';
+			status.setAttribute('role', 'status');
+			status.textContent = this.error ?? 'Loading files…';
 			this.statusDomNode = status;
 			this.scrollContent.prepend(status);
 			return;
 		}
 		if (this.error) {
-			const error = h(document, "div");
-			error.className = "ash-explorer-status ash-explorer-error";
-			error.setAttribute("role", "alert");
+			const error = h(document, 'div');
+			error.className = 'ash-explorer-status ash-explorer-error';
+			error.setAttribute('role', 'alert');
 			error.textContent = this.error;
 			this.statusDomNode = error;
 			this.scrollContent.prepend(error);

@@ -1,13 +1,14 @@
 import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
-import { DropdownWithPrimaryActionViewItem } from './dropdownWithPrimaryActionViewItem.js';
-import { addDisposableListener, ModifierKeyEmitter } from "../../../base/browser/dom.js";
-import { setAriaAttribute } from "../../../base/browser/ui/aria/aria.js";
-import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
-import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import { DropdownMenuActionViewItem } from "../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
-import { Separator, SubmenuAction, type IAction } from "../../../base/common/actions.js";
-import { isLinux, isWindows } from "../../../base/common/platform.js";
-import { MenuItemAction, SubmenuItemAction } from "../common/actions.js";
+import '../../../base/browser/ui/dropdown/dropdown.css';
+import { addDisposableListener, h, ModifierKeyEmitter, stopEvent } from '../../../base/browser/dom.js';
+import { observeElementSize } from '../../../base/browser/observer.js';
+import { setAriaAttribute } from '../../../base/browser/ui/aria/aria.js';
+import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
+import { DropdownMenuActionViewItem } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
+import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
+import { isLinux, isWindows } from '../../../base/common/platform.js';
+import { MenuItemAction, SubmenuItemAction } from '../common/actions.js';
 
 export interface PrimaryAndSecondaryActions {
 	readonly primary: IAction[];
@@ -19,7 +20,7 @@ type MenuActionGroups = ReadonlyArray<readonly [string, readonly IAction[]]>;
 export function getContextMenuActions(
 	groups: MenuActionGroups,
 	primaryGroup?: string,
-	targetWindow: Window | undefined = typeof window === "undefined" ? undefined : window,
+	targetWindow: Window | undefined = typeof window === 'undefined' ? undefined : window,
 ): PrimaryAndSecondaryActions {
 	const target: PrimaryAndSecondaryActions = { primary: [], secondary: [] };
 	fillInActions(
@@ -34,7 +35,7 @@ export function getContextMenuActions(
 export function getFlatContextMenuActions(
 	groups: MenuActionGroups,
 	primaryGroup?: string,
-	targetWindow: Window | undefined = typeof window === "undefined" ? undefined : window,
+	targetWindow: Window | undefined = typeof window === 'undefined' ? undefined : window,
 ): IAction[] {
 	const target: IAction[] = [];
 	fillInActions(
@@ -87,7 +88,7 @@ export function fillInActionBarActions(
 	shouldInlineSubmenu?: (action: SubmenuAction, group: string, groupSize: number) => boolean,
 	useSeparatorsInPrimaryActions = false,
 ): void {
-	const isPrimaryGroup = typeof primaryGroup === "string"
+	const isPrimaryGroup = typeof primaryGroup === 'string'
 		? (group: string): boolean => group === primaryGroup
 		: primaryGroup;
 	fillInActions(
@@ -104,7 +105,7 @@ function fillInActions(
 	groups: MenuActionGroups,
 	target: IAction[] | PrimaryAndSecondaryActions,
 	useAlternativeActions: boolean,
-	isPrimaryGroup: (group: string) => boolean = (group) => group === "navigation",
+	isPrimaryGroup: (group: string) => boolean = (group) => group === 'navigation',
 	shouldInlineSubmenu: (action: SubmenuAction, group: string, groupSize: number) => boolean = () => false,
 	useSeparatorsInPrimaryActions = false,
 ): void {
@@ -190,18 +191,18 @@ export class MenuEntryActionViewItem extends ButtonActionViewItem {
 
 	override render(container: HTMLElement): void {
 		super.render(container);
-		container.classList.add("ash-menu-entry");
+		container.classList.add('ash-menu-entry');
 		if (!this.menuItemAction.alt) return;
 		const targetWindow = container.ownerDocument.defaultView;
 		if (!targetWindow) return;
 		const modifiers = ModifierKeyEmitter.getInstance(targetWindow);
 		const update = (): void => this.updateAlternativeState(modifiers);
 		this._register(modifiers.event(update));
-		this._register(addDisposableListener(container, "mouseenter", () => {
+		this._register(addDisposableListener(container, 'mouseenter', () => {
 			this.isMouseOver = true;
 			update();
 		}));
-		this._register(addDisposableListener(container, "mouseleave", () => {
+		this._register(addDisposableListener(container, 'mouseleave', () => {
 			this.isMouseOver = false;
 			update();
 		}));
@@ -225,7 +226,7 @@ export class MenuEntryActionViewItem extends ButtonActionViewItem {
 		this.button.enabled = nextAction.enabled;
 		this.button.checked = nextAction.checked;
 		this.button.setTitle(nextAction.tooltip);
-		setAriaAttribute(this.button.domNode, "label", nextAction.label);
+		setAriaAttribute(this.button.domNode, 'label', nextAction.label);
 	}
 }
 
@@ -250,7 +251,89 @@ export class SubmenuEntryActionViewItem
 
 	override render(container: HTMLElement): void {
 		super.render(container);
-		container.classList.add("ash-menu-entry");
+		container.classList.add('ash-menu-entry');
+	}
+}
+
+/**
+ * Presents a contributed submenu with its first action as the default command.
+ * The command retains MenuEntryActionViewItem's modifier and command semantics;
+ * the submenu keeps its own enabled state and popup lifetime.
+ */
+export class DropdownWithDefaultActionViewItem extends ActionViewItem {
+	private readonly defaultAction: IAction;
+	private readonly defaultItem: ActionViewItem;
+	private readonly dropdownItem: DropdownMenuActionViewItem;
+	public readonly onDidChangeDropdownVisibility;
+
+	constructor(
+		action: SubmenuItemAction,
+		contextMenuProvider: IContextMenuProvider,
+		private readonly options: IMenuEntryActionViewItemOptions = {},
+	) {
+		super(action, options);
+		const defaultAction = action.actions.find(candidate => !(candidate instanceof Separator));
+		if (!defaultAction) {
+			throw new Error(`Split menu has no default action: ${action.id}`);
+		}
+		this.defaultAction = defaultAction;
+		this.defaultItem = this._register(defaultAction instanceof MenuItemAction
+			? new MenuEntryActionViewItem(defaultAction, options)
+			: new ButtonActionViewItem(defaultAction, { buttonStyles: defaultButtonStyles, ...options }));
+		this.dropdownItem = this._register(new SubmenuEntryActionViewItem(action, contextMenuProvider, options));
+		this.onDidChangeDropdownVisibility = this.dropdownItem.onDidChangeVisibility;
+	}
+
+	public override render(container: HTMLElement): void {
+		container.classList.add('ash-dropdown-with-default-action-view-item', 'ash-split-action');
+		container.classList.toggle('primary', this.options.buttonPresentation === 'primary');
+		const primaryContainer = h(container.ownerDocument, 'div');
+		primaryContainer.className = 'ash-split-action-primary';
+		primaryContainer.classList.toggle('icon', this.defaultAction.icon !== undefined);
+		const dropdownContainer = h(container.ownerDocument, 'div');
+		dropdownContainer.className = 'ash-split-action-dropdown';
+		container.append(primaryContainer, dropdownContainer);
+		this.defaultItem.render(primaryContainer);
+		this.dropdownItem.render(dropdownContainer);
+		this._register(this.onDidChangeDropdownVisibility(visible => container.classList.toggle('active', visible)));
+		this._register(addDisposableListener(primaryContainer, 'keydown', event => {
+			if (event.key !== 'ArrowRight' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+				return;
+			}
+			stopEvent(event);
+			this.defaultItem.setTabbable(false);
+			this.dropdownItem.setTabbable(true);
+			this.dropdownItem.focus();
+		}));
+		this._register(addDisposableListener(dropdownContainer, 'keydown', event => {
+			if (event.key !== 'ArrowLeft' || !this.defaultAction.enabled || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+				return;
+			}
+			stopEvent(event);
+			this.dropdownItem.setTabbable(false);
+			this.defaultItem.setTabbable(true);
+			this.defaultItem.focus();
+		}));
+		if (this.options.buttonPresentation === 'primary') {
+			this._register(observeElementSize(primaryContainer, size => {
+				if (size.height > 0) {
+					dropdownContainer.style.width = `${size.height}px`;
+				}
+			}));
+		}
+	}
+
+	public override focus(fromRight = false): void {
+		if (fromRight || !this.defaultAction.enabled) {
+			this.dropdownItem.focus();
+		} else {
+			this.defaultItem.focus();
+		}
+	}
+
+	public override setTabbable(tabbable: boolean): void {
+		this.defaultItem.setTabbable(tabbable && this.defaultAction.enabled);
+		this.dropdownItem.setTabbable(tabbable && !this.defaultAction.enabled);
 	}
 }
 
@@ -269,9 +352,8 @@ export function createActionViewItem(
 		return new MenuEntryActionViewItem(action, options);
 	}
 	if (action instanceof SubmenuItemAction) {
-		const primary = action.actions.find(candidate => !(candidate instanceof Separator));
-		if (action.item.isSplitButton && primary) {
-			return new DropdownWithPrimaryActionViewItem(primary, action, () => action.actions, contextMenuProvider, options);
+		if (action.item.isSplitButton && action.actions.some(candidate => !(candidate instanceof Separator))) {
+			return new DropdownWithDefaultActionViewItem(action, contextMenuProvider, options);
 		}
 		return new SubmenuEntryActionViewItem(action, contextMenuProvider, options);
 	}

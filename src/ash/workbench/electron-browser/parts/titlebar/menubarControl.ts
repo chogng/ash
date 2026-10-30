@@ -2,12 +2,12 @@ import {
 	type IAction,
 	Separator,
 	SubmenuAction,
-} from "../../../../base/common/actions.js";
+} from '../../../../base/common/actions.js';
 import {
 	Disposable,
 	toDisposable,
-} from "../../../../base/common/lifecycle.js";
-import { isMacintosh } from "../../../../base/common/platform.js";
+} from '../../../../base/common/lifecycle.js';
+import { isMacintosh } from '../../../../base/common/platform.js';
 import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import {
@@ -15,16 +15,16 @@ import {
 	IMenuService,
 	MenuId,
 	MenuItemAction,
-} from "../../../../platform/actions/common/actions.js";
+} from '../../../../platform/actions/common/actions.js';
 import type {
 	INativeMenubarData,
 	NativeMenubarItem,
 	INativeTouchBarItem,
-} from "../../../../platform/menubar/common/nativeMenubar.js";
-import { IMenubarService } from "../../../../platform/menubar/electron-browser/menubar.js";
+} from '../../../../platform/menubar/common/nativeMenubar.js';
+import { IMenubarService } from '../../../../platform/menubar/electron-browser/menubar.js';
 import type {
 	IMenubarControl,
-} from "../../../browser/parts/titlebar/menubarControl.js";
+} from '../../../browser/parts/titlebar/menubarControl.js';
 
 /** Synchronizes the workbench menu model to the macOS application menu. */
 export class NativeMenubarControl extends Disposable
@@ -80,8 +80,8 @@ export class NativeMenubarControl extends Disposable
 		// Empty menus have no artwork to load; retain one load when actions appear.
 		if (touchBarActions.length && !this.touchBarIcons) {
 			this.touchBarIcons = Promise.all([
-				pngDataUrl(new URL("../../../browser/parts/editor/media/back-tb.png", import.meta.url).href),
-				pngDataUrl(new URL("../../../browser/parts/editor/media/forward-tb.png", import.meta.url).href),
+				pngDataUrl(new URL('../../../browser/parts/editor/media/back-tb.png', import.meta.url).href),
+				pngDataUrl(new URL('../../../browser/parts/editor/media/forward-tb.png', import.meta.url).href),
 			]);
 		}
 
@@ -104,7 +104,7 @@ export class NativeMenubarControl extends Disposable
 				}
 			})
 			.catch((error: unknown) => {
-				console.error("Failed to update native menubar", error);
+				console.error('Failed to update native menubar', error);
 			});
 	}
 
@@ -136,14 +136,14 @@ function serializeMenubar(
 		const items: NativeMenubarItem[] = [];
 		for (const action of source) {
 			if (action instanceof Separator) {
-				items.push({ type: "separator" });
+				items.push({ type: 'separator' });
 				continue;
 			}
 			if (action instanceof SubmenuAction) {
 				const children = serializeItems(action.actions);
 				if (children.length > 0) {
 					items.push({
-						type: "submenu",
+						type: 'submenu',
 						label: action.label,
 						enabled: action.enabled,
 						items: children,
@@ -162,7 +162,7 @@ function serializeMenubar(
 				: undefined;
 			if (altId && alternate) actionMap.set(altId, alternate);
 			items.push({
-				type: "action",
+				type: 'action',
 				id,
 				...(altId ? { altId } : {}),
 				label: action.label,
@@ -201,7 +201,7 @@ function serializeMenubar(
 }
 
 async function pngDataUrl(url: string): Promise<string> {
-	if (url.startsWith("data:image/png;base64,")) return url;
+	if (url.startsWith('data:image/png;base64,')) return url;
 	const response = await fetch(url);
 	if (!response.ok) throw new Error(`Could not load Touch Bar icon: ${response.status}`);
 	const bytes = new Uint8Array(await response.arrayBuffer());
@@ -214,13 +214,13 @@ function trimSeparators(
 	const result: NativeMenubarItem[] = [];
 	for (const item of items) {
 		if (
-			item.type === "separator" &&
-			(result.length === 0 || result[result.length - 1]?.type === "separator")
+			item.type === 'separator' &&
+			(result.length === 0 || result[result.length - 1]?.type === 'separator')
 		) {
 			continue;
 		}
 		result.push(item);
 	}
-	if (result[result.length - 1]?.type === "separator") result.pop();
+	if (result[result.length - 1]?.type === 'separator') result.pop();
 	return result;
 }

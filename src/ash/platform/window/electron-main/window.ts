@@ -6,15 +6,15 @@ import {
 	DEFAULT_EMPTY_WINDOW_SIZE,
 	DEFAULT_WORKSPACE_WINDOW_SIZE,
 	type IWindowClientSize,
-} from "../common/window.js";
+} from '../common/window.js';
 import {
 	WorkbenchState,
-} from "../../workspace/common/workspace.js";
+} from '../../workspace/common/workspace.js';
 
 export const WindowMode = {
-	Normal: "normal",
-	Maximized: "maximized",
-	Fullscreen: "fullscreen",
+	Normal: 'normal',
+	Maximized: 'maximized',
+	Fullscreen: 'fullscreen',
 } as const;
 
 /** Stable string values used by runtime and persisted window state. */

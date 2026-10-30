@@ -7,7 +7,7 @@
 export {
 	ScrollableElement,
 	ScrollableElement as Scrollbar,
-} from "./scrollableElement.js";
+} from './scrollableElement.js';
 export type {
 	ScrollableElementOptions,
 	ScrollableElementOptions as ScrollbarOptions,
@@ -20,5 +20,5 @@ export type {
 	ScrollPosition as ScrollbarPosition,
 	ScrollbarVisibility,
 	ScrollbarWheelOptions,
-} from "./scrollableElement.js";
-export type { ScrollbarAxis } from "./abstractScrollbar.js";
+} from './scrollableElement.js';
+export type { ScrollbarAxis } from './abstractScrollbar.js';

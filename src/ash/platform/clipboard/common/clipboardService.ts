@@ -1,4 +1,4 @@
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { URI } from '../../../base/common/uri.js';
 
 export interface IClipboardResources {
@@ -30,4 +30,4 @@ export interface IClipboardService {
 	hasResources(): Promise<boolean>;
 }
 
-export const IClipboardService = createServiceIdentifier<IClipboardService>("clipboardService");
+export const IClipboardService = createServiceIdentifier<IClipboardService>('clipboardService');

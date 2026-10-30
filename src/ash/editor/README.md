@@ -25,12 +25,12 @@ Standalone 的 F1 快捷入口支持直接筛选命令，也支持 `>` 命令、
 
 Editor 维护以下核心入口。实现 README 可以补充局部细节，但不得复制核心规范。
 
-| 文档                                                       | Canonical responsibility                                                                                                              | 不负责                                           |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| [`README.md`](./README.md)                                 | 扁平目录、单一 TextModel、依赖方向和 Workbench 贡献装配                                                                               | 单套功能实现的完整行为和实现台账                 |
-| [`text-engine.md`](./text-engine.md)                       | 行式文本内核、view 架构、input、Contribution 与生命周期契约                                                                           | Workbench pane、文件协议和 App Server transport  |
-| [`text-engine-geometry.md`](./text-engine-geometry.md)     | 文本几何、浏览器渲染后端、测量、输入坐标和长期目标契约；中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md) | 不拥有完整行式 engine、Workbench pane 或文件协议 |
-| [根目录 Editor TODO](../../../TODO.md#stanza-编辑器--todo) | 当前未完成的用户行为、owner 复核与验收事项                                                                                            | 不把尚未实现的上游能力标记为已完成               |
+| 文档                                                   | Canonical responsibility                                                                                                              | 不负责                                           |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| [`README.md`](./README.md)                             | 扁平目录、单一 TextModel、依赖方向和 Workbench 贡献装配                                                                               | 单套功能实现的完整行为和实现台账                 |
+| [`text-engine.md`](./text-engine.md)                   | 行式文本内核、view 架构、input、Contribution 与生命周期契约                                                                           | Workbench pane、文件协议和 App Server transport  |
+| [`text-engine-geometry.md`](./text-engine-geometry.md) | 文本几何、浏览器渲染后端、测量、输入坐标和长期目标契约；中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md) | 不拥有完整行式 engine、Workbench pane 或文件协议 |
+| [根目录 Editor TODO](../../../TODO.md)                 | 当前未完成的用户行为、owner 复核与验收事项                                                                                            | 不把尚未实现的上游能力标记为已完成               |
 
 跨系统的 editor/file/language/Workbench/App Server 关系只在 [`docs/editor-architecture.md`](../../../docs/editor-architecture.md) 详细说明。[`browser/README.md`](./browser/README.md) 和其他子目录 README 面向实现维护者，记录局部调用路径、DOM ownership、failure semantics 和测试影响。
 
@@ -152,5 +152,9 @@ F1 的 `Developer: Inspect Tokens` 动作在光标旁显示当前词法 token �
 - `test:editor:unit` 编译并运行 Stanza 内核、Code/Diff Pane、语言与普通文件宿主 adapter 测试。
 - `test:editor:browser` 验证 Stanza 的 TextModel、Code、Diff、输入、布局、主题、语言和可访问性。扩展客户端通过 `test:browser:integration <spec>` 独立验证；完整浏览器入口和 CI 继续覆盖这些扩展用例。
 - `test/architecture/editor-architecture.test.ts` 验证扁平目录、单一 TextModel authority 和模式 bundle。
+
+2026-10-30 在 Windows x64、`c7ff564119` 上按代码与测试验收输入法和可访问性：7 文件的 69 项测试通过，覆盖 Native／textarea 输入、正文和双向选区镜像、CRLF 映射、可访问性配置／系统状态、ARIA、帮助与焦点恢复、监听释放及迟到事件。补充 Native／textarea 各自的候选提交、空完成取消和 Escape 取消共 6 项回归；使用包含代理对的候选替换反向选区，核对撤销／重做、原文与选区恢复，以及取消不污染既有历史。该输入文件最终 40 项通过，其余 6 文件 35 项复用已通过结果；普通文件模型的保存、重开、恢复及冲突另有 51 项通过，合计 126 项。日志为 `.build/todo-code-audit-editor-input-accessibility.log`、`.build/todo-code-audit-editor-ime-transactions.log` 与 `.build/todo-code-audit-editor-file-lifecycle.log`。
+
+原两条基础输入法／屏幕阅读器待办按本轮代码验收口径消项。本轮使用 Node／jsdom 和受控浏览器事件，没有新增 macOS／Linux 物理输入法或真实屏幕阅读器朗读证据；2026-10-22 本机缺 NVDA、讲述人未取得实际朗读输出的历史限制仍适用。正文／选区暴露、ARIA 与焦点测试不代表外部辅助技术的实际语音输出，已有物理设备记录的适用范围仍见[编辑器架构](../../../docs/editor-architecture.md#验证范围)。扩展客户端的跨页输入、辅助技术及多窗口／远端组合继续由所属扩展任务维护。
 
 修改产品装配时运行相关架构测试和 Common／Renderer 类型检查；修改模型、输入或序列化时运行对应的 unit/browser suite。按代码 owner 选择验证范围，扩展组合与产品环境验收不计入 Stanza 基础完成条件。

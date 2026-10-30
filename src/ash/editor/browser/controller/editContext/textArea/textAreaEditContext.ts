@@ -1,10 +1,10 @@
 import './textAreaEditContext.css';
-import { Disposable } from "../../../../../base/common/lifecycle.js";
-import { h } from "../../../../../base/browser/dom.js";
-import { FastDomNode } from "../../../../../base/browser/fastDomNode.js";
+import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { h } from '../../../../../base/browser/dom.js';
+import { FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { type IKeyboardEvent } from '../../../../../base/browser/keyboardEvent.js';
-import { type Event } from "../../../../../base/common/event.js";
-import { AbstractEditContext, type CompositionController, type EditContextOptions, type EditContextPosition, type EditContextState } from "../editContext.js";
+import { type Event } from '../../../../../base/common/event.js';
+import { AbstractEditContext, type CompositionController, type EditContextOptions, type EditContextPosition, type EditContextState } from '../editContext.js';
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { SelectionDirection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
@@ -16,9 +16,9 @@ import { type IViewModel } from '../../../../common/viewModel.js';
 import * as viewEvents from '../../../../common/viewEvents.js';
 import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { SimplePagedScreenReaderStrategy } from '../screenReaderUtils.js';
-import { TextAreaInput, type ICompositionData, type ICompositionStartEvent, type ITextAreaInputHost } from "./textAreaEditContextInput.js";
-import { TextAreaEditContextRegistry } from "./textAreaEditContextRegistry.js";
-import { TextAreaState, type ITextAreaWrapper } from "./textAreaEditContextState.js";
+import { TextAreaInput, type ICompositionData, type ICompositionStartEvent, type ITextAreaInputHost } from './textAreaEditContextInput.js';
+import { TextAreaEditContextRegistry } from './textAreaEditContextRegistry.js';
+import { TextAreaState, type ITextAreaWrapper } from './textAreaEditContextState.js';
 
 /** Options accepted by the textarea-backed edit context. */
 export type TextAreaEditContextOptions = EditContextOptions;
@@ -53,19 +53,19 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	) {
 		super(context);
 		const ownerDocument = container.ownerDocument;
-		this.textArea = new FastDomNode(h(ownerDocument, "textarea"));
-		this.textArea.setClassName("stanza-editor-input");
+		this.textArea = new FastDomNode(h(ownerDocument, 'textarea'));
+		this.textArea.setClassName('stanza-editor-input');
 		this.textArea.domNode.tabIndex = this._context.configuration.options.get(EditorOption.tabIndex);
 		this.textArea.domNode.spellcheck = false;
 		this.textArea.domNode.readOnly = options.readOnly;
-		this.textArea.domNode.wrap = "off";
+		this.textArea.domNode.wrap = 'off';
 		this.textArea.domNode.dir = options.textDirection;
-		this.textArea.domNode.autocomplete = "off";
-		this.textArea.setAttribute("autocapitalize", "off");
-		this.textArea.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor input");
-		this.textArea.setAttribute("aria-multiline", "true");
-		this.textArea.setAttribute("aria-roledescription", "code editor");
-		this.textArea.setAttribute("aria-readonly", String(this.textArea.domNode.readOnly));
+		this.textArea.domNode.autocomplete = 'off';
+		this.textArea.setAttribute('autocapitalize', 'off');
+		this.textArea.setAttribute('aria-label', options.ariaLabel ?? 'Stanza editor input');
+		this.textArea.setAttribute('aria-multiline', 'true');
+		this.textArea.setAttribute('aria-roledescription', 'code editor');
+		this.textArea.setAttribute('aria-readonly', String(this.textArea.domNode.readOnly));
 		const inputHost: ITextAreaInputHost = {
 			context: this._context,
 			getScreenReaderContent: () => this.accessibilityController.getScreenReaderContent(),
@@ -184,13 +184,13 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 
 	setReadOnly(readOnly: boolean): void {
 		this.textArea.domNode.readOnly = readOnly;
-		this.textArea.setAttribute("aria-readonly", String(readOnly));
+		this.textArea.setAttribute('aria-readonly', String(readOnly));
 	}
 
 	prepareComposition(): void {
 		// Preserve the native buffer: the IME has already anchored its range
 		// before compositionstart. Clearing it would shift the system caret.
-		this.textArea.toggleClassName("ime-input", true);
+		this.textArea.toggleClassName('ime-input', true);
 	}
 
 	positionComposition(position: EditContextPosition): void {
@@ -200,10 +200,10 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	clearComposition(): void {
-		this.textArea.toggleClassName("ime-input", false);
-		this.textArea.setLeft("");
-		this.textArea.setTop("");
-		this.textArea.setHeight("");
+		this.textArea.toggleClassName('ime-input', false);
+		this.textArea.setLeft('');
+		this.textArea.setTop('');
+		this.textArea.setHeight('');
 	}
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {

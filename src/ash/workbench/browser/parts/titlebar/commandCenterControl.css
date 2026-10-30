@@ -14,7 +14,7 @@
 	transform: translateY(-50%);
 }
 
-.ash-titlebar-command-center-button {
+.ash-button.ash-titlebar-command-center-button {
 	width: 100%;
 	height: 24px;
 	min-height: 24px;
@@ -27,6 +27,7 @@
 
 .ash-titlebar-command-center-button:hover {
 	background: var(--ash-commandCenter-hoverBackground);
+	border-color: var(--ash-commandCenter-activeBorder);
 }
 
 .ash-titlebar-command-center-button:active,

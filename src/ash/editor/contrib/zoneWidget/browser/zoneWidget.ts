@@ -1,6 +1,7 @@
+import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import './zoneWidget.css';
 import { h } from '../../../../base/browser/dom.js';
-import { Sash, SashState, type SashDragEvent } from '../../../../base/browser/ui/sash/sash.js';
+import { Sash, SashState, type ISashEvent } from '../../../../base/browser/ui/sash/sash.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Color } from '../../../../base/common/color.js';
 import { type ICodeEditor, type IOverlayWidget, type IOverlayWidgetPosition, type IViewZone } from '../../../browser/editorBrowser.js';
@@ -326,9 +327,7 @@ export abstract class ZoneWidget extends Disposable {
 			this.container.style.borderBottomWidth = `${frameWidth}px`;
 		}
 		if (this.resizeSash) {
-			this.resizeSash.element.style.top = `${Math.max(0, heightInPixels - frameWidth)}px`;
-			this.resizeSash.element.style.right = '0';
-			this.resizeSash.element.style.left = '0';
+			this.resizeSash.layout();
 		}
 		this._onWidth(widthInPixels);
 		this._doLayout(containerHeight, widthInPixels);
@@ -340,7 +339,15 @@ export abstract class ZoneWidget extends Disposable {
 	}
 
 	private _initSash(): void {
-		const sash = this._register(new Sash(this.domNode, 'horizontal'));
+		const sash = this._register(new Sash(this.domNode, {
+			getHorizontalSashTop: () => {
+				const lineHeight = this.editor.getOption(EditorOption.lineHeight);
+				const frameWidth = this.options.showFrame ? this.options.frameWidth ?? Math.round(lineHeight / 9) : 0;
+				return Math.max(0, this.heightInPixels - frameWidth);
+			},
+			getHorizontalSashLeft: () => 0,
+			getHorizontalSashWidth: () => this._getWidth(this.editor.getLayoutInfo()),
+		}, { orientation: Orientation.HORIZONTAL }));
 		this.resizeSash = sash;
 		this._register(sash.onDidStart(() => {
 			this.resizeStartHeightInLines = this.heightInLines;
@@ -352,9 +359,9 @@ export abstract class ZoneWidget extends Disposable {
 		this.updateSashState();
 	}
 
-	private handleSashChange(event: SashDragEvent): void {
+	private handleSashChange(event: ISashEvent): void {
 		if (!this.options.isResizeable || this.resizeStartHeightInLines === undefined || !this._viewZone) return;
-		const lineDelta = Math.trunc(event.delta / this.editor.getOption(EditorOption.lineHeight));
+		const lineDelta = Math.trunc((event.currentY - event.startY) / this.editor.getOption(EditorOption.lineHeight));
 		const { minLines, maxLines } = this._getResizeBounds();
 		const heightInLines = Math.min(maxLines, Math.max(minLines, this.resizeStartHeightInLines + lineDelta));
 		if (heightInLines !== this.heightInLines) this._relayout(heightInLines);

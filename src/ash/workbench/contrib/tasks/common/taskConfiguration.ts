@@ -1,17 +1,17 @@
 import { isExecutionVariable } from '../../../services/configurationResolver/common/configurationResolver.js';
 import { localize } from '../../../../nls.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import { parseJsonc } from "../../../../base/common/jsonc.js";
-import { ShellQuoting, type RunOptions, type TaskPresentationOptions, type ShellQuotedString, type TaskShellExecution, type IWorkspaceTask, type WorkspaceTaskGroup, type WorkspaceTaskSource } from "./tasks.js";
+import { parseJsonc } from '../../../../base/common/jsonc.js';
+import { ShellQuoting, type RunOptions, type TaskPresentationOptions, type ShellQuotedString, type TaskShellExecution, type IWorkspaceTask, type WorkspaceTaskGroup, type WorkspaceTaskSource } from './tasks.js';
 
 const MAX_TASKS = 256;
 const MAX_COMMAND_LENGTH = 32_768;
 
 /** Preserves VS Code task configuration and identifies execution settings Ash cannot honor. */
 export function parseWorkspaceTasks(source: string, operatingSystem?: OperatingSystem, resolvableVariables?: ReadonlySet<string>): readonly IWorkspaceTask[] {
-	const document = record(parseJsonc(source, ".vscode/tasks.json"), ".vscode/tasks.json");
-	if (document.version !== "2.0.0") throw new TypeError(".vscode/tasks.json version must be '2.0.0'");
-	if (!Array.isArray(document.tasks)) throw new TypeError(".vscode/tasks.json tasks must be an array");
+	const document = record(parseJsonc(source, '.vscode/tasks.json'), '.vscode/tasks.json');
+	if (document.version !== '2.0.0') throw new TypeError(".vscode/tasks.json version must be '2.0.0'");
+	if (!Array.isArray(document.tasks)) throw new TypeError('.vscode/tasks.json tasks must be an array');
 	if (document.tasks.length > MAX_TASKS) throw new RangeError(`.vscode/tasks.json cannot contain more than ${MAX_TASKS} tasks`);
 	const { tasks, version, ...defaults } = document;
 	freezeConfiguration(defaults);
@@ -19,13 +19,13 @@ export function parseWorkspaceTasks(source: string, operatingSystem?: OperatingS
 }
 
 /** Projects conventional package scripts into explicit user-selectable tasks. */
-export function parsePackageTasks(source: string, packageManager: "npm" | "pnpm" | "yarn"): readonly IWorkspaceTask[] {
-	const document = record(parseJsonc(source, "package.json"), "package.json");
+export function parsePackageTasks(source: string, packageManager: 'npm' | 'pnpm' | 'yarn'): readonly IWorkspaceTask[] {
+	const document = record(parseJsonc(source, 'package.json'), 'package.json');
 	if (document.scripts === undefined) return Object.freeze([]);
-	const scripts = record(document.scripts, "package.json scripts");
+	const scripts = record(document.scripts, 'package.json scripts');
 	return Object.freeze(Object.entries(scripts).flatMap(([name, command]) => {
-		if (!/^[A-Za-z0-9:_-]{1,128}$/.test(name) || typeof command !== "string" || !command.trim()) return [];
-		const invocation = packageManager === "yarn" ? `yarn run ${name}` : `${packageManager} run ${name}`;
+		if (!/^[A-Za-z0-9:_-]{1,128}$/.test(name) || typeof command !== 'string' || !command.trim()) return [];
+		const invocation = packageManager === 'yarn' ? `yarn run ${name}` : `${packageManager} run ${name}`;
 		return [task(`${packageManager}:${name}`, name, invocation, packageManager, packageTaskGroup(name), command.trim())];
 	}).slice(0, MAX_TASKS));
 }
@@ -33,10 +33,10 @@ export function parsePackageTasks(source: string, packageManager: "npm" | "pnpm"
 /** Conventional Cargo entry points available when the workspace has Cargo.toml. */
 export function cargoWorkspaceTasks(): readonly IWorkspaceTask[] {
 	return Object.freeze([
-		task("cargo:check", "cargo check", "cargo check", "cargo", "build", "Check the workspace without producing binaries"),
-		task("cargo:build", "cargo build", "cargo build", "cargo", "build", "Build the workspace"),
-		task("cargo:test", "cargo test", "cargo test", "cargo", "test", "Run the workspace test suite"),
-		task("cargo:run", "cargo run", "cargo run", "cargo", "run", "Run the default workspace binary"),
+		task('cargo:check', 'cargo check', 'cargo check', 'cargo', 'build', 'Check the workspace without producing binaries'),
+		task('cargo:build', 'cargo build', 'cargo build', 'cargo', 'build', 'Build the workspace'),
+		task('cargo:test', 'cargo test', 'cargo test', 'cargo', 'test', 'Run the workspace test suite'),
+		task('cargo:run', 'cargo run', 'cargo run', 'cargo', 'run', 'Run the default workspace binary'),
 	]);
 }
 
@@ -74,7 +74,7 @@ function parseWorkspaceTask(value: unknown, index: number, version: string, defa
 	// The caller supplies the execution host OS; renderer platform facts are insufficient.
 	const taskConfiguration = platformConfiguration(input, os);
 	const effective = mergeExecutionConfiguration(platformConfiguration(defaults, os), taskConfiguration);
-	const type = effective.type === undefined ? "shell" : string(effective.type, `tasks[${index}].type`);
+	const type = effective.type === undefined ? 'shell' : string(effective.type, `tasks[${index}].type`);
 	// Provider-defined tasks may omit their label until the provider resolves them.
 	const label = input.label === undefined && type !== 'shell' && type !== 'process' ? type : string(input.label, `tasks[${index}].label`).trim();
 	if (!label || label.length > 256) throw new TypeError(`tasks[${index}].label must contain 1 to 256 characters`);
@@ -111,7 +111,7 @@ function parseWorkspaceTask(value: unknown, index: number, version: string, defa
 		...(shellOptions === undefined ? {} : { options: { executable: shellOptions.executable, shellArgs: shellOptions.args, shellQuoting: shellOptions.quoting } }),
 	});
 	const environment = options.env === undefined ? undefined : parseTaskEnvironment(options.env);
-	const command = [baseCommand, ...args].filter(Boolean).join(" ");
+	const command = [baseCommand, ...args].filter(Boolean).join(' ');
 	if ((!command && dependencies.length === 0 && unsupported.length === 0) || command.length > MAX_COMMAND_LENGTH || command.includes('\0')) throw new TypeError(`tasks[${index}].command must contain 1 to ${MAX_COMMAND_LENGTH} characters without NUL`);
 	const matchers = effective.problemMatcher === undefined ? [] : Array.isArray(effective.problemMatcher) ? effective.problemMatcher : [effective.problemMatcher];
 	if (options.cwd !== undefined && (typeof options.cwd !== 'string' || options.cwd.includes('\0'))) throw new TypeError('options.cwd must be a string without NUL');
@@ -120,7 +120,7 @@ function parseWorkspaceTask(value: unknown, index: number, version: string, defa
 	const groupOptions = typeof effective.group === 'object' && effective.group !== null && !Array.isArray(effective.group) ? effective.group as Record<string, unknown> : undefined;
 	if (groupOptions?.isDefault !== undefined && typeof groupOptions.isDefault !== 'boolean' && typeof groupOptions.isDefault !== 'string') throw new TypeError('group.isDefault must be a boolean or glob string');
 	return Object.freeze({
-		...task(`vscode:${index}:${stableId(label)}`, label, command, "vscode", taskGroup(effective.group), typeof effective.detail === 'string' ? effective.detail : type === "shell" ? "Shell task" : type === "process" ? "Process task" : type),
+		...task(`vscode:${index}:${stableId(label)}`, label, command, 'vscode', taskGroup(effective.group), typeof effective.detail === 'string' ? effective.detail : type === 'shell' ? 'Shell task' : type === 'process' ? 'Process task' : type),
 		configuration: Object.freeze({ version, defaults, task: freezeConfiguration(input), groupIsConfigured: effective.group !== undefined }),
 		...(groupOptions?.isDefault === undefined ? {} : { groupIsDefault: groupOptions.isDefault as boolean | string }),
 		...(effective.runOptions === undefined ? {} : { runOptions: parseTaskRunOptions(effective.runOptions) }),
@@ -279,30 +279,30 @@ function task(id: string, label: string, command: string, source: WorkspaceTaskS
 
 function packageTaskGroup(name: string): WorkspaceTaskGroup {
 	const normalized = name.toLowerCase();
-	if (normalized === "test" || normalized.startsWith("test:")) return "test";
-	if (normalized === "start" || normalized === "dev" || normalized === "serve" || normalized.startsWith("start:") || normalized.startsWith("dev:")) return "run";
-	if (normalized === "build" || normalized === "compile" || normalized === "check" || normalized.startsWith("build:")) return "build";
-	return "other";
+	if (normalized === 'test' || normalized.startsWith('test:')) return 'test';
+	if (normalized === 'start' || normalized === 'dev' || normalized === 'serve' || normalized.startsWith('start:') || normalized.startsWith('dev:')) return 'run';
+	if (normalized === 'build' || normalized === 'compile' || normalized === 'check' || normalized.startsWith('build:')) return 'build';
+	return 'other';
 }
 
 function taskGroup(value: unknown): WorkspaceTaskGroup {
-	const candidate = typeof value === "string" ? value : typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>).kind : undefined;
-	return candidate === "build" || candidate === "test" || candidate === "clean" || candidate === "rebuild" ? candidate : "other";
+	const candidate = typeof value === 'string' ? value : typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>).kind : undefined;
+	return candidate === 'build' || candidate === 'test' || candidate === 'clean' || candidate === 'rebuild' ? candidate : 'other';
 }
 
 function shellArgument(value: unknown, path: string): string {
-	if (typeof value === "number" && Number.isFinite(value)) return String(value);
-	if (typeof value !== "string") throw new TypeError(`${path} must be a string or finite number`);
+	if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+	if (typeof value !== 'string') throw new TypeError(`${path} must be a string or finite number`);
 	if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) return value;
 	return `"${value.replaceAll('"', '\\"')}"`;
 }
 
 function stableId(value: string): string {
-	return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "task";
+	return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80) || 'task';
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${path} must be an object`);
 	return value as Record<string, unknown>;
 }
 
@@ -312,6 +312,6 @@ function array(value: unknown, path: string): readonly unknown[] {
 }
 
 function string(value: unknown, path: string): string {
-	if (typeof value !== "string") throw new TypeError(`${path} must be a string`);
+	if (typeof value !== 'string') throw new TypeError(`${path} must be a string`);
 	return value;
 }

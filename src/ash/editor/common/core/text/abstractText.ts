@@ -1,9 +1,9 @@
-import { LineRange } from "../ranges/lineRange.js";
-import { OffsetRange } from "../ranges/offsetRange.js";
-import { Position } from "../position.js";
-import { Range } from "../range.js";
+import { LineRange } from '../ranges/lineRange.js';
+import { OffsetRange } from '../ranges/offsetRange.js';
+import { Position } from '../position.js';
+import { Range } from '../range.js';
 import { splitLines } from '../../../../base/common/strings.js';
-import { PositionOffsetTransformer, PositionOffsetTransformerBase } from "./positionToOffsetImpl.js";
+import { PositionOffsetTransformer, PositionOffsetTransformerBase } from './positionToOffsetImpl.js';
 import { TextLength } from '../text/textLength.js';
 
 /** A DOM-free text value that can expose slices in editor coordinates. */
@@ -28,7 +28,7 @@ export abstract class AbstractText {
 export class LineBasedText extends AbstractText {
 	constructor(private readonly getLineContent: (lineNumber: number) => string, readonly lineCount: number) {
 		super();
-		if (!Number.isSafeInteger(lineCount) || lineCount < 1) throw new RangeError("A text source must contain at least one line");
+		if (!Number.isSafeInteger(lineCount) || lineCount < 1) throw new RangeError('A text source must contain at least one line');
 	}
 
 	get length(): TextLength {
@@ -67,5 +67,5 @@ export class StringText extends AbstractText {
 }
 
 function validateLineRange(range: Range, lineCount: number): void {
-	if (range.startLineNumber < 1 || range.endLineNumber > lineCount) throw new RangeError("Text range is outside the text source");
+	if (range.startLineNumber < 1 || range.endLineNumber > lineCount) throw new RangeError('Text range is outside the text source');
 }

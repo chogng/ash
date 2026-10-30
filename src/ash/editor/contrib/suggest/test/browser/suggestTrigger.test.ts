@@ -2,30 +2,30 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { SuggestModel } from "../../browser/suggestModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { SuggestModel } from '../../browser/suggestModel.js';
 import { LanguageCompletionService } from '../../browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, LanguageCompletionItemKind } from '../../../../common/languages.js';
 
-import { Position } from "../../../../common/core/position.js";
-import { Range } from "../../../../common/core/range.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
+import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageService } from '../../../../common/services/languageService.js';
-import { SuggestController } from "../../browser/suggestController.js";
+import { SuggestController } from '../../browser/suggestController.js';
 
-const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { ViewController } = await import('../../../../browser/view/viewController.js');
-test("Explicit invocation requests providers through the completion service", async () => {
+test('Explicit invocation requests providers through the completion service', async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
-		id: "typescript",
-		languageIds: ["typescript"],
+		id: 'typescript',
+		languageIds: ['typescript'],
 		provideCompletions: request => {
 			requests.push(request);
-			return completionResult(request, "const");
+			return completionResult(request, 'const');
 		},
 	});
 	fixture.suggest.triggerSuggest();
@@ -33,92 +33,92 @@ test("Explicit invocation requests providers through the completion service", as
 
 	assert.equal(requests.length, 1);
 	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.Invoke);
-	assert.equal(requests[0]!.snapshot.getText(), "con");
-	assert.equal(fixture.session.state!.selectedItem!.providerId, "typescript");
+	assert.equal(requests[0]!.snapshot.getText(), 'con');
+	assert.equal(fixture.session.state!.selectedItem!.providerId, 'typescript');
 	assert.equal(fixture.suggest.widget.visible, true);
 });
 
-test("A registered trigger character requests after the text transaction", async () => {
+test('A registered trigger character requests after the text transaction', async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
-		id: "member",
-		languageIds: ["typescript"],
-		triggerCharacters: ["."],
+		id: 'member',
+		languageIds: ['typescript'],
+		triggerCharacters: ['.'],
 		provideCompletions: request => {
 			requests.push(request);
-			return completionResult(request, "method", true);
+			return completionResult(request, 'method', true);
 		},
-	}, "obj");
-	const event = beforeInputEvent(fixture.dom.window, ".");
+	}, 'obj');
+	const event = beforeInputEvent(fixture.dom.window, '.');
 	fixture.input.element.dispatchEvent(event);
 	await waitFor(() => fixture.session.state !== undefined);
 
 	assert.equal(event.defaultPrevented, true);
-	assert.equal(fixture.model.getText(), "obj.");
+	assert.equal(fixture.model.getText(), 'obj.');
 	assert.equal(requests.length, 1);
 	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
 	assert.equal(
 		requests[0]!.context.kind === LanguageCompletionTriggerKind.TriggerCharacter
 			? requests[0]!.context.triggerCharacter
 			: undefined,
-		".",
+		'.',
 	);
 	assert.equal(Position.compare(requests[0]!.position, new Position((0) + 1, (4) + 1)), 0);
-	assert.equal(requests[0]!.snapshot.getText(), "obj.");
+	assert.equal(requests[0]!.snapshot.getText(), 'obj.');
 });
 
-test("An auto-closed trigger character requests from the caret inside its pair", async () => {
+test('An auto-closed trigger character requests from the caret inside its pair', async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
-		id: "call",
-		languageIds: ["typescript"],
-		triggerCharacters: ["("],
+		id: 'call',
+		languageIds: ['typescript'],
+		triggerCharacters: ['('],
 		provideCompletions: request => {
 			requests.push(request);
-			return completionResult(request, "argument");
+			return completionResult(request, 'argument');
 		},
-	}, "call");
+	}, 'call');
 
-	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, "("));
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, '('));
 	await waitFor(() => fixture.session.state !== undefined);
 
-	assert.equal(fixture.model.getText(), "call()");
+	assert.equal(fixture.model.getText(), 'call()');
 	assert.equal(requests.length, 1);
 	assert.equal(Position.compare(requests[0]!.position, new Position((0) + 1, (5) + 1)), 0);
-	assert.equal(requests[0]!.snapshot.getText(), "call()");
+	assert.equal(requests[0]!.snapshot.getText(), 'call()');
 });
 
-test("Typing after an incomplete result retriggers all providers at the new version", async () => {
+test('Typing after an incomplete result retriggers all providers at the new version', async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
-		id: "incomplete",
-		languageIds: ["typescript"],
+		id: 'incomplete',
+		languageIds: ['typescript'],
 		provideCompletions: request => {
 			requests.push(request);
-			return completionResult(request, requests.length === 1 ? "const" : "continue", true);
+			return completionResult(request, requests.length === 1 ? 'const' : 'continue', true);
 		},
 	});
 	fixture.suggest.triggerSuggest();
 	await waitFor(() => fixture.session.state?.requestId === 1);
 
-	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, "t"));
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, 't'));
 	await waitFor(() => fixture.session.state?.requestId === 2);
 
-	assert.equal(fixture.model.getText(), "cont");
+	assert.equal(fixture.model.getText(), 'cont');
 	assert.deepEqual(requests.map(request => request.context.kind), [
 		LanguageCompletionTriggerKind.Invoke,
 		LanguageCompletionTriggerKind.IncompleteRefresh,
 	]);
 	assert.equal(Position.compare(requests[1]!.position, new Position((0) + 1, (4) + 1)), 0);
-	assert.equal(requests[1]!.snapshot.getText(), "cont");
-	assert.equal(fixture.session.state!.selectedItem!.label, "continue");
+	assert.equal(requests[1]!.snapshot.getText(), 'cont');
+	assert.equal(fixture.session.state!.selectedItem!.label, 'continue');
 });
 
-test("Deleting after an incomplete result retriggers providers at the new version", async () => {
+test('Deleting after an incomplete result retriggers providers at the new version', async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
-		id: "incomplete-delete",
-		languageIds: ["typescript"],
+		id: 'incomplete-delete',
+		languageIds: ['typescript'],
 		provideCompletions: request => {
 			requests.push(request);
 			return completionResult(request, request.snapshot.getText(), true);
@@ -127,28 +127,28 @@ test("Deleting after an incomplete result retriggers providers at the new versio
 	fixture.suggest.triggerSuggest();
 	await waitFor(() => fixture.session.state?.requestId === 1);
 
-	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, null, "deleteContentBackward"));
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, null, 'deleteContentBackward'));
 	await waitFor(() => fixture.session.state?.requestId === 2);
 
-	assert.equal(fixture.model.getText(), "co");
+	assert.equal(fixture.model.getText(), 'co');
 	assert.equal(requests[1]!.context.kind, LanguageCompletionTriggerKind.IncompleteRefresh);
-	assert.equal(requests[1]!.snapshot.getText(), "co");
+	assert.equal(requests[1]!.snapshot.getText(), 'co');
 });
 
-test("Completion request wiring rejects a same-model session from another service", () => {
+test('Completion request wiring rejects a same-model session from another service', () => {
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register({
-		id: "one",
-		languageIds: ["typescript"],
+		id: 'one',
+		languageIds: ['typescript'],
 		provideCompletions: () => undefined,
 	});
-	using model = new TextModel("con");
+	using model = new TextModel('con');
 	using firstService = new LanguageCompletionService(model, registry);
 	using secondService = new LanguageCompletionService(model, registry);
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editor = createTestCodeEditor({
-		container: requiredElement<HTMLElement>(dom.window.document, "main"),
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,
 		contributions: [],
@@ -172,15 +172,15 @@ interface TriggerFixture extends Disposable {
 	readonly suggest: SuggestController;
 }
 
-function createFixture(provider: LanguageCompletionProvider, text = "con"): TriggerFixture {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+function createFixture(provider: LanguageCompletionProvider, text = 'con'): TriggerFixture {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const registry = new LanguageCompletionProviderRegistry();
 	const registration = registry.register(provider);
-	const model = new TextModel(text, { languageId: "typescript" });
+	const model = new TextModel(text, { languageId: 'typescript' });
 	const service = new LanguageCompletionService(model, registry);
 	const editor = createTestCodeEditor({
-		container: requiredElement<HTMLElement>(dom.window.document, "main"),
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,
 		contributions: [],
@@ -235,7 +235,7 @@ interface KeyOptions {
 }
 
 function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, options: KeyOptions = {}): KeyboardEvent {
-	return new targetWindow.KeyboardEvent("keydown", {
+	return new targetWindow.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
 		key,
@@ -243,8 +243,8 @@ function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: stri
 	}) as unknown as KeyboardEvent;
 }
 
-function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string | null, inputType = "insertText"): InputEvent {
-	return new targetWindow.InputEvent("beforeinput", {
+function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string | null, inputType = 'insertText'): InputEvent {
+	return new targetWindow.InputEvent('beforeinput', {
 		bubbles: true,
 		cancelable: true,
 		inputType,
@@ -257,7 +257,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		if (predicate()) return;
 		await new Promise<void>(resolve => setTimeout(resolve, 0));
 	}
-	assert.fail("Timed out waiting for completion request");
+	assert.fail('Timed out waiting for completion request');
 }
 
 function requiredElement<T extends Element = HTMLElement>(root: ParentNode, selector: string): T {

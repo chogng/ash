@@ -1,4 +1,4 @@
-import type { AgentModelCatalog, AgentModelProviders, AgentModelDefaults, ModelReasoningEffort } from '../../../../platform/agentHost/common/agentModels.js';
+import type { AgentModelCatalog, AgentModelProviders, AgentModelDefaults, ModelReasoningEffort, ModelCatalogStatus } from '../../../../platform/agentHost/common/agentModels.js';
 import { TaskQueue } from '../../../../base/common/async.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled } from '../../../../base/common/errors.js';
@@ -35,6 +35,7 @@ export interface ILanguageModelsService {
 	refreshModels(): Promise<readonly ModelCatalogEntry[]>;
 	isModelVisible(model: ModelRef): boolean;
 	setModelVisible(model: ModelRef, visible: boolean): Promise<void>;
+	removeCustomModelProvider(connection: string): Promise<void>;
 	discoverProviderModels(connection: string): Promise<readonly ModelCatalogEntry[]>;
 }
 
@@ -54,6 +55,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	// A close/crash invalidates work even when no replacement transport generation has started.
 	private connectionEpoch = 0;
 	private modelCatalog: readonly ModelCatalogEntry[] = [];
+	private catalogStatuses: readonly ModelCatalogStatus[] = [];
 	private modelCatalogLoad: Promise<void> | undefined;
 	private hasLoadedModelCatalog = false;
 	private catalogRevision = 0;
@@ -76,6 +78,8 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 				this.defaultsGeneration++;
 				this.modelDefaults = undefined;
 				this.changed.fire();
+				// Connection removal may have no credential event, including when it originates in another window.
+				this.invalidateModelCatalog();
 			} else if (event.method === 'provider/models/updated') {
 				const scope = 'catalogScope' in event.params ? event.params.catalogScope : undefined;
 				if (scope && this.externalScopes.get(scope.connection) !== scope.identity) {
@@ -166,12 +170,18 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	}
 	public isModelVisible(model: ModelRef): boolean { return this.preferences.isModelVisible(model); }
 	public setModelVisible(model: ModelRef, visible: boolean): Promise<void> { return this.preferences.setModelVisible(model, visible); }
+	public async removeCustomModelProvider(connection: string): Promise<void> {
+		await this.modelApi.removeCustomProvider(connection);
+		try { await this.preferences.removeProviderPreferences(connection); }
+		finally { this.invalidateModelCatalog(); await this.refreshModels(); }
+	}
 	public async discoverProviderModels(connection: string): Promise<readonly ModelCatalogEntry[]> {
 		// An older catalog request may predate the completed endpoint observation.
-		const models = await this.modelApi.listProviderModels(connection);
-		if (this.modelCatalogLoad) { await this.modelCatalogLoad; }
-		await this.refreshModels();
-		return models;
+		try { return await this.modelApi.listProviderModels(connection); }
+		finally {
+			if (this.modelCatalogLoad) { await this.modelCatalogLoad.catch(() => { }); }
+			await this.refreshModels();
+		}
 	}
 	public async listModels(): Promise<readonly ModelCatalogEntry[]> {
 		const [catalog] = await Promise.all([this.listModelCatalog(), this.modelDefaults ? undefined : this.readModelDefaults().catch(() => undefined)]);
@@ -204,7 +214,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 
 	public async listModelProviders(): Promise<readonly ModelProviderCredentialStatus[]> {
 		const result = await this.modelApi.listProviders();
-		return modelProviderStatuses(result);
+		return modelProviderStatuses(result, this.catalogStatuses);
 	}
 
 	public async setModelProviderApiKey(connection: string, apiKey: string): Promise<void> {
@@ -257,6 +267,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		this.modelCatalogLoad = undefined;
 		const hadModels = this.modelCatalog.length > 0 || this.providerState !== '[]';
 		this.modelCatalog = Object.freeze([]);
+		this.catalogStatuses = Object.freeze([]);
 		this.providerState = '[]';
 		// Consumers retain their old array on read failure, so publish an empty current view now.
 		this.hasLoadedModelCatalog = true;
@@ -302,8 +313,9 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 		this.externalScopes.clear();
 		for (const scope of scopes) { this.externalScopes.set(scope.connection, scope.identity); }
 		const providerState = JSON.stringify(modelProviderStatuses(providers));
-		const changed = scopeChanged || !sameModelCatalog(this.modelCatalog, catalog) || this.providerState !== providerState;
+		const changed = scopeChanged || !sameModelCatalog(this.modelCatalog, catalog) || this.providerState !== providerState || JSON.stringify(this.catalogStatuses) !== JSON.stringify(snapshot.statuses ?? []);
 		this.modelCatalog = Object.freeze(catalog);
+		this.catalogStatuses = snapshot.statuses ?? [];
 		this.providerState = providerState;
 		this.modelAccountConnections = new Set(providers.providers.map(provider => provider.connection));
 		if (this.accountState) { this.accountScope = accountCatalogScope(this.accountState, this.modelAccountConnections); }
@@ -317,7 +329,7 @@ function accountCatalogScope(account: AccountState, modelConnections: ReadonlySe
 	return JSON.stringify(account.accounts.filter(entry => !modelConnections || modelConnections.has(entry.provider)).map(entry => JSON.stringify([entry.provider, entry.accountId, entry.organization, entry.plan, entry.status])).sort());
 }
 
-function modelProviderStatuses(result: AgentModelProviders): ModelProviderCredentialStatus[] {
+function modelProviderStatuses(result: AgentModelProviders, statuses: readonly ModelCatalogStatus[] = []): ModelProviderCredentialStatus[] {
 	return result.providers.map(provider => ({
 		provider: provider.provider,
 		connection: provider.connection,
@@ -328,6 +340,7 @@ function modelProviderStatuses(result: AgentModelProviders): ModelProviderCreden
 		displayName: provider.displayName,
 		apiKeyPolicy: provider.apiKeyPolicy,
 		apiKeyConfigured: provider.apiKeyConfigured,
+		catalog: statuses.find(status => status.connection === provider.connection),
 	}));
 }
 
@@ -337,6 +350,12 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 		return candidate !== undefined
 			&& entry.displayName === candidate.displayName
 			&& entry.description === candidate.description
+			&& entry.capabilities?.toolCalling === candidate.capabilities?.toolCalling
+			&& entry.capabilities?.agentMode === candidate.capabilities?.agentMode
+			&& entry.source?.providerId === candidate.source?.providerId
+			&& entry.source?.connectionId === candidate.source?.connectionId
+			&& entry.source?.metadata === candidate.source?.metadata
+			&& JSON.stringify(entry.pricing ?? []) === JSON.stringify(candidate.pricing ?? [])
 			&& entry.inputModalities?.join(',') === candidate.inputModalities?.join(',')
 			&& entry.discovered === candidate.discovered
 			// Announcement withdrawal and date changes must notify open pickers, even with identical models.

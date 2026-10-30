@@ -171,7 +171,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 			}
 			// Register before awaiting: even a failed checkpoint must resume this client.
 			this.prepared.add(instance);
-			const snapshot = await instance.serializeState();
+			const snapshot = await instance.serializeState({ revive });
 			if (!revive) {
 				if (!this.processes.getReconnectLease) throw new Error(localize('terminal.reload.leaseUnavailable', 'The terminal process cannot be reattached after reload.'));
 				const lease = await this.processes.getReconnectLease(snapshot.process.terminalId);

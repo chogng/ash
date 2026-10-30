@@ -1,12 +1,12 @@
-import { createDeleteReferenceCommand, createInsertCitationCommand, createInsertReferenceCommand, createUpdateReferenceCommand } from "../common/citationCommands.js";
+import { createDeleteReferenceCommand, createInsertCitationCommand, createInsertReferenceCommand, createUpdateReferenceCommand } from '../common/citationCommands.js';
 import { buildReferenceIndex, type ReferenceEntry } from '../common/references.js';
-import type { EditorToolbarAction, EditorToolbarActionContext } from "../../../widget/richTextEditor/richTextEditorWidget.js";
+import type { EditorToolbarAction, EditorToolbarActionContext } from '../../../widget/richTextEditor/richTextEditorWidget.js';
 import { localize } from 'ash:editor/nls.js';
 
 /** Toolbar actions contributed by the citation capability. */
 export const citationToolbarActions: readonly EditorToolbarAction[] = Object.freeze([
 	{
-		id: "citation",
+		id: 'citation',
 		get label() { return localize('document.citation.insert', 'Citation'); },
 		run: async context => {
 			if (!context.selection) return undefined;
@@ -23,7 +23,7 @@ export const citationToolbarActions: readonly EditorToolbarAction[] = Object.fre
 		},
 	},
 	{
-		id: "reference",
+		id: 'reference',
 		get label() { return localize('document.reference.insert', 'Reference'); },
 		run: async context => {
 			const result = await context.dialogs.input({

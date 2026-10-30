@@ -74,11 +74,13 @@ export class CallStackView extends ViewPane {
 			session.selectThread(inspection.threadId);
 			this.threads = inspection.threads;
 			this.frames = inspection.frames;
-		} catch (error) { if (this.isCurrentInspection(session, generation)) this.notifications.error(message(error)); }
+		} catch (error) {
+			if (this.isCurrentInspection(session, generation)) this.notifications.error(message(error));
+		}
 		if (this.isCurrentInspection(session, generation)) this.render();
 	}
 	private isCurrentInspection(session: IDebugSession, generation: number): boolean {
-		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === "stopped";
+		return !this.isDisposed && generation === this.refreshGeneration && this.debug.session === session && session.state === 'stopped';
 	}
 
 	private activateFrame(event: Event): void {
@@ -101,15 +103,15 @@ export class CallStackView extends ViewPane {
 		if (focusedThread) this.threadsElement.value = String(focusedThread.id);
 		this.threadsElement.hidden = this.threads.length < 2;
 		this.rowControls.clear();
-		this.stackElement.replaceChildren(...this.frames.map((frame, index) => itemButton(this.rowControls, this.element.ownerDocument, `${frame.name}  ${frame.source?.name ?? frame.source?.path ?? ""}${frame.lineNumber > 0 ? `:${frame.lineNumber}` : ""}`, "ash-debug-frame", "frameIndex", index, frame.id === this.debug.getViewModel().focusedStackFrame?.id)));
-		const instructionLabel = localize("debug.addInstructionBreakpoint", "Add Instruction Breakpoint");
+		this.stackElement.replaceChildren(...this.frames.map((frame, index) => itemButton(this.rowControls, this.element.ownerDocument, `${frame.name}  ${frame.source?.name ?? frame.source?.path ?? ''}${frame.lineNumber > 0 ? `:${frame.lineNumber}` : ''}`, 'ash-debug-frame', 'frameIndex', index, frame.id === this.debug.getViewModel().focusedStackFrame?.id)));
+		const instructionLabel = localize('debug.addInstructionBreakpoint', 'Add Instruction Breakpoint');
 		this.instructionToolbar.setActions([{
-			id: "debug.addInstructionBreakpoint",
+			id: 'debug.addInstructionBreakpoint',
 			label: instructionLabel,
 			tooltip: instructionLabel,
 			icon: Lxicon.add,
 			enabled: Boolean(stopped && session.capabilities.supportsInstructionBreakpoints),
-			run: () => this.commands.executeCommand(ADD_INSTRUCTION_BREAKPOINT_ID, this.debug.getViewModel().focusedStackFrame?.instructionPointerReference ?? ""),
+			run: () => this.commands.executeCommand(ADD_INSTRUCTION_BREAKPOINT_ID, this.debug.getViewModel().focusedStackFrame?.instructionPointerReference ?? ''),
 		}, {
 			id: 'debug.action.openDisassemblyView', label: localize('debug.openDisassembly', 'Open Disassembly View'), tooltip: localize('debug.openDisassembly', 'Open Disassembly View'), icon: Lxicon.code,
 			enabled: Boolean(stopped && session.capabilities.supportsDisassembleRequest),
@@ -117,14 +119,14 @@ export class CallStackView extends ViewPane {
 		}]);
 	}
 }
-function select(document: Document, label: string): HTMLSelectElement { const element = h(document, "select"); element.setAttribute("aria-label", label); return element; }
-function option(document: Document, value: string, label: string): HTMLOptionElement { const element = h(document, "option"); element.value = value; element.textContent = label; return element; }
+function select(document: Document, label: string): HTMLSelectElement { const element = h(document, 'select'); element.setAttribute('aria-label', label); return element; }
+function option(document: Document, value: string, label: string): HTMLOptionElement { const element = h(document, 'option'); element.value = value; element.textContent = label; return element; }
 function itemButton(owner: DisposableStore, document: Document, label: string, className: string, dataName: string, index: number, selected = false): HTMLLIElement {
-	const item = h(document, "li");
-	const action = h(document, "button");
-	action.type = "button";
+	const item = h(document, 'li');
+	const action = h(document, 'button');
+	action.type = 'button';
 	action.className = className;
-	action.classList.toggle("selected", selected);
+	action.classList.toggle('selected', selected);
 	action.textContent = label;
 	action.dataset[dataName] = String(index);
 	owner.add(getHoverDelegate().setupHover({ target: action, content: label }));

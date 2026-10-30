@@ -32,6 +32,11 @@ pub(crate) enum Message {
     ExecChangesUnavailable,
     UpdatePackageFailed,
     InstallFailed,
+    CleanupFailed,
+    UninstallAbout,
+    UninstallPurge,
+    UninstallFailed,
+    UninstallScheduled,
     Installed,
     InstallLauncherKept,
     InstallUnmanagedCurrent,
@@ -61,6 +66,26 @@ pub(crate) fn format(message: Message, argument: impl AsRef<str>) -> String {
 fn localized(message: Message, locale: &str) -> &'static str {
     let language = locale.split(['-', '_', '.']).next().unwrap_or_default();
     match (message, language) {
+        (Message::UninstallAbout, "zh") => "卸载当前 CLI，默认保留用户数据。",
+        (Message::UninstallAbout, _) => "Uninstall this CLI, keeping user data by default.",
+        (Message::UninstallPurge, "zh") => {
+            "同时清除独占的 Ash 数据；保留工作树、共享组件和归属不明的文件。"
+        }
+        (Message::UninstallPurge, _) => {
+            "Also remove exclusive Ash data; keep worktrees, shared components and unowned files."
+        }
+        (Message::UninstallFailed, "zh") => "无法卸载 Ash：{0}",
+        (Message::UninstallFailed, _) => "Could not uninstall Ash: {0}",
+        (Message::UninstallScheduled, "zh") => {
+            "此命令退出后将执行卸载。完成状态、保留项和错误将写入：{0}"
+        }
+        (Message::UninstallScheduled, _) => {
+            "Removal starts after this command exits. Completion, retained paths and errors are recorded in: {0}"
+        }
+        (Message::CleanupFailed, "zh") => "Ash 已安装，但旧文件清理未完成：{0}",
+        (Message::CleanupFailed, _) => {
+            "Ash is installed, but old files could not be cleaned up: {0}"
+        }
         (Message::InstallUnmanagedCurrent, "zh") => "拒绝替换非 Ash 管理的版本指针：{0}",
         (Message::InstallUnmanagedCurrent, _) => {
             "Refusing to replace an unmanaged Ash current path: {0}"

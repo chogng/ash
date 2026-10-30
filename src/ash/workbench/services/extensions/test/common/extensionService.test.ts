@@ -16,53 +16,53 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../localization/test/common/localizationTestUtils.js';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
-import { strict as assert } from "node:assert";
-import { createHash } from "node:crypto";
-import { test, after } from "mocha";
+import { strict as assert } from 'node:assert';
+import { createHash } from 'node:crypto';
+import { test, after } from 'mocha';
 import { readFile, readdir } from 'node:fs/promises';
 import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
 import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExtensionPoints.js';
-import { DisposableTracker, installDisposableTracker, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
-import type { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import type { ServerNotification } from "../../../../../../../.build/protocol/typescript/index.js";
-import { AppServerExtensionService } from "../../browser/appServerExtensionService.js";
-import { parseExtensionManifest, type ExtensionCatalog as WorkbenchExtensionCatalog } from "../../common/extensionService.js";
-import { parseJsonc } from "../../common/jsonc.js";
+import { DisposableTracker, installDisposableTracker, toDisposable } from '../../../../../base/common/lifecycle.js';
+import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from '../../../../../platform/extensions/common/extensionApi.js';
+import type { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import type { ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
+import { AppServerExtensionService } from '../../browser/appServerExtensionService.js';
+import { parseExtensionManifest, type ExtensionCatalog as WorkbenchExtensionCatalog } from '../../common/extensionService.js';
+import { parseJsonc } from '../../common/jsonc.js';
 import { SnippetsService } from '../../../../contrib/snippets/browser/snippetsService.js';
 import { MainThreadLocalization } from '../../../../api/browser/mainThreadLocalization.js';
-import { ExtensionThemeRegistry, parseExtensionTheme } from "../../common/extensionTheme.js";
-import { ExtensionDebugAdapterRegistry } from "../../common/extensionDebugAdapter.js";
+import { ExtensionThemeRegistry, parseExtensionTheme } from '../../common/extensionTheme.js';
+import { ExtensionDebugAdapterRegistry } from '../../common/extensionDebugAdapter.js';
 
 import { parseProblemMatchers } from '../../../../contrib/tasks/common/problemMatcher.js';
 import { WatchingProblemCollector } from '../../../../contrib/tasks/common/problemCollectors.js';
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
-import { URI } from "../../../../../base/common/uri.js";
+import { URI } from '../../../../../base/common/uri.js';
 
 const adapters = new AdapterManager();
 after(() => adapters.dispose());
 
 const descriptorManifest = JSON.stringify({
-	name: "demo",
-	publisher: "ash",
-	version: "1.0.0",
+	name: 'demo',
+	publisher: 'ash',
+	version: '1.0.0',
 	contributes: {
-		grammars: [{ language: "demo", scopeName: "source.demo", path: "./syntaxes/demo.tmLanguage.json" }],
-		debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter", args: ["--stdio", "", "$HOME"] } }, { type: "pure-debug", label: "Pure debug" }],
+		grammars: [{ language: 'demo', scopeName: 'source.demo', path: './syntaxes/demo.tmLanguage.json' }],
+		debuggers: [{ type: 'demo', label: 'Demo Debug', debugAdapter: { program: 'demo-adapter', args: ['--stdio', '', '$HOME'] } }, { type: 'pure-debug', label: 'Pure debug' }],
 	},
 });
 const descriptor: ExtensionDescriptor = Object.freeze({
-	id: "ash.demo",
-	name: "demo",
-	publisher: "ash",
-	version: "1.0.0",
-	displayName: "Demo",
-	sourceKind: "builtIn",
+	id: 'ash.demo',
+	name: 'demo',
+	publisher: 'ash',
+	version: '1.0.0',
+	displayName: 'Demo',
+	sourceKind: 'builtIn',
 	manifestJson: descriptorManifest,
 	manifestSha256: digestText(descriptorManifest),
-	packageSha256: `sha256:${"b".repeat(64)}`,
+	packageSha256: `sha256:${'b'.repeat(64)}`,
 });
 
 test('the Rust LLDB package contributes debugger metadata and settings without an eager executable factory', async () => {
@@ -93,59 +93,59 @@ test('the Rust LLDB package contributes debugger metadata and settings without a
 	assert.equal(registry.getConfiguration('debug.lldb.runtimeDirectory'), undefined);
 });
 
-test("parses TextMate grammar contributions and normalizes package-relative paths", () => {
+test('parses TextMate grammar contributions and normalizes package-relative paths', () => {
 	const manifest = parseExtensionManifest(JSON.stringify({
-		name: "demo",
-		publisher: "ash",
-		version: "1.0.0",
+		name: 'demo',
+		publisher: 'ash',
+		version: '1.0.0',
 		contributes: {
 			grammars: [{
-				language: "demo",
-				scopeName: "source.demo",
-				path: "./syntaxes/demo.tmLanguage.json",
-				injectTo: ["source.js"],
-				tokenTypes: { "comment.demo": "comment" },
+				language: 'demo',
+				scopeName: 'source.demo',
+				path: './syntaxes/demo.tmLanguage.json',
+				injectTo: ['source.js'],
+				tokenTypes: { 'comment.demo': 'comment' },
 			}],
 		},
 	}), descriptor);
 
 	assert.deepEqual(manifest.contributes.grammars[0], {
-		language: "demo",
-		scopeName: "source.demo",
-		path: "syntaxes/demo.tmLanguage.json",
-		injectTo: ["source.js"],
-		tokenTypes: { "comment.demo": "comment" },
+		language: 'demo',
+		scopeName: 'source.demo',
+		path: 'syntaxes/demo.tmLanguage.json',
+		injectTo: ['source.js'],
+		tokenTypes: { 'comment.demo': 'comment' },
 	});
 });
 
-test("fails closed for invalid or escaping grammar contributions", () => {
+test('fails closed for invalid or escaping grammar contributions', () => {
 	assert.throws(() => parseExtensionManifest(JSON.stringify({
-		name: "demo",
-		publisher: "ash",
-		version: "1.0.0",
-		contributes: { grammars: [{ scopeName: "source.demo", path: "../outside.json" }] },
+		name: 'demo',
+		publisher: 'ash',
+		version: '1.0.0',
+		contributes: { grammars: [{ scopeName: 'source.demo', path: '../outside.json' }] },
 	}), descriptor));
 	assert.throws(() => parseExtensionManifest(JSON.stringify({
-		name: "demo",
-		publisher: "ash",
-		version: "1.0.0",
-		contributes: { grammars: [{ scopeName: "source.demo", path: "grammar.json", tokenTypes: { "source.js": "invalid" } }] },
+		name: 'demo',
+		publisher: 'ash',
+		version: '1.0.0',
+		contributes: { grammars: [{ scopeName: 'source.demo', path: 'grammar.json', tokenTypes: { 'source.js': 'invalid' } }] },
 	}), descriptor), /invalid/);
 });
 
-test("parses declarative debugger contributions and rejects duplicate adapter ownership", () => {
+test('parses declarative debugger contributions and rejects duplicate adapter ownership', () => {
 	const manifest = parseExtensionManifest(JSON.stringify({
-		name: "demo",
-		publisher: "ash",
-		version: "1.0.0",
-		contributes: { debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter", args: ["--stdio"] } }] },
+		name: 'demo',
+		publisher: 'ash',
+		version: '1.0.0',
+		contributes: { debuggers: [{ type: 'demo', label: 'Demo Debug', debugAdapter: { program: 'demo-adapter', args: ['--stdio'] } }] },
 	}), descriptor);
-	assert.deepEqual(manifest.contributes.debuggers, [{ type: "demo", label: "Demo Debug", program: "demo-adapter", arguments: ["--stdio"] }]);
+	assert.deepEqual(manifest.contributes.debuggers, [{ type: 'demo', label: 'Demo Debug', program: 'demo-adapter', arguments: ['--stdio'] }]);
 
 	using registry = new ExtensionDebugAdapterRegistry();
-	registry.replace([{ extensionId: "ash.demo", ...manifest.contributes.debuggers[0]! }]);
-	assert.equal(registry.get("demo")?.program, "demo-adapter");
-	assert.throws(() => registry.replace([{ extensionId: "ash.demo", ...manifest.contributes.debuggers[0]! }, { extensionId: "other.demo", ...manifest.contributes.debuggers[0]! }]), /both/);
+	registry.replace([{ extensionId: 'ash.demo', ...manifest.contributes.debuggers[0]! }]);
+	assert.equal(registry.get('demo')?.program, 'demo-adapter');
+	assert.throws(() => registry.replace([{ extensionId: 'ash.demo', ...manifest.contributes.debuggers[0]! }, { extensionId: 'other.demo', ...manifest.contributes.debuggers[0]! }]), /both/);
 });
 
 test('debugger command mappings are validated and remain immutable across catalog generations', () => {
@@ -170,69 +170,75 @@ test('debugger command mappings are validated and remain immutable across catalo
 	}
 });
 
-test("disposing a declarative Debug Adapter registry revokes its catalog", () => {
+test('disposing a declarative Debug Adapter registry revokes its catalog', () => {
 	const registry = new ExtensionDebugAdapterRegistry();
-	const definition = Object.freeze({ extensionId: "ash.demo", type: "demo", label: "Demo", program: "demo-adapter", arguments: Object.freeze([]) });
+	const definition = Object.freeze({ extensionId: 'ash.demo', type: 'demo', label: 'Demo', program: 'demo-adapter', arguments: Object.freeze([]) });
 	registry.replace([definition]);
 
 	registry.dispose();
 
 	assert.deepEqual(registry.definitions, []);
-	assert.equal(registry.get("demo"), undefined);
+	assert.equal(registry.get('demo'), undefined);
 	assert.throws(() => registry.replace([definition]), /disposed/);
 });
 
-test("preserves language, snippet, theme, and advanced TextMate metadata", () => {
+test('preserves language, snippet, theme, and advanced TextMate metadata', () => {
 	const manifest = parseExtensionManifest(JSON.stringify({
-		name: "demo",
-		publisher: "ash",
-		version: "1.0.0",
+		name: 'demo',
+		publisher: 'ash',
+		version: '1.0.0',
 		contributes: {
-			languages: [{ id: "demo", extensions: [".demo"], firstLine: "^#!.*\\bdemo", configuration: "./language-configuration.json" }],
-			snippets: [{ language: ["demo"], path: "./snippets/demo.json" }],
-			themes: [{ label: "Demo Dark", path: "./themes/demo.json", uiTheme: "vs-dark" }],
+			languages: [{ id: 'demo', extensions: ['.demo'], firstLine: '^#!.*\\bdemo', configuration: './language-configuration.json' }],
+			snippets: [{ language: ['demo'], path: './snippets/demo.json' }],
+			themes: [{ label: 'Demo Dark', path: './themes/demo.json', uiTheme: 'vs-dark' }],
 			grammars: [{
-				language: "demo",
-				scopeName: "source.demo",
-				path: "./syntaxes/demo.tmLanguage.json",
-				embeddedLanguages: { "meta.embedded": "javascript" },
-				tokenTypes: { "constant.demo": "string" },
-				balancedBracketScopes: ["*"],
-				unbalancedBracketScopes: ["string.quoted"],
+				language: 'demo',
+				scopeName: 'source.demo',
+				path: './syntaxes/demo.tmLanguage.json',
+				embeddedLanguages: { 'meta.embedded': 'javascript' },
+				tokenTypes: { 'constant.demo': 'string' },
+				balancedBracketScopes: ['*'],
+				unbalancedBracketScopes: ['string.quoted'],
 			}],
 		},
 	}), descriptor);
 
 	assert.deepEqual(manifest.contributes.languages[0], {
-		id: "demo",
+		id: 'demo',
 		aliases: [],
-		extensions: [".demo"],
+		extensions: ['.demo'],
 		filenames: [],
 		filenamePatterns: [],
 		mimetypes: [],
-		firstLine: "^#!.*\\bdemo",
-		configuration: "language-configuration.json",
+		firstLine: '^#!.*\\bdemo',
+		configuration: 'language-configuration.json',
 	});
-	assert.deepEqual(manifest.contributes.snippets[0], { language: ["demo"], path: "snippets/demo.json" });
-	assert.deepEqual(manifest.contributes.themes[0], { label: "Demo Dark", path: "themes/demo.json", uiTheme: "vs-dark" });
-	assert.deepEqual(manifest.contributes.grammars[0]!.embeddedLanguages, { "meta.embedded": "javascript" });
-	assert.deepEqual(manifest.contributes.grammars[0]!.tokenTypes, { "constant.demo": "string" });
-	assert.deepEqual(manifest.contributes.grammars[0]!.balancedBracketScopes, ["*"]);
+	assert.deepEqual(manifest.contributes.snippets[0], { language: ['demo'], path: 'snippets/demo.json' });
+	assert.deepEqual(manifest.contributes.themes[0], { label: 'Demo Dark', path: 'themes/demo.json', uiTheme: 'vs-dark' });
+	assert.deepEqual(manifest.contributes.grammars[0]!.embeddedLanguages, { 'meta.embedded': 'javascript' });
+	assert.deepEqual(manifest.contributes.grammars[0]!.tokenTypes, { 'constant.demo': 'string' });
+	assert.deepEqual(manifest.contributes.grammars[0]!.balancedBracketScopes, ['*']);
 });
 
-test("validates extension theme catalogs", () => {
-
-	const theme = parseExtensionTheme({
-		semanticTokenColors: { "comment": { "foreground": "#6A9955", "fontStyle": "italic" } },
-		colors: { "editor.foreground": "#D4D4D4" },
-	}, "ash.demo:0", "ash.demo", "Demo Dark", "vs-dark", "theme test");
+test('validates extension theme catalogs', () => {
+	const theme = parseExtensionTheme(
+		{
+			semanticTokenColors: { comment: { foreground: '#6A9955', fontStyle: 'italic' } },
+			colors: { 'editor.foreground': '#D4D4D4' },
+		},
+		'ash.demo:0',
+		'ash.demo',
+		'Demo Dark',
+		'vs-dark',
+		'theme test',
+	);
 	using themes = new ExtensionThemeRegistry();
 	themes.replace([theme]);
-	assert.equal(themes.currentCatalog.themes[0]!.label, "Demo Dark");
+	assert.equal(themes.currentCatalog.themes[0]!.label, 'Demo Dark');
 	assert.deepEqual(themes.currentCatalog.themes[0]!.semanticTokenColors?.comment, { foreground: '#6A9955', fontStyle: 'italic' });
 });
 
-test("activates declarations without fetching legacy TextMate grammar resources", async () => {
+test('activates declarations without fetching legacy TextMate grammar resources', async () => {
 	const catalog: ExtensionCatalog = Object.freeze({
 		generation: 1,
 		extensions: [descriptor],
@@ -246,9 +252,9 @@ test("activates declarations without fetching legacy TextMate grammar resources"
 	};
 
 	const service = new AppServerExtensionService({ api, }, createEmptyTestLanguagePacks(), adapters);
-	assert.equal("replace" in service.themes, false);
-	assert.equal("replace" in service.fileTemplates, false);
-	assert.equal("replace" in service.debugAdapters, false);
+	assert.equal('replace' in service.themes, false);
+	assert.equal('replace' in service.fileTemplates, false);
+	assert.equal('replace' in service.debugAdapters, false);
 	assert.equal(Object.isFrozen(service.themes), true);
 	assert.equal(Object.isFrozen(service.fileTemplates), true);
 	assert.equal(Object.isFrozen(service.debugAdapters), true);
@@ -266,16 +272,16 @@ test("activates declarations without fetching legacy TextMate grammar resources"
 	assert.equal(service.currentCatalog.generation, catalog.generation);
 	assert.equal(service.currentCatalog.extensions[0]?.id, descriptor.id);
 	assert.equal(service.currentCatalog.extensions[0]?.packageSha256, descriptor.packageSha256);
-	assert.equal("manifestJson" in service.currentCatalog.extensions[0]!, false);
-	assert.equal(service.debugAdapters.get("demo")?.program, "demo-adapter");
-	assert.equal(service.debugAdapters.get("pure-debug")?.label, "Pure debug");
-	assert.equal(adapters.get("pure-debug"), undefined);
-	assert.deepEqual(adapters.get("demo")?.createDebugAdapter?.(), { program: "demo-adapter", arguments: ["--stdio", "", "$HOME"] });
+	assert.equal('manifestJson' in service.currentCatalog.extensions[0]!, false);
+	assert.equal(service.debugAdapters.get('demo')?.program, 'demo-adapter');
+	assert.equal(service.debugAdapters.get('pure-debug')?.label, 'Pure debug');
+	assert.equal(adapters.get('pure-debug'), undefined);
+	assert.deepEqual(adapters.get('demo')?.createDebugAdapter?.(), { program: 'demo-adapter', arguments: ['--stdio', '', '$HOME'] });
 	service.dispose();
-	assert.equal(adapters.get("demo"), undefined);
+	assert.equal(adapters.get('demo'), undefined);
 });
 
-test("disposes extension activation without leaking registrations", () => {
+test('disposes extension activation without leaking registrations', () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
 	{
@@ -284,15 +290,15 @@ test("disposes extension activation without leaking registrations", () => {
 	tracker.assertNoLeaks();
 });
 
-test("reads each generation-scoped resource once while preparing one catalog", async () => {
+test('reads each generation-scoped resource once while preparing one catalog', async () => {
 	const themedDescriptor = descriptorWithManifest({
-		name: "demo",
-		publisher: "ash",
-		version: "1.0.0",
+		name: 'demo',
+		publisher: 'ash',
+		version: '1.0.0',
 		contributes: {
 			themes: [
-				{ id: "first", label: "First", path: "themes/shared.json", uiTheme: "vs-dark" },
-				{ id: "second", label: "Second", path: "themes/shared.json", uiTheme: "vs" },
+				{ id: 'first', label: 'First', path: 'themes/shared.json', uiTheme: 'vs-dark' },
+				{ id: 'second', label: 'Second', path: 'themes/shared.json', uiTheme: 'vs' },
 			]
 		},
 	});
@@ -315,8 +321,21 @@ test('loads an extension theme include through its package resources', async () 
 		contributes: { themes: [{ id: 'inherited', label: 'Inherited', path: 'themes/child.json', uiTheme: 'vs-dark' }] },
 	});
 	const resources = new Map([
-		['themes/child.json', JSON.stringify({ include: './base.json', colors: { 'editor.background': '#445566' }, semanticTokenColors: { "string": { "foreground": "#556677" } } })],
-		['themes/base.json', JSON.stringify({ colors: { 'editor.background': '#112233', 'statusBar.background': '#223344' }, semanticTokenColors: { "comment": { "foreground": "#334455" } } })],
+		[
+			'themes/child.json',
+			JSON.stringify({
+				include: './base.json',
+				colors: { 'editor.background': '#445566' },
+				semanticTokenColors: { string: { foreground: '#556677' } },
+			}),
+		],
+		[
+			'themes/base.json',
+			JSON.stringify({
+				colors: { 'editor.background': '#112233', 'statusBar.background': '#223344' },
+				semanticTokenColors: { comment: { foreground: '#334455' } },
+			}),
+		],
 	]);
 	const reads: string[] = [];
 	const api: IExtensionApi = {
@@ -326,7 +345,7 @@ test('loads an extension theme include through its package resources', async () 
 			return new TextEncoder().encode(resources.get(request.path)!);
 		}),
 	};
-	using service = new AppServerExtensionService({ api, }, createEmptyTestLanguagePacks(), adapters);
+	using service = new AppServerExtensionService({ api }, createEmptyTestLanguagePacks(), adapters);
 	await service.start();
 	const theme = service.themes.currentCatalog.themes[0]!;
 	assert.deepEqual(reads, ['themes/child.json', 'themes/base.json']);
@@ -345,9 +364,9 @@ test('rejects retired extension token themes without reading syntax resources', 
 	assert.deepEqual(reads, ['themes/main.json']);
 });
 
-test("rejects a catalog whose canonical manifest digest does not match", async () => {
+test('rejects a catalog whose canonical manifest digest does not match', async () => {
 	const api: IExtensionApi = {
-		list: async () => Object.freeze({ generation: 1, extensions: Object.freeze([Object.freeze({ ...descriptor, manifestSha256: `sha256:${"0".repeat(64)}` })]), diagnostics: Object.freeze([]) }),
+		list: async () => Object.freeze({ generation: 1, extensions: Object.freeze([Object.freeze({ ...descriptor, manifestSha256: `sha256:${'0'.repeat(64)}` })]), diagnostics: Object.freeze([]) }),
 		resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
 	};
 	using service = new AppServerExtensionService({ api, }, createEmptyTestLanguagePacks(), adapters);
@@ -410,7 +429,7 @@ test('enablement updates cannot downgrade a queued source refresh', async () => 
 	assert.equal(service.currentCatalog.generation, 2);
 });
 
-test("coalesces concurrent reload requests into one queued follow-up refresh", async () => {
+test('coalesces concurrent reload requests into one queued follow-up refresh', async () => {
 	const first = deferred<ExtensionCatalog>();
 	let listCalls = 0;
 	const api: IExtensionApi = {
@@ -477,7 +496,7 @@ test('queued reloads report the final failure and retain the last committed cata
 	assert.deepEqual({ requests, generation: service.currentCatalog.generation, failures }, { requests: 3, generation: 1, failures: [finalFailure] });
 });
 
-test("reloads declarations for Plugin activation and Extensions installation changes", async () => {
+test('reloads declarations for Plugin activation and Extensions installation changes', async () => {
 	let generation = 0;
 	const modes: string[] = [];
 	let listener: ((event: ServerNotification) => void) | undefined;
@@ -498,7 +517,7 @@ test("reloads declarations for Plugin activation and Extensions installation cha
 		if (catalog.generation === 2) refreshed.resolve(catalog);
 	});
 
-	listener?.({ method: "plugin/changed", params: { revision: 2, activationGeneration: 2 } });
+	listener?.({ method: 'plugin/changed', params: { revision: 2, activationGeneration: 2 } });
 	const catalog = await refreshed.promise;
 
 	assert.equal(catalog.generation, 2);
@@ -516,7 +535,7 @@ test("reloads declarations for Plugin activation and Extensions installation cha
 	assert.deepEqual(modes, ['cached', 'cached', 'cached', 'cached'], 'notifications read the new backend snapshot without rescanning unchanged sources');
 });
 
-test("dispose suppresses a queued reload and ignores the in-flight result", async () => {
+test('dispose suppresses a queued reload and ignores the in-flight result', async () => {
 	const first = deferred<ExtensionCatalog>();
 	let listCalls = 0;
 	const api: IExtensionApi = {
@@ -536,7 +555,7 @@ test("dispose suppresses a queued reload and ignores the in-flight result", asyn
 	assert.equal(listCalls, 1);
 });
 
-test("preserves the last active catalog when refreshed theme materialization fails", async () => {
+test('preserves the last active catalog when refreshed theme materialization fails', async () => {
 	const extension = descriptorWithManifest({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { themes: [{ id: 'demo', label: 'Demo', path: 'theme.json', uiTheme: 'vs-dark' }] } });
 	let generation = 1;
 	const api: IExtensionApi = {
@@ -553,17 +572,17 @@ test("preserves the last active catalog when refreshed theme materialization fai
 	assert.equal(service.themes.currentCatalog, previousThemes);
 });
 
-test("publishes one coherent contribution generation to registry listeners", async () => {
+test('publishes one coherent contribution generation to registry listeners', async () => {
 	const catalog: ExtensionCatalog = Object.freeze({
 		generation: 3,
 		extensions: Object.freeze([descriptorWithManifest({
-			name: "demo",
-			publisher: "ash",
-			version: "1.0.0",
+			name: 'demo',
+			publisher: 'ash',
+			version: '1.0.0',
 			contributes: {
-				languages: [{ id: "demo", extensions: [".demo"] }],
-				themes: [{ id: "dark", label: "Demo Dark", path: "themes/dark.json", uiTheme: "vs-dark" }],
-				debuggers: [{ type: "demo", label: "Demo Debug", debugAdapter: { program: "demo-adapter" } }],
+				languages: [{ id: 'demo', extensions: ['.demo'] }],
+				themes: [{ id: 'dark', label: 'Demo Dark', path: 'themes/dark.json', uiTheme: 'vs-dark' }],
+				debuggers: [{ type: 'demo', label: 'Demo Debug', debugAdapter: { program: 'demo-adapter' } }],
 			},
 		})]),
 		diagnostics: Object.freeze([]),
@@ -587,15 +606,15 @@ test("publishes one coherent contribution generation to registry listeners", asy
 	assert.deepEqual(observations, [{ themeCount: 1, adapterCount: 1, generation: 3 }]);
 });
 
-test("resolves extension language first-line patterns after file content is available", () => {
+test('resolves extension language first-line patterns after file content is available', () => {
 	using languages = new LanguageService();
-	using registration = languages.registerLanguage({ id: "demo", firstLine: "^#!.*\\bdemo" }, { priority: 100 });
+	using registration = languages.registerLanguage({ id: 'demo', firstLine: '^#!.*\\bdemo' }, { priority: 100 });
 
-	assert.equal(languages.resolveLanguageId({ resource: URI.file("C:\\workspace\\script"), firstLine: "#!/usr/bin/env demo" }), "demo");
-	assert.equal(languages.resolveLanguageId({ resource: URI.file("C:\\workspace\\script"), firstLine: "#!/usr/bin/env python" }), undefined);
+	assert.equal(languages.resolveLanguageId({ resource: URI.file('C:\\workspace\\script'), firstLine: '#!/usr/bin/env demo' }), 'demo');
+	assert.equal(languages.resolveLanguageId({ resource: URI.file('C:\\workspace\\script'), firstLine: '#!/usr/bin/env python' }), undefined);
 });
 
-test("treats an in-flight load cancelled by disposal as normal shutdown", async () => {
+test('treats an in-flight load cancelled by disposal as normal shutdown', async () => {
 	let rejectList: ((error: Error) => void) | undefined;
 	const api: IExtensionApi = {
 		list: () => new Promise((_resolve, reject) => { rejectList = reject; }),
@@ -608,7 +627,7 @@ test("treats an in-flight load cancelled by disposal as normal shutdown", async 
 
 	const starting = service.start();
 	service.dispose();
-	rejectList?.(new Error("transport disposed"));
+	rejectList?.(new Error('transport disposed'));
 
 	await assert.doesNotReject(starting);
 	assert.deepEqual(failures, []);
@@ -717,7 +736,7 @@ function descriptorWithManifest(manifest: unknown): ExtensionDescriptor {
 }
 
 function digestText(value: string): string {
-	return `sha256:${createHash("sha256").update(value).digest("hex")}`;
+	return `sha256:${createHash('sha256').update(value).digest('hex')}`;
 }
 
 function emptyCatalog(generation: number): ExtensionCatalog {
@@ -847,7 +866,6 @@ test('failed or disposed resource preparation stops admitting packages and obser
 		assert.equal(reads, 8, action);
 	}
 });
-
 
 function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void; } {
 	let resolve!: (value: T) => void;
@@ -1068,7 +1086,6 @@ test('declarative extension problem contributions activate, roll back failed rel
 	assert.throws(() => parseProblemMatchers(['$extension-service-matcher']), /Unknown problem matcher/);
 });
 
-
 for (const [targetPlatform, extensionLocation, selected, expectedProgram] of [
 	['linux-x64', 'file:///installed/extension', 'linux', '/installed/extension/linux-adapter.js'],
 	['darwin-arm64', 'file:///installed/extension', 'osx', '/installed/extension/osx-adapter.js'],
@@ -1113,7 +1130,6 @@ test('relative Debug runtime paths use the installed package and missing host fa
 	const platformManifest = JSON.stringify({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { debuggers: [{ type: 'standard', linux: { program: 'adapter' } }] } });
 	assert.throws(() => parseExtensionManifest(platformManifest, descriptor), /无法获取调试适配器“standard”的执行平台/);
 });
-
 
 test('catalog refresh preserves an unchanged declarative Debug owner and retires a changed package', async () => {
 	let generation = 1;
@@ -1198,7 +1214,6 @@ test('speech provider declarations remain bounded immutable metadata in the orig
 	}
 });
 
-
 test('built-in language associations agree with ash-language on the shared conformance corpus', async () => {
 	using languages = new LanguageService();
 	for (const directory of (await readdir('extensions')).sort()) {
@@ -1255,7 +1270,6 @@ test('common project language packages register resources and localize English a
 		}
 	}
 });
-
 
 test('custom editor declarations accept MIME-only channel resources and reject empty selectors', () => {
 	const parse = (selector: unknown) => parseExtensionManifest(JSON.stringify({

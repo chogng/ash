@@ -2,14 +2,14 @@ import {
 	Menu,
 	type BrowserWindow,
 	type MenuItemConstructorOptions,
-} from "electron/main";
-import { Disposable, toDisposable } from "../../../common/lifecycle.js";
+} from 'electron/main';
+import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { promiseWithResolvers } from '../../../common/async.js';
 import {
 	type INativeContextMenuRequest,
 	type INativeContextMenuResult,
 	type NativeContextMenuItem,
-} from "../common/contextmenu.js";
+} from '../common/contextmenu.js';
 
 interface IMenuPopup {
 	readonly menu: Menu;
@@ -93,18 +93,18 @@ function toTemplate(
 ): MenuItemConstructorOptions[] {
 	return items.map((item): MenuItemConstructorOptions => {
 		switch (item.type) {
-			case "separator":
-				return { type: "separator" };
-			case "submenu":
+			case 'separator':
+				return { type: 'separator' };
+			case 'submenu':
 				return {
-					type: "submenu",
+					type: 'submenu',
 					label: item.label,
 					enabled: item.enabled,
 					submenu: toTemplate(item.items, select),
 				};
-			case "action":
+			case 'action':
 				return {
-					type: item.checked === undefined ? "normal" : "checkbox",
+					type: item.checked === undefined ? 'normal' : 'checkbox',
 					label: item.label,
 					enabled: item.enabled,
 					checked: item.checked,

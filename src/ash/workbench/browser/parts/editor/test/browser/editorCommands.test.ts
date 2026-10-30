@@ -1,17 +1,17 @@
 import '../../../../../../editor/test/browser/testEditorDom.js';
 import { installTestElementHeights } from '../../../../../../editor/test/browser/editorTestGlobals.js';
 import { Event } from '../../../../../../base/common/event.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { URI } from "../../../../../../base/common/uri.js";
-import { ContextKeyService, IContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
-import { InstantiationService } from "../../../../../../platform/instantiation/common/instantiationService.js";
-import { IQuickInputService } from "../../../../../../platform/quickinput/common/quickInput.js";
-import { CommandService } from "../../../../../services/commands/common/commandService.js";
-import { TestQuickInputService } from "../../../../../../platform/quickinput/test/browser/testQuickInputService.js";
-import { IEditorGroupsService } from "../../../../../services/editor/common/editorGroupsService.js";
-import { IEditorPart, type IEditorPart as EditorPartContract } from "../../editorPart.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { URI } from '../../../../../../base/common/uri.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
+import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
+import { CommandService } from '../../../../../services/commands/common/commandService.js';
+import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { IEditorGroupsService } from '../../../../../services/editor/common/editorGroupsService.js';
+import { IEditorPart, type IEditorPart as EditorPartContract } from '../../editorPart.js';
 import { registerAction2, MenuId } from '../../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../../platform/actions/common/menuService.js';
 import { CloseWorkspaceAction } from '../../../../actions/workspaceActions.js';
@@ -246,7 +246,9 @@ test('Close Workspace delegates an empty window to the host and follows workspac
 	const menus = new MenuService(commands, contextKeys);
 	const requests: unknown[] = [];
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IHostService, { reload: async () => { throw new Error("Unexpected reload in this fixture"); }, hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async options => { requests.push(options); }, getScreenshot: async () => undefined });
+	services.registerInstance(IHostService, {
+		getWindows: async () => [], reload: async () => { throw new Error('Unexpected reload in this fixture'); }, hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, openWindow: async options => { requests.push(options); }, getScreenshot: async () => undefined
+	});
 	const closeMenu = () => menus.getMenuActions(MenuId.MenubarFileMenu).flatMap(([, actions]) => actions).filter(action => action.id === CloseWorkspaceAction.ID).map(action => ({ label: action.label, enabled: action.enabled }));
 	assert.deepEqual(closeMenu(), [{ label: 'Close Folder', enabled: true }]);
 	await commands.executeCommand(CloseWorkspaceAction.ID);
@@ -260,8 +262,8 @@ test('Close Workspace delegates an empty window to the host and follows workspac
 	assert.deepEqual(requests.at(-1), { forceReuseWindow: true, remoteAuthority: 'ssh+work-server' });
 });
 
-test("editor commands close the active tab and reopen it with a chosen editor", async () => {
-	const dom = new JSDOM("<!doctype html><body><button>Editor</button></body>");
+test('editor commands close the active tab and reopen it with a chosen editor', async () => {
+	const dom = new JSDOM('<!doctype html><body><button>Editor</button></body>');
 	using heights = installTestElementHeights(dom.window.document);
 	const previousGlobals = new Map<string, PropertyDescriptor | undefined>();
 	for (const [name, value] of Object.entries({
@@ -278,10 +280,10 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 	}
 
 	try {
-		const { CLOSE_EDITOR_COMMAND_ID, REOPEN_WITH_COMMAND_ID } = await import("../../editorCommands.js");
-		const activeInput = { resource: URI.file("C:\\project\\main.ts") };
-		const otherInput = { resource: URI.file("C:\\project\\other.ts") };
-		const additionalInput = { resource: URI.file("C:\\project\\additional.ts") };
+		const { CLOSE_EDITOR_COMMAND_ID, REOPEN_WITH_COMMAND_ID } = await import('../../editorCommands.js');
+		const activeInput = { resource: URI.file('C:\\project\\main.ts') };
+		const otherInput = { resource: URI.file('C:\\project\\other.ts') };
+		const additionalInput = { resource: URI.file('C:\\project\\additional.ts') };
 		const closedInputs: typeof activeInput[] = [];
 		let cancelClose = false;
 		const activeGroup = {
@@ -304,8 +306,8 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 			closeEditor: async (input: typeof activeInput) => { closed = input; return true; },
 		};
 		const editorTypes = [
-			{ id: "ash.editor.binary", name: "Binary Editor" },
-			{ id: "stanza.editor.code", name: "Code Editor" },
+			{ id: 'ash.editor.binary', name: 'Binary Editor' },
+			{ id: 'stanza.editor.code', name: 'Code Editor' },
 		];
 		let closed: typeof activeInput | undefined;
 		let chosen: string | undefined;
@@ -329,7 +331,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		using contextKeys = new ContextKeyService();
 		services.registerInstance(IContextKeyService, contextKeys);
 		services.registerInstance(IEditorPart, editorPart);
-		services.registerInstance(IEditorGroupsService, { groups: [activeGroup, otherGroup], activeGroup, getGroup: (id: number) => [activeGroup, otherGroup].find(group => group.id === id) } as unknown as import("../../../../../services/editor/common/editorGroupsService.js").IEditorGroupsService);
+		services.registerInstance(IEditorGroupsService, { groups: [activeGroup, otherGroup], activeGroup, getGroup: (id: number) => [activeGroup, otherGroup].find(group => group.id === id) } as unknown as import('../../../../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
 		using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
 		services.registerInstance(IQuickInputService, quickInput);
 		using commands = new CommandService(services);
@@ -349,18 +351,18 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		assert.deepEqual(closedInputs.slice(closeCount), [activeInput]);
 		cancelClose = false;
 		const reopening = commands.executeCommand(REOPEN_WITH_COMMAND_ID);
-		const picker = dom.window.document.querySelector(".ash-quick-pick");
+		const picker = dom.window.document.querySelector('.ash-quick-pick');
 		assert.ok(picker);
-		assert.equal(picker.querySelector<HTMLInputElement>("input")?.placeholder, "Select an editor");
-		assert.match(picker.textContent ?? "", /Binary Editor/u);
-		picker.querySelector<HTMLInputElement>("input")?.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+		assert.equal(picker.querySelector<HTMLInputElement>('input')?.placeholder, 'Select an editor');
+		assert.match(picker.textContent ?? '', /Binary Editor/u);
+		picker.querySelector<HTMLInputElement>('input')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
 			bubbles: true,
 			cancelable: true,
-			key: "Enter",
+			key: 'Enter',
 		}));
 		await reopening;
-		assert.equal(chosen, "ash.editor.binary");
-		assert.equal(dom.window.document.querySelector(".ash-quick-pick"), null);
+		assert.equal(chosen, 'ash.editor.binary');
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 
 		const otherReopening = commands.executeCommand(REOPEN_WITH_COMMAND_ID, { groupId: 0, editorIndex: 0 });
 		dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
@@ -370,7 +372,7 @@ test("editor commands close the active tab and reopen it with a chosen editor", 
 		assert.equal(reopenedOtherGroup, true, 'zero is a valid group identity');
 		editorTypes.pop();
 		await commands.executeCommand(REOPEN_WITH_COMMAND_ID);
-		assert.equal(dom.window.document.querySelector(".ash-quick-pick"), null);
+		assert.equal(dom.window.document.querySelector('.ash-quick-pick'), null);
 	} finally {
 		for (const [name, descriptor] of previousGlobals) {
 			if (descriptor) Object.defineProperty(globalThis, name, descriptor);

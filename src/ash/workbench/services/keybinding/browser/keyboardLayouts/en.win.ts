@@ -60,7 +60,7 @@ export const EN_US_WIN_LAYOUT: IKeymapInfo = {
 		BracketRight: [']', '}', '', '', 0, 'VK_OEM_6'],
 		Backslash: ['\\', '|', '', '', 0, 'VK_OEM_5'],
 		Semicolon: [';', ':', '', '', 0, 'VK_OEM_1'],
-		Quote: ['\'', '"', '', '', 0, 'VK_OEM_7'],
+		Quote: ["'", '"', '', '', 0, 'VK_OEM_7'],
 		Backquote: ['`', '~', '', '', 0, 'VK_OEM_3'],
 		Comma: [',', '<', '', '', 0, 'VK_OEM_COMMA'],
 		Period: ['.', '>', '', '', 0, 'VK_OEM_PERIOD'],
@@ -170,4 +170,3 @@ export const EN_US_WIN_LAYOUT: IKeymapInfo = {
 };
 
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout(EN_US_WIN_LAYOUT);
-

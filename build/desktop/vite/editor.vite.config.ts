@@ -1,18 +1,18 @@
-import { resolve } from "node:path";
-import { defineConfig } from "vite";
+import { resolve } from 'node:path';
+import { defineConfig } from 'vite';
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
 import { rendererOutput } from './rendererOutput.ts';
-import { hotReloadPlugin } from "./hotReloadPlugin.ts";
+import { hotReloadPlugin } from './hotReloadPlugin.ts';
 
-const repositoryRoot = resolve(import.meta.dirname, "../../..");
-const desktopRoot = resolve(repositoryRoot, ".");
+const repositoryRoot = resolve(import.meta.dirname, '../../..');
+const desktopRoot = resolve(repositoryRoot, '.');
 
 export default defineConfig({
-	base: "./",
+	base: './',
 	root: resolve(import.meta.dirname, 'stanza'),
 	plugins: [buildMetricsPlugin(), hotReloadPlugin({ desktopRoot })],
 	server: {
-		host: "127.0.0.1",
+		host: '127.0.0.1',
 		port: 5199,
 		strictPort: true,
 		fs: { allow: [repositoryRoot] },
@@ -22,12 +22,12 @@ export default defineConfig({
 		noDiscovery: true,
 	},
 	build: {
-		outDir: resolve(repositoryRoot, ".build/desktop/stanza"),
+		outDir: resolve(repositoryRoot, '.build/desktop/stanza'),
 		emptyOutDir: true,
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
-				stanza: resolve(import.meta.dirname, "stanza/index.html"),
+				stanza: resolve(import.meta.dirname, 'stanza/index.html'),
 			},
 		},
 	},

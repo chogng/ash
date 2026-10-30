@@ -12,27 +12,27 @@ import '../../contrib/welcomeGettingStarted/browser/gettingStartedColors.js';
 import '../../../sessions/contrib/creator/browser/widget/designToolsWidget.js';
 import '../../../platform/theme/common/colors/baseColors.js';
 import '../../../platform/theme/common/sizes/baseSizes.js';
-import { strict as assert } from "node:assert";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { strict as assert } from 'node:assert';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, relative } from "node:path";
-import { test } from "mocha";
-import { colorCssVariable } from "../../../platform/theme/common/colorUtils.js";
-import { Colors } from "../../../platform/theme/common/colorRegistry.js";
-import { Sizes } from "../../../platform/theme/common/sizeRegistry.js";
-import { asCssVariableName } from "../../../platform/theme/common/sizeUtils.js";
-import "../../../editor/common/core/editorColorRegistry.js";
+import { join, relative } from 'node:path';
+import { test } from 'mocha';
+import { colorCssVariable } from '../../../platform/theme/common/colorUtils.js';
+import { Colors } from '../../../platform/theme/common/colorRegistry.js';
+import { Sizes } from '../../../platform/theme/common/sizeRegistry.js';
+import { asCssVariableName } from '../../../platform/theme/common/sizeUtils.js';
+import '../../../editor/common/core/editorColorRegistry.js';
 import '../../contrib/debug/browser/debugColors.js';
 import '../../../sessions/contrib/creator/browser/widget/designToolsWidget.js';
-import "../../../editor/browser/widget/multiDiffEditor/colors.js";
-import "../../common/theme.js";
-import "../../contrib/chat/common/widget/chatColors.js";
-import "../../contrib/preferences/common/settingsEditorColorRegistry.js";
+import '../../../editor/browser/widget/multiDiffEditor/colors.js';
+import '../../common/theme.js';
+import '../../contrib/chat/common/widget/chatColors.js';
+import '../../contrib/preferences/common/settingsEditorColorRegistry.js';
 import '../../contrib/preferences/browser/keybindingsEditor.js';
 import '../../contrib/scm/browser/scmHistory.js';
-import "../../contrib/terminal/common/terminalColorRegistry.js";
-import "../../contrib/terminalContrib/commandGuide/browser/terminal.commandGuide.contribution.js";
-import "../../../sessions/common/theme.js";
+import '../../contrib/terminal/common/terminalColorRegistry.js';
+import '../../contrib/terminalContrib/commandGuide/browser/terminal.commandGuide.contribution.js';
+import '../../../sessions/common/theme.js';
 
 test('CSS variable manifest matches registered colors and sizes', async () => {
 	const path = join(process.cwd(), 'build/lib/stylelint/ash-known-variables.json');
@@ -41,19 +41,19 @@ test('CSS variable manifest matches registered colors and sizes', async () => {
 	assert.deepEqual(variables.sizes, Sizes.getSizes().map(({ id }) => asCssVariableName(id)).sort(), 'Run pnpm stylelint:update and review the manifest.');
 });
 
-test("CSS isolates intentional color samples", async () => {
+test('CSS isolates intentional color samples', async () => {
 	const intentionalColorFiles = new Set([
-		"base/browser/ui/colorPicker/colorPicker.css",
-		"base/browser/ui/lxicons/lxicon.css",
-		"editor/browser/viewParts/viewLines/viewLines.css",
-		"editor/browser/viewParts/decorations/decorations.css",
-		"editor/contrib/colorPicker/browser/colorPicker.css",
+		'base/browser/ui/colorPicker/colorPicker.css',
+		'base/browser/ui/lxicons/lxicon.css',
+		'editor/browser/viewParts/viewLines/viewLines.css',
+		'editor/browser/viewParts/decorations/decorations.css',
+		'editor/contrib/colorPicker/browser/colorPicker.css',
 	]);
-	const sourceRoot = join(process.cwd(), "src", "ash");
+	const sourceRoot = join(process.cwd(), 'src', 'ash');
 	const rawColors: string[] = [];
-	for (const file of (await presentationFiles(sourceRoot)).filter(file => file.endsWith(".css"))) {
-		const source = await readFile(file, "utf8");
-		const name = relative(sourceRoot, file).replaceAll("\\", "/");
+	for (const file of (await presentationFiles(sourceRoot)).filter(file => file.endsWith('.css'))) {
+		const source = await readFile(file, 'utf8');
+		const name = relative(sourceRoot, file).replaceAll('\\', '/');
 		if (!intentionalColorFiles.has(name)) {
 			for (const line of rawColorLines(source)) rawColors.push(`${name}:${line}`);
 		}
@@ -97,7 +97,7 @@ async function presentationFiles(directory: string): Promise<string[]> {
 		if (entry.isDirectory() && entry.name === '.build') continue;
 		const path = join(directory, entry.name);
 		if (entry.isDirectory()) result.push(...await presentationFiles(path));
-		else if (entry.name.endsWith(".css") || entry.name.endsWith(".ts") && !path.includes("/test/")) result.push(path);
+		else if (entry.name.endsWith('.css') || entry.name.endsWith('.ts') && !path.includes('/test/')) result.push(path);
 	}
 	return result;
 }

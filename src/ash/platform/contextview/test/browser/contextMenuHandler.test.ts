@@ -1,24 +1,24 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { Event } from "../../../../base/common/event.js";
-import { DisposableTracker, installDisposableTracker } from "../../../../base/common/lifecycle.js";
-import type { IKeybindingService } from "../../../keybinding/common/keybinding.js";
-import type { INotificationService } from "../../../notification/common/notification.js";
-import type { IContextViewService } from "../../browser/contextView.js";
-import { ContextViewHideReason, type ContextViewOptions } from "../../../../base/browser/ui/contextview/contextview.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { Event } from '../../../../base/common/event.js';
+import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
+import type { IKeybindingService } from '../../../keybinding/common/keybinding.js';
+import type { INotificationService } from '../../../notification/common/notification.js';
+import type { IContextViewService } from '../../browser/contextView.js';
+import { ContextViewHideReason, type ContextViewOptions } from '../../../../base/browser/ui/contextview/contextview.js';
 
-test("context menus focus the container unless first-item selection is requested", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-	const previousNode = Object.getOwnPropertyDescriptor(globalThis, "Node");
-	Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
-	Object.defineProperty(globalThis, "Node", { configurable: true, value: dom.window.Node });
-	Object.defineProperty(dom.window.Element.prototype, "getClientRects", { value: () => [{}] });
-	Object.defineProperty(dom.window.Element.prototype, "scrollTo", { value(): void { } });
+test('context menus focus the container unless first-item selection is requested', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+	const previousNode = Object.getOwnPropertyDescriptor(globalThis, 'Node');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
+	Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
+	Object.defineProperty(dom.window.Element.prototype, 'getClientRects', { value: () => [{}] });
+	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', { value(): void { } });
 	try {
-		const { ContextMenuHandler } = await import("../../browser/contextMenuHandler.js");
+		const { ContextMenuHandler } = await import('../../browser/contextMenuHandler.js');
 		let options: ContextViewOptions | undefined;
 		const contextView: IContextViewService = {
 			container: dom.window.document.body,
@@ -34,7 +34,7 @@ test("context menus focus the container unless first-item selection is requested
 		for (const autoSelectFirstItem of [undefined, false, true]) {
 			handler.showContextMenu({
 				getAnchor: () => dom.window.document.body,
-				getActions: () => [{ id: "run", label: "Run", tooltip: "Run", enabled: true, run() { } }],
+				getActions: () => [{ id: 'run', label: 'Run', tooltip: 'Run', enabled: true, run() { } }],
 				autoSelectFirstItem,
 			});
 			const menu = dom.window.document.querySelector<HTMLElement>('[role="menu"]')!;
@@ -43,19 +43,19 @@ test("context menus focus the container unless first-item selection is requested
 		}
 	} finally {
 		dom.window.close();
-		if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
-		else Reflect.deleteProperty(globalThis, "window");
-		if (previousNode) Object.defineProperty(globalThis, "Node", previousNode);
-		else Reflect.deleteProperty(globalThis, "Node");
+		if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+		else Reflect.deleteProperty(globalThis, 'window');
+		if (previousNode) Object.defineProperty(globalThis, 'Node', previousNode);
+		else Reflect.deleteProperty(globalThis, 'Node');
 	}
 });
 
-test("a context menu that cannot be shown releases its execution resources", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
-	Object.defineProperty(globalThis, "Node", { configurable: true, value: dom.window.Node });
-	const { ContextMenuHandler } = await import("../../browser/contextMenuHandler.js");
-	const { getWindowId } = await import("../../../../base/browser/window.js");
+test('a context menu that cannot be shown releases its execution resources', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
+	Object.defineProperty(globalThis, 'Node', { configurable: true, value: dom.window.Node });
+	const { ContextMenuHandler } = await import('../../browser/contextMenuHandler.js');
+	const { getWindowId } = await import('../../../../base/browser/window.js');
 	// Window registration belongs to the DOM fixture, outside the handler's leak boundary.
 	getWindowId(dom.window as unknown as Window);
 	const tracker = new DisposableTracker();
@@ -72,7 +72,7 @@ test("a context menu that cannot be shown releases its execution resources", asy
 		getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
 		onDidUpdateKeybindings: Event.None,
-		resolveKeybinding() { throw new Error("Not used"); },
+		resolveKeybinding() { throw new Error('Not used'); },
 		resolveUserBinding() { return undefined; },
 		lookupKeybindings() { return []; },
 		lookupKeybinding() { return undefined; },
@@ -85,7 +85,7 @@ test("a context menu that cannot be shown releases its execution resources", asy
 	for (let index = 0; index < 3; index++) {
 		assert.equal(handler.showContextMenu({
 			getAnchor: () => ({ x: 10, y: 20, targetWindow: dom.window as unknown as Window }),
-			getActions: () => [{ id: "run", label: "Run", tooltip: "Run", enabled: true, run() { } }],
+			getActions: () => [{ id: 'run', label: 'Run', tooltip: 'Run', enabled: true, run() { } }],
 			onHide: (cancelled) => {
 				assert.equal(cancelled, true);
 				hideCount++;
@@ -97,6 +97,6 @@ test("a context menu that cannot be shown releases its execution resources", asy
 	handler.dispose();
 	tracker.assertNoLeaks();
 	dom.window.close();
-	Reflect.deleteProperty(globalThis, "window");
-	Reflect.deleteProperty(globalThis, "Node");
+	Reflect.deleteProperty(globalThis, 'window');
+	Reflect.deleteProperty(globalThis, 'Node');
 });

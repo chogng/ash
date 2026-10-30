@@ -1,12 +1,12 @@
 import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingService.js';
-import type { RendererCapabilityContribution } from "./webRendererApi.js";
-import { BrowserClipboardService } from "../../platform/clipboard/browser/clipboardService.js";
+import type { RendererCapabilityContribution } from './webRendererApi.js';
+import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import type { IStartWorkbenchOptions } from './workbench.js';
-import { startWebWorkbench } from "./web.factory.js";
-import { showStartupError } from "./startupError.js";
-import type { IDisposable } from "../../base/common/lifecycle.js";
+import { startWebWorkbench } from './web.factory.js';
+import { showStartupError } from './startupError.js';
+import type { IDisposable } from '../../base/common/lifecycle.js';
 import { connectBrowserWorkbenchHost } from './web.host.js';
 
 /** Starts the Workbench after resolving its optional development host. */

@@ -154,11 +154,13 @@ ChangesViewService 当前只拥有上述展示状态及修订绑定的 read mark
 
 共享 multi-diff 的来源替换会取消旧模型的就绪等待；等待捕获所属代次的取消信号，防止已经释放的模型让编辑器一直停在 pending。SessionChangesEditor 在加载子比较前提供视口，并传递宿主输入取消信号。Turn / commit 源、来源操作和内容标签仍在已确认的共享 Sessions core 中，服务 Code 和 Cowork。
 
-CI 操作沿 `ChecksViewModel → IGitHubService → AppServerGitHubService → GitHubRequestProcessor → github.api.v1 Provider` 执行，GitHub HTTP 仅由独立扩展拥有。每次操作捕获账号、仓库、PR、head SHA 与 check ID；扩展重新读取 PR 和 check 身份。重新运行还确认 Actions job 的 `check_run_url`、仓库及 SHA，GitHub 决定该账号的 Actions 写权限。普通 commit statuses 和外部检查没有伪造的 Actions 操作。
+CI 操作沿 `ChecksViewModel → IGitHubService → AppServerGitHubService → GitHubRequestProcessor → github.api.v2 Provider` 执行，GitHub HTTP 仅由独立扩展拥有。每次操作捕获账号、仓库、PR、head SHA 与 check ID；扩展重新读取 PR 和 check 身份。重新运行还确认 Actions job 的 `check_run_url`、仓库及 SHA，GitHub 决定该账号的 Actions 写权限。普通 commit statuses 和外部检查没有伪造的 Actions 操作。
 
 Read annotations 展示纯文本输出及文件行号，沿现有 Changes Accessible View 读取。Download logs 仅在用户点击时取得 GitHub Actions 的一分钟下载能力链接；不保存到会话、Agent 上下文或持久存储，也不携带 Bearer 跟随跨域跳转。Ask agent to fix CI 显式把捕获的失败检查、head 和有界注释交给发起 Thread；先核对可写状态及 sequence，空闲时 startTurn、已有 Turn 时 queueTurn，沿用普通权限。读取检查不会提交消息；会话／账号变化或迟到读取不能转投其他对话。
 
 ## 契约边界与验证
+
+2026-10-30 在 Windows x64、`a174f34dfd` 上按源码与定向测试收口已接通的提交／会话切换、Changes 审阅与 PR 表单行为。生产链捕获 Session／Thread、仓库和修订，拒绝退休作用域及 A-B-A 切换后的旧请求；表单晚到默认值不覆盖编辑，关闭表单后已派发提交只完成一次，回复丢失保留不确定状态而不重发。相关模型、提交、Changes、PR 和命令回归共 309 项通过，日志为 `.build/todo-code-audit-contracts.log`、`.build/todo-code-audit-workflows.log` 和 `.build/todo-code-audit-final-regressions.log`。验收修正了旧 Chat 标题测试未绑定窗口 Chat enablement、仍将新建入口视为单按钮的问题，并覆盖实际 split button 的新建草稿效果；没有修改产品行为。本轮没有新增上游实窗配对，持续合并及 request metadata 的后端缺口继续保留。
 
 ChangesViewService 只拥有 Turn 展示状态和修订绑定的 read marker。Ash 的 Session／Thread、稳定 EditorInput 与上游 session URI／provider changeset 模型不同；共享 multi-diff 来源和标签保留在 Sessions core，服务 Code 与 Cowork。没有对应 DOM 的 label 样式、没有消费者的 facade 和独立 Part 不创建外壳。持续合并策略仍需后端工作流契约，见 [Sessions TODO](../TODO.md#sessions--todo)。跨客户端审阅、provider changeset、隔离与反馈评论保留在[发展候选（未排期）](../TODO.md#发展候选未排期)，尚未实现，不要求按上游身份模型批量补 API。
 

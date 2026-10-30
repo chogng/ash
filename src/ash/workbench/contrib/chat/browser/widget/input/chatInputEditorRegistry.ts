@@ -1,10 +1,10 @@
-import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
-import { Emitter, type Event } from "../../../../../../base/common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
+import { Emitter, type Event } from '../../../../../../base/common/event.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import type { ITextModel } from '../../../../../../editor/common/model.js';
 import type { ICodeEditor } from '../../../../../../editor/browser/editorBrowser.js';
-import type { SlashCommandCatalog } from "../../../common/slashCommands.js";
+import type { SlashCommandCatalog } from '../../../common/slashCommands.js';
 import type { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
@@ -72,7 +72,7 @@ export class ChatInputEditorRegistry {
 	}
 
 	get activeProviderId(): string {
-		return this.provider?.id ?? "textarea";
+		return this.provider?.id ?? 'textarea';
 	}
 
 	private add(provider: IChatInputEditorProvider): void {
@@ -100,20 +100,20 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 		super();
 		this.minimumHeight = options.height?.minimum ?? 40;
 		this.maximumHeight = options.height?.maximum ?? 314;
-		this.element = h(options.container.ownerDocument, "textarea");
-		this.element.className = "ash-chat-textarea-input";
+		this.element = h(options.container.ownerDocument, 'textarea');
+		this.element.className = 'ash-chat-textarea-input';
 		this.element.rows = 2;
 		this.element.style.minHeight = `${this.minimumHeight}px`;
 		this.element.style.height = `${this.minimumHeight}px`;
 		this.element.placeholder = options.placeholder;
-		this.element.setAttribute("aria-label", options.ariaLabel);
+		this.element.setAttribute('aria-label', options.ariaLabel);
 		options.container.append(this.element);
-		this._register(addDisposableListener(this.element, "input", () => {
+		this._register(addDisposableListener(this.element, 'input', () => {
 			this.layout();
 			this._onDidChange.fire(this.value);
 		}));
-		this._register(addDisposableListener(this.element, "keydown", (event) => {
-			if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+		this._register(addDisposableListener(this.element, 'keydown', (event) => {
+			if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
 			event.preventDefault();
 			event.stopPropagation();
 			this._onDidSubmit.fire();

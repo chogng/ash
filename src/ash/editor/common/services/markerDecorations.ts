@@ -9,11 +9,18 @@ import { type IModelDecoration, type ITextModel } from '../model.js';
 
 export const IMarkerDecorationsService = createDecorator<IMarkerDecorationsService>('markerDecorationsService');
 
+export interface IMarkerLimit {
+	readonly isMarkersSourceTruncated: boolean;
+	readonly isMarkersTruncated: number | undefined;
+}
+
 export interface IMarkerDecorationsService {
 	readonly _serviceBrand: undefined;
 	/** Holds the model while at least one editor displays its markers. */
 	acquire(model: ITextModel, diagnostics?: LanguageDiagnosticsSource): IDisposable;
 	readonly onDidChangeMarker: Event<ITextModel>;
+	readonly onDidChangeMarkerLimit: Event<ITextModel>;
+	getMarkerLimits(uri: URI): IMarkerLimit | undefined;
 	getMarker(uri: URI, decoration: IModelDecoration): IMarker | null;
 	getLiveMarkers(uri: URI): [Range, IMarker][];
 	addMarkerSuppression(uri: URI, range: Range): IDisposable;

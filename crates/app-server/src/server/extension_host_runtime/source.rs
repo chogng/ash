@@ -59,9 +59,32 @@ pub(crate) enum EditorExtensionScope {
     ProductPackage,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum WorkspaceTrustRequirement {
+    Required,
+    NotRequired,
+}
+
+impl WorkspaceTrustRequirement {
+    pub(crate) fn from_manifest(manifest: &serde_json::Value) -> Self {
+        match &manifest["capabilities"]["untrustedWorkspaces"]["supported"] {
+            serde_json::Value::Bool(true) => Self::NotRequired,
+            serde_json::Value::String(value) if value == "limited" => Self::NotRequired,
+            _ => Self::Required,
+        }
+    }
+
+    fn from_json(manifest: &str) -> Result<Self, ExtensionHostRuntimeError> {
+        serde_json::from_str(manifest)
+            .map(|value| Self::from_manifest(&value))
+            .map_err(|_| ExtensionHostRuntimeError::Internal)
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct EditorExtensionDeployment {
     pub(crate) scope: EditorExtensionScope,
+    pub(crate) workspace_trust: WorkspaceTrustRequirement,
     pub(crate) id: String,
     pub(crate) version: String,
     pub(crate) package_digest: String,
@@ -91,6 +114,7 @@ impl EditorExtensionDeployment {
     /// A package revocation must never be hidden by an unchanged digest.
     pub(super) fn can_reuse(&self, next: &Self) -> bool {
         self.scope == next.scope
+            && self.workspace_trust == next.workspace_trust
             && self.id == next.id
             && self.version == next.version
             && self.package_digest == next.package_digest
@@ -241,6 +265,7 @@ fn product_debug_workflow_deployment(
     }
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
+        workspace_trust: WorkspaceTrustRequirement::from_manifest(&manifest),
         id: id.clone(),
         version: "1.0.0".into(),
         package_digest: digest.clone(),
@@ -319,6 +344,7 @@ pub(super) fn product_lldb_deployment(
         .map_err(|_| ExtensionHostRuntimeError::Internal)?;
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
+        workspace_trust: WorkspaceTrustRequirement::from_manifest(&manifest),
         id: "ash.debug-lldb".into(),
         version: "1.0.0".into(),
         package_digest: digest.clone(),
@@ -381,6 +407,7 @@ fn product_ssh_deployment(
     let id = "ash.remote-ssh".to_string();
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
+        workspace_trust: WorkspaceTrustRequirement::from_json(manifest)?,
         id: id.clone(),
         version: "1.0.0".into(),
         package_digest: digest.clone(),
@@ -435,6 +462,7 @@ pub(super) fn product_markdown_math_deployment(
     let id = "ash.markdown-math".to_owned();
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
+        workspace_trust: WorkspaceTrustRequirement::from_json(manifest)?,
         id: id.clone(),
         version: "1.0.0".into(),
         package_digest: digest.clone(),
@@ -528,6 +556,7 @@ fn product_markdown_deployment(
     );
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
+        workspace_trust: WorkspaceTrustRequirement::from_manifest(&manifest_value),
         id: "ash.markdown-language-features".into(),
         version: "1.0.0".into(),
         package_digest: digest.clone(),
@@ -617,6 +646,7 @@ fn product_git_deployment(
         .collect();
     Ok(EditorExtensionDeployment {
         scope: EditorExtensionScope::Product,
+        workspace_trust: WorkspaceTrustRequirement::from_manifest(&manifest_value),
         id: "ash.git".into(),
         version: "0.1.0".into(),
         package_digest: digest.clone(),
@@ -844,6 +874,7 @@ pub(super) fn plugin_deployments(
                 ash_plugin::EditorExtensionRuntime::HostRpc => (None, None),
             };
             deployments.push(EditorExtensionDeployment {
+                workspace_trust: WorkspaceTrustRequirement::NotRequired,
                 scope: if contribution.runtime == ash_plugin::EditorExtensionRuntime::JavaScript
                     && contribution
                         .capabilities

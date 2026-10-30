@@ -1,18 +1,18 @@
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Emitter, Event } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
-import { IQuickInputService, type IQuickPick, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
-import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
-import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
-import "../../../sessions/browser/actions/sessionsChatActions.js";
-import { ISessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
-import type { ISession } from "../../../sessions/services/sessions/common/session.js";
-import { ISessionsManagementService } from "../../../sessions/services/sessions/common/sessionsManagement.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
+import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import '../../../sessions/browser/actions/sessionsChatActions.js';
+import { ISessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
+import type { ISession } from '../../../sessions/services/sessions/common/session.js';
+import { ISessionsManagementService } from '../../../sessions/services/sessions/common/sessionsManagement.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ApprovalReviewModelSelection } from '../../../platform/agentHost/common/agentModels.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
@@ -57,7 +57,7 @@ test('permission commands use shared Chinese copy and require confirmation only 
 	} finally { resetNlsResolver(); }
 });
 
-test("Sessions owns the local New Chat command without requiring regular Workbench Views", async () => {
+test('Sessions owns the local New Chat command without requiring regular Workbench Views', async () => {
 	const onDidChange = new Emitter<void>();
 	let created = 0;
 	const viewService: ISessionsService = {
@@ -74,7 +74,7 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 		openUntitledSession() { },
 		openNewSession() {
 			created += 1;
-			return { untitledSessionId: `untitled-${created}`, title: "New code session", model: undefined, agent: undefined, workspace: { type: 'current' } };
+			return { untitledSessionId: `untitled-${created}`, title: 'New code session', model: undefined, agent: undefined, workspace: { type: 'current' } };
 		},
 		activateSelection() { },
 		closeVisibleSelection() { },
@@ -109,26 +109,26 @@ test('navigation New uses the active entry owner before the default ChatGPT entr
 	assert.deepEqual(calls, ['native', 'chatgpt']);
 });
 
-test("Sessions History opens the selected active chat", async () => {
+test('Sessions History opens the selected active chat', async () => {
 	const opened: Array<{ sessionId: string; threadId: string; }> = [];
 	const quickInput = new TestQuickInputService();
 	const sessions: readonly ISession[] = [
 		{
-			sessionId: "session-1",
-			title: "First Session",
-			status: "active",
-			nextApprovalMode: "manual",
+			sessionId: 'session-1',
+			title: 'First Session',
+			status: 'active',
+			nextApprovalMode: 'manual',
 			chats: [
-				{ threadId: "thread-1", origin: { type: "root" }, status: "active" },
-				{ threadId: "thread-2", origin: { type: "root" }, status: "archived" },
+				{ threadId: 'thread-1', origin: { type: 'root' }, status: 'active' },
+				{ threadId: 'thread-2', origin: { type: 'root' }, status: 'archived' },
 			],
 		},
 		{
-			sessionId: "session-2",
-			title: "Archived Session",
-			status: "archived",
-			nextApprovalMode: "manual",
-			chats: [{ threadId: "thread-3", origin: { type: "root" }, status: "active" }],
+			sessionId: 'session-2',
+			title: 'Archived Session',
+			status: 'archived',
+			nextApprovalMode: 'manual',
+			chats: [{ threadId: 'thread-3', origin: { type: 'root' }, status: 'active' }],
 		},
 	];
 	const services = new InstantiationService();
@@ -141,10 +141,10 @@ test("Sessions History opens the selected active chat", async () => {
 
 	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
 
-	assert.equal(quickInput.picker?.placeholder, "Select a session");
-	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ["First Session"]);
+	assert.equal(quickInput.picker?.placeholder, 'Select a session');
+	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ['First Session']);
 	quickInput.picker?.acceptFirst();
-	assert.deepEqual(opened, [{ sessionId: "session-1", threadId: "thread-1" }]);
+	assert.deepEqual(opened, [{ sessionId: 'session-1', threadId: 'thread-1' }]);
 });
 
 test('Session History shows each branch management state in Chinese before opening details', async () => {
@@ -223,9 +223,9 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	readonly onDidTriggerItemButton = Event.None;
 	sortByLabel = true;
 	items: readonly TItem[] = [];
-	ariaLabel = "";
-	placeholder = "";
-	value = "";
+	ariaLabel = '';
+	placeholder = '';
+	value = '';
 	valueSelection = { start: 0, end: 0 };
 	filterValue = (value: string): string => value;
 

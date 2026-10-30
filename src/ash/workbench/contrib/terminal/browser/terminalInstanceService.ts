@@ -56,7 +56,7 @@ export class TerminalInstanceService extends Disposable {
 					dimensions: options.dimensions,
 					onTitleChanged: callbacks.onTitleChanged,
 				},
-				undefined,
+				{ profile: { type: 'default' }, type: options.type ?? options.config.type },
 				options.initialText ?? options.config.initialText,
 				options.waitOnExit ?? options.config.waitOnExit,
 				options.dimensions,
@@ -79,6 +79,7 @@ export class TerminalInstanceService extends Disposable {
 			: { ...options.execution });
 		const profile = options.profile.type === 'custom' ? Object.freeze({ ...options.profile, path: Object.freeze([...options.profile.path]), args: (typeof options.profile.args === 'string' ? options.profile.args : Object.freeze([...options.profile.args])) }) : Object.freeze({ ...options.profile });
 		const launch = Object.freeze({
+			type: options.type,
 			executable: Array.isArray(options.resolvedShellLaunchConfig?.executable) ? Object.freeze([...options.resolvedShellLaunchConfig.executable]) : options.resolvedShellLaunchConfig?.executable,
 			args: Array.isArray(options.resolvedShellLaunchConfig?.args) ? Object.freeze([...options.resolvedShellLaunchConfig.args]) : options.resolvedShellLaunchConfig?.args,
 			environmentVariableCollections: options.environmentVariableCollections ?? options.attachPersistentProcess?.state.environmentVariableCollections,
@@ -152,7 +153,7 @@ export class TerminalInstanceService extends Disposable {
 		if (!dirId && folders.length === 0) return undefined;
 		if (!dirId && folders.length > 1) throw new Error(localize('terminal.selectFolder', 'Select a workspace folder for the terminal.'));
 		const folder = dirId ? folders.find(folder => folder.id === dirId) : folders[0];
-		if (!folder) throw new Error("TerminalUnavailable: Terminal requires an open workspace folder");
+		if (!folder) throw new Error('TerminalUnavailable: Terminal requires an open workspace folder');
 		return folder;
 	}
 
@@ -163,8 +164,8 @@ function processWorkspaceFolder(dirId: string | undefined): { readonly dirId?: s
 }
 
 function terminalProfileTitle(profile: ITerminalProfile): string {
-	if (profile.profileId === "cmd" || profile.profileId === "command-prompt") {
-		return "cmd";
+	if (profile.profileId === 'cmd' || profile.profileId === 'command-prompt') {
+		return 'cmd';
 	}
 	return profile.title;
 }

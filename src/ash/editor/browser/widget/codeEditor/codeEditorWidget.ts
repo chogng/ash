@@ -1,27 +1,27 @@
 import type { IBulkEditOptions } from '../../services/bulkEditService.js';
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
-import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
+import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { isAncestorOfActiveElement, trackFocus, type IFocusTracker } from '../../../../base/browser/focus.js';
 import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
-import { Selection, type ISelection } from "../../../common/core/selection.js";
-import { Position, type IPosition } from "../../../common/core/position.js";
+import { Selection, type ISelection } from '../../../common/core/selection.js';
+import { Position, type IPosition } from '../../../common/core/position.js';
 import { CursorColumns } from '../../../common/core/cursorColumns.js';
-import { Range, type IRange } from "../../../common/core/range.js";
-import { TextModel } from "../../../common/model/textModel.js";
+import { Range, type IRange } from '../../../common/core/range.js';
+import { TextModel } from '../../../common/model/textModel.js';
 import { type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextModel } from '../../../common/model.js';
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
 import { EditorType, Handler, ScrollType, type CompositionTypePayload, type ICommand, type IEditorAction, type ICodeEditorViewState, type IEditorDecorationsCollection, type IEditorModel, type IEditorViewState, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload, type IContentSizeChangedEvent } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
 import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, IPasteEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { View, type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
-import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { CodeEditorContributions } from "./codeEditorContributions.js";
+import { KeyboardNavigationController, ViewController } from '../../view/viewController.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { CodeEditorContributions } from './codeEditorContributions.js';
 import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
 import { migrateOptions } from '../../config/migrateOptions.js';
 import { EditorExtensionsRegistry, type EditorAction, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
@@ -46,8 +46,8 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { EditSources, TextModelEditSource } from '../../../common/textModelEditSource.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
-import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { InternalEditorAction } from '../../../common/editorAction.js';
 import { type ICursorPositionChangedEvent, type ICursorSelectionChangedEvent } from '../../../common/cursorEvents.js';
@@ -1340,11 +1340,11 @@ class EditorDecorationsCollection implements IEditorDecorationsCollection {
 }
 
 function validateOptions(options: CodeEditorWidgetOptions): void {
-	if (!options || typeof options !== "object" || !isHTMLElement(options.container) || (options.model !== null && !(options.model instanceof TextModel))) {
-		throw new TypeError("Code editor widget requires a container and a text model or null");
+	if (!options || typeof options !== 'object' || !isHTMLElement(options.container) || (options.model !== null && !(options.model instanceof TextModel))) {
+		throw new TypeError('Code editor widget requires a container and a text model or null');
 	}
-	if (options.onContributionError !== undefined && typeof options.onContributionError !== "function") {
-		throw new TypeError("Code editor contribution error handler must be a function");
+	if (options.onContributionError !== undefined && typeof options.onContributionError !== 'function') {
+		throw new TypeError('Code editor contribution error handler must be a function');
 	}
 }
 

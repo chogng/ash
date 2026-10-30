@@ -1,9 +1,9 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { type TrackedRange } from "../../common/model/trackedRange.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { type TrackedRange } from '../../common/model/trackedRange.js';
 import { TrackedRangeStickiness } from '../../common/model.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
@@ -15,8 +15,8 @@ const range = (
 	position(0, endColumn),
 );
 
-test("TrackedRange applies explicit insertion-edge stickiness", () => {
-	using model = new TextModel("abcd");
+test('TrackedRange applies explicit insertion-edge stickiness', () => {
+	using model = new TextModel('abcd');
 	using both = model.trackRange(
 		range(1, 3),
 		TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
@@ -35,8 +35,8 @@ test("TrackedRange applies explicit insertion-edge stickiness", () => {
 	);
 
 	model.applyEdits([
-		{ range: range(3, 3), text: "Y" },
-		{ range: range(1, 1), text: "X" },
+		{ range: range(3, 3), text: 'Y' },
+		{ range: range(1, 1), text: 'X' },
 	]);
 
 	assert.deepEqual({
@@ -46,16 +46,16 @@ test("TrackedRange applies explicit insertion-edge stickiness", () => {
 		end: model.getTextInRange(end.range),
 		neither: model.getTextInRange(neither.range),
 	}, {
-		text: "aXbcYd",
-		both: "XbcY",
-		start: "Xbc",
-		end: "bcY",
-		neither: "bc",
+		text: 'aXbcYd',
+		both: 'XbcY',
+		start: 'Xbc',
+		end: 'bcY',
+		neither: 'bc',
 	});
 });
 
-test("Collapsed tracked ranges stay ordered at inserted text", () => {
-	using model = new TextModel("abc");
+test('Collapsed tracked ranges stay ordered at inserted text', () => {
+	using model = new TextModel('abc');
 	const tracked = new Map<TrackedRangeStickiness, TrackedRange>();
 	for (const stickiness of [
 		TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
@@ -69,7 +69,7 @@ test("Collapsed tracked ranges stay ordered at inserted text", () => {
 		);
 	}
 
-	model.applyEdits([{ range: range(1, 1), text: "X" }]);
+	model.applyEdits([{ range: range(1, 1), text: 'X' }]);
 
 	assert.deepEqual(
 		Object.fromEntries(
@@ -84,19 +84,19 @@ test("Collapsed tracked ranges stay ordered at inserted text", () => {
 		{
 			[TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges]: {
 				range: range(1, 2),
-				text: "X",
+				text: 'X',
 			},
 			[TrackedRangeStickiness.GrowsOnlyWhenTypingBefore]: {
 				range: range(1, 1),
-				text: "",
+				text: '',
 			},
 			[TrackedRangeStickiness.GrowsOnlyWhenTypingAfter]: {
 				range: range(2, 2),
-				text: "",
+				text: '',
 			},
 			[TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges]: {
 				range: range(2, 2),
-				text: "",
+				text: '',
 			},
 		},
 	);
@@ -106,8 +106,8 @@ test("Collapsed tracked ranges stay ordered at inserted text", () => {
 	}
 });
 
-test("TrackedRange resolves replacement containment deterministically", () => {
-	using model = new TextModel("abcdef");
+test('TrackedRange resolves replacement containment deterministically', () => {
+	using model = new TextModel('abcdef');
 	using both = model.trackRange(
 		range(2, 4),
 		TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
@@ -125,7 +125,7 @@ test("TrackedRange resolves replacement containment deterministically", () => {
 		TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 	);
 
-	model.applyEdits([{ range: range(1, 5), text: "Z" }]);
+	model.applyEdits([{ range: range(1, 5), text: 'Z' }]);
 
 	assert.deepEqual({
 		text: model.getText(),
@@ -134,7 +134,7 @@ test("TrackedRange resolves replacement containment deterministically", () => {
 		end: end.range,
 		neither: neither.range,
 	}, {
-		text: "aZf",
+		text: 'aZf',
 		both: range(1, 2),
 		start: range(1, 1),
 		end: range(2, 2),
@@ -142,8 +142,8 @@ test("TrackedRange resolves replacement containment deterministically", () => {
 	});
 });
 
-test("TrackedRange updates before events and follows undo and redo", () => {
-	using model = new TextModel("abcdef");
+test('TrackedRange updates before events and follows undo and redo', () => {
+	using model = new TextModel('abcdef');
 	using tracked = model.trackRange(
 		range(2, 4),
 		TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
@@ -153,15 +153,15 @@ test("TrackedRange updates before events and follows undo and redo", () => {
 		observedText.push(model.getTextInRange(tracked.range));
 	});
 
-	model.pushEditOperations(null, [{ range: range(2, 4), text: "XYZ" }], () => null);
+	model.pushEditOperations(null, [{ range: range(2, 4), text: 'XYZ' }], () => null);
 	model.undo();
 	model.redo();
 
-	assert.deepEqual(observedText, ["XYZ", "cd", "XYZ"]);
+	assert.deepEqual(observedText, ['XYZ', 'cd', 'XYZ']);
 });
 
-test("TrackedRange validates model positions and disposal", () => {
-	const model = new TextModel("abc");
+test('TrackedRange validates model positions and disposal', () => {
+	const model = new TextModel('abc');
 	assert.throws(
 		() => model.trackRange(
 			Range.fromPositions(position(1, 0)),
@@ -188,12 +188,12 @@ test("TrackedRange validates model positions and disposal", () => {
 	assert.throws(() => modelOwned.range, /already disposed/);
 });
 
-test("TrackedRange rejects unknown stickiness", () => {
-	using model = new TextModel("abc");
+test('TrackedRange rejects unknown stickiness', () => {
+	using model = new TextModel('abc');
 	assert.throws(
 		() => model.trackRange(
 			range(0, 1),
-			"invalid" as unknown as TrackedRangeStickiness,
+			'invalid' as unknown as TrackedRangeStickiness,
 		),
 		/Unknown tracked range stickiness/,
 	);

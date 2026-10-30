@@ -70,32 +70,58 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	}
 });
 
-test('Outline shows real nested symbols, filters, sorts, and navigates the editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench }) => {
-	const page = workbench.page;
-	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
-	await page.locator('[data-view-id="outline"] .ash-pane-view-header-button').click();
-	const view = page.locator('[data-view-id="outline"]');
-	const tree = view.getByRole('tree');
-	await expect(view.locator('.ash-outline-label')).toHaveText(['zebra', 'nested', 'alpha']);
-	await tree.focus();
-	await tree.press('ControlOrMeta+f');
-	const find = tree.getByRole('searchbox', { name: 'Find in Tree' });
-	await find.fill('nested');
-	await expect(view.locator('.ash-outline-label')).toHaveText(['zebra', 'nested']);
-	await find.press('Escape');
-	await expect(tree).toBeFocused();
-	await expect(view.locator('.ash-outline-label')).toHaveText(['zebra', 'nested', 'alpha']);
-	const actions = view.getByRole('button', { name: 'More Actions', exact: true });
-	await workbench.menus.select(application, () => actions.click(), ['Sort by Name']);
-	await expect(view.locator('.ash-outline-label')).toHaveText(['alpha', 'zebra', 'nested']);
-	await view.getByRole('treeitem', { name: 'alpha', exact: true }).click();
-	await tree.press('Enter');
-	await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
-	await expect(workbench.editors.groupAt(0).editor.element.getByText('Line 5, column 15, 5 characters selected', { exact: true })).toHaveText('Line 5, column 15, 5 characters selected');
-	// Replacing the document must refresh the retained outline rather than the editor pane.
-	await page.keyboard.press('ControlOrMeta+a');
-	await page.keyboard.insertText('function replacement() { return 3; }');
-	await expect(view.locator('.ash-outline-label')).toHaveText(['replacement']);
+test.describe('Outline symbol updates', () => {
+	test.use({ electronUserSettings: { 'workbench.hover.delay': 0 } });
+
+	test('Outline shows real nested symbols, filters, sorts, and navigates the editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench }) => {
+		const page = workbench.page;
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+		await page.locator('[data-view-id="outline"] .ash-pane-view-header-button').click();
+		const view = page.locator('[data-view-id="outline"]');
+		const tree = view.getByRole('tree');
+		const zebra = tree.getByRole('treeitem', { name: 'zebra', exact: true }).first();
+		await expect(zebra).toBeVisible();
+		// Syntax and language-server providers may arrive separately. Follow one complete source hierarchy.
+		const rootId = (await zebra.getAttribute('data-tree-id'))!;
+		const provider = rootId.slice(0, rootId.lastIndexOf('/'));
+		const symbols = tree.locator(`[data-tree-id^="${provider}/"]`);
+		const labels = symbols.locator('.ash-outline-label');
+		const alphaRow = symbols.filter({ has: page.locator('.ash-outline-label').filter({ hasText: /^alpha$/u }) });
+		await expect(labels).toHaveText(['zebra', 'nested', 'alpha']);
+		const alpha = await alphaRow.elementHandle();
+		await tree.locator(`[data-tree-id="${rootId}"]`).click();
+		await tree.press('ArrowLeft');
+		await expect(labels).toHaveText(['zebra', 'alpha']);
+		expect(await alphaRow.evaluate((element, previous) => element === previous, alpha)).toBe(true);
+		await page.mouse.move(0, 0);
+		await page.keyboard.press('Escape');
+		await alphaRow.locator('.ash-outline-row').hover();
+		await expect(page.getByRole('tooltip')).toHaveText('alpha');
+		await page.mouse.move(0, 0);
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('tooltip')).toHaveCount(0);
+		await tree.press('ArrowRight');
+		await expect(labels).toHaveText(['zebra', 'nested', 'alpha']);
+		await tree.focus();
+		await tree.press('ControlOrMeta+f');
+		const find = tree.getByRole('searchbox', { name: 'Find in Tree' });
+		await find.fill('nested');
+		await expect(labels).toHaveText(['zebra', 'nested']);
+		await find.press('Escape');
+		await expect(tree).toBeFocused();
+		await expect(labels).toHaveText(['zebra', 'nested', 'alpha']);
+		const actions = view.getByRole('button', { name: 'More Actions', exact: true });
+		await workbench.menus.select(application, () => actions.click(), ['Sort by Name']);
+		await expect(labels).toHaveText(['alpha', 'zebra', 'nested']);
+		await alphaRow.click();
+		await tree.press('Enter');
+		await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
+		await expect(workbench.editors.groupAt(0).editor.element.getByText('Line 5, column 15, 5 characters selected', { exact: true })).toHaveText('Line 5, column 15, 5 characters selected');
+		// Replacing the document must refresh the retained outline rather than the editor pane.
+		await page.keyboard.press('ControlOrMeta+a');
+		await page.keyboard.insertText('function replacement() { return 3; }');
+		await expect(labels).toHaveText(['replacement']);
+	});
 });
 
 test('Timeline records saves, compares a snapshot, and follows the selected file', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench, reloadWorkbench }) => {

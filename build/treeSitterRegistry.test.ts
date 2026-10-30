@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { format } from './format.ts';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -10,8 +11,16 @@ test('one package declaration generates both runtimes and detects stale registra
 	const root = await fixture(t);
 	await generateTreeSitterRegistry({ root });
 	await generateTreeSitterRegistry({ root, check: true });
+	for (const name of ['src/ash/platform/syntax/common/syntaxLanguages.generated.ts', 'src/ash/workbench/services/treeSitter/browser/treeSitterGrammars.generated.ts']) {
+		const path = resolve(root, name);
+		const source = await readFile(path, 'utf8');
+		assert.equal(format(path, source), source);
+	}
 	const metadata = await import(pathToFileURL(resolve(root, 'src/ash/platform/syntax/common/syntaxLanguages.generated.ts')).href);
-	assert.deepEqual(metadata.syntaxLanguageDefinitions.map((language: { id: string; }) => language.id), ['demo', 'demoreact']);
+	assert.deepEqual(
+		metadata.syntaxLanguageDefinitions.map((language: { id: string; }) => language.id),
+		['demo', 'demoreact'],
+	);
 	const rust = await readFile(resolve(root, 'crates/syntax/src/languages.generated.rs'), 'utf8');
 	const web = await readFile(resolve(root, 'src/ash/workbench/services/treeSitter/browser/treeSitterGrammars.generated.ts'), 'utf8');
 	assert.match(rust, /ash_grammars::language\("demo"\)/);
@@ -76,13 +85,27 @@ async function fixture(t: { after(callback: () => Promise<void>): void; }): Prom
 	await mkdir(resolve(root, 'extensions/shared/queries'), { recursive: true });
 	await writeFile(resolve(root, 'extensions/shared/queries/base.scm'), '(identifier) @variable');
 	await writeFile(resolve(root, 'extensions/demo/package.json'), JSON.stringify({ contributes: { languages: [{ id: 'demo' }, { id: 'demoreact' }] } }));
-	await writeFile(resolve(root, 'extensions/demo/tree-sitter/grammars.json'), JSON.stringify([{
-		name: 'demo',
-		highlights: ['@shared/queries/base.scm'], tags: [], folds: [], injections: [],
-		languages: [
-			{ id: 'demo', variant: 'Demo', editorLanguage: 'demo', editorIds: ['demo'], aliases: ['dm'] },
-			{ id: 'demoreact', variant: 'Demoreact', editorLanguage: 'demoreact', editorIds: ['demoreact'], aliases: ['dmx'] },
-		],
-	}]));
+	await writeFile(
+		resolve(root, 'extensions/demo/tree-sitter/grammars.json'),
+		JSON.stringify([
+			{
+				name: 'demo',
+				highlights: ['@shared/queries/base.scm'],
+				tags: [],
+				folds: [],
+				injections: [],
+				languages: [
+					{ id: 'demo', variant: 'Demo', editorLanguage: 'demo', editorIds: ['demo'], aliases: ['dm'] },
+					{
+						id: 'demoreact',
+						variant: 'Demoreact',
+						editorLanguage: 'demoreact',
+						editorIds: ['demoreact'],
+						aliases: ['dmx'],
+					},
+				],
+			},
+		]),
+	);
 	return root;
 }

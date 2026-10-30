@@ -10,53 +10,53 @@ import { IFileSearchService } from '../../../../../platform/search/common/fileSe
 import { ISearchService } from '../../../../services/search/common/search.js';
 import { SearchService } from '../../../../services/search/common/searchService.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
-import assert from "node:assert/strict";
+import assert from 'node:assert/strict';
 import { test, suite } from 'mocha';
-import { JSDOM } from "jsdom";
-import { BrowserContentSearchService } from "../../../../../platform/search/browser/searchService.js";
-import type { IContentSearchQuery, ContentSearchMatch } from "../../../../../platform/search/common/search.js";
-import type { IContentSearchApi } from "../../../../../platform/search/common/searchApi.js";
+import { JSDOM } from 'jsdom';
+import { BrowserContentSearchService } from '../../../../../platform/search/browser/searchService.js';
+import type { IContentSearchQuery, ContentSearchMatch } from '../../../../../platform/search/common/search.js';
+import type { IContentSearchApi } from '../../../../../platform/search/common/searchApi.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
-import { ContentSearchConfiguration } from "../../common/searchConfiguration.js";
-import { DisposableStore } from "../../../../../base/common/lifecycle.js";
-import { Event } from "../../../../../base/common/event.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import { IConfigurationService } from "../../../../../platform/configuration/common/configuration.js";
-import { IContentSearchService as ContentSearchServiceId } from "../../../../../platform/search/common/search.js";
-import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { TestWorkspaceService } from "../../../../services/configuration/test/common/testServices.js";
-import { IEditorService } from "../../../../services/editor/common/editorService.js";
-import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import { BrowserContextViewService } from "../../../../../platform/contextview/browser/contextViewService.js";
-import { HoverService, IHoverService } from "../../../../../platform/hover/browser/hoverService.js";
-import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import "../../../../contrib/accessibility/browser/accessibilityConfiguration.js";
-import { BrowserStorageService } from "../../../../services/storage/browser/storageService.js";
-import { SearchHistoryService, ISearchHistoryService } from "../../common/searchHistoryService.js";
-import { IStorageService } from "../../../../../platform/storage/common/storage.js";
-import { IReplaceService } from "../../browser/replace.js";
-import { ReplaceService } from "../../browser/replaceService.js";
-import { IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
-import { BulkEditTestServices } from "../../../bulkEdit/test/browser/bulkEditTestServices.js";
-import { ITextModelResourceService } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
-import { IBulkEditService } from "../../../../../editor/browser/services/bulkEditService.js";
-import { IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
-import { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import { CommandService } from "../../../../services/commands/common/commandService.js";
-import { IViewsService } from "../../../../services/views/common/viewsService.js";
-import type { IView } from "../../../../common/views.js";
-import type { SearchView } from "../../browser/searchView.js";
-import { SEARCH_VIEW_ID, SearchCommandIds } from "../../common/constants.js";
-import { IClipboardService } from "../../../../../platform/clipboard/common/clipboardService.js";
-import { BrowserClipboardService } from "../../../../../platform/clipboard/browser/clipboardService.js";
-import { ILabelService } from "../../../../../platform/label/common/label.js";
-import { LabelService } from "../../../../services/label/common/labelService.js";
-import { isWindows, operatingSystem, OperatingSystem } from "../../../../../base/common/platform.js";
-import type { IContextMenuDelegate } from "../../../../../base/browser/contextmenu.js";
-import { MenuId } from "../../../../../platform/actions/common/actions.js";
-import { MenuService } from "../../../../../platform/actions/common/menuService.js";
-import type { IAction } from "../../../../../base/common/actions.js";
+import { ContentSearchConfiguration } from '../../common/searchConfiguration.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { Event } from '../../../../../base/common/event.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IContentSearchService as ContentSearchServiceId } from '../../../../../platform/search/common/search.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
+import { HoverService, IHoverService } from '../../../../../platform/hover/browser/hoverService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import '../../../../contrib/accessibility/browser/accessibilityConfiguration.js';
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
+import { SearchHistoryService, ISearchHistoryService } from '../../common/searchHistoryService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { IReplaceService } from '../../browser/replace.js';
+import { ReplaceService } from '../../browser/replaceService.js';
+import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
+import { BulkEditTestServices } from '../../../bulkEdit/test/browser/bulkEditTestServices.js';
+import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import type { IView } from '../../../../common/views.js';
+import type { SearchView } from '../../browser/searchView.js';
+import { SEARCH_VIEW_ID, SearchCommandIds } from '../../common/constants.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
+import { ILabelService } from '../../../../../platform/label/common/label.js';
+import { LabelService } from '../../../../services/label/common/labelService.js';
+import { isWindows, operatingSystem, OperatingSystem } from '../../../../../base/common/platform.js';
+import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
+import { MenuId } from '../../../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import type { IAction } from '../../../../../base/common/actions.js';
 import '../../browser/searchActionsTopBar.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import type { IContentSearchComplete, IContentSearchOptions } from '../../../../../platform/search/common/search.js';
@@ -66,17 +66,17 @@ interface ViewSearchProvider { search(query: IContentSearchQuery, options?: ICon
 
 const matches: readonly ContentSearchMatch[] = [
 	{
-		dirId: "workspace",
-		path: "src/main.ts",
+		dirId: 'workspace',
+		path: 'src/main.ts',
 		lineNumber: 4,
-		preview: "const needle = true;",
+		preview: 'const needle = true;',
 		ranges: [{ start: 6, end: 12 }],
 	},
 	{
-		dirId: "workspace",
-		path: "src/main.ts",
+		dirId: 'workspace',
+		path: 'src/main.ts',
 		lineNumber: 9,
-		preview: "use(needle);",
+		preview: 'use(needle);',
 		ranges: [{ start: 4, end: 10 }],
 	},
 ];
@@ -502,14 +502,14 @@ test('Search lifecycle slow-search timer belongs to its query and errors restore
 	}
 });
 
-test("BrowserContentSearchService pulls bounded batches and releases the job", async () => {
+test('BrowserContentSearchService pulls bounded batches and releases the job', async () => {
 	const readCursors: number[] = [];
 	let cancelCount = 0;
 	const api: IContentSearchApi = {
 		start: async (params) => {
-			assert.equal(params.query, "needle");
+			assert.equal(params.query, 'needle');
 			assert.equal(params.maxResults, 2_000);
-			return { searchId: "search-1" };
+			return { searchId: 'search-1' };
 		},
 		read: async (params) => {
 			readCursors.push(params.afterMatch);
@@ -553,8 +553,8 @@ test("BrowserContentSearchService pulls bounded batches and releases the job", a
 	assert.equal(cancelCount, 1);
 });
 
-test("SearchView submits typed filters and groups highlighted matches", async () => {
-	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
+test('SearchView submits typed filters and groups highlighted matches', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const installedGlobals = installDomGlobals(browser);
 	let submitted: IContentSearchQuery | undefined;
 	const service: ViewSearchProvider = {
@@ -573,65 +573,65 @@ test("SearchView submits typed filters and groups highlighted matches", async ()
 		using store = new DisposableStore();
 		const services = createServices(store, browser, service);
 		const { SearchView } = await import(
-			"../../../../../workbench/contrib/search/browser/searchView.js"
+			'../../../../../workbench/contrib/search/browser/searchView.js'
 		);
 		using pane = services.createInstance(SearchView,
 			browser.window.document.body,
 			{
-				id: "ash.search",
-				title: "Search",
+				id: 'ash.search',
+				title: 'Search',
 			},
 		);
 		browser.window.document.body.append(pane.element);
 		const details = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Toggle Search Details"]')!;
-		assert.equal(details.getAttribute("aria-expanded"), "false");
+		assert.equal(details.getAttribute('aria-expanded'), 'false');
 		details.click();
-		assert.equal(details.getAttribute("aria-expanded"), "true");
-		input(pane.element, "Search workspace").value = "needle";
-		input(pane.element, "Files to include").value = "src/**, docs/**";
-		input(pane.element, "Files to exclude").value = "**/*.test.ts";
+		assert.equal(details.getAttribute('aria-expanded'), 'true');
+		input(pane.element, 'Search workspace').value = 'needle';
+		input(pane.element, 'Files to include').value = 'src/**, docs/**';
+		input(pane.element, 'Files to exclude').value = '**/*.test.ts';
 		pane.element.querySelector<HTMLButtonElement>('button[aria-label="Match Case"]')!.click();
 		pane.element.querySelector<HTMLButtonElement>('button[aria-label="Use Regular Expression"]')!.click();
 		details.click();
-		assert.equal(details.getAttribute("aria-expanded"), "false");
-		input(pane.element, "Search workspace").dispatchEvent(new browser.window.KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true }));
+		assert.equal(details.getAttribute('aria-expanded'), 'false');
+		input(pane.element, 'Search workspace').dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
 		assert.equal(submitted, undefined);
-		input(pane.element, "Search workspace").dispatchEvent(
-			new browser.window.KeyboardEvent("keydown", {
-				key: "Enter",
+		input(pane.element, 'Search workspace').dispatchEvent(
+			new browser.window.KeyboardEvent('keydown', {
+				key: 'Enter',
 				bubbles: true,
 				cancelable: true,
 			}),
 		);
 
 		await waitFor(() =>
-			pane.element.querySelector(".ash-search-status")?.textContent ===
-			"2 results"
+			pane.element.querySelector('.ash-search-status')?.textContent ===
+			'2 results'
 		);
 		assert.deepEqual(submitted, {
-			text: "needle",
+			text: 'needle',
 			wholeWord: false,
-			patternKind: "regex",
-			caseSensitivity: "sensitive",
-			includePatterns: ["src/**", "docs/**"],
-			excludePatterns: ["**/*.test.ts"],
+			patternKind: 'regex',
+			caseSensitivity: 'sensitive',
+			includePatterns: ['src/**', 'docs/**'],
+			excludePatterns: ['**/*.test.ts'],
 			maxResults: 2_000,
 			freshness: 'current',
 		});
 		assert.equal(
-			pane.element.querySelector(".ash-search-file-path .ash-icon-label-text")?.textContent,
-			"main.ts",
+			pane.element.querySelector('.ash-search-file-path .ash-icon-label-text')?.textContent,
+			'main.ts',
 		);
-		assert.equal(pane.element.querySelector(".ash-search-file-path .ash-icon-label-description")?.textContent, "src");
+		assert.equal(pane.element.querySelector('.ash-search-file-path .ash-icon-label-description')?.textContent, 'src');
 		assert.equal(
-			pane.element.querySelector(".ash-search-file-count")?.textContent,
-			"2",
+			pane.element.querySelector('.ash-search-file-count')?.textContent,
+			'2',
 		);
 		assert.deepEqual(
-			[...pane.element.querySelectorAll("mark")].map(
+			[...pane.element.querySelectorAll('mark')].map(
 				(element) => element.textContent,
 			),
-			["needle", "needle"],
+			['needle', 'needle'],
 		);
 	} finally {
 		browser.window.close();
@@ -641,15 +641,15 @@ test("SearchView submits typed filters and groups highlighted matches", async ()
 	}
 });
 
-test("SearchView applies configured query defaults and result limits", async () => {
-	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
+test('SearchView applies configured query defaults and result limits', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	const installedGlobals = installDomGlobals(browser);
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue(ContentSearchConfiguration.matchCase, true);
 	await configuration.updateValue(ContentSearchConfiguration.smartCase, false);
 	await configuration.updateValue(ContentSearchConfiguration.regularExpression, true);
-	await configuration.updateValue(ContentSearchConfiguration.includePatterns, "src/**, packages/**");
-	await configuration.updateValue(ContentSearchConfiguration.excludePatterns, "**/*.test.ts");
+	await configuration.updateValue(ContentSearchConfiguration.includePatterns, 'src/**, packages/**');
+	await configuration.updateValue(ContentSearchConfiguration.excludePatterns, '**/*.test.ts');
 	await configuration.updateValue(ContentSearchConfiguration.maxResults, 750);
 	let submitted: IContentSearchQuery | undefined;
 	const service: ViewSearchProvider = {
@@ -662,23 +662,23 @@ test("SearchView applies configured query defaults and result limits", async () 
 	try {
 		using store = new DisposableStore();
 		const services = createServices(store, browser, service, configuration);
-		const { SearchView } = await import("../../../../../workbench/contrib/search/browser/searchView.js");
-		using pane = services.createInstance(SearchView, browser.window.document.body, { id: "ash.search", title: "Search" });
+		const { SearchView } = await import('../../../../../workbench/contrib/search/browser/searchView.js');
+		using pane = services.createInstance(SearchView, browser.window.document.body, { id: 'ash.search', title: 'Search' });
 		browser.window.document.body.append(pane.element);
-		input(pane.element, "Search workspace").value = "Needle";
-		assert.equal(pane.element.querySelector('button[aria-label="Match Case"]')?.getAttribute('aria-pressed'), "true");
-		assert.equal(pane.element.querySelector('button[aria-label="Use Regular Expression"]')?.getAttribute('aria-pressed'), "true");
-		assert.equal(input(pane.element, "Files to include").value, "src/**, packages/**");
-		assert.equal(input(pane.element, "Files to exclude").value, "**/*.test.ts");
-		pane.element.querySelector("form")?.dispatchEvent(new browser.window.Event("submit", { bubbles: true, cancelable: true }));
+		input(pane.element, 'Search workspace').value = 'Needle';
+		assert.equal(pane.element.querySelector('button[aria-label="Match Case"]')?.getAttribute('aria-pressed'), 'true');
+		assert.equal(pane.element.querySelector('button[aria-label="Use Regular Expression"]')?.getAttribute('aria-pressed'), 'true');
+		assert.equal(input(pane.element, 'Files to include').value, 'src/**, packages/**');
+		assert.equal(input(pane.element, 'Files to exclude').value, '**/*.test.ts');
+		pane.element.querySelector('form')?.dispatchEvent(new browser.window.Event('submit', { bubbles: true, cancelable: true }));
 		await waitFor(() => submitted !== undefined);
 		assert.deepEqual(submitted, {
-			text: "Needle",
+			text: 'Needle',
 			wholeWord: false,
-			patternKind: "regex",
-			caseSensitivity: "sensitive",
-			includePatterns: ["src/**", "packages/**"],
-			excludePatterns: ["**/*.test.ts"],
+			patternKind: 'regex',
+			caseSensitivity: 'sensitive',
+			includePatterns: ['src/**', 'packages/**'],
+			excludePatterns: ['**/*.test.ts'],
 			maxResults: 750,
 			freshness: 'current',
 		});
@@ -690,9 +690,9 @@ test("SearchView applies configured query defaults and result limits", async () 
 
 function query(): IContentSearchQuery {
 	return {
-		text: "needle",
-		patternKind: "literal",
-		caseSensitivity: "smart",
+		text: 'needle',
+		patternKind: 'literal',
+		caseSensitivity: 'smart',
 		includePatterns: [],
 		excludePatterns: [],
 	};
@@ -713,15 +713,15 @@ async function waitFor(
 	const deadline = Date.now() + timeoutMillis;
 	while (!condition()) {
 		if (Date.now() >= deadline) {
-			throw new Error("Timed out waiting for SearchView");
+			throw new Error('Timed out waiting for SearchView');
 		}
 		await new Promise((resolve) => setTimeout(resolve, 0));
 	}
 }
 
 function installDomGlobals(browser: JSDOM): readonly string[] {
-	Object.defineProperty(browser.window.HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 600 });
-	Object.defineProperty(browser.window.HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 280 });
+	Object.defineProperty(browser.window.HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 600 });
+	Object.defineProperty(browser.window.HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 280 });
 	const globals = {
 		window: browser.window,
 		document: browser.window.document,
@@ -757,10 +757,10 @@ function createServices(store: DisposableStore, browser: JSDOM, search: ViewSear
 	services.registerInstance(IContextKeyService, store.add(new ContextKeyService()));
 	services.registerInstance(IContextMenuService, menus);
 	services.registerInstance(IHoverService, store.add(new HoverService(configuration, contextView, menus)));
-	services.registerInstance(IWorkspaceContextService, workspace ?? store.add(new TestWorkspaceService({ id: "workspace", uri: URI.file("/workspace") })));
+	services.registerInstance(IWorkspaceContextService, workspace ?? store.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') })));
 	services.registerInstance(ILabelService, store.add(createTestLabelService(services.get(IWorkspaceContextService), OperatingSystem.Linux)));
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [], openEditor: async () => { }, focusActiveEditor() { } });
-	services.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", flushInterval: 0 })));
+	services.registerInstance(IStorageService, store.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 })));
 	services.registerInstance(ISearchHistoryService, store.add(services.createInstance(SearchHistoryService)));
 	const editing = store.add(new BulkEditTestServices([]));
 	services.registerInstance(ITextModelResourceService, editing.models);
@@ -1167,7 +1167,12 @@ test('Copy leaves no-selection and inactive calls alone but honors dismissed exp
 				return { resultCount: 2, limitHit: false, error: undefined };
 			}
 		});
-		services.registerInstance(IClipboardService, new BrowserClipboardService({ writeText: async value => { if (rejectWrite) { throw denied; } written.push(value); } } as Clipboard));
+		services.registerInstance(IClipboardService, new BrowserClipboardService({
+			writeText: async value => {
+				if (rejectWrite) { throw denied; }
+				written.push(value);
+			}
+		} as Clipboard));
 		const { SearchView } = await import('../../browser/searchView.js');
 		await import('../../browser/searchActionsCopy.js');
 		await import('../../browser/searchActionsRemoveReplace.js');

@@ -1,12 +1,13 @@
+import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import type { IEditorIdentifier, IEditorPane, IResourceEditorInput } from '../../../common/editor.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
-import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
-import type { EditorOpenOptions, EditorOpenTarget, IEditorService, ISaveAllEditorsOptions, ISaveEditorsOptions, ISaveEditorsResult } from "../common/editorService.js";
+import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
+import type { EditorOpenOptions, EditorOpenTarget, IEditorService, ISaveAllEditorsOptions, ISaveEditorsOptions, ISaveEditorsResult } from '../common/editorService.js';
 import { GroupDirection, type IEditorGroup, type IEditorGroupsService, type IFindGroupScope } from '../common/editorGroupsService.js';
-import type { EditorGroupId, EditorGroupState, EditorPartChangeEvent, EditorPartState } from "../common/editorState.js";
+import type { EditorGroupId, EditorGroupState, EditorPartChangeEvent, EditorPartState } from '../common/editorState.js';
 
 /** Projects the Editor Part into the resource-oriented Workbench editor contract. */
 export class BrowserEditorService extends Disposable implements IEditorService, IEditorGroupsService {
@@ -79,7 +80,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 
 	addGroup(location: IEditorGroup | EditorGroupId, direction: GroupDirection): IEditorGroup {
 		const reference = typeof location === 'number' ? location : location.id;
-		const directions = { [GroupDirection.UP]: 'up', [GroupDirection.DOWN]: 'down', [GroupDirection.LEFT]: 'left', [GroupDirection.RIGHT]: 'right' } as const;
+		const directions = { [GroupDirection.UP]: Direction.Up, [GroupDirection.DOWN]: Direction.Down, [GroupDirection.LEFT]: Direction.Left, [GroupDirection.RIGHT]: Direction.Right } as const;
 		return this.editorPart.addGroup(reference, directions[direction]);
 	}
 

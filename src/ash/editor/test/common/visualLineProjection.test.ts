@@ -1,11 +1,11 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Position } from "../../common/core/position.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Position } from '../../common/core/position.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 
-test("visual line projection maps logical rows, UTF-16 columns, and empty lines", () => {
-	using model = new TextModel("ab😀cd\n\nxyz");
+test('visual line projection maps logical rows, UTF-16 columns, and empty lines', () => {
+	using model = new TextModel('ab😀cd\n\nxyz');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [
 		[2, 4, 6],
 		[0],
@@ -68,16 +68,16 @@ test("visual line projection maps logical rows, UTF-16 columns, and empty lines"
 	assert.equal(projection.firstVisualLineIndex(2), 4);
 });
 
-test("visual line projection rejects stale or invalid break coordinates", () => {
-	using model = new TextModel("a😀");
+test('visual line projection rejects stale or invalid break coordinates', () => {
+	using model = new TextModel('a😀');
 	assert.throws(() => EditorVisualLineProjection.fromBreakColumns(model, [[1]]), /final visual line break/);
 	assert.throws(() => EditorVisualLineProjection.fromBreakColumns(model, [[2, 3]]), /grapheme boundaries/);
 	assert.throws(() => EditorVisualLineProjection.fromBreakColumns(model, [[0, 3]]), /empty visual segment/);
 	assert.throws(() => EditorVisualLineProjection.fromBreakColumns(model, []), /one entry/);
 });
 
-test("identity visual line projection resolves unwrapped lines lazily", () => {
-	using model = new TextModel("first\nsecond");
+test('identity visual line projection resolves unwrapped lines lazily', () => {
+	using model = new TextModel('first\nsecond');
 	const projection = EditorVisualLineProjection.identity(model);
 
 	assert.equal(projection.visualLineCount, 2);

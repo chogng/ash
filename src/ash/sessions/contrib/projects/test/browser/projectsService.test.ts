@@ -28,7 +28,7 @@ class ProjectsFixture extends Disposable {
 		this._register(toDisposable(() => browser.window.close()));
 		this.services.registerInstance(IStorageService, storage);
 		this.services.registerInstance(IProjectService, {
-			addSession: async () => { throw new Error("Unexpected project membership change"); },
+			addSession: async () => { throw new Error('Unexpected project membership change'); },
 			onDidChange: this.changed.event,
 			list: async () => this.pending ? this.pending.p : [...this.projects],
 			read: async id => this.projects.find(project => project.id === id)!,

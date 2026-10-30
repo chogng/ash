@@ -1,11 +1,11 @@
 import type { IFindWidgetStyles } from './abstractTree.js';
 import type { IListStyles } from '../list/listWidget.js';
-import type { Event } from "../../../common/event.js";
-import { Disposable } from "../../../common/lifecycle.js";
-import type { ListScrolling } from "../list/list.js";
-import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "./objectTree.js";
-import type { ObjectTreeElement, ObjectTreeIdentityProvider, ObjectTreeNode } from "./objectTreeModel.js";
-import type { TreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreeSorter, TreeTwistieState } from "./tree.js";
+import type { Event } from '../../../common/event.js';
+import { Disposable } from '../../../common/lifecycle.js';
+import type { ListScrolling } from '../list/list.js';
+import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from './objectTree.js';
+import type { ObjectTreeElement, ObjectTreeIdentityProvider, ObjectTreeNode } from './objectTreeModel.js';
+import type { TreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreeSorter, TreeTwistieState } from './tree.js';
 
 export interface DataTreeOptions<T> {
 	readonly styles?: IListStyles;
@@ -138,7 +138,7 @@ export class DataTree<TInput, T> extends Disposable {
 	}
 
 	private requireInput(): TInput {
-		if (this.input === undefined) throw new Error("DataTree input is not set");
+		if (this.input === undefined) throw new Error('DataTree input is not set');
 		return this.input;
 	}
 }

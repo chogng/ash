@@ -14,12 +14,12 @@ import { OutputViewPane } from './outputView.js';
 import { OutputAccessibilityHelp } from './outputAccessibilityHelp.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { Action2, registerAction2 } from "../../../../platform/actions/common/actions.js";
-import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
-import { IEditorService } from "../../../services/editor/common/editorService.js";
-import { IWorkbenchHostService } from "../../../services/host/common/workbenchHostService.js";
-import { IOutputService, type IOutputChannel, OUTPUT_MODE_ID, LOG_MODE_ID, CLEAR_OUTPUT_COMMAND_ID, EXPORT_OUTPUT_COMMAND_ID, OPEN_OUTPUT_IN_EDITOR_COMMAND_ID, OUTPUT_VIEW_ID, SHOW_OUTPUT_CHANNELS_COMMAND_ID, SHOW_OUTPUT_COMMAND_ID } from "../../../services/output/common/output.js";
-import { IViewsService } from "../../../services/views/common/viewsService.js";
+import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IWorkbenchHostService } from '../../../services/host/common/workbenchHostService.js';
+import { IOutputService, type IOutputChannel, OUTPUT_MODE_ID, LOG_MODE_ID, CLEAR_OUTPUT_COMMAND_ID, EXPORT_OUTPUT_COMMAND_ID, OPEN_OUTPUT_IN_EDITOR_COMMAND_ID, OUTPUT_VIEW_ID, SHOW_OUTPUT_CHANNELS_COMMAND_ID, SHOW_OUTPUT_COMMAND_ID } from '../../../services/output/common/output.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { ILoggerService, type ILogFile } from '../../../../platform/log/common/log.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { CONTEXT_SAVED_LOGS_AVAILABLE, OPEN_SAVED_LOGS_COMMAND_ID } from '../../../services/output/common/output.js';
@@ -67,7 +67,7 @@ registerAction2(class OpenSavedLogsAction extends Action2 {
 });
 
 registerAction2(class ShowOutputAction extends Action2 {
-	constructor() { super({ id: SHOW_OUTPUT_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ShowOutputAction' }, "View: Show Output"), f1: true }); }
+	constructor() { super({ id: SHOW_OUTPUT_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ShowOutputAction' }, 'View: Show Output'), f1: true }); }
 	override async run(accessor: ServicesAccessor): Promise<boolean> {
 		const channel = accessor.get(IOutputService).activeChannel;
 		if (!channel) return accessor.get(IViewsService).focusView(OUTPUT_VIEW_ID);
@@ -77,14 +77,14 @@ registerAction2(class ShowOutputAction extends Action2 {
 });
 
 registerAction2(class ShowOutputChannelsAction extends Action2 {
-	constructor() { super({ id: SHOW_OUTPUT_CHANNELS_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ShowOutputChannelsAction' }, "Output: Show Output Channels"), f1: true }); }
+	constructor() { super({ id: SHOW_OUTPUT_CHANNELS_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ShowOutputChannelsAction' }, 'Output: Show Output Channels'), f1: true }); }
 	override run(accessor: ServicesAccessor): void {
 		const output = accessor.get(IOutputService);
 		const picker = accessor.get(IQuickInputService).createQuickPick<OutputChannelQuickPickItem>();
 		const disposables = new DisposableStore();
 		disposables.add(picker);
 		picker.placeholder = localize('output.pickChannel', 'Select an Output channel');
-		picker.items = output.channels.map(channel => ({ channel, label: channel.label, description: channel.kind === "log" ? localize('output.log', 'Log') : undefined, detail: channel.descriptor.extensionId }));
+		picker.items = output.channels.map(channel => ({ channel, label: channel.label, description: channel.kind === 'log' ? localize('output.log', 'Log') : undefined, detail: channel.descriptor.extensionId }));
 		disposables.add(picker.onDidAccept(() => {
 			const item = picker.selectedItems[0];
 			if (!item) return;
@@ -96,12 +96,12 @@ registerAction2(class ShowOutputChannelsAction extends Action2 {
 });
 
 registerAction2(class ClearOutputAction extends Action2 {
-	constructor() { super({ id: CLEAR_OUTPUT_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ClearOutputAction' }, "Output: Clear Output"), f1: true }); }
+	constructor() { super({ id: CLEAR_OUTPUT_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ClearOutputAction' }, 'Output: Clear Output'), f1: true }); }
 	override run(accessor: ServicesAccessor): void { accessor.get(IOutputService).activeChannel?.clear(); }
 });
 
 registerAction2(class OpenOutputInEditorAction extends Action2 {
-	constructor() { super({ id: OPEN_OUTPUT_IN_EDITOR_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.OpenOutputInEditorAction' }, "Output: Open Output in Editor"), f1: true }); }
+	constructor() { super({ id: OPEN_OUTPUT_IN_EDITOR_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.OpenOutputInEditorAction' }, 'Output: Open Output in Editor'), f1: true }); }
 	public override async run(accessor: ServicesAccessor): Promise<void> {
 		const channel = accessor.get(IOutputService).activeChannel;
 		if (channel) {
@@ -112,11 +112,11 @@ registerAction2(class OpenOutputInEditorAction extends Action2 {
 });
 
 registerAction2(class ExportOutputAction extends Action2 {
-	constructor() { super({ id: EXPORT_OUTPUT_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ExportOutputAction' }, "Output: Export Output…"), f1: true }); }
+	constructor() { super({ id: EXPORT_OUTPUT_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ExportOutputAction' }, 'Output: Export Output…'), f1: true }); }
 	override run(accessor: ServicesAccessor): void {
 		const channel = accessor.get(IOutputService).activeChannel;
 		if (channel) {
-			accessor.get(IWorkbenchHostService).downloadText({ fileName: `${channel.label.replace(/[\\/:*?"<>|\u0000-\u001F]/g, "-")}.log`, content: channel.getText(), mediaType: "text/plain;charset=utf-8" });
+			accessor.get(IWorkbenchHostService).downloadText({ fileName: `${channel.label.replace(/[\\/:*?"<>|\u0000-\u001F]/g, '-')}.log`, content: channel.getText(), mediaType: 'text/plain;charset=utf-8' });
 		}
 	}
 });

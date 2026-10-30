@@ -1,6 +1,7 @@
 import './media/bannerpart.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
@@ -30,7 +31,7 @@ import { Part } from '../../part.js';
 /** A single window notice surface; pending producers retain their own identity and priority. */
 export class BannerPart extends Part implements IBannerService {
 	declare readonly _serviceBrand: undefined;
-	readonly height = 32;
+	readonly height = 36;
 	private readonly notices = new Map<string, IBannerItem>();
 	private readonly content = this._register(new DisposableStore());
 	private displayed: IBannerItem | undefined;
@@ -134,6 +135,9 @@ export class BannerPart extends Part implements IBannerService {
 
 		const document = this.domNode.ownerDocument;
 		this.domNode.classList.toggle('neutral', next.neutral === true);
+		const surface = h(document, 'div');
+		surface.className = 'ash-banner-content';
+		this.domNode.append(surface);
 		if (next.icon) {
 			const icon = h(document, 'span');
 			icon.className = 'ash-banner-icon';
@@ -144,17 +148,18 @@ export class BannerPart extends Part implements IBannerService {
 				image.alt = '';
 				icon.append(image);
 			} else appendIcon(next.icon, icon);
-			this.domNode.append(icon);
+			surface.append(icon);
 		}
 		const message = h(document, 'div');
 		message.className = 'ash-banner-message';
 		if (typeof next.message === 'string') message.textContent = next.message;
 		else message.append(this.content.add(this.markdown.render(next.message, { ownerDocument: document })).element);
-		this.domNode.append(message);
+		surface.append(message);
 		const text = message.textContent?.trim() ?? '';
 		const label = next.ariaLabel ?? text;
 		this.domNode.setAttribute('aria-label', label);
-		this.content.add(this.hover.setupDelayedHover(message, { content: text }));
+		// Open into the content area so native titlebar controls cannot cover the tooltip.
+		this.content.add(this.hover.setupDelayedHover(message, { content: text, position: { hoverPosition: HoverPosition.BELOW } }));
 		const actions = h(document, 'div');
 		actions.className = 'ash-banner-actions';
 		for (const action of next.actions ?? []) {
@@ -162,20 +167,20 @@ export class BannerPart extends Part implements IBannerService {
 				opener: (href: string) => { void this.opener.open(href, { allowCommands: true, fromUserGesture: true }).catch(onUnexpectedError); },
 			}));
 		}
-		this.domNode.append(actions);
+		surface.append(actions);
 		const close = h(document, 'button');
 		close.className = 'ash-banner-close';
 		close.type = 'button';
 		const closeLabel = next.closeLabel ?? localize('banner.close', 'Close Banner');
 		close.setAttribute('aria-label', closeLabel);
-		this.content.add(this.hover.setupDelayedHover(close, { content: closeLabel }));
+		this.content.add(this.hover.setupDelayedHover(close, { content: closeLabel, position: { hoverPosition: HoverPosition.BELOW } }));
 		appendIcon(Lxicon.close, close);
 		const item = next;
 		this.content.add(addDisposableListener(close, 'click', () => {
 			this.hide(item.id);
 			item.onClose?.();
 		}));
-		this.domNode.append(close);
+		surface.append(close);
 		if (!wasVisible) this.setBannerVisible(true);
 		// State changes never steal editor focus, but keep a keyboard user inside an updated notice.
 		if (hadFocus) {

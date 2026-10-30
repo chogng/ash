@@ -1,12 +1,12 @@
-import { Emitter } from "../../../../base/common/event.js";
+import { Emitter } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
 import { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import type { ExtensionsPackageSummaryDto } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ExtensionsBuiltInProviders, ExtensionsEditorExtensionPolicy, ExtensionsEditorExtensionPolicyAction, ExtensionsEditorExtensions, ExtensionsRecommendationEnvironment } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { IExtensionManagementApi } from "../../../../platform/extensionManagement/common/extensionManagementApi.js";
-import type { IExtensionManagementService, ExtensionsAcquiredCapability, ExtensionsBrowseSnapshot, ExtensionsInstalledPackage, ExtensionsPackageDetails, ExtensionsPackageSummary, ExtensionsSearchOptions, ExtensionsSearchPage, ExtensionRegistrySources, AshExtensionSource } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { IExtensionManagementApi } from '../../../../platform/extensionManagement/common/extensionManagementApi.js';
+import type { IExtensionManagementService, ExtensionsAcquiredCapability, ExtensionsBrowseSnapshot, ExtensionsInstalledPackage, ExtensionsPackageDetails, ExtensionsPackageSummary, ExtensionsSearchOptions, ExtensionsSearchPage, ExtensionRegistrySources, AshExtensionSource } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 
 /** App Server adapter and owner of path-free Renderer browse snapshots. */
 export class AppServerExtensionManagementService extends Disposable implements IExtensionManagementService {
@@ -62,7 +62,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 	constructor(private readonly api: IExtensionManagementApi, events: IServerEventApi) {
 		super();
 		const subscription = events.subscribe(event => {
-			if (event.method !== "extensions/changed") return;
+			if (event.method !== 'extensions/changed') return;
 			if (event.params.instanceId === this.installedInstanceId && event.params.generation <= this.installedGeneration) return;
 			this.installedInstanceId = event.params.instanceId;
 			this.installedGeneration = event.params.generation;
@@ -112,7 +112,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 		return this.api.update({ installationId, version: version ?? null });
 	}
 
-	async uninstall(installationId: string, mode: "ifUnused" | "whenUnused" = "whenUnused"): Promise<void> {
+	async uninstall(installationId: string, mode: 'ifUnused' | 'whenUnused' = 'whenUnused'): Promise<void> {
 		await this.api.uninstall({ installationId, mode });
 	}
 

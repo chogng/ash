@@ -1,17 +1,17 @@
 import { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
 import './standalone-tokens.css';
-import { DisposableStore, type IDisposable } from "../../../base/common/lifecycle.js";
-import { URI } from "../../../base/common/uri.js";
-import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference, type ICodeEditor } from "../../browser/editorBrowser.js";
+import { DisposableStore, type IDisposable } from '../../../base/common/lifecycle.js';
+import { URI } from '../../../base/common/uri.js';
+import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference, type ICodeEditor } from '../../browser/editorBrowser.js';
 import { type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
-import { PositionAffinity, type ITextModel } from "../../common/model.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { IStandaloneThemeService, type IStandaloneThemeData, type NamedEditorThemeData } from "../common/standaloneTheme.js";
+import { PositionAffinity, type ITextModel } from '../../common/model.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { IStandaloneThemeService, type IStandaloneThemeData, type NamedEditorThemeData } from '../common/standaloneTheme.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { IModelService } from '../../common/services/model.js';
 import { ILanguageService } from '../../common/languages/language.js';
 import { createTextModel, StandaloneEditor, type IActionDescriptor, type IStandaloneCodeEditor, type IStandaloneEditorConstructionOptions } from './standaloneCodeEditor.js';
-import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
+import { StandaloneServices, type StandaloneServiceOverrides } from './standaloneServices.js';
 import { Colorizer, type IColorizerElementOptions, type IColorizerOptions } from './colorizer.js';
 import {
 	IMarkerService,
@@ -105,7 +105,7 @@ export function create(
 	options: IStandaloneEditorConstructionOptions = {},
 	overrides: StandaloneServiceOverrides = {},
 ): IStandaloneCodeEditor {
-	if (!domElement || domElement.nodeType !== 1 || !domElement.ownerDocument) throw new TypeError("Standalone editor requires an HTML element");
+	if (!domElement || domElement.nodeType !== 1 || !domElement.ownerDocument) throw new TypeError('Standalone editor requires an HTML element');
 	const services = StandaloneServices.initialize(overrides);
 	const {
 		model: suppliedModel,
@@ -119,7 +119,7 @@ export function create(
 		...browserOptions
 	} = options;
 	if (suppliedModel && (value !== undefined || language !== undefined || resource !== undefined)) {
-		throw new TypeError("Standalone editor model cannot be combined with value, language, or resource");
+		throw new TypeError('Standalone editor model cannot be combined with value, language, or resource');
 	}
 	if (suppliedModel && !(suppliedModel instanceof TextModel)) {
 		throw new TypeError('Standalone editor requires a TextModel created by this editor API');
@@ -128,7 +128,7 @@ export function create(
 	if (autoDetectHighContrast !== undefined) services.themeService.setAutoDetectHighContrast(autoDetectHighContrast);
 	const languageId = services.languageService.getLanguageIdByMimeType(language) ?? language;
 	const model = suppliedModel === undefined
-		? services.modelService.createModel(value ?? "", services.languageService.createById(languageId), resource)
+		? services.modelService.createModel(value ?? '', services.languageService.createById(languageId), resource)
 		: suppliedModel;
 	const ownsModel = suppliedModel === undefined;
 	try {

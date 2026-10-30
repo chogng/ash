@@ -83,4 +83,3 @@ class WorkbenchProductIconThemeRegistry {
 }
 
 export const WorkbenchProductIconThemesRegistry = new WorkbenchProductIconThemeRegistry();
-

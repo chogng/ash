@@ -61,65 +61,65 @@ import { SpeechService } from '../../../workbench/contrib/speech/browser/speechS
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
-import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../.build/protocol/typescript/index.js";
-import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from "../../../platform/agentHost/common/agent.js";
-import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
-import type { IAction } from "../../../base/common/actions.js";
-import { Emitter, Event } from "../../../base/common/event.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
+import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from '../../../../../.build/protocol/typescript/index.js';
+import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from '../../../platform/agentHost/common/agent.js';
+import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import type { IAction } from '../../../base/common/actions.js';
+import { Emitter, Event } from '../../../base/common/event.js';
 import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
-import { Lxicon } from "../../../base/common/lxicons.js";
-import { IMenuService, MenuId } from "../../../platform/actions/common/actions.js";
-import { MenuService } from "../../../platform/actions/common/menuService.js";
-import { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
-import { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
+import { Lxicon } from '../../../base/common/lxicons.js';
+import { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../platform/actions/common/menuService.js';
+import { IContextViewService } from '../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
-import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
-import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
-import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import type { IPaneComposite } from '../../../workbench/common/panecomposite.js';
-import { ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from "../../../workbench/common/views.js";
-import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../workbench/contrib/chat/browser/widget/chatListItems.js";
-import { ChatWidgetModel } from "../../browser/chatWidgetModel.js";
-import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
+import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from '../../../workbench/contrib/chat/browser/widget/chatListItems.js';
+import { ChatWidgetModel } from '../../browser/chatWidgetModel.js';
+import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { Menus } from '../../browser/menus.js';
-import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../workbench/services/preferences/common/preferences.js";
-import { PreferencesService as BrowserPreferencesService } from "../../../workbench/services/preferences/browser/preferencesService.js";
+import { IPreferencesService, type IPreferencesService as PreferencesService } from '../../../workbench/services/preferences/common/preferences.js';
+import { PreferencesService as BrowserPreferencesService } from '../../../workbench/services/preferences/browser/preferencesService.js';
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
-import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
-import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
+import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from '../../../workbench/services/layout/browser/layoutService.js';
+import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
+import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
-import { ModelCatalogConfiguration } from "../../../workbench/contrib/chat/common/languageModelsConfiguration.js";
+import { ModelCatalogConfiguration } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
-import { TestSessionsManagementService as BaseSessionsManagementService } from "../../services/sessions/test/browser/testSessionsManagementService.js";
-import { AppServerSessionsProvider } from "../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
-import type { ISession } from "../../services/sessions/common/session.js";
-import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
-import { IViewsService } from "../../../workbench/services/views/common/viewsService.js";
-import { ViewsService } from "../../../workbench/services/views/browser/viewsService.js";
-import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
+import { TestSessionsManagementService as BaseSessionsManagementService } from '../../services/sessions/test/browser/testSessionsManagementService.js';
+import { AppServerSessionsProvider } from '../../contrib/providers/agentHost/browser/appServerSessionsProvider.js';
+import type { ISession } from '../../services/sessions/common/session.js';
+import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
+import { ViewsService } from '../../../workbench/services/views/browser/viewsService.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../platform/dialogs/common/dialogs.js';
-import { TestQuickInputService } from "../../../platform/quickinput/test/browser/testQuickInputService.js";
-import { Dimension, h } from "../../../base/browser/dom.js";
+import { TestQuickInputService } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { Dimension, h } from '../../../base/browser/dom.js';
 import { FileKind, IFileService } from '../../../platform/files/common/files.js';
 import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
-import { URI } from "../../../base/common/uri.js";
-import { ICommandService } from "../../../platform/commands/common/commands.js";
+import { URI } from '../../../base/common/uri.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import type { IOpenerService, OpenOptions } from "../../../platform/opener/common/opener.js";
-import { IEditorService } from "../../../workbench/services/editor/common/editorService.js";
+import type { IOpenerService, OpenOptions } from '../../../platform/opener/common/opener.js';
+import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { FileNotFoundError, FileRevisionConflictError } from '../../../platform/files/common/files.js';
@@ -172,7 +172,7 @@ function createChatListWidget(container: HTMLElement, options: ConstructorParame
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { throw new Error('Unexpected media preview'); }, focusActiveEditor() { } });
 	return services.createInstance(ChatListWidget, container, options);
 }
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 setARIAContainer(browserEnvironment.window.document.body);
 const unavailableFileService = {
 	readFile: async (resource: URI) => { throw new FileNotFoundError(resource); },
@@ -210,29 +210,29 @@ for (const [name, value] of Object.entries({
 	});
 }
 await import(
-	"../../browser/workbenchChat.contribution.js"
+	'../../browser/workbenchChat.contribution.js'
 );
 const { BrowserContextViewService } = await import(
-	"../../../platform/contextview/browser/contextViewService.js"
+	'../../../platform/contextview/browser/contextViewService.js'
 );
 const { ChatViewPane } = await import(
-	"../../browser/chatViewPane.js"
+	'../../browser/chatViewPane.js'
 );
 const { ChatListWidget } = await import(
-	"../../../workbench/contrib/chat/browser/widget/chatListWidget.js"
+	'../../../workbench/contrib/chat/browser/widget/chatListWidget.js'
 );
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
 const testStorageEnvironment = new JSDOM('', { url: 'https://ash.test/' });
 const storageResources = new DisposableStore();
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
-const { ChatWidget, openChatMarkdownLink } = await import("../../../workbench/contrib/chat/browser/widget/chatWidget.js");
+const { ChatWidget, openChatMarkdownLink } = await import('../../../workbench/contrib/chat/browser/widget/chatWidget.js');
 const { CoworkWidget } = await import('../../contrib/cowork/browser/widget/coworkWidget.js');
 const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
 const { NewCoworkInputWidget } = await import('../../contrib/cowork/browser/newCoworkInput.js');
 const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
 await import(
-	"../../../workbench/contrib/preferences/browser/preferences.contribution.js"
+	'../../../workbench/contrib/preferences/browser/preferences.contribution.js'
 );
 suiteTeardown(() => {
 	for (const storage of testStorages) storage.dispose();
@@ -240,19 +240,19 @@ suiteTeardown(() => {
 	storageResources.dispose();
 	browserEnvironment.window.close();
 	for (const name of [
-		"window",
-		"document",
-		"Node",
-		"Element",
-		"HTMLElement",
-		"Event",
-		"MouseEvent",
+		'window',
+		'document',
+		'Node',
+		'Element',
+		'HTMLElement',
+		'Event',
+		'MouseEvent',
 	]) {
 		Reflect.deleteProperty(globalThis, name);
 	}
 });
 
-test("Chat Markdown links route resource, command, and external targets through their owning services", async () => {
+test('Chat Markdown links route resource, command, and external targets through their owning services', async () => {
 	const editorResources: URI[] = [];
 	const externalTargets: { target: string; options: OpenOptions; }[] = [];
 	const editorService = {
@@ -262,18 +262,18 @@ test("Chat Markdown links route resource, command, and external targets through 
 		open: async (target: string, options: OpenOptions) => { externalTargets.push({ target, options }); },
 	} as unknown as IOpenerService;
 
-	await openChatMarkdownLink("vscode-remote://ssh-remote+host/src/file.ts", openerService, editorService);
+	await openChatMarkdownLink('vscode-remote://ssh-remote+host/src/file.ts', openerService, editorService);
 	await openChatMarkdownLink('ash-remote://ssh+host/src/ash.ts', openerService, editorService);
-	await openChatMarkdownLink("vscode-file://vscode-app/workspace/readme.md", openerService, editorService);
+	await openChatMarkdownLink('vscode-file://vscode-app/workspace/readme.md', openerService, editorService);
 	await openChatMarkdownLink('vscode-remote-resource://ssh-remote+host/workspace/image.png', openerService, editorService);
 	await openChatMarkdownLink('vscode-notebook-cell:///workspace/notebook.ipynb#cell-4', openerService, editorService);
 	await openChatMarkdownLink('vscode-file://other-host/workspace/secret.md', openerService, editorService);
 	await openChatMarkdownLink('vscode-remote-resource://127.0.0.1:9999/vscode-remote-resource?path=%2Fworkspace%2Fsecret.png', openerService, editorService);
-	await openChatMarkdownLink("command:ash.open?%5B%22readme.md%22%5D", openerService, editorService);
-	await openChatMarkdownLink("mailto:help@example.com", openerService, editorService);
+	await openChatMarkdownLink('command:ash.open?%5B%22readme.md%22%5D', openerService, editorService);
+	await openChatMarkdownLink('mailto:help@example.com', openerService, editorService);
 	await openChatMarkdownLink('https://example.com/docs', openerService, editorService);
-	await openChatMarkdownLink("private:///workbench/resource", openerService, editorService);
-	await openChatMarkdownLink("#section", openerService, editorService);
+	await openChatMarkdownLink('private:///workbench/resource', openerService, editorService);
+	await openChatMarkdownLink('#section', openerService, editorService);
 
 	assert.deepEqual(editorResources.map(resource => resource.toString()), [
 		'ash-remote://ssh+host/src/file.ts',
@@ -282,7 +282,7 @@ test("Chat Markdown links route resource, command, and external targets through 
 		'ash-remote://ssh+host/workspace/image.png',
 		'vscode-notebook-cell:///workspace/notebook.ipynb#cell-4',
 	]);
-	assert.deepEqual(externalTargets.shift(), { target: "command:ash.open?%5B%22readme.md%22%5D", options: { allowCommands: true, fromUserGesture: true } });
+	assert.deepEqual(externalTargets.shift(), { target: 'command:ash.open?%5B%22readme.md%22%5D', options: { allowCommands: true, fromUserGesture: true } });
 	assert.deepEqual(externalTargets, ['mailto:help@example.com', 'https://example.com/docs'].map(target => ({ target, options: { openExternal: true, fromUserGesture: true, allowContributedOpeners: true } })));
 });
 
@@ -350,7 +350,7 @@ function chatTitleActions(pane: { readonly partTitleProjection: { readonly actio
 	return actions;
 }
 
-test("Chat contribution owns the fixed Auxiliary Bar view", () => {
+test('Chat contribution owns the fixed Auxiliary Bar view', () => {
 	const registry = ViewsRegistry;
 
 	assert.equal(
@@ -406,27 +406,29 @@ test('100 catalog sessions instantiate only opened conversations and reconnect t
 	assert.equal(first.hidden, false);
 });
 
-test("Chat title and history switching retain conversations and drafts", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Chat title and history switching retain conversations and drafts', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	dom.window.HTMLElement.prototype.scrollTo = () => { };
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const subscriptionModel = {
-		model: { provider: "openai", model: "gpt-6.1-sol" },
-		displayName: "GPT-6.1 Sol",
+		model: { provider: 'openai', model: 'gpt-6.1-sol' },
+		displayName: 'GPT-6.1 Sol',
 		contextWindow: 128000,
-		supportedReasoningEfforts: [{ effort: "low" }, { effort: "medium" }, { effort: "high" }] as const,
+		supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }] as const,
 		defaultReasoningEffort: 'medium' as const,
 	};
 	const fake = fakeApi({
 		sessions: [
-			{ ...session("session-1", "thread-1"), model: subscriptionModel.model },
-			{ ...session("session-2", "thread-2"), model: subscriptionModel.model },
+			{ ...session('session-1', 'thread-1'), model: subscriptionModel.model },
+			{ ...session('session-2', 'thread-2'), model: subscriptionModel.model },
 		],
 		models: [subscriptionModel],
 	});
 	const api = fake.api;
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
+	// The production window binds this key from its Chat enablement contribution.
+	ChatContextKeys.enabled.bindTo(contextKeys).set(true);
 	using viewDescriptors = new TestViewDescriptorService({
 		registry: new WorkbenchViewRegistry(),
 	}, contextKeys);
@@ -437,7 +439,11 @@ test("Chat title and history switching retain conversations and drafts", async (
 	services.registerInstance(IConfigurationService, configuration);
 	let preferencesEditorTarget: import('../../../workbench/services/editor/common/editorService.js').EditorOpenTarget | undefined;
 	using chat = createChatService(api);
-	using quickInput = new TestQuickInputService({ instantiationService: services, container: dom.window.document.body, contextKeyService: contextKeys });
+	using quickInput = new TestQuickInputService({
+		instantiationService: services,
+		container: dom.window.document.body,
+		contextKeyService: contextKeys
+	});
 	using keybindingFiles = new KeybindingTestServices();
 	using editorServices = createTestEditorServices(undefined, keybindingFiles.services);
 	editorServices.registerInstance(IDialogService, recordingDialogService([]));
@@ -474,7 +480,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
-			title: "Chat",
+			title: 'Chat',
 		},
 		chat,
 		sessions,
@@ -489,49 +495,55 @@ test("Chat title and history switching retain conversations and drafts", async (
 		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), userDataProfile, testLifecycle, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, unavailableAuxiliaryWindows, contextKeys,
 	);
 	chatView = pane;
-	const title = h(dom.window.document, "div");
-	title.className = "ash-pane-composite-title";
+	const title = h(dom.window.document, 'div');
+	title.className = 'ash-pane-composite-title';
 	title.append(chatTitleContent(pane), chatTitleActions(pane));
 	dom.window.document.body.append(title, pane.element);
 
 	await sessions.initialize();
 	await nextTask();
 
-	const titleButton = title.querySelector<HTMLButtonElement>(".ash-chat-view-title-button")!;
+	const titleButton = title.querySelector<HTMLButtonElement>('.ash-chat-view-title-button')!;
 	const toolbar = title.querySelector(
-		".ash-chat-title-actions > .ash-action-bar",
+		'.ash-chat-title-actions > .ash-action-bar',
 	);
 	const layoutToolbar = title.querySelector<HTMLElement>(
-		".ash-chat-title-layout-actions",
+		'.ash-chat-title-layout-actions',
 	);
-	assert.equal(title.querySelector("[role=tablist]"), null);
-	assert.equal(titleButton.textContent, "Session session-1");
-	assert.equal(toolbar?.getAttribute("role"), "toolbar");
-	assert.equal(toolbar?.classList.contains("ash-toolbar"), true);
+	assert.equal(title.querySelector('[role=tablist]'), null);
+	assert.equal(titleButton.textContent, 'Session session-1');
+	assert.equal(toolbar?.getAttribute('role'), 'toolbar');
+	assert.equal(toolbar?.classList.contains('ash-toolbar'), true);
 	assert.equal(
 		chatTitleContent(pane).nextElementSibling,
 		chatTitleActions(pane),
 	);
 	assert.deepEqual(
-		[...toolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []]
+		[...toolbar?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []]
 			.map((item) => item.dataset.actionId),
 		[
-			NEW_CHAT_COMMAND_ID,
+			`submenu.${MenuId.ChatNewMenu.id}`,
 			SHOW_CHAT_HISTORY_COMMAND_ID,
-			"ash.toolbar.moreActions",
+			'ash.toolbar.moreActions',
 		],
 	);
+	const newChatButton = toolbar?.querySelector<HTMLButtonElement>('.ash-split-action-primary button');
+	assert.ok(newChatButton);
+	assert.equal(toolbar?.querySelector('.ash-split-action-dropdown button')?.getAttribute('aria-label'), 'New Chat');
+	assert.equal(menuService.getMenuActions(MenuId.ChatNewMenu).flatMap(([, actions]) => actions)[0]?.id, NEW_CHAT_COMMAND_ID);
 	assert.deepEqual(
-		[...toolbar?.querySelectorAll<HTMLButtonElement>("button") ?? []]
+		[...toolbar?.querySelectorAll<HTMLButtonElement>('button') ?? []]
 			.map((button) => button.title),
-		["New Chat", "Show Chat History", "More Actions"],
+		['New Chat', '', 'Show Chat History', 'More Actions'],
 	);
-	assert.equal(
-		toolbar?.querySelectorAll(".ash-action-view-item.icon").length,
-		3,
-	);
-	assert.ok(toolbar?.querySelector(".ash-button-label"));
-	assert.ok(toolbar?.querySelector(".ash-icon"));
+	for (const button of toolbar?.querySelectorAll('button') ?? []) assert.ok(button.querySelector('.ash-icon'));
+	newChatButton.click();
+	const titleDraftId = sessions.activeUntitledSession?.untitledSessionId;
+	assert.ok(titleDraftId);
+	sessions.discardUntitledSession(titleDraftId);
+	sessions.selectThread('session-1', 'thread-1');
+	assert.ok(toolbar?.querySelector('.ash-button-label'));
+	assert.ok(toolbar?.querySelector('.ash-icon'));
 	assert.ok(layoutToolbar?.querySelector(
 		`[data-action-id="${TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID}"]`,
 	));
@@ -539,7 +551,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 	assert.equal(configuration.getValue(AGENT_SESSIONS_ORIENTATION_SETTING), AgentSessionsOrientation.SideBySide);
 	assert.equal(pane.minimumWidth, 300);
 	await configuration.updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation.Stacked);
-	layoutToolbar?.querySelector<HTMLButtonElement>("button")?.focus();
+	layoutToolbar?.querySelector<HTMLButtonElement>('button')?.focus();
 	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
 	const sessionsSidebar = pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar');
 	assert.equal(sessionsSidebar?.hidden, false);
@@ -580,10 +592,10 @@ test("Chat title and history switching retain conversations and drafts", async (
 	assert.equal(sessionsSidebar?.hidden, true);
 	layoutToolbar?.querySelector<HTMLButtonElement>('button')?.focus();
 	await commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
-	pane.element.querySelector(".ash-chat-body")!.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+	pane.element.querySelector('.ash-chat-body')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(sessionsSidebar?.hidden, true);
 	assert.equal(contextKeys.getValue('agentSessionsSidebarVisible'), false);
-	assert.equal(dom.window.document.activeElement, layoutToolbar?.querySelector("button"));
+	assert.equal(dom.window.document.activeElement, layoutToolbar?.querySelector('button'));
 	assert.equal(layoutToolbar?.hidden, false);
 	const chatActions = menuService.getMenuActions(MenuId.ChatTitle)
 		.filter(([group]) => group === 'chatActions')
@@ -598,25 +610,25 @@ test("Chat title and history switching retain conversations and drafts", async (
 		[
 			{
 				id: OPEN_CHAT_BROWSER_COMMAND_ID,
-				label: "Open Browser",
+				label: 'Open Browser',
 				enabled: false,
 				icon: Lxicon.browserWeb,
 			},
 			{
 				id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
-				label: "Move Chat to Editor Area",
-				enabled: false,
+				label: 'Move Chat to Editor Area',
+				enabled: true,
 				icon: Lxicon.layoutPanel1,
 			},
 			{
 				id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
-				label: "Move Chat to New Window",
+				label: 'Move Chat to New Window',
 				enabled: false,
 				icon: Lxicon.linkExternal,
 			},
 			{
 				id: OPEN_CHAT_SETTINGS_COMMAND_ID,
-				label: "Chat Settings",
+				label: 'Chat Settings',
 				enabled: true,
 				icon: Lxicon.settings,
 			},
@@ -677,49 +689,49 @@ test("Chat title and history switching retain conversations and drafts", async (
 	activeInput.value = '';
 	activeInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
 	await chatActions[3]?.run();
-	const settingsInput = dom.window.document.querySelector<HTMLInputElement>(".ash-quick-pick-input input");
+	const settingsInput = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 	assert.ok(settingsInput);
-	settingsInput.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
-	assert.equal(preferencesEditorTarget, "modalGroup");
+	settingsInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+	assert.equal(preferencesEditorTarget, 'modalGroup');
 	assert.equal(chatTitleContent(pane).querySelector('[role=tab]'), null);
 	const panel = pane.element.querySelector('[role=region]');
 	assert.equal(panel?.id, titleButton.getAttribute('aria-controls'));
 	assert.equal(panel?.getAttribute('aria-labelledby'), titleButton.querySelector('span')?.id);
 	assert.equal(
 		pane.element.querySelector(
-			".ash-chat-transcript-scrollable",
-		)?.getAttribute("data-scroll-direction"),
-		"vertical",
+			'.ash-chat-transcript-scrollable',
+		)?.getAttribute('data-scroll-direction'),
+		'vertical',
 	);
-	const chatPanes = pane.element.querySelectorAll<HTMLElement>(".ash-chat-pane-host > .ash-chat");
+	const chatPanes = pane.element.querySelectorAll<HTMLElement>('.ash-chat-pane-host > .ash-chat');
 	assert.equal(chatPanes.length, 2);
 	for (const chatPane of chatPanes) {
-		assert.equal(chatPane.classList.contains("empty"), true);
-		assert.equal(chatPane.classList.contains("has-conversation"), false);
-		assert.equal(chatPane.querySelector<HTMLElement>(":scope > .ash-chat-goal")?.hidden, true);
-		assert.ok(chatPane.querySelector(":scope > .ash-chat-list-widget"));
-		assert.ok(chatPane.querySelector(":scope > .ash-chat-input-part"));
-		const inputToolbar = chatPane.querySelector<HTMLElement>(".ash-chat-input-toolbars");
-		assert.equal(inputToolbar?.getAttribute("role"), "toolbar");
+		assert.equal(chatPane.classList.contains('empty'), true);
+		assert.equal(chatPane.classList.contains('has-conversation'), false);
+		assert.equal(chatPane.querySelector<HTMLElement>(':scope > .ash-chat-goal')?.hidden, true);
+		assert.ok(chatPane.querySelector(':scope > .ash-chat-list-widget'));
+		assert.ok(chatPane.querySelector(':scope > .ash-chat-input-part'));
+		const inputToolbar = chatPane.querySelector<HTMLElement>('.ash-chat-input-toolbars');
+		assert.equal(inputToolbar?.getAttribute('role'), 'toolbar');
 		assert.ok(chatPane.querySelector(".ash-chat-secondary-input-toolbar [data-action-id='ash.chat.input.attach']"));
 		assert.deepEqual(
-			[...inputToolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map((item) => item.dataset.actionId),
+			[...inputToolbar?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map((item) => item.dataset.actionId),
 			[
-				"ash.chat.input.mode",
-				"ash.chat.input.model",
-				"workbench.action.chat.toggleSpeechToText",
-				"ash.chat.input.voice",
+				'ash.chat.input.mode',
+				'ash.chat.input.model',
+				'workbench.action.chat.toggleSpeechToText',
+				'ash.chat.input.voice',
 			],
 		);
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, "Agent");
-		assert.equal(inputToolbar?.querySelector<HTMLElement>(".ash-chat-input-model-action .ash-chat-input-picker-label")?.textContent, "GPT-6.1 Sol");
-		assert.equal(inputToolbar?.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label'), 'Model options: Medium');
-		assert.equal(inputToolbar?.querySelector(".ash-chat-input-model-access-badge"), null);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, 'GPT-6.1 Sol');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label'), 'Model options: Medium');
+		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
-	const modelButton = firstChatPane.querySelector<HTMLElement>(".ash-chat-input-model-action");
+	const modelButton = firstChatPane.querySelector<HTMLElement>('.ash-chat-input-model-action');
 	modelButton?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	const modelPicker = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-picker[role="dialog"]');
 	assert.equal(modelPicker?.getAttribute('aria-label'), 'Choose a chat model');
@@ -740,31 +752,31 @@ test("Chat title and history switching retain conversations and drafts", async (
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
 	assert.equal(dom.window.document.activeElement, modelPicker?.querySelector('[role=menuitemradio]'));
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-	assert.equal(firstChatPane.querySelector<HTMLElement>(".ash-chat-input-model-action")?.getAttribute('aria-expanded'), 'false');
-	firstChatPane.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	assert.equal(firstChatPane.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-expanded'), 'false');
+	firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	const effortMenu = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-configuration-menu');
 	assert.equal(effortMenu?.querySelector('.ash-chat-model-configuration-heading')?.textContent, 'Thinking Level');
 	assert.deepEqual([...effortMenu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []].map(button => button.textContent), ['Low', 'Medium', 'High']);
 	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.textContent, 'Medium');
 	assert.equal(effortMenu?.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('aria-description'), null);
 	effortMenu?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.high'] button")?.click();
-	await waitFor(() => firstChatPane.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label') === 'Model options: High');
-	firstChatPane.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	await waitFor(() => firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label') === 'Model options: High');
+	firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
 	assert.equal(dom.window.document.querySelector('.ash-chat-model-configuration-menu [role="menuitemradio"][aria-checked="true"]')?.textContent, 'High');
 	dom.window.document.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.effort.medium'] button")?.click();
-	await waitFor(() => firstChatPane.querySelector<HTMLElement>(".ash-chat-input-configuration-action")?.getAttribute('aria-label') === 'Model options: Medium');
+	await waitFor(() => firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label') === 'Model options: Medium');
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
 	assert.deepEqual(shownContextMenuActions, []);
 	await waitFor(() => dom.window.document.querySelector('.ash-chat-input-mode-menu') !== null);
-	const modeMenu = dom.window.document.querySelector<HTMLElement>(".ash-chat-input-mode-menu");
-	assert.equal(modeMenu?.closest(".ash-context-view")?.parentElement, contextViewService.container);
+	const modeMenu = dom.window.document.querySelector<HTMLElement>('.ash-chat-input-mode-menu');
+	assert.equal(modeMenu?.closest('.ash-context-view')?.parentElement, contextViewService.container);
 	assert.deepEqual(
-		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.textContent),
+		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.textContent),
 		['Agent', 'Plan', 'Debug', 'Multitask', 'Ask'],
 	);
 	assert.deepEqual(
-		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
+		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
 		['unlimited', 'plan', 'debug', 'multitask', 'chat-4'],
 	);
 	assert.deepEqual(
@@ -773,31 +785,31 @@ test("Chat title and history switching retain conversations and drafts", async (
 	);
 	modeMenu?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
-	assert.equal(firstChatPane.querySelector(".ash-chat-input-mode-selector")?.classList.contains('mode-agent'), true);
-	assert.equal(dom.window.document.querySelector(".ash-chat-input-mode-menu"), null);
+	assert.equal(firstChatPane.querySelector('.ash-chat-input-mode-selector')?.classList.contains('mode-agent'), true);
+	assert.equal(dom.window.document.querySelector('.ash-chat-input-mode-menu'), null);
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	const composerInputs = [...chatPanes].map((chatPane) => {
-		const input = chatPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
+		const input = chatPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input');
 		assert.ok(input);
 		return input;
 	});
-	typeChatText(dom.window, composerInputs[0], "First draft");
-	pane.addContext({ id: "first-context", kind: "file", name: "first.txt", resolve: async () => ({ name: "first.txt", content: "First context" }) });
+	typeChatText(dom.window, composerInputs[0], 'First draft');
+	pane.addContext({ id: 'first-context', kind: 'file', name: 'first.txt', resolve: async () => ({ name: 'first.txt', content: 'First context' }) });
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled, false);
 	assert.equal(firstChatPane.querySelector("[data-action-id='ash.chat.input.voice']"), null);
 
 	await chooseConversation(pane, dom, 1);
-	assert.equal(sessions.active?.session.sessionId, "session-2");
-	assert.equal(sessions.active?.threadId, "thread-2");
-	assert.equal(titleButton.textContent, "Session session-2");
+	assert.equal(sessions.active?.session.sessionId, 'session-2');
+	assert.equal(sessions.active?.threadId, 'thread-2');
+	assert.equal(titleButton.textContent, 'Session session-2');
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
-	typeChatText(dom.window, composerInputs[1], "Second draft");
+	typeChatText(dom.window, composerInputs[1], 'Second draft');
 	await chooseConversation(pane, dom, 0);
-	assert.equal(sessions.active?.session.sessionId, "session-1");
+	assert.equal(sessions.active?.session.sessionId, 'session-1');
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
-	assert.equal(composerInputs[0]?.value, "First draft first.txt ");
-	assert.equal(composerInputs[1]?.value, "Second draft");
-	assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ["first.txt"]);
+	assert.equal(composerInputs[0]?.value, 'First draft first.txt ');
+	assert.equal(composerInputs[1]?.value, 'Second draft');
+	assert.deepEqual((await pane.captureActiveDraft())?.draft.contexts?.map(context => context.name), ['first.txt']);
 
 	assert.equal(title.querySelector('.ash-tab-close-action'), null);
 	assert.deepEqual(fake.stopRequests, []);
@@ -818,37 +830,37 @@ test("Chat title and history switching retain conversations and drafts", async (
 	dom.window.close();
 });
 
-test("Chat transcript retains message rows while reordering and revising Markdown", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Chat transcript retains message rows while reordering and revising Markdown', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using list = createChatListWidget(dom.window.document.body);
 	list.render([]);
-	assert.equal(list.element.textContent, "");
-	const first = { id: "first", type: "agentMessage" as const, text: "Original **answer**", transient: false };
-	const second = { id: "second", type: "userMessage" as const, text: "Question", transient: false };
+	assert.equal(list.element.textContent, '');
+	const first = { id: 'first', type: 'agentMessage' as const, text: 'Original **answer**', transient: false };
+	const second = { id: 'second', type: 'userMessage' as const, text: 'Question', transient: false };
 	list.render([first, second]);
 	const firstElement = list.element.querySelector<HTMLElement>('[data-item-id="first"]');
 	const secondElement = list.element.querySelector<HTMLElement>('[data-item-id="second"]');
 	assert.ok(firstElement && secondElement);
 
-	list.render([second, { ...first, text: "Revised **answer**" }]);
+	list.render([second, { ...first, text: 'Revised **answer**' }]);
 
-	assert.deepEqual([...list.element.querySelectorAll<HTMLElement>(".ash-chat-item")].map(element => ({
+	assert.deepEqual([...list.element.querySelectorAll<HTMLElement>('.ash-chat-item')].map(element => ({
 		id: element.dataset.itemId,
 		reused: element === secondElement,
-	})), [{ id: "second", reused: true }, { id: "first", reused: false }]);
+	})), [{ id: 'second', reused: true }, { id: 'first', reused: false }]);
 	assert.equal(firstElement.isConnected, true);
 	assert.equal(list.element.querySelector('[data-item-id="first"]'), firstElement);
-	assert.equal(firstElement.querySelector("p")?.textContent, "Revised answer");
-	assert.ok(!firstElement.textContent?.includes("Original"));
-	assert.equal(firstElement.querySelector("strong")?.textContent, "answer");
+	assert.equal(firstElement.querySelector('p')?.textContent, 'Revised answer');
+	assert.ok(!firstElement.textContent?.includes('Original'));
+	assert.equal(firstElement.querySelector('strong')?.textContent, 'answer');
 	dom.window.close();
 });
 
-test("Chat transcript keeps the first visible message in place when history is prepended", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Chat transcript keeps the first visible message in place when history is prepended', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using list = createChatListWidget(dom.window.document.body);
-	const viewport = list.element.querySelector<HTMLElement>(".ash-scrollbar-viewport")!;
-	const transcript = list.element.querySelector<HTMLElement>(".ash-chat-transcript")!;
+	const viewport = list.element.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+	const transcript = list.element.querySelector<HTMLElement>('.ash-chat-transcript')!;
 	Object.defineProperties(viewport, {
 		clientHeight: { configurable: true, get: () => 100 },
 		scrollHeight: { configurable: true, get: () => transcript.childElementCount * 100 },
@@ -856,8 +868,8 @@ test("Chat transcript keeps the first visible message in place when history is p
 	const rect = (top: number, bottom: number): DOMRect => ({ top, bottom, left: 0, right: 100, width: 100, height: bottom - top, x: 0, y: top, toJSON: () => ({}) });
 	viewport.getBoundingClientRect = () => rect(0, 100);
 	transcript.getBoundingClientRect = () => rect(-viewport.scrollTop, transcript.childElementCount * 100 - viewport.scrollTop);
-	const item = (id: string) => ({ id, type: "userMessage" as const, text: id, transient: false });
-	list.render([item("one"), item("two"), item("three")]);
+	const item = (id: string) => ({ id, type: 'userMessage' as const, text: id, transient: false });
+	list.render([item('one'), item('two'), item('three')]);
 	for (const element of transcript.children) {
 		(element as HTMLElement).getBoundingClientRect = () => {
 			const top = [...transcript.children].indexOf(element) * 100 - viewport.scrollTop;
@@ -867,27 +879,27 @@ test("Chat transcript keeps the first visible message in place when history is p
 	list.setVisible(true);
 	viewport.scrollTop = 100;
 
-	list.render([item("zero"), item("one"), item("two"), item("three")]);
+	list.render([item('zero'), item('one'), item('two'), item('three')]);
 
 	assert.equal(viewport.scrollTop, 200);
 	dom.window.close();
 });
 
-test("Turn error cards invoke their typed action without interpreting message text", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Turn error cards invoke their typed action without interpreting message text', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	let requestedAction: ChatTurnErrorAction | undefined;
 	using list = createChatListWidget(dom.window.document.body, {
 		onDidRequestErrorAction: (action) => { requestedAction = action; },
 	});
-	const item = chatTurnErrorListItem(failedTurn("providerAuth", false, "same opaque message"));
+	const item = chatTurnErrorListItem(failedTurn('providerAuth', false, 'same opaque message'));
 	assert.ok(item);
 
 	list.render([item]);
-	list.element.querySelector<HTMLButtonElement>(".ash-chat-turn-error-action")?.click();
+	list.element.querySelector<HTMLButtonElement>('.ash-chat-turn-error-action')?.click();
 
-	assert.equal(list.element.querySelector(".ash-chat-item-label")?.textContent, "Authentication");
-	assert.equal(list.element.querySelector("pre")?.textContent, "same opaque message");
-	assert.deepEqual(requestedAction, { type: "chooseModel", label: "Choose another model" });
+	assert.equal(list.element.querySelector('.ash-chat-item-label')?.textContent, 'Authentication');
+	assert.equal(list.element.querySelector('pre')?.textContent, 'same opaque message');
+	assert.deepEqual(requestedAction, { type: 'chooseModel', label: 'Choose another model' });
 	dom.window.close();
 });
 
@@ -1310,13 +1322,13 @@ test('sending from one session preserves a later draft during first-session crea
 	assert.equal(readNewChatDraftState(composerStorage, 'thread-1'), undefined);
 });
 
-test("an empty Session list opens an untitled session and persists it on its first send", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('an empty Session list opens an untitled session and persists it on its first send', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	dom.window.HTMLElement.prototype.scrollTo = () => { };
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	let failAgentList = false;
-	const createdSession = session("session-1", undefined, "New Chat");
-	const attachedSession = session("session-1", "thread-1", "New Chat");
+	const createdSession = session('session-1', undefined, 'New Chat');
+	const attachedSession = session('session-1', 'thread-1', 'New Chat');
 	const fake = fakeApi({
 		sessions: [],
 		agents: [{ name: 'reviewer', description: 'Reviews changes', sourceId: 'directory-1' }],
@@ -1324,7 +1336,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		createSession: createdSession,
 		createThread: {
 			session: attachedSession,
-			threadId: "thread-1",
+			threadId: 'thread-1',
 		},
 	});
 	const api = fake.api;
@@ -1353,7 +1365,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
-			title: "Chat",
+			title: 'Chat',
 		},
 		paneChat,
 		sessions,
@@ -1378,40 +1390,40 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	const titleLabel = chatTitleContent(pane).querySelector<HTMLElement>('.ash-chat-view-title-label')!;
 	assert.equal(titleLabel.textContent, 'New Chat');
 	assert.equal(chatTitleContent(pane).querySelector('[role=tab]'), null);
-	assert.equal(pane.element.querySelector<HTMLElement>(".ash-chat-view-empty")?.hidden, true);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-view-empty')?.hidden, true);
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.createThreadRequests.length, 0);
 	assert.equal(sessions.sessions.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
 	const untitledPane = pane.element.querySelector<HTMLElement>("[role='region']");
 	assert.ok(untitledPane?.dataset.untitledSessionId);
-	const input = untitledPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
+	const input = untitledPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input');
 	assert.ok(input);
-	assert.equal(untitledPane.classList.contains("empty"), true);
+	assert.equal(untitledPane.classList.contains('empty'), true);
 	let contextResolutions = 0;
 	pane.toggleSessionsSidebar();
 	assert.equal(pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), false);
 	pane.addContext({
-		id: "commit-1",
-		kind: "scmHistoryItem",
-		name: "abc1234 · Explain context transport",
+		id: 'commit-1',
+		kind: 'scmHistoryItem',
+		name: 'abc1234 · Explain context transport',
 		resolve: async () => {
 			contextResolutions += 1;
-			return { name: "Git commit abc1234", content: "diff --git a/file b/file" };
+			return { name: 'Git commit abc1234', content: 'diff --git a/file b/file' };
 		},
 	});
-	assert.equal(input.value, "abc1234 · Explain context transport ");
-	assert.equal(untitledPane.querySelector(".ash-chat-input-attachments"), null);
-	typeChatText(dom.window, input, "abc1234 · Explain context transport Hello from an untitled session");
-	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+	assert.equal(input.value, 'abc1234 · Explain context transport ');
+	assert.equal(untitledPane.querySelector('.ash-chat-input-attachments'), null);
+	typeChatText(dom.window, input, 'abc1234 · Explain context transport Hello from an untitled session');
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
-		key: "Enter",
+		key: 'Enter',
 	}));
-	assert.equal(untitledPane.classList.contains("empty"), false);
-	assert.equal(untitledPane.classList.contains("has-conversation"), true);
-	assert.ok(untitledPane.querySelector(":scope > .ash-chat-list-widget"));
-	assert.ok(untitledPane.querySelector(":scope > .ash-chat-input-part"));
+	assert.equal(untitledPane.classList.contains('empty'), false);
+	assert.equal(untitledPane.classList.contains('has-conversation'), true);
+	assert.ok(untitledPane.querySelector(':scope > .ash-chat-list-widget'));
+	assert.ok(untitledPane.querySelector(':scope > .ash-chat-input-part'));
 	await waitFor(() => fake.turnStartRequests.length === 1);
 	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')?.hidden, false);
 	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-pane-host')?.hidden, false);
@@ -1423,21 +1435,21 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(fake.turnStartRequests[0]?.mode, 'agent');
 	assert.equal(contextResolutions, 1);
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
-		{ type: "context", name: "Git commit abc1234", content: "diff --git a/file b/file" },
-		{ type: "text", text: " Hello from an untitled session" },
+		{ type: 'context', name: 'Git commit abc1234', content: 'diff --git a/file b/file' },
+		{ type: 'text', text: ' Hello from an untitled session' },
 	]);
-	assert.equal(untitledPane.querySelector(".ash-chat-input-attachment-item"), null);
+	assert.equal(untitledPane.querySelector('.ash-chat-input-attachment-item'), null);
 	assert.equal(sessions.untitledSessions.length, 0);
-	assert.equal(sessions.active?.session.sessionId, "session-1");
-	assert.equal(sessions.active?.threadId, "thread-1");
+	assert.equal(sessions.active?.session.sessionId, 'session-1');
+	assert.equal(sessions.active?.threadId, 'thread-1');
 
 	assert.equal(
 		pane.element.querySelector<HTMLElement>("[role='region']")?.dataset.sessionId,
-		"session-1",
+		'session-1',
 	);
 	assert.equal(
 		pane.element.querySelector("[role='region']")?.getAttribute(
-			"aria-labelledby",
+			'aria-labelledby',
 		),
 		titleLabel.id,
 	);
@@ -1446,10 +1458,10 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	dom.window.close();
 });
 
-test("the New Chat slash command opens an untitled session", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('the New Chat slash command opens an untitled session', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
-	const initialSession = session("session-1", "thread-1", "First Chat");
+	const initialSession = session('session-1', 'thread-1', 'First Chat');
 	const fake = fakeApi({ sessions: [initialSession] });
 	const services = new InstantiationService();
 	services.registerInstance(IConfigurationService, inputResources.add(new WorkbenchConfigurationService()));
@@ -1481,7 +1493,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
-			title: "Chat",
+			title: 'Chat',
 		},
 		paneChat,
 		sessions,
@@ -1503,14 +1515,14 @@ test("the New Chat slash command opens an untitled session", async () => {
 	await sessions.initialize();
 	await nextTask();
 
-	const input = pane.element.querySelector<HTMLTextAreaElement>(".ash-chat:not([hidden]) .ash-chat-textarea-input");
+	const input = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input');
 	assert.ok(input);
-	typeChatText(dom.window, input, "/new");
-	assert.equal(pane.element.querySelector("[data-action-id='ash.chat.input.command'] button")?.textContent, "Command");
-	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+	typeChatText(dom.window, input, '/new');
+	assert.equal(pane.element.querySelector("[data-action-id='ash.chat.input.command'] button")?.textContent, 'Command');
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
-		key: "Enter",
+		key: 'Enter',
 	}));
 	await waitFor(() => sessions.untitledSessions.length === 1);
 	assert.equal(chatTitleContent(pane).querySelector('.ash-chat-view-title-label')?.textContent, 'New Chat');
@@ -1523,12 +1535,12 @@ test("the New Chat slash command opens an untitled session", async () => {
 	dom.window.close();
 });
 
-test("failed first send keeps the untitled session and its input draft", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('failed first send keeps the untitled session and its input draft', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const fake = fakeApi({
 		sessions: [],
-		createSessionError: new Error("Cannot create Session"),
+		createSessionError: new Error('Cannot create Session'),
 	});
 	const services = new InstantiationService();
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -1555,7 +1567,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
-			title: "Chat",
+			title: 'Chat',
 		},
 		paneChat,
 		sessions,
@@ -1577,50 +1589,50 @@ test("failed first send keeps the untitled session and its input draft", async (
 	await sessions.initialize();
 	await nextTask();
 
-	const input = pane.element.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
+	const input = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input');
 	assert.ok(input);
 	pane.addContext({
-		id: "failed-commit",
-		kind: "scmHistoryItem",
-		name: "failed commit",
-		resolve: async () => ({ name: "Git commit failed", content: "change" }),
+		id: 'failed-commit',
+		kind: 'scmHistoryItem',
+		name: 'failed commit',
+		resolve: async () => ({ name: 'Git commit failed', content: 'change' }),
 	});
-	typeChatText(dom.window, input, "failed commit Keep this draft");
-	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+	typeChatText(dom.window, input, 'failed commit Keep this draft');
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
-		key: "Enter",
+		key: 'Enter',
 	}));
-	await waitFor(() => input.value === "failed commit Keep this draft");
+	await waitFor(() => input.value === 'failed commit Keep this draft');
 
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.equal(sessions.sessions.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
-	assert.equal(pane.element.querySelector(".ash-chat-input-attachments"), null);
-	assert.equal(input.value, "failed commit Keep this draft");
+	assert.equal(pane.element.querySelector('.ash-chat-input-attachments'), null);
+	assert.equal(input.value, 'failed commit Keep this draft');
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
-	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains("empty"), true);
-	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains("has-conversation"), false);
-	assert.match(pane.element.querySelector<HTMLElement>(".ash-chat-status, .ash-chat-status-summary")?.textContent ?? "", /Cannot create Session/);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains('empty'), true);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='region']")?.classList.contains('has-conversation'), false);
+	assert.match(pane.element.querySelector<HTMLElement>('.ash-chat-status, .ash-chat-status-summary')?.textContent ?? '', /Cannot create Session/);
 
 	dom.window.close();
 });
 
-test("one Session retains one Chat pane while its selected Thread changes", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('one Session retains one Chat pane while its selected Thread changes', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const multiThreadSession: ISession = {
-		...session("session-1", "thread-1", "One Chat"),
+		...session('session-1', 'thread-1', 'One Chat'),
 		chats: [
-			{ threadId: "thread-1", origin: { type: "root" }, status: "active" },
+			{ threadId: 'thread-1', origin: { type: 'root' }, status: 'active' },
 			{
-				threadId: "thread-2",
+				threadId: 'thread-2',
 				origin: {
-					type: "fork",
-					parentThreadId: "thread-1",
+					type: 'fork',
+					parentThreadId: 'thread-1',
 					parentSequence: 1,
 				},
-				status: "active",
+				status: 'active',
 			},
 		],
 	};
@@ -1641,7 +1653,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		dom.window.document.body,
 		{
 			id: CHAT_VIEW_ID,
-			title: "Chat",
+			title: 'Chat',
 		},
 		paneChat,
 		sessions,
@@ -1663,36 +1675,36 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 	await sessions.initialize();
 	await nextTask();
 
-	assert.equal(chatTitleContent(pane).querySelectorAll(".ash-chat-view-title-label").length, 1);
-	const chatPane = pane.element.querySelector<HTMLElement>(".ash-chat-pane-host > .ash-chat");
+	assert.equal(chatTitleContent(pane).querySelectorAll('.ash-chat-view-title-label').length, 1);
+	const chatPane = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat');
 	assert.ok(chatPane);
-	assert.equal(chatPane.dataset.sessionId, "session-1");
-	assert.equal(chatPane.dataset.threadId, "thread-1");
-	const input = chatPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
+	assert.equal(chatPane.dataset.sessionId, 'session-1');
+	assert.equal(chatPane.dataset.threadId, 'thread-1');
+	const input = chatPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input');
 	assert.ok(input);
 	input.focus();
 	assert.strictEqual(dom.window.document.activeElement, input);
 
-	sessions.selectThread("session-1", "thread-2");
+	sessions.selectThread('session-1', 'thread-2');
 	await nextTask();
 
 	assert.strictEqual(
-		pane.element.querySelector(".ash-chat-pane-host > .ash-chat"),
+		pane.element.querySelector('.ash-chat-pane-host > .ash-chat'),
 		chatPane,
 	);
-	assert.equal(chatTitleContent(pane).querySelectorAll(".ash-chat-view-title-label").length, 1);
-	assert.equal(chatPane.dataset.threadId, "thread-2");
+	assert.equal(chatTitleContent(pane).querySelectorAll('.ash-chat-view-title-label').length, 1);
+	assert.equal(chatPane.dataset.threadId, 'thread-2');
 	assert.strictEqual(dom.window.document.activeElement, input);
 	dom.window.close();
 });
 
-test("Chat history selects an active Thread through Quick Pick", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Chat history selects an active Thread through Quick Pick', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using domCleanup = toDisposable(() => dom.window.close());
 	const api = fakeApi({
 		sessions: [
-			session("session-1", "thread-1", "First Chat"),
-			session("session-2", "thread-2", "Second Chat"),
+			session('session-1', 'thread-1', 'First Chat'),
+			session('session-2', 'thread-2', 'Second Chat'),
 		],
 	}).api;
 	using services = new InstantiationService();
@@ -1724,34 +1736,34 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 	await nextTask();
 	assert.deepEqual(
 		currentQuickPickItems(quickInput).map(item => item.label),
-		["First Chat", "Second Chat"],
+		['First Chat', 'Second Chat'],
 	);
 	const input = dom.window.document.querySelector<HTMLInputElement>(
-		".ash-quick-pick-input input",
+		'.ash-quick-pick-input input',
 	);
 	assert.ok(input);
-	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
-		key: "ArrowDown",
+		key: 'ArrowDown',
 	}));
-	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
-		key: "Enter",
+		key: 'Enter',
 	}));
 
 	await picking;
-	assert.equal(sessions.active?.session.sessionId, "session-2");
-	assert.equal(sessions.active?.threadId, "thread-2");
+	assert.equal(sessions.active?.session.sessionId, 'session-2');
+	assert.equal(sessions.active?.threadId, 'thread-2');
 	assert.equal(focusedView, CHAT_VIEW_ID);
 	assert.equal(
-		dom.window.document.querySelector(".ash-quick-pick"),
+		dom.window.document.querySelector('.ash-quick-pick'),
 		null,
 	);
 });
 
-test("ViewsService resolves, opens, and focuses contributed views", async () => {
+test('ViewsService resolves, opens, and focuses contributed views', async () => {
 	const registry = ViewsRegistry;
 	using contextKeys = new ContextKeyService();
 	using descriptors = new TestViewDescriptorService({
@@ -1760,7 +1772,7 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 	let focused = 0;
 	let opened = 0;
 	const view = {
-		element: h(testStorageEnvironment.window.document, "div"),
+		element: h(testStorageEnvironment.window.document, 'div'),
 		id: CHAT_VIEW_ID,
 		paneTitle: 'Chat',
 		getProgressIndicator: () => undefined,
@@ -1827,63 +1839,63 @@ test("ViewsService resolves, opens, and focuses contributed views", async () => 
 	assert.equal(await service.focusView(CHAT_VIEW_ID), true);
 	assert.equal(opened, 1);
 	assert.equal(focused, 1);
-	assert.equal(await service.openView("missing"), null);
+	assert.equal(await service.openView('missing'), null);
 });
 
-test("SessionsManagementService restores and creates active Threads", async () => {
-	const initialSession = session("session-1", "thread-1");
-	const createdSession = session("session-2");
-	const attachedSession = session("session-2", "thread-2");
+test('SessionsManagementService restores and creates active Threads', async () => {
+	const initialSession = session('session-1', 'thread-1');
+	const createdSession = session('session-2');
+	const attachedSession = session('session-2', 'thread-2');
 	const api = fakeApi({
 		sessions: [initialSession],
 		createSession: createdSession,
 		createThread: {
 			session: attachedSession,
-			threadId: "thread-2",
+			threadId: 'thread-2',
 		},
 	}).api;
 	using service = new SessionsManagementService(api);
 
 	await service.initialize();
-	assert.equal(service.active?.threadId, "thread-1");
-	assert.equal(service.active?.session.title, "Session session-1");
+	assert.equal(service.active?.threadId, 'thread-1');
+	assert.equal(service.active?.session.title, 'Session session-1');
 
-	const active = await service.startNewSession("Another");
-	assert.equal(active.threadId, "thread-2");
-	assert.equal(service.sessions[0].sessionId, "session-2");
-	assert.equal(service.state, "ready");
+	const active = await service.startNewSession('Another');
+	assert.equal(active.threadId, 'thread-2');
+	assert.equal(service.sessions[0].sessionId, 'session-2');
+	assert.equal(service.state, 'ready');
 });
 
-test("SessionsManagementService archives a Session and selects the next active one", async () => {
-	const first = session("session-1", "thread-1");
-	const second = session("session-2", "thread-2");
+test('SessionsManagementService archives a Session and selects the next active one', async () => {
+	const first = session('session-1', 'thread-1');
+	const second = session('session-2', 'thread-2');
 	const fake = fakeApi({ sessions: [first, second] });
 	using service = new SessionsManagementService(fake.api);
 
 	await service.initialize();
-	await service.archiveSession("session-1");
+	await service.archiveSession('session-1');
 
 	assert.deepEqual(
 		fake.archiveRequests.map(({ sessionId }) => ({ sessionId })),
-		[{ sessionId: "session-1" }],
+		[{ sessionId: 'session-1' }],
 	);
 	assert.equal(
-		service.sessions.find(({ sessionId }) => sessionId === "session-1")
+		service.sessions.find(({ sessionId }) => sessionId === 'session-1')
 			?.status,
-		"archived",
+		'archived',
 	);
-	assert.equal(service.active?.session.sessionId, "session-2");
-	assert.equal(service.active?.threadId, "thread-2");
-	assert.equal(service.state, "ready");
+	assert.equal(service.active?.session.sessionId, 'session-2');
+	assert.equal(service.active?.threadId, 'thread-2');
+	assert.equal(service.state, 'ready');
 });
 
-test("SessionsManagementService permits an empty selection when no durable Session remains", async () => {
-	const onlySession = session("session-1", "thread-1");
+test('SessionsManagementService permits an empty selection when no durable Session remains', async () => {
+	const onlySession = session('session-1', 'thread-1');
 	const fake = fakeApi({ sessions: [onlySession] });
 	using service = new SessionsManagementService(fake.api);
 
 	await service.initialize();
-	await service.archiveSession("session-1");
+	await service.archiveSession('session-1');
 
 	assert.equal(service.active, undefined);
 	assert.equal(service.untitledSessions.length, 0);
@@ -1892,7 +1904,7 @@ test("SessionsManagementService permits an empty selection when no durable Sessi
 	assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("SessionsManagementService selects another untitled session and permits the last one to be discarded", async () => {
+test('SessionsManagementService selects another untitled session and permits the last one to be discarded', async () => {
 	const fake = fakeApi();
 	using service = new SessionsManagementService(fake.api);
 
@@ -1911,18 +1923,18 @@ test("SessionsManagementService selects another untitled session and permits the
 	assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("SessionsManagementService writes the default without replacing existing Session models", async () => {
+test('SessionsManagementService writes the default without replacing existing Session models', async () => {
 	const firstModel = { provider: 'openai', model: 'first' };
 	const secondModel = { provider: 'openai', model: 'second' };
 	const fake = fakeApi({
 		sessions: [
-			{ ...session("session-1", "thread-1"), model: firstModel },
-			{ ...session("session-2", "thread-2"), model: secondModel },
+			{ ...session('session-1', 'thread-1'), model: firstModel },
+			{ ...session('session-2', 'thread-2'), model: secondModel },
 		],
 	});
 	using service = new SessionsManagementService(fake.api);
 	await service.initialize();
-	const model: ModelRef = { provider: "openai", model: "gpt-session" };
+	const model: ModelRef = { provider: 'openai', model: 'gpt-session' };
 
 	await service.setModel(model);
 
@@ -1931,8 +1943,8 @@ test("SessionsManagementService writes the default without replacing existing Se
 	assert.deepEqual(fake.modelRequests.map(request => request.model), [model]);
 });
 
-test("ChatWidgetModel applies backend-assembled transcript entries", async () => {
-	const activeSession = session("session-1", "thread-1");
+test('ChatWidgetModel applies backend-assembled transcript entries', async () => {
+	const activeSession = session('session-1', 'thread-1');
 	let currentThread = thread();
 	const fake = fakeApi({
 		sessions: [activeSession],
@@ -1940,50 +1952,50 @@ test("ChatWidgetModel applies backend-assembled transcript entries", async () =>
 	});
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(createChatService(fake.api), {
-		kind: "session",
+		kind: 'session',
 		active: {
 			session: activeSession,
-			threadId: "thread-1",
+			threadId: 'thread-1',
 		},
 	}, sessions);
 
 	await model.initialize();
 	fake.emit({
-		method: "session/thread/transcript/update",
+		method: 'session/thread/transcript/update',
 		params: {
-			sessionId: "session-1",
-			threadId: "thread-1",
+			sessionId: 'session-1',
+			threadId: 'thread-1',
 			durableSequence: 1,
 			revision: 2,
 			changes: [{
-				type: "upsert",
+				type: 'upsert',
 				entry: {
-					type: "item",
-					entryId: "item:item-1",
-					turnId: "turn-1",
+					type: 'item',
+					entryId: 'item:item-1',
+					turnId: 'turn-1',
 					transient: true,
-					item: { type: "agentMessage", itemId: "item-1", turnId: "turn-1", text: "Hello" },
+					item: { type: 'agentMessage', itemId: 'item-1', turnId: 'turn-1', text: 'Hello' },
 				},
 			}],
 		},
 	});
 
-	assert.deepEqual(model.items.map((item) => item.text), ["Hello"]);
+	assert.deepEqual(model.items.map((item) => item.text), ['Hello']);
 	assert.equal(model.items[0].transient, true);
 
-	currentThread = thread("Hello");
+	currentThread = thread('Hello');
 	fake.emit({
-		method: "session/thread/update",
+		method: 'session/thread/update',
 		params: {
-			sessionId: "session-1",
-			threadId: "thread-1",
+			sessionId: 'session-1',
+			threadId: 'thread-1',
 			durableSequence: 4,
 			update: {
-				type: "committed",
+				type: 'committed',
 				event: {
-					type: "itemCompleted",
-					threadId: "thread-1",
-					turnId: "turn-1",
+					type: 'itemCompleted',
+					threadId: 'thread-1',
+					turnId: 'turn-1',
 					item: currentThread.turns[0].items[0],
 				},
 			},
@@ -1991,30 +2003,30 @@ test("ChatWidgetModel applies backend-assembled transcript entries", async () =>
 	});
 	await nextTask();
 
-	assert.deepEqual(model.items.map((item) => item.text), ["Hello"]);
+	assert.deepEqual(model.items.map((item) => item.text), ['Hello']);
 	assert.equal(model.items[0].transient, false);
 	assert.equal(model.thread?.sequence, 4);
 });
 
-test("ChatWidgetModel projects and refreshes the canonical durable Turn plan", async () => {
-	const activeSession = session("session-1", "thread-1");
+test('ChatWidgetModel projects and refreshes the canonical durable Turn plan', async () => {
+	const activeSession = session('session-1', 'thread-1');
 	let currentThread: Thread = {
 		...thread(),
 		sequence: 3,
 		turns: [{
-			turnId: "turn-1",
-			status: "running",
-			mode: "agent",
-			kind: "coding",
-			toolMode: "direct",
-			approvalMode: "manual",
+			turnId: 'turn-1',
+			status: 'running',
+			mode: 'agent',
+			kind: 'coding',
+			toolMode: 'direct',
+			approvalMode: 'manual',
 			usage: emptyUsage(),
 			items: [],
 			plan: {
-				explanation: "Implement S3",
+				explanation: 'Implement S3',
 				steps: [
-					{ step: "Implement", status: "inProgress" },
-					{ step: "Verify", status: "pending" },
+					{ step: 'Implement', status: 'inProgress' },
+					{ step: 'Verify', status: 'pending' },
 				],
 			},
 		}],
@@ -2022,13 +2034,13 @@ test("ChatWidgetModel projects and refreshes the canonical durable Turn plan", a
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(createChatService(fake.api), {
-		kind: "session",
-		active: { session: activeSession, threadId: "thread-1" },
+		kind: 'session',
+		active: { session: activeSession, threadId: 'thread-1' },
 	}, sessions);
 
 	await model.initialize();
-	assert.equal(model.items[0]?.id, "turn-plan:turn-1");
-	assert.match(model.items[0]?.text ?? "", /In progress:\*\* Implement/);
+	assert.equal(model.items[0]?.id, 'turn-plan:turn-1');
+	assert.match(model.items[0]?.text ?? '', /In progress:\*\* Implement/);
 
 	currentThread = {
 		...currentThread,
@@ -2036,26 +2048,26 @@ test("ChatWidgetModel projects and refreshes the canonical durable Turn plan", a
 		turns: [{
 			...currentThread.turns[0],
 			plan: {
-				explanation: "Implementation complete",
+				explanation: 'Implementation complete',
 				steps: [
-					{ step: "Implement", status: "completed" },
-					{ step: "Verify", status: "inProgress" },
+					{ step: 'Implement', status: 'completed' },
+					{ step: 'Verify', status: 'inProgress' },
 				],
 			},
 		}],
 	};
 	fake.emit({
-		method: "session/thread/update",
+		method: 'session/thread/update',
 		params: {
-			sessionId: "session-1",
-			threadId: "thread-1",
+			sessionId: 'session-1',
+			threadId: 'thread-1',
 			durableSequence: 4,
 			update: {
-				type: "committed",
+				type: 'committed',
 				event: {
-					type: "planUpdated",
-					threadId: "thread-1",
-					turnId: "turn-1",
+					type: 'planUpdated',
+					threadId: 'thread-1',
+					turnId: 'turn-1',
 					plan: currentThread.turns[0].plan!,
 				},
 			},
@@ -2064,36 +2076,36 @@ test("ChatWidgetModel projects and refreshes the canonical durable Turn plan", a
 	await nextTask();
 
 	assert.equal(model.items.length, 1);
-	assert.match(model.items[0]?.text ?? "", /\[x\] Implement/);
-	assert.match(model.items[0]?.text ?? "", /In progress:\*\* Verify/);
+	assert.match(model.items[0]?.text ?? '', /\[x\] Implement/);
+	assert.match(model.items[0]?.text ?? '', /In progress:\*\* Verify/);
 });
 
-test("ChatWidgetModel mechanically clears and replaces transient transcript entries", async () => {
-	const activeSession = session("session-1", "thread-1");
+test('ChatWidgetModel mechanically clears and replaces transient transcript entries', async () => {
+	const activeSession = session('session-1', 'thread-1');
 	const fake = fakeApi({
 		sessions: [activeSession],
 		thread: () => thread(),
 	});
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(createChatService(fake.api), {
-		kind: "session",
+		kind: 'session',
 		active: {
 			session: activeSession,
-			threadId: "thread-1",
+			threadId: 'thread-1',
 		},
 	}, sessions);
 
 	await model.initialize();
 	let transcriptRevision = 1;
 	const emitChanges = (
-		changes: Extract<ServerNotification, { method: "session/thread/transcript/update"; }>["params"]["changes"],
+		changes: Extract<ServerNotification, { method: 'session/thread/transcript/update'; }>['params']['changes'],
 		revision = ++transcriptRevision,
 	): void => {
 		fake.emit({
-			method: "session/thread/transcript/update",
+			method: 'session/thread/transcript/update',
 			params: {
-				sessionId: "session-1",
-				threadId: "thread-1",
+				sessionId: 'session-1',
+				threadId: 'thread-1',
 				durableSequence: 1,
 				revision,
 				changes,
@@ -2101,58 +2113,58 @@ test("ChatWidgetModel mechanically clears and replaces transient transcript entr
 		});
 	};
 	const item = (itemId: string) => ({
-		type: "upsert" as const,
+		type: 'upsert' as const,
 		entry: {
-			type: "item" as const,
+			type: 'item' as const,
 			entryId: `item:${itemId}`,
-			turnId: "turn-1",
+			turnId: 'turn-1',
 			transient: true,
-			item: { type: "agentMessage" as const, itemId, turnId: "turn-1", text: itemId },
+			item: { type: 'agentMessage' as const, itemId, turnId: 'turn-1', text: itemId },
 		},
 	});
 
-	emitChanges([item("old-item")]);
-	assert.deepEqual(model.items.map((item) => item.text), ["old-item"]);
-	emitChanges([{ type: "clearTransient" }]);
+	emitChanges([item('old-item')]);
+	assert.deepEqual(model.items.map((item) => item.text), ['old-item']);
+	emitChanges([{ type: 'clearTransient' }]);
 	assert.equal(model.items.length, 0);
 
-	emitChanges([item("new-item")]);
-	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
-	emitChanges([item("duplicate-is-ignored")], transcriptRevision);
-	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
-	emitChanges([item("gap-is-ignored")], transcriptRevision + 2);
+	emitChanges([item('new-item')]);
+	assert.deepEqual(model.items.map((item) => item.text), ['new-item']);
+	emitChanges([item('duplicate-is-ignored')], transcriptRevision);
+	assert.deepEqual(model.items.map((item) => item.text), ['new-item']);
+	emitChanges([item('gap-is-ignored')], transcriptRevision + 2);
 	await nextTask();
-	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
-	emitChanges([{ type: "clearTransient" }], transcriptRevision + 3);
+	assert.deepEqual(model.items.map((item) => item.text), ['new-item']);
+	emitChanges([{ type: 'clearTransient' }], transcriptRevision + 3);
 	assert.equal(model.items.length, 0);
 });
 
-test("ChatWidgetModel projects a durable Turn failure into the conversation", async () => {
-	const activeSession = session("session-1", "thread-1");
+test('ChatWidgetModel projects a durable Turn failure into the conversation', async () => {
+	const activeSession = session('session-1', 'thread-1');
 	const failedThread: Thread = {
-		advisor: { type: "default" },
-		agentId: "agent-1",
-		origin: { type: "root" },
+		advisor: { type: 'default' },
+		agentId: 'agent-1',
+		origin: { type: 'root' },
 		hookRuns: [],
 		referenceCost: { knownAmounts: [], complete: true },
-		sessionId: "session-1",
-		threadId: "thread-1",
-		title: "Main",
-		status: "active",
+		sessionId: 'session-1',
+		threadId: 'thread-1',
+		title: 'Main',
+		status: 'active',
 		sequence: 3,
 		usage: emptyUsage(),
 		turns: [{
-			turnId: "turn-1",
-			status: "failed",
-			mode: "agent",
-			kind: "coding",
-			toolMode: "direct",
-			approvalMode: "manual",
+			turnId: 'turn-1',
+			status: 'failed',
+			mode: 'agent',
+			kind: 'coding',
+			toolMode: 'direct',
+			approvalMode: 'manual',
 			usage: emptyUsage(),
 			items: [],
 			error: {
-				code: "providerAuth",
-				message: "Model provider authentication failed",
+				code: 'providerAuth',
+				message: 'Model provider authentication failed',
 				retryable: false,
 			},
 		}],
@@ -2160,114 +2172,114 @@ test("ChatWidgetModel projects a durable Turn failure into the conversation", as
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(createChatService(fake.api), {
-		kind: "session",
-		active: { session: activeSession, threadId: "thread-1" },
+		kind: 'session',
+		active: { session: activeSession, threadId: 'thread-1' },
 	}, sessions);
 
 	await model.initialize();
 
 	assert.deepEqual(model.items, [{
-		id: "turn-error:turn-1",
-		type: "turnError",
-		text: "Model provider authentication failed",
+		id: 'turn-error:turn-1',
+		type: 'turnError',
+		text: 'Model provider authentication failed',
 		transient: false,
 		isError: true,
-		label: "Authentication",
-		detail: "Choose a model with working credentials before sending another message.",
-		errorCode: "providerAuth",
-		action: { type: "chooseModel", label: "Choose another model" },
+		label: 'Authentication',
+		detail: 'Choose a model with working credentials before sending another message.',
+		errorCode: 'providerAuth',
+		action: { type: 'chooseModel', label: 'Choose another model' },
 	}]);
-	assert.equal(model.state, "ready");
+	assert.equal(model.state, 'ready');
 });
 
-test("Turn error presentation is selected only from the stable error code", () => {
-	const message = "same opaque message";
-	const cases: readonly { readonly code: TurnError["code"]; readonly retryable: boolean; }[] = [
-		{ code: "modelInvocationFailed", retryable: true },
-		{ code: "contextOverflow", retryable: true },
-		{ code: "providerAuth", retryable: false },
-		{ code: "invalidRequest", retryable: false },
-		{ code: "invalidResponse", retryable: true },
-		{ code: "completionPersistenceFailed", retryable: true },
-		{ code: "interactionDeadlineElapsed", retryable: true },
-		{ code: "toolRepetition", retryable: false },
-		{ code: "usageLimited", retryable: false },
-		{ code: "worktreeCaptureFailed", retryable: true },
+test('Turn error presentation is selected only from the stable error code', () => {
+	const message = 'same opaque message';
+	const cases: readonly { readonly code: TurnError['code']; readonly retryable: boolean; }[] = [
+		{ code: 'modelInvocationFailed', retryable: true },
+		{ code: 'contextOverflow', retryable: true },
+		{ code: 'providerAuth', retryable: false },
+		{ code: 'invalidRequest', retryable: false },
+		{ code: 'invalidResponse', retryable: true },
+		{ code: 'completionPersistenceFailed', retryable: true },
+		{ code: 'interactionDeadlineElapsed', retryable: true },
+		{ code: 'toolRepetition', retryable: false },
+		{ code: 'usageLimited', retryable: false },
+		{ code: 'worktreeCaptureFailed', retryable: true },
 	];
 
 	assert.deepEqual(cases.map(({ code, retryable }) => {
 		const item = chatTurnErrorListItem(failedTurn(code, retryable, message));
 		return { code: item?.errorCode, label: item?.label, action: item?.action?.type, message: item?.text };
 	}), [
-		{ code: "modelInvocationFailed", label: "Model error", action: "retry", message },
-		{ code: "contextOverflow", label: "Context limit", action: "startNewChat", message },
-		{ code: "providerAuth", label: "Authentication", action: "chooseModel", message },
-		{ code: "invalidRequest", label: "Invalid request", action: "revise", message },
-		{ code: "invalidResponse", label: "Invalid response", action: "retry", message },
-		{ code: "completionPersistenceFailed", label: "Save failed", action: "retry", message },
-		{ code: "interactionDeadlineElapsed", label: "Interaction expired", action: "retry", message },
-		{ code: "toolRepetition", label: "Repeated tool failure", action: "revise", message },
-		{ code: "usageLimited", label: "Usage limit", action: "chooseModel", message },
-		{ code: "worktreeCaptureFailed", label: "Worktree capture failed", action: "retry", message },
+		{ code: 'modelInvocationFailed', label: 'Model error', action: 'retry', message },
+		{ code: 'contextOverflow', label: 'Context limit', action: 'startNewChat', message },
+		{ code: 'providerAuth', label: 'Authentication', action: 'chooseModel', message },
+		{ code: 'invalidRequest', label: 'Invalid request', action: 'revise', message },
+		{ code: 'invalidResponse', label: 'Invalid response', action: 'retry', message },
+		{ code: 'completionPersistenceFailed', label: 'Save failed', action: 'retry', message },
+		{ code: 'interactionDeadlineElapsed', label: 'Interaction expired', action: 'retry', message },
+		{ code: 'toolRepetition', label: 'Repeated tool failure', action: 'revise', message },
+		{ code: 'usageLimited', label: 'Usage limit', action: 'chooseModel', message },
+		{ code: 'worktreeCaptureFailed', label: 'Worktree capture failed', action: 'retry', message },
 	]);
 });
 
-test("ChatWidgetModel rebuilds error actions from canonical Thread state after refresh and reconnect", async () => {
-	const activeSession = session("session-1", "thread-1");
-	let currentThread = threadWithFailure("providerAuth", false);
+test('ChatWidgetModel rebuilds error actions from canonical Thread state after refresh and reconnect', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	let currentThread = threadWithFailure('providerAuth', false);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(createChatService(fake.api), {
-		kind: "session",
-		active: { session: activeSession, threadId: "thread-1" },
+		kind: 'session',
+		active: { session: activeSession, threadId: 'thread-1' },
 	}, sessions);
 	await model.initialize();
 
-	currentThread = threadWithFailure("toolRepetition", false, 4);
+	currentThread = threadWithFailure('toolRepetition', false, 4);
 	fake.emit({
-		method: "session/thread/update",
+		method: 'session/thread/update',
 		params: {
-			sessionId: "session-1",
-			threadId: "thread-1",
+			sessionId: 'session-1',
+			threadId: 'thread-1',
 			durableSequence: currentThread.sequence,
 			update: {
-				type: "committed",
+				type: 'committed',
 				event: {
-					type: "turnFailed",
-					threadId: "thread-1",
-					turnId: "turn-1",
+					type: 'turnFailed',
+					threadId: 'thread-1',
+					turnId: 'turn-1',
 					error: currentThread.turns[0]!.error!,
 				},
 			},
 		},
 	});
-	await waitFor(() => model.items[0]?.errorCode === "toolRepetition");
-	assert.equal(model.items[0]?.action?.type, "revise");
+	await waitFor(() => model.items[0]?.errorCode === 'toolRepetition');
+	assert.equal(model.items[0]?.action?.type, 'revise');
 
-	currentThread = threadWithFailure("usageLimited", false, 5);
+	currentThread = threadWithFailure('usageLimited', false, 5);
 	fake.emitReady();
-	await waitFor(() => model.items[0]?.errorCode === "usageLimited");
-	assert.equal(model.items[0]?.action?.type, "chooseModel");
+	await waitFor(() => model.items[0]?.errorCode === 'usageLimited');
+	assert.equal(model.items[0]?.action?.type, 'chooseModel');
 });
 
-test("ChatWidgetModel retries only the latest retryable failed Turn as a new visible Turn", async () => {
-	const activeSession = session("session-1", "thread-1");
-	const failedThread = threadWithFailure("modelInvocationFailed", true);
+test('ChatWidgetModel retries only the latest retryable failed Turn as a new visible Turn', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const failedThread = threadWithFailure('modelInvocationFailed', true);
 	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(createChatService(fake.api), {
-		kind: "session",
-		active: { session: activeSession, threadId: "thread-1" },
+		kind: 'session',
+		active: { session: activeSession, threadId: 'thread-1' },
 	}, sessions);
 	await model.initialize();
 
-	await model.retryFailedTurn("turn-1");
+	await model.retryFailedTurn('turn-1');
 
 	assert.deepEqual(fake.turnStartRequests.map(({ expectedSequence, input }) => ({ expectedSequence, input })), [{
 		expectedSequence: failedThread.sequence,
-		input: [{ type: "text", text: "Try again." }],
+		input: [{ type: 'text', text: 'Try again.' }],
 	}]);
-	await assert.rejects(model.retryFailedTurn("older-turn"), /Only the latest retryable failed Turn/);
+	await assert.rejects(model.retryFailedTurn('older-turn'), /Only the latest retryable failed Turn/);
 });
 
 interface FakeOptions {
@@ -2415,7 +2427,14 @@ for (const reconnect of [false, true]) {
 		const fake = fakeApi();
 		const pending = new DeferredPromise<Awaited<ReturnType<typeof fake.api.thread.subscribe>>>();
 		const released: string[] = [];
-		const chat = createChatService({ ...fake.api, thread: { ...fake.api.thread, subscribe: () => pending.p, unsubscribe: async ({ threadId }) => { released.push(threadId); } } });
+		const chat = createChatService({
+			...fake.api,
+			thread: {
+				...fake.api.thread,
+				subscribe: () => pending.p,
+				unsubscribe: async ({ threadId }) => { released.push(threadId); }
+			}
+		});
 		const subscribing = chat.subscribeThread('session-1', 'thread-1', 0, {});
 		const rejected = assert.rejects(subscribing, isCancellationError);
 		chat.dispose();
@@ -2519,67 +2538,67 @@ test('closing during subscription waits for the request before releasing the bac
 	assert.deepEqual(released, ['thread-1']);
 });
 
-test("Chat service retains Agent identity and branch origin when reading a Thread", async () => {
+test('Chat service retains Agent identity and branch origin when reading a Thread', async () => {
 	const fake = fakeApi();
 	using chat = createChatService(fake.api);
-	const read = await chat.readThread("session-1", "thread-1");
-	assert.equal(read.thread.agentId, "agent-1");
-	assert.deepEqual(read.thread.origin, { type: "root" });
+	const read = await chat.readThread('session-1', 'thread-1');
+	assert.equal(read.thread.agentId, 'agent-1');
+	assert.deepEqual(read.thread.origin, { type: 'root' });
 });
 
-test("Chat service preserves complete transcript items from reads and updates", async () => {
-	const items: Thread["turns"][number]["items"] = [
-		{ type: "reasoning", itemId: "reasoning-1", turnId: "turn-1", text: "Checking", state: [{ scope: "provider/model", item: { id: "encrypted-state" } }] },
+test('Chat service preserves complete transcript items from reads and updates', async () => {
+	const items: Thread['turns'][number]['items'] = [
+		{ type: 'reasoning', itemId: 'reasoning-1', turnId: 'turn-1', text: 'Checking', state: [{ scope: 'provider/model', item: { id: 'encrypted-state' } }] },
 		{
-			type: "toolCall", itemId: "call-1", turnId: "turn-1", toolCallId: "tool-1", name: "shell", argumentsJson: '{}',
+			type: 'toolCall', itemId: 'call-1', turnId: 'turn-1', toolCallId: 'tool-1', name: 'shell', argumentsJson: '{}',
 			binding: {
-				registryGeneration: 3, definitionDigest: "digest", sourceChain: [{ type: "product", component: "shell" }],
-				activity: { type: "run" }, caller: { type: "direct" },
+				registryGeneration: 3, definitionDigest: 'digest', sourceChain: [{ type: 'product', component: 'shell' }],
+				activity: { type: 'run' }, caller: { type: 'direct' },
 			},
 		},
 		{
-			type: "toolResult", itemId: "result-1", turnId: "turn-1", toolCallId: "tool-1", text: "Done", isError: false,
-			content: [{ type: "text", text: "Done" }, { type: "imageUrl", url: "https://example.test/image.png", detail: "high" }],
+			type: 'toolResult', itemId: 'result-1', turnId: 'turn-1', toolCallId: 'tool-1', text: 'Done', isError: false,
+			content: [{ type: 'text', text: 'Done' }, { type: 'imageUrl', url: 'https://example.test/image.png', detail: 'high' }],
 		},
 	];
-	const original = thread("Done");
+	const original = thread('Done');
 	const currentThread: Thread = { ...original, turns: original.turns.map(turn => ({ ...turn, items })) };
 	const fake = fakeApi({ thread: () => currentThread });
 	using chat = createChatService(fake.api);
-	const read = await chat.readThread("session-1", "thread-1");
+	const read = await chat.readThread('session-1', 'thread-1');
 	assert.deepEqual(read.thread.turns[0].items, items);
-	assert.deepEqual(read.transcript.entries.map(entry => entry.type === "item" ? entry.item : undefined), items);
+	assert.deepEqual(read.transcript.entries.map(entry => entry.type === 'item' ? entry.item : undefined), items);
 
 	const updates: ThreadTranscriptUpdateEnvelope[] = [];
 	using listener = chat.onDidUpdateThreadTranscript(update => updates.push(update));
 	fake.emit({
-		method: "session/thread/transcript/update",
+		method: 'session/thread/transcript/update',
 		params: {
-			sessionId: "session-1", threadId: "thread-1", durableSequence: 4, revision: 5,
-			changes: items.map(item => ({ type: "upsert" as const, entry: { type: "item" as const, entryId: `item:${item.itemId}`, turnId: item.turnId, item, transient: false } })),
+			sessionId: 'session-1', threadId: 'thread-1', durableSequence: 4, revision: 5,
+			changes: items.map(item => ({ type: 'upsert' as const, entry: { type: 'item' as const, entryId: `item:${item.itemId}`, turnId: item.turnId, item, transient: false } })),
 		},
 	});
-	assert.deepEqual(updates[0]?.changes.map(change => change.type === "upsert" && change.entry.type === "item" ? change.entry.item : undefined), items);
+	assert.deepEqual(updates[0]?.changes.map(change => change.type === 'upsert' && change.entry.type === 'item' ? change.entry.item : undefined), items);
 });
 
-test("Chat service accepts committed fork-history import notifications", () => {
+test('Chat service accepts committed fork-history import notifications', () => {
 	const fake = fakeApi();
 	using chat = createChatService(fake.api);
 	const updates: ThreadUpdateEnvelope[] = [];
 	using listener = chat.onDidUpdateThread(update => updates.push(update));
 
 	fake.emit({
-		method: "session/thread/update",
+		method: 'session/thread/update',
 		params: {
-			sessionId: "session-1",
-			threadId: "thread-1",
+			sessionId: 'session-1',
+			threadId: 'thread-1',
 			durableSequence: 2,
 			update: {
-				type: "committed",
+				type: 'committed',
 				event: {
-					type: "forkHistoryImported",
-					threadId: "thread-1",
-					sourceThreadId: "thread-source",
+					type: 'forkHistoryImported',
+					threadId: 'thread-1',
+					sourceThreadId: 'thread-source',
 					sourceSequence: 7,
 					turns: [],
 				},
@@ -2588,48 +2607,48 @@ test("Chat service accepts committed fork-history import notifications", () => {
 	});
 
 	assert.deepEqual(updates, [{
-		sessionId: "session-1",
-		threadId: "thread-1",
+		sessionId: 'session-1',
+		threadId: 'thread-1',
 		durableSequence: 2,
 		streamCursor: undefined,
-		update: { type: "committed", event: { type: "forkHistoryImported" } },
+		update: { type: 'committed', event: { type: 'forkHistoryImported' } },
 	}]);
 });
 
-test("Chat service projects unique enabled Skills and submits the exact pinned reference", async () => {
+test('Chat service projects unique enabled Skills and submits the exact pinned reference', async () => {
 	const commit = {
-		id: { source: "user:skill-source:test", name: "commit" },
-		description: "Draft a commit message",
-		contentDigest: "sha256:commit",
+		id: { source: 'user:skill-source:test', name: 'commit' },
+		description: 'Draft a commit message',
+		contentDigest: 'sha256:commit',
 		enabled: true,
 		compatible: true,
 	};
 	const fake = fakeApi({
 		skills: [
 			commit,
-			{ ...commit, id: { source: "workspace:disabled-commit", name: "commit" }, enabled: false },
-			{ ...commit, id: { source: "workspace:one", name: "duplicate" } },
-			{ ...commit, id: { source: "workspace:two", name: "duplicate" } },
-			{ ...commit, id: { source: "workspace:disabled", name: "disabled" }, enabled: false },
+			{ ...commit, id: { source: 'workspace:disabled-commit', name: 'commit' }, enabled: false },
+			{ ...commit, id: { source: 'workspace:one', name: 'duplicate' } },
+			{ ...commit, id: { source: 'workspace:two', name: 'duplicate' } },
+			{ ...commit, id: { source: 'workspace:disabled', name: 'disabled' }, enabled: false },
 		]
 	});
 	using chat = createChatService(fake.api);
 
-	const selectors = toSkillSelectors((await fake.api.skills.list("cached", "session-1")).skills);
+	const selectors = toSkillSelectors((await fake.api.skills.list('cached', 'session-1')).skills);
 
 	assert.deepEqual(selectors, [{
-		name: "commit",
-		description: "Draft a commit message",
-		source: "user:skill-source:test",
+		name: 'commit',
+		description: 'Draft a commit message',
+		source: 'user:skill-source:test',
 		skill: {
-			id: { source: "user:skill-source:test", name: "commit" },
-			version: { type: "pinnedDigest", digest: "sha256:commit" },
+			id: { source: 'user:skill-source:test', name: 'commit' },
+			version: { type: 'pinnedDigest', digest: 'sha256:commit' },
 		},
 	}]);
-	await chat.startTurn({ sessionId: "session-1", threadId: "thread-1", expectedSequence: 1, text: "$commit staged changes", mode: "agent", skills: [selectors[0]!.skill] });
+	await chat.startTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: '$commit staged changes', mode: 'agent', skills: [selectors[0]!.skill] });
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
-		{ type: "skill", skill: selectors[0]!.skill },
-		{ type: "text", text: "$commit staged changes" },
+		{ type: 'skill', skill: selectors[0]!.skill },
+		{ type: 'text', text: '$commit staged changes' },
 	]);
 });
 
@@ -2699,7 +2718,7 @@ test('instruction references reach Turn start, queue and steering without becomi
 	assert.deepEqual(fake.turnSteerRequests[0]?.input, input);
 });
 
-test("Language models service applies product visibility defaults and persists manual changes", async () => {
+test('Language models service applies product visibility defaults and persists manual changes', async () => {
 	const enabled = [
 		{ provider: 'openai', model: 'gpt-6.1-sol' },
 		{ provider: 'openai', model: 'gpt-6-astra' },
@@ -2749,9 +2768,9 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	const fake = fakeApi({ models: [codeModel, coworkModel], createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
 	using configuration = new WorkbenchConfigurationService();
 	using storage = createTestStorage();
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'openai/gpt-6.1-sol');
 	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, 'anthropic/claude-opus-5-5');
 	using chat = createChatService(fake.api, configuration, storage);
+	await modelsFor(chat).rememberSelectedModel(codeModel.model);
 	using sessions = new SessionsManagementService(fake.api);
 	const draft = sessions.createUntitledSession();
 	using code = createWidgetModel(chat, { kind: 'untitled', session: draft }, sessions);
@@ -2776,7 +2795,6 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [coworkModel.model, codeModel.model]);
 	await code.selectModel(codeModel.model);
 	await cowork.selectModel(coworkModel.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, '');
 	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, '');
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
 	using restoredCoworkPreferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
@@ -2801,7 +2819,7 @@ test('Cowork default model settings use the Chinese catalog and reject invalid v
 	} finally { resetNlsResolver(); }
 });
 
-test('New chats use the configured model before the remembered picker choice', async () => {
+test('New chats restore the last picker model across services and remember Auto', async () => {
 	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First' };
 	const second = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Second' };
 	const fake = fakeApi({
@@ -2813,37 +2831,35 @@ test('New chats use the configured model before the remembered picker choice', a
 	using storage = createTestStorage();
 	using chat = createChatService(fake.api, configuration, storage);
 	using sessions = new SessionsManagementService(fake.api);
-	await modelsFor(chat).rememberSelectedModel(first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-opus-5-5');
-	const configuredDraft = sessions.createUntitledSession();
-	using configured = createWidgetModel(chat, { kind: 'untitled', session: configuredDraft }, sessions);
-	await configured.initialize();
-	assert.deepEqual(configured.selectedModel, second.model);
-	await configured.send('Use the configured model');
-	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, second.model);
+	using picker = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await picker.initialize();
+	await picker.selectModel(first.model);
+	using remembered = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await remembered.initialize();
+	assert.deepEqual(remembered.selectedModel, first.model);
+	await remembered.send('Use the last picker model');
+	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, first.model);
 	assert.ok(fake.skillListRequests.includes(undefined));
 	assert.equal(fake.skillListRequests.at(-1), 'created');
 
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, '');
-	const rememberedDraft = sessions.createUntitledSession();
-	using remembered = createWidgetModel(chat, { kind: 'untitled', session: rememberedDraft }, sessions);
-	await remembered.initialize();
-	assert.deepEqual(remembered.selectedModel, first.model);
-	await remembered.send('Use the remembered model');
-	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, first.model);
+	await picker.selectModel(second.model);
 	using restoredChatService = createChatService(fake.api, configuration, storage);
-	await modelsFor(restoredChatService).readModelDefaults();
-	assert.deepEqual(modelsFor(restoredChatService).getDefaultNewChatModel(await modelsFor(restoredChatService).listModels()), first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'missing/model');
-	assert.deepEqual(modelsFor(chat).getDefaultNewChatModel(await modelsFor(chat).listModels()), first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'auto');
-	const automaticDraft = sessions.createUntitledSession();
-	using automatic = createWidgetModel(chat, { kind: 'untitled', session: automaticDraft }, sessions);
+	using restored = createWidgetModel(restoredChatService, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await restored.initialize();
+	assert.deepEqual(restored.selectedModel, second.model);
+	await restored.send('Use the latest picker model after restoring');
+	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, second.model);
+	await picker.selectAutomaticModel();
+	using automatic = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await automatic.initialize();
 	assert.equal(automatic.isAutomaticModel, true);
+	using restoredAutomaticService = createChatService(fake.api, configuration, storage);
+	using restoredAutomatic = createWidgetModel(restoredAutomaticService, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await restoredAutomatic.initialize();
+	assert.equal(restoredAutomatic.isAutomaticModel, true);
 });
 
-test('A manual model choice stays with its chat while later new chats use the new default', async () => {
+test('Existing chats keep their choice while new chats follow the last picker selection', async () => {
 	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First' };
 	const second = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Second' };
 	const fake = fakeApi({ models: [first, second] });
@@ -2851,25 +2867,23 @@ test('A manual model choice stays with its chat while later new chats use the ne
 	using storage = createTestStorage();
 	using chat = createChatService(fake.api, configuration, storage);
 	using sessions = new SessionsManagementService(fake.api);
-	const firstDraft = sessions.createUntitledSession();
-	using firstChat = createWidgetModel(chat, { kind: 'untitled', session: firstDraft }, sessions);
+	using firstChat = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await firstChat.initialize();
 	await firstChat.selectModel(first.model);
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'anthropic/claude-opus-5-5');
-	await waitFor(() => firstChat.models.length === 2);
-	assert.deepEqual(firstChat.selectedModel, first.model);
-	const secondDraft = sessions.createUntitledSession();
-	using secondChat = createWidgetModel(chat, { kind: 'untitled', session: secondDraft }, sessions);
+	using secondChat = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await secondChat.initialize();
-	assert.deepEqual(secondChat.selectedModel, second.model);
-
-	await secondChat.selectAutomaticModel();
-	await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'openai/gpt-6.1-sol');
-	assert.equal(secondChat.isAutomaticModel, true);
-	const thirdDraft = sessions.createUntitledSession();
-	using thirdChat = createWidgetModel(chat, { kind: 'untitled', session: thirdDraft }, sessions);
+	assert.deepEqual(secondChat.selectedModel, first.model);
+	await secondChat.selectModel(second.model);
+	assert.deepEqual(firstChat.selectedModel, first.model);
+	using thirdChat = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await thirdChat.initialize();
-	assert.deepEqual(thirdChat.selectedModel, first.model);
+	assert.deepEqual(thirdChat.selectedModel, second.model);
+	await secondChat.selectAutomaticModel();
+	assert.equal(secondChat.isAutomaticModel, true);
+	assert.deepEqual(firstChat.selectedModel, first.model);
+	using fourthChat = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await fourthChat.initialize();
+	assert.equal(fourthChat.isAutomaticModel, true);
 });
 
 test('Model discovery refreshes the picker after an older catalog request completes', async () => {
@@ -2930,18 +2944,18 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.equal(pickerEntry.supportedReasoningEfforts[0].description, 'Quick tasks');
 });
 
-test("Chat picker excludes a hidden selected model", async () => {
+test('Chat picker excludes a hidden selected model', async () => {
 	const entry = {
-		model: { provider: "openai", model: "gpt-5.6-sol" },
-		displayName: "GPT-5.6 Sol",
+		model: { provider: 'openai', model: 'gpt-5.6-sol' },
+		displayName: 'GPT-5.6 Sol',
 	};
-	const activeSession = { ...session("session-1", "thread-1"), model: entry.model };
+	const activeSession = { ...session('session-1', 'thread-1'), model: entry.model };
 	const fake = fakeApi({ sessions: [activeSession], models: [entry] });
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
 	using chat = createChatService(fake.api, configuration);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 
 	await model.initialize();
 
@@ -2962,9 +2976,8 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const root = thread('Root answer');
 		let currentThread = { ...root, turns: root.turns.map(turn => ({ ...turn, model: rootModel })) };
 		const fake = fakeApi({ sessions: [durable], models: [rootModel, childModel, defaultModel].map(model => ({ model, displayName: model.model })), thread: () => currentThread });
-		fake.api.model.readModel = async () => defaultModel;
+		await fake.api.model.configureDefaults({ model: defaultModel }, (await fake.api.model.readDefaults()).revision);
 		using configuration = new WorkbenchConfigurationService();
-		await configuration.updateValue(ModelCatalogConfiguration.defaultModel, 'provider/default-c');
 		await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, 'provider/default-c');
 		using chat = createChatService(fake.api, configuration);
 		using sessions = new SessionsManagementService(fake.api);
@@ -3036,14 +3049,14 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 }
 
-test("ChatWidgetModel keeps per-chat choices while saving the default for new chats", async () => {
-	const firstModel: ModelRef = { provider: "openai", model: "gpt-first" };
-	const secondModel: ModelRef = { provider: "openai", model: "gpt-second" };
+test('ChatWidgetModel keeps per-chat choices while saving the default for new chats', async () => {
+	const firstModel: ModelRef = { provider: 'openai', model: 'gpt-first' };
+	const secondModel: ModelRef = { provider: 'openai', model: 'gpt-second' };
 	const activeSession = {
-		...session("session-1", "thread-1"),
+		...session('session-1', 'thread-1'),
 		chats: [
-			{ threadId: "thread-1", origin: { type: "root" as const }, status: "active" as const },
-			{ threadId: "thread-2", origin: { type: "root" as const }, status: "active" as const },
+			{ threadId: 'thread-1', origin: { type: 'root' as const }, status: 'active' as const },
+			{ threadId: 'thread-2', origin: { type: 'root' as const }, status: 'active' as const },
 		],
 	};
 	let currentThread = thread();
@@ -3052,17 +3065,17 @@ test("ChatWidgetModel keeps per-chat choices while saving the default for new ch
 	await modelsFor(chat).setModelVisible(firstModel, true);
 	await modelsFor(chat).setModelVisible(secondModel, true);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
 	await model.selectModel(firstModel);
-	await model.send("first chat");
-	currentThread = { ...thread(), threadId: "thread-2" };
-	await model.selectThread({ session: activeSession, threadId: "thread-2" });
+	await model.send('first chat');
+	currentThread = { ...thread(), threadId: 'thread-2' };
+	await model.selectThread({ session: activeSession, threadId: 'thread-2' });
 	await model.selectModel(secondModel);
-	await model.send("second chat");
+	await model.send('second chat');
 	currentThread = thread();
-	await model.selectThread({ session: activeSession, threadId: "thread-1" });
+	await model.selectThread({ session: activeSession, threadId: 'thread-1' });
 
 	assert.deepEqual(fake.turnStartRequests.map(request => request.model), [firstModel, secondModel]);
 	assert.deepEqual(model.selectedModel, firstModel);
@@ -3160,63 +3173,63 @@ test('ChatWidgetModel sends image-only input using the selected approval mode', 
 	assert.equal(model.inputState.approvalMode, 'auto');
 });
 
-test("ChatWidgetModel steers an active Turn instead of starting another Turn", async () => {
-	const activeSession = session("session-1", "thread-1");
+test('ChatWidgetModel steers an active Turn instead of starting another Turn', async () => {
+	const activeSession = session('session-1', 'thread-1');
 	const activeThread: Thread = {
 		...thread(),
 		sequence: 4,
 		turns: [{
-			turnId: "turn-running",
-			status: "running",
-			mode: "agent",
-			kind: "coding",
-			toolMode: "direct",
-			approvalMode: "manual",
+			turnId: 'turn-running',
+			status: 'running',
+			mode: 'agent',
+			kind: 'coding',
+			toolMode: 'direct',
+			approvalMode: 'manual',
 			usage: emptyUsage(),
 			items: [{
-				type: "userMessage",
-				itemId: "item-user",
-				turnId: "turn-running",
-				text: "initial request",
+				type: 'userMessage',
+				itemId: 'item-user',
+				turnId: 'turn-running',
+				text: 'initial request',
 			}],
 		}],
 	};
 	const fake = fakeApi({ sessions: [activeSession], thread: () => activeThread });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
-	await model.send("focus on the failing test");
+	await model.send('focus on the failing test');
 
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.deepEqual(fake.turnSteerRequests, [{
 		commandId: fake.turnSteerRequests[0]?.commandId,
-		sessionId: "session-1",
-		threadId: "thread-1",
-		turnId: "turn-running",
+		sessionId: 'session-1',
+		threadId: 'thread-1',
+		turnId: 'turn-running',
 		expectedSequence: 4,
-		input: [{ type: "text", text: "focus on the failing test" }],
+		input: [{ type: 'text', text: 'focus on the failing test' }],
 	}]);
 });
 
-test("ChatWidgetModel dispatches compact as a standalone server command", async () => {
-	const activeSession = session("session-1", "thread-1");
-	const fake = fakeApi({ sessions: [activeSession], thread: () => thread("previous answer") });
+test('ChatWidgetModel dispatches compact as a standalone server command', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession], thread: () => thread('previous answer') });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 
-	await model.executeServerCommand("compact", "preserve the deployment decision");
+	await model.executeServerCommand('compact', 'preserve the deployment decision');
 
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.deepEqual(fake.turnCompactRequests, [{
 		commandId: fake.turnCompactRequests[0]?.commandId,
-		sessionId: "session-1",
-		threadId: "thread-1",
+		sessionId: 'session-1',
+		threadId: 'thread-1',
 		expectedSequence: 4,
-		retentionPrompt: "preserve the deployment decision",
+		retentionPrompt: 'preserve the deployment decision',
 	}]);
 });
 
@@ -3380,7 +3393,7 @@ test('ChatWidgetModel retries the recorded mode independently of prompt identity
 function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {
 	let auxiliaryBarSize = new Dimension(380, 600);
 	const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
-	const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ["auxiliarybar"] : []);
+	const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ['auxiliarybar'] : []);
 	const updateVisibility = (partId: WorkbenchPartId, visible: boolean): void => {
 		if (visible === visibleParts.has(partId)) return;
 		if (visible) visibleParts.add(partId);
@@ -3405,13 +3418,13 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly archiveRequests: readonly SessionMutationParams[];
 	readonly stopRequests: readonly SessionMutationParams[];
 	readonly createSessionRequests: readonly SessionCreateParams[];
-	readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
-	readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
+	readonly createThreadRequests: readonly SessionOperationInput<'createThread'>[];
+	readonly turnStartRequests: readonly SessionOperationInput<'startTurn'>[];
 	readonly queuedRequests: readonly QueueEnqueueParams[];
-	readonly advisorRequests: readonly SessionOperationInput<"configureAdvisor">[];
-	readonly consultRequests: readonly SessionOperationInput<"consultAdvisor">[];
-	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
-	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
+	readonly advisorRequests: readonly SessionOperationInput<'configureAdvisor'>[];
+	readonly consultRequests: readonly SessionOperationInput<'consultAdvisor'>[];
+	readonly turnCompactRequests: readonly SessionOperationInput<'compactContext'>[];
+	readonly turnSteerRequests: readonly SessionOperationInput<'steerTurn'>[];
 	readonly modelListRequests: readonly undefined[];
 	readonly skillListRequests: readonly (string | undefined)[];
 	readonly providerModelRequests: readonly string[];
@@ -3422,19 +3435,19 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly emitReady: () => void;
 } {
 	const listeners = new Set<(notification: ServerNotification) => void>();
-	const connectionListeners = new Set<(state: "ready") => void>();
+	const connectionListeners = new Set<(state: 'ready') => void>();
 	let connectionGeneration = 1;
 	let modelDefaults = { revision: 1, model: null as ModelRef | null, reasoningEffort: null as import('../../../platform/agentHost/common/agentModels.js').ModelReasoningEffort | null };
 	const archiveRequests: SessionMutationParams[] = [];
 	const stopRequests: SessionMutationParams[] = [];
 	const createSessionRequests: SessionCreateParams[] = [];
-	const createThreadRequests: SessionOperationInput<"createThread">[] = [];
-	const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
+	const createThreadRequests: SessionOperationInput<'createThread'>[] = [];
+	const turnStartRequests: SessionOperationInput<'startTurn'>[] = [];
 	const queuedRequests: QueueEnqueueParams[] = [];
-	const advisorRequests: SessionOperationInput<"configureAdvisor">[] = [];
-	const consultRequests: SessionOperationInput<"consultAdvisor">[] = [];
-	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
-	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
+	const advisorRequests: SessionOperationInput<'configureAdvisor'>[] = [];
+	const consultRequests: SessionOperationInput<'consultAdvisor'>[] = [];
+	const turnCompactRequests: SessionOperationInput<'compactContext'>[] = [];
+	const turnSteerRequests: SessionOperationInput<'steerTurn'>[] = [];
 	const modelListRequests: undefined[] = [];
 	const skillListRequests: (string | undefined)[] = [];
 	const providerModelRequests: string[] = [];
@@ -3452,9 +3465,9 @@ function fakeApi(options: FakeOptions = {}): {
 		accounts: { read: async () => ({ revision: '1', accounts: [] }) },
 		appServer: {
 			get connectionGeneration() { return connectionGeneration; },
-			getConnectionState: async () => "ready" as const,
+			getConnectionState: async () => 'ready' as const,
 			getSlashCommands: async () => [],
-			onConnectionState: (next: (state: "ready") => void) => {
+			onConnectionState: (next: (state: 'ready') => void) => {
 				connectionListeners.add(next);
 				return { dispose: () => { connectionListeners.delete(next); } };
 			},
@@ -3481,16 +3494,16 @@ function fakeApi(options: FakeOptions = {}): {
 			create: async (params: SessionCreateParams) => {
 				createSessionRequests.push(params);
 				if (options.createSessionError) throw options.createSessionError;
-				const created = options.createSession ?? options.createThread?.session ?? session("created", "created-thread");
+				const created = options.createSession ?? options.createThread?.session ?? session('created', 'created-thread');
 				// Legacy fixtures kept root creation in createThread; the real create API is atomic.
 				const chats = created.chats.length ? created.chats : (options.createThread?.session ?? session(created.sessionId, 'created-thread')).chats;
 				return { session: sessionDto({ ...created, chats }) };
 			},
-			createThread: async (params: SessionOperationInput<"createThread">) => {
+			createThread: async (params: SessionOperationInput<'createThread'>) => {
 				createThreadRequests.push(params);
 				const created = options.createThread ?? {
-					session: session("created", "created-thread"),
-					threadId: "created-thread",
+					session: session('created', 'created-thread'),
+					threadId: 'created-thread',
 				};
 				return { ...created, session: sessionDto(created.session) };
 			},
@@ -3502,7 +3515,7 @@ function fakeApi(options: FakeOptions = {}): {
 				return {
 					session: {
 						...sessionDto(archived),
-						status: "archived" as const,
+						status: 'archived' as const,
 					},
 				};
 			},
@@ -3514,7 +3527,7 @@ function fakeApi(options: FakeOptions = {}): {
 				return {
 					session: {
 						...sessionDto(stopped),
-						status: "archived" as const,
+						status: 'archived' as const,
 					},
 				};
 			},
@@ -3556,7 +3569,7 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		skills: {
-			onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error("No Skill body in this test fixture"); },
+			onDidChangeSkills: Event.None, readTextResource: async () => { throw new Error('No Skill body in this test fixture'); },
 			list: async (_reload: string, sessionId?: string) => { skillListRequests.push(sessionId); return { generation: 1, skills: options.skills ?? [] }; },
 		},
 		thread: {
@@ -3569,7 +3582,7 @@ function fakeApi(options: FakeOptions = {}): {
 					categories: [{ category: 'conversation', tokens: 200, sources: [] }], latestRequest: { usedTokens: 180, source: 'estimated' },
 				}, toolDefinitions: []
 			}),
-			configureAdvisor: async (params: SessionOperationInput<"configureAdvisor">) => { advisorRequests.push(params); return { sequence: params.expectedSequence + 1 }; },
+			configureAdvisor: async (params: SessionOperationInput<'configureAdvisor'>) => { advisorRequests.push(params); return { sequence: params.expectedSequence + 1 }; },
 			read: async () => {
 				const value = currentThread();
 				return { thread: value, transcript: transcript(value) };
@@ -3584,16 +3597,16 @@ function fakeApi(options: FakeOptions = {}): {
 		turn: {
 			enqueue: async (params: QueueEnqueueParams) => { queuedRequests.push(params); return {}; },
 			listQueued: async () => ({ messages: [] }),
-			consultAdvisor: async (params: SessionOperationInput<"consultAdvisor">) => { consultRequests.push(params); return { turnId: "advisor-turn", sequence: params.expectedSequence + 1 }; },
-			start: async (params: SessionOperationInput<"startTurn">) => {
+			consultAdvisor: async (params: SessionOperationInput<'consultAdvisor'>) => { consultRequests.push(params); return { turnId: 'advisor-turn', sequence: params.expectedSequence + 1 }; },
+			start: async (params: SessionOperationInput<'startTurn'>) => {
 				turnStartRequests.push(params);
-				return { turnId: "turn-started", sequence: 2 };
+				return { turnId: 'turn-started', sequence: 2 };
 			},
-			compact: async (params: SessionOperationInput<"compactContext">) => {
+			compact: async (params: SessionOperationInput<'compactContext'>) => {
 				turnCompactRequests.push(params);
-				return { turnId: "turn-compact", sequence: params.expectedSequence + 2 };
+				return { turnId: 'turn-compact', sequence: params.expectedSequence + 2 };
 			},
-			steer: async (params: SessionOperationInput<"steerTurn">) => {
+			steer: async (params: SessionOperationInput<'steerTurn'>) => {
 				turnSteerRequests.push(params);
 				return { turnId: params.turnId, sequence: params.expectedSequence + 2 };
 			},
@@ -3630,7 +3643,7 @@ function fakeApi(options: FakeOptions = {}): {
 		},
 		emitReady: () => {
 			connectionGeneration++;
-			for (const listener of connectionListeners) listener("ready");
+			for (const listener of connectionListeners) listener('ready');
 		},
 	};
 }
@@ -3643,10 +3656,10 @@ function session(
 	return {
 		sessionId: id,
 		title,
-		status: "active",
-		nextApprovalMode: "manual",
+		status: 'active',
+		nextApprovalMode: 'manual',
 		chats: threadId
-			? [{ threadId, origin: { type: "root" }, status: "active" }]
+			? [{ threadId, origin: { type: 'root' }, status: 'active' }]
 			: [],
 	};
 }
@@ -3657,7 +3670,7 @@ function sessionDto(value: ISession): SessionDto {
 		title: value.title,
 		status: value.status,
 		model: value.model,
-		manager: { status: "idle", statusChangedAtUnixMs: 0 },
+		manager: { status: 'idle', statusChangedAtUnixMs: 0 },
 		threads: value.chats.map(chat => ({
 			threadId: chat.threadId,
 			title: `Thread ${chat.threadId}`,
@@ -3665,38 +3678,38 @@ function sessionDto(value: ISession): SessionDto {
 			completedTurnDurationMs: 0,
 			usage: emptyUsage(),
 			status: chat.status,
-			...(chat.origin.type === "root" ? {} : { parentThreadId: chat.origin.parentThreadId }),
-			...(chat.origin.type === "fork" || chat.origin.type === "rewind" ? { forkedFromId: chat.origin.parentThreadId } : {}),
+			...(chat.origin.type === 'root' ? {} : { parentThreadId: chat.origin.parentThreadId }),
+			...(chat.origin.type === 'fork' || chat.origin.type === 'rewind' ? { forkedFromId: chat.origin.parentThreadId } : {}),
 		})),
 	};
 }
 
 function thread(agentText?: string): Thread {
 	return {
-		advisor: { type: "default" },
-		agentId: "agent-1",
-		origin: { type: "root" },
+		advisor: { type: 'default' },
+		agentId: 'agent-1',
+		origin: { type: 'root' },
 		hookRuns: [],
 		referenceCost: { knownAmounts: [], complete: true },
-		sessionId: "session-1",
-		threadId: "thread-1",
-		title: "Main",
-		status: "active",
+		sessionId: 'session-1',
+		threadId: 'thread-1',
+		title: 'Main',
+		status: 'active',
 		sequence: agentText ? 4 : 1,
 		usage: emptyUsage(),
 		turns: agentText
 			? [{
-				turnId: "turn-1",
-				status: "completed",
-				mode: "agent",
-				kind: "coding",
-				toolMode: "direct",
-				approvalMode: "manual",
+				turnId: 'turn-1',
+				status: 'completed',
+				mode: 'agent',
+				kind: 'coding',
+				toolMode: 'direct',
+				approvalMode: 'manual',
 				usage: emptyUsage(),
 				items: [{
-					type: "agentMessage",
-					itemId: "item-1",
-					turnId: "turn-1",
+					type: 'agentMessage',
+					itemId: 'item-1',
+					turnId: 'turn-1',
 					text: agentText,
 				}],
 			}]
@@ -3711,9 +3724,9 @@ function transcript(value: Thread): ThreadTranscriptSnapshot {
 		durableSequence: value.sequence,
 		revision: value.sequence,
 		entries: value.turns.flatMap((turn) => [
-			...turn.items.map((item) => ({ type: "item" as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false })),
-			...(turn.plan ? [{ type: "turnPlan" as const, entryId: `turn-plan:${turn.turnId}`, turnId: turn.turnId, plan: turn.plan }] : []),
-			...(turn.error ? [{ type: "turnError" as const, entryId: `turn-error:${turn.turnId}`, turnId: turn.turnId, error: turn.error }] : []),
+			...turn.items.map((item) => ({ type: 'item' as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false })),
+			...(turn.plan ? [{ type: 'turnPlan' as const, entryId: `turn-plan:${turn.turnId}`, turnId: turn.turnId, plan: turn.plan }] : []),
+			...(turn.error ? [{ type: 'turnError' as const, entryId: `turn-error:${turn.turnId}`, turnId: turn.turnId, error: turn.error }] : []),
 		]),
 	};
 }
@@ -3948,38 +3961,38 @@ test('bounded Chat cannot erase a newer tail when an older read has a newer stre
 	assert.equal(model.thread?.sequence, 67);
 });
 
-function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn failed"): Omit<Thread["turns"][number], 'items'> & { items: []; } {
+function failedTurn(code: TurnError['code'], retryable: boolean, message = 'Turn failed'): Omit<Thread['turns'][number], 'items'> & { items: []; } {
 	return {
-		turnId: "turn-1",
-		status: "failed",
-		mode: "agent",
-		kind: "coding",
-		toolMode: "direct",
-		approvalMode: "manual",
+		turnId: 'turn-1',
+		status: 'failed',
+		mode: 'agent',
+		kind: 'coding',
+		toolMode: 'direct',
+		approvalMode: 'manual',
 		usage: emptyUsage(),
 		items: [],
 		error: { code, message, retryable },
 	};
 }
 
-function threadWithFailure(code: TurnError["code"], retryable: boolean, sequence = 3): Thread {
+function threadWithFailure(code: TurnError['code'], retryable: boolean, sequence = 3): Thread {
 	return {
-		advisor: { type: "default" },
-		agentId: "agent-1",
-		origin: { type: "root" },
+		advisor: { type: 'default' },
+		agentId: 'agent-1',
+		origin: { type: 'root' },
 		hookRuns: [],
 		referenceCost: { knownAmounts: [], complete: true },
-		sessionId: "session-1",
-		threadId: "thread-1",
-		title: "Main",
-		status: "active",
+		sessionId: 'session-1',
+		threadId: 'thread-1',
+		title: 'Main',
+		status: 'active',
 		sequence,
 		usage: emptyUsage(),
 		turns: [failedTurn(code, retryable)],
 	};
 }
 
-function emptyUsage(): Thread["usage"] {
+function emptyUsage(): Thread['usage'] {
 	return {
 		modelInvocations: 0,
 		inputTokens: { reported: 0, complete: true },
@@ -3992,7 +4005,7 @@ function emptyUsage(): Thread["usage"] {
 
 function typeChatText(targetWindow: typeof browserEnvironment.window, input: HTMLTextAreaElement, text: string): void {
 	input.value = text;
-	input.dispatchEvent(new targetWindow.Event("input", { bubbles: true }));
+	input.dispatchEvent(new targetWindow.Event('input', { bubbles: true }));
 }
 
 function nextTask(): Promise<void> {
@@ -4004,7 +4017,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		if (predicate()) return;
 		await nextTask();
 	}
-	assert.fail("Timed out waiting for Chat view state");
+	assert.fail('Timed out waiting for Chat view state');
 }
 
 function currentQuickPickItems(quickInput: IQuickInputService): readonly IQuickPickItem[] {
@@ -4030,12 +4043,12 @@ function recordingDialogService(messages: IMessageDialogOptions[]): IDialogServi
 }
 
 
-test("Audio history identifies the sender and recording duration", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Audio history identifies the sender and recording duration', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using list = createChatListWidget(dom.window.document.body);
 	list.render([chatListItem({
-		type: "userAudioAttachment", itemId: "audio", turnId: "turn",
-		attachment: { contentDigest: "sha256:audio", mediaType: "wav", encodedBytes: 32044, durationMs: 1001 },
+		type: 'userAudioAttachment', itemId: 'audio', turnId: 'turn',
+		attachment: { contentDigest: 'sha256:audio', mediaType: 'wav', encodedBytes: 32044, durationMs: 1001 },
 	})]);
 	assert.equal(list.element.querySelector('.ash-chat-item-label')!.textContent, 'You');
 	assert.equal(list.element.querySelector('figcaption')!.textContent, 'Audio (2 seconds)');
@@ -4045,32 +4058,32 @@ test("Audio history identifies the sender and recording duration", () => {
 });
 
 
-test("Advisor question consults directly without starting the worker", async () => {
-	const activeSession = session("session-1", "thread-1");
+test('Advisor question consults directly without starting the worker', async () => {
+	const activeSession = session('session-1', 'thread-1');
 	const fake = fakeApi({
 		sessions: [activeSession],
-		advisorDefault: { model: { provider: "openai", model: "reviewer" }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 },
-		thread: () => ({ ...thread("previous answer"), advisor: { type: "off" } }),
+		advisorDefault: { model: { provider: 'openai', model: 'reviewer' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 },
+		thread: () => ({ ...thread('previous answer'), advisor: { type: 'off' } }),
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
-	await model.executeServerCommand("advisor", "Check src/app.rs cancellation");
+	await model.executeServerCommand('advisor', 'Check src/app.rs cancellation');
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(fake.advisorRequests.length, 0);
-	assert.equal(fake.consultRequests[0]?.question, "Check src/app.rs cancellation");
-	assert.equal(fake.consultRequests[0]?.threadId, "thread-1");
+	assert.equal(fake.consultRequests[0]?.question, 'Check src/app.rs cancellation');
+	assert.equal(fake.consultRequests[0]?.threadId, 'thread-1');
 });
 
-test("Advisor without a configured model keeps an untitled chat", async () => {
+test('Advisor without a configured model keeps an untitled chat', async () => {
 	const fake = fakeApi();
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	const untitled = sessions.createUntitledSession();
-	using model = createWidgetModel(chat, { kind: "untitled", session: untitled }, sessions);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: untitled }, sessions);
 	await model.initialize();
-	await assert.rejects(model.executeServerCommand("advisor", "Check cancellation"), /Configure an advisor model in Chat Settings/);
+	await assert.rejects(model.executeServerCommand('advisor', 'Check cancellation'), /Configure an advisor model in Chat Settings/);
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.consultRequests.length, 0);
 });
@@ -4097,32 +4110,32 @@ test('Selecting a custom Agent in a new Chat creates the Session with its exact 
 	assert.equal(sessions.untitledSessions.length, 0);
 });
 
-test("Advisor command selects a model and the off switch preserves its settings", async () => {
+test('Advisor command selects a model and the off switch preserves its settings', async () => {
 	const fake = fakeApi({
-		configuredProviders: ["openai"],
-		models: [{ model: { provider: "openai", model: "reviewer" }, displayName: "Reviewer", }],
+		configuredProviders: ['openai'],
+		models: [{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', }],
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
-	using model = createWidgetModel(chat, { kind: "untitled", session: sessions.createUntitledSession() }, sessions);
+	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
-	await model.executeServerCommand("advisor", "openai/reviewer");
+	await model.executeServerCommand('advisor', 'openai/reviewer');
 	assert.equal(fake.savedAdvisorDefaults[0]?.enabled, true);
-	await model.executeServerCommand("advisor", "off");
+	await model.executeServerCommand('advisor', 'off');
 	assert.deepEqual(fake.savedAdvisorDefaults[1], { ...fake.savedAdvisorDefaults[0], enabled: false });
-	await assert.rejects(model.executeServerCommand("advisor", "Check cancellation"), /Configure an advisor model/);
-	await model.executeServerCommand("advisor", "openai/reviewer");
+	await assert.rejects(model.executeServerCommand('advisor', 'Check cancellation'), /Configure an advisor model/);
+	await model.executeServerCommand('advisor', 'openai/reviewer');
 	assert.deepEqual(fake.savedAdvisorDefaults[2], fake.savedAdvisorDefaults[0]);
-	await model.executeServerCommand("advisor", "clear");
+	await model.executeServerCommand('advisor', 'clear');
 	assert.equal(fake.savedAdvisorDefaults[3], null);
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.consultRequests.length, 0);
 });
 
-test("Chat Settings toggles Advisor while keeping its selected model", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('Chat Settings toggles Advisor while keeping its selected model', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	using domCleanup = toDisposable(() => dom.window.close());
-	const selected = { model: { provider: "openai", model: "reviewer" }, enabled: true, maxCalls: 5, maxOutputTokens: 4096 };
+	const selected = { model: { provider: 'openai', model: 'reviewer' }, enabled: true, maxCalls: 5, maxOutputTokens: 4096 };
 	const fake = fakeApi({ advisorDefault: selected });
 	using chat = createChatService(fake.api);
 	using contextKeys = new ContextKeyService();
@@ -4149,13 +4162,13 @@ test("Chat Settings toggles Advisor while keeping its selected model", async () 
 	for (const enabled of [false, true]) {
 		await commands.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
 		const labels = currentQuickPickItems(quickInput).map(item => item.label);
-		assert.ok(labels.includes(enabled ? "Turn Advisor on" : "Turn Advisor off"));
-		assert.ok(labels.includes("Clear saved Advisor model"));
-		const input = dom.window.document.querySelector<HTMLInputElement>(".ash-quick-pick-input input");
+		assert.ok(labels.includes(enabled ? 'Turn Advisor on' : 'Turn Advisor off'));
+		assert.ok(labels.includes('Clear saved Advisor model'));
+		const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick-input input');
 		assert.ok(input);
-		input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" }));
-		input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "ArrowDown" }));
-		input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" }));
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+		input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
 		await waitFor(() => fake.savedAdvisorDefaults.length === (enabled ? 2 : 1));
 		assert.deepEqual(fake.savedAdvisorDefaults.at(-1), { ...selected, enabled });
 	}
@@ -4227,32 +4240,32 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	assert.equal(currentQuickPickItems(quickInput)[0]?.description, 'API key saved');
 });
 
-test("Advisor model choices include the fixed catalog before connection setup", async () => {
+test('Advisor model choices include the fixed catalog before connection setup', async () => {
 	const fake = fakeApi({
-		configuredProviders: ["openai"],
+		configuredProviders: ['openai'],
 		models: [
-			{ model: { provider: "openai", model: "reviewer" }, displayName: "Reviewer", },
-			{ model: { provider: "google", model: "flash" }, displayName: "Flash", },
+			{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', },
+			{ model: { provider: 'google', model: 'flash' }, displayName: 'Flash', },
 		],
 	});
 	using chat = createChatService(fake.api);
-	assert.deepEqual((await modelsFor(chat).listAdvisorModels()).map(entry => entry.displayName), ["Reviewer", "Flash"]);
+	assert.deepEqual((await modelsFor(chat).listAdvisorModels()).map(entry => entry.displayName), ['Reviewer', 'Flash']);
 });
 
-test("Advisor transcript groups the call and renders advice as a disclosure", () => {
+test('Advisor transcript groups the call and renders advice as a disclosure', () => {
 	const entries: readonly ThreadTranscriptEntry[] = [
-		{ type: "item", entryId: "call", turnId: "turn", transient: false, item: { type: "toolCall", itemId: "call", turnId: "turn", toolCallId: "consult", name: "advisor", argumentsJson: '{"question":"Check cancellation"}' } },
-		{ type: "item", entryId: "result", turnId: "turn", transient: false, item: { type: "toolResult", itemId: "result", turnId: "turn", toolCallId: "consult", text: JSON.stringify({ status: "reviewed", model: { provider: "test", model: "reviewer" }, advice: "Check **cancellation**.", question: "Check cancellation", sourceSequence: 10, usage: { inputTokens: 120, outputTokens: 8 } }), isError: false } },
+		{ type: 'item', entryId: 'call', turnId: 'turn', transient: false, item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'consult', name: 'advisor', argumentsJson: '{"question":"Check cancellation"}' } },
+		{ type: 'item', entryId: 'result', turnId: 'turn', transient: false, item: { type: 'toolResult', itemId: 'result', turnId: 'turn', toolCallId: 'consult', text: JSON.stringify({ status: 'reviewed', model: { provider: 'test', model: 'reviewer' }, advice: 'Check **cancellation**.', question: 'Check cancellation', sourceSequence: 10, usage: { inputTokens: 120, outputTokens: 8 } }), isError: false } },
 	];
 	const items = chatTranscriptListItems(entries);
 	assert.equal(items.length, 1);
-	assert.equal(items[0]?.type, "advisor");
-	const container = document.createElement("div");
+	assert.equal(items[0]?.type, 'advisor');
+	const container = document.createElement('div');
 	using widget = createChatListWidget(container);
 	widget.render(items);
-	assert.equal(container.querySelector("summary")?.textContent, "Advisor · test/reviewer");
-	assert.equal(container.querySelector("strong")?.textContent, "cancellation");
-	assert.match(container.textContent ?? "", /120 input · 8 output/);
+	assert.equal(container.querySelector('summary')?.textContent, 'Advisor · test/reviewer');
+	assert.equal(container.querySelector('strong')?.textContent, 'cancellation');
+	assert.match(container.textContent ?? '', /120 input · 8 output/);
 });
 
 test('reconnection keeps a draft and blocks submission until thread subscription finishes', async () => {
@@ -4706,6 +4719,7 @@ class TestChatAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	readonly dom = new JSDOM('<!doctype html><body><main></main></body>');
 	readonly window = this.dom.window as unknown as Window;
 	readonly container = this.dom.window.document.querySelector('main')!;
+	readonly onWillLayout = Event.None;
 	readonly onDidLayout = Event.None;
 	readonly onBeforeUnload = Event.None;
 	private readonly closed = this._register(new Emitter<void>());
@@ -4755,7 +4769,15 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 		...session('session-1', 'thread-1', 'Navigation fixture'),
 		chats: [
 			{ threadId: 'thread-1', origin: { type: 'root' }, status: 'active' },
-			{ threadId: 'thread-2', origin: { type: 'fork', parentThreadId: 'thread-1', parentSequence: 1 }, status: 'active' },
+			{
+				threadId: 'thread-2',
+				origin: {
+					type: 'fork',
+					parentThreadId: 'thread-1',
+					parentSequence: 1
+				},
+				status: 'active'
+			},
 		],
 	};
 	const fake = fakeApi({ sessions: [activeSession], createSession: session('created', 'created-thread') });

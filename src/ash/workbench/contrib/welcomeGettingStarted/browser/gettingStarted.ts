@@ -1,3 +1,5 @@
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { resolveAgentsWindowGraphicDesign } from '../../chat/browser/agentSessions/agentsWindowGraphic.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IWorkspacesService, recentWorkspaceUri } from '../../../../platform/workspaces/common/workspaces.js';
 import { basename } from '../../../../base/common/resources.js';
@@ -16,6 +18,7 @@ import { OpenFolderWorkspaceSupportContext, BrowserLocalFolderSupportContext } f
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ConnectToRemoteCommandId } from '../../remote/browser/remoteActions.js';
+import { OPEN_AGENTS_WINDOW_COMMAND_ID, AgentsWindowGraphicVariant, agentsWindowGraphicConfiguration } from '../../chat/common/constants.js';
 import { GettingStarted, type IGettingStartedProject } from './gettingStartedContent.js';
 import { isGettingStartedInput } from './gettingStartedInput.js';
 
@@ -29,6 +32,7 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 	private content: GettingStarted | undefined;
 	private focusedContext: IContextKey<boolean> | undefined;
 	private recentGeneration = 0;
+	private graphicGeneration = 0;
 
 	constructor(
 		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
@@ -37,11 +41,19 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 		@ICommandService private readonly commandService: ICommandService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IGitHubConnectionService private readonly githubConnection: IGitHubConnectionService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) {
 		super(GettingStartedPageId, themeService, storageService);
-		this._register(CommandsRegistry.onDidChangeCommands(() => this.content?.setCloneRepositoryAction(this.cloneAction())));
+		this._register(CommandsRegistry.onDidChangeCommands(() => {
+			this.content?.setCloneRepositoryAction(this.cloneAction());
+			this.updateAgentsIntroduction();
+		}));
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(agentsWindowGraphicConfiguration.key)) this.updateAgentsIntroduction();
+		}));
+		this._register(this.host.onDidChangeFocus(focused => { if (focused) this.updateAgentsIntroduction(); }));
 		this._register(this.workspacesService.onDidChangeRecentlyOpened(() => { void this.refreshProjects(); }));
 	}
 
@@ -64,10 +76,13 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 			actions: {
 				openFolder: this.canOpenFolder ? () => this.fileDialogs.pickFolderAndOpen() : undefined,
 				cloneRepository: this.cloneAction(),
+				openAgentsWindow: this.agentsAction(),
+				openEditorWindow: () => this.host.openWindow(),
 				connectViaSsh: () => this.commandService.executeCommand(ConnectToRemoteCommandId),
 				connectGitHub: () => this.githubConnection.connect(),
 			},
 		}));
+		this.updateAgentsIntroduction();
 		void this.refreshProjects();
 	}
 
@@ -83,11 +98,42 @@ export class GettingStartedPage extends EditorPane implements IEditorPane {
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility);
 		if (!visibility) this.focusedContext?.set(false);
+		else this.updateAgentsIntroduction();
 	}
 
 	public override focus(): void {
 		// Enter the page without selecting an action; Tab moves to the first available button.
 		this.content?.domNode.focus();
+	}
+
+	private agentsAction(): (() => Promise<void>) | undefined {
+		return CommandsRegistry.hasCommand(OPEN_AGENTS_WINDOW_COMMAND_ID) ? () => this.commandService.executeCommand(OPEN_AGENTS_WINDOW_COMMAND_ID) : undefined;
+	}
+
+	private updateAgentsIntroduction(): void {
+		const generation = ++this.graphicGeneration;
+		if (!this.content || this.isDisposed) {
+			return;
+		}
+		const action = this.agentsAction();
+		this.content.setAgentsWindowAction(action);
+		const variant = this.configuration.getValue<AgentsWindowGraphicVariant>(agentsWindowGraphicConfiguration.key);
+		if (!action || variant !== AgentsWindowGraphicVariant.Auto) {
+			this.content.setAgentsWindowGraphic(resolveAgentsWindowGraphicDesign(variant, undefined));
+			return;
+		}
+		this.content.setAgentsWindowGraphic(undefined);
+		// The native registry is authoritative. Managed Agents and auxiliary windows are not editors.
+		void this.host.getWindows({ includeAuxiliaryWindows: false }).then(windows => {
+			if (!this.isDisposed && generation === this.graphicGeneration) {
+				this.content?.setAgentsWindowGraphic(resolveAgentsWindowGraphicDesign(variant, windows.filter(window => window.kind === 'editor').length > 1));
+			}
+		}, error => {
+			if (!this.isDisposed && generation === this.graphicGeneration) {
+				console.error('Failed to enumerate editor windows', error);
+				this.content?.setAgentsWindowGraphic(AgentsWindowGraphicVariant.WindowComparison);
+			}
+		});
 	}
 
 	private cloneAction(): (() => Promise<void>) | undefined {

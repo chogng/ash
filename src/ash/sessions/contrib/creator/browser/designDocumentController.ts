@@ -185,9 +185,17 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		if (this.isBusy) { return undefined; }
 		this.isFileOperationRunning = true;
 		this.changeEmitter.fire({});
-		try { return await this.placeImage(metadata, center, this.model.version); }
-		catch (error) { await this.dialogs.error(localize('sessions.design.importFailed', 'Could not import the image.'), String(error)); return undefined; }
-		finally { this.isFileOperationRunning = false; if (!this.isDisposed) { this.changeEmitter.fire({}); } }
+		try {
+			return await this.placeImage(metadata, center, this.model.version);
+		}
+		catch (error) {
+			await this.dialogs.error(localize('sessions.design.importFailed', 'Could not import the image.'), String(error));
+			return undefined;
+		}
+		finally {
+			this.isFileOperationRunning = false;
+			if (!this.isDisposed) { this.changeEmitter.fire({}); }
+		}
 	}
 
 	private async placeImage(metadata: AssetVersion, center: DesignPoint, versionToken: string): Promise<string | undefined> {
@@ -521,9 +529,16 @@ export class DesignDocumentController extends Disposable implements IWorkingCopy
 		await this.autoSavePromise;
 		if (this.isBusy) { return; }
 		this.isFileOperationRunning = true; this.changeEmitter.fire({});
-		try { await run(); }
-		catch (error) { await this.dialogs.error(localize('sessions.design.libraryFailed', 'Could not update the design library.'), String(error)); }
-		finally { this.isFileOperationRunning = false; if (!this.isDisposed) { this.changeEmitter.fire({}); } }
+		try {
+			await run();
+		}
+		catch (error) {
+			await this.dialogs.error(localize('sessions.design.libraryFailed', 'Could not update the design library.'), String(error));
+		}
+		finally {
+			this.isFileOperationRunning = false;
+			if (!this.isDisposed) { this.changeEmitter.fire({}); }
+		}
 	}
 	private async readLibrary(resource: URI): Promise<{ readonly library: DesignLibrary; readonly media: ReadonlyMap<string, Uint8Array>; }> {
 		const read = await this.files.readFile(resource);

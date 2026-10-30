@@ -1,9 +1,9 @@
-import "./media/unusualLineTerminators.css";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
+import './media/unusualLineTerminators.css';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { type TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 
-import { type TextModel } from "../../../common/model/textModel.js";
-import { findUnusualLineTerminators } from "../common/unusualLineTerminatorRanges.js";
+import { type TextModel } from '../../../common/model/textModel.js';
+import { findUnusualLineTerminators } from '../common/unusualLineTerminatorRanges.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import type { TextModelChange } from '../../../common/core/textChange.js';
 import { Range } from '../../../common/core/range.js';
@@ -14,7 +14,7 @@ export class UnusualLineTerminatorsController extends Disposable {
 
 	constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<void>) {
 		super();
-		if (decorations.textModel !== model) throw new TypeError("Stanza unusual line terminator dependencies must share a text model");
+		if (decorations.textModel !== model) throw new TypeError('Stanza unusual line terminator dependencies must share a text model');
 		this._register(model.onDidChangeContent(change => this.update(change)));
 		this.update();
 	}

@@ -87,6 +87,7 @@ mod browser_file_access;
 #[path = "server/request_processors/browser.rs"]
 mod browser_processor;
 mod browser_workspace;
+mod host_credentials;
 pub(crate) use browser_workspace::WebWorkspaceRollback;
 
 mod call_adapters;
@@ -374,6 +375,7 @@ pub struct AppServer {
     github_processor: Option<Arc<github_processor::GitHubRequestProcessor>>,
     issue_reporter: Option<github::GitHubIssueReporter>,
     chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
+    chatgpt_web: Option<Arc<ash_chatgpt::ChatGptWebAuthentication>>,
     kimi: Option<Arc<ash_kimi::KimiOAuth>>,
     supergrok: Option<Arc<supergrok::SuperGrokOAuth>>,
     glm_accounts: std::collections::BTreeMap<String, Arc<ash_glm::GlmOAuth>>,
@@ -947,6 +949,25 @@ impl AppServer {
         )
     }
 
+    fn secret_storage_recovery_response(
+        &self,
+        state: ash_app_server_protocol::protocol::secrets::SecretStorageStatusResult,
+    ) -> Result<Value, RpcError> {
+        if state.status
+            == ash_app_server_protocol::protocol::secrets::SecretStorageStatus::Available
+            && let Some(login) = &self.login
+            && let Err(error) = login.refresh()
+        {
+            // The storage action succeeded independently of optional account providers.
+            // A successful projection refresh publishes account/updated through its owner.
+            log::warn!(
+                "Could not refresh accounts after credential storage recovery: {:?}",
+                error.kind()
+            );
+        }
+        result(&state)
+    }
+
     fn call_processor(&self) -> call_operations::CallRequestProcessor<'_> {
         call_operations::CallRequestProcessor::new(
             &self.calls,
@@ -1345,6 +1366,7 @@ impl AppServer {
             github_processor: None,
             issue_reporter: None,
             chatgpt: None,
+            chatgpt_web: None,
             kimi: None,
             supergrok: None,
             glm_accounts: std::collections::BTreeMap::new(),
@@ -2041,6 +2063,14 @@ impl AppServer {
 
     pub fn with_chatgpt_account(mut self, chatgpt: Arc<ash_chatgpt::ChatGptAccount>) -> Self {
         self.chatgpt = Some(chatgpt);
+        self
+    }
+
+    pub fn with_chatgpt_web_authentication(
+        mut self,
+        auth: Arc<ash_chatgpt::ChatGptWebAuthentication>,
+    ) -> Self {
+        self.chatgpt_web = Some(auth);
         self
     }
 
@@ -3293,6 +3323,8 @@ impl AppServer {
                 | ClientMethod::GitHubPullRequestFiles
                 | ClientMethod::GitHubPullRequestReviews
                 | ClientMethod::GitHubPullRequestDiff
+                | ClientMethod::GitHubRepositoryTree
+                | ClientMethod::GitHubRepositoryBlob
                 | ClientMethod::GitHubFileRead
                 | ClientMethod::GitHubReviewThreads
                 | ClientMethod::GitHubReviewThreadRead
@@ -3872,12 +3904,13 @@ impl AppServer {
             Some(ClientMethod::SecretsStatus) => {
                 self.secret_processor.secrets_status(&request.params)
             }
-            Some(ClientMethod::SecretsAuthorize) => {
-                self.secret_processor.secrets_authorize(&request.params)
-            }
-            Some(ClientMethod::SecretsStorageModeSet) => self
-                .secret_processor
-                .secrets_storage_mode_set(&request.params),
+            Some(ClientMethod::SecretsAuthorize) => self.secret_storage_recovery_response(
+                self.secret_processor.secrets_authorize(&request.params)?,
+            ),
+            Some(ClientMethod::SecretsStorageModeSet) => self.secret_storage_recovery_response(
+                self.secret_processor
+                    .secrets_storage_mode_set(&request.params)?,
+            ),
             Some(ClientMethod::ProviderApiKeySet) => self
                 .provider_processor()
                 .provider_api_key_set(std::mem::take(&mut request.params)),

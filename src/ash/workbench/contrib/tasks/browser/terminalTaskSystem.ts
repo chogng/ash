@@ -77,7 +77,16 @@ export class TerminalTaskSystem extends Disposable {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
-		this._register(terminals.onDidDisposeInstance(terminal => this.taskTerminals.delete(terminal.id)));
+		this._register(terminals.onDidDisposeInstance(terminal => {
+			this.taskTerminals.delete(terminal.id);
+			const run = this.runs.get(terminal.id);
+			if (run?.status === 'running') {
+				// Direct disposal can publish before asynchronous process release ends.
+				// Join the Terminal owner's close promise, including release failures.
+				run.cancel();
+				void terminal.close().then(() => run.completeExecution(undefined), error => run.rejectCompletion(error));
+			}
+		}));
 	}
 
 	public get activeRuns(): readonly ITaskRun[] { return [...this.runs].map(([, run]) => run).filter(run => run.status === 'running'); }
@@ -291,7 +300,7 @@ export class TerminalTaskSystem extends Disposable {
 			const options: ITerminalCreateOptions = pty ? {
 				dirId: folder.id, dimensions: { rows: 24, cols: 80 }, title: `Task: ${task.label}`, deferStart: true,
 				config: {
-					name: task.label, isFeatureTerminal: true,
+					name: task.label, type: 'Task', isFeatureTerminal: true,
 					waitOnExit,
 					customPtyImplementation: (id, cols, rows) => new TaskTerminalProcess(id, {
 						onDidWrite: pty!.onDidWrite, onDidClose: pty!.onDidClose, onDidChangeName: pty!.onDidChangeName,
@@ -300,7 +309,7 @@ export class TerminalTaskSystem extends Disposable {
 					}, cols, rows),
 				},
 			} : {
-				dirId: folder.id, dimensions: { rows: 24, cols: 80 }, profile, title: `Task: ${task.label}`,
+				dirId: folder.id, dimensions: { rows: 24, cols: 80 }, profile, title: `Task: ${task.label}`, type: 'Task',
 				deferStart: true,
 				waitOnExit,
 				...(initialText === undefined ? {} : { initialText }),
@@ -313,7 +322,7 @@ export class TerminalTaskSystem extends Disposable {
 				if (task.presentation?.clear) terminal.clearBuffer();
 				await terminal.reuseTerminal(options.config ? { ...options.config, name: options.title, deferStart: true } : {
 					executable: launch?.executable, args: launch?.args,
-					name: options.title, env: options.env, cwd: options.cwd, execution: options.execution, initialText: options.initialText, waitOnExit: options.waitOnExit, deferStart: true,
+					name: options.title, type: 'Task', env: options.env, cwd: options.cwd, execution: options.execution, initialText: options.initialText, waitOnExit: options.waitOnExit, deferStart: true,
 				});
 				this.terminals.setActiveInstance(terminal);
 			} else {

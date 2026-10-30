@@ -82,7 +82,7 @@ resources.add(new Button(root, { label: 'Reference secondary button', presentati
 const models = services.get(IModelService);
 const codeEditors = services.get(ICodeEditorService);
 window.agentTraceIntegration = {
-	async setTheme(id: string): Promise<void> { await themes.setColorTheme(id); },
+	async setTheme(id: string): Promise<void> { await themes.setColorTheme(id, 'themePicker'); },
 	dispose(): void { resources.dispose(); },
 	accessibleContent: () => editor.getAccessibleContent(),
 	resources: () => ({ models: models.getModels().length, editors: codeEditors.listCodeEditors().length }),

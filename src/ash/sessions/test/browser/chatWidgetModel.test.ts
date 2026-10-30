@@ -433,10 +433,20 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 	for (const failed of [false, true]) {
 		test(`${kind} snapshot refresh retires an earlier ${failed ? 'error' : 'snapshot'} before reading accumulated updates`, async () => {
-			const f = fixture(kind); using resources = f.resources; await f.model.initialize();
-			const reads: DeferredPromise<ThreadRead>[] = []; f.threadApi.read = () => { const read = new DeferredPromise<ThreadRead>(); reads.push(read); return read.p; };
+			const f = fixture(kind);
+			using resources = f.resources;
+			await f.model.initialize();
+			const reads: DeferredPromise<ThreadRead>[] = [];
+			f.threadApi.read = () => {
+				const read = new DeferredPromise<ThreadRead>();
+				reads.push(read);
+				return read.p;
+			};
 			const emit = (sequence: number) => f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: sequence, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn-A' } } });
-			emit(2); await waitFor(() => reads.length === 1); emit(3); await turnTask();
+			emit(2);
+			await waitFor(() => reads.length === 1);
+			emit(3);
+			await turnTask();
 			assert.equal(reads.length, 1);
 			if (failed) await reads[0]!.error(new Error('Old snapshot failure')); else await reads[0]!.complete(snapshot('A', 2));
 			await waitFor(() => reads.length === 2);
@@ -526,10 +536,20 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		});
 	}
 	test(`${kind} replacement refresh cannot roll back a newer sequence returned by the retired read`, async () => {
-		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
-		const reads: DeferredPromise<ThreadRead>[] = []; f.threadApi.read = () => { const read = new DeferredPromise<ThreadRead>(); reads.push(read); return read.p; };
+		const f = fixture(kind);
+		using resources = f.resources;
+		await f.model.initialize();
+		const reads: DeferredPromise<ThreadRead>[] = [];
+		f.threadApi.read = () => {
+			const read = new DeferredPromise<ThreadRead>();
+			reads.push(read);
+			return read.p;
+		};
 		const emit = (sequence: number) => f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: sequence, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'turn-A' } } });
-		emit(2); await waitFor(() => reads.length === 1); emit(3); await turnTask();
+		emit(2);
+		await waitFor(() => reads.length === 1);
+		emit(3);
+		await turnTask();
 		assert.equal(reads.length, 1);
 		await reads[0]!.complete(snapshot('A', 4)); await waitFor(() => reads.length === 2);
 		assert.equal(f.model.thread?.sequence, 4);

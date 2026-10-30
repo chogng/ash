@@ -1,14 +1,14 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Position } from "../../common/core/position.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
-import { hitTestStanzaVisualEditorPoint, EditorHitTargetKind } from "../../common/viewModel/pointerHitTest.js";
-import { ModelLineProjectionData } from "../../common/modelLineProjectionData.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Position } from '../../common/core/position.js';
+import { TextModel } from '../../common/model/textModel.js';
+import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
+import { hitTestStanzaVisualEditorPoint, EditorHitTargetKind } from '../../common/viewModel/pointerHitTest.js';
+import { ModelLineProjectionData } from '../../common/modelLineProjectionData.js';
 import { type TextMeasurer } from '../../common/viewModel.js';
 
-test("visual hit testing maps wrapped visual coordinates back to logical UTF-16 positions", () => {
-	using model = new TextModel("abcdef\ngh");
+test('visual hit testing maps wrapped visual coordinates back to logical UTF-16 positions', () => {
+	using model = new TextModel('abcdef\ngh');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6], [2]]);
 	const layout = {
 		lineHeight: 20,
@@ -36,8 +36,8 @@ test("visual hit testing maps wrapped visual coordinates back to logical UTF-16 
 	});
 });
 
-test("visual hit testing treats wrapped continuation indentation as empty content", () => {
-	using model = new TextModel("abcdef");
+test('visual hit testing treats wrapped continuation indentation as empty content', () => {
+	using model = new TextModel('abcdef');
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6]], [20]);
 	const layout = {
 		lineHeight: 20,
@@ -61,8 +61,8 @@ test("visual hit testing treats wrapped continuation indentation as empty conten
 	});
 });
 
-test("visual hit testing identifies injected text and preserves attached data", () => {
-	using model = new TextModel("abc");
+test('visual hit testing identifies injected text and preserves attached data', () => {
+	using model = new TextModel('abc');
 	const marker = Object.freeze({ kind: 'marker' });
 	const projection = EditorVisualLineProjection.fromLineBreakData(model, [new ModelLineProjectionData(
 		[1],

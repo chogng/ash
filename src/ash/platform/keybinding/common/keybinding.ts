@@ -4,21 +4,21 @@ import type { JsonSchema } from '../../../base/common/jsonSchema.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type {
 	Event,
-} from "../../../base/common/event.js";
+} from '../../../base/common/event.js';
 import type {
 	Keybinding,
 	ResolvedKeybinding,
-} from "../../../base/common/keybindings.js";
+} from '../../../base/common/keybindings.js';
 import type {
 	CommandId,
-} from "../../commands/common/commands.js";
+} from '../../commands/common/commands.js';
 import type {
 	Context,
-} from "../../contextkey/common/contextkey.js";
-import { RawContextKey } from "../../contextkey/common/contextkey.js";
+} from '../../contextkey/common/contextkey.js';
+import { RawContextKey } from '../../contextkey/common/contextkey.js';
 import {
 	createServiceIdentifier,
-} from "../../instantiation/common/instantiation.js";
+} from '../../instantiation/common/instantiation.js';
 
 /** One ordered shortcut rule from the active `keybindings.json`. */
 export interface IUserFriendlyKeybinding {
@@ -60,20 +60,20 @@ export interface IKeybindingService {
 }
 
 export const IKeybindingService =
-	createServiceIdentifier<IKeybindingService>("keybindingService");
+	createServiceIdentifier<IKeybindingService>('keybindingService');
 
 /** Shared context identities used by keybinding dispatch and recording UIs. */
 export const KeybindingContextKeys = {
 	inChordMode: new RawContextKey<boolean>(
-		"keybinding.inChordMode",
+		'keybinding.inChordMode',
 		false,
 	),
 	isComposing: new RawContextKey<boolean>(
-		"keybinding.isComposing",
+		'keybinding.isComposing',
 		false,
 	),
 	isRecording: new RawContextKey<boolean>(
-		"keybinding.isRecording",
+		'keybinding.isRecording',
 		false,
 	),
 };

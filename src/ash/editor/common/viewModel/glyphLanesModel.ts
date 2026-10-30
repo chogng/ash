@@ -63,5 +63,3 @@ export class GlyphMarginLanesModel implements IGlyphMarginLanesModel {
 		return count;
 	}
 }
-
-

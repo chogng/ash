@@ -377,7 +377,11 @@ impl ModelsManager {
             match cache.load(scope) {
                 Ok(Some(catalog)) => {
                     let mut state = write_lock(&managed.state);
-                    apply_discovery(&mut state.records, &catalog);
+                    apply_discovery(
+                        &mut state.records,
+                        &catalog,
+                        crate::MetadataSource::PersistedObservation,
+                    );
                     state.last_discovered_ids = catalog
                         .models
                         .iter()
@@ -475,7 +479,11 @@ impl ModelsManager {
         let mut state = write_lock(&managed.state);
         match outcome {
             CatalogDiscoveryOutcome::Modified(catalog) => {
-                apply_discovery(&mut state.records, &catalog);
+                apply_discovery(
+                    &mut state.records,
+                    &catalog,
+                    crate::MetadataSource::ProviderLive,
+                );
                 state.last_discovered_ids = catalog
                     .models
                     .iter()

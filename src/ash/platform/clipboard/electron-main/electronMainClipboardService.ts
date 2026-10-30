@@ -1,4 +1,4 @@
-import { clipboard, ClipboardItem } from "electron";
+import { clipboard, ClipboardItem } from 'electron';
 import type { BrowserWindow } from 'electron/main';
 import { Schemas } from '../../../base/common/network.js';
 import { URI } from '../../../base/common/uri.js';

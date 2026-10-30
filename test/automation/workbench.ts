@@ -1,6 +1,6 @@
-import type { Browser, ElectronApplication, Locator, Page } from "@playwright/test";
-import { Editors } from "./editors.js";
-import { QuickAccess } from "./quickaccess.js";
+import type { Browser, ElectronApplication, Locator, Page } from '@playwright/test';
+import { Editors } from './editors.js';
+import { QuickAccess } from './quickaccess.js';
 import { SettingsEditor } from './settings.js';
 import { Terminal } from './terminal.js';
 import { Dialogs } from './dialogs.js';
@@ -23,7 +23,7 @@ export class Workbench {
 	readonly git: Git;
 
 	constructor(readonly page: Page) {
-		this.element = page.locator(".ash-workbench");
+		this.element = page.locator('.ash-workbench');
 		this.editors = new Editors(page);
 		this.quickaccess = new QuickAccess(page);
 		this.settingsEditor = new SettingsEditor(page, this.quickaccess);
@@ -36,8 +36,8 @@ export class Workbench {
 
 	async waitForReady(): Promise<void> {
 		await waitForWindowLoad(this.page);
-		await this.element.waitFor({ state: "visible" });
-		if (!await this.page.locator(".ash-sessions-window").isVisible()) {
+		await this.element.waitFor({ state: 'visible' });
+		if (!await this.page.locator('.ash-sessions-window').isVisible()) {
 			// Restored layouts can legitimately give the Panel or Auxiliary Bar
 			// the content area. Module restoration above still owns readiness.
 			if (await this.editors.element.isVisible()) await this.editors.waitForReady();

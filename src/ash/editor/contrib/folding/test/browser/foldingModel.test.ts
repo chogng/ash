@@ -1,10 +1,10 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { EditorFoldingModel } from "../../browser/foldingModel.js";
-import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
-import { Position } from "../../../../common/core/position.js";
-import { Range } from "../../../../common/core/range.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { EditorFoldingModel } from '../../browser/foldingModel.js';
+import { EditorFoldingRangeSource } from '../../browser/foldingRanges.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
+import { TextModel } from '../../../../common/model/textModel.js';
 import { EditorHiddenRangeModel } from '../../browser/hiddenRangeModel.js';
 
 test('column edits and unchanged provider results retain fold state without rereading all tracked coordinates', () => {
@@ -33,12 +33,12 @@ test('column edits and unchanged provider results retain fold state without rere
 	} finally { model.positionAt = original; }
 });
 
-test("Folding model tracks line boundaries across edits and removes deleted ranges", () => {
-	const model = new TextModel("before\nheader\nbody\nend\nafter");
+test('Folding model tracks line boundaries across edits and removes deleted ranges', () => {
+	const model = new TextModel('before\nheader\nbody\nend\nafter');
 	using folding = new EditorFoldingModel(model);
 	folding.setRanges([{ startLineIndex: 1, endLineIndex: 3, collapsed: true }]);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: "new\n" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'new\n' }]);
 	assert.deepEqual(folding.regions, [{
 		startLineIndex: 2,
 		endLineIndex: 4,
@@ -46,12 +46,12 @@ test("Folding model tracks line boundaries across edits and removes deleted rang
 		source: EditorFoldingRangeSource.Provider,
 	}]);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((5) + 1, (0) + 1)), text: "" }]);
+	model.applyEdits([{ range: Range.fromPositions(new Position((2) + 1, (0) + 1), new Position((5) + 1, (0) + 1)), text: '' }]);
 	assert.deepEqual(folding.regions, []);
 });
 
-test("Folding model rejects crossing and single-line ranges", () => {
-	const model = new TextModel("0\n1\n2\n3\n4");
+test('Folding model rejects crossing and single-line ranges', () => {
+	const model = new TextModel('0\n1\n2\n3\n4');
 	using folding = new EditorFoldingModel(model);
 	assert.throws(() => folding.setRanges([{ startLineIndex: 0, endLineIndex: 3 }, { startLineIndex: 2, endLineIndex: 4 }]));
 	assert.throws(() => folding.setRanges([{ startLineIndex: 1, endLineIndex: 1 }]));
@@ -70,8 +70,8 @@ test('Folding rejects an ancestor crossing after a completed child without repla
 	assert.deepEqual(folding.regions, before);
 });
 
-test("Folding model retains matching provider collapse state while replacing provider ranges", () => {
-	const model = new TextModel("header\nbody\nend");
+test('Folding model retains matching provider collapse state while replacing provider ranges', () => {
+	const model = new TextModel('header\nbody\nend');
 	using folding = new EditorFoldingModel(model);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 	folding.setProviderRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
@@ -107,8 +107,8 @@ test('Folding memento restores collapsed and manual ranges across provider updat
 	assert.deepEqual(folding.regions, []);
 });
 
-test("Folding model recursively changes only the innermost containing hierarchy", () => {
-	using model = new TextModel("outer\nchild\ngrandchild\nend child\nend outer\nunrelated\nbody");
+test('Folding model recursively changes only the innermost containing hierarchy', () => {
+	using model = new TextModel('outer\nchild\ngrandchild\nend child\nend outer\nunrelated\nbody');
 	using folding = new EditorFoldingModel(model);
 	folding.setRanges([
 		{ startLineIndex: 0, endLineIndex: 4 },
@@ -125,8 +125,8 @@ test("Folding model recursively changes only the innermost containing hierarchy"
 	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, false, false, true]);
 });
 
-test("Manual folding ranges persist through provider replacement and reject crossing boundaries", () => {
-	using model = new TextModel("outer\nmanual start\nbody\nmanual end\nend");
+test('Manual folding ranges persist through provider replacement and reject crossing boundaries', () => {
+	using model = new TextModel('outer\nmanual start\nbody\nmanual end\nend');
 	using folding = new EditorFoldingModel(model);
 	folding.setProviderRanges([{ startLineIndex: 0, endLineIndex: 4 }]);
 
@@ -141,8 +141,8 @@ test("Manual folding ranges persist through provider replacement and reject cros
 	assert.equal(folding.regions.length, 1);
 });
 
-test("Folding a level preserves other levels and skips the selected scopes", () => {
-	using model = new TextModel("outer\nchild\ngrandchild\nend grandchild\nend child\nend outer\nother\nbody");
+test('Folding a level preserves other levels and skips the selected scopes', () => {
+	using model = new TextModel('outer\nchild\ngrandchild\nend grandchild\nend child\nend outer\nother\nbody');
 	using folding = new EditorFoldingModel(model);
 	folding.setRanges([
 		{ startLineIndex: 0, endLineIndex: 5 },

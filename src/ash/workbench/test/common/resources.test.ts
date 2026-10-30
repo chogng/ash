@@ -67,7 +67,7 @@ suite('ResourceGlobMatcher', () => {
 		using matcher = new ResourceGlobMatcher(() => expression, () => true, workspace, configuration);
 		(expression['**/*.js'] as { when: string; }).when = 'other.ts';
 		assert.equal(matcher.matches(URI.file('/root/main.js'), name => name === 'main.ts'), true);
-		await configuration.updateValue('test.expression', { 'changed': true });
+		await configuration.updateValue('test.expression', { changed: true });
 		assert.equal(matcher.matches(URI.file('/root/main.js'), name => name === 'main.ts'), false);
 	});
 });

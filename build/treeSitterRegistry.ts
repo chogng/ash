@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { formatGeneratedTypeScript } from './lib/generatedTypeScript.ts';
 
 export interface GrammarLanguage {
 	id: string;
@@ -221,7 +222,7 @@ export async function generateTreeSitterRegistry(options: { root?: string; check
 	if (!/^\d+\.\d+\.\d+$/.test(lock.version) || !/^[a-f0-9]{64}$/.test(lock.wasm?.sha256)) throw new Error('Invalid grammar release lock');
 	const wasmDirectory = `third_party/.cache/ash-grammars/${lock.version}/wasm-${lock.wasm.sha256}`;
 	for (const [path, generated] of generate(root, await readGrammarPackages(root), wasmDirectory)) {
-		const content = path.endsWith('.rs') ? await formatRust(generated, root) : generated;
+		const content = path.endsWith('.rs') ? await formatRust(generated, root) : formatGeneratedTypeScript(generated);
 		const target = resolve(root, path);
 		let previous: string | undefined;
 		try { previous = await readFile(target, 'utf8'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }

@@ -1,9 +1,9 @@
-import { collectDocumentNodeIds, findDocumentNode, type DocumentAttributes, type DocumentNode, type DocumentNodeId } from "../../model/document.js";
+import { collectDocumentNodeIds, findDocumentNode, type DocumentAttributes, type DocumentNode, type DocumentNodeId } from '../../model/document.js';
 import { localize } from 'ash:editor/nls.js';
-import { isDocumentSelectionValid, nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from "../../core/documentSelection.js";
-import type { DocumentHistoryEntries, DocumentHistoryEntry } from "../../model/documentHistory.js";
-import { type DocumentSchema } from "../../model/documentSchema.js";
-import { applyDocumentTransaction, DocumentTransaction, DocumentTransactionMapping, type DocumentStep, type ReplaceTextStep } from "../../model/documentTransaction.js";
+import { isDocumentSelectionValid, nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from '../../core/documentSelection.js';
+import type { DocumentHistoryEntries, DocumentHistoryEntry } from '../../model/documentHistory.js';
+import { type DocumentSchema } from '../../model/documentSchema.js';
+import { applyDocumentTransaction, DocumentTransaction, DocumentTransactionMapping, type DocumentStep, type ReplaceTextStep } from '../../model/documentTransaction.js';
 
 export interface RebasedDocumentTransaction {
 	readonly transaction: DocumentTransaction;
@@ -16,7 +16,7 @@ export interface RebasedDocumentTransaction {
 export class DocumentRebaseError extends Error {
 	constructor(message: string, options?: ErrorOptions) {
 		super(message, options);
-		this.name = "DocumentRebaseError";
+		this.name = 'DocumentRebaseError';
 	}
 }
 
@@ -89,11 +89,11 @@ export function rebaseDocumentTransaction(base: DocumentNode, schema: DocumentSc
 		const normalizedTransaction = transaction.selectionSet ? transaction.withSelection(selection) : transaction;
 		return Object.freeze({ transaction: normalizedTransaction, document: applied.document, remoteDocument, droppedSteps: Object.freeze(droppedSteps) });
 	} catch (error) {
-		throw new DocumentRebaseError("The rebased document transaction is not valid after the remote change", { cause: error });
+		throw new DocumentRebaseError('The rebased document transaction is not valid after the remote change', { cause: error });
 	}
 }
 
-type HistoricalInsertionOrder = "before" | "after";
+type HistoricalInsertionOrder = 'before' | 'after';
 
 function rebaseUndoEntries(document: DocumentNode, schema: DocumentSchema, entries: readonly DocumentHistoryEntry[], remote: DocumentTransaction): DocumentHistoryEntry[] | undefined {
 	let localDocument = document;
@@ -121,7 +121,7 @@ function rebaseRedoEntries(document: DocumentNode, schema: DocumentSchema, entri
 	const rebased = new Array<DocumentHistoryEntry>(entries.length);
 	for (let index = entries.length - 1; index >= 0; index -= 1) {
 		const entry = entries[index]!;
-		const forward = rebaseLocalHistoryTransaction(localDocument, schema, entry.transaction, remoteAtCurrent, "after");
+		const forward = rebaseLocalHistoryTransaction(localDocument, schema, entry.transaction, remoteAtCurrent, 'after');
 		if (!forward) return undefined;
 		const applied = applyDocumentTransaction(remoteAtCurrentDocument(localDocument, schema, remoteAtCurrent), schema, forward.transaction);
 		const remoteAtNext = rebaseHistoryTransaction(localDocument, schema, remoteAtCurrent, entry.transaction);
@@ -187,17 +187,17 @@ function mapHistoryStepThroughRemote(step: DocumentStep, changes: readonly Remot
 	for (const change of changes) {
 		if (!mapped) return undefined;
 		mapped = mapReviewAnchor(mapped, change, localCreatedIds);
-		if (mapped.kind === "replaceText") {
+		if (mapped.kind === 'replaceText') {
 			mapped = mapHistoryReplaceTextThroughRemote(mapped, [change], remoteDocument, insertionOrder, localCreatedIds);
 			if (!mapped) return undefined;
 			continue;
 		}
-		if (mapped.kind === "insertNode") {
+		if (mapped.kind === 'insertNode') {
 			if (!isNodeAvailable(remoteDocument, mapped.parentId, localCreatedIds)) return undefined;
 			mapped = { ...mapped, index: mapHistoryChildIndex(mapped.parentId, mapped.index, change, insertionOrder) };
 			continue;
 		}
-		if (mapped.kind === "moveNode") {
+		if (mapped.kind === 'moveNode') {
 			if (!isNodeAvailable(remoteDocument, mapped.nodeId, localCreatedIds) || !isNodeAvailable(remoteDocument, mapped.parentId, localCreatedIds)) return undefined;
 			mapped = { ...mapped, index: mapHistoryChildIndex(mapped.parentId, mapped.index, change, insertionOrder) };
 			continue;
@@ -213,12 +213,12 @@ function mapHistoryReplaceTextThroughRemote(step: ReplaceTextStep, changes: read
 		if (localCreatedIds.has(mapped.nodeId)) continue;
 		if (!isNodeAvailable(remoteDocument, mapped.nodeId, localCreatedIds)) throw new DocumentRebaseError(`History text node '${mapped.nodeId}' no longer exists`);
 		const remote = change.step;
-		if (remote.kind !== "replaceText" || remote.nodeId !== mapped.nodeId) continue;
+		if (remote.kind !== 'replaceText' || remote.nodeId !== mapped.nodeId) continue;
 		const textNode = findDocumentNode(remoteDocument, mapped.nodeId)?.node;
 		if (!textNode || textNode.text === undefined) throw new DocumentRebaseError(`History text node '${mapped.nodeId}' no longer exists`);
-		const fromBias = mapped.from === mapped.to ? insertionOrder === "before" ? "backward" : "forward" : "forward";
+		const fromBias = mapped.from === mapped.to ? insertionOrder === 'before' ? 'backward' : 'forward' : 'forward';
 		const from = mapTextOffset(mapped.from, remote, fromBias);
-		const to = mapTextOffset(mapped.to, remote, mapped.from === mapped.to ? fromBias : "backward");
+		const to = mapTextOffset(mapped.to, remote, mapped.from === mapped.to ? fromBias : 'backward');
 		mapped = { ...mapped, from: Math.max(0, Math.min(textNode.text.length, from)), to: Math.max(0, Math.min(textNode.text.length, Math.max(from, to))) };
 		if (step.from !== step.to && mapped.from === mapped.to) return undefined;
 	}
@@ -227,35 +227,35 @@ function mapHistoryReplaceTextThroughRemote(step: ReplaceTextStep, changes: read
 
 function mapHistoryChildIndex(parentId: DocumentNodeId, index: number, change: RemoteChange, insertionOrder: HistoricalInsertionOrder): number {
 	const step = change.step;
-	if (step.kind === "insertNode" && step.parentId === parentId) return step.index < index || (step.index === index && insertionOrder === "after") ? index + 1 : index;
-	if (step.kind === "deleteNode") {
+	if (step.kind === 'insertNode' && step.parentId === parentId) return step.index < index || (step.index === index && insertionOrder === 'after') ? index + 1 : index;
+	if (step.kind === 'deleteNode') {
 		const location = findDocumentNode(change.before, step.nodeId);
 		return location?.parent?.id === parentId && location.index < index ? index - 1 : index;
 	}
-	if (step.kind !== "moveNode") return index;
+	if (step.kind !== 'moveNode') return index;
 	const location = findDocumentNode(change.before, step.nodeId);
 	let mapped = index;
 	if (location?.parent?.id === parentId && location.index < mapped) mapped -= 1;
-	if (step.parentId === parentId && (step.index < mapped || (step.index === mapped && insertionOrder === "after"))) mapped += 1;
+	if (step.parentId === parentId && (step.index < mapped || (step.index === mapped && insertionOrder === 'after'))) mapped += 1;
 	return mapped;
 }
 
 function historicalInsertionOrder(document: DocumentNode, remote: DocumentTransaction, inverse: DocumentTransaction): HistoricalInsertionOrder {
 	for (const inverseStep of inverse.steps) {
 		for (const remoteStep of remote.steps) {
-			if (inverseStep.kind === "replaceText" && remoteStep.kind === "replaceText" && remoteStep.nodeId === inverseStep.nodeId && remoteStep.from === remoteStep.to) {
-				if (remoteStep.from === inverseStep.to) return "before";
-				if (remoteStep.from === inverseStep.from) return "after";
+			if (inverseStep.kind === 'replaceText' && remoteStep.kind === 'replaceText' && remoteStep.nodeId === inverseStep.nodeId && remoteStep.from === remoteStep.to) {
+				if (remoteStep.from === inverseStep.to) return 'before';
+				if (remoteStep.from === inverseStep.from) return 'after';
 			}
-			if (inverseStep.kind === "deleteNode" && remoteStep.kind === "insertNode") {
+			if (inverseStep.kind === 'deleteNode' && remoteStep.kind === 'insertNode') {
 				const location = findDocumentNode(document, inverseStep.nodeId);
 				if (location?.parent?.id !== remoteStep.parentId) continue;
-				if (remoteStep.index === location.index + 1) return "before";
-				if (remoteStep.index === location.index) return "after";
+				if (remoteStep.index === location.index + 1) return 'before';
+				if (remoteStep.index === location.index) return 'after';
 			}
 		}
 	}
-	return "after";
+	return 'after';
 }
 
 function remoteAtCurrentDocument(document: DocumentNode, schema: DocumentSchema, remote: DocumentTransaction): DocumentNode {
@@ -365,12 +365,12 @@ function mapStepThroughRemote(step: DocumentStep, changes: readonly RemoteChange
 }
 
 function mapStepThroughChange(step: DocumentStep, change: RemoteChange, remoteDocument: DocumentNode, localCreatedIds: ReadonlySet<DocumentNodeId>): DocumentStep | undefined {
-	if (step.kind === "replaceText") return mapReplaceTextStep(step, change, remoteDocument, localCreatedIds);
-	if (step.kind === "insertNode") {
+	if (step.kind === 'replaceText') return mapReplaceTextStep(step, change, remoteDocument, localCreatedIds);
+	if (step.kind === 'insertNode') {
 		if (!isNodeAvailable(remoteDocument, step.parentId, localCreatedIds)) return undefined;
 		return { ...step, index: mapChildIndex(step.parentId, step.index, change) };
 	}
-	if (step.kind === "moveNode") {
+	if (step.kind === 'moveNode') {
 		if (!isNodeAvailable(remoteDocument, step.nodeId, localCreatedIds) || !isNodeAvailable(remoteDocument, step.parentId, localCreatedIds)) return undefined;
 		return { ...step, index: mapChildIndex(step.parentId, step.index, change) };
 	}
@@ -382,31 +382,31 @@ function mapReplaceTextStep(step: ReplaceTextStep, change: RemoteChange, remoteD
 	if (localCreatedIds.has(step.nodeId)) return step;
 	if (!isNodeAvailable(remoteDocument, step.nodeId, localCreatedIds)) return undefined;
 	const remoteStep = change.step;
-	if (remoteStep.kind !== "replaceText" || remoteStep.nodeId !== step.nodeId) return step;
+	if (remoteStep.kind !== 'replaceText' || remoteStep.nodeId !== step.nodeId) return step;
 	const textNode = findDocumentNode(remoteDocument, step.nodeId)?.node;
 	if (!textNode || textNode.text === undefined) return undefined;
-	const from = mapTextOffset(step.from, remoteStep, "backward");
-	const to = mapTextOffset(step.to, remoteStep, "forward");
+	const from = mapTextOffset(step.from, remoteStep, 'backward');
+	const to = mapTextOffset(step.to, remoteStep, 'forward');
 	return { ...step, from: Math.max(0, Math.min(textNode.text.length, from)), to: Math.max(0, Math.min(textNode.text.length, Math.max(from, to))) };
 }
 
-function mapTextOffset(offset: number, remote: ReplaceTextStep, bias: "backward" | "forward"): number {
+function mapTextOffset(offset: number, remote: ReplaceTextStep, bias: 'backward' | 'forward'): number {
 	const insertedLength = normalizeText(remote.text).length;
 	const change = insertedLength - (remote.to - remote.from);
-	if (offset < remote.from || (offset === remote.from && bias === "backward")) return offset;
-	if (offset > remote.to || (offset === remote.to && bias === "forward")) return offset + change;
-	return bias === "backward" ? remote.from : remote.from + insertedLength;
+	if (offset < remote.from || (offset === remote.from && bias === 'backward')) return offset;
+	if (offset > remote.to || (offset === remote.to && bias === 'forward')) return offset + change;
+	return bias === 'backward' ? remote.from : remote.from + insertedLength;
 }
 
 function mapChildIndex(parentId: DocumentNodeId, index: number, change: RemoteChange): number {
 	const step = change.step;
-	if (step.kind === "insertNode" && step.parentId === parentId && step.index <= index) return index + 1;
-	if (step.kind === "deleteNode") {
+	if (step.kind === 'insertNode' && step.parentId === parentId && step.index <= index) return index + 1;
+	if (step.kind === 'deleteNode') {
 		const location = findDocumentNode(change.before, step.nodeId);
 		if (location?.parent?.id === parentId && location.index < index) return index - 1;
 		return index;
 	}
-	if (step.kind !== "moveNode") return index;
+	if (step.kind !== 'moveNode') return index;
 	const location = findDocumentNode(change.before, step.nodeId);
 	let mapped = index;
 	if (location?.parent?.id === parentId && location.index < mapped) mapped -= 1;
@@ -420,12 +420,12 @@ function isNodeAvailable(document: DocumentNode, nodeId: DocumentNodeId, localCr
 
 function normalizeSelection(original: DocumentSelection | undefined, mapped: DocumentSelection | undefined, remoteDocument: DocumentNode, document: DocumentNode): DocumentSelection | undefined {
 	if (!original) return mapped && isDocumentSelectionValid(document, mapped) ? mapped : undefined;
-	if (original.kind === "all") return original;
-	if (original.kind === "node") {
+	if (original.kind === 'all') return original;
+	if (original.kind === 'node') {
 		if (findDocumentNode(document, original.nodeId)) return nodeSelection(original.nodeId);
 		return mapped && isDocumentSelectionValid(document, mapped) ? mapped : undefined;
 	}
-	const mappedText = mapped?.kind === "text" ? mapped : undefined;
+	const mappedText = mapped?.kind === 'text' ? mapped : undefined;
 	const anchor = normalizePoint(original.anchor, mappedText?.anchor, remoteDocument, document);
 	const head = normalizePoint(original.head, mappedText?.head, remoteDocument, document);
 	if (!anchor || !head) return undefined;
@@ -441,7 +441,7 @@ function normalizePoint(original: DocumentPoint, mapped: DocumentPoint | undefin
 }
 
 function normalizeText(text: string): string {
-	return text.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+	return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 }
 
 /** A comment created before a peer edit must travel through the same position mapping as selections. */

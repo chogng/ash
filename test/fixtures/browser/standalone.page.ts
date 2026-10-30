@@ -247,6 +247,7 @@ interface StandaloneHarness {
 	setKeyboardReadOnly(readOnly: boolean): void;
 	layoutContribution(width: number, height?: number): void;
 	toggleClosedFindOption(): void;
+	prepareFindHighlights(overlap: boolean): void;
 	prepareCompletionGeometry(scrolled: boolean): void;
 	readCompletionGeometry(): { caret: { left: number; top: number; height: number; }; api: { left: number; top: number; height: number; }; widget: { left: number; top: number; }; contentLeft: number; textLeft: number; };
 	prepareContributionRequests(kind: ContributionRequestKind, triggerCharacters?: readonly string[]): void;
@@ -961,6 +962,30 @@ window.ashStandaloneIntegration = {
 	setKeyboardReadOnly: readOnly => callerEditor.updateOptions({ readOnly }),
 	layoutContribution: (width, height = 180) => callerEditor.layout({ width, height }),
 	toggleClosedFindOption: () => callerEditor.getContribution<FindController>(FindController.ID)!.toggleCaseSensitive(),
+	prepareFindHighlights: overlap => {
+		callerEditor.updateOptions({ occurrencesHighlight: 'off' });
+		callerEditor.setValue('alpha alpha');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		for (const [id, colorScheme, background, focus] of [
+			['find-test-light', stanza.ColorScheme.Light, '#ff0000', '#0000ff'],
+			['find-test-dark', stanza.ColorScheme.Dark, '#00ff00', '#ff0000'],
+			['find-test-hc-dark', stanza.ColorScheme.HighContrastDark, '#ff0000', '#0000ff'],
+			['find-test-hc-light', stanza.ColorScheme.HighContrastLight, '#00ff00', '#ff0000'],
+		] as const) {
+			stanza.editor.defineNamedTheme(id, {
+				label: id,
+				colorScheme,
+				colors: { 'search.matchBackground': background, focusBorder: focus },
+			});
+		}
+		if (overlap) {
+			// A separate owner retains ordinary matches while editor Find changes its current match.
+			callerModel.deltaDecorations([], [1, 7].map(column => ({
+				range: new stanza.Range(1, column, 1, column + 5),
+				options: { description: 'independent-find-match', className: 'findMatch' },
+			})));
+		}
+	},
 	prepareCompletionGeometry: scrolled => {
 		const lineNumber = scrolled ? 40 : 1;
 		callerEditor.setValue(Array.from({ length: 80 }, () => 'alpha '.repeat(50)).join('\n'));

@@ -1,5 +1,5 @@
 import { defaultInputBoxStyles } from '../../theme/browser/defaultStyles.js';
-import { addDisposableListener, stopEvent, h, isHTMLElement } from "../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h, isHTMLElement } from '../../../base/browser/dom.js';
 import { TabList } from '../../../base/browser/ui/tablist/tabList.js';
 import { ActionBar } from '../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -9,13 +9,13 @@ import { AnchorPosition, layout2d } from '../../../base/common/layout.js';
 import {
 	setAriaAttribute,
 	setRole,
-} from "../../../base/browser/ui/aria/aria.js";
+} from '../../../base/browser/ui/aria/aria.js';
 import {
 	InputBox,
 	type InputSelection,
-} from "../../../base/browser/ui/inputbox/inputbox.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, MutableDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+} from '../../../base/browser/ui/inputbox/inputbox.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type {
 	IQuickPick,
 	IQuickPickItem,
@@ -25,8 +25,8 @@ import type {
 	IKeyMods,
 	IQuickInput,
 	IQuickPickDidAcceptEvent,
-} from "../common/quickInput.js";
-import { QuickInputList } from "./quickInputList.js";
+} from '../common/quickInput.js';
+import { QuickInputList } from './quickInputList.js';
 import { QuickInputType, QuickPickFocus } from '../common/quickInput.js';
 import { localize } from '../../../nls.js';
 import { RawContextKey } from '../../contextkey/common/contextkey.js';
@@ -116,7 +116,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	private readonly options: BrowserQuickInputHostOptions;
 	private visible = false;
 	private _ariaLabel = localize('quickInput.title', 'Quick Pick');
-	private _placeholder = "";
+	private _placeholder = '';
 	private _filterValue = (value: string): string => value;
 
 	readonly onDidAccept: Event<IQuickPickDidAcceptEvent> = this._onDidAccept.event;
@@ -137,22 +137,22 @@ export class QuickPick<TItem extends IQuickPickItem>
 		super();
 		this.options = options;
 		const ownerDocument = host.ownerDocument;
-		this.element = h(ownerDocument, "div");
-		this.element.className = "ash-quick-pick";
-		setRole(this.element, "dialog");
-		setAriaAttribute(this.element, "label", this._ariaLabel);
+		this.element = h(ownerDocument, 'div');
+		this.element.className = 'ash-quick-pick';
+		setRole(this.element, 'dialog');
+		setAriaAttribute(this.element, 'label', this._ariaLabel);
 		this.list = this._register(new QuickInputList<TItem>(this.element));
 		this.list.element.id = `${this.list.listId}-panel`;
 		this.inputBox = this._register(new InputBox(this.element, {
 			inputBoxStyles: defaultInputBoxStyles,
-			type: "text",
+			type: 'text',
 			ariaLabel: localize('quickInput.title', 'Quick Pick'),
-			role: "combobox",
-			ariaAutoComplete: "list",
+			role: 'combobox',
+			ariaAutoComplete: 'list',
 			ariaControls: this.list.listId,
 			ariaExpanded: true,
 		}));
-		this.inputBox.element.classList.add("ash-quick-pick-input", "ash-quick-pick-filter");
+		this.inputBox.element.classList.add('ash-quick-pick-input', 'ash-quick-pick-filter');
 		const clearLabel = localize('quickInput.clearInput', 'Clear input');
 		this.inputActions = this._register(new ActionBar(this.inputBox.element, {
 			ariaLabel: clearLabel,
@@ -231,8 +231,8 @@ export class QuickPick<TItem extends IQuickPickItem>
 
 	set ariaLabel(value: string) {
 		this._ariaLabel = value;
-		setAriaAttribute(this.element, "label", value);
-		setAriaAttribute(this.inputBox.inputElement, "label", value);
+		setAriaAttribute(this.element, 'label', value);
+		setAriaAttribute(this.inputBox.inputElement, 'label', value);
 	}
 
 	set items(items: readonly (TItem | IQuickPickSeparator)[]) {

@@ -1,0 +1,36 @@
+---
+source: cli/tests/support/tui_process.rs
+expression: screen
+---
+  <FIXTURE>/workspace                                    [Dashboard]
+
+> 请尝试创建 declined-by-tui.txt
+
+● Failed to update file declined-by-tui.txt
+ └─ declined-by-tui.txt
+    user declined the requested one-time tool authorization
+    view full
+
+● 工具调用被用户拒绝。没有写入文件。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                 /permission to change permissions
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  >
+  ───────────────────────────────────────────────────────────────────────────── ash-real-scenario
+
+  ⏸ Manual · ← Dashboard · ? for shortcuts

@@ -1,21 +1,21 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
 import { spawnSync } from 'node:child_process';
 import { isWindows } from '../../common/platform.js';
-import { URI } from "../../common/uri.js";
+import { URI } from '../../common/uri.js';
 
-test("URI parses and canonicalizes absolute hierarchical resources", () => {
-	const resource = URI.parse("ASH://workspace/a/../An item?rev=1#anchor=3");
+test('URI parses and canonicalizes absolute hierarchical resources', () => {
+	const resource = URI.parse('ASH://workspace/a/../An item?rev=1#anchor=3');
 
 	assert.equal(
 		resource.toString(),
-		"ash://workspace/An%20item?rev=1#anchor=3",
+		'ash://workspace/An%20item?rev=1#anchor=3',
 	);
-	assert.equal(resource.scheme, "ash");
-	assert.equal(resource.authority, "workspace");
-	assert.equal(resource.path, "/An item");
-	assert.equal(resource.query, "rev=1");
-	assert.equal(resource.fragment, "anchor=3");
+	assert.equal(resource.scheme, 'ash');
+	assert.equal(resource.authority, 'workspace');
+	assert.equal(resource.path, '/An item');
+	assert.equal(resource.query, 'rev=1');
+	assert.equal(resource.fragment, 'anchor=3');
 });
 
 test('URI.parse assigns file to scheme-less input and strict mode requires a scheme', () => {
@@ -36,29 +36,29 @@ test('URI.from applies the same scheme rule to decoded components', () => {
 });
 
 test('URI validates percent encoding and rejects credentials', () => {
-	assert.throws(() => URI.parse("file:///item%ZZ.txt"), TypeError);
+	assert.throws(() => URI.parse('file:///item%ZZ.txt'), TypeError);
 	assert.throws(() => URI.parse('item%ZZ.txt'), TypeError);
 	assert.throws(
-		() => URI.parse("https://user:secret@example.com/item"),
+		() => URI.parse('https://user:secret@example.com/item'),
 		TypeError,
 	);
 });
 
-test("URI.file supports Windows drive paths and UNC paths", () => {
+test('URI.file supports Windows drive paths and UNC paths', () => {
 	if (!isWindows) {
 		assert.equal(URI.file('C:\\Users\\Ash\\An item.txt').toString(), 'file:///C:%5CUsers%5CAsh%5CAn%20item.txt');
 		return;
 	}
-	const drive = URI.file("C:\\Users\\Ash\\An item.txt");
-	const unc = URI.file("\\\\server\\share\\An item.txt");
+	const drive = URI.file('C:\\Users\\Ash\\An item.txt');
+	const unc = URI.file('\\\\server\\share\\An item.txt');
 
-	assert.equal(drive.toString(), "file:///C:/Users/Ash/An%20item.txt");
-	assert.equal(drive.fsPath, "c:\\Users\\Ash\\An item.txt");
+	assert.equal(drive.toString(), 'file:///C:/Users/Ash/An%20item.txt');
+	assert.equal(drive.fsPath, 'c:\\Users\\Ash\\An item.txt');
 	assert.equal(
 		unc.toString(),
-		"file://server/share/An%20item.txt",
+		'file://server/share/An%20item.txt',
 	);
-	assert.equal(unc.fsPath, isWindows ? "\\\\server\\share\\An item.txt" : '//server/share/An item.txt');
+	assert.equal(unc.fsPath, isWindows ? '\\\\server\\share\\An item.txt' : '//server/share/An item.txt');
 });
 
 test('URI.file preserves percent signs and Unicode in file paths', () => {
@@ -195,39 +195,39 @@ for (const os of ['windows', 'mac', 'linux'] as const) {
 	});
 }
 
-test("URI changes are immutable and fragments can be removed explicitly", () => {
-	const anchored = URI.parse("ash://workspace/item?rev=2#anchor=7");
+test('URI changes are immutable and fragments can be removed explicitly', () => {
+	const anchored = URI.parse('ash://workspace/item?rev=2#anchor=7');
 	const resource = anchored.with({ fragment: null });
 
-	assert.equal(anchored.fragment, "anchor=7");
-	assert.equal(resource.toString(), "ash://workspace/item?rev=2");
+	assert.equal(anchored.fragment, 'anchor=7');
+	assert.equal(resource.toString(), 'ash://workspace/item?rev=2');
 	assert.equal(resource.with({ query: 'rev=3' }).query, 'rev=3');
 	assert.equal(resource.with({ path: '/renamed' }).path, '/renamed');
 });
 
 test('URI.with encodes a decoded path and keeps the other components', () => {
-	const parent = URI.parse("ash://workspace/root?rev=2#anchor");
+	const parent = URI.parse('ash://workspace/root?rev=2#anchor');
 	const child = parent.with({ path: '/root/hello world.txt' });
 
-	assert.equal(child.toString(), "ash://workspace/root/hello%20world.txt?rev=2#anchor");
-	assert.equal(parent.toString(), "ash://workspace/root?rev=2#anchor");
+	assert.equal(child.toString(), 'ash://workspace/root/hello%20world.txt?rev=2#anchor');
+	assert.equal(parent.toString(), 'ash://workspace/root?rev=2#anchor');
 	assert.equal(parent.with({ path: '/root/bad%ZZ.txt' }).toString(), 'ash://workspace/root/bad%25ZZ.txt?rev=2#anchor');
 });
 
-test("URI.joinPathSegment preserves components and encodes one child name", () => {
-	const parent = URI.parse("ash://workspace/root?rev=2#anchor");
-	const child = parent.joinPathSegment("hello %中?#.txt");
-	assert.equal(child.toString(), "ash://workspace/root/hello%20%25%E4%B8%AD%3F%23.txt?rev=2#anchor");
-	assert.deepEqual([child.scheme, child.authority, child.path, child.query, child.fragment], ["ash", "workspace", "/root/hello %中?#.txt", "rev=2", "anchor"]);
-	assert.equal(URI.file("/tmp/root/").joinPathSegment("a b").toString(), "file:///tmp/root/a%20b");
-	assert.equal(URI.file("/tmp/root").joinPathSegment("..").toString(), isWindows ? "file:///tmp" : "file:///tmp/");
+test('URI.joinPathSegment preserves components and encodes one child name', () => {
+	const parent = URI.parse('ash://workspace/root?rev=2#anchor');
+	const child = parent.joinPathSegment('hello %中?#.txt');
+	assert.equal(child.toString(), 'ash://workspace/root/hello%20%25%E4%B8%AD%3F%23.txt?rev=2#anchor');
+	assert.deepEqual([child.scheme, child.authority, child.path, child.query, child.fragment], ['ash', 'workspace', '/root/hello %中?#.txt', 'rev=2', 'anchor']);
+	assert.equal(URI.file('/tmp/root/').joinPathSegment('a b').toString(), 'file:///tmp/root/a%20b');
+	assert.equal(URI.file('/tmp/root').joinPathSegment('..').toString(), isWindows ? 'file:///tmp' : 'file:///tmp/');
 	const directories = [
-		...(isWindows ? [URI.file("C:\\project\\src"), URI.file("\\\\server\\share\\src")] : []),
-		URI.parse("vscode-remote://ssh-remote+host/workspace?rev=1#anchor"),
+		...(isWindows ? [URI.file('C:\\project\\src'), URI.file('\\\\server\\share\\src')] : []),
+		URI.parse('vscode-remote://ssh-remote+host/workspace?rev=1#anchor'),
 	];
 	for (const directory of directories) {
-		for (const name of ["plain.txt", "a % 中.txt", "question?#.txt"]) {
-			const base = directory.path.endsWith("/") ? directory.path.slice(0, -1) : directory.path;
+		for (const name of ['plain.txt', 'a % 中.txt', 'question?#.txt']) {
+			const base = directory.path.endsWith('/') ? directory.path.slice(0, -1) : directory.path;
 			assert.equal(directory.joinPathSegment(name).toString(), directory.with({ path: `${base}/${name}` }).toString());
 		}
 	}

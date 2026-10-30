@@ -59,39 +59,44 @@
 	box-sizing: border-box;
 }
 
-.ash-dropdown-with-primary-action-view-item {
+.ash-split-action {
 	display: flex;
 	align-items: stretch;
 	gap: 0;
 	border-radius: var(--ash-cornerRadius-small);
 }
 
-.ash-dropdown-with-primary-primary,
-.ash-dropdown-with-primary-dropdown {
+.ash-split-action-primary,
+.ash-split-action-dropdown {
 	display: flex;
 	align-items: stretch;
 }
 
-.ash-toolbar .ash-dropdown-with-primary-action-view-item .ash-button {
+.ash-toolbar .ash-split-action:where(:not(.primary)) .ash-button {
 	height: var(--ash-toolbar-actionSize);
 	min-height: var(--ash-toolbar-actionSize);
 	border: 0;
 }
 
-.ash-toolbar .ash-dropdown-with-primary-primary.icon > .ash-button {
-	width: var(--ash-toolbar-actionSize);
-	min-width: var(--ash-toolbar-actionSize);
-	padding: 0;
+.ash-split-action-primary > .ash-button {
 	border-radius: var(--ash-cornerRadius-small) 0 0
 		var(--ash-cornerRadius-small);
 }
 
-.ash-toolbar .ash-dropdown-with-primary-primary.icon > .ash-button-primary {
+.ash-toolbar
+	.ash-split-action-primary.icon
+	> .ash-button:where(:not(.ash-button-primary)) {
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	padding: 0;
+}
+
+.ash-toolbar .ash-split-action-primary.icon > .ash-button-primary {
 	width: auto;
 	padding-inline: var(--ash-spacing-size80);
 }
 
-.ash-toolbar .ash-dropdown-with-primary-dropdown > .ash-button {
+.ash-toolbar .ash-split-action-dropdown > .ash-button {
 	box-sizing: border-box;
 	width: calc(
 		var(--ash-lxiconFontSize-compact) + 2 * var(--ash-spacing-size20)
@@ -104,15 +109,23 @@
 		0;
 }
 
-.ash-toolbar .ash-dropdown-with-primary-dropdown > .ash-button-primary {
+.ash-toolbar .ash-split-action-dropdown > .ash-button-primary {
 	border-left: var(--ash-strokeThickness) solid currentColor;
 }
 
-.ash-dropdown-with-primary-dropdown .ash-button-content {
+.ash-toolbar
+	.ash-split-action.primary
+	.ash-split-action-dropdown
+	> .ash-button {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-split-action-dropdown .ash-button-content {
 	display: none;
 }
 
-.ash-dropdown-with-primary-dropdown .ash-dropdown-menu-indicator .ash-icon {
+.ash-split-action-dropdown .ash-dropdown-menu-indicator .ash-icon {
 	width: var(--ash-lxiconFontSize-compact);
 	height: var(--ash-lxiconFontSize-compact);
 	font-size: var(--ash-lxiconFontSize-compact);

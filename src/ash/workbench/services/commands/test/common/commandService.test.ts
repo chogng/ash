@@ -1,21 +1,21 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
 import {
 	CommandRegistry,
-} from "../../../../../platform/commands/common/commands.js";
-import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
+} from '../../../../../platform/commands/common/commands.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import {
 	CommandService,
-} from "../../../../../workbench/services/commands/common/commandService.js";
+} from '../../../../../workbench/services/commands/common/commandService.js';
 
-test("command service emits execution events around the handler call", async () => {
+test('command service emits execution events around the handler call', async () => {
 	const registry = new CommandRegistry();
 	const order: string[] = [];
 	using commandRegistration = registry.register(
-		"test.command.events",
+		'test.command.events',
 		async () => {
-			order.push("handler");
-			return "result";
+			order.push('handler');
+			return 'result';
 		},
 	);
 	using service = new CommandService(new InstantiationService(), registry);
@@ -27,24 +27,24 @@ test("command service emits execution events around the handler call", async () 
 	});
 
 	const result = await service.executeCommand<string>(
-		"test.command.events",
-		"argument",
+		'test.command.events',
+		'argument',
 	);
 
-	assert.equal(result, "result");
+	assert.equal(result, 'result');
 	assert.deepEqual(order, [
-		"will:test.command.events:argument",
-		"handler",
-		"did:test.command.events:argument",
+		'will:test.command.events:argument',
+		'handler',
+		'did:test.command.events:argument',
 	]);
 });
 
-test("command service does not emit did when a handler throws", async () => {
+test('command service does not emit did when a handler throws', async () => {
 	const registry = new CommandRegistry();
 	using commandRegistration = registry.register(
-		"test.command.failure",
+		'test.command.failure',
 		() => {
-			throw new Error("failed");
+			throw new Error('failed');
 		},
 	);
 	using service = new CommandService(new InstantiationService(), registry);
@@ -58,7 +58,7 @@ test("command service does not emit did when a handler throws", async () => {
 	});
 
 	await assert.rejects(
-		service.executeCommand("test.command.failure"),
+		service.executeCommand('test.command.failure'),
 		/failed/,
 	);
 	assert.equal(willCount, 1);

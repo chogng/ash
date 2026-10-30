@@ -26,7 +26,7 @@ export interface ISymbolNavigationService extends IDisposable {
 }
 
 class SymbolNavigationService extends Disposable implements ISymbolNavigationService {
-	public declare readonly _serviceBrand: undefined;
+	declare public readonly _serviceBrand: undefined;
 	private readonly session = this._register(new DisposableStore());
 	private readonly contexts = new Set<IContextKey<boolean>>();
 	private anchor: OneReference | undefined;

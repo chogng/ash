@@ -46,7 +46,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Backspace: [],
 		Tab: [],
 		Space: [' ', ' ', ' ', ' ', 0],
-		Minus: ['\'', '?', '´', '¸', 0],
+		Minus: ["'", '?', '´', '¸', 0],
 		Equal: ['¡', '¿', '‚', '˛', 0],
 		BracketLeft: ['`', '^', '[', 'ˆ', 3],
 		BracketRight: ['+', '*', ']', '±', 0],

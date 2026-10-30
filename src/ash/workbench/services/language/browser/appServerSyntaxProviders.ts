@@ -1,13 +1,13 @@
 import { syntaxLanguageForEditorLanguage, syntaxEditorLanguageIds } from '../../../../platform/syntax/common/syntaxApi.js';
 export { syntaxLanguageForEditorLanguage } from '../../../../platform/syntax/common/syntaxApi.js';
 import { nestDocumentSymbols } from '../../../../editor/common/languages.js';
-import { VSBuffer } from "../../../../base/common/buffer.js";
-import { raceCancellationError } from "../../../../base/common/async.js";
-import { Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
-import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxRange, SyntaxLanguage, SyntaxEdit } from "../../../../platform/syntax/common/syntaxApi.js";
-import { Position } from "../../../../editor/common/core/position.js";
-import { Range } from "../../../../editor/common/core/range.js";
-import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
+import { VSBuffer } from '../../../../base/common/buffer.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
+import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxRange, SyntaxLanguage, SyntaxEdit } from '../../../../platform/syntax/common/syntaxApi.js';
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range } from '../../../../editor/common/core/range.js';
+import { type TextSnapshot } from '../../../../editor/common/core/textChange.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest, type LanguageFoldingRange, type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest, type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest, type SyntaxProvider, type SyntaxProviderRequest, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../../../editor/common/languages.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
@@ -43,7 +43,7 @@ export class AppServerSyntaxProviders extends Disposable {
 }
 
 class AppServerSyntaxProvider extends Disposable implements SyntaxProvider, LanguageDocumentSymbolProvider, LanguageFoldingRangeProvider, LanguageSelectionRangeProvider {
-	readonly id = "ash.appServer.syntax";
+	readonly id = 'ash.appServer.syntax';
 	readonly languageIds = APP_SERVER_SYNTAX_LANGUAGE_IDS;
 	readonly diagnosticPriority = 100;
 	private readonly sessions = this._register(new DisposableMap<TextModel, ModelSyntaxSession>());
@@ -98,7 +98,7 @@ class AppServerSyntaxProvider extends Disposable implements SyntaxProvider, Lang
 		const result = await session.analyze(language, snapshot.version, text, signal);
 		if (!result || model.tokenization.syntaxTree) return undefined;
 		if (result.revision !== snapshot.version) {
-			throw new Error("App Server syntax result does not match the requested editor model revision");
+			throw new Error('App Server syntax result does not match the requested editor model revision');
 		}
 		return result;
 	}
@@ -235,15 +235,15 @@ function projectAppServerSyntaxDiagnostic(diagnostic: SyntaxDiagnostic, lines: r
 	return Object.freeze({
 		range,
 		severity: LanguageDiagnosticSeverity.Error,
-		message: diagnostic.kind === "missing" ? "Missing required syntax" : "Syntax error",
-		code: diagnostic.kind === "missing" ? "syntax-missing" : "syntax-error",
-		source: "ash-syntax",
+		message: diagnostic.kind === 'missing' ? 'Missing required syntax' : 'Syntax error',
+		code: diagnostic.kind === 'missing' ? 'syntax-missing' : 'syntax-error',
+		source: 'ash-syntax',
 	});
 }
 
 function projectAppServerSyntaxSymbol(symbol: SyntaxSymbol, lines: readonly string[], languageId?: string): LanguageDocumentSymbol {
-	if (typeof symbol.name !== "string" || symbol.name.trim().length === 0) {
-		throw new TypeError("App Server syntax symbol must have a non-empty name");
+	if (typeof symbol.name !== 'string' || symbol.name.trim().length === 0) {
+		throw new TypeError('App Server syntax symbol must have a non-empty name');
 	}
 	return Object.freeze({
 		name: symbol.name,
@@ -259,22 +259,22 @@ function projectRange(range: SyntaxRange, lines: readonly string[]): Range {
 
 function projectPosition(position: { readonly lineIndex: number; readonly columnIndex: number; }, lines: readonly string[]): Position {
 	if (!Number.isSafeInteger(position.lineIndex) || !Number.isSafeInteger(position.columnIndex) || position.lineIndex < 0 || position.columnIndex < 0 || position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
-		throw new RangeError("App Server syntax range is outside its editor snapshot");
+		throw new RangeError('App Server syntax range is outside its editor snapshot');
 	}
 	return new Position((position.lineIndex) + 1, (position.columnIndex) + 1);
 }
 
 function snapshotLines(snapshot: TextSnapshot): readonly string[] {
 	const text = snapshot.getText();
-	const lines = text.split("\n");
+	const lines = text.split('\n');
 	if (text.length !== snapshot.length || lines.length !== snapshot.lineCount) {
-		throw new Error("Editor syntax snapshot metadata is inconsistent");
+		throw new Error('Editor syntax snapshot metadata is inconsistent');
 	}
 	return Object.freeze(lines);
 }
 
-function assertMatchingRevision(result: Pick<SyntaxAnalyzeResult, "revision">, snapshot: TextSnapshot): void {
+function assertMatchingRevision(result: Pick<SyntaxAnalyzeResult, 'revision'>, snapshot: TextSnapshot): void {
 	if (result.revision !== snapshot.version) {
-		throw new Error("App Server syntax result does not match the requested editor snapshot");
+		throw new Error('App Server syntax result does not match the requested editor snapshot');
 	}
 }

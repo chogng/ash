@@ -20,7 +20,7 @@ Work in three layers - name the **feeling**, find the **principle** it breaks, t
   5. *Elevation is encoded, not eyeballed* - does roundness express the surface's role?
   6. *Sameness signals sameness* - do two like things look identical, and is any difference intentional?
   7. *Delight earns its keep* - what does this help the user do?
-- **Moves (the mechanics):** IDE default elevation tiers (Control 4 / Inner 6 / Outer 8; pills fully round), the shared spacing ramp, the type ramp (roles + `regular`/`semiBold` only, no 500), default icon sizes (16 base / 12 compact), a 1px token for standard strokes, `--ash-*` theme color, reveal-on-intent chrome, prefer a word to a mystery glyph.
+- **Moves (the mechanics):** IDE default elevation tiers (Control 4 / Inner 6 / Outer 8; pills fully round), the shared spacing ramp, the type ramp (roles + `regular`/`semiBold` only, no 500), default icon sizes (16 base / 12 compact), a 1px token for standard strokes, `--ash-*` theme color, [reveal-on-intent chrome, scoped by component](../../.agents/skills/design-philosophy/SKILL.md#reveal-on-intent), prefer a word to a mystery glyph.
 
 Reach for a **move** only *after* naming the feeling and the principle - never instead. Describe a bug by its role/tier/ramp (*"this overlay is rounded at the control tier"*), not its number (*"border-radius should be 6"*).
 

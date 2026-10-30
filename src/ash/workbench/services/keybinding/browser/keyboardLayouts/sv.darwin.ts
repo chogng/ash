@@ -50,7 +50,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Equal: ['´', '`', '´', '`', 3],
 		BracketLeft: ['å', 'Å', '˙', '˚', 0],
 		BracketRight: ['¨', '^', '~', '^', 7],
-		Backslash: ['\'', '*', '™', '’', 0],
+		Backslash: ["'", '*', '™', '’', 0],
 		Semicolon: ['ö', 'Ö', 'ø', 'Ø', 0],
 		Quote: ['ä', 'Ä', 'æ', 'Æ', 0],
 		Backquote: ['<', '>', '≤', '≥', 0],

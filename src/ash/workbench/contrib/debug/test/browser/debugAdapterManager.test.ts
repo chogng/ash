@@ -1,7 +1,7 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { createStaticDebugAdapterFactory, IAdapterManager } from "../../common/debug.js";
-import { AdapterManager } from "../../browser/debugAdapterManager.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { createStaticDebugAdapterFactory, IAdapterManager } from '../../common/debug.js';
+import { AdapterManager } from '../../browser/debugAdapterManager.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -20,25 +20,25 @@ test('AdapterManager registration shares factories within a window and isolates 
 	assert.equal(second.get('isolated'), undefined);
 });
 
-test("AdapterManager composes independent producers and removes only its owner", () => {
+test('AdapterManager composes independent producers and removes only its owner', () => {
 	using registry = new AdapterManager();
-	const declarative = registry.registerFactories([createStaticDebugAdapterFactory("node", "Node", "declarative.node", { program: "node-adapter", arguments: [] })]);
-	using hosted = registry.registerFactories([createStaticDebugAdapterFactory("python", "Python", "hosted.python", { program: "python-adapter", arguments: ["--stdio"] })]);
+	const declarative = registry.registerFactories([createStaticDebugAdapterFactory('node', 'Node', 'declarative.node', { program: 'node-adapter', arguments: [] })]);
+	using hosted = registry.registerFactories([createStaticDebugAdapterFactory('python', 'Python', 'hosted.python', { program: 'python-adapter', arguments: ['--stdio'] })]);
 
-	assert.deepEqual(registry.factories.map(factory => factory.type), ["node", "python"]);
-	assert.deepEqual(registry.get("python")?.createDebugAdapter?.(), { program: "python-adapter", arguments: ["--stdio"] });
+	assert.deepEqual(registry.factories.map(factory => factory.type), ['node', 'python']);
+	assert.deepEqual(registry.get('python')?.createDebugAdapter?.(), { program: 'python-adapter', arguments: ['--stdio'] });
 	declarative.dispose();
-	assert.deepEqual(registry.factories.map(factory => factory.type), ["python"]);
+	assert.deepEqual(registry.factories.map(factory => factory.type), ['python']);
 });
 
-test("AdapterManager rejects conflicting replacement atomically", () => {
+test('AdapterManager rejects conflicting replacement atomically', () => {
 	using registry = new AdapterManager();
-	using first = registry.registerFactories([createStaticDebugAdapterFactory("node", "Node", "first", { program: "first", arguments: [] })]);
-	using second = registry.registerFactories([createStaticDebugAdapterFactory("python", "Python", "second", { program: "second", arguments: [] })]);
+	using first = registry.registerFactories([createStaticDebugAdapterFactory('node', 'Node', 'first', { program: 'first', arguments: [] })]);
+	using second = registry.registerFactories([createStaticDebugAdapterFactory('python', 'Python', 'second', { program: 'second', arguments: [] })]);
 
-	assert.throws(() => second.replace([createStaticDebugAdapterFactory("node", "Other Node", "second", { program: "other", arguments: [] })]), /already registered/);
-	assert.equal(registry.get("node")?.sourceId, "first");
-	assert.equal(registry.get("python")?.sourceId, "second");
+	assert.throws(() => second.replace([createStaticDebugAdapterFactory('node', 'Other Node', 'second', { program: 'other', arguments: [] })]), /already registered/);
+	assert.equal(registry.get('node')?.sourceId, 'first');
+	assert.equal(registry.get('python')?.sourceId, 'second');
 });
 
 test('AdapterManager retains unchanged factories when another type activates', () => {

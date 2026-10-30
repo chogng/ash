@@ -116,16 +116,16 @@ export const syntaxWireCodec: WorkerTextModelCodec<languages.SyntaxLane, languag
 		});
 	},
 	decodePayload(lane: languages.SyntaxLane, value: unknown, snapshot: TextSnapshot) {
-		assertRecord(value, "Syntax wire request");
-		let tokenize: languages.SyntaxRequest["tokenize"];
+		assertRecord(value, 'Syntax wire request');
+		let tokenize: languages.SyntaxRequest['tokenize'];
 		if (value.tokenize !== undefined) {
-			assertRecord(value.tokenize, "Syntax wire tokenization");
-			if (!Array.isArray(value.tokenize.lines)) throw new TypeError("Syntax wire tokenization requires lines");
-			const lineNumber = decodePositiveSafeInteger(value.tokenize.lineNumber, "Syntax wire tokenization start line");
-			if (lineNumber > snapshot.lineCount) throw new RangeError("Syntax wire tokenization start line is outside the document");
-			tokenize = Object.freeze({ lineNumber, lines: Object.freeze(value.tokenize.lines.map(line => decodeString(line, "Syntax wire tokenization line"))) });
+			assertRecord(value.tokenize, 'Syntax wire tokenization');
+			if (!Array.isArray(value.tokenize.lines)) throw new TypeError('Syntax wire tokenization requires lines');
+			const lineNumber = decodePositiveSafeInteger(value.tokenize.lineNumber, 'Syntax wire tokenization start line');
+			if (lineNumber > snapshot.lineCount) throw new RangeError('Syntax wire tokenization start line is outside the document');
+			tokenize = Object.freeze({ lineNumber, lines: Object.freeze(value.tokenize.lines.map(line => decodeString(line, 'Syntax wire tokenization line'))) });
 		}
-		const request = Object.freeze({ languageId: decodeString(value.languageId, "Syntax wire language ID"), ...(tokenize === undefined ? {} : { tokenize }) });
+		const request = Object.freeze({ languageId: decodeString(value.languageId, 'Syntax wire language ID'), ...(tokenize === undefined ? {} : { tokenize }) });
 		languages.assertSyntaxRequest(request);
 		assertTokenizationLane(lane, request);
 		return request;
@@ -148,7 +148,7 @@ function encodeSyntaxWireResult(lane: languages.SyntaxLane, result: languages.Sy
 	const insertedItemCount = splices.reduce((count, splice) => count + splice.items.length, 0);
 	if (insertedItemCount >= items.length) return encodeFull(lane, items);
 	return Object.freeze({
-		kind: "delta",
+		kind: 'delta',
 		baseRequestId: base.requestId,
 		splices: Object.freeze(splices.map(splice => Object.freeze({
 			startItemIndex: splice.startItemIndex,
@@ -160,49 +160,49 @@ function encodeSyntaxWireResult(lane: languages.SyntaxLane, result: languages.Sy
 }
 
 function decodeSyntaxWireResult(lane: languages.SyntaxLane, value: unknown, snapshot: TextSnapshot, base: WorkerTextModelResult<languages.SyntaxResult> | undefined): languages.SyntaxResult {
-	assertRecord(value, "Syntax wire result");
+	assertRecord(value, 'Syntax wire result');
 	if (lane === languages.SYNTAX_TOKENIZE_LANE) {
 		if (value.tokens === null) return Object.freeze({ lane, value: null });
-		if (!Array.isArray(value.tokens)) throw new TypeError("Syntax tokenization result requires tokens or null");
+		if (!Array.isArray(value.tokens)) throw new TypeError('Syntax tokenization result requires tokens or null');
 		return Object.freeze({ lane, value: { tokens: value.tokens.map(token => syntaxDecodeItem(languages.SYNTAX_TOKEN_LANE, token) as LanguageToken) } });
 	}
-	if (value.kind === "full") {
-		if (!Array.isArray(value.items)) throw new TypeError("Full syntax wire result must contain items");
+	if (value.kind === 'full') {
+		if (!Array.isArray(value.items)) throw new TypeError('Full syntax wire result must contain items');
 		return resultFromItems(lane, value.items.map(item => syntaxDecodeItem(lane, item)), snapshot);
 	}
-	if (value.kind !== "delta") {
+	if (value.kind !== 'delta') {
 		throw new TypeError(`Unknown syntax wire result kind '${String(value.kind)}'`);
 	}
 	if (!Array.isArray(value.splices)) {
-		throw new TypeError("Syntax delta must contain splices");
+		throw new TypeError('Syntax delta must contain splices');
 	}
-	const baseRequestId = decodePositiveSafeInteger(value.baseRequestId, "Syntax delta base request ID");
+	const baseRequestId = decodePositiveSafeInteger(value.baseRequestId, 'Syntax delta base request ID');
 	if (!base || base.requestId !== baseRequestId) {
-		throw new Error("Syntax delta base result is unavailable");
+		throw new Error('Syntax delta base result is unavailable');
 	}
 	const baseItems = readBaseItems(lane, base);
 	if (!baseItems) {
-		throw new Error("Syntax delta base lane does not match");
+		throw new Error('Syntax delta base lane does not match');
 	}
 	const items: SyntaxItem[] = [];
 	const tokenSplices = [];
 	let baseItemIndex = 0;
 	let lineDelta = 0;
 	for (const encodedSplice of value.splices) {
-		assertRecord(encodedSplice, "Syntax delta splice");
+		assertRecord(encodedSplice, 'Syntax delta splice');
 		if (!Array.isArray(encodedSplice.items)) {
-			throw new TypeError("Syntax delta splice must contain items");
+			throw new TypeError('Syntax delta splice must contain items');
 		}
-		const startItemIndex = decodeNonNegativeSafeInteger(encodedSplice.startItemIndex, "Syntax delta start item index");
-		const deleteItemCount = decodeNonNegativeSafeInteger(encodedSplice.deleteItemCount, "Syntax delta delete item count");
+		const startItemIndex = decodeNonNegativeSafeInteger(encodedSplice.startItemIndex, 'Syntax delta start item index');
+		const deleteItemCount = decodeNonNegativeSafeInteger(encodedSplice.deleteItemCount, 'Syntax delta delete item count');
 		if (startItemIndex < baseItemIndex || startItemIndex > baseItems.length || deleteItemCount > baseItems.length - startItemIndex) {
-			throw new RangeError("Syntax delta splices must be ordered, non-overlapping, and inside their base result");
+			throw new RangeError('Syntax delta splices must be ordered, non-overlapping, and inside their base result');
 		}
 		for (const item of baseItems.slice(baseItemIndex, startItemIndex)) items.push(shiftItem(lane, item, lineDelta));
 		const inserted = encodedSplice.items.map(item => syntaxDecodeItem(lane, item));
 		const resultStartItemIndex = items.length;
 		pushMany(items, inserted);
-		const nextLineDelta = decodeSafeInteger(encodedSplice.lineDelta, "Syntax delta line shift");
+		const nextLineDelta = decodeSafeInteger(encodedSplice.lineDelta, 'Syntax delta line shift');
 		tokenSplices.push(Object.freeze({
 			baseStartItemIndex: startItemIndex,
 			baseDeleteItemCount: deleteItemCount,
@@ -215,7 +215,7 @@ function decodeSyntaxWireResult(lane: languages.SyntaxLane, value: unknown, snap
 		lineDelta = nextLineDelta;
 	}
 	if (lineDelta !== snapshot.lineCount - base.snapshot.lineCount) {
-		throw new Error("Syntax delta final line shift does not match its snapshots");
+		throw new Error('Syntax delta final line shift does not match its snapshots');
 	}
 	for (const item of baseItems.slice(baseItemIndex)) items.push(shiftItem(lane, item, lineDelta));
 	const result = resultFromItems(lane, items, snapshot);
@@ -230,7 +230,7 @@ function decodeSyntaxWireResult(lane: languages.SyntaxLane, value: unknown, snap
 
 function encodeFull(lane: languages.SyntaxLane, items: readonly SyntaxItem[]): unknown {
 	return Object.freeze({
-		kind: "full",
+		kind: 'full',
 		items: Object.freeze(items.map(item => syntaxEncodeItem(lane, item))),
 	});
 }
@@ -258,7 +258,7 @@ function syntaxEncodeItem(lane: languages.SyntaxLane, item: SyntaxItem): unknown
 	if (lane === languages.SYNTAX_TOKEN_LANE) {
 		const token = item as LanguageToken;
 		return Object.freeze({
-			range: syntaxEncodeRange(token.range, "Language token wire range"),
+			range: syntaxEncodeRange(token.range, 'Language token wire range'),
 			tokenType: token.tokenType,
 			modifiers: Object.freeze([...token.modifiers]),
 			...(token.languageId === undefined ? {} : { languageId: token.languageId }),
@@ -268,7 +268,7 @@ function syntaxEncodeItem(lane: languages.SyntaxLane, item: SyntaxItem): unknown
 	}
 	const diagnostic = item as languages.LanguageDiagnostic;
 	return Object.freeze({
-		range: syntaxEncodeRange(diagnostic.range, "Language diagnostic wire range"),
+		range: syntaxEncodeRange(diagnostic.range, 'Language diagnostic wire range'),
 		severity: diagnostic.severity,
 		message: diagnostic.message,
 		...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
@@ -277,42 +277,42 @@ function syntaxEncodeItem(lane: languages.SyntaxLane, item: SyntaxItem): unknown
 }
 
 function syntaxDecodeItem(lane: languages.SyntaxLane, value: unknown): SyntaxItem {
-	assertRecord(value, lane === languages.SYNTAX_TOKEN_LANE ? "Language token wire token" : "Language diagnostic wire diagnostic");
+	assertRecord(value, lane === languages.SYNTAX_TOKEN_LANE ? 'Language token wire token' : 'Language diagnostic wire diagnostic');
 	if (lane === languages.SYNTAX_TOKEN_LANE) {
 		if (!Array.isArray(value.modifiers)) {
-			throw new TypeError("Language token wire modifiers must be an array");
+			throw new TypeError('Language token wire modifiers must be an array');
 		}
 		return {
-			range: syntaxDecodeRange(value.range, "Language token wire range"),
-			tokenType: decodeString(value.tokenType, "Language token wire type"),
-			modifiers: value.modifiers.map(modifier => decodeString(modifier, "Language token wire modifier")),
-			...(value.languageId === undefined ? {} : { languageId: decodeString(value.languageId, "Language token wire embedded language ID") }),
+			range: syntaxDecodeRange(value.range, 'Language token wire range'),
+			tokenType: decodeString(value.tokenType, 'Language token wire type'),
+			modifiers: value.modifiers.map(modifier => decodeString(modifier, 'Language token wire modifier')),
+			...(value.languageId === undefined ? {} : { languageId: decodeString(value.languageId, 'Language token wire embedded language ID') }),
 			...(value.balancedBrackets === undefined ? {} : { balancedBrackets: decodeExcludedBrackets(value.balancedBrackets) }),
 			...(value.presentation === undefined ? {} : { presentation: decodePresentation(value.presentation) }),
 		};
 	}
 	const code = decodeDiagnosticCode(value.code);
-	const source = value.source === undefined ? undefined : decodeString(value.source, "Language diagnostic wire source");
+	const source = value.source === undefined ? undefined : decodeString(value.source, 'Language diagnostic wire source');
 	return {
-		range: syntaxDecodeRange(value.range, "Language diagnostic wire range"),
-		severity: decodeString(value.severity, "Language diagnostic wire severity") as languages.LanguageDiagnostic["severity"],
-		message: decodeString(value.message, "Language diagnostic wire message"),
+		range: syntaxDecodeRange(value.range, 'Language diagnostic wire range'),
+		severity: decodeString(value.severity, 'Language diagnostic wire severity') as languages.LanguageDiagnostic['severity'],
+		message: decodeString(value.message, 'Language diagnostic wire message'),
 		...(code === undefined ? {} : { code }),
 		...(source === undefined ? {} : { source }),
 	};
 }
 
 function decodeExcludedBrackets(value: unknown): false {
-	if (value !== false) throw new TypeError("Language token wire balanced-bracket metadata must be false");
+	if (value !== false) throw new TypeError('Language token wire balanced-bracket metadata must be false');
 	return false;
 }
 
-function decodePresentation(value: unknown): NonNullable<LanguageToken["presentation"]> {
-	assertRecord(value, "Language token wire presentation");
-	const foreground = value.foreground === undefined ? undefined : decodeString(value.foreground, "Language token wire foreground");
-	const background = value.background === undefined ? undefined : decodeString(value.background, "Language token wire background");
-	if (value.fontStyle !== undefined && !Array.isArray(value.fontStyle)) throw new TypeError("Language token wire font style must be an array");
-	const fontStyle = value.fontStyle === undefined ? undefined : value.fontStyle.map(style => decodeString(style, "Language token wire font style")) as NonNullable<LanguageToken["presentation"]>["fontStyle"];
+function decodePresentation(value: unknown): NonNullable<LanguageToken['presentation']> {
+	assertRecord(value, 'Language token wire presentation');
+	const foreground = value.foreground === undefined ? undefined : decodeString(value.foreground, 'Language token wire foreground');
+	const background = value.background === undefined ? undefined : decodeString(value.background, 'Language token wire background');
+	if (value.fontStyle !== undefined && !Array.isArray(value.fontStyle)) throw new TypeError('Language token wire font style must be an array');
+	const fontStyle = value.fontStyle === undefined ? undefined : value.fontStyle.map(style => decodeString(style, 'Language token wire font style')) as NonNullable<LanguageToken['presentation']>['fontStyle'];
 	return { ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) };
 }
 
@@ -345,14 +345,14 @@ function syntaxDecodePosition(value: unknown, owner: string): Position {
 }
 
 function decodeDiagnosticCode(value: unknown): languages.LanguageDiagnosticCode | undefined {
-	if (value === undefined || typeof value === "string") return value;
-	if (typeof value === "number" && Number.isFinite(value)) return value;
-	throw new TypeError("Language diagnostic wire code must be a finite number or string");
+	if (value === undefined || typeof value === 'string') return value;
+	if (typeof value === 'number' && Number.isFinite(value)) return value;
+	throw new TypeError('Language diagnostic wire code must be a finite number or string');
 }
 
 function assertTokenizationLane(lane: languages.SyntaxLane, request: languages.SyntaxRequest): void {
 	if ((lane === languages.SYNTAX_TOKENIZE_LANE) !== (request.tokenize !== undefined)) {
-		throw new TypeError("Hypothetical tokenization parameters must match their request lane");
+		throw new TypeError('Hypothetical tokenization parameters must match their request lane');
 	}
 }
 
@@ -391,8 +391,8 @@ interface SyntaxLineRun extends SyntaxLinePair {
 }
 
 function createSyntaxItemSplices(lane: languages.SyntaxLane, previous: readonly SyntaxItem[], current: readonly SyntaxItem[], previousSnapshot: TextSnapshot, currentSnapshot: TextSnapshot): readonly SyntaxItemSplice[] {
-	const previousLines = previousSnapshot.getText().split("\n");
-	const currentLines = currentSnapshot.getText().split("\n");
+	const previousLines = previousSnapshot.getText().split('\n');
+	const currentLines = currentSnapshot.getText().split('\n');
 	const previousBounds = createLineItemBounds(previous, previousLines.length);
 	const currentBounds = createLineItemBounds(current, currentLines.length);
 	if (!previousBounds || !currentBounds) {

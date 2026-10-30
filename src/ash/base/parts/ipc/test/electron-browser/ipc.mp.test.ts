@@ -28,7 +28,7 @@ suite('IPC, MessagePorts', () => {
 				return { dispose: () => { registrations.delete(key); } };
 			}
 		},
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 	suiteSetup(async () => {

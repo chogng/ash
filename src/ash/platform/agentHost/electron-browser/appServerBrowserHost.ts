@@ -10,8 +10,10 @@ import type { IMainProcessService } from '../../ipc/common/mainProcessService.js
 import type { Event } from '../../../base/common/event.js';
 import type { IConfigurationService } from '../../configuration/common/configuration.js';
 import { BrowserCDPSettingId, BrowserChatToolsSettingId } from '../../browserView/common/browserView.js';
+import { CanvasesEnabledSettingId, type IAgentCanvasHost } from '../common/agentService.js';
+import { ChatAIDisabledSettingId } from '../../chat/common/chatSettings.js';
 
-export function registerAppServerBrowserHost(client: AppServerProtocolClient, playwrightService: IPlaywrightService, mainProcessService: IMainProcessService, configuration: IConfigurationService): IDisposable {
+export function registerAppServerBrowserHost(client: AppServerProtocolClient, playwrightService: IPlaywrightService, mainProcessService: IMainProcessService, configuration: IConfigurationService, canvases?: IAgentCanvasHost): IDisposable {
 	const handlers = new DisposableStore();
 	mainProcessService.registerChannel('browserSharing', {
 		call: async <T>(_context: string, command: string, arg: unknown): Promise<T> => {
@@ -47,6 +49,9 @@ export function registerAppServerBrowserHost(client: AppServerProtocolClient, pl
 		await preferenceUpdate;
 		if (handlers.isDisposed || configuration.getValue<boolean>(BrowserChatToolsSettingId) === false) { throw new Error('BrowserCapabilityUnavailable'); }
 	};
+	const canvasReady = (): void => {
+		if (configuration.getValue<boolean>(CanvasesEnabledSettingId) === false || configuration.getValue<boolean>(ChatAIDisabledSettingId) === true) { throw new Error('CanvasCapabilityUnavailable'); }
+	};
 	handlers.add(configuration.onDidChangeConfiguration(event => {
 		if (event.affectsConfiguration(BrowserChatToolsSettingId) || event.affectsConfiguration(BrowserCDPSettingId)) { applyPreference(); }
 	}));
@@ -81,7 +86,31 @@ export function registerAppServerBrowserHost(client: AppServerProtocolClient, pl
 	}));
 	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], async (params, context) => {
 		await ready();
-		return decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params })));
+		if (!params.canvas) { return decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params }))); }
+		canvasReady();
+		const request = { sessionId: params.canvas.sessionId, threadId: params.threadId, instanceId: params.canvas.instanceId };
+		const state = { id: generateUuid(), succeeded: false };
+		canvases?.acceptCanvasOpen(request, state);
+		let resolved = params;
+		let presentation: { readonly url: string; readonly title?: string; readonly status?: string; } | undefined;
+		if (params.canvas.definition) {
+			if (!canvases) { throw new Error('CanvasCapabilityUnavailable'); }
+			const source = await canvases.openCanvasSource({ ...request, definition: params.canvas.definition }, context.signal);
+			presentation = source;
+			const url = new URL(source.url);
+			if (url.username || url.password || source.url.length > 8192 || url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) { throw new Error('CanvasSourceDenied'); }
+			canvasReady();
+			resolved = { ...params, url: source.url, canvas: { ...params.canvas, title: source.title ?? params.canvas.title } };
+		}
+		context.signal.throwIfAborted();
+		const result = decodeAppServerServerRequestResult('browser/create', await call(context.signal, playwrightService, id => channel.call('create', { id, params: resolved })));
+		canvases?.acceptCanvasOpen(request, { ...state, succeeded: true }, presentation);
+		return result;
+	}));
+	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/canvases/list'], async (params, context) => {
+		await ready(); canvasReady();
+		if (!canvases) { throw new Error('CanvasCapabilityUnavailable'); }
+		return decodeAppServerServerRequestResult('browser/canvases/list', { canvases: await canvases.listCanvases(params.sessionId, params.threadId, context.signal) ?? null });
 	}));
 	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/list'], async (params, context) => {
 		await ready();
@@ -102,6 +131,7 @@ export function registerAppServerBrowserHost(client: AppServerProtocolClient, pl
 	}));
 	handlers.add(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/close'], async (params, context) => {
 		await ready();
+		await canvases?.closeCanvasSource(params.threadId, params.targetId, context.signal);
 		return decodeAppServerServerRequestResult('browser/close', await call(context.signal, playwrightService, id => channel.call('close', { id, params })));
 	}));
 	applyPreference();

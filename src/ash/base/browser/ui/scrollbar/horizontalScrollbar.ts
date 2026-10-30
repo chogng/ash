@@ -1,13 +1,13 @@
 import {
 	AbstractScrollbar,
 	type AbstractScrollbarOptions,
-} from "./abstractScrollbar.js";
-import type { ScrollbarAxisMetrics } from "./scrollbarState.js";
+} from './abstractScrollbar.js';
+import type { ScrollbarAxisMetrics } from './scrollbarState.js';
 
 /** Horizontal track and thumb behavior owned by a scrollable element. */
 export class HorizontalScrollbar extends AbstractScrollbar {
 	constructor(container: HTMLElement, options: AbstractScrollbarOptions) {
-		super(container, "horizontal", options);
+		super(container, 'horizontal', options);
 	}
 
 	protected override applyThumbMetrics(
@@ -18,13 +18,13 @@ export class HorizontalScrollbar extends AbstractScrollbar {
 	}
 
 	protected override pointerCoordinate(
-		event: Pick<PointerEvent, "clientX">,
+		event: Pick<PointerEvent, 'clientX'>,
 	): number {
 		return event.clientX;
 	}
 
 	protected override trackPointerCoordinate(
-		event: Pick<PointerEvent, "clientX">,
+		event: Pick<PointerEvent, 'clientX'>,
 		bounds: DOMRect,
 	): number {
 		return event.clientX - bounds.left;
@@ -34,8 +34,8 @@ export class HorizontalScrollbar extends AbstractScrollbar {
 		key: string,
 		step: number,
 	): number | undefined {
-		if (key === "ArrowLeft") return -step;
-		if (key === "ArrowRight") return step;
+		if (key === 'ArrowLeft') return -step;
+		if (key === 'ArrowRight') return step;
 		return undefined;
 	}
 }

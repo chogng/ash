@@ -312,15 +312,27 @@ impl LoginService {
     }
 
     pub fn complete(&self, completion: CompleteLogin) -> Result<(), LoginError> {
+        self.complete_with(completion.login_id, || completion.outcome)
+    }
+
+    /// Commits a provider's local credentials only while its login is active.
+    /// The closure must not perform network I/O. Cancellation and connection
+    /// teardown cannot retire the login between this check and its local commit.
+    pub fn complete_with(
+        &self,
+        login_id: LoginId,
+        commit: impl FnOnce() -> LoginCompletionOutcome,
+    ) -> Result<(), LoginError> {
         let event = {
             let mut state = self.state.lock().map_err(lock_error)?;
-            let Some(provider) = state.active_logins.remove(&completion.login_id) else {
+            let Some(provider) = state.active_logins.remove(&login_id) else {
                 return Err(LoginError::new(
                     LoginErrorKind::NotFound,
                     "login attempt is not active",
                 ));
             };
-            if let LoginCompletionOutcome::Succeeded { account } = &completion.outcome {
+            let outcome = commit();
+            if let LoginCompletionOutcome::Succeeded { account } = &outcome {
                 validate_account_provider(&provider, account)?;
                 state.advance_provider(&provider);
                 upsert_account(
@@ -332,8 +344,8 @@ impl LoginService {
             }
             state.initialized_providers.insert(provider);
             LoginCompletion {
-                login_id: completion.login_id,
-                outcome: completion.outcome,
+                login_id,
+                outcome,
                 account_state: state.account.clone(),
             }
         };
@@ -456,20 +468,21 @@ impl LoginService {
             .accounts
             .into_iter()
             .filter(|account| account.account.provider == provider)
+            .map(|account| account.account)
             .collect();
-        if accounts.is_empty() {
-            return Ok(LogoutOutcome::AlreadyLoggedOut);
-        }
-        for account in accounts {
-            driver.logout(&account.account)?;
-        }
+        driver.logout_provider(&accounts)?;
+        let outcome = if accounts.is_empty() {
+            LogoutOutcome::AlreadyLoggedOut
+        } else {
+            LogoutOutcome::LoggedOut
+        };
         let updated = {
             let mut state = self.state.lock().map_err(lock_error)?;
             state.advance_provider(provider);
             let before = state.account.accounts.len();
             replace_provider_accounts(&mut state.account.accounts, provider, Vec::new());
             if state.account.accounts.len() == before {
-                return Ok(LogoutOutcome::LoggedOut);
+                return Ok(outcome);
             }
             state.account.revision = state.account.revision.saturating_add(1);
             state.account.clone()
@@ -477,7 +490,7 @@ impl LoginService {
         if let Some(events) = self.events()? {
             events.account_updated(updated);
         }
-        Ok(LogoutOutcome::LoggedOut)
+        Ok(outcome)
     }
 
     /// Removes one exact account without disturbing other accounts owned by its provider.

@@ -69,5 +69,3 @@ export class MinimapTokensColorTracker extends Disposable {
 		return this._backgroundIsLight;
 	}
 }
-
-

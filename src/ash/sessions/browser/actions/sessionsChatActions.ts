@@ -1,15 +1,15 @@
 import { ISessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 import { sessionManagementLabel } from '../sessionManagementLabels.js';
 import { localize2, localize } from '../../../nls.js';
-import { DisposableStore } from "../../../base/common/lifecycle.js";
-import { Action2, registerAction2 } from "../../../platform/actions/common/actions.js";
-import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
-import { IQuickInputService, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
-import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
+import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { Action2, registerAction2 } from '../../../platform/actions/common/actions.js';
+import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
+import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
-import type { IUntitledChatSession, SessionId, ThreadId } from "../../services/sessions/common/session.js";
-import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";
-import { ISessionsService } from "../../services/sessions/browser/sessionsService.js";
+import type { IUntitledChatSession, SessionId, ThreadId } from '../../services/sessions/common/session.js';
+import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { approvalModeDefinitions } from '../../../platform/agentHost/common/approvalModes.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ForkConversationAction } from '../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
@@ -122,7 +122,7 @@ function selectReviewItem(input: IQuickInputService, title: string, items: reado
 // ChatWidget shares these command IDs with the regular Workbench; this window owns their Sessions behavior.
 registerAction2(class NewSessionsChatAction extends Action2 {
 	constructor() {
-		super({ id: NEW_CHAT_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'chat.sessions.new' }, "New Session") });
+		super({ id: NEW_CHAT_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session') });
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<IUntitledChatSession | undefined> {
@@ -174,7 +174,7 @@ interface SessionsHistoryQuickPickItem extends IQuickPickItem {
 
 registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 	constructor() {
-		super({ id: SHOW_CHAT_HISTORY_COMMAND_ID, f1: true, title: localize2({ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' }, "Show Session History") });
+		super({ id: SHOW_CHAT_HISTORY_COMMAND_ID, f1: true, title: localize2({ bundle: 'ash.sessions', key: 'command.ShowSessionsChatHistoryAction' }, 'Show Session History') });
 	}
 
 	override run(accessor: ServicesAccessor): void {
@@ -183,14 +183,14 @@ registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
 		const quickPick = accessor.get(IQuickInputService).createQuickPick<SessionsHistoryQuickPickItem>();
 		const disposables = new DisposableStore();
 		disposables.add(quickPick);
-		quickPick.placeholder = "Select a session";
+		quickPick.placeholder = 'Select a session';
 		quickPick.items = sessions.sessions.flatMap(session => {
-			if (session.status !== "active") return [];
-			const threads = session.chats.filter(thread => thread.status === "active");
+			if (session.status !== 'active') return [];
+			const threads = session.chats.filter(thread => thread.status === 'active');
 			return threads.map((thread, index) => ({
 				sessionId: session.sessionId,
 				threadId: thread.threadId,
-				label: session.title.trim() || "Session",
+				label: session.title.trim() || 'Session',
 				description: [session.application?.label, threads.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined, thread.origin.type !== 'root' && thread.title?.trim() !== session.title.trim() ? thread.title?.trim() : undefined, sessionManagementLabel(thread.management)].filter(Boolean).join(' · ') || undefined,
 				detail: thread.management?.activity?.text ?? thread.management?.summary ?? undefined,
 			}));

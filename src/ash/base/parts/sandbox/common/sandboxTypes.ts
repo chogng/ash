@@ -27,4 +27,5 @@ export interface ISandboxIpcMessagePort {
 export interface ISandboxProcess {
 	readonly platform: string;
 	readonly arch: string;
+	readonly isBuilt: boolean;
 }

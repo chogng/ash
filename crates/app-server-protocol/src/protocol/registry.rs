@@ -379,6 +379,16 @@ use crate::protocol::automation::AutomationWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserBinaryPayload;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasDefinition;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasDefinitionId;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasListParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasListResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::browser::BrowserCanvasPresentation;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserCdpOperationDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::browser::BrowserCloseParams;
@@ -1501,6 +1511,10 @@ use crate::protocol::github::GitHubPullRequestUpdateParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRemoteRepository;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryBlobParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryBlobResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositoryBranchesParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositoryBranchesResult;
@@ -1512,6 +1526,10 @@ use crate::protocol::github::GitHubRepositoryParams;
 use crate::protocol::github::GitHubRepositorySearchParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRepositorySearchResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryTreeParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubRepositoryTreeResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubRequestedReviewers;
 #[cfg(any(test, feature = "export"))]
@@ -2012,7 +2030,13 @@ use crate::protocol::model::ContextToolDefinition;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogEntry;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelCatalogIssue;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogScope;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelCatalogSource;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelCatalogStatus;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelListParams;
 #[cfg(any(test, feature = "export"))]
@@ -2182,6 +2206,8 @@ use crate::protocol::secrets::SecretStorageStatus;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::secrets::SecretStorageStatusResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::secrets::SecretStorageType;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::AdvisorConfigureResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsParams;
@@ -2342,6 +2368,8 @@ use crate::protocol::syntax::SyntaxTokenDto;
 use crate::protocol::syntax::SyntaxTokenKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::syntax::SyntaxUpdateParams;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelCatalogFreshness;
 
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::CodeSnapshot;
@@ -2823,6 +2851,8 @@ use ash_protocol::ModelInvocationRecord;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelInvocationTiming;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelMetadataQuality;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelMoneyAmount;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelOutputTransport;
@@ -2844,6 +2874,8 @@ use ash_protocol::ModelServiceTier;
 use ash_protocol::ModelSettings;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelSpeed;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelTokenPricing;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelToolOutputLimit;
 #[cfg(any(test, feature = "export"))]
@@ -5271,6 +5303,8 @@ client_methods! {
     GitHubPullRequestFiles => "github/pullRequest/files" { params: GitHubPageParams, response: GitHubPullRequestFilesResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubPullRequestReviews => "github/pullRequest/reviews" { params: GitHubPageParams, response: GitHubPullRequestReviewsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubPullRequestDiff => "github/pullRequest/diff" { params: GitHubReviewDiffParams, response: GitHubReviewDiffResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubRepositoryTree => "github/repository/tree" { params: GitHubRepositoryTreeParams, response: GitHubRepositoryTreeResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubRepositoryBlob => "github/repository/blob" { params: GitHubRepositoryBlobParams, response: GitHubRepositoryBlobResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubFileRead => "github/file/read" { params: GitHubFileReadParams, response: GitHubFileContent, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubReviewThreads => "github/pullRequest/threads" { params: GitHubReviewThreadsParams, response: GitHubReviewThreadsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubReviewThreadRead => "github/pullRequest/thread/read" { params: GitHubReviewThreadReadParams, response: GitHubReviewCommentsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
@@ -5893,6 +5927,7 @@ host_methods! {
     TextDocumentApply => "textDocument/apply" { params: TextDocumentApplyParams, response: TextDocumentApplyResult, },
     TextDocumentRelease => "textDocument/release" { params: TextDocumentReleaseParams, response: (), },
     BrowserList => "browser/list" { params: BrowserListParams, response: BrowserListResult, },
+    BrowserCanvasList => "browser/canvases/list" { params: BrowserCanvasListParams, response: BrowserCanvasListResult, },
     BrowserCreate => "browser/create" {
         params: BrowserCreateParams,
         response: BrowserCreateResult,
@@ -6172,6 +6207,12 @@ typescript_bindings! {
     crate::protocol::github::GitHubReviewDiffParams,
     crate::protocol::github::GitHubReviewDiffResult,
     crate::protocol::github::GitHubFileReadParams,
+    crate::protocol::github::GitHubRepositoryTreeParams,
+    crate::protocol::github::GitHubRepositoryTreeResult,
+    crate::protocol::github::GitHubRepositoryTreeEntry,
+    crate::protocol::github::GitHubRepositoryEntryKind,
+    crate::protocol::github::GitHubRepositoryBlobParams,
+    crate::protocol::github::GitHubRepositoryBlobResult,
     crate::protocol::github::GitHubFileContent,
     crate::protocol::github::GitHubReviewThreadsParams,
     crate::protocol::github::GitHubReviewThreadReadParams,
@@ -6217,6 +6258,9 @@ typescript_bindings! {
     crate::protocol::github::GitHubShareLinkParams,
     crate::protocol::github::GitHubShareLinkResult,
     crate::protocol::github::GitHubManagedSettingsParams,
+    crate::protocol::github::GitHubManagedSettingsReadMode,
+    crate::protocol::github::GitHubManagedSettingsFailure,
+    crate::protocol::github::GitHubManagedSettingsRefresh,
     crate::protocol::github::GitHubManagedSettingsResult,
     crate::protocol::github::GitHubPullRequestReference,
     crate::protocol::github::GitHubSessionPullRequestsParams,
@@ -6463,6 +6507,11 @@ typescript_bindings! {
     BrowserListResult,
     BrowserPageSummary,
     BrowserCreateParams,
+    BrowserCanvasPresentation,
+    BrowserCanvasDefinition,
+    BrowserCanvasDefinitionId,
+    BrowserCanvasListParams,
+    BrowserCanvasListResult,
     BrowserNetworkAuthorizeParams,
     BrowserNetworkAuthorizeResult,
     BrowserSharingSetParams,
@@ -6962,6 +7011,8 @@ typescript_bindings! {
     ModelAcceleration,
     ModelAccelerationOption,
     ModelRetirement,
+    ModelMetadataQuality,
+    ModelTokenPricing,
     ModelToolOutputLimit,
     ReasoningEffort,
     ModelReasoningEffortOption,
@@ -6969,6 +7020,10 @@ typescript_bindings! {
     ReasoningReplayContext,
     Personality,
     ModelCatalogEntry,
+    ModelCatalogSource,
+    ModelCatalogStatus,
+    ModelCatalogIssue,
+    ModelCatalogFreshness,
     ModelListParams,
     ModelCatalogScope,
     ModelListResult,
@@ -6990,6 +7045,7 @@ typescript_bindings! {
     ProviderListResult,
     SecretStorageStatus,
     SecretStorageStatusResult,
+    SecretStorageType,
     SecretStorageMode,
     SecretStorageModeSetParams,
     StableTurnErrorCode,

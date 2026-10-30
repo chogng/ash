@@ -79,7 +79,7 @@ suite('Local Agent Host connection service', () => {
 			},
 		},
 		ipcMessagePort: { acquire: channel => { portChannels.push(channel); return { dispose() { } }; } },
-		process: { platform: process.platform, arch: process.arch },
+		process: { platform: process.platform, arch: process.arch, isBuilt: false },
 		webUtils: { getPathForFile: () => '' },
 	};
 

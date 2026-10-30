@@ -1,7 +1,7 @@
-import type { Event } from "../../../common/event.js";
-import { Disposable } from "../../../common/lifecycle.js";
-import { ObjectTreeModel, type ObjectTreeDefaultCollapseState, type ObjectTreeElement, type ObjectTreeIdentityProvider, type ObjectTreeModelChangeEvent, type ObjectTreeModelCollapseStateChangeEvent, type ObjectTreeNode } from "./objectTreeModel.js";
-import type { TreeFilter, TreeSorter } from "./tree.js";
+import type { Event } from '../../../common/event.js';
+import { Disposable } from '../../../common/lifecycle.js';
+import { ObjectTreeModel, type ObjectTreeDefaultCollapseState, type ObjectTreeElement, type ObjectTreeIdentityProvider, type ObjectTreeModelChangeEvent, type ObjectTreeModelCollapseStateChangeEvent, type ObjectTreeNode } from './objectTreeModel.js';
+import type { TreeFilter, TreeSorter } from './tree.js';
 
 export interface CompressibleTreeElement<T> {
 	readonly element: T;
@@ -167,11 +167,11 @@ function noCompressTreeElement<T>(input: CompressibleTreeElement<T>): ObjectTree
 }
 
 function compressedId<T>(node: CompressedTreeNode<T>, identityProvider: ObjectTreeIdentityProvider<T>): string {
-	return node.elements.map((element) => identityProvider.getId(element)).join("\0");
+	return node.elements.map((element) => identityProvider.getId(element)).join('\0');
 }
 
 function last<T>(elements: readonly T[]): T {
 	const element = elements[elements.length - 1];
-	if (element === undefined) throw new Error("Compressed tree nodes must contain at least one element");
+	if (element === undefined) throw new Error('Compressed tree nodes must contain at least one element');
 	return element;
 }

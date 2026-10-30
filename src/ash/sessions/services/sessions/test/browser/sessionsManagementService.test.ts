@@ -1,19 +1,19 @@
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { isCancellationError } from "../../../../../base/common/errors.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto } from "../../../../../../../.build/protocol/typescript/index.js";
-import { IAppServerApi, type AppServerConnectionState, IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
+import type { AgentTreeNodeProjection, ModelUsageSummary, ServerNotification, Session as SessionDto } from '../../../../../../../.build/protocol/typescript/index.js';
+import { IAppServerApi, type AppServerConnectionState, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { IAgentSessionService, IAgentTurnService } from "../../../../../platform/agentHost/common/agentService.js";
-import { type ThreadSubscription } from "../../../../../platform/agentHost/common/agent.js";
-import { IAgentModelsService } from "../../../../../platform/agentHost/common/agentModels.js";
+import { IAgentSessionService, IAgentTurnService } from '../../../../../platform/agentHost/common/agentService.js';
+import { type ThreadSubscription } from '../../../../../platform/agentHost/common/agent.js';
+import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
 import { TestSessionsManagementService as SessionsManagementService } from './testSessionsManagementService.js';
-import { AppServerSessionsProvider } from "../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
-import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWorkspaceSelection } from "../../common/session.js";
+import { AppServerSessionsProvider } from '../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js';
+import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWorkspaceSelection } from '../../common/session.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -488,22 +488,22 @@ test('container drafts preserve their Provider target through first send', async
 	assert.equal(active.session.workspace?.root, target.root);
 });
 
-test("management initializes the catalog from provider-owned Session mapping", async () => {
-	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+test('management initializes the catalog from provider-owned Session mapping', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using service = createManagement(fake);
 
 	await service.initialize();
 
 	assert.equal(service.sessions.length, 2);
-	assert.equal(service.active?.session.sessionId, "session-1");
-	assert.equal(service.active?.threadId, "thread-1");
-	assert.equal(service.sessions[0]?.chats[0]?.origin.type, "root");
+	assert.equal(service.active?.session.sessionId, 'session-1');
+	assert.equal(service.active?.threadId, 'thread-1');
+	assert.equal(service.sessions[0]?.chats[0]?.origin.type, 'root');
 	assert.equal(fake.subscribeCount, 1);
 	assert.equal(fake.catalogSubscriptionCount, 1);
 	assert.equal(service.sessions[1]?.agentTree, undefined);
 });
 
-test("an untitled Session keeps its selected directory when the Agents window changes workspace", async () => {
+test('an untitled Session keeps its selected directory when the Agents window changes workspace', async () => {
 	let selected = { type: 'local' as const, root: '/work/first' };
 	const fake = sessionHost([], undefined, () => selected);
 	const created: unknown[] = [];
@@ -538,7 +538,7 @@ test('restoring an untitled identity keeps its workspace, model and Agent withou
 	assert.deepEqual({ active: service.activeUntitledSession, sessions: service.sessions, backend: fake.sessions }, { active: draft, sessions: [], backend: [] });
 });
 
-test("a multi-root Workspace sends the selected folder as the execution target", async () => {
+test('a multi-root Workspace sends the selected folder as the execution target', async () => {
 	const folders = [
 		{ label: 'first', target: { type: 'local' as const, root: '/work/first' } },
 		{ label: 'second', target: { type: 'ssh' as const, host: 'build', root: '/work/second' } },
@@ -562,7 +562,7 @@ test("a multi-root Workspace sends the selected folder as the execution target",
 	assert.deepEqual(active.session.workspace, { authorityId: 'ssh+build', root: '/work/second' });
 });
 
-test("closing the multi-root folder picker leaves the draft ready", async () => {
+test('closing the multi-root folder picker leaves the draft ready', async () => {
 	const fake = sessionHost([], undefined, () => ({ type: 'multiple', folders: [{ label: 'first', target: { type: 'local', root: '/work/first' } }] }));
 	let created = false;
 	fake.host.session.create = async () => { created = true; throw new Error('unexpected'); };
@@ -573,8 +573,8 @@ test("closing the multi-root folder picker leaves the draft ready", async () => 
 	assert.equal(service.state, 'ready');
 });
 
-test("Session list becomes ready while the opened conversation is still loading", async () => {
-	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+test('Session list becomes ready while the opened conversation is still loading', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	let release!: () => void;
 	const held = new Promise<void>(resolve => { release = resolve; });
 	const subscribe = fake.host.session.subscribe.bind(fake.host.session);
@@ -585,7 +585,7 @@ test("Session list becomes ready while the opened conversation is still loading"
 	using service = createManagement(fake);
 
 	await service.initialize();
-	assert.equal(service.state, "ready");
+	assert.equal(service.state, 'ready');
 	assert.equal(service.sessions.length, 2);
 	assert.equal(fake.subscribeCount, 0);
 
@@ -593,112 +593,112 @@ test("Session list becomes ready while the opened conversation is still loading"
 	await waitFor(() => service.active?.session.agentTree !== undefined);
 });
 
-test("opening a background-created conversation reads and subscribes it without reloading the window", async () => {
+test('opening a background-created conversation reads and subscribes it without reloading the window', async () => {
 	const fake = sessionHost([]);
 	using service = createManagement(fake);
 	await service.initialize();
-	fake.sessions.push(session("automation-session", "automation-thread"));
+	fake.sessions.push(session('automation-session', 'automation-thread'));
 
-	await service.openThread("automation-session", "automation-thread");
+	await service.openThread('automation-session', 'automation-thread');
 
-	assert.equal(service.active?.threadId, "automation-thread");
+	assert.equal(service.active?.threadId, 'automation-thread');
 	assert.equal(service.sessions.length, 1);
 	assert.equal(fake.subscribeCount, 1);
 	assert.equal(fake.listCount, 0);
 	assert.equal(fake.readCatalogCount, 1);
 });
 
-test("session/changed adds a conversation created by another client without changing selection", async () => {
-	const fake = sessionHost([session("session-1", "thread-1")]);
+test('session/changed adds a conversation created by another client without changing selection', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1')]);
 	using service = createManagement(fake);
 	await service.initialize();
-	fake.sessions.push(session("automation-session", "automation-thread"));
-	fake.emit({ method: "session/changed", params: { sessionId: "automation-session", agentTreeChanged: false } });
+	fake.sessions.push(session('automation-session', 'automation-thread'));
+	fake.emit({ method: 'session/changed', params: { sessionId: 'automation-session', agentTreeChanged: false } });
 	await waitFor(() => service.sessions.length === 2);
 
-	assert.equal(service.sessions[0]?.sessionId, "automation-session");
-	assert.equal(service.active?.threadId, "thread-1");
+	assert.equal(service.sessions[0]?.sessionId, 'automation-session');
+	assert.equal(service.active?.threadId, 'thread-1');
 	assert.equal(fake.subscribeCount, 1);
 });
 
-test("selecting a catalog-only Session loads its details on demand", async () => {
-	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+test('selecting a catalog-only Session loads its details on demand', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using service = createManagement(fake);
 	await service.initialize();
 
-	service.selectThread("session-2", "thread-2");
+	service.selectThread('session-2', 'thread-2');
 	await waitFor(() => fake.subscribeCount === 2 && service.sessions[1]?.agentTree !== undefined);
 
-	assert.equal(service.active?.threadId, "thread-2");
+	assert.equal(service.active?.threadId, 'thread-2');
 });
 
-test("catalog invalidation during detail loading keeps the selected Session hydrated", async () => {
-	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+test('catalog invalidation during detail loading keeps the selected Session hydrated', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using service = createManagement(fake);
 	await service.initialize();
 
-	service.selectThread("session-2", "thread-2");
-	fake.sessions[1] = { ...fake.sessions[1]!, title: "Updated while opening" };
-	fake.emit({ method: "session/changed", params: { sessionId: "session-2", agentTreeChanged: false } });
-	await waitFor(() => service.sessions[1]?.title === "Updated while opening" && service.sessions[1]?.agentTree !== undefined);
+	service.selectThread('session-2', 'thread-2');
+	fake.sessions[1] = { ...fake.sessions[1]!, title: 'Updated while opening' };
+	fake.emit({ method: 'session/changed', params: { sessionId: 'session-2', agentTreeChanged: false } });
+	await waitFor(() => service.sessions[1]?.title === 'Updated while opening' && service.sessions[1]?.agentTree !== undefined);
 
-	assert.equal(service.active?.threadId, "thread-2");
+	assert.equal(service.active?.threadId, 'thread-2');
 });
 
-test("catalog invalidation refreshes a background Session without loading its conversation", async () => {
-	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+test('catalog invalidation refreshes a background Session without loading its conversation', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using service = createManagement(fake);
 	await service.initialize();
-	fake.sessions[1] = { ...fake.sessions[1]!, title: "Renamed in background", threads: [{ ...fake.sessions[1]!.threads[0]!, title: "Renamed Thread" }] };
+	fake.sessions[1] = { ...fake.sessions[1]!, title: 'Renamed in background', threads: [{ ...fake.sessions[1]!.threads[0]!, title: 'Renamed Thread' }] };
 
-	fake.emit({ method: "session/changed", params: { sessionId: "session-2", agentTreeChanged: false } });
-	await waitFor(() => service.sessions[1]?.title === "Renamed in background");
+	fake.emit({ method: 'session/changed', params: { sessionId: 'session-2', agentTreeChanged: false } });
+	await waitFor(() => service.sessions[1]?.title === 'Renamed in background');
 
 	assert.equal(fake.subscribeCount, 1);
-	assert.equal(service.sessions[1]?.chats[0]?.title, "Renamed Thread");
+	assert.equal(service.sessions[1]?.chats[0]?.title, 'Renamed Thread');
 });
 
-test("session/deleted removes an unselected Session from the catalog", async () => {
-	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+test('session/deleted removes an unselected Session from the catalog', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using service = createManagement(fake);
 	await service.initialize();
 	fake.sessions.splice(1, 1);
 
-	fake.emit({ method: "session/deleted", params: { sessionId: "session-2" } });
+	fake.emit({ method: 'session/deleted', params: { sessionId: 'session-2' } });
 	await waitFor(() => service.sessions.length === 1);
 
-	assert.equal(service.sessions[0]?.sessionId, "session-1");
+	assert.equal(service.sessions[0]?.sessionId, 'session-1');
 });
 
-test("deleting the selected Session opens the next catalog Session", async () => {
-	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+test('deleting the selected Session opens the next catalog Session', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using service = createManagement(fake);
 	await service.initialize();
 	fake.sessions.splice(0, 1);
 
-	fake.emit({ method: "session/deleted", params: { sessionId: "session-1" } });
-	await waitFor(() => service.active?.threadId === "thread-2" && service.active.session.agentTree !== undefined);
+	fake.emit({ method: 'session/deleted', params: { sessionId: 'session-1' } });
+	await waitFor(() => service.active?.threadId === 'thread-2' && service.active.session.agentTree !== undefined);
 
 	assert.equal(fake.subscribeCount, 2);
 });
 
-test("session/changed invalidates the frontend Session without inventing a Session sequence", async () => {
-	const fake = sessionHost([session("session-1", "thread-1")]);
+test('session/changed invalidates the frontend Session without inventing a Session sequence', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1')]);
 	using service = createManagement(fake);
 	await service.initialize();
 	const subscriptions = fake.subscribeCount;
 
-	fake.sessions[0] = { ...fake.sessions[0]!, title: "Renamed" };
-	fake.emit({ method: "session/changed", params: { sessionId: "session-1", agentTreeChanged: false } });
-	await waitFor(() => service.sessions[0]?.title === "Renamed");
+	fake.sessions[0] = { ...fake.sessions[0]!, title: 'Renamed' };
+	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
+	await waitFor(() => service.sessions[0]?.title === 'Renamed');
 
 	assert.equal(fake.subscribeCount, subscriptions);
 	assert.equal(fake.readCatalogCount, 1);
-	assert.equal(service.sessions[0]?.title, "Renamed");
+	assert.equal(service.sessions[0]?.title, 'Renamed');
 });
 
-test("ordinary Thread events leave the opened conversation and rendered list intact", async () => {
-	const fake = sessionHost([session("session-1", "thread-1")]);
+test('ordinary Thread events leave the opened conversation and rendered list intact', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1')]);
 	using service = createManagement(fake);
 	await service.initialize();
 	await waitFor(() => service.active?.session.agentTree !== undefined);
@@ -707,7 +707,7 @@ test("ordinary Thread events leave the opened conversation and rendered list int
 	let renders = 0;
 	using listener = service.onDidChange(() => { renders += 1; });
 
-	fake.emit({ method: "session/changed", params: { sessionId: "session-1", agentTreeChanged: false } });
+	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 	await waitFor(() => fake.readCatalogCount === 1);
 	await Promise.resolve();
 
@@ -717,44 +717,44 @@ test("ordinary Thread events leave the opened conversation and rendered list int
 	assert.equal(renders, 0);
 });
 
-test("a new Thread in the opened Session refreshes its subscription", async () => {
-	const fake = sessionHost([session("session-1", "thread-1")]);
+test('a new Thread in the opened Session refreshes its subscription', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1')]);
 	using service = createManagement(fake);
 	await service.initialize();
 	await waitFor(() => service.active?.session.agentTree !== undefined);
 	const subscriptions = fake.subscribeCount;
 	const current = fake.sessions[0]!;
-	fake.sessions[0] = { ...current, threads: [...current.threads, { ...current.threads[0]!, threadId: "thread-2" }] };
+	fake.sessions[0] = { ...current, threads: [...current.threads, { ...current.threads[0]!, threadId: 'thread-2' }] };
 
-	fake.emit({ method: "session/changed", params: { sessionId: "session-1", agentTreeChanged: false } });
+	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: false } });
 	await waitFor(() => fake.subscribeCount === subscriptions + 1 && service.sessions[0]?.chats.length === 2);
 
 	assert.equal(fake.listCount, 0);
 });
 
-test("the backend marks Agent tree changes for the opened Session", async () => {
-	const fake = sessionHost([session("session-1", "thread-1")]);
+test('the backend marks Agent tree changes for the opened Session', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1')]);
 	using service = createManagement(fake);
 	await service.initialize();
 	const subscriptions = fake.subscribeCount;
 
-	fake.emit({ method: "session/changed", params: { sessionId: "session-1", agentTreeChanged: true } });
+	fake.emit({ method: 'session/changed', params: { sessionId: 'session-1', agentTreeChanged: true } });
 	await waitFor(() => fake.subscribeCount === subscriptions + 1);
 
-	assert.equal(service.sessions[0]?.sessionId, "session-1");
-	assert.equal(service.sessions[0]?.chats[0]?.threadId, "thread-1");
+	assert.equal(service.sessions[0]?.sessionId, 'session-1');
+	assert.equal(service.sessions[0]?.chats[0]?.threadId, 'thread-1');
 });
 
-test("archive sends only the Session grouping identity", async () => {
-	const fake = sessionHost([session("session-1", "thread-1"), session("session-2", "thread-2")]);
+test('archive sends only the Session grouping identity', async () => {
+	const fake = sessionHost([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using service = createManagement(fake);
 	await service.initialize();
 
-	await service.archiveSession("session-1");
+	await service.archiveSession('session-1');
 
-	assert.deepEqual(fake.archiveRequests, [{ commandId: fake.archiveRequests[0]?.commandId, sessionId: "session-1" }]);
-	assert.equal(service.sessions.find(candidate => candidate.sessionId === "session-1")?.status, "archived");
-	assert.equal(service.active?.session.sessionId, "session-2");
+	assert.deepEqual(fake.archiveRequests, [{ commandId: fake.archiveRequests[0]?.commandId, sessionId: 'session-1' }]);
+	assert.equal(service.sessions.find(candidate => candidate.sessionId === 'session-1')?.status, 'archived');
+	assert.equal(service.active?.session.sessionId, 'session-2');
 });
 
 test('restoring a Session preserves the foreground draft and only restores the canonical root', async () => {
@@ -802,18 +802,18 @@ for (const disposed of [false, true]) {
 	});
 }
 
-test("interrupt reads the current Thread sequence before sending the command", async () => {
+test('interrupt reads the current Thread sequence before sending the command', async () => {
 	const tree = agentNode();
-	const fake = sessionHost([session("session-1", "thread-1")], tree);
+	const fake = sessionHost([session('session-1', 'thread-1')], tree);
 	using service = createManagement(fake);
 	await service.initialize();
 
-	await service.interruptThread("session-1", "thread-1");
+	await service.interruptThread('session-1', 'thread-1');
 
 	assert.deepEqual(fake.interruptRequests.map(({ sessionId, threadId, turnId, expectedSequence }) => ({ sessionId, threadId, turnId, expectedSequence })), [{
-		sessionId: "session-1",
-		threadId: "thread-1",
-		turnId: "turn-1",
+		sessionId: 'session-1',
+		threadId: 'thread-1',
+		turnId: 'turn-1',
 		expectedSequence: 7,
 	}]);
 });
@@ -822,32 +822,39 @@ function session(sessionId: string, threadId: string): SessionDto {
 	return {
 		sessionId,
 		title: `Session ${sessionId}`,
-		status: "active",
-		manager: { status: "idle", statusChangedAtUnixMs: 0 },
+		status: 'active',
+		manager: { status: 'idle', statusChangedAtUnixMs: 0 },
 		threads: [{
 			threadId,
 			title: `Thread ${threadId}`,
 			createdAtUnixMs: 0,
 			completedTurnDurationMs: 0,
 			usage: emptyUsage(),
-			status: "active",
+			status: 'active',
 		}],
 	};
 }
 
 function emptyUsage(): ModelUsageSummary {
 	const total = { reported: 0, complete: true };
-	return { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total };
+	return {
+		modelInvocations: 0,
+		inputTokens: total,
+		outputTokens: total,
+		cachedInputTokens: total,
+		cacheWriteInputTokens: total,
+		reasoningTokens: total
+	};
 }
 
 function agentNode(): AgentTreeNodeProjection {
 	const total = { reported: 0, complete: true };
 	return {
-		threadId: "thread-1",
+		threadId: 'thread-1',
 		threadSequence: 7,
-		title: "Main",
-		executionStatus: "running",
-		currentTurnId: "turn-1",
+		title: 'Main',
+		executionStatus: 'running',
+		currentTurnId: 'turn-1',
 		usage: {
 			modelInvocations: 0,
 			inputTokens: total,
@@ -874,9 +881,9 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 	const listeners = new Set<(event: ServerNotification) => void>();
 	const sessions = [...initial];
 	const agentTree = { roots: tree ? [tree] : [] };
-	const archiveRequests: Parameters<IAgentSessionService["archive"]>[0][] = [];
+	const archiveRequests: Parameters<IAgentSessionService['archive']>[0][] = [];
 	const restoreRequests: Parameters<IAgentSessionService['restore']>[0][] = [];
-	const interruptRequests: Parameters<IAgentTurnService["interrupt"]>[0][] = [];
+	const interruptRequests: Parameters<IAgentTurnService['interrupt']>[0][] = [];
 	let subscribeCount = 0;
 	let catalogSubscriptionCount = 0;
 	let listCount = 0;
@@ -885,7 +892,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		async collectDebugLogs() { throw new Error('Session management does not collect debug logs'); },
 		async rename({ sessionId, title }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); sessions[index] = { ...sessions[index]!, title }; return { session: sessions[index]!, agentTree }; },
 		async delete({ sessionId }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); if (index >= 0) sessions.splice(index, 1); },
-		async create() { throw new Error("Not used"); },
+		async create() { throw new Error('Not used'); },
 		async listAgents() { return { agents: [] }; },
 		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree }; },
 		async readCatalog({ sessionId }) { readCatalogCount += 1; return { session: sessions.find(candidate => candidate.sessionId === sessionId) ?? null }; },
@@ -902,14 +909,14 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 			};
 		},
 		async unsubscribe() { },
-		async createThread() { throw new Error("Not used"); },
+		async createThread() { throw new Error('Not used'); },
 		async archive(params) {
 			archiveRequests.push(params);
 			const index = sessions.findIndex(candidate => candidate.sessionId === params.sessionId);
-			sessions[index] = { ...sessions[index]!, status: "archived", threads: sessions[index]!.threads.map(thread => ({ ...thread, status: "archived" })) };
+			sessions[index] = { ...sessions[index]!, status: 'archived', threads: sessions[index]!.threads.map(thread => ({ ...thread, status: 'archived' })) };
 			return { session: sessions[index]!, agentTree };
 		},
-		async stop() { throw new Error("Not used"); },
+		async stop() { throw new Error('Not used'); },
 		async restore(params) {
 			restoreRequests.push(params);
 			const index = sessions.findIndex(candidate => candidate.sessionId === params.sessionId);
@@ -919,17 +926,17 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		},
 	};
 	const turn: IAgentTurnService = {
-		enqueue: async () => { throw new Error("Queue is unavailable in this fixture"); },
+		enqueue: async () => { throw new Error('Queue is unavailable in this fixture'); },
 		listQueued: async () => ({ messages: [] }),
-		async consultAdvisor() { throw new Error("Not used"); },
-		async start() { throw new Error("Not used"); },
-		async compact() { throw new Error("Not used"); },
-		async steer() { throw new Error("Not used"); },
+		async consultAdvisor() { throw new Error('Not used'); },
+		async start() { throw new Error('Not used'); },
+		async compact() { throw new Error('Not used'); },
+		async steer() { throw new Error('Not used'); },
 		async interrupt(params) {
 			interruptRequests.push(params);
 			return { threadId: params.threadId, sequence: params.expectedSequence + 1, turnId: params.turnId };
 		},
-		async resolveInteraction() { throw new Error("Not used"); },
+		async resolveInteraction() { throw new Error('Not used'); },
 	};
 	const events: IServerEventApi = {
 		subscribe(listener) {
@@ -963,13 +970,13 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 function threadProjection(sessionId: string, threadId: string): ThreadSubscription {
 	return {
 		thread: {
-			advisor: { type: "default" },
-			agentId: "agent-1",
-			origin: { type: "root" },
+			advisor: { type: 'default' },
+			agentId: 'agent-1',
+			origin: { type: 'root' },
 			sessionId,
 			threadId,
 			title: `Thread ${threadId}`,
-			status: "active",
+			status: 'active',
 			sequence: 1,
 			usage: {
 				modelInvocations: 0,
@@ -991,7 +998,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		if (predicate()) return;
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
-	throw new Error("Condition was not met");
+	throw new Error('Condition was not met');
 }
 
 test('concurrent catalog discovery acquires a single connection subscription', async () => {

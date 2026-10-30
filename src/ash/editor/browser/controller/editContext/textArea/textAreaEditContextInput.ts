@@ -1,14 +1,14 @@
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { isFirefox } from '../../../../../base/browser/browser.js';
 import { StandardKeyboardEvent, type IKeyboardEvent } from '../../../../../base/browser/keyboardEvent.js';
-import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { Disposable, MutableDisposable } from "../../../../../base/common/lifecycle.js";
-import { Position } from "../../../../common/core/position.js";
-import { Selection } from "../../../../common/core/selection.js";
-import { normalizeTextLineEndings } from "../../../../common/core/textChange.js";
-import { type ViewContext } from "../../../../common/viewModel/viewContext.js";
+import { Emitter, type Event } from '../../../../../base/common/event.js';
+import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
+import { Position } from '../../../../common/core/position.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { normalizeTextLineEndings } from '../../../../common/core/textChange.js';
+import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { CopyOptions, createClipboardCopyEvent, createClipboardPasteEvent, type ClipboardStoredMetadata, type IClipboardCopyEvent, type IClipboardPasteEvent } from '../clipboardUtils.js';
-import { type ITextAreaWrapper, type ITypeData, TextAreaState } from "./textAreaEditContextState.js";
+import { type ITextAreaWrapper, type ITypeData, TextAreaState } from './textAreaEditContextState.js';
 
 export interface ICompositionData {
 	readonly data: string;
@@ -94,31 +94,31 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	private connect(): void {
-		this._register(addDisposableListener(this.element, "focus", () => this.setFocused(true)));
-		this._register(addDisposableListener(this.element, "blur", () => this.setFocused(false)));
+		this._register(addDisposableListener(this.element, 'focus', () => this.setFocused(true)));
+		this._register(addDisposableListener(this.element, 'blur', () => this.setFocused(false)));
 		this._register(addDisposableListener<CompositionEvent>(
 			this.element,
-			"compositionstart",
+			'compositionstart',
 			event => this.handleCompositionStart(event),
 		));
 		this._register(addDisposableListener<CompositionEvent>(
 			this.element,
-			"compositionupdate",
+			'compositionupdate',
 			event => this.handleCompositionUpdate(event),
 		));
 		this._register(addDisposableListener<CompositionEvent>(
 			this.element,
-			"compositionend",
+			'compositionend',
 			event => this.handleCompositionEnd(event),
 		));
 		this._register(addDisposableListener<InputEvent>(
 			this.element,
-			"beforeinput",
+			'beforeinput',
 			event => this.handleBeforeInput(event),
 		));
 		this._register(addDisposableListener<InputEvent>(
 			this.element,
-			"input",
+			'input',
 			event => {
 				this.setIgnoreSelectionChangeTime('received input event');
 				this._textAreaState = TextAreaState.readFromTextArea(this, this._textAreaState);
@@ -133,7 +133,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 		this._register(addDisposableListener<ClipboardEvent>(this.element, 'paste', event => this.handlePaste(event)));
 		this._register(addDisposableListener<KeyboardEvent>(
 			this.element,
-			"keydown",
+			'keydown',
 			event => this.keydownEmitter.fire(new StandardKeyboardEvent(event)),
 		));
 		this._register(addDisposableListener<KeyboardEvent>(
@@ -157,7 +157,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	clear(): void {
-		this.setValue("clear", "");
+		this.setValue('clear', '');
 	}
 
 	getValue(): string {
@@ -173,19 +173,19 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	getSelectionStart(): number {
-		return this.element.selectionDirection === "backward"
+		return this.element.selectionDirection === 'backward'
 			? this.element.selectionEnd
 			: this.element.selectionStart;
 	}
 
 	getSelectionEnd(): number {
-		return this.element.selectionDirection === "backward"
+		return this.element.selectionDirection === 'backward'
 			? this.element.selectionStart
 			: this.element.selectionEnd;
 	}
 
 	setSelectionRange(reason: string, selectionStart: number, selectionEnd: number): void {
-		const direction = selectionStart > selectionEnd ? "backward" : "forward";
+		const direction = selectionStart > selectionEnd ? 'backward' : 'forward';
 		if (
 			this.getSelectionStart() === selectionStart
 			&& this.getSelectionEnd() === selectionEnd
@@ -412,7 +412,7 @@ function readCompositionSelection(element: HTMLTextAreaElement, rawText: string,
 	}
 	const start = normalizedOffset(rawText, element.selectionStart);
 	const end = normalizedOffset(rawText, element.selectionEnd);
-	return element.selectionDirection === "backward"
+	return element.selectionDirection === 'backward'
 		? { anchorOffset: end, activeOffset: start }
 		: { anchorOffset: start, activeOffset: end };
 }

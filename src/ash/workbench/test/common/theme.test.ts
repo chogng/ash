@@ -1,14 +1,14 @@
 import { loadColorThemeDocument } from '../../services/themes/common/colorThemeData.js';
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { createColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { ColorScheme } from "../../../platform/theme/common/theme.js";
+import { createColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { ColorScheme } from '../../../platform/theme/common/theme.js';
 import { ColorRegistry, Colors } from '../../../platform/theme/common/colorRegistry.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../nls.js';
 import { productLanguagePackCatalogs } from '../../services/localization/common/localizationCatalogs.js';
-import { WorkbenchThemeRegistry, WorkbenchThemesRegistry, getWorkbenchColorTheme, resolveWorkbenchColorTheme } from "../../common/theme.js";
+import { WorkbenchThemeRegistry, WorkbenchThemesRegistry, getWorkbenchColorTheme, resolveWorkbenchColorTheme } from '../../common/theme.js';
 test('Activity Bar badge color descriptions appear in Chinese in the theme color catalog', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
@@ -88,36 +88,36 @@ test('built-in syntax rules use the theme-defaults extension resources', async (
 	}
 });
 
-test("a contributed Workbench theme set can replace its own stable IDs", () => {
+test('a contributed Workbench theme set can replace its own stable IDs', () => {
 	const registry = new WorkbenchThemeRegistry();
-	using registration = registry.registerColorThemes([theme("extension-demo-dark", "Dark")]);
+	using registration = registry.registerColorThemes([theme('extension-demo-dark', 'Dark')]);
 
-	registration.replace([theme("extension-demo-dark", "Updated Dark"), theme("extension-demo-light", "Light", ColorScheme.Light)]);
+	registration.replace([theme('extension-demo-dark', 'Updated Dark'), theme('extension-demo-light', 'Light', ColorScheme.Light)]);
 
-	assert.equal(registry.getColorTheme("extension-demo-dark")?.label, "Updated Dark");
-	assert.equal(registry.getColorTheme("extension-demo-light")?.colorScheme, ColorScheme.Light);
+	assert.equal(registry.getColorTheme('extension-demo-dark')?.label, 'Updated Dark');
+	assert.equal(registry.getColorTheme('extension-demo-light')?.colorScheme, ColorScheme.Light);
 });
 
-test("a contributed Workbench theme replacement preserves other owners on conflict", () => {
+test('a contributed Workbench theme replacement preserves other owners on conflict', () => {
 	const registry = new WorkbenchThemeRegistry();
-	using external = registry.registerColorTheme(theme("external-dark", "External"));
-	using registration = registry.registerColorThemes([theme("extension-demo-dark", "Demo")]);
+	using external = registry.registerColorTheme(theme('external-dark', 'External'));
+	using registration = registry.registerColorThemes([theme('extension-demo-dark', 'Demo')]);
 
-	assert.throws(() => registration.replace([theme("external-dark", "Conflict")]), /already registered/);
-	assert.equal(registry.getColorTheme("extension-demo-dark")?.label, "Demo");
-	assert.equal(registry.getColorTheme("external-dark")?.label, "External");
+	assert.throws(() => registration.replace([theme('external-dark', 'Conflict')]), /already registered/);
+	assert.equal(registry.getColorTheme('extension-demo-dark')?.label, 'Demo');
+	assert.equal(registry.getColorTheme('external-dark')?.label, 'External');
 });
 
-test("Workbench theme changes publish one immutable catalog after registration, replacement, and disposal", () => {
+test('Workbench theme changes publish one immutable catalog after registration, replacement, and disposal', () => {
 	const registry = new WorkbenchThemeRegistry();
 	const catalogs: Array<readonly ReturnType<typeof theme>[]> = [];
 	using listener = registry.onDidChange(themes => catalogs.push(themes));
-	const registration = registry.registerColorThemes([theme("extension-demo-dark", "Demo")]);
+	const registration = registry.registerColorThemes([theme('extension-demo-dark', 'Demo')]);
 
-	registration.replace([theme("extension-demo-light", "Light", ColorScheme.Light)]);
+	registration.replace([theme('extension-demo-light', 'Light', ColorScheme.Light)]);
 	registration.dispose();
 
-	assert.deepEqual(catalogs.map(catalog => catalog.map(candidate => candidate.id)), [["extension-demo-dark"], ["extension-demo-light"], []]);
+	assert.deepEqual(catalogs.map(catalog => catalog.map(candidate => candidate.id)), [['extension-demo-dark'], ['extension-demo-light'], []]);
 	assert.equal(Object.isFrozen(catalogs[0]), true);
 });
 

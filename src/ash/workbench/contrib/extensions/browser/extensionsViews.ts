@@ -34,6 +34,7 @@ import {
 import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { addConnection, describeConnectorState, describeMcpServerState, changeExtensionEnablement, extensionEnablementLabel, getSkillSummary } from './extensionsActions.js';
 import { IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -42,11 +43,11 @@ import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/vi
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
-import { ExtensionsInput, ExtensionsCapabilityInput, type ExtensionsCapabilityTarget, ExtensionsInputSource } from '../common/extensionsInput.js';
+import { ExtensionsInput, ExtensionsCapabilityInput, type ExtensionsCapabilityTarget, ExtensionsInputSource, getExtensionFallbackIcon } from '../common/extensionsInput.js';
+import { URI } from '../../../../base/common/uri.js';
 import { getExtensionAttribution } from '../common/extensionAttribution.js';
 import { IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { ExtensionUiTarget } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
-import { extensionUiTargetsLabel } from '../../../../platform/extensionManagement/common/extensionNls.js';
 import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -91,6 +92,7 @@ class ExtensionsContent extends Disposable {
 	constructor(container: HTMLElement, options: ExtensionsOpenOptions & { readonly beforeOpenEditor?: () => Promise<void>; },
 		@IExtensionManagementService private readonly extensionManagement: IExtensionManagementService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@INotificationService private readonly notifications: INotificationService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@IEditorService private readonly editors: IEditorService,
@@ -120,7 +122,6 @@ class ExtensionsContent extends Disposable {
 			accessibilityProvider: {
 				getAriaLabel: item => [
 					item.summary.displayName,
-					extensionUiTargetsLabel(item.summary.uiTargets),
 					...this.isPluginsPane ? [item.attribution, item.summary.description] : [item.summary.version, item.summary.description],
 					item.enabled === false ? localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled') : '',
 				].filter(Boolean).join(', ')
@@ -147,7 +148,7 @@ class ExtensionsContent extends Disposable {
 			type: AccessibleViewType.Help, priority: 100, name: `extensions-help-${generateUuid()}`, when: ContextKeyExpr.has('extensionsFocused'), getProvider: () => {
 				const focused = mainWindow.document.activeElement;
 				if (!this.visible || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, 'Extensions opens your installed Skills, Plugins and Connections, followed by Recommended. Skills contain Agent working methods, Plugins add features, and Connections lists external services and tool servers together. The search box above all panes searches the Marketplace and installed Plugins, including built-in language servers. Use Filter extensions to choose installed categories, built-in plugins or recommendations. Clear Search removes the query and filters. Use @installed to filter installed items, or clear the search to return to these categories. One Refresh extensions action reloads all categories. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus. Use Left and Right on pane headers to collapse or expand them. Use Tab to move between controls, arrow keys to select an item, and Enter to open details. Plugin rows show the name, publisher and description. Search also matches the publisher. Open Plugin details to enable or disable it and view its version and identifier. Skill enablement and connection actions are managed separately in their details. Execution authorization and permissions are reviewed in package details. Language packs are managed through the display language setting. Run Install extension from Git repository in the Command Palette to install a repository package. Press Escape during installation to cancel. Recommendations combine open files, current languages, project configuration, workspace declarations, available tools, keymaps, remote workspaces and browser use, with a reason for each item. Run Show recommended keymaps in the Command Palette to browse optional keyboard shortcuts. Recommendation notifications offer Install, Show recommendations and Don\'t show again. Enable recommendations only on demand to hide automatic notifications. Recent file recommendations remain available for seven days. Use Ignore an extension recommendation and Restore an ignored extension recommendation in the Command Palette or Extensions menu. Restore dismissed extension recommendation notifications resets notification dismissals. Escape closes this help.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+				return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type: AccessibleViewType.Help }, () => localize({ bundle: 'ash.extensions', key: 'accessibilityHelp' }, "Extensions opens your installed Skills, Plugins and Connections, followed by Recommended. Skills contain Agent working methods, Plugins add features, and Connections lists external services and tool servers together. The search box above all panes searches the Marketplace and installed Plugins, including built-in language servers. Use Filter extensions to choose installed categories, built-in plugins or recommendations. Clear Search removes the query and filters. Use @installed to filter installed items, or clear the search to return to these categories. One Refresh extensions action reloads all categories. The title bar More Actions menu provides marketplace, installed, source management and installation commands. Pane actions appear on hover or keyboard focus. Use Left and Right on pane headers to collapse or expand them. Use Tab to move between controls, arrow keys to select an item, and Enter to open details. Plugin rows show the name, publisher and description. Search also matches the publisher. Open Plugin details to enable or disable it and view its version and identifier. Skill enablement and connection actions are managed separately in their details. Execution authorization and permissions are reviewed in package details. Language packs are managed through the display language setting. Run Install extension from Git repository in the Command Palette to install a repository package. Press Escape during installation to cancel. Recommendations combine open files, current languages, project configuration, workspace declarations, available tools, keymaps, remote workspaces and browser use, with a reason for each item. Run Show recommended keymaps in the Command Palette to browse optional keyboard shortcuts. Recommendation notifications offer Install, Show recommendations and Don't show again. Enable recommendations only on demand to hide automatic notifications. Recent file recommendations remain available for seven days. Use Ignore an extension recommendation and Restore an ignored extension recommendation in the Command Palette or Extensions menu. Restore dismissed extension recommendation notifications resets notification dismissals. Escape closes this help."), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 			}
 		}));
 	}
@@ -165,7 +166,11 @@ class ExtensionsContent extends Disposable {
 		row.dataset.packageId = item.summary.id;
 		if (item.installation) { row.dataset.installationId = item.installation.installationId; } else { delete row.dataset.installationId; }
 		const content = h(mainWindow.document, 'div'); content.className = 'extension-row';
-		const icon = h(mainWindow.document, 'div'); icon.className = 'extension-icon'; appendLabelIcon(icon, Lxicon.extensions); icon.setAttribute('aria-hidden', 'true');
+		const icon = h(mainWindow.document, 'div'); icon.className = 'extension-icon'; icon.setAttribute('aria-hidden', 'true');
+		const fallback = getExtensionFallbackIcon(item.summary.id, item.source);
+		if (fallback instanceof URI) {
+			const image = h(mainWindow.document, 'img'); image.alt = ''; image.draggable = false; image.src = fallback.toString(); icon.append(image);
+		} else { appendLabelIcon(icon, fallback); }
 		if (item.icon) {
 			const path = item.icon.path.toLowerCase();
 			void this.extensionCatalog.resources.readExtensionResourceBytes(item.icon).then(bytes => {
@@ -180,8 +185,8 @@ class ExtensionsContent extends Disposable {
 		}
 		const body = h(mainWindow.document, 'div'); body.className = 'extension-body';
 		const labels: readonly [string, string | undefined][] = this.isPluginsPane
-			? [['extension-name', item.summary.displayName], ['extension-metadata', [extensionUiTargetsLabel(item.summary.uiTargets), item.attribution].filter(Boolean).join(' · ')], ['extension-description', item.summary.description]]
-			: [['extension-name', item.summary.displayName], ['extension-description', item.summary.description], ['extension-metadata', `${extensionUiTargetsLabel(item.summary.uiTargets)} · ${item.summary.id} · ${item.summary.version}`]];
+			? [['extension-name', item.summary.displayName], ['extension-metadata', item.attribution], ['extension-description', item.summary.description]]
+			: [['extension-name', item.summary.displayName], ['extension-description', item.summary.description], ['extension-metadata', `${item.summary.id} · ${item.summary.version}`]];
 		for (const [className, value] of labels) {
 			if (!value) { continue; }
 			const label = resources.add(new IconLabel(body, { label: value, title: value, hideIcon: true }));
@@ -205,7 +210,7 @@ class ExtensionsContent extends Disposable {
 				event.stopPropagation(); void this.run(async () => {
 					if (this.working) { return; }
 					this.working = true; install.enabled = false;
-					try { const details = await this.extensionManagement.get(item.summary.id, item.summary.version); await changeExtensionPackage(this.extensionManagement, this.dialogs, 'install', details); }
+					try { const details = await this.extensionManagement.get(item.summary.id, item.summary.version); await changeExtensionPackage(this.extensionManagement, this.dialogs, this.notifications, 'install', details); }
 					finally { this.working = false; if (!this.isDisposed) { await this.load(); } }
 				});
 			}));
@@ -338,13 +343,17 @@ export class ExtensionsListView extends ViewPane {
 		super(container, { ...options, minimumBodySize: 160 });
 		this.element.classList.add('ash-extensions-view');
 		const isPluginsPane = options.id === 'ash.extensions.plugins';
-		const badge = this._register(new CountBadge(this.headerElement, {
+		const countContainer = h(this.headerElement.ownerDocument, 'span', {
+			className: 'ash-extensions-count',
+			attributes: { id: `${this.id}-count` },
+		});
+		this.headerElement.append(countContainer);
+		const badge = this._register(new CountBadge(countContainer, {
 			titleFormat: isPluginsPane
 				? localize({ bundle: 'ash.extensions', key: 'pluginResults' }, '{0} plugins')
 				: localize({ bundle: 'ash.extensions', key: 'results' }, '{0} extensions'),
 		}, defaultCountBadgeStyles));
-		badge.domNode.id = `${this.id}-count`;
-		this.headerElement.setAttribute('aria-describedby', badge.domNode.id);
+		this.headerElement.setAttribute('aria-describedby', countContainer.id);
 		this.content = this._register(instantiation.createInstance(ExtensionsContent, this.contentElement, isPluginsPane ? { view: 'plugins', mode: 'installed' } : { mode: 'browse' }));
 		const loading = this._register(new MutableDisposable());
 		this._register(this.content.onDidChangeLoading(active => {
@@ -411,11 +420,15 @@ abstract class ExtensionsListViewPane extends ViewPane {
 	protected constructor(container: HTMLElement, options: IViewPaneOptions, private readonly editors: IEditorService, contextKeys: IContextKeyService, configuration: IConfigurationService, private readonly packageManagement: IExtensionManagementService, private readonly verbositySetting = AccessibilityVerbositySettingId.Extensions) {
 		super(container, { ...options, minimumBodySize: 80 });
 		this.element.classList.add('ash-extensions-view');
-		this.badge = this._register(new CountBadge(this.headerElement, {
+		const countContainer = h(this.headerElement.ownerDocument, 'span', {
+			className: 'ash-extensions-count',
+			attributes: { id: `${this.id}-count` },
+		});
+		this.headerElement.append(countContainer);
+		this.badge = this._register(new CountBadge(countContainer, {
 			titleFormat: localize({ bundle: 'ash.extensions', key: 'paneResults' }, '{0} items'),
 		}, defaultCountBadgeStyles));
-		this.badge.domNode.id = `${this.id}-count`;
-		this.headerElement.setAttribute('aria-describedby', this.badge.domNode.id);
+		this.headerElement.setAttribute('aria-describedby', countContainer.id);
 		const body = h(mainWindow.document, 'section');
 		this.body = body;
 		body.className = 'ash-extensions extension-capability-pane';
@@ -473,7 +486,7 @@ abstract class ExtensionsListViewPane extends ViewPane {
 					const focused = mainWindow.document.activeElement;
 					if (!this.isBodyVisible() || !(focused instanceof HTMLElement) || !this.element.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.Help
-						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, 'Extensions opens installed Skills, Plugins and Connections, followed by Recommended. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Use the single search box above the panes to search the Marketplace and installed Plugins, including built-in language servers; @installed filters current resources. Clear the search to return to installed categories. Down moves to results; arrow keys select items; Enter opens details. Refresh extensions reloads all categories. Pane actions appear on hover or keyboard focus. Marketplace source selects a registry; Load more continues the search. Skill details control only that skill. Connections shows all connections in one list. Open details for account authorization, server status and available actions. A service’s associated MCP server appears only in its details. Add connection offers service account authorization or custom MCP configuration. Choose a service to sign in or connect with an API token, or configure an HTTP server or local process. Server details provide Edit, Enable or Disable, Connect, Disconnect and Remove when available. Connection actions keep packages installed. Package details manage installation, permissions and removal. Refresh reads current domain state. Run Install extension from Git repository in the Command Palette to install a repository package. Recommendations combine open files, current languages, project configuration, workspace declarations, available tools, keymaps, remote workspaces and browser use, with a reason for each item. Run Show recommended keymaps in the Command Palette to browse optional keyboard shortcuts. Recommendation notifications offer Install, Show recommendations and Don\'t show again. Enable recommendations only on demand to hide automatic notifications. Recent file recommendations remain available for seven days. Use Ignore an extension recommendation and Restore an ignored extension recommendation in the Command Palette or Extensions menu. Restore dismissed extension recommendation notifications resets notification dismissals. Escape cancels a dialog.')
+						? localize({ bundle: 'ash.extensions', key: 'capabilityHelp' }, "Extensions opens installed Skills, Plugins and Connections, followed by Recommended. Use Left and Right on a pane header to collapse or expand it, and Up and Down to move between headers. Use the single search box above the panes to search the Marketplace and installed Plugins, including built-in language servers; @installed filters current resources. Clear the search to return to installed categories. Down moves to results; arrow keys select items; Enter opens details. Refresh extensions reloads all categories. Pane actions appear on hover or keyboard focus. Marketplace source selects a registry; Load more continues the search. Skill details control only that skill. Connections shows all connections in one list. Open details for account authorization, server status and available actions. A service’s associated MCP server appears only in its details. Add connection offers service account authorization or custom MCP configuration. Choose a service to sign in or connect with an API token, or configure an HTTP server or local process. Server details provide Edit, Enable or Disable, Connect, Disconnect and Remove when available. Connection actions keep packages installed. Package details manage installation, permissions and removal. Refresh reads current domain state. Run Install extension from Git repository in the Command Palette to install a repository package. Recommendations combine open files, current languages, project configuration, workspace declarations, available tools, keymaps, remote workspaces and browser use, with a reason for each item. Run Show recommended keymaps in the Command Palette to browse optional keyboard shortcuts. Recommendation notifications offer Install, Show recommendations and Don't show again. Enable recommendations only on demand to hide automatic notifications. Recent file recommendations remain available for seven days. Use Ignore an extension recommendation and Restore an ignored extension recommendation in the Command Palette or Extensions menu. Restore dismissed extension recommendation notifications resets notification dismissals. Escape cancels a dialog.")
 						: [localize({ bundle: 'ash.extensions', key: 'paneResults' }, '{0} items', this.list.items.length), this.status.textContent, ...this.list.items.map(item => `${item.name}\n${item.description}\n${item.metadata}`)].filter(Boolean).join('\n\n'), () => focused.focus(), this.verbositySetting);
 				},
 			}));
@@ -645,10 +658,9 @@ export class RecommendedExtensionsView extends ExtensionsListViewPane {
 					const details = await this.extensions.get(recommendation.extensionId);
 					summary = { id: details.package.id, version: details.package.version, packageType: details.packageType, displayName: details.displayName, description: details.description, uiTargets: details.uiTargets };
 				} catch { /* Keep declared IDs visible while their catalog source is unavailable. */ }
-				const audience = extensionUiTargetsLabel(summary ? summary.uiTargets : recommendation.uiTargets);
 				return {
 					target: { kind: 'recommendation' as const, id: recommendation.extensionId, summary }, name: summary?.displayName ?? recommendation.extensionId,
-					description: recommendation.reason.reasonText, metadata: [audience, summary?.id ?? localize({ bundle: 'ash.extensions', key: 'recommendationNotFound' }, 'Unavailable from enabled sources')].filter(Boolean).join(' · '),
+					description: recommendation.reason.reasonText, metadata: summary?.id ?? localize({ bundle: 'ash.extensions', key: 'recommendationNotFound' }, 'Unavailable from enabled sources'),
 				};
 			})));
 		}
@@ -758,7 +770,9 @@ export class McpServersViewPane extends ExtensionsListViewPane {
 		// Package identity enriches backend status; installation alone says nothing about connection state.
 		const items: ExtensionsListItem[] = installed.flatMap(installation => installation.capabilities.filter(capability => capability.kind === 'mcp' && !linkedServers.has(`marketplace:${installation.package.id}:mcp:${capability.id}`)).map(capability => ({
 			target: { kind: 'mcp' as const, serverId: `marketplace:${installation.package.id}:mcp:${capability.id}`, installationId: installation.installationId, capabilityId: capability.reference.id },
-			name: capability.id, description: `${installation.package.id} · ${installation.package.version}`, metadata: installation.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'),
+			name: capability.id, description: `${installation.package.id} · ${installation.package.version}`, metadata: installation.state === 'pendingRemoval'
+				? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending')
+				: localize({ bundle: 'ash.extensions', key: 'installedFilter' }, 'Installed'),
 		})));
 		for (const connector of connectors) {
 			items.push({

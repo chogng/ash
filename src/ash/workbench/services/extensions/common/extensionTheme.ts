@@ -1,16 +1,28 @@
 import { localize } from '../../../../nls.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Color } from "../../../../base/common/color.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IColorTheme } from "../../../../platform/theme/common/themeService.js";
-import { createDocumentColorTheme, parseColorThemeDocument, parseSemanticTokenRules } from "../../themes/common/colorThemeData.js";
-import type { ColorThemeDocument } from "../../themes/common/colorThemeData.js";
-import { ColorScheme } from "../../../../platform/theme/common/theme.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Color } from '../../../../base/common/color.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IColorTheme } from '../../../../platform/theme/common/themeService.js';
+import { createDocumentColorTheme, parseColorThemeDocument, parseSemanticTokenRules } from '../../themes/common/colorThemeData.js';
+import type { ColorThemeDocument } from '../../themes/common/colorThemeData.js';
+import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { loadColorThemeDocument } from '../../themes/common/colorThemeData.js';
 import { parseJsonc } from './jsonc.js';
 import type { ExtensionThemeContribution } from './extensionManifest.js';
 import { colorThemeSchema } from '../../themes/common/colorThemeSchema.js';
 import { isRecord } from '../../../../base/common/types.js';
+import { URI } from '../../../../base/common/uri.js';
+import type { ExtensionSourceKind } from './extensionService.js';
+
+/** Only the development host publishes checkout locations, independently of installed packages. */
+export function getDevelopmentThemeLocation(
+	extensionId: string,
+	sourceKind: ExtensionSourceKind,
+	locations: Readonly<Record<string, string>> | undefined,
+): URI | undefined {
+	const location = sourceKind === 'builtIn' ? locations?.[extensionId] : undefined;
+	return location ? URI.parse(location) : undefined;
+}
 
 export interface ExtensionThemeDefinition {
 	readonly id: string;
@@ -54,7 +66,7 @@ export class ExtensionThemeRegistry extends Disposable implements ExtensionTheme
 
 	replace(themes: readonly ExtensionThemeDefinition[]): void {
 		this.assertNotDisposed();
-		if (!Array.isArray(themes)) throw new TypeError("Extension theme replacement must be an array");
+		if (!Array.isArray(themes)) throw new TypeError('Extension theme replacement must be an array');
 		const normalized = themes.map(normalizeTheme);
 		const ids = new Set<string>();
 		for (const theme of normalized) {
@@ -119,8 +131,8 @@ function extensionThemeDocument(value: unknown): unknown {
 export function extensionWorkbenchThemeId(extensionId: string, contributionId: string | undefined, index: number): string {
 	// Product themes retain the IDs already persisted in settings; their resources use ordinary contributions.
 	if (extensionId === 'vscode.theme-defaults' && contributionId?.startsWith('ash-')) return contributionId;
-	const extension = themeIdSegment(extensionId, "Extension theme extension ID");
-	const contribution = themeIdSegment(contributionId ?? String(index + 1), "Extension theme contribution ID");
+	const extension = themeIdSegment(extensionId, 'Extension theme extension ID');
+	const contribution = themeIdSegment(contributionId ?? String(index + 1), 'Extension theme contribution ID');
 	return `extension-${extension}-${contribution}`;
 }
 
@@ -134,13 +146,13 @@ export function createExtensionWorkbenchColorTheme(theme: ExtensionThemeDefiniti
 }
 
 function normalizeTheme(theme: ExtensionThemeDefinition): ExtensionThemeDefinition {
-	if (typeof theme !== "object" || theme === null) throw new TypeError("Extension theme must be an object");
-	const uiTheme = theme.uiTheme === undefined ? undefined : boundedText(theme.uiTheme, "Extension theme UI theme", 128);
+	if (typeof theme !== 'object' || theme === null) throw new TypeError('Extension theme must be an object');
+	const uiTheme = theme.uiTheme === undefined ? undefined : boundedText(theme.uiTheme, 'Extension theme UI theme', 128);
 	if (uiTheme !== undefined) extensionColorScheme(uiTheme);
 	return Object.freeze({
-		id: boundedText(theme.id, "Extension theme ID", 256),
-		extensionId: boundedText(theme.extensionId, "Extension theme extension ID", 256),
-		label: boundedText(theme.label, "Extension theme label", 256),
+		id: boundedText(theme.id, 'Extension theme ID', 256),
+		extensionId: boundedText(theme.extensionId, 'Extension theme extension ID', 256),
+		label: boundedText(theme.label, 'Extension theme label', 256),
 		...(uiTheme === undefined ? {} : { uiTheme }),
 		colors: normalizeColors(theme.colors),
 		...(theme.semanticHighlighting === undefined ? {} : { semanticHighlighting: theme.semanticHighlighting }),
@@ -162,42 +174,42 @@ function parseColors(value: unknown, owner: string): Readonly<Record<string, str
 }
 
 function normalizeColors(value: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
-	const colors = record(value, "Extension theme colors");
+	const colors = record(value, 'Extension theme colors');
 	return Object.freeze(Object.fromEntries(Object.entries(colors).map(([key, color]) => [
-		boundedText(key, "Extension theme color key", 256),
+		boundedText(key, 'Extension theme color key', 256),
 		colorValue(color, `Extension theme color '${key}'`),
 	])));
 }
 
 function colorValue(value: unknown, owner: string): string {
 	const color = boundedText(value, owner, 128);
-	if (!color.startsWith("#")) throw new TypeError(`${owner} must be a hexadecimal color`);
+	if (!color.startsWith('#')) throw new TypeError(`${owner} must be a hexadecimal color`);
 	Color.fromHex(color);
 	return color;
 }
 
 function boundedText(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== "string" || value.length === 0 || value.length > maximum || /[\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || value.length === 0 || value.length > maximum || /[\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
 	return value;
 }
 
 function extensionColorScheme(uiTheme: string | undefined): ColorScheme {
 	switch (uiTheme) {
-		case "vs": return ColorScheme.Light;
-		case "vs-dark": return ColorScheme.Dark;
-		case "hc-black": return ColorScheme.HighContrastDark;
-		case "hc-light": return ColorScheme.HighContrastLight;
-		default: throw new TypeError("Selectable extension themes must declare a supported uiTheme");
+		case 'vs': return ColorScheme.Light;
+		case 'vs-dark': return ColorScheme.Dark;
+		case 'hc-black': return ColorScheme.HighContrastDark;
+		case 'hc-light': return ColorScheme.HighContrastLight;
+		default: throw new TypeError('Selectable extension themes must declare a supported uiTheme');
 	}
 }
 
 function themeIdSegment(value: string, owner: string): string {
-	const normalized = boundedText(value, owner, 256).toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "");
+	const normalized = boundedText(value, owner, 256).toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-+|-+$/gu, '');
 	if (normalized.length === 0) throw new TypeError(`${owner} cannot produce a stable theme ID`);
 	return normalized;
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, unknown>;
 }

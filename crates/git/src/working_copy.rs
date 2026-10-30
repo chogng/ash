@@ -146,6 +146,101 @@ impl GitRepositorySnapshot {
 }
 
 impl GitClient {
+    /// Reads HEAD and tracking counts without inspecting the index or working tree.
+    pub async fn head(&self, repository: &GitRepository) -> GitResult<GitHead> {
+        let branches = self.local_branches(repository).await?;
+        if let Some(branch) = branches.iter().find(|branch| branch.is_current()) {
+            let upstream = if let Some(name) = branch.upstream() {
+                let target = self
+                    .run_query_unchecked(
+                        repository.worktree_root(),
+                        [
+                            "rev-parse",
+                            "--verify",
+                            "--quiet",
+                            &format!("{name}^{{commit}}"),
+                        ],
+                    )
+                    .await?;
+                if target.status.code() == Some(1) {
+                    // Porcelain retains the configured upstream name when its ref
+                    // is gone, but omits ahead/behind counts.
+                    Some(GitUpstream {
+                        name: name.to_owned(),
+                        ahead: 0,
+                        behind: 0,
+                    })
+                } else {
+                    let target = target.require_success()?;
+                    let object_id =
+                        utf8(&target.stdout, &target.command, "upstream object id")?.trim();
+                    let counts = self
+                        .run_query(
+                            repository.worktree_root(),
+                            [
+                                "rev-list",
+                                "--left-right",
+                                "--count",
+                                &format!("{}...{object_id}", branch.object_id()),
+                            ],
+                        )
+                        .await?;
+                    let values = utf8(&counts.stdout, &counts.command, "tracking counts")?
+                        .split_whitespace()
+                        .map(str::parse::<usize>)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| {
+                            GitError::invalid_output(&counts.command, "invalid tracking counts")
+                        })?;
+                    let [ahead, behind] = values.as_slice() else {
+                        return Err(GitError::invalid_output(
+                            &counts.command,
+                            "expected two tracking counts",
+                        ));
+                    };
+                    Some(GitUpstream {
+                        name: name.to_owned(),
+                        ahead: *ahead,
+                        behind: *behind,
+                    })
+                }
+            } else {
+                None
+            };
+            return Ok(GitHead::Branch {
+                name: branch.name().to_owned(),
+                object_id: branch.object_id().to_owned(),
+                upstream,
+            });
+        }
+        let target = self
+            .run_query_unchecked(
+                repository.worktree_root(),
+                ["rev-parse", "--verify", "--quiet", "HEAD"],
+            )
+            .await?;
+        if target.status.code() == Some(1) {
+            let branch = self
+                .run_query(
+                    repository.worktree_root(),
+                    ["symbolic-ref", "--short", "HEAD"],
+                )
+                .await?;
+            Ok(GitHead::Unborn {
+                name: utf8(&branch.stdout, &branch.command, "branch name")?
+                    .trim()
+                    .to_owned(),
+            })
+        } else {
+            let target = target.require_success()?;
+            Ok(GitHead::Detached {
+                object_id: utf8(&target.stdout, &target.command, "HEAD object id")?
+                    .trim()
+                    .to_owned(),
+            })
+        }
+    }
+
     /// Files outside the worktree that can change ignore classification, including config includes.
     /// Git resolves config paths so its HOME, XDG and core.excludesFile rules remain authoritative.
     pub async fn ignore_watch_paths(&self, repository: &GitRepository) -> GitResult<Vec<PathBuf>> {

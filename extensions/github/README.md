@@ -52,7 +52,7 @@ App Server 在 `issue/list` 与 `issue/read` 中用 Git origin 关联 GitHub 仓
 
 ## 运行与生命周期
 
-公开 typed DataChannel 为 `github.api.v1`，消息由 `ash-github::{GitHubInvocation, GitHubRequest, GitHubResponse}` 定义。仓库、Issue、PR、分享、分支保护和问题报告使用同一独立程序。共享 `crates/github` 只保留领域类型、错误、授权契约与消费者代理；App Server 的生产依赖不链接本扩展实现。`vscode/extensions/github` 是扩展分工和可观察行为参照；仓库发布、搜索、分享和分支保护通过此 Provider 与现有 Git 扩展接入。
+公开 typed DataChannel 为 `github.api.v2`，消息由 `ash-github::{GitHubInvocation, GitHubRequest, GitHubResponse}` 定义。仓库、Issue、PR、分享、分支保护和问题报告使用同一独立程序。共享 `crates/github` 只保留领域类型、错误、授权契约与消费者代理；App Server 的生产依赖不链接本扩展实现。`vscode/extensions/github` 是扩展分工和可观察行为参照；仓库发布、搜索、分享和分支保护通过此 Provider 与现有 Git 扩展接入。
 
 产品入口与 managed profile 入口都显式选定安装目录下的 `bin/ash-github-extension{.exe}`。`LocalProfileRuntime` 持有唯一监管器；目录消费者携带各自授权和 HTTP 服务绑定。首次 API 请求才启动程序，停用取消全部在途服务并关闭进程，重新启用后按需恢复；没有 API 扩展时返回不可用，不回退到内置 API 实现。缺少被显式选定的 executable 在组合时失败。默认 TUI / embedded options 不选定 GitHub 扩展。
 

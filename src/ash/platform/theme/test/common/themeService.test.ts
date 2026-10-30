@@ -1,15 +1,15 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
 import {
 	darkColorTheme,
 	highContrastDarkColorTheme,
 	highContrastLightColorTheme,
 	lightColorTheme,
-} from "../../common/colorTheme.js";
-import { TestThemeService } from "./testThemeService.js";
-import { Colors } from "../../common/colorRegistry.js";
+} from '../../common/colorTheme.js';
+import { TestThemeService } from './testThemeService.js';
+import { Colors } from '../../common/colorRegistry.js';
 
-test("TestThemeService exposes its initial theme and emits actual changes", () => {
+test('TestThemeService exposes its initial theme and emits actual changes', () => {
 	using service = new TestThemeService(darkColorTheme);
 	const changes: string[] = [];
 	using listener = service.onDidColorThemeChange((theme) => {
@@ -20,15 +20,15 @@ test("TestThemeService exposes its initial theme and emits actual changes", () =
 	service.setColorTheme(lightColorTheme);
 
 	assert.equal(service.getColorTheme(), lightColorTheme);
-	assert.deepEqual(changes, ["ash-light"]);
+	assert.deepEqual(changes, ['ash-light']);
 });
 
-test("built-in themes resolve registered colors and omit inactive high contrast borders", () => {
+test('built-in themes resolve registered colors and omit inactive high contrast borders', () => {
 	for (const theme of [darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme]) {
 		assert.equal(theme.colorEntries.length, Colors.getColors().length);
 		for (const { id, value } of theme.colorEntries) {
 			assert.equal(theme.getColorCss(id), theme.colors[id]);
-			assert.equal(typeof theme.colors[id], value ? "string" : "undefined");
+			assert.equal(typeof theme.colors[id], value ? 'string' : 'undefined');
 		}
 	}
 	assert.equal(darkColorTheme.getColorCss('contrastBorder'), undefined);

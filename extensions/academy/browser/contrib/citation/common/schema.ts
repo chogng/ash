@@ -1,31 +1,31 @@
-import type { DocumentAttributes } from "../../../../common/model/document.js";
-import type { DocumentNodeSpec } from "../../../../common/model/documentSchema.js";
+import type { DocumentAttributes } from '../../../../common/model/document.js';
+import type { DocumentNodeSpec } from '../../../../common/model/documentSchema.js';
 import { localize } from 'ash:editor/nls.js';
 
-export const CITATION_NODE_TYPE = "citation";
-export const BIBLIOGRAPHY_NODE_TYPE = "bibliography";
-export const REFERENCE_NODE_TYPE = "reference";
+export const CITATION_NODE_TYPE = 'citation';
+export const BIBLIOGRAPHY_NODE_TYPE = 'bibliography';
+export const REFERENCE_NODE_TYPE = 'reference';
 
 export const citationNodeSpec: DocumentNodeSpec = Object.freeze({
-	kind: "inline",
+	kind: 'inline',
 	validateAttributes: (attrs: DocumentAttributes) => {
-		if (typeof attrs.key !== "string" || attrs.key.length === 0) throw new TypeError("Citation key must be a non-empty string");
-		if (attrs.label !== undefined && typeof attrs.label !== "string") throw new TypeError("Citation label must be a string");
+		if (typeof attrs.key !== 'string' || attrs.key.length === 0) throw new TypeError('Citation key must be a non-empty string');
+		if (attrs.label !== undefined && typeof attrs.label !== 'string') throw new TypeError('Citation label must be a string');
 	},
 });
 
 export const bibliographyNodeSpec: DocumentNodeSpec = Object.freeze({
-	kind: "group",
-	groups: ["citation-bibliography"],
-	content: [{ group: "citation-reference", min: 1 }],
+	kind: 'group',
+	groups: ['citation-bibliography'],
+	content: [{ group: 'citation-reference', min: 1 }],
 });
 
 export const referenceNodeSpec: DocumentNodeSpec = Object.freeze({
-	kind: "block",
-	groups: ["citation-reference"],
-	content: [{ type: "paragraph", min: 1, max: 1 }],
+	kind: 'block',
+	groups: ['citation-reference'],
+	content: [{ type: 'paragraph', min: 1, max: 1 }],
 	validateAttributes: (attrs: DocumentAttributes) => {
-		if (typeof attrs.key !== "string" || attrs.key.length === 0) throw new TypeError("Reference key must be a non-empty string");
+		if (typeof attrs.key !== 'string' || attrs.key.length === 0) throw new TypeError('Reference key must be a non-empty string');
 		if ((attrs.libraryId === undefined) !== (attrs.libraryEntryId === undefined) || attrs.libraryId !== undefined && (typeof attrs.libraryId !== 'string' || !attrs.libraryId || attrs.libraryId.length > 128 || typeof attrs.libraryEntryId !== 'string' || !attrs.libraryEntryId || attrs.libraryEntryId.length > 128)) throw new TypeError(localize('document.library.invalidIdentity', 'Invalid reference library identity.'));
 	},
 });

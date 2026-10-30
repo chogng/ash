@@ -208,7 +208,12 @@ export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectio
 			this.enabled.checked = this.savedAdvisor?.enabled ?? false;
 			this.status.textContent = localize('advisor.settings.saveFailed', 'Could not save Advisor settings: {0}', String(error));
 		} finally {
-			if (!this.isDisposed && this.visible && version === this.loadVersion) { this.working = false; this.updateControls(); this.changed.fire(); this.reloadIfRequested(); }
+			if (!this.isDisposed && this.visible && version === this.loadVersion) {
+				this.working = false;
+				this.updateControls();
+				this.changed.fire();
+				this.reloadIfRequested();
+			}
 		}
 	}
 

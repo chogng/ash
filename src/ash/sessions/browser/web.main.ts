@@ -16,16 +16,16 @@ import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
 import { FileDialogService } from '../../workbench/services/dialogs/browser/fileDialogService.js';
-import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
-import { onUnexpectedError } from "../../base/common/errors.js";
-import { Disposable } from "../../base/common/lifecycle.js";
-import { createDisconnectedRendererApi } from "../../workbench/browser/rendererApi.js";
+import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
+import { onUnexpectedError } from '../../base/common/errors.js';
+import { Disposable } from '../../base/common/lifecycle.js';
+import { createDisconnectedRendererApi } from '../../workbench/browser/rendererApi.js';
 import { BrowserLifecycleService } from '../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { BrowserHostColorSchemeService } from '../../workbench/services/themes/browser/browserHostColorSchemeService.js';
-import { BrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
+import { BrowserContextMenuService } from '../../platform/contextview/browser/contextMenuService.js';
 import { connectBrowserWorkbenchHost } from '../../workbench/browser/web.host.js';
 import { workspaceFromIdentifier } from '../../platform/workspace/common/workspace.js';
-import type { SessionsProfile } from "../common/sessionsProfile.js";
+import type { SessionsProfile } from '../common/sessionsProfile.js';
 import type { Workbench } from './workbench.js';
 import { createSessionsWorkbench } from './workbenchFactory.js';
 import { TitlebarPart } from './parts/titlebarPart.js';
@@ -82,7 +82,9 @@ export class SessionsBrowserMain extends Disposable {
 					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 				} : undefined,
 				contributionIds: [
+					'workbench.contrib.policyTelemetry',
 					'workbench.contrib.limitIndicator',
+					'status.languageStatus',
 					'workbench.contrib.opener',
 					'chatResponseResourceWorkbenchContribution',
 					'terminalAutoReplies',
@@ -103,9 +105,9 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.logs',
-					'workbench.contrib.appServerRecovery',
-					'workbench.contrib.workspacePermissionStatus',
+					'sessions.contrib.workspaceStatus',
 					'workbench.contrib.githubLinkPresentations',
+					'workbench.contrib.githubFileSystemProvider',
 					'workbench.contrib.url',
 					'workbench.contrib.chatAccessibilitySignals',
 					'workbench.contrib.speechAccessibilitySignal',

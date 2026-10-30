@@ -3,10 +3,10 @@ import type { RangeMapping, DetailedLineRangeMapping, LineRangeMapping } from '.
 import type { MovedText } from './linesDiffComputer.js';
 
 export enum LineDiffKind {
-	Unchanged = "unchanged",
-	Modified = "modified",
-	Removed = "removed",
-	Added = "added",
+	Unchanged = 'unchanged',
+	Modified = 'modified',
+	Removed = 'removed',
+	Added = 'added',
 }
 
 export interface DiffRange {

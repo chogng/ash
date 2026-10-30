@@ -1,5 +1,5 @@
-import { DocumentTransaction } from "./documentTransaction.js";
-import { type DocumentSelection } from "../core/documentSelection.js";
+import { DocumentTransaction } from './documentTransaction.js';
+import { type DocumentSelection } from '../core/documentSelection.js';
 
 export interface DocumentHistoryEntry {
 	readonly transaction: DocumentTransaction;
@@ -23,7 +23,7 @@ export class DocumentHistory {
 	private groupOpen = false;
 
 	constructor(limit = 1_000) {
-		if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("Document history limit must be a non-negative safe integer");
+		if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError('Document history limit must be a non-negative safe integer');
 		this.limit = limit;
 	}
 

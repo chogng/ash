@@ -860,6 +860,7 @@ pub struct LocalProfileRuntime {
     extension_packages: Mutex<Option<ProfileExtensionsAuthority>>,
     github_authentication: Mutex<Option<Arc<GitHubAuthenticationRuntime>>>,
     github_extension: Mutex<Option<Arc<GitHubExtensionRuntime>>>,
+    chatgpt_web: Mutex<Option<Arc<ash_chatgpt::ChatGptWebAuthentication>>>,
     editor_extension_policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     pub(crate) session_runtimes: Arc<crate::session_runtime_provider::SessionRuntimeProvider>,
 }
@@ -956,6 +957,7 @@ impl LocalProfileRuntime {
         let secrets = open_profile_secrets(
             &profile_root,
             std::env::var("ASH_USE_INMEMORY_SECRETSTORAGE"),
+            std::env::var("ASH_USE_DEVELOPMENT_SECRETSTORAGE"),
         )?;
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
@@ -1014,6 +1016,7 @@ impl LocalProfileRuntime {
             extension_packages: Mutex::new(None),
             github_authentication: Mutex::new(None),
             github_extension: Mutex::new(None),
+            chatgpt_web: Mutex::new(None),
         })
     }
 
@@ -1149,7 +1152,25 @@ impl CodebaseProviders {
 fn open_profile_secrets(
     profile_root: &Path,
     memory_setting: Result<String, std::env::VarError>,
+    development_setting: Result<String, std::env::VarError>,
 ) -> Result<Arc<dyn SecretStore>, OpenAppServerError> {
+    // The development host supplies this policy; a released host explicitly clears it.
+    // Keep the previous encrypted store untouched instead of attempting an implicit migration.
+    let (storage_root, default_mode) = match development_setting.as_deref() {
+        Ok("1") => (
+            profile_root.join("development-secrets"),
+            ash_secrets::SecretStorageMode::File,
+        ),
+        Ok("0") | Err(std::env::VarError::NotPresent) => (
+            profile_root.join("secrets"),
+            ash_secrets::SecretStorageMode::Encrypted,
+        ),
+        Ok(_) | Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(open_error(
+                "ASH_USE_DEVELOPMENT_SECRETSTORAGE must be 0 or 1",
+            ));
+        }
+    };
     match memory_setting.as_deref() {
         Ok("1") => return Ok(Arc::new(ash_secrets::MemorySecretStore::default())),
         Ok("0") | Err(std::env::VarError::NotPresent) => {}
@@ -1165,8 +1186,10 @@ fn open_profile_secrets(
     #[cfg(test)]
     let keyring = ash_secrets::FileSecretStore::open(profile_root.join("test-keyring"))
         .map_err(open_error)?;
-    ProfileSecretStore::open(profile_root.join("secrets"), Arc::new(keyring))
-        .map(|store| Arc::new(store) as Arc<dyn SecretStore>)
+    ProfileSecretStore::open_with_default_mode(storage_root, Arc::new(keyring), default_mode)
+        .map(|store| {
+            Arc::new(ash_secrets::SessionSecretStore::new(Arc::new(store))) as Arc<dyn SecretStore>
+        })
         .map_err(open_error)
 }
 
@@ -1391,6 +1414,7 @@ pub fn open_app_server_with_codebase_providers(
         (None, None) => open_profile_secrets(
             &options.profile_root,
             std::env::var("ASH_USE_INMEMORY_SECRETSTORAGE"),
+            std::env::var("ASH_USE_DEVELOPMENT_SECRETSTORAGE"),
         )?,
     };
     let mut connector_runtime = match options.connector_runtime.take() {
@@ -1587,6 +1611,24 @@ pub fn open_app_server_with_codebase_providers(
         options.profile_root.join("chatgpt-plan.lock"),
         Arc::clone(&model_client),
     );
+    let create_web_auth = || {
+        ash_chatgpt::ChatGptWebAuthentication::new(
+            options.profile_root.clone(),
+            profile_secrets.clone(),
+            model_client.clone(),
+            chatgpt_oauth.clone(),
+        )
+    };
+    let chatgpt_web = if let Some(profile) = &profile_runtime {
+        let mut authority = profile
+            .chatgpt_web
+            .lock()
+            .map_err(|_| OpenAppServerError("ChatGPT Web authority lock poisoned".into()))?;
+        authority.get_or_insert_with(create_web_auth).clone()
+    } else {
+        create_web_auth()
+    };
+    let chatgpt_web_login = chatgpt_web.login_driver();
     let kimi_oauth = match &model_operation_client {
         Some(client) => KimiOAuth::with_client(Arc::clone(&profile_secrets), Arc::clone(client)),
         None => KimiOAuth::production(Arc::clone(&profile_secrets))
@@ -1795,6 +1837,7 @@ pub fn open_app_server_with_codebase_providers(
         )
     });
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
+        chatgpt_web_login.clone(),
         chatgpt_plan.clone(),
         chatgpt_oauth.clone(),
         kimi_oauth.clone(),
@@ -1817,6 +1860,9 @@ pub fn open_app_server_with_codebase_providers(
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
     chatgpt_plan
+        .install_login_service(&login_service)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    chatgpt_web_login
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     chatgpt_oauth
@@ -1908,6 +1954,7 @@ pub fn open_app_server_with_codebase_providers(
     ))
     .with_login_service(login_service)
     .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
+    .with_chatgpt_web_authentication(chatgpt_web)
     .with_kimi_account(kimi_oauth)
     .with_supergrok_account(supergrok_oauth)
     .with_glm_accounts(glm_accounts)
@@ -3098,6 +3145,41 @@ impl ModelCatalog for ConfigBackedModelService {
         }
         Ok(ash_app_server_protocol::protocol::model::ModelListResult {
             models,
+            catalog_statuses: contexts
+                .catalog_snapshots()
+                .map(|(connection, snapshot)| {
+                    use ash_app_server_protocol::protocol::model::ModelCatalogIssue;
+                    use ash_app_server_protocol::protocol::model::ModelCatalogStatus;
+                    use ash_models_manager::CatalogWarningCode;
+                    ModelCatalogStatus {
+                        provider: snapshot.scope().provider().to_string(),
+                        connection: connection.to_owned(),
+                        freshness: snapshot.freshness(),
+                        issues: snapshot
+                            .warnings()
+                            .iter()
+                            .map(|warning| match warning.code() {
+                                CatalogWarningCode::RefreshFailed => {
+                                    ModelCatalogIssue::RefreshFailed
+                                }
+                                CatalogWarningCode::DiscoveryUnsupported => {
+                                    ModelCatalogIssue::DiscoveryUnsupported
+                                }
+                                CatalogWarningCode::AuthenticationRequired => {
+                                    ModelCatalogIssue::AuthenticationRequired
+                                }
+                                CatalogWarningCode::StaleCatalog => ModelCatalogIssue::StaleCatalog,
+                                CatalogWarningCode::UnknownCapability => {
+                                    ModelCatalogIssue::UnknownCapability
+                                }
+                                CatalogWarningCode::UnlistedModel => {
+                                    ModelCatalogIssue::UnlistedModel
+                                }
+                            })
+                            .collect(),
+                    }
+                })
+                .collect(),
             catalog_scopes: Some(scopes),
         })
     }
@@ -3198,6 +3280,35 @@ fn runtime_catalog_entry(
         entry.model().clone(),
         &context.info,
     );
+    result.source = Some(
+        ash_app_server_protocol::protocol::model::ModelCatalogSource {
+            provider_id: provider_config.provider.clone(),
+            connection_id: provider_config.connection.clone(),
+            metadata: entry.metadata_quality(),
+        },
+    );
+    // Public API reference prices do not describe subscriptions, custom gateways or endpoint overrides.
+    if provider_config.custom.is_none()
+        && provider_config.access_mode() == model_provider_info::ProviderAccessMode::Api
+        && provider_config
+            .base_url
+            .as_deref()
+            .is_none_or(|url| url.trim().is_empty())
+    {
+        static PRICES: std::sync::LazyLock<ash_model_accounting::RateCard> =
+            std::sync::LazyLock::new(|| {
+                ash_model_accounting::RateCard::bundled_accelerated_public_prices()
+                    .expect("bundled reference rate card is valid")
+            });
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| CoreError::Model(error.to_string()))?
+            .as_millis();
+        result.pricing = PRICES.catalog_prices(
+            entry.model(),
+            i64::try_from(now).map_err(|error| CoreError::Model(error.to_string()))?,
+        );
+    }
     result.maximum_context_window = context.maximum_window;
     result.long_context = entry.long_context(provider_config);
     result.selected_acceleration = provider_config

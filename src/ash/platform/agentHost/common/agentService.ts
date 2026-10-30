@@ -2,6 +2,30 @@ import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type * as Agent from './agent.js';
 
+export const CanvasesEnabledSettingId = 'chat.canvases.enabled';
+
+/** Window-owned Canvas callbacks. App Server supplies task identity; extensions supply sources. */
+export interface IAgentCanvasHost {
+	listCanvases(sessionId: string, threadId: string, signal: AbortSignal): Promise<readonly IAgentCanvasDefinition[] | undefined>;
+	openCanvasSource(request: IAgentCanvasOpenRequest, signal: AbortSignal): Promise<{ readonly url: string; readonly title?: string; readonly status?: string; }>;
+	closeCanvasSource(threadId: string, targetId: string, signal: AbortSignal): Promise<void>;
+	acceptCanvasOpen(request: { readonly sessionId: string; readonly threadId: string; readonly instanceId: string; }, state: { readonly id: string; readonly succeeded: boolean; }, source?: { readonly url: string; readonly title?: string; readonly status?: string; }): void;
+}
+
+export interface IAgentCanvasDefinition {
+	readonly id: { readonly extensionId: string; readonly canvasId: string; };
+	readonly displayName: string;
+	readonly description: string;
+	readonly requiresInput: boolean;
+}
+
+export interface IAgentCanvasOpenRequest {
+	readonly sessionId: string;
+	readonly threadId: string;
+	readonly instanceId: string;
+	readonly definition: { readonly extensionId: string; readonly canvasId: string; };
+}
+
 export interface IAgentSessionService {
 	/** Collects process logs from the runtime owning this Session, using connection-owned resources. */
 	collectDebugLogs(params: Agent.SessionReadParams, signal?: AbortSignal): Promise<{

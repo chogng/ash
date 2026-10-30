@@ -1,13 +1,13 @@
-import type { IAction, IActionRunner } from "../common/actions.js";
-import type { CancellationToken } from "../common/cancellation.js";
-import type { ResolvedKeybinding } from "../common/keybindings.js";
+import type { IAction, IActionRunner } from '../common/actions.js';
+import type { CancellationToken } from '../common/cancellation.js';
+import type { ResolvedKeybinding } from '../common/keybindings.js';
 import type {
 	AnchorAlignment,
 	AnchorAxisAlignment,
 	AnchorPosition,
-} from "./ui/contextview/contextview.js";
-import type { ActionViewItem } from "./ui/actionbar/actionViewItems.js";
-import type { MenuActionViewItemOptions } from "./ui/menu/menu.js";
+} from './ui/contextview/contextview.js';
+import type { ActionViewItem } from './ui/actionbar/actionViewItems.js';
+import type { MenuActionViewItemOptions } from './ui/menu/menu.js';
 
 export interface IContextMenuPoint {
 	readonly x: number;
@@ -30,7 +30,7 @@ export interface IContextMenuDelegate {
 	getAnchor(): ContextMenuAnchor;
 	getActions(): readonly IAction[];
 	getActionsContext?(event?: IContextMenuEvent): unknown;
-	getCheckedActionsRepresentation?(action: IAction): "radio" | "checkbox";
+	getCheckedActionsRepresentation?(action: IAction): 'radio' | 'checkbox';
 	getActionViewItem?(
 		action: IAction,
 		options: MenuActionViewItemOptions,

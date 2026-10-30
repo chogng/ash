@@ -1,6 +1,8 @@
 import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultMenuStyles, defaultKeybindingLabelStyles, defaultCheckboxStyles } from '../../theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement, stopEvent } from '../../../base/browser/dom.js';
-import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import { ActionViewItem, ButtonActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../base/browser/ui/inputbox/inputbox.js';
 import { Emitter } from '../../../base/common/event.js';
@@ -39,6 +41,9 @@ export interface IActionListItem<T> {
 	readonly badge?: string;
 	/** Searchable metadata announced with the action, separate from the visible label and badge. */
 	readonly detail?: string;
+	readonly description?: string;
+	readonly toolbarActions?: readonly IAction[];
+	readonly opensDialog?: boolean;
 }
 
 export interface IActionListOptions {
@@ -88,6 +93,66 @@ class ActionListHeader extends ActionViewItem {
 	}
 
 	public override setTabbable(_tabbable: boolean): void { }
+}
+
+/** A selectable row and its secondary actions share one navigation stop. */
+class ActionListAction extends ButtonActionViewItem {
+	private readonly toolbar: Button[] = [];
+
+	constructor(action: IAction, private readonly entry: IActionListItem<unknown>) {
+		super(action, { buttonStyles: defaultButtonStyles, buttonPresentation: 'quiet' });
+	}
+
+	public override render(container: HTMLElement): void {
+		container.classList.add('ash-action-widget-action');
+		super.render(container);
+		const button = this.button.domNode;
+		button.classList.add('ash-action-widget-primary');
+		button.setAttribute('role', this.entry.checked === undefined ? 'menuitem' : 'menuitemradio');
+		button.removeAttribute('aria-pressed');
+		if (this.entry.checked !== undefined) {
+			button.setAttribute('aria-checked', String(this.entry.checked));
+			const check = h(container.ownerDocument, 'span');
+			check.className = 'ash-action-widget-check';
+			check.hidden = !this.entry.checked;
+			check.setAttribute('aria-hidden', 'true');
+			appendIcon(Lxicon.check, check);
+			button.append(check);
+		}
+		const description = [this.entry.detail, this.entry.description, this.entry.badge].filter(Boolean).join(' · ');
+		if (description) { button.setAttribute('aria-description', description); }
+		if (this.entry.description) {
+			const summary = h(container.ownerDocument, 'span');
+			summary.className = 'ash-action-widget-summary';
+			summary.textContent = this.entry.description;
+			button.append(summary);
+		}
+		if (this.entry.badge) {
+			const badge = h(container.ownerDocument, 'span');
+			badge.className = 'ash-menu-badge';
+			badge.textContent = this.entry.badge;
+			button.append(badge);
+		}
+		for (const action of this.entry.toolbarActions ?? []) {
+			const secondary = this._register(new Button(container, {
+				...defaultButtonStyles, presentation: 'quiet', label: '', iconOnly: true, icon: action.icon,
+				ariaLabel: action.label, title: action.tooltip, enabled: action.enabled,
+				onClick: () => { void action.run(); },
+			}));
+			secondary.domNode.classList.add('ash-action-widget-secondary');
+			if (this.entry.opensDialog) { secondary.domNode.setAttribute('aria-haspopup', 'dialog'); }
+			this.toolbar.push(secondary);
+		}
+	}
+
+	protected override setupTooltip(): void {
+		this.setupDelayedHover(this.button.domNode, [this.action.label, this.entry.description].filter(Boolean).join(' · '));
+	}
+
+	public override setTabbable(tabbable: boolean): void {
+		super.setTabbable(tabbable);
+		for (const button of this.toolbar) { button.domNode.tabIndex = tabbable ? 0 : -1; }
+	}
 }
 
 /** Owns typed action dispatch and its pending state; Menu owns row focus and navigation. */
@@ -286,7 +351,12 @@ export class ActionList<T> extends Disposable {
 			getCheckedActionsRepresentation: () => 'radio',
 			getKeybinding: action => entries.get(action.id)?.keybinding,
 			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
-			actionViewItemProvider: action => entries.get(action.id)?.kind === ActionListItemKind.Header ? new ActionListHeader(action) : undefined,
+			actionViewItemProvider: action => {
+				const entry = entries.get(action.id);
+				if (!entry) { return undefined; }
+				if (entry.kind === ActionListItemKind.Header) { return new ActionListHeader(action); }
+				return entry.toolbarActions?.length ? new ActionListAction(action, entry) : undefined;
+			},
 		}, defaultMenuStyles));
 		menu.element.setAttribute('aria-label', localize('actionWidget.label', 'Actions'));
 		const hint = this.domNode.getAttribute('aria-description');
@@ -354,6 +424,8 @@ export class ActionList<T> extends Disposable {
 			this.filter?.focus();
 		}
 	}
+
+	public getFocusedElement(): IActionListItem<T> | undefined { return this.focusedEntry; }
 
 	public layout(minWidth: number): number {
 		// Measure the existing menu at its intrinsic width, including icons, shortcuts and chrome.

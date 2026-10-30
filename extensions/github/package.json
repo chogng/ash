@@ -16,7 +16,7 @@
     "entrypoint": "ash-github-extension",
     "scope": "profile",
     "capabilities": [
-      "github.api.v1"
+      "github.api.v2"
     ],
     "clients": [
       "app"

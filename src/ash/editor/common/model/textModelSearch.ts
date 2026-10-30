@@ -1,8 +1,8 @@
-import { escapeRegExpCharacters } from "../../../base/common/strings.js";
-import { Position } from "../core/position.js";
-import { Range } from "../core/range.js";
+import { escapeRegExpCharacters } from '../../../base/common/strings.js';
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
 import { getMapForWordSeparators, WordCharacterClass, type WordCharacterClassifier } from '../core/wordCharacterClassifier.js';
-import type { TextModel } from "./textModel.js";
+import type { TextModel } from './textModel.js';
 
 export function isMultilineRegexSource(searchString: string): boolean {
 	if (!searchString) return false;
@@ -23,8 +23,8 @@ const MAX_PATTERN_LENGTH = 4_096;
 
 /** Selects whether a search pattern is interpreted literally or as a JavaScript regular expression. */
 export enum TextSearchPatternKind {
-	Literal = "literal",
-	RegularExpression = "regularExpression",
+	Literal = 'literal',
+	RegularExpression = 'regularExpression',
 }
 
 /** One caller-readable document search request. */
@@ -56,7 +56,7 @@ export interface TextSearchMatch {
 export class TextSearchQueryError extends Error {
 	constructor(message: string, options?: ErrorOptions) {
 		super(message, options);
-		this.name = "TextSearchQueryError";
+		this.name = 'TextSearchQueryError';
 	}
 }
 
@@ -118,8 +118,8 @@ export function findNextTextMatch(model: TextModel, query: TextModelSearchQuery,
 }
 
 function validateQuery(query: TextModelSearchQuery): void {
-	if (!query || typeof query !== "object") throw new TypeError("Text search requires a query");
-	if (typeof query.pattern !== "string") throw new TypeError("Text search pattern must be a string");
+	if (!query || typeof query !== 'object') throw new TypeError('Text search requires a query');
+	if (typeof query.pattern !== 'string') throw new TypeError('Text search pattern must be a string');
 	if (query.wordSeparators !== undefined && typeof query.wordSeparators !== 'string') throw new TypeError('Text search word separators must be a string');
 	if (query.pattern.length > MAX_PATTERN_LENGTH) {
 		throw new TextSearchQueryError(`Text search pattern must not exceed ${MAX_PATTERN_LENGTH} UTF-16 units`);
@@ -142,9 +142,9 @@ function compileQuery(query: TextModelSearchQuery): RegExp {
 		? query.pattern
 		: escapeRegExpCharacters(query.pattern);
 	try {
-		return new RegExp(source, `gmu${query.matchCase ? "" : "i"}`);
+		return new RegExp(source, `gmu${query.matchCase ? '' : 'i'}`);
 	} catch (error) {
-		throw new TextSearchQueryError("Text search regular expression is invalid", { cause: error });
+		throw new TextSearchQueryError('Text search regular expression is invalid', { cause: error });
 	}
 }
 

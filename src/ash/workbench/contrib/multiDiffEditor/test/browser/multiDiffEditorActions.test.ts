@@ -10,7 +10,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IEditorPart as IEditorPartShape } from '../../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';

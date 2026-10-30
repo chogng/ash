@@ -20,7 +20,7 @@ export class ToggleTabFocusModeAction extends Action2 {
 				weight: KeybindingWeight.EditorContrib
 			},
 			metadata: {
-				description: nls.localize2('tabMovesFocusDescriptions', "Determines whether the tab key moves focus around the workbench or inserts the tab character in the current editor. This is also called tab trapping, tab navigation, or tab focus mode."),
+				description: nls.localize2('tabMovesFocusDescriptions', 'Determines whether the tab key moves focus around the workbench or inserts the tab character in the current editor. This is also called tab trapping, tab navigation, or tab focus mode.'),
 			},
 			f1: true
 		});
@@ -30,8 +30,8 @@ export class ToggleTabFocusModeAction extends Action2 {
 		const movesFocus = !TabFocus.getTabFocusMode();
 		TabFocus.setTabFocusMode(movesFocus);
 		alert(movesFocus
-			? nls.localize('toggle.tabMovesFocus.on', "Pressing Tab will now move focus to the next focusable element")
-			: nls.localize('toggle.tabMovesFocus.off', "Pressing Tab will now insert the tab character"));
+			? nls.localize('toggle.tabMovesFocus.on', 'Pressing Tab will now move focus to the next focusable element')
+			: nls.localize('toggle.tabMovesFocus.off', 'Pressing Tab will now insert the tab character'));
 	}
 }
 

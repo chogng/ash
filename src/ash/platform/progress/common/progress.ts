@@ -1,5 +1,5 @@
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
-import type { INotificationSource, NotificationPriority } from "../../notification/common/notification.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import type { INotificationSource, NotificationPriority } from '../../notification/common/notification.js';
 
 export const enum ProgressLocation {
 	Explorer = 1,
@@ -68,4 +68,4 @@ export interface IProgressService {
 	): Promise<R>;
 }
 
-export const IProgressService = createServiceIdentifier<IProgressService>("progressService");
+export const IProgressService = createServiceIdentifier<IProgressService>('progressService');

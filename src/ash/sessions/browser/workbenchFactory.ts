@@ -56,4 +56,3 @@ export async function createSessionsWorkbench(options: IWorkbenchOptions): Promi
 		throw error;
 	}
 }
-

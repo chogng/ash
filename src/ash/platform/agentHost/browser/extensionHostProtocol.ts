@@ -22,11 +22,11 @@ export interface ExtensionHostInvokeOptions {
 	readonly now?: () => number;
 }
 
-const FAILURE_CODES = ["authorityDenied", "staleSnapshot", "isolationUnavailable", "launchFailed", "handshakeFailed", "activationFailed", "registrationNotFound", "operationNotSupported", "cancelled", "deadlineExceeded", "quotaExceeded", "hostExited", "hostRestarted", "outcomeIndeterminate", "crashLoop", "invalidProtocol", "internal"] as const;
-const LIFECYCLES = ["dormant", "stopped", "starting", "handshaking", "ready", "recovering", "crashLoop", "failed"] as const;
-const LANGUAGE_OPERATIONS = ["diagnostics", "selectionRanges", "documentHighlights", "workspaceSymbols", "completion", "definition", "hover", "references", "rename", "formatting", "codeAction", "codeLens", "documentSymbols", "foldingRanges", "documentLinks", "documentColors", "semanticTokens", "inlayHints", "linkedEditing", "parameterHints"] as const;
-const CANCELLATION_REASONS = ["caller", "deadline", "authorityRevoked", "shutdown"] as const;
-const OUTPUT_SEVERITIES = ["trace", "debug", "information", "warning", "error", "log"] as const;
+const FAILURE_CODES = ['authorityDenied', 'staleSnapshot', 'isolationUnavailable', 'launchFailed', 'handshakeFailed', 'activationFailed', 'registrationNotFound', 'operationNotSupported', 'cancelled', 'deadlineExceeded', 'quotaExceeded', 'hostExited', 'hostRestarted', 'outcomeIndeterminate', 'crashLoop', 'invalidProtocol', 'internal'] as const;
+const LIFECYCLES = ['dormant', 'stopped', 'starting', 'handshaking', 'ready', 'recovering', 'crashLoop', 'failed'] as const;
+const LANGUAGE_OPERATIONS = ['diagnostics', 'selectionRanges', 'documentHighlights', 'workspaceSymbols', 'completion', 'definition', 'hover', 'references', 'rename', 'formatting', 'codeAction', 'codeLens', 'documentSymbols', 'foldingRanges', 'documentLinks', 'documentColors', 'semanticTokens', 'inlayHints', 'linkedEditing', 'parameterHints'] as const;
+const CANCELLATION_REASONS = ['caller', 'deadline', 'authorityRevoked', 'shutdown'] as const;
+const OUTPUT_SEVERITIES = ['trace', 'debug', 'information', 'warning', 'error', 'log'] as const;
 // Renderer envelopes carry both a document snapshot and a provider's render tree.
 // Keep this above their combined bounded sizes; each process still enforces its
 // own admitted Host RPC quota (512 KiB by default, larger for product providers).
@@ -37,15 +37,15 @@ const MAX_PAYLOAD_DEPTH = 160;
 const MAX_COLLECTION_ENTRIES = 262_144;
 
 export function normalizeExtensionHostSnapshot(value: unknown): ExtensionHostFleetSnapshot {
-	const snapshot = exactRecord(value, "Extension Host snapshot", ["extensions", "generation"]);
-	const extensions = boundedArray(snapshot.extensions, "Extension Host extensions", 128).map(normalizeRuntime);
-	assertUnique(extensions.map(extension => extension.id), "Extension Host extension IDs");
-	return Object.freeze({ generation: positiveSafeInteger(snapshot.generation, "Extension Host fleet generation"), extensions: Object.freeze(extensions) });
+	const snapshot = exactRecord(value, 'Extension Host snapshot', ['extensions', 'generation']);
+	const extensions = boundedArray(snapshot.extensions, 'Extension Host extensions', 128).map(normalizeRuntime);
+	assertUnique(extensions.map(extension => extension.id), 'Extension Host extension IDs');
+	return Object.freeze({ generation: positiveSafeInteger(snapshot.generation, 'Extension Host fleet generation'), extensions: Object.freeze(extensions) });
 }
 
 export function normalizeExtensionHostChanged(value: unknown): number {
-	const changed = exactRecord(value, "Extension Host changed notification", ["generation"]);
-	return positiveSafeInteger(changed.generation, "Extension Host changed generation");
+	const changed = exactRecord(value, 'Extension Host changed notification', ['generation']);
+	return positiveSafeInteger(changed.generation, 'Extension Host changed generation');
 }
 
 // Only this boundary's own deeply frozen output can bypass another same-realm
@@ -56,29 +56,29 @@ export function normalizeExtensionHostPayload(value: unknown): JsonValue {
 	if (value !== null && typeof value === 'object' && normalizedPayloads.has(value)) return value as JsonValue;
 	const budget = { bytes: 0, jsonBytes: 0, nodes: 0, seen: new Set<object>(), path: [] as (string | number)[] };
 	const normalized = normalizeJsonValue(value, 0, budget);
-	if (budget.jsonBytes > MAX_PAYLOAD_BYTES) throw new RangeError("Extension Host payload is too large");
+	if (budget.jsonBytes > MAX_PAYLOAD_BYTES) throw new RangeError('Extension Host payload is too large');
 	if (normalized !== null && typeof normalized === 'object') normalizedPayloads.add(normalized);
 	return normalized;
 }
 
 export function normalizeExtensionHostInvocationRequest(value: ExtensionHostInvocationRequest): ExtensionHostInvocationRequest {
-	const request = exactRecord(value, "Extension Host invocation", ["activationGeneration", "deadlineUnixMillis", "extensionId", "incarnation", "operation", "payload", "registrationId"], ["registrationGeneration"]);
+	const request = exactRecord(value, 'Extension Host invocation', ['activationGeneration', 'deadlineUnixMillis', 'extensionId', 'incarnation', 'operation', 'payload', 'registrationId'], ['registrationGeneration']);
 	return Object.freeze({
-		extensionId: boundedText(request.extensionId, "Extension Host extension ID", 256),
-		registrationId: boundedText(request.registrationId, "Extension Host registration ID", 256),
-		...(request.registrationGeneration === undefined ? {} : { registrationGeneration: positiveSafeInteger(request.registrationGeneration, "Speech registration generation") }),
-		activationGeneration: positiveSafeInteger(request.activationGeneration, "Extension Host activation generation"),
-		incarnation: positiveSafeInteger(request.incarnation, "Extension Host incarnation"),
-		operation: boundedText(request.operation, "Extension Host operation", 128),
+		extensionId: boundedText(request.extensionId, 'Extension Host extension ID', 256),
+		registrationId: boundedText(request.registrationId, 'Extension Host registration ID', 256),
+		...(request.registrationGeneration === undefined ? {} : { registrationGeneration: positiveSafeInteger(request.registrationGeneration, 'Speech registration generation') }),
+		activationGeneration: positiveSafeInteger(request.activationGeneration, 'Extension Host activation generation'),
+		incarnation: positiveSafeInteger(request.incarnation, 'Extension Host incarnation'),
+		operation: boundedText(request.operation, 'Extension Host operation', 128),
 		payload: normalizeExtensionHostPayload(request.payload),
-		deadlineUnixMillis: positiveSafeInteger(request.deadlineUnixMillis, "Extension Host invocation deadline"),
+		deadlineUnixMillis: positiveSafeInteger(request.deadlineUnixMillis, 'Extension Host invocation deadline'),
 	});
 }
 
 /** Reads a connection-owned result when notified and cancels on local abandonment. */
 export async function invokeExtensionHost(transport: ExtensionHostInvokeTransport, request: ExtensionHostInvocationRequest, signal: AbortSignal, options: ExtensionHostInvokeOptions = {}): Promise<JsonValue> {
 	const normalized = normalizeExtensionHostInvocationRequest(request);
-	throwIfCancelled(signal, "Extension Host invocation cancelled");
+	throwIfCancelled(signal, 'Extension Host invocation cancelled');
 	const now = options.now ?? Date.now;
 	let invocationId: string | undefined;
 	let completionBeforeStart = false;
@@ -111,10 +111,10 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 		}));
 		subscriptions.add(transport.onDidDisconnect(error => disconnected.abort(error)));
 		scheduleDeadline();
-		throwIfCancelled(pendingSignal, "Extension Host invocation cancelled");
+		throwIfCancelled(pendingSignal, 'Extension Host invocation cancelled');
 		const started = transport.start(normalized).then(value => {
-			const result = exactRecord(value, "Extension Host invocation start result", ["invocationId"]);
-			const id = boundedText(result.invocationId, "Extension Host invocation ID", 256);
+			const result = exactRecord(value, 'Extension Host invocation start result', ['invocationId']);
+			const id = boundedText(result.invocationId, 'Extension Host invocation ID', 256);
 			invocationId = id;
 			// Start can allocate a session after its caller has already left. The late
 			// continuation still owns that identity and must retire it exactly once.
@@ -124,22 +124,22 @@ export async function invokeExtensionHost(transport: ExtensionHostInvokeTranspor
 		invocationId = await raceCancellationError(started, pendingSignal);
 		if (!completionBeforeStart) await raceCancellationError(completed.p, pendingSignal);
 		while (true) {
-			throwIfCancelled(pendingSignal, "Extension Host invocation cancelled");
-			if (now() >= normalized.deadlineUnixMillis) throw new ExtensionHostInvocationError("deadlineExceeded", "Extension Host invocation deadline elapsed");
+			throwIfCancelled(pendingSignal, 'Extension Host invocation cancelled');
+			if (now() >= normalized.deadlineUnixMillis) throw new ExtensionHostInvocationError('deadlineExceeded', 'Extension Host invocation deadline elapsed');
 			const notified = completed.isSettled;
 			const result = normalizeReadResult(await raceCancellationError(transport.read(invocationId), pendingSignal));
-			if (result.state === "pending") {
+			if (result.state === 'pending') {
 				if (notified) throw new ExtensionHostInvocationError('invalidProtocol', 'Extension Host completion has no terminal result');
 				await raceCancellationError(completed.p, pendingSignal);
 				continue;
 			}
 			terminal = true;
-			if (result.state === "succeeded") return result.payload;
-			if (result.state === "failed") throw new ExtensionHostInvocationError(result.code, result.message);
+			if (result.state === 'succeeded') return result.payload;
+			if (result.state === 'failed') throw new ExtensionHostInvocationError(result.code, result.message);
 			throw new CancellationError(`Extension Host invocation cancelled: ${result.reason}`, result.reason);
 		}
 	} catch (error) {
-		if (deadline.signal.aborted && !signal.aborted) throw new ExtensionHostInvocationError("deadlineExceeded", "Extension Host invocation deadline elapsed");
+		if (deadline.signal.aborted && !signal.aborted) throw new ExtensionHostInvocationError('deadlineExceeded', 'Extension Host invocation deadline elapsed');
 		if (disconnected.signal.aborted && !signal.aborted) throw disconnected.signal.reason;
 		throw error;
 	} finally {
@@ -159,13 +159,13 @@ export function normalizeExtensionHostRegistrations(value: unknown): readonly Ex
 }
 
 function normalizeRuntime(value: unknown): ExtensionHostRuntime {
-	const runtime = exactRecord(value, "Extension Host runtime", ["activationGeneration", "failure", "id", "incarnation", "lifecycle", "outputEvents", "packageDigest", "registrations", "runtimeApiVersion", "stderr", "version"], ["activation"]);
+	const runtime = exactRecord(value, 'Extension Host runtime', ['activationGeneration', 'failure', 'id', 'incarnation', 'lifecycle', 'outputEvents', 'packageDigest', 'registrations', 'runtimeApiVersion', 'stderr', 'version'], ['activation']);
 	const registrations = normalizeExtensionHostRegistrations(runtime.registrations);
-	const outputEvents = boundedArray(runtime.outputEvents, "Extension Host Output events", 4096).map(normalizeOutputEvent);
-	if (utf8Length(JSON.stringify(outputEvents)) > MAX_OUTPUT_EVENT_BYTES) throw new RangeError("Extension Host Output event history is too large");
-	assertStrictlyIncreasing(outputEvents.map(event => event.sequence), "Extension Host Output event sequences");
-	const lifecycle = stringEnum(runtime.lifecycle, "Extension Host lifecycle", LIFECYCLES);
-	const incarnation = optionalPositiveSafeInteger(runtime.incarnation, "Extension Host incarnation");
+	const outputEvents = boundedArray(runtime.outputEvents, 'Extension Host Output events', 4096).map(normalizeOutputEvent);
+	if (utf8Length(JSON.stringify(outputEvents)) > MAX_OUTPUT_EVENT_BYTES) throw new RangeError('Extension Host Output event history is too large');
+	assertStrictlyIncreasing(outputEvents.map(event => event.sequence), 'Extension Host Output event sequences');
+	const lifecycle = stringEnum(runtime.lifecycle, 'Extension Host lifecycle', LIFECYCLES);
+	const incarnation = optionalPositiveSafeInteger(runtime.incarnation, 'Extension Host incarnation');
 	let activation: ExtensionHostActivation | undefined;
 	if (runtime.activation !== undefined) {
 		const facts = exactRecord(runtime.activation, 'Extension activation', ['events', 'commands']);
@@ -179,63 +179,63 @@ function normalizeRuntime(value: unknown): ExtensionHostRuntime {
 	}
 	if (lifecycle === 'dormant' && (!activation || incarnation !== undefined || registrations.length || outputEvents.length || runtime.stderr !== '' || runtime.failure !== null)) { throw new TypeError('Dormant extension requires manifest facts and no process registration'); }
 	if (lifecycle !== 'dormant' && activation) { throw new TypeError('Activation facts require a dormant extension'); }
-	if (lifecycle === "ready" && incarnation === undefined) throw new TypeError("Ready Extension Host runtime must have an incarnation");
+	if (lifecycle === 'ready' && incarnation === undefined) throw new TypeError('Ready Extension Host runtime must have an incarnation');
 	return Object.freeze({
-		id: boundedText(runtime.id, "Extension Host extension ID", 256),
-		version: boundedText(runtime.version, "Extension Host extension version", 128),
-		packageDigest: sha256Digest(runtime.packageDigest, "Extension Host package digest"),
-		runtimeApiVersion: boundedPositiveSafeInteger(runtime.runtimeApiVersion, "Extension Host runtime API version", 65_535),
-		activationGeneration: positiveSafeInteger(runtime.activationGeneration, "Extension Host activation generation"),
+		id: boundedText(runtime.id, 'Extension Host extension ID', 256),
+		version: boundedText(runtime.version, 'Extension Host extension version', 128),
+		packageDigest: sha256Digest(runtime.packageDigest, 'Extension Host package digest'),
+		runtimeApiVersion: boundedPositiveSafeInteger(runtime.runtimeApiVersion, 'Extension Host runtime API version', 65_535),
+		activationGeneration: positiveSafeInteger(runtime.activationGeneration, 'Extension Host activation generation'),
 		incarnation,
 		lifecycle,
 		...(activation ? { activation } : {}),
 		failure: runtime.failure === null ? undefined : normalizeFailure(runtime.failure),
-		stderr: boundedOptionalText(runtime.stderr, "Extension Host stderr", 262_144),
+		stderr: boundedOptionalText(runtime.stderr, 'Extension Host stderr', 262_144),
 		outputEvents: Object.freeze(outputEvents),
 		registrations: Object.freeze(registrations),
 	});
 }
 
 function normalizeOutputEvent(value: unknown): ExtensionHostOutputEvent {
-	const input = record(value, "Extension Host Output event");
+	const input = record(value, 'Extension Host Output event');
 	const operation = input.operation;
-	const sequence = positiveSafeInteger(input.sequence, "Extension Host Output event sequence");
-	const incarnation = positiveSafeInteger(input.incarnation, "Extension Host Output event incarnation");
-	const activationGeneration = positiveSafeInteger(input.activationGeneration, "Extension Host Output event activation generation");
+	const sequence = positiveSafeInteger(input.sequence, 'Extension Host Output event sequence');
+	const incarnation = positiveSafeInteger(input.incarnation, 'Extension Host Output event incarnation');
+	const activationGeneration = positiveSafeInteger(input.activationGeneration, 'Extension Host Output event activation generation');
 	const channelId = outputChannelId(input.channelId);
-	if (operation === "create") {
-		exactKeys(input, "Extension Host Output create event", ["activationGeneration", "channelId", "incarnation", "kind", "label", "operation", "sequence"]);
-		return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId, label: boundedText(input.label, "Extension Host Output channel label", 512), kind: stringEnum(input.kind, "Extension Host Output channel kind", ["output", "log"] as const) }) });
+	if (operation === 'create') {
+		exactKeys(input, 'Extension Host Output create event', ['activationGeneration', 'channelId', 'incarnation', 'kind', 'label', 'operation', 'sequence']);
+		return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId, label: boundedText(input.label, 'Extension Host Output channel label', 512), kind: stringEnum(input.kind, 'Extension Host Output channel kind', ['output', 'log'] as const) }) });
 	}
-	if (operation === "append" || operation === "replace") {
-		exactKeys(input, `Extension Host Output ${operation} event`, ["activationGeneration", "category", "channelId", "incarnation", "operation", "sequence", "severity", "text"]);
-		const category = input.category === null ? undefined : boundedText(input.category, "Extension Host Output category", 128);
-		return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId, text: boundedOptionalText(input.text, "Extension Host Output text", 524_288), severity: stringEnum(input.severity, "Extension Host Output severity", OUTPUT_SEVERITIES), category }) });
+	if (operation === 'append' || operation === 'replace') {
+		exactKeys(input, `Extension Host Output ${operation} event`, ['activationGeneration', 'category', 'channelId', 'incarnation', 'operation', 'sequence', 'severity', 'text']);
+		const category = input.category === null ? undefined : boundedText(input.category, 'Extension Host Output category', 128);
+		return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId, text: boundedOptionalText(input.text, 'Extension Host Output text', 524_288), severity: stringEnum(input.severity, 'Extension Host Output severity', OUTPUT_SEVERITIES), category }) });
 	}
-	if (operation === "clear" || operation === "dispose") {
-		exactKeys(input, `Extension Host Output ${operation} event`, ["activationGeneration", "channelId", "incarnation", "operation", "sequence"]);
+	if (operation === 'clear' || operation === 'dispose') {
+		exactKeys(input, `Extension Host Output ${operation} event`, ['activationGeneration', 'channelId', 'incarnation', 'operation', 'sequence']);
 		return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId }) });
 	}
-	if (operation === "show") {
-		exactKeys(input, "Extension Host Output show event", ["activationGeneration", "channelId", "incarnation", "operation", "preserveFocus", "sequence"]);
-		if (typeof input.preserveFocus !== "boolean") throw new TypeError("Extension Host Output preserve-focus flag is invalid");
+	if (operation === 'show') {
+		exactKeys(input, 'Extension Host Output show event', ['activationGeneration', 'channelId', 'incarnation', 'operation', 'preserveFocus', 'sequence']);
+		if (typeof input.preserveFocus !== 'boolean') throw new TypeError('Extension Host Output preserve-focus flag is invalid');
 		return Object.freeze({ sequence, incarnation, activationGeneration, operation: Object.freeze({ operation, channelId, preserveFocus: input.preserveFocus }) });
 	}
-	throw new TypeError("Extension Host Output operation is invalid");
+	throw new TypeError('Extension Host Output operation is invalid');
 }
 
 function boundedOptionalText(value: unknown, owner: string, maximumLength: number): string {
-	if (typeof value !== "string") throw new TypeError(`${owner} must be a string`);
-	if (value.length > maximumLength || value.includes("\0")) throw new RangeError(`${owner} is invalid`);
+	if (typeof value !== 'string') throw new TypeError(`${owner} must be a string`);
+	if (value.length > maximumLength || value.includes('\0')) throw new RangeError(`${owner} is invalid`);
 	return value;
 }
 
 function normalizeFailure(value: unknown): ExtensionHostRuntimeFailure {
-	const failure = exactRecord(value, "Extension Host failure", ["code", "incarnation", "message"]);
+	const failure = exactRecord(value, 'Extension Host failure', ['code', 'incarnation', 'message']);
 	return Object.freeze({
-		code: stringEnum(failure.code, "Extension Host failure code", FAILURE_CODES),
-		message: boundedText(failure.message, "Extension Host failure message", 4096),
-		incarnation: optionalPositiveSafeInteger(failure.incarnation, "Extension Host failure incarnation"),
+		code: stringEnum(failure.code, 'Extension Host failure code', FAILURE_CODES),
+		message: boundedText(failure.message, 'Extension Host failure message', 4096),
+		incarnation: optionalPositiveSafeInteger(failure.incarnation, 'Extension Host failure incarnation'),
 	});
 }
 
@@ -274,9 +274,9 @@ function statusBarIdentifier(value: unknown): string {
 }
 
 function normalizeRegistration(value: unknown): ExtensionHostRegistration {
-	const input = record(value, "Extension Host registration");
+	const input = record(value, 'Extension Host registration');
 	const kind = input.kind;
-	const registrationId = boundedText(input.registrationId, "Extension Host registration ID", 256);
+	const registrationId = boundedText(input.registrationId, 'Extension Host registration ID', 256);
 	if (kind === 'remoteAuthorityResolver' || kind === 'remoteConnectionResolver') {
 		exactKeys(input, 'Remote resolver registration', ['kind', 'registrationId', 'authorityPrefix']);
 		const authorityPrefix = validateRemoteConnectionResolverPrefix(boundedText(input.authorityPrefix, 'Remote prefix', 64));
@@ -317,8 +317,8 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		assertUnique(schemes, 'Extension Host opener schemes');
 		return Object.freeze({ kind, registrationId, schemes: Object.freeze(schemes), label: boundedText(input.label, 'Extension Host opener label', 512) });
 	}
-	if (kind === "command") {
-		exactKeys(input, "Extension Host command registration", ["command", "kind", "registrationId", "title"], ['category', 'enablement', 'icon', 'menus']);
+	if (kind === 'command') {
+		exactKeys(input, 'Extension Host command registration', ['command', 'kind', 'registrationId', 'title'], ['category', 'enablement', 'icon', 'menus']);
 		const menus = input.menus === undefined ? undefined : boundedArray(input.menus, 'Extension command menus', 64).map(value => {
 			const menu = exactRecord(value, 'Extension command menu', ['menu'], ['when', 'group', 'alt']);
 			return Object.freeze({
@@ -329,19 +329,19 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 			});
 		});
 		return Object.freeze({
-			kind, registrationId, command: boundedText(input.command, "Extension Host command", 256), title: boundedText(input.title, "Extension Host command title", 512),
+			kind, registrationId, command: boundedText(input.command, 'Extension Host command', 256), title: boundedText(input.title, 'Extension Host command title', 512),
 			...(input.category === undefined ? {} : { category: boundedText(input.category, 'Extension command category', 512) }),
 			...(input.enablement === undefined ? {} : { enablement: boundedText(input.enablement, 'Extension command enablement', 2048) }),
 			...(input.icon === undefined ? {} : { icon: boundedText(input.icon, 'Extension command icon', 128) }), ...(menus === undefined ? {} : { menus: Object.freeze(menus) })
 		});
 	}
-	if (kind === "languageProvider") {
-		exactKeys(input, "Extension Host language registration", ["kind", "languageIds", "operations", "registrationId"], ["completionTriggerCharacters"]);
-		const languageIds = boundedArray(input.languageIds, "Extension Host language IDs", 64).map((languageId, index) => boundedText(languageId, `Extension Host language ID ${index}`, 256));
-		const operations = boundedArray(input.operations, "Extension Host language operations", 32).map(operation => stringEnum(operation, "Extension Host language operation", LANGUAGE_OPERATIONS));
-		if (languageIds.length === 0 || operations.length === 0) throw new TypeError("Extension Host language registration must not be empty");
-		assertUnique(languageIds, "Extension Host language IDs");
-		assertUnique(operations, "Extension Host language operations");
+	if (kind === 'languageProvider') {
+		exactKeys(input, 'Extension Host language registration', ['kind', 'languageIds', 'operations', 'registrationId'], ['completionTriggerCharacters']);
+		const languageIds = boundedArray(input.languageIds, 'Extension Host language IDs', 64).map((languageId, index) => boundedText(languageId, `Extension Host language ID ${index}`, 256));
+		const operations = boundedArray(input.operations, 'Extension Host language operations', 32).map(operation => stringEnum(operation, 'Extension Host language operation', LANGUAGE_OPERATIONS));
+		if (languageIds.length === 0 || operations.length === 0) throw new TypeError('Extension Host language registration must not be empty');
+		assertUnique(languageIds, 'Extension Host language IDs');
+		assertUnique(operations, 'Extension Host language operations');
 		const triggers = input.completionTriggerCharacters === undefined ? [] : boundedArray(input.completionTriggerCharacters, 'Completion trigger characters', 64).map(value => {
 			const character = boundedText(value, 'Completion trigger character', 8);
 			if ([...character].length !== 1) throw new TypeError('Completion trigger must contain one character');
@@ -351,9 +351,9 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		if (triggers.length && !operations.includes('completion')) throw new TypeError('Completion triggers require a completion provider');
 		return Object.freeze({ kind, registrationId, ...(triggers.length ? { completionTriggerCharacters: Object.freeze(triggers) } : {}), languageIds: Object.freeze(languageIds), operations: Object.freeze(operations) });
 	}
-	if (kind === "debugAdapter") {
-		exactKeys(input, "Extension Host Debug Adapter registration", ["debuggerType", "kind", "registrationId"]);
-		return Object.freeze({ kind, registrationId, debuggerType: boundedText(input.debuggerType, "Extension Host Debug Adapter type", 256) });
+	if (kind === 'debugAdapter') {
+		exactKeys(input, 'Extension Host Debug Adapter registration', ['debuggerType', 'kind', 'registrationId']);
+		return Object.freeze({ kind, registrationId, debuggerType: boundedText(input.debuggerType, 'Extension Host Debug Adapter type', 256) });
 	}
 	if (kind === 'debugAdapterTracker') {
 		exactKeys(input, 'Extension Host Debug Adapter tracker', ['debuggerType', 'kind', 'registrationId']);
@@ -394,13 +394,13 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, 'Extension Host terminal environment registration', ['kind', 'registrationId']);
 		return Object.freeze({ kind, registrationId });
 	}
-	if (kind === "taskProvider") {
-		exactKeys(input, "Extension Host Task provider registration", ["kind", "registrationId", "taskType"]);
-		return Object.freeze({ kind, registrationId, taskType: boundedText(input.taskType, "Extension Host Task type", 256) });
+	if (kind === 'taskProvider') {
+		exactKeys(input, 'Extension Host Task provider registration', ['kind', 'registrationId', 'taskType']);
+		return Object.freeze({ kind, registrationId, taskType: boundedText(input.taskType, 'Extension Host Task type', 256) });
 	}
-	if (kind === "testProfileProvider") {
-		exactKeys(input, "Extension Host Test Profile provider registration", ["kind", "label", "providerId", "registrationId"]);
-		return Object.freeze({ kind, registrationId, providerId: boundedText(input.providerId, "Extension Host Test Profile provider ID", 256), label: boundedText(input.label, "Extension Host Test Profile provider label", 512) });
+	if (kind === 'testProfileProvider') {
+		exactKeys(input, 'Extension Host Test Profile provider registration', ['kind', 'label', 'providerId', 'registrationId']);
+		return Object.freeze({ kind, registrationId, providerId: boundedText(input.providerId, 'Extension Host Test Profile provider ID', 256), label: boundedText(input.label, 'Extension Host Test Profile provider label', 512) });
 	}
 	if (kind === 'treeDataProvider') {
 		exactKeys(input, 'Extension Host tree registration', ['kind', 'registrationId', 'viewId', 'title'], ['containerId']);
@@ -426,57 +426,57 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		const presentationKind = parseLinkPresentation({ kind: input.presentationKind }).kind;
 		return Object.freeze({ kind, registrationId, uriPattern, presentationKind });
 	}
-	throw new TypeError("Extension Host registration kind is invalid");
+	throw new TypeError('Extension Host registration kind is invalid');
 }
 
-type ReadResult = { readonly state: "pending"; } | { readonly state: "succeeded"; readonly payload: JsonValue; } | { readonly state: "failed"; readonly code: ExtensionHostFailureCode; readonly message: string; } | { readonly state: "cancelled"; readonly reason: ExtensionHostCancellationReason; };
+type ReadResult = { readonly state: 'pending'; } | { readonly state: 'succeeded'; readonly payload: JsonValue; } | { readonly state: 'failed'; readonly code: ExtensionHostFailureCode; readonly message: string; } | { readonly state: 'cancelled'; readonly reason: ExtensionHostCancellationReason; };
 
 function normalizeReadResult(value: unknown): ReadResult {
-	const result = record(value, "Extension Host invocation read result");
-	if (result.state === "pending") {
-		exactKeys(result, "Extension Host pending invocation", ["state"]);
-		return Object.freeze({ state: "pending" });
+	const result = record(value, 'Extension Host invocation read result');
+	if (result.state === 'pending') {
+		exactKeys(result, 'Extension Host pending invocation', ['state']);
+		return Object.freeze({ state: 'pending' });
 	}
-	if (result.state === "succeeded") {
-		exactKeys(result, "Extension Host succeeded invocation", ["payload", "state"]);
-		return Object.freeze({ state: "succeeded", payload: normalizeExtensionHostPayload(result.payload) });
+	if (result.state === 'succeeded') {
+		exactKeys(result, 'Extension Host succeeded invocation', ['payload', 'state']);
+		return Object.freeze({ state: 'succeeded', payload: normalizeExtensionHostPayload(result.payload) });
 	}
-	if (result.state === "failed") {
-		exactKeys(result, "Extension Host failed invocation", ["code", "message", "state"]);
-		return Object.freeze({ state: "failed", code: stringEnum(result.code, "Extension Host invocation failure code", FAILURE_CODES), message: boundedText(result.message, "Extension Host invocation failure message", 4096) });
+	if (result.state === 'failed') {
+		exactKeys(result, 'Extension Host failed invocation', ['code', 'message', 'state']);
+		return Object.freeze({ state: 'failed', code: stringEnum(result.code, 'Extension Host invocation failure code', FAILURE_CODES), message: boundedText(result.message, 'Extension Host invocation failure message', 4096) });
 	}
-	if (result.state === "cancelled") {
-		exactKeys(result, "Extension Host cancelled invocation", ["reason", "state"]);
-		return Object.freeze({ state: "cancelled", reason: stringEnum(result.reason, "Extension Host cancellation reason", CANCELLATION_REASONS) });
+	if (result.state === 'cancelled') {
+		exactKeys(result, 'Extension Host cancelled invocation', ['reason', 'state']);
+		return Object.freeze({ state: 'cancelled', reason: stringEnum(result.reason, 'Extension Host cancellation reason', CANCELLATION_REASONS) });
 	}
-	throw new TypeError("Extension Host invocation state is invalid");
+	throw new TypeError('Extension Host invocation state is invalid');
 }
 
 function normalizeCancelResult(value: unknown): void {
-	const result = exactRecord(value, "Extension Host invocation cancel result", ["disposition"]);
-	stringEnum(result.disposition, "Extension Host cancellation disposition", ["requested", "alreadyTerminal"] as const);
+	const result = exactRecord(value, 'Extension Host invocation cancel result', ['disposition']);
+	stringEnum(result.disposition, 'Extension Host cancellation disposition', ['requested', 'alreadyTerminal'] as const);
 }
 
 function normalizeJsonValue(value: unknown, depth: number, budget: { bytes: number; jsonBytes: number; nodes: number; readonly seen: Set<object>; readonly path: (string | number)[]; }): JsonValue {
 	budget.nodes += 1;
 	if (budget.nodes > MAX_PAYLOAD_NODES || depth > MAX_PAYLOAD_DEPTH) throw new RangeError(`${jsonValuePath(budget.path)} is too complex`);
-	if (value === null || typeof value === "boolean") {
+	if (value === null || typeof value === 'boolean') {
 		budget.jsonBytes += value === null || value === true ? 4 : 5;
 		return value;
 	}
-	if (typeof value === "number") {
+	if (typeof value === 'number') {
 		if (!Number.isFinite(value)) throw new TypeError(`${jsonValuePath(budget.path)} contains a non-finite number`);
 		budget.bytes += 16;
 		budget.jsonBytes += String(value).length;
 		return value;
 	}
-	if (typeof value === "string") {
+	if (typeof value === 'string') {
 		budget.bytes += utf8Length(value);
 		budget.jsonBytes += jsonStringLength(value);
 		if (budget.bytes > MAX_PAYLOAD_BYTES) throw new RangeError(`${jsonValuePath(budget.path)} is too large`);
 		return value;
 	}
-	if (typeof value !== "object" || value === undefined) throw new TypeError(`${jsonValuePath(budget.path)} must contain only JSON values`);
+	if (typeof value !== 'object' || value === undefined) throw new TypeError(`${jsonValuePath(budget.path)} must contain only JSON values`);
 	if (budget.seen.has(value)) throw new TypeError(`${jsonValuePath(budget.path)} must not contain cycles or shared object references`);
 	budget.seen.add(value);
 	try {
@@ -499,7 +499,7 @@ function normalizeJsonValue(value: unknown, depth: number, budget: { bytes: numb
 		budget.jsonBytes += 2 + Math.max(0, entries.length - 1);
 		const normalized: Record<string, JsonValue> = Object.create(null) as Record<string, JsonValue>;
 		for (const [key, entry] of entries) {
-			if (key.length === 0 || key.length > 256 || key.includes("\0")) throw new TypeError(`${jsonValuePath(budget.path)} contains an invalid key`);
+			if (key.length === 0 || key.length > 256 || key.includes('\0')) throw new TypeError(`${jsonValuePath(budget.path)} contains an invalid key`);
 			budget.bytes += utf8Length(key);
 			budget.jsonBytes += jsonStringLength(key) + 1;
 			budget.path.push(key);
@@ -521,7 +521,7 @@ function jsonValuePath(path: readonly (string | number)[]): string {
 }
 
 function record(value: unknown, owner: string): Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${owner} must be an object`);
 	return value as Record<string, unknown>;
 }
 
@@ -543,7 +543,7 @@ function boundedArray(value: unknown, owner: string, maximum: number): readonly 
 }
 
 function boundedText(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== "string" || value.length === 0 || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || value.length === 0 || value.length > maximum || value.includes('\0')) throw new TypeError(`${owner} is invalid`);
 	return value;
 }
 
@@ -569,7 +569,7 @@ function optionalPositiveSafeInteger(value: unknown, owner: string): number | un
 }
 
 function stringEnum<const T extends readonly string[]>(value: unknown, owner: string, values: T): T[number] {
-	if (typeof value !== "string" || !values.includes(value)) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || !values.includes(value)) throw new TypeError(`${owner} is invalid`);
 	return value as T[number];
 }
 
@@ -582,8 +582,8 @@ function assertStrictlyIncreasing(values: readonly number[], owner: string): voi
 }
 
 function outputChannelId(value: unknown): string {
-	const result = boundedText(value, "Extension Host Output channel ID", 256);
-	if (/\s/u.test(result)) throw new TypeError("Extension Host Output channel ID is invalid");
+	const result = boundedText(value, 'Extension Host Output channel ID', 256);
+	if (/\s/u.test(result)) throw new TypeError('Extension Host Output channel ID is invalid');
 	return result;
 }
 

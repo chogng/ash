@@ -3,6 +3,7 @@ import type { ITerminalInstance } from './terminal.js';
 import { IEnvironmentVariableService, type IEnvironmentVariableInfo } from '../common/environmentVariable.js';
 import { EnvironmentVariableInfoChangesActive } from './environmentVariableInfo.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { IHoverService, type IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
@@ -123,7 +124,11 @@ export class TerminalInstanceHover extends Disposable {
 		for (const status of statuses) {
 			const section = h(document, 'div');
 			section.className = 'ash-terminal-instance-hover-section';
-			section.textContent = details ? status.detailedTooltip ?? status.tooltip : status.tooltip;
+			if (status.icon) {
+				appendIcon(status.icon, section);
+				section.append(' ');
+			}
+			section.append(details ? status.detailedTooltip ?? status.tooltip : status.tooltip);
 			if (status.severity === Severity.Error) {
 				section.dataset.severity = 'error';
 			} else if (status.severity === Severity.Warning) {

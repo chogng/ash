@@ -41,6 +41,8 @@ import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../../browser/parts/side
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayoutService.js';
+import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
+import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 
 suite('SessionsLayoutService lifecycle and focus', () => {
@@ -190,6 +192,30 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.visible.get('editor'), false);
 		assert.equal(fixture.visible.get('auxiliarybar'), true);
 		assert.equal(fixture.focused, 'details');
+	});
+
+	test('Code drops restored detail tabs and stale editor visibility without an active session', async () => {
+		using fixture = new EntryFixture({ code: { details: true, panel: false, documents: true } });
+		fixture.documentInputs.push(new EmptyFileEditorInput(), new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old')));
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.documentInputs, []);
+		assert.equal(fixture.visible.get('editor'), false);
+		assert.equal(fixture.visible.get('auxiliarybar'), true);
+		assert.equal(fixture.focused, 'details');
+		await fixture.service.openEntry(chatEntry);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.documentInputs, []);
+		assert.equal(fixture.visible.get('editor'), false);
+	});
+
+	test('Code retains an open document when removing an unowned restored Changes tab', async () => {
+		using fixture = new EntryFixture({ code: { details: true, panel: false, documents: true } });
+		const file = { resource: URI.file('/workspace/sample.ts'), label: 'sample.ts' };
+		fixture.documentInputs.push(new SessionChangesEditorInput(URI.parse('ash-session-changes:/draft/old')), file);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(fixture.documentInputs, [file]);
+		assert.equal(fixture.visible.get('editor'), true);
+		assert.equal(fixture.visible.get('auxiliarybar'), true);
 	});
 
 	test('background entry restoration preserves the Custom View, focus and activity selection', async () => {
@@ -345,6 +371,7 @@ class EntryFixture extends Disposable {
 	public readonly visible = new Map<string, boolean>([['sessions', true], ['editor', false], ['auxiliarybar', false], ['sidebar', true], ['panel', false]]);
 	public readonly partChanges: string[] = [];
 	public readonly groupChanges: string[] = [];
+	public readonly documentInputs: IResourceEditorInput[] = [];
 	public pageTitleVisible = true;
 	public readonly opened: { id: string; focus: boolean | undefined; }[] = [];
 	private sidebarId: string | undefined;
@@ -365,7 +392,13 @@ class EntryFixture extends Disposable {
 		this._register(toDisposable(() => this.dom.window.close()));
 		if (savedVisibility) { this.storage.store('sessions.layout.entryVisibility', JSON.stringify(savedVisibility), StorageScope.PROFILE, StorageTarget.MACHINE); }
 		const fixture = this;
-		const documentGroup = { id: 'documents', inputs: [] };
+		const documentGroup = {
+			id: 'documents', inputs: this.documentInputs,
+			closeEditor: async (input: IResourceEditorInput) => {
+				this.documentInputs.splice(this.documentInputs.indexOf(input), 1);
+				return true;
+			},
+		};
 		const pageGroup = { id: 'pages', inputs: [], setTitleVisible: (visible: boolean) => { this.pageTitleVisible = visible; } };
 		this.services.registerInstance(IStorageService, this.storage);
 		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
@@ -393,7 +426,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(INotificationService, { error: (message: string) => { this.errors.push(message); } } as unknown as INotificationService);
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
-			openInNewWindow: async () => { throw new Error("Unexpected popup"); },
+			openInNewWindow: async () => { throw new Error('Unexpected popup'); },
 			setConversationKind: async () => {
 				if (!this.conversationStarted.isSettled) { await this.conversationStarted.complete(); }
 				await this.conversationGate;
@@ -402,6 +435,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(IOutputService, { onDidRequestShowChannel: this.outputReveal.event } as unknown as IOutputService);
 		this.services.registerInstance(IViewsService, {
 			onDidChangeViewContainerVisibility: this.viewVisibility.event,
+			isViewContainerActive: (id: string) => this.sidebarId === id,
 			getVisibleViewContainer: () => this.sidebarId ? { id: this.sidebarId, title: 'Conversations', location: ViewContainerLocation.Sidebar } : null,
 			openViewContainer: async (id: string, focus?: boolean) => {
 				this.opened.push({ id, focus });

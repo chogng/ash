@@ -51,7 +51,7 @@ for (const reloadBackend of [false, true]) test(`development extension manifests
 		const ready = workbench.waitForReady();
 		const trust = page.getByRole('dialog', { name: 'Ash' });
 		await Promise.race([ready, trust.waitFor({ state: 'visible' })]);
-		if (await trust.isVisible()) await trust.getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+		if (await trust.isVisible()) await trust.getByRole('button', { name: 'Trust Folder', exact: true }).click();
 		await ready;
 		await workbench.git.open();
 		const sourceControl = page.getByRole('tab', { name: /^Source Control(?:,|$)/u });

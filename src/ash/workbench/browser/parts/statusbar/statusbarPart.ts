@@ -1,11 +1,11 @@
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
-import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
-import "./media/statusbarpart.css";
-import { addDisposableListener, isHTMLElement, isNode, h } from "../../../../base/browser/dom.js";
-import { Part } from "../../part.js";
+import './media/statusbarpart.css';
+import { addDisposableListener, isHTMLElement, isNode, h } from '../../../../base/browser/dom.js';
+import { Part } from '../../part.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -15,8 +15,8 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { StatusBarFocused } from '../../../common/contextkeys.js';
 import { HideStatusbarEntryAction, ToggleStatusbarEntryVisibilityAction } from './statusbarActions.js';
 import { localize } from '../../../../nls.js';
-import { StatusbarHeight } from "../workbenchPartDimensions.js";
-import { StatusbarEntryItem } from "./statusbarItem.js";
+import { StatusbarHeight } from '../workbenchPartDimensions.js';
+import { StatusbarEntryItem } from './statusbarItem.js';
 import {
 	type IStatusbarEntry,
 	type IStatusbarEntryAccessor,
@@ -25,7 +25,7 @@ import {
 	type IStatusbarEntryItem,
 	IStatusbarService,
 	StatusbarAlignment,
-} from "../../../services/statusbar/browser/statusbar.js";
+} from '../../../services/statusbar/browser/statusbar.js';
 
 /** Operations on the status bar presentation owned by one window. */
 export interface IStatusbarEntryContainer extends IDisposable {
@@ -66,15 +66,15 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
-		super(container, "statusbar", themeService, storageService);
+		super(container, 'statusbar', themeService, storageService);
 		const ownerDocument = container.ownerDocument;
 		this.statusbarService = statusbarService;
 		this.viewModel = this._register(instantiationService.createInstance(StatusbarViewModel));
 		this.onDidChangeEntryVisibility = this.viewModel.onDidChangeEntryVisibility;
 		this.titleDomNode.remove();
 		this.contentDomNode.remove();
-		this.domNode.setAttribute("role", "status");
-		this.domNode.setAttribute("aria-live", "off");
+		this.domNode.setAttribute('role', 'status');
+		this.domNode.setAttribute('aria-live', 'off');
 		this.domNode.setAttribute('aria-label', localize('statusbar.label', 'Status Bar'));
 		this.domNode.tabIndex = 0;
 		const scopedContext = this._register(contextKeyService.createScoped(this.domNode));
@@ -88,16 +88,16 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 			if (item) this.lastFocusedEntryId = item.id;
 		}));
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showContextMenu(event)));
-		this._register(addDisposableListener(this.domNode, "keydown", (event) => {
+		this._register(addDisposableListener(this.domNode, 'keydown', (event) => {
 			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey)) {
 				this.showContextMenu(event);
 			}
 		}));
-		this._register(addDisposableListener(this.domNode, "mouseover", (event) => this.updateCompactHover(event.target)));
-		this._register(addDisposableListener(this.domNode, "mouseout", (event) => this.updateCompactHover(event.relatedTarget)));
+		this._register(addDisposableListener(this.domNode, 'mouseover', (event) => this.updateCompactHover(event.target)));
+		this._register(addDisposableListener(this.domNode, 'mouseout', (event) => this.updateCompactHover(event.relatedTarget)));
 
-		this.leftItems = createItemsContainer(ownerDocument, "left");
-		this.rightItems = createItemsContainer(ownerDocument, "right");
+		this.leftItems = createItemsContainer(ownerDocument, 'left');
+		this.rightItems = createItemsContainer(ownerDocument, 'right');
 		this.domNode.append(this.leftItems, this.rightItems);
 
 		this._register(toDisposable(() => this.disposeItems()));
@@ -150,7 +150,7 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 		container: HTMLDivElement,
 		entries: readonly IStatusbarEntryItem[],
 	): void {
-		const previousGroups = Array.from(container.querySelectorAll<HTMLDivElement>(":scope > .ash-statusbar-compact-group"));
+		const previousGroups = Array.from(container.querySelectorAll<HTMLDivElement>(':scope > .ash-statusbar-compact-group'));
 		const groupChildren = new Map<HTMLDivElement, HTMLElement[]>();
 		const children: HTMLElement[] = [];
 		let compactGroupDomNode: HTMLDivElement | undefined;
@@ -179,8 +179,8 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 			if (belongsToCompactRun) {
 				if (!compactGroupDomNode || compactGroupId !== entry.compactGroup) {
 					compactGroupDomNode = previousGroups.find(group => group.dataset.compactGroup === entry.compactGroup && !groupChildren.has(group))
-						?? h(container.ownerDocument, "div");
-					compactGroupDomNode.className = "ash-statusbar-compact-group";
+						?? h(container.ownerDocument, 'div');
+					compactGroupDomNode.className = 'ash-statusbar-compact-group';
 					compactGroupDomNode.dataset.compactGroup = entry.compactGroup;
 					compactGroupId = entry.compactGroup;
 					children.push(compactGroupDomNode);
@@ -311,11 +311,11 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 		const compactGroup = hoveredItem && hoveredItem.isFocusable() ? this.compactGroupByItemId.get(hoveredItem.id) : undefined;
 		this.clearCompactHover();
 		if (!compactGroup || !hoveredItem) return;
-		for (const item of this.compactGroups.get(compactGroup) ?? []) item.setCompactHoverState(item === hoveredItem ? "entry" : "group");
+		for (const item of this.compactGroups.get(compactGroup) ?? []) item.setCompactHoverState(item === hoveredItem ? 'entry' : 'group');
 	}
 
 	private clearCompactHover(): void {
-		for (const item of this.items.values()) item.setCompactHoverState("none");
+		for (const item of this.items.values()) item.setCompactHoverState('none');
 	}
 
 	private disposeItems(): void {
@@ -337,8 +337,8 @@ function reconcileChildren(container: HTMLElement, children: readonly HTMLElemen
 	}
 }
 
-function createItemsContainer(ownerDocument: Document, alignment: "left" | "right"): HTMLDivElement {
-	const container = h(ownerDocument, "div");
+function createItemsContainer(ownerDocument: Document, alignment: 'left' | 'right'): HTMLDivElement {
+	const container = h(ownerDocument, 'div');
 	container.className = `ash-statusbar-items ash-statusbar-items-${alignment}`;
 	return container;
 }
@@ -393,10 +393,10 @@ export class StatusbarService extends Disposable
 		options: IStatusbarEntryOptions,
 	): IStatusbarEntryAccessor {
 		if (this.isDisposed) {
-			throw new ReferenceError("StatusbarService is already disposed");
+			throw new ReferenceError('StatusbarService is already disposed');
 		}
 		if (!options.id) {
-			throw new Error("A status bar entry requires a non-empty id");
+			throw new Error('A status bar entry requires a non-empty id');
 		}
 		if (this.entries.has(options.id)) {
 			throw new Error(`Status bar entry already exists: ${options.id}`);
@@ -404,7 +404,7 @@ export class StatusbarService extends Disposable
 
 		const priority = options.priority ?? 0;
 		if (!Number.isFinite(priority)) {
-			throw new Error("Status bar entry priority must be finite");
+			throw new Error('Status bar entry priority must be finite');
 		}
 
 		let stored: IStoredStatusbarEntry = {

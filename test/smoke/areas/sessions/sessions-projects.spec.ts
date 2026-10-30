@@ -58,6 +58,61 @@ test.describe('Projects sorting persistence', () => {
 	});
 });
 
+test(
+	'Sessions Projects renames in the title bar and persists through a reopened window',
+	{ tag: ['@browser-app-server', '@electron-app-server'] },
+	async ({ application, target, workbench }, testInfo) => {
+		let page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('[data-action-id="sessions.open.projects"] button').click();
+		await page.locator('.ash-projects').getByRole('button', { name: 'New project', exact: true }).first().click();
+		const dialog = page.getByRole('dialog', { name: 'Create a project' });
+		await dialog
+			.getByRole('textbox', { name: 'What are you working on?', exact: true })
+			.fill('Inline rename fixture');
+		await dialog
+			.getByRole('textbox', { name: 'What are you trying to achieve?', exact: true })
+			.fill('Keep the project goals when renaming.');
+		await dialog.getByRole('button', { name: 'Create project', exact: true }).click();
+		await expect(dialog).toHaveCount(0);
+		const breadcrumb = page.locator('.ash-sessions-titlebar .ash-projects-breadcrumb');
+		const input = breadcrumb.getByRole('textbox', { name: 'Project name', exact: true });
+		await breadcrumb.getByRole('button', { name: 'Rename project Inline rename fixture', exact: true }).click();
+		await expect(input).toBeFocused();
+		expect(
+			await input.evaluate(element => ({
+				start: (element as HTMLInputElement).selectionStart,
+				end: (element as HTMLInputElement).selectionEnd,
+			})),
+		).toEqual({ start: 0, end: 'Inline rename fixture'.length });
+		await input.fill('  Renamed project  ');
+		await input.press('Enter');
+		const renamed = breadcrumb.getByRole('button', { name: 'Rename project Renamed project', exact: true });
+		await expect(renamed).toBeFocused();
+		await expect(page.locator('.ash-projects h1')).toHaveText('Renamed project');
+		await renamed.press('Enter');
+		await input.fill('Cancelled project');
+		await input.press('Escape');
+		await expect(renamed).toBeFocused();
+		await renamed.press('Space');
+		await input.fill('Saved on blur');
+		await page.locator('.ash-projects h1').click();
+		await expect(page.locator('.ash-projects h1')).toHaveText('Saved on blur');
+		await expect(page.locator('.ash-projects h1')).toBeFocused();
+		await expect(
+			breadcrumb.getByRole('button', { name: 'Rename project Saved on blur', exact: true }),
+		).toBeVisible();
+		await expect(page.locator('.ash-projects-description')).toHaveText('Keep the project goals when renaming.');
+		await page.screenshot({ path: testInfo.outputPath('projects-inline-renamed.png') });
+		await breadcrumb.getByRole('button', { name: 'Projects', exact: true }).click();
+		await expect(page.locator('.ash-projects-card').filter({ hasText: 'Saved on blur' })).toBeVisible();
+		page = await workbench.reopenAgentsWindow(application, page);
+		await page.locator('[data-action-id="sessions.open.projects"] button').click();
+		await page.locator('.ash-projects-card').filter({ hasText: 'Saved on blur' }).click();
+		await expect(page.locator('.ash-projects h1')).toHaveText('Saved on blur');
+		await expect(page.locator('.ash-projects-description')).toHaveText('Keep the project goals when renaming.');
+	},
+);
+
 test('Sessions Projects replaces material categories and supports keyboard creation', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');

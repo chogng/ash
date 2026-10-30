@@ -6,7 +6,7 @@ import { WordBasedCompletionItemProvider } from '../../../browser/services/edito
 import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
 import { createSnippetVariables } from '../../snippet/common/snippetParser.js';
 import { isCompletionsEnabledFromObject } from '../../../common/services/completionsEnablement.js';
-import { Position } from "../../../common/core/position.js";
+import { Position } from '../../../common/core/position.js';
 import { ILanguageService } from '../../../common/languages/language.js';
 import { stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -322,7 +322,7 @@ function reportRequestError(error: unknown): void {
 registerEditorContribution({
 	id: SuggestController.ID,
 	install: context => {
-		if (context.kind !== "text") return;
+		if (context.kind !== 'text') return;
 		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.model.getLanguageId())) return;
 		const completions = context.register(new LanguageCompletionService(context.model, context.languageFeaturesService.completionProvider, {
 			resource: context.model.uri,

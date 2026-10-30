@@ -7,10 +7,10 @@ import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { isEditorPaneWithStatus } from '../../../common/editor.js';
-import "./media/editorstatus.css";
-import { addDisposableListener, h, isHTMLElement } from "../../../../base/browser/dom.js";
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
+import './media/editorstatus.css';
+import { addDisposableListener, h, isHTMLElement } from '../../../../base/browser/dom.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
@@ -21,14 +21,14 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { Action2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import type { IWorkbenchContribution } from "../../../common/contributions.js";
+import type { IWorkbenchContribution } from '../../../common/contributions.js';
 
-import type { IEditorPart } from "./editorPart.js";
-import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
+import type { IEditorPart } from './editorPart.js';
+import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 
 /** Projects the active editor's cursor, format, language, and save state. */
 export class EditorStatusContribution extends Disposable implements IWorkbenchContribution {
-	static readonly ID = "workbench.contrib.editorStatus";
+	static readonly ID = 'workbench.contrib.editorStatus';
 
 	private readonly cursor = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly indentation = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
@@ -80,7 +80,7 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 			ariaLabel: localize('status.editor.screenReaderAria', 'Screen reader mode enabled. Open explanation'),
 			tooltip: localize('status.editor.screenReaderTooltip', 'Screen reader mode is enabled. Open explanation'),
 			run: () => this.showScreenReaderExplanation(),
-		}, "ash.status.editor.screenReaderMode", 100);
+		}, 'ash.status.editor.screenReaderMode', 100);
 	}
 
 	private showScreenReaderExplanation(): void {
@@ -88,18 +88,18 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 		const doc = this.editorPart.domNode.ownerDocument;
 		const previousFocus = isHTMLElement(doc.activeElement) ? doc.activeElement : undefined;
 		const resources = new DisposableStore();
-		const dialog = h(doc, "section");
-		dialog.className = "ash-screen-reader-explanation";
-		dialog.setAttribute("role", "dialog");
-		dialog.setAttribute("aria-modal", "true");
-		dialog.setAttribute("aria-labelledby", "ash-screen-reader-explanation-title");
-		const heading = h(doc, "h2");
-		heading.id = "ash-screen-reader-explanation-title";
+		const dialog = h(doc, 'section');
+		dialog.className = 'ash-screen-reader-explanation';
+		dialog.setAttribute('role', 'dialog');
+		dialog.setAttribute('aria-modal', 'true');
+		dialog.setAttribute('aria-labelledby', 'ash-screen-reader-explanation-title');
+		const heading = h(doc, 'h2');
+		heading.id = 'ash-screen-reader-explanation-title';
 		heading.textContent = localize('status.editor.screenReaderHeading', 'Screen reader mode is on');
-		const details = h(doc, "p");
+		const details = h(doc, 'p');
 		details.textContent = localize('status.editor.screenReaderDetails', 'Ash has adjusted editor interactions for a screen reader. You can change this in Settings under Screen reader optimization.');
-		const close = h(doc, "button");
-		close.type = "button";
+		const close = h(doc, 'button');
+		close.type = 'button';
 		close.textContent = localize('status.editor.close', 'Close');
 		dialog.append(heading, details, close);
 		doc.body.append(dialog);
@@ -107,14 +107,14 @@ export class EditorStatusContribution extends Disposable implements IWorkbenchCo
 			dialog.remove();
 			if (previousFocus?.isConnected) previousFocus.focus();
 		}));
-		resources.add(addDisposableListener(close, "click", () => this.explanation.clear()));
-		resources.add(addDisposableListener(dialog, "keydown", (event: KeyboardEvent) => {
-			if (event.key === "Tab") {
+		resources.add(addDisposableListener(close, 'click', () => this.explanation.clear()));
+		resources.add(addDisposableListener(dialog, 'keydown', (event: KeyboardEvent) => {
+			if (event.key === 'Tab') {
 				event.preventDefault();
 				close.focus();
 				return;
 			}
-			if (event.key !== "Escape") return;
+			if (event.key !== 'Escape') return;
 			event.preventDefault();
 			this.explanation.clear();
 		}));

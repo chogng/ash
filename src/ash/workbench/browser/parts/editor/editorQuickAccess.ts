@@ -1,10 +1,10 @@
 import './media/editorquickaccess.css';
-import { basename } from "../../../../base/common/resources.js";
-import { localize } from "../../../../nls.js";
-import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks } from "../../../../platform/quickinput/browser/pickerQuickAccess.js";
-import { filterQuickPickItems } from "../../../../platform/quickinput/browser/quickInputList.js";
-import type { EditorIdentifier } from "../../../services/editor/common/editorState.js";
-import { IEditorPart } from "./editorPart.js";
+import { basename } from '../../../../base/common/resources.js';
+import { localize } from '../../../../nls.js';
+import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks } from '../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import { filterQuickPickItems } from '../../../../platform/quickinput/browser/quickInputList.js';
+import type { EditorIdentifier } from '../../../services/editor/common/editorState.js';
+import { IEditorPart } from './editorPart.js';
 
 interface EditorQuickPickItem extends IPickerQuickAccessItem {
 	readonly editor: EditorIdentifier;
@@ -12,7 +12,7 @@ interface EditorQuickPickItem extends IPickerQuickAccessItem {
 
 /** Searches open editors in the order they were last used. */
 export class AllEditorsByMostRecentlyUsedQuickAccess extends PickerQuickAccessProvider<EditorQuickPickItem> {
-	static readonly PREFIX: string = "edt mru ";
+	static readonly PREFIX: string = 'edt mru ';
 
 	constructor(@IEditorPart protected readonly editorPart: IEditorPart, prefix = AllEditorsByMostRecentlyUsedQuickAccess.PREFIX) {
 		super(prefix);
@@ -37,8 +37,8 @@ export class AllEditorsByMostRecentlyUsedQuickAccess extends PickerQuickAccessPr
 			buttons: [{ id: 'close', label: localize('workbench.closeEditor', 'Close') }],
 			label: editorInputLabel(editor.input),
 			description: localize(
-				"workbench.editorGroupNumber",
-				"Group {0}",
+				'workbench.editorGroupNumber',
+				'Group {0}',
 				this.editorPart.groups.findIndex(group => group.id === editor.groupId) + 1,
 			),
 			detail: editor.input.resource.toString(),
@@ -60,7 +60,7 @@ export class ActiveGroupEditorsByMostRecentlyUsedQuickAccess extends AllEditorsB
 	}
 }
 
-function editorInputLabel(input: EditorIdentifier["input"]): string {
+function editorInputLabel(input: EditorIdentifier['input']): string {
 	if (input.label?.trim()) return input.label;
 	return basename(input.resource) || input.resource.toString();
 }
