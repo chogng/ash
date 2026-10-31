@@ -1,3 +1,16 @@
+diff --git a/.cargo/config.toml b/.cargo/config.toml
+--- a/.cargo/config.toml
++++ b/.cargo/config.toml
+@@ -14,4 +14,8 @@ index = "sparse+https://pkgs.dev.azure.com/devdiv/_packaging/DeepPrompt/Cargo/index/"
+ # BinSkim compliance flags (OneBranch BA2007)
+ # Required for Windows builds in the ADO sign pipeline.
+-[target.'cfg(target_os = "windows")']
++[target.'cfg(all(target_os = "windows", target_arch = "x86_64"))']
+ rustflags = ["-Ccontrol-flow-guard", "-Ctarget-feature=+crt-static", "-Clink-args=/DYNAMICBASE /CETCOMPAT"]
++
++# ARM64 retains CFG, ASLR and the static CRT; MSVC only supports the CET flag on x64.
++[target.'cfg(all(target_os = "windows", target_arch = "aarch64"))']
++rustflags = ["-Ccontrol-flow-guard", "-Ctarget-feature=+crt-static", "-Clink-args=/DYNAMICBASE"]
 diff --git a/Cargo.lock b/Cargo.lock
 index b6737fac1bd94666f0707d7e8dbcd9a98267e0a1..279971c547fa3f232df67f267720539844ff8857 100644
 --- a/Cargo.lock
