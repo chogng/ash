@@ -56,6 +56,8 @@ pub fn snapshot(
     selection_revision: u64,
 ) -> Result<Value, external_ext_sdk::ExtensionError> {
     let configuration = &repository.configuration;
+    let in_progress = repository.is_running();
+    let synchronizing = repository.is_synchronizing();
     let changes = repository
         .status
         .as_ref()
@@ -292,21 +294,16 @@ pub fn snapshot(
                 let label = api.text("git.status.noBranch", &[]);
                 (String::new(), label.clone(), label, "sync")
             };
-            let busy_label = repository
-                .operation
-                .filter(|operation| *operation != crate::model::RepositoryOperation::Preparing)
-                .map(|operation| {
-                    api.text(
-                        if operation == crate::model::RepositoryOperation::Synchronize {
-                            "git.status.synchronizing"
-                        } else {
-                            "git.operationProgress"
-                        },
-                        &[],
-                    )
-                });
-            let synchronizing =
-                repository.operation == Some(crate::model::RepositoryOperation::Synchronize);
+            let busy_label = in_progress.then(|| {
+                api.text(
+                    if synchronizing {
+                        "git.status.synchronizing"
+                    } else {
+                        "git.operationProgress"
+                    },
+                    &[],
+                )
+            });
             statusbar.push(json!({"id":"ash.status.git.sync","text":text,"ariaLabel":busy_label.as_deref().unwrap_or(&aria),"tooltip":busy_label.as_deref().unwrap_or(&tooltip),"priority":800,"compactGroup":"ash.status.git","icon":if synchronizing {"sync"} else {icon},"showProgress":synchronizing,"enabled":!repository.is_busy() && matches!(head,Head::Branch{..})}));
         }
     }
@@ -382,10 +379,7 @@ pub fn snapshot(
         format!(
             "$({}) {label}",
             match primary {
-                "sync" | "publish"
-                    if repository.operation
-                        == Some(crate::model::RepositoryOperation::Synchronize) =>
-                {
+                "sync" | "publish" if synchronizing => {
                     "sync~spin"
                 }
                 "sync" => "sync",
@@ -404,7 +398,7 @@ pub fn snapshot(
     };
     let status_message = if limit_reached && !configuration.boolean("ignoreLimitWarning", false) {
         api.text("git.limitReached", &[])
-    } else if repository.is_busy() && configuration.boolean("showProgress", true) {
+    } else if in_progress && configuration.boolean("showProgress", true) {
         api.text("git.operationProgress", &[])
     } else if !repository.error.is_empty() {
         repository.error.clone()
@@ -428,7 +422,7 @@ pub fn snapshot(
         "input":{"visible":configuration.boolean("showCommitInput",true),"buttonVisible":configuration.value("showActionButton").get(primary).and_then(Value::as_bool).unwrap_or(true),"value":repository.draft,
             "validationMessage":input_validation,"placeholder":api.text("git.commitMessageOnBranch",&[if cfg!(target_os="macos") {"Cmd+Enter"} else {"Ctrl+Enter"},branch.unwrap_or("HEAD")]),"enabled":true,"canAccept":can_accept,"buttonLabel":label,"buttonTooltip":tooltip},
         "actionButton":{"command":primary_command,"secondaryCommands":secondary_commands,"enabled":can_accept && !repository.is_busy()},
-        "activeRepositoryName":branch,"statusMessage":status_message,"isBusy":repository.is_busy(),"historyOperationRevision":repository.history_operation_revision,"statusBarCommands":statusbar,
+        "activeRepositoryName":branch,"statusMessage":status_message,"isBusy":in_progress,"historyOperationRevision":repository.history_operation_revision,"statusBarCommands":statusbar,
         "timeline":{"label":api.text("git.timelineHistory",&[]),"resetKey":format!("{}:{}:{}",configuration.text("timeline.date","committed"),configuration.boolean("timeline.showAuthor",true),configuration.boolean("timeline.showUncommitted",false))},
         "hasHistory":true,"hasHistoryItemRefs":true,"hasHistoryMergeBase":true,"historyRef":history_ref,"historyRemoteRef":remote_ref,
         "historyRevision":repository.status.as_ref().map(|status|status.history_revision).unwrap_or(0),"historyChangeSilent":repository.status.as_ref().is_some_and(|status|status.history_change_silent),"historyRefsRevision":0,"historyRefsItems":[],"hasMerge":true,"inputRevision":repository.input_revision,

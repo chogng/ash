@@ -88,6 +88,15 @@ pull retry. Cancellation refreshes repository state and stops synchronization be
 `git.supportCancellation` enables fetch/pull cancellation even with `git.showProgress`
 disabled. Push has no cancellation action.
 
+The extension runtime owns the foreground operation lifecycle. Its repository model
+reserves mutations throughout preparation, execution and follow-up prompts. Only actual
+transport execution publishes progress; a follow-up prompt suspends progress without
+forgetting transport work already performed. Completion, failure and cancellation release
+the reservation after reconciling repository status, and advance the foreground history
+revision only if a remote operation started. Workbench consumes this single SCM snapshot
+for Changes, Graph and status-bar presentation; it does not infer Git execution from a
+command promise or a dialog's lifetime.
+
 The status-bar sync icon rotates during sync, pull, push and publish, after confirmation.
 It follows `git.enableStatusBarSync`, hides without remotes, and shows only incoming counts
 for read-only remotes. An untracked branch invokes publish; multiple remotes offer a picker

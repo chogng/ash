@@ -204,6 +204,7 @@ impl GitRuntime {
             .lock()
             .map_err(|_| invalid("Git operation state failed"))?;
         token.check_cancelled()?;
+        let repository = self.repository(Some(&repository.descriptor.id))?;
         if let Some(repository) = self.lock().repositories.get_mut(&repository.descriptor.id) {
             repository.operation = Some(
                 if matches!(
@@ -217,6 +218,8 @@ impl GitRuntime {
                         | "git.pushForce"
                         | "ash.git.push"
                         | "git.publish"
+                        | "git.fetch"
+                        | "git.fetchAll"
                 ) {
                     crate::model::RepositoryOperation::Preparing
                 } else {
@@ -226,12 +229,14 @@ impl GitRuntime {
             repository.error.clear();
             repository.notice.clear();
         }
-        self.publish()?;
-        let outcome = if context["type"] == "historyItemViewModel" {
-            self.graph_action(&repository, command, context, token)
-        } else {
-            self.run_command(command, arguments, &repository, token)
-        };
+        let outcome = (|| {
+            self.publish()?;
+            if context["type"] == "historyItemViewModel" {
+                self.graph_action(&repository, command, context, token)
+            } else {
+                self.run_command(command, arguments, &repository, token)
+            }
+        })();
         // A failed or cancelled Git operation can still update refs, the index or
         // integration state. Refresh independently of its cancelled invocation token.
         if outcome.is_err() {
@@ -240,21 +245,7 @@ impl GitRuntime {
             }
         }
         if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
-            if matches!(
-                current.operation,
-                Some(
-                    crate::model::RepositoryOperation::Preparing
-                        | crate::model::RepositoryOperation::Synchronize
-                )
-            ) || matches!(command, "git.fetch" | "git.fetchAll")
-            {
-                current.history_operation_revision = current
-                    .history_operation_revision
-                    .checked_add(1)
-                    .expect("Git history operation revision overflowed");
-            }
-            current.operation = None;
-            current.pending_paths = None;
+            current.finish_operation();
             if let Err(error) = &outcome {
                 if error.code != external_ext_sdk::HostErrorCode::Cancelled {
                     current.error = error.message.clone();
@@ -1027,14 +1018,13 @@ impl GitRuntime {
         } else {
             FetchMode::Default
         };
-        let result = self.api.transport(
+        let result = self.run_transport(
             repository,
             TransportOperation::Fetch(mode),
             &transport,
             false,
             token,
         )?;
-        self.accept_status(result.status.clone());
         Ok(json!(result))
     }
     fn remote(
@@ -1046,6 +1036,7 @@ impl GitRuntime {
         if matches!(command, "git.fetch" | "git.fetchAll") {
             return self.fetch(repository, command, token);
         }
+        self.await_remote_input(repository)?;
         let config = &repository.configuration;
         let before = self.api.status(repository, Some(token))?;
         let mut transport = self.transport(repository);
@@ -1138,7 +1129,8 @@ impl GitRuntime {
             }
         }
         if sync && sync_catalog["upstreamReadOnly"] != true && config.boolean("confirmSync", true) {
-            let choice = self.api.editor(
+            let choice = self.remote_prompt(
+                repository,
                 json!({"method":"prompt", "severity":"warning",
                     "message":self.api.text("git.syncConfirm", &[&before.head.upstream().expect("sync has upstream").name]),
                     "buttons":[self.api.text("git.syncConfirm.ok", &[]), self.api.text("git.syncConfirm.neverAgain", &[])]}),
@@ -1164,9 +1156,8 @@ impl GitRuntime {
         {
             return Err(invalid(&self.api.text("git.commitHeadChanged", &[])));
         }
-        self.start_remote_operation(repository)?;
         let result = if matches!(command, "git.push" | "ash.git.push" | "git.pushForce") {
-            self.api.transport(
+            self.run_transport(
                 repository,
                 TransportOperation::Push {
                     expected_head: &before.head,
@@ -1177,7 +1168,7 @@ impl GitRuntime {
             )?
         } else {
             if config.boolean("fetchOnPull", false) {
-                self.api.transport(
+                self.run_transport(
                     repository,
                     TransportOperation::Fetch(FetchMode::All),
                     &transport,
@@ -1188,7 +1179,7 @@ impl GitRuntime {
             if !config.boolean("ignoreRebaseWarning", false) {
                 let upstream_rewritten = self.api.upstream_rewritten(repository, token)?;
                 if upstream_rewritten {
-                    let choice = self.api.editor(json!({"method":"prompt", "severity":"warning",
+                    let choice = self.remote_prompt(repository, json!({"method":"prompt", "severity":"warning",
                         "message":self.api.text("git.rewrittenPullConfirm", &[]),
                         "buttons":[self.api.text("git.rewrittenPull.always", &[]), self.api.text("git.rewrittenPull.once", &[])]}), Some(token))?;
                     match choice["selection"].as_u64() {
@@ -1213,7 +1204,7 @@ impl GitRuntime {
                 PullMode::Configured
             };
             let expected_head = sync.then_some(&before.head);
-            let mut pulled = self.api.transport(
+            let mut pulled = self.run_transport(
                 repository,
                 TransportOperation::Pull {
                     mode,
@@ -1224,12 +1215,11 @@ impl GitRuntime {
                 token,
             )?;
             if let TransportOutcome::TagConflict { tags } = &pulled.outcome {
-                self.accept_status(pulled.status.clone());
                 let message = self.api.text("git.tagConflict", &[&tags.join(", ")]);
                 if config.boolean("replaceTagsWhenPull", false) {
                     return Err(invalid(&message));
                 }
-                let choice = self.api.editor(json!({"method":"prompt", "severity":"error", "message":message,
+                let choice = self.remote_prompt(repository, json!({"method":"prompt", "severity":"error", "message":message,
                     "buttons":[self.api.text("git.tagConflict.replace", &[]), self.api.text("git.tagConflict.always", &[])]}), Some(token))?;
                 match choice["selection"].as_u64() {
                     Some(0) => {}
@@ -1243,7 +1233,7 @@ impl GitRuntime {
                     _ => return Err(invalid("Invalid Git tag conflict selection")),
                 }
                 transport.replace_tags = true;
-                pulled = self.api.transport(
+                pulled = self.run_transport(
                     repository,
                     TransportOperation::Pull {
                         mode,
@@ -1257,7 +1247,6 @@ impl GitRuntime {
                     return Err(invalid(&message));
                 }
             }
-            self.accept_status(pulled.status.clone());
             if sync {
                 let status = &pulled.status;
                 if status.head.name() != before.head.name()
@@ -1273,7 +1262,7 @@ impl GitRuntime {
                     return Ok(json!(pulled));
                 }
                 transport.follow_tags = config.boolean("followTagsWhenSync", false);
-                self.api.transport(
+                self.run_transport(
                     repository,
                     TransportOperation::Push {
                         expected_head: &status.head,
@@ -1286,7 +1275,6 @@ impl GitRuntime {
                 pulled
             }
         };
-        self.accept_status(result.status.clone());
         if matches!(
             command,
             "git.push" | "ash.git.push" | "git.pushForce" | "git.sync" | "git.syncRebase"
@@ -1295,9 +1283,52 @@ impl GitRuntime {
         }
         Ok(json!(result))
     }
+    fn run_transport(
+        &self,
+        repository: &Repository,
+        operation: TransportOperation<'_>,
+        options: &TransportOptions,
+        synchronizing: bool,
+        token: &CancellationToken,
+    ) -> Result<crate::model::TransportResult, ExtensionError> {
+        token.check_cancelled()?;
+        self.start_remote_operation(repository)?;
+        let result = self
+            .api
+            .transport(repository, operation, options, synchronizing, token)?;
+        self.accept_status(result.status.clone());
+        Ok(result)
+    }
+    fn await_remote_input(&self, repository: &Repository) -> Result<(), ExtensionError> {
+        let changed =
+            if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+                let previous = current.operation;
+                current.await_remote_input();
+                current.operation != previous
+            } else {
+                false
+            };
+        if changed {
+            self.publish()?;
+        }
+        Ok(())
+    }
+    fn remote_prompt(
+        &self,
+        repository: &Repository,
+        prompt: Value,
+        token: Option<&CancellationToken>,
+    ) -> Result<Value, ExtensionError> {
+        // Keep the operation reservation and any completed transport work while
+        // suspending all progress until the next transport actually starts.
+        self.await_remote_input(repository)?;
+        self.api.editor(prompt, token)
+    }
     fn start_remote_operation(&self, repository: &Repository) -> Result<(), ExtensionError> {
         if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
-            current.operation = Some(crate::model::RepositoryOperation::Synchronize);
+            current.operation = Some(crate::model::RepositoryOperation::Synchronize {
+                phase: crate::model::RemoteOperationPhase::Running,
+            });
         }
         self.publish()
     }
