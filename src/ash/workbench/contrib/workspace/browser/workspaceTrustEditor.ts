@@ -216,7 +216,7 @@ export class WorkspaceTrustEditor extends EditorPane {
 				const focused = document.activeElement;
 				if (!this.active || !isHTMLElement(focused) || !this.root.contains(focused)) return undefined;
 				return new AccessibleContentProvider(AccessibleViewProviderId.WorkspaceTrust, { type }, () => type === AccessibleViewType.Help
-					? localize('workspaceTrust.help', 'Workspace Trust\nThis page shows the current folder’s effective permissions on this window’s connected host, independently of the selected Agents conversation. Use Tab to reach Trust workspace or Open in Restricted Mode. Restricted Mode allows editing and saving files while commands and workspace integrations are disabled. Each action asks for confirmation before saving and restoring the workspace connection. Trust changes finish after workspace integrations have updated. For multi-folder workspaces, select the folder to manage. Expand Advanced permissions with Enter or Space to review the folder path, choose a preset or change individual permission switches. Advanced changes are a draft until Save permissions is confirmed. Discard changes restores the saved permissions. When permissions cannot be applied or read, Refresh rereads them and discards drafts. If grants, workspace or connection change, review the refreshed permissions before saving. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost; review the warning before confirming. Hosts without management authority can only view permissions. Escape closes this help and returns focus.')
+					? localize('workspaceTrust.help', 'Workspace Trust\nThis page shows the current folder’s effective permissions on this window’s connected host, independently of the selected Agents conversation. Use Tab to reach Trust workspace or Open in Restricted Mode. Restricted Mode allows editing and saving files while commands and workspace integrations are disabled. Each action asks for confirmation before saving and updating workspace integrations. Trust changes finish after workspace integrations have updated. For multi-folder workspaces, select the folder to manage. Expand Advanced permissions with Enter or Space to review the folder path, choose a preset or change individual permission switches. Advanced changes are a draft until Save permissions is confirmed. Discard changes restores the saved permissions. When permissions cannot be applied or read, Refresh rereads them and discards drafts. If grants, workspace or connection change, review the refreshed permissions before saving. Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost; review the warning before confirming. Hosts without management authority can only view permissions. Escape closes this help and returns focus.')
 					: [this.folderName.textContent, this.folderPath.textContent, this.heading.textContent, this.summary.textContent, ...[...this.draft].map(permission => this.permissionLabel(permission)), this.status.textContent].join('\n'),
 					() => { if (focused.isConnected) focused.focus(); }, AccessibilityVerbositySettingId.WorkspaceTrust);
 			},
@@ -356,10 +356,10 @@ export class WorkspaceTrustEditor extends EditorPane {
 						? localize('workspaceTrust.confirmRestricted', 'Open {0} in Restricted Mode?', this.folderName.textContent)
 						: localize('workspaceTrust.confirm', 'Apply directory permissions to {0}?', path),
 				detail: [development
-					? localize('workspaceTrust.confirmTrustDetail', 'This allows editing files, running commands and loading project configuration, instructions, skills, MCP servers, hooks, plugins and language services in {0}. Only continue if you trust this project. The workspace connection will be restored.', path)
+					? localize('workspaceTrust.confirmTrustDetail', 'This allows editing files, running commands and loading project configuration, instructions, skills, MCP servers, hooks, plugins and language services in {0}. Only continue if you trust this project.', path)
 					: restricted
-						? localize('workspaceTrust.confirmRestrictedDetail', 'This allows editing and saving files in {0}. Commands and workspace integrations will be disabled. The workspace connection will be restored.', path)
-						: localize('workspaceTrust.confirmDetail', 'Allowed capabilities: {0}\nThis saves a directory grant on the connected host and restores the workspace connection.', permissions.map(permission => this.permissionLabel(permission)).join(', ') || localize('workspaceTrust.none', 'None')),
+						? localize('workspaceTrust.confirmRestrictedDetail', 'This allows editing and saving files in {0}. Commands and workspace integrations will be disabled.', path)
+						: localize('workspaceTrust.confirmDetail', 'Allowed capabilities: {0}\nThis saves a directory grant on the connected host and updates workspace integrations.', permissions.map(permission => this.permissionLabel(permission)).join(', ') || localize('workspaceTrust.none', 'None')),
 				...(hasRunningSessions ? [localize('workspaceTrust.runningSessionsWarning', 'Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost.')] : []),
 				].join('\n\n'),
 				primaryButton,
@@ -373,11 +373,11 @@ export class WorkspaceTrustEditor extends EditorPane {
 			} else {
 				await this.trust.setDirectoryPermissions(path, permissions, revision);
 				if (!this.current(generation) || connectionGeneration !== this.api.connectionGeneration) return;
-				this.status.textContent = localize('workspaceTrust.applying', 'Permissions saved. Restoring the workspace connection…');
-				await this.api.recovery?.reconnect();
+				this.status.textContent = localize('workspaceTrust.applying', 'Permissions saved. Updating workspace integrations…');
+				await this.api.recovery?.reconnect({ reason: 'permissions' });
 				await this.management.resolveWorkspaceTrust();
 			}
-			// Recovery invalidates the old snapshot. Reread the still-open folder before restoring focus.
+			// Permission changes invalidate the old snapshot. Reread before restoring focus.
 			if (this.active && this.selected === selected) {
 				await this.refresh();
 				if (preset && this.active && this.selected === selected) this.root.focus();

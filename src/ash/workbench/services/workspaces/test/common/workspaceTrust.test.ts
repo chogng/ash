@@ -357,11 +357,13 @@ test('save failures cancel the trust request, notify once and allow a fresh requ
 	assert.equal(await retry, true);
 });
 
-test('revoking workspace trust retains file editing and saving without command execution', async () => {
+test('trust changes identify permission recovery and revocation retains editing', async () => {
 	using f = createTrustFixture();
 	await f.trust.workspaceTrustInitialized;
 	await f.trust.setWorkspaceTrust(true);
+	assert.equal(f.trust.isWorkspaceTrusted(), true);
 	await f.trust.setWorkspaceTrust(false);
+	assert.deepEqual(f.effects, [`save:${URI.file('/first').fsPath}`, 'reconnect', `save:${URI.file('/first').fsPath}`, 'reconnect']);
 	assert.deepEqual(f.active.get('first'), RESTRICTED_DIR_PERMISSIONS);
 	assert.deepEqual(await f.trust.getWorkspaceTrustInfo(), { isTrusted: false, isReadOnly: false });
 	assert.equal(RESTRICTED_DIR_PERMISSIONS.includes('writeFiles'), true);
@@ -503,6 +505,7 @@ function createTrustFixture(recovering = false, multiRoot = false) {
 			if (path === state.failPath || expectedRevision !== revision) throw new Error('Revision conflict');
 			state.effects.push(`save:${path}`);
 			state.saved.set(path.slice(1), permissions);
+			state.active.set(path.slice(1), permissions);
 			changed.fire();
 			return { revision: ++revision, generation: 1, disposition: 'updated' };
 		},
@@ -516,7 +519,8 @@ function createTrustFixture(recovering = false, multiRoot = false) {
 		connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [],
 		recovery: {
 			get status() { return state.status; }, error: undefined, onDidChange: recovered.event,
-			reconnect: async () => {
+			reconnect: async options => {
+				assert.deepEqual(options, { reason: 'permissions' });
 				state.effects.push('reconnect'); state.status = 'recovering'; recovered.fire();
 				state.active = new Map(state.saved); state.status = 'idle'; recovered.fire();
 			},
