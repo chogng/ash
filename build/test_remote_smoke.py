@@ -76,7 +76,7 @@ class RemoteFixtureCleanupTests(unittest.TestCase):
                         return_value=temporary,
                     ),
                     patch.object(remote_smoke, "os", SimpleNamespace(name=platform)),
-                    patch.object(remote_smoke.time, "monotonic", side_effect=[0, 11]),
+                    patch.object(remote_smoke.time, "monotonic", side_effect=[0, 46]),
                     patch.object(remote_smoke.time, "sleep") as sleep,
                     self.assertRaises(PermissionError),
                 ):
@@ -107,7 +107,7 @@ class RemoteFixtureCleanupTests(unittest.TestCase):
                 remote_smoke.tempfile, "TemporaryDirectory", return_value=temporary
             ),
             patch.object(remote_smoke, "os", SimpleNamespace(name="nt")),
-            patch.object(remote_smoke.time, "monotonic", side_effect=[0, 11]),
+            patch.object(remote_smoke.time, "monotonic", side_effect=[0, 46]),
             patch.object(remote_smoke, "_record_windows_executable_lock") as diagnostic,
             self.assertRaises(PermissionError),
         ):

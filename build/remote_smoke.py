@@ -19,12 +19,14 @@ import time
 
 @contextmanager
 def remote_fixture_directory(*, prefix: str):
-    """Keep cleanup strict while Windows releases stopped executable mappings."""
+    """Keep cleanup strict while the independent terminal host retires."""
     temporary = tempfile.TemporaryDirectory(prefix=prefix)
     try:
         yield temporary.name
     finally:
-        deadline = time.monotonic() + 10
+        # Unguarded terminal hosts retire after 30 idle seconds. Windows keeps
+        # their package executable mapped until then, even after the backend stops.
+        deadline = time.monotonic() + 45
         while True:
             try:
                 temporary.cleanup()
