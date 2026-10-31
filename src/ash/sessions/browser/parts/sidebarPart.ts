@@ -7,17 +7,13 @@ import { SyncDescriptor } from '../../../platform/instantiation/common/descripto
 import { ViewPane, type IViewPaneOptions } from '../../../workbench/browser/parts/views/viewPane.js';
 import { SessionsViewRegistry } from '../../common/views.js';
 import { localize } from '../../../nls.js';
-import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { ActivityBarPosition } from '../../../workbench/common/configuration.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { SidebarPart as WorkbenchSidebarPart } from '../../../workbench/browser/parts/sidebar/sidebarPart.js';
 import { IViewDescriptorService, ViewContainerLocation } from '../../../workbench/common/views.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { SessionsList } from './sidebar/sessionsList.js';
-import { TeamsPanel, type TeamRoleOption } from './sidebar/teamsPanel.js';
-import { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IWorkbenchLayoutService } from '../../../workbench/services/layout/browser/layoutService.js';
@@ -32,14 +28,12 @@ import { INotificationService } from '../../../platform/notification/common/noti
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
 export const CODE_NAVIGATION_CONTAINER_ID = 'sessions.navigation.code';
-export const TEAMS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.teams';
 
-export function registerSessionsNavigation(listRoles: () => Promise<readonly TeamRoleOption[]>): IDisposable {
+export function registerSessionsNavigation(): IDisposable {
 	const registrations = new DisposableStore();
 	for (const [id, title, key, ctorDescriptor] of [
 		[SESSIONS_NAVIGATION_CONTAINER_ID, localize('sessions.activity.chat', 'Chat'), 'sessions.activity.chat', new SyncDescriptor(SessionsNavigationView, ['chat'])],
 		[CODE_NAVIGATION_CONTAINER_ID, localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), 'sessions.mode.code', new SyncDescriptor(SessionsNavigationView, ['code'])],
-		[TEAMS_NAVIGATION_CONTAINER_ID, 'Agent Teams', 'sessions.activity.teams', new SyncDescriptor(TeamsNavigationView, [listRoles])],
 	] as const) {
 		registrations.add(SessionsViewRegistry.registerViewContainer({ id, title, localizationKey: { bundle: 'ash', key }, location: ViewContainerLocation.Sidebar, order: 0 }));
 		registrations.add(SessionsViewRegistry.registerViews(id, [{ id: id + '.view', title, localizationKey: { bundle: 'ash', key }, ctorDescriptor, canToggleVisibility: false }]));
@@ -86,21 +80,6 @@ class SessionsNavigationView extends ViewPane {
 		}
 	}
 	public focus(): void { this.list.focus(); }
-}
-
-class TeamsNavigationView extends ViewPane {
-	private readonly teams: TeamsPanel;
-	constructor(listRoles: () => Promise<readonly TeamRoleOption[]>, parent: HTMLElement, options: IViewPaneOptions, @ITeamsManagementService teams: ITeamsManagementService, @ISessionsService sessions: ISessionsService, @IQuickInputService quickInput: IQuickInputService) {
-		super(parent, options);
-		this.contentElement.classList.add('ash-sessions-navigation-view');
-		this.teams = this._register(new TeamsPanel(this.contentElement, teams, sessions, quickInput, listRoles));
-		this.teams.domNode.hidden = false;
-	}
-	public override setVisible(visible: boolean): void {
-		super.setVisible(visible);
-		if (visible) { void this.teams.show(); }
-	}
-	public focus(): void { this.teams.focus(); }
 }
 
 /** Shared container host with Sessions Activity Bar placement and sizing. */

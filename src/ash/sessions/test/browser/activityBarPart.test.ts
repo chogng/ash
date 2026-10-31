@@ -338,17 +338,17 @@ test('Code navigation has its own actions and order while Chat keeps its saved n
 	const labels = () => [...bar.domNode.querySelectorAll('.ash-sessions-navigation button')].map(button => button.textContent);
 	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Search', 'Automations', 'Collab', 'Agent Teams', 'Symphony', 'Customize']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Automations', 'Collab', 'Symphony', 'Customize']);
 	assert.equal(bar.domNode.querySelector('[data-action-id="sessions.open.code"]'), null);
 	setARIAContainer(document.body);
 	bar.domNode.querySelector('[data-action-id="sessions.open.collaboration"] button')!.dispatchEvent(new browser.window.KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true }));
 	await shown[0]!.run();
-	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony', 'Customize']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Symphony', 'Customize']);
 	assert.equal(storage.get('sessions.activityBar.actionOrder', StorageScope.PROFILE), JSON.stringify(chatOrder));
 	contexts.setContext('sessions.workspaceMode', 'chat');
 	assert.deepEqual(labels(), ['Artifacts', 'New', 'Search', 'Projects', 'Customize']);
 	contexts.setContext('sessions.workspaceMode', 'code');
-	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Agent Teams', 'Symphony', 'Customize']);
+	assert.deepEqual(labels(), ['New', 'Search', 'Collab', 'Automations', 'Symphony', 'Customize']);
 });
 
 test('workspace mode controls switch retained pages and follow their owner selection', async () => {

@@ -1,6 +1,7 @@
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter } from '../../../base/common/event.js';
-import { Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { addDisposableListener, getActiveElement, isHTMLElement } from '../../../base/browser/dom.js';
 import { onWillUnregisterWindow } from '../../../base/browser/window.js';
 import { IContextKeyService, type IScopedContextKeyService } from '../../contextkey/browser/contextKeyService.js';
 import type { IContextKey } from '../../contextkey/common/contextkey.js';
@@ -15,6 +16,7 @@ import { QuickInputController } from './quickInputController.js';
 /** Owns Quick Access and the shared input host within an application's service scope. */
 export class QuickInputService extends Disposable implements IQuickInputService {
 	private readonly inputControllers = this._register(new DisposableMap<HTMLElement, QuickInputController>());
+	private readonly modalListeners = this._register(new DisposableMap<HTMLElement, IDisposable>());
 	private accessController: QuickAccessController | undefined;
 	private readonly shown = this._register(new Emitter<void>());
 	private readonly hidden = this._register(new Emitter<void>());
@@ -32,17 +34,21 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		this.inQuickInput = inQuickInputContext.bindTo(contextKeyService);
 		this._register(toDisposable(() => this.inQuickInput.reset()));
 		this._register(layoutService.onDidLayoutActiveContainer(() => {
-			this.inputControllers.get(layoutService.activeContainer)?.layout(layoutService.activeContainerDimension, layoutService.activeContainerOffset.quickInputTop);
+			const container = this.getInputContainer();
+			this.inputControllers.get(container)?.layout(layoutService.activeContainerDimension, container === layoutService.activeContainer ? layoutService.activeContainerOffset.quickInputTop : 0);
 		}));
 		this._register(layoutService.onDidChangeActiveContainer(() => {
 			// A provider captures the editor at invocation; dismiss it before another window takes over.
 			for (const [container, controller] of this.inputControllers) {
-				if (container !== layoutService.activeContainer) controller.currentQuickInput?.hide();
+				if (container !== layoutService.activeContainer && !layoutService.activeContainer.contains(container)) controller.currentQuickInput?.hide();
 			}
 		}));
 		this._register(onWillUnregisterWindow(({ window }) => {
 			for (const [container] of this.inputControllers) {
-				if (container.ownerDocument.defaultView === window) this.inputControllers.deleteAndDispose(container);
+				if (container.ownerDocument.defaultView === window) {
+					this.inputControllers.deleteAndDispose(container);
+					this.modalListeners.deleteAndDispose(container);
+				}
 			}
 		}));
 	}
@@ -54,8 +60,17 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 
 	protected get controller(): QuickInputController {
 		this.assertNotDisposed();
+		const container = this.getInputContainer();
+		return this.inputControllers.get(container) ?? this.inputControllers.set(container, this.createController(undefined, container));
+	}
+
+	private getInputContainer(): HTMLElement {
 		const container = this.layoutService.activeContainer;
-		return this.inputControllers.get(container) ?? this.inputControllers.set(container, this.createController());
+		const focused = getActiveElement(container.ownerDocument);
+		const modal = isHTMLElement(focused) ? focused.closest<HTMLElement>('dialog[open]') : undefined;
+		// Native modal dialogs make overlays outside their subtree inert. Keep the window's
+		// single Quick Input service and its command handlers, but host the controller inside it.
+		return modal && container.contains(modal) ? modal : container;
 	}
 
 	protected createController(className?: string, container = this.layoutService.activeContainer): QuickInputController {
@@ -90,12 +105,18 @@ export class QuickInputService extends Disposable implements IQuickInputService 
 		type = quickInputTypeContextKey.bindTo(scope);
 		focus = quickInputFocusContext.bindTo(scope);
 		end = endOfQuickInputBoxContext.bindTo(scope);
-		controller.layout(this.layoutService.activeContainerDimension, this.layoutService.activeContainerOffset.quickInputTop);
+		controller.layout(this.layoutService.activeContainerDimension, container === this.layoutService.activeContainer ? this.layoutService.activeContainerOffset.quickInputTop : 0);
+		if (container.tagName === 'DIALOG') {
+			this.modalListeners.set(container, addDisposableListener(container, 'close', () => {
+				this.inputControllers.deleteAndDispose(container);
+				this.modalListeners.deleteAndDispose(container);
+			}));
+		}
 		return controller;
 	}
 
 	public get currentQuickInput(): IQuickInput | undefined {
-		return this.inputControllers.get(this.layoutService.activeContainer)?.currentQuickInput;
+		return this.inputControllers.get(this.getInputContainer())?.currentQuickInput;
 	}
 
 	public createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {

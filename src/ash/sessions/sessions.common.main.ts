@@ -115,10 +115,7 @@ MenusRegistry.appendMenuItems([
 		id: Menus.CodeActivityBar,
 		item: { command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') }, group: 'navigation', order: 30 },
 	},
-	{
-		id: Menus.CodeActivityBar,
-		item: { command: { id: 'sessions.open.teams', title: localize2({ bundle: 'ash', key: 'sessions.activity.teams' }, 'Agent Teams'), icon: Lxicon.agent, toggled: ContextKeyExpr.has('sessions.activity.teamsSelected') }, group: 'navigation', order: 35 },
-	},
+
 ]);
 
 registerTerminalView(SessionsViewRegistry);

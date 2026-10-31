@@ -3,9 +3,8 @@
 	min-height: 0;
 	flex: 1 1 auto;
 	flex-direction: column;
-	padding: var(--ash-spacing-size160) var(--ash-spacing-size120);
+	padding: 0;
 	color: var(--ash-foreground);
-	background: var(--ash-sideBar-background);
 }
 
 .ash-teams-panel[hidden] {
@@ -18,7 +17,7 @@
 }
 .ash-teams-content {
 	min-height: 0;
-	overflow: auto;
+	overflow: visible;
 }
 .ash-teams-toolbar,
 .ash-teams-actions {

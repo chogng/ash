@@ -4,10 +4,9 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import type { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import type { Team, TeamMessage, TeamRole, TeamRun } from '../../../services/teams/common/team.js';
-import type { ITeamsManagementService } from '../../../services/teams/common/teamsManagement.js';
+import { ITeamsManagementService } from '../../../services/teams/common/teamsManagement.js';
 
 export interface TeamRoleOption {
 	readonly name: string;
@@ -15,9 +14,9 @@ export interface TeamRoleOption {
 	readonly role: TeamRole;
 }
 
-/** Team catalog and task entry in the Agents sidebar. */
+/** Team management within Agent settings. */
 export class TeamsPanel extends Disposable {
-	readonly domNode: HTMLElement;
+	private readonly domNode: HTMLElement;
 	private readonly content: HTMLDivElement;
 	private readonly status: HTMLParagraphElement;
 	private readonly renderListeners = this._register(new DisposableStore());
@@ -28,25 +27,25 @@ export class TeamsPanel extends Disposable {
 
 	constructor(
 		container: HTMLElement,
-		private readonly teams: ITeamsManagementService,
-		private readonly sessions: ISessionsService,
-		private readonly quickInput: IQuickInputService,
 		private readonly listRoles: () => Promise<readonly TeamRoleOption[]>,
+		private readonly openRole: (role: Extract<TeamRole, { type: 'exact'; }>) => void,
+		private readonly openTask: (run: TeamRun) => Promise<void>,
+		@ITeamsManagementService private readonly teams: ITeamsManagementService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'section');
 		this.domNode.className = 'ash-teams-panel';
 		this.domNode.hidden = true;
-		const heading = h(document, 'h2');
-		heading.textContent = localize('sessions.teams.title', 'Teams');
+		this.domNode.setAttribute('aria-label', localize('sessions.teams.title', 'Teams'));
 		this.content = h(document, 'div');
 		this.content.className = 'ash-teams-content';
 		this.status = h(document, 'p');
 		this.status.className = 'ash-teams-status';
 		this.status.setAttribute('role', 'status');
 		this.status.setAttribute('aria-live', 'polite');
-		this.domNode.append(heading, this.status, this.content);
+		this.domNode.append(this.status, this.content);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(this.teams.teams.onDidChange(() => this.render()));
@@ -58,14 +57,29 @@ export class TeamsPanel extends Disposable {
 		await this.perform(async () => { await this.teams.refresh(); await this.loadSelected(); });
 	}
 
-	focus(): void { this.content.querySelector<HTMLButtonElement>('button')?.focus(); }
+	getAccessibleContent(): string {
+		const team = this.current();
+		return [
+			this.error,
+			...this.teams.teams.get().map(team => team.name),
+			...(team ? [
+				team.description,
+				localize('sessions.teams.members', 'Members'),
+				...team.members.map(member => `${member.name}: ${member.responsibility} · ${member.role.type === 'exact' ? member.role.name : localize('sessions.teams.defaultRole', 'Default Agent')}${member.agentId === team.coordinatorId ? ` · ${localize('sessions.teams.lead', 'Lead')}` : ''}`),
+				localize('sessions.teams.tasks', 'Tasks'),
+				...this.runs.map(run => run.objective),
+				localize('sessions.teams.discussion', 'Discussion'),
+				...this.messages.map(message => `${team.members.find(member => member.agentId === message.senderId)?.name ?? message.senderId}: ${message.text}`),
+			] : []),
+		].filter(Boolean).join('\n');
+	}
 
 	private async perform(operation: () => Promise<void>): Promise<void> {
 		this.error = undefined;
 		this.status.textContent = localize('sessions.teams.working', 'Working…');
 		try { await operation(); }
 		catch (error) { this.error = error instanceof Error ? error.message : String(error); }
-		this.render();
+		if (!this.isDisposed) this.render();
 	}
 
 	private async loadSelected(): Promise<void> {
@@ -141,6 +155,10 @@ export class TeamsPanel extends Disposable {
 			row.className = 'ash-teams-member';
 			this.paragraph(row, `${member.name} · ${member.responsibility}${member.agentId === team.coordinatorId ? ` · ${localize('sessions.teams.lead', 'Lead')}` : ''}`);
 			this.paragraph(row, member.role.type === 'exact' ? member.role.name : localize('sessions.teams.defaultRole', 'Default Agent'));
+			const role = member.role;
+			if (role.type === 'exact') {
+				this.button(row, localize('sessions.teams.viewRole', 'View role'), () => this.openRole(role));
+			}
 			if (team.status === 'active') {
 				this.button(row, localize('sessions.teams.editMember', 'Edit member'), () => this.perform(async () => {
 					const name = await this.input(localize('sessions.teams.memberName', 'Member name'), member.name);
@@ -166,7 +184,7 @@ export class TeamsPanel extends Disposable {
 		const runsHeading = h(document, 'h4');
 		runsHeading.textContent = localize('sessions.teams.tasks', 'Tasks');
 		runs.append(runsHeading);
-		for (const run of this.runs) this.button(runs, run.objective, () => this.perform(() => this.sessions.openThread(run.sessionId, run.coordinatorThreadId)));
+		for (const run of this.runs) this.button(runs, run.objective, () => this.perform(() => this.openTask(run)));
 		detail.append(runs);
 		const discussion = h(document, 'div');
 		const discussionHeading = h(document, 'h4');
@@ -213,7 +231,7 @@ export class TeamsPanel extends Disposable {
 		if (!objective) return;
 		const run = await this.teams.startRun(team, objective);
 		await this.loadSelected();
-		await this.sessions.openThread(run.sessionId, run.coordinatorThreadId);
+		await this.openTask(run);
 	}
 
 	private async postMessage(team: Team): Promise<void> {

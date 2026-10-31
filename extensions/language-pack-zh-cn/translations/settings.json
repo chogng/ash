@@ -452,6 +452,7 @@
     "lsp.idle.help": "已启动的语言服务器默认保持运行，以保留内存中的分析结果。可在语言服务器设置中启用自动释放，在最后一个相关文件关闭并经过等待时间后回收进程内存。Rust 重启后需重新建立分析缓存，Cargo 编译产物不能恢复这份缓存。基础高亮和折叠不受影响。Rust 设置中的缓存容量按条目计数，不是 MB 数或总内存上限。",
     "open.invalidSectionQuery": "分区查询必须为字符串，并指定图形设置分区。",
     "open.unsupportedSectionSearch": "此设置分区不提供独立搜索。",
+    "roles.unavailable": "此角色已不可用：{0}",
     "roles.title": "Agent 定义",
     "roles.refresh": "刷新定义",
     "roles.description": "查看内置角色并自定义目录 Agent。保存后刷新，修改将用于新的运行；正在运行的 Agent 保留其冻结定义。",
