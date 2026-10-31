@@ -1069,10 +1069,20 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
         "initialize",
         serde_json::json!({"clientInfo":{"name":"auth-test","version":"1"},"capabilities":{}}),
     );
-    assert_eq!(
-        call(2, "account/read", serde_json::json!({}))["result"]["accounts"][0]["plan"],
-        "pro"
-    );
+    let accounts = call(2, "account/read", serde_json::json!({}))["result"]["accounts"].clone();
+    let accounts = accounts.as_array().unwrap();
+    assert_eq!(accounts.len(), 2);
+    let codex = accounts
+        .iter()
+        .find(|account| account["provider"] == ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID)
+        .unwrap();
+    assert_eq!(codex["plan"], "pro");
+    let web = accounts
+        .iter()
+        .find(|account| account["provider"] == ash_chatgpt::CHATGPT_WEB_PROVIDER_ID)
+        .unwrap()
+        .clone();
+    assert_eq!(web["status"], "ready");
     assert_eq!(
         call(
             3,
@@ -1081,10 +1091,12 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
         )["result"]["status"],
         "loggedOut"
     );
+    // Both providers reuse the external login, but own independent disconnect states.
     assert_eq!(
         call(4, "account/read", serde_json::json!({}))["result"]["accounts"],
-        serde_json::json!([])
+        serde_json::json!([web])
     );
+    assert_eq!(std::fs::read(home.path().join("auth.json")).unwrap(), auth);
     // Reconnect uses a fresh external login regardless of who owns logout on this machine.
     std::fs::write(home.path().join("auth.json"), &auth).unwrap();
     assert_eq!(
@@ -1095,10 +1107,19 @@ fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
         )["result"]["type"],
         "connected"
     );
-    assert_eq!(
-        call(6, "account/read", serde_json::json!({}))["result"]["accounts"][0]["status"],
-        "ready"
-    );
+    let accounts = call(6, "account/read", serde_json::json!({}))["result"]["accounts"].clone();
+    let accounts = accounts.as_array().unwrap();
+    assert_eq!(accounts.len(), 2);
+    for provider in [
+        ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
+        ash_chatgpt::CHATGPT_WEB_PROVIDER_ID,
+    ] {
+        let account = accounts
+            .iter()
+            .find(|account| account["provider"] == provider)
+            .unwrap();
+        assert_eq!(account["status"], "ready");
+    }
     assert!(auth == std::fs::read(home.path().join("auth.json")).unwrap());
     std::fs::remove_file(home.path().join("auth.json")).unwrap();
     assert_eq!(
@@ -5173,6 +5194,7 @@ fn glm_connections_use_distinct_endpoints_keys_and_billing_without_changing_the_
             entry.context_window = Some(1_000_000);
             entry.auto_compact_token_limit = Some(900_000);
             entry.available_context_window = Some(900_000 - 4_096 - 1_024);
+            entry.usable_context_window = Some(1_000_000 - 4_096 - 1_024);
         }
     }
     let model = ModelRef::new(

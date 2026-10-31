@@ -30,7 +30,7 @@ export type SettingsSectionField = { readonly description?: string; } & (
 	| { readonly id: string; readonly kind: 'status'; readonly text: string; }
 	| { readonly id: string; readonly kind: 'boolean'; readonly label: string; readonly value: boolean; readonly enabled: boolean; readonly setValue: (value: boolean) => void; }
 	| { readonly id: string; readonly kind: 'text'; readonly label: string; readonly value: string; readonly placeholder: string; readonly enabled: boolean; readonly setValue: (value: string) => void; }
-	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
+	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; readonly separatorBefore?: boolean; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
 	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly enabled: boolean; readonly run: () => Promise<void>; });
 
 export type SettingValueType = 'boolean' | 'number' | 'numberWithOptions' | 'select' | 'text' | 'stringMap' | 'complex';

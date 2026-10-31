@@ -1202,7 +1202,7 @@ fn sqlite_model_provider_migration_backfills_legacy_catalog_once() {
     let threads = ThreadController::with_store(store.clone());
     threads.migrate_model_providers(&mapping).unwrap();
     assert!(matches!(threads.read_thread(&id).unwrap().advisor,
-        ash_protocol::AdvisorSelection::Model { config } if config.model.provider == new));
+        ash_protocol::AdvisorSelection::Model { config } if config.model.as_ref().is_some_and(|model| model.provider == new)));
     let events = store.load(&id).unwrap();
     drop(threads);
     let threads = ThreadController::with_store(store.clone());

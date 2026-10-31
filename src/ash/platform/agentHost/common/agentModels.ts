@@ -81,7 +81,8 @@ export interface ModelCatalogEntry {
 }
 
 export interface AdvisorConfig {
-	readonly model: ModelRef;
+	/** An absent model inherits the initiating chat's model and reasoning effort. */
+	readonly model?: ModelRef | null;
 	readonly enabled: boolean;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly maxCalls: number;

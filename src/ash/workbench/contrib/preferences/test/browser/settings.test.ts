@@ -3514,10 +3514,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		assert.ok(option);
 		option.click();
 	};
-	selectAdvisor('Off');
+	selectAdvisor('Disable');
 	await nextTurn();
 	assert.deepEqual(advisorWrites, [{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
-	selectAdvisor('Muse Spark 1.3');
+	selectAdvisor('Muse Spark 1.3 · High');
 	await nextTurn();
 	assert.deepEqual(advisorWrites[1], {
 		model: otherAdvisorModel,
@@ -3527,12 +3527,12 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		reasoningEffort: 'high',
 	});
 	rejectAdvisorSave = true;
-	selectAdvisor('Off');
+	selectAdvisor('Disable');
 	await nextTurn();
-	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Muse Spark 1.3');
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Muse Spark 1.3 · High');
 	assert.match(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="status"]')?.textContent ?? '', /Preference write failed/u);
 	rejectAdvisorSave = false;
-	selectAdvisor('Off');
+	selectAdvisor('Disable');
 	await nextTurn();
 	assert.deepEqual(advisorWrites[2], {
 		model: otherAdvisorModel,
@@ -3541,17 +3541,17 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		maxOutputTokens: 4096,
 		reasoningEffort: 'high',
 	});
-	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Off');
-	selectAdvisor('Muse Spark 1.3');
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Disable');
+	selectAdvisor('Muse Spark 1.3 · High');
 	await nextTurn();
 	hiddenAdvisors.add(otherAdvisorModel.model);
 	modelsChanged.fire();
 	await nextTurn();
-	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Muse Spark 1.3');
+	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.textContent, 'Muse Spark 1.3 · High');
 	root.querySelector<HTMLElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll('[role="option"]')].map(option => option.textContent),
-		['Off', 'GPT-6.1 Sol', 'Muse Spark 1.3'],
+		['Inherit from chat', 'Disable', 'GPT-6.1 Sol · Default', 'Muse Spark 1.3 · Default', 'Muse Spark 1.3 · High'],
 	);
 	assert.equal(advisorWrites.length, 4, 'Hiding a model must not change the saved preference');
 	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] > .ash-settings-card-title')?.textContent, 'Advisor');

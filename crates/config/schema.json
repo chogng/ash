@@ -2,7 +2,7 @@
   "$defs": {
     "AdvisorConfig": {
       "additionalProperties": false,
-      "description": "Immutable model and budget selected for consultations in one Turn.",
+      "description": "Advisor preference; chat inheritance is resolved before freezing a Turn.",
       "properties": {
         "enabled": {
           "default": true,
@@ -23,7 +23,15 @@
           "type": "integer"
         },
         "model": {
-          "$ref": "#/$defs/ModelRef"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "An absent model inherits the initiating chat's model and reasoning effort."
         },
         "reasoningEffort": {
           "anyOf": [
@@ -36,9 +44,6 @@
           ]
         }
       },
-      "required": [
-        "model"
-      ],
       "type": "object"
     },
     "AgentConfig": {

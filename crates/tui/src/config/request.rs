@@ -140,7 +140,7 @@ fn select_advisor<T: JsonRpcTransport>(
             })?;
         let mut advisor = config
             .advisor
-            .filter(|advisor| advisor.model == model)
+            .filter(|advisor| advisor.model.as_ref() == Some(&model))
             .unwrap_or_else(|| ash_protocol::AdvisorConfig::new(model));
         advisor.enabled = true;
         Some(advisor)

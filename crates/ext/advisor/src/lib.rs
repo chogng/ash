@@ -88,7 +88,10 @@ impl AdvisorToolService {
             ToolModelRequest {
                 identity,
                 call_id: &call.id,
-                model: &config.model,
+                model: config
+                    .model
+                    .as_ref()
+                    .expect("Turn freezes the Advisor model"),
                 instructions: role.role_instructions(),
                 question: &arguments.question,
                 max_output_tokens: config.max_output_tokens,
@@ -159,7 +162,11 @@ impl ToolService for AdvisorToolService {
     ) -> Result<ActionReviewRequest, CoreError> {
         arguments(call)?;
         let config = self.config(facts)?;
-        let scope = format!("model:{}/{}", config.model.provider, config.model.model);
+        let model = config
+            .model
+            .as_ref()
+            .expect("Turn freezes the Advisor model");
+        let scope = format!("model:{}/{}", model.provider, model.model);
         let canonical = serde_json::to_vec(
             &json!({"tool": TOOL_NAME, "arguments": call.arguments, "config": config}),
         )

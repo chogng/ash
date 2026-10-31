@@ -536,8 +536,12 @@ impl TurnExecutor {
                 .snapshot(Arc::clone(&model))?
                 .unwrap_or_else(|| Arc::clone(&self.policy_source));
             if let Some(advisor) = &turn.advisor {
+                let advisor_model = advisor
+                    .model
+                    .as_ref()
+                    .expect("Turn freezes the Advisor model");
                 let auxiliary = model
-                    .snapshot(ModelSelection::Session(&advisor.model))?
+                    .snapshot(ModelSelection::Session(advisor_model))?
                     .unwrap_or_else(|| Arc::clone(&model));
                 self.threads
                     .turn_tool_models
@@ -545,7 +549,7 @@ impl TurnExecutor {
                     .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?
                     .insert(
                         thread_id.clone(),
-                        (turn_id.clone(), advisor.model.clone(), auxiliary),
+                        (turn_id.clone(), advisor_model.clone(), auxiliary),
                     );
             }
             models.insert(

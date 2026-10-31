@@ -312,6 +312,7 @@ fn status_line_context_follows_thread_snapshots() {
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                recommended_for: Vec::new(),
                 source: None,
                 pricing: Vec::new(),
                 retirement: None,
@@ -329,6 +330,7 @@ fn status_line_context_follows_thread_snapshots() {
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(100),
+                usable_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![],

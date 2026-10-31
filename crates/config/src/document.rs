@@ -357,10 +357,12 @@ impl UserConfigDocument {
             advisor
                 .validate()
                 .map_err(|message| ConfigError(message.into()))?;
-            if !self.has_model_provider(&advisor.model.provider) {
+            if let Some(model) = &advisor.model
+                && !self.has_model_provider(&model.provider)
+            {
                 return Err(ConfigError(format!(
                     "advisor model provider '{}' is not configured",
-                    advisor.model.provider
+                    model.provider
                 )));
             }
         }

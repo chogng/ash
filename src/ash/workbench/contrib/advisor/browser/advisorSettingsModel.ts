@@ -4,7 +4,7 @@ import { localize } from '../../../../nls.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
 import { updateAdvisorConfig } from '../../../services/chat/common/advisor.js';
 import { IChatService, type AdvisorConfig } from '../../../services/chat/common/chatService.js';
-import { ModelPurpose, modelsRecommendedFor, modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
+import { ModelPurpose, modelsRecommendedFor, modelRefIdentity, type ModelCatalogEntry, type ModelReasoningEffort } from '../../../services/chat/common/modelCatalog.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
 
 /** Advisor settings data; each host supplies the shared Preferences renderer. */
@@ -15,7 +15,7 @@ export class AdvisorSettingsModel extends Disposable implements SettingsSectionM
 	get title(): string { return localize('advisor.settings.title', 'Advisor'); }
 	get description(): string { return localize('advisor.settings.description', 'Choose a higher-intelligence model to provide strategic guidance while the executor continues with the task.'); }
 	get keywords(): readonly string[] { return ['advisor', 'model', 'second opinion', localize('advisor.settings.model', 'Advisor model')]; }
-	get help(): string { return localize('advisor.settings.help', 'Advisor settings\nUse Tab to reach Advisor model. Press Enter or Space to open the list, use arrow keys to choose a model, and press Enter to save. Selecting a model enables Advisor. Off disables it and keeps the selected model. The list shows visible models recommended for Advisor in the model catalog. Escape closes the list or help and returns focus.'); }
+	get help(): string { return localize('advisor.settings.help', 'Advisor settings\nUse Tab to reach Advisor model. Press Enter or Space to open the list, use arrow keys to choose an option, and press Enter to save. Inherit from chat uses the current chat model and reasoning effort. Disable turns Advisor off and keeps the saved selection. Below the divider, choose a model and reasoning effort from the visible models recommended for Advisor. Escape closes the list or help and returns focus.'); }
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
 	private models: readonly ModelCatalogEntry[] = [];
@@ -42,23 +42,45 @@ export class AdvisorSettingsModel extends Disposable implements SettingsSectionM
 
 	get fields(): readonly SettingsSectionField[] {
 		const advisor = this.savedAdvisor;
+		const choices = this.modelChoices();
 		const options = [
-			{ value: '', label: localize('advisor.settings.disabled', 'Off') },
-			...modelsRecommendedFor(this.models, ModelPurpose.Advisor)
-				.filter(entry => this.languageModels.isModelVisible(entry.model))
-				.map(entry => ({ value: modelRefIdentity(entry.model), label: entry.displayName })),
+			{ value: 'inherit', label: localize('advisor.settings.inherit', 'Inherit from chat') },
+			{ value: '', label: localize('advisor.settings.disabled', 'Disable') },
+			...choices.map((choice, index) => ({ value: choice.value, label: choice.label, separatorBefore: index === 0 })),
 		];
-		const value = advisor?.enabled ? modelRefIdentity(advisor.model) : '';
-		// Recommendation and visibility updates never replace a saved selection.
-		if (advisor && value && !options.some(option => option.value === value)) {
-			const selected = this.models.find(entry => modelRefIdentity(entry.model) === value);
-			options.push({ value, label: selected?.displayName ?? `${advisor.model.provider}/${advisor.model.model}` });
+		let value = '';
+		if (advisor?.enabled) {
+			value = advisor.model ? modelChoiceValue(advisor.model, advisor.reasoningEffort ?? undefined) : 'inherit';
 		}
 		return [{
 			id: 'advisor-model', kind: 'select', label: localize('advisor.settings.model', 'Advisor model'),
 			description: this.description, value, options, enabled: this.loaded && !this.working,
 			setValue: value => this.selectModel(value),
 		}, { id: 'advisor-status', kind: 'status', text: this.message }];
+	}
+
+	private modelChoices(): readonly { value: string; label: string; entry: Pick<ModelCatalogEntry, 'model' | 'supportedReasoningEfforts'>; effort: ModelReasoningEffort | undefined; }[] {
+		const entries = [...modelsRecommendedFor(this.models, ModelPurpose.Advisor).filter(entry => this.languageModels.isModelVisible(entry.model))];
+		const saved = this.savedAdvisor;
+		const savedModel = saved?.model;
+		// Recommendation and visibility updates never replace a saved selection.
+		if (savedModel && !entries.some(entry => modelRefIdentity(entry.model) === modelRefIdentity(savedModel))) {
+			entries.push(this.models.find(entry => modelRefIdentity(entry.model) === modelRefIdentity(savedModel)) ?? {
+				model: savedModel, displayName: `${savedModel.provider}/${savedModel.model}`, longContext: null,
+			});
+		}
+		return entries.flatMap(entry => {
+			const efforts: (ModelReasoningEffort | undefined)[] = [undefined, ...(entry.supportedReasoningEfforts ?? []).map(option => option.effort)];
+			if (saved?.model && modelRefIdentity(saved.model) === modelRefIdentity(entry.model) && saved.reasoningEffort && !efforts.includes(saved.reasoningEffort)) {
+				efforts.push(saved.reasoningEffort);
+			}
+			return efforts.map(effort => ({
+				value: modelChoiceValue(entry.model, effort),
+				label: localize('advisor.settings.modelEffort', '{0} · {1}', entry.displayName, effort === undefined && entry.defaultReasoningEffort
+					? localize('advisor.settings.defaultEffort', '{0} (Default)', effortLabel(entry.defaultReasoningEffort)) : effortLabel(effort)),
+				entry, effort,
+			}));
+		});
 	}
 
 	setVisible(visible: boolean): void {
@@ -94,13 +116,16 @@ export class AdvisorSettingsModel extends Disposable implements SettingsSectionM
 
 	private selectModel(value: string): void {
 		if (!this.visible || !this.loaded || this.working) { return; }
+		if (value === 'inherit') {
+			void this.save(updateAdvisorConfig(this.savedAdvisor, { type: 'inherit' }));
+			return;
+		}
 		if (!value) {
 			void this.save(updateAdvisorConfig(this.savedAdvisor, { type: 'setEnabled', enabled: false }));
 			return;
 		}
-		const selected = this.models.find(entry => modelRefIdentity(entry.model) === value);
-		const model = selected ?? (this.savedAdvisor && modelRefIdentity(this.savedAdvisor.model) === value ? { model: this.savedAdvisor.model } : undefined);
-		if (model) { void this.save(updateAdvisorConfig(this.savedAdvisor, { type: 'selectModel', model })); }
+		const selected = this.modelChoices().find(choice => choice.value === value);
+		if (selected) { void this.save(updateAdvisorConfig(this.savedAdvisor, { type: 'selectModel', model: selected.entry, reasoningEffort: selected.effort ?? null })); }
 	}
 
 	private async save(next: AdvisorConfig | null): Promise<void> {
@@ -130,5 +155,22 @@ export class AdvisorSettingsModel extends Disposable implements SettingsSectionM
 			this.reloadRequested = false;
 			void this.load();
 		}
+	}
+}
+
+function modelChoiceValue(model: ModelCatalogEntry['model'], effort: ModelReasoningEffort | undefined): string {
+	return JSON.stringify([model.provider, model.model, effort ?? null]);
+}
+
+function effortLabel(effort: ModelReasoningEffort | undefined): string {
+	switch (effort) {
+		case undefined: return localize('chat.modelPicker.defaultEffort', 'Default');
+		case 'none': return localize('chat.modelPicker.effortNone', 'None');
+		case 'minimal': return localize('chat.modelPicker.effortMinimal', 'Minimal');
+		case 'low': return localize('chat.modelPicker.effortLow', 'Low');
+		case 'medium': return localize('chat.modelPicker.effortMedium', 'Medium');
+		case 'high': return localize('chat.modelPicker.effortHigh', 'High');
+		case 'extraHigh': return localize('chat.modelPicker.effortExtraHigh', 'Extra High');
+		case 'max': return localize('chat.modelPicker.effortMax', 'Max');
 	}
 }

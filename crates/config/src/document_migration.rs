@@ -435,8 +435,13 @@ fn migrate_subscription_models(document: &mut UserConfigDocument) {
     if let Some(model) = &mut document.agent.commit_message_model {
         migrate(model);
     }
-    if let Some(advisor) = &mut document.agent.advisor {
-        migrate(&mut advisor.model);
+    if let Some(model) = document
+        .agent
+        .advisor
+        .as_mut()
+        .and_then(|advisor| advisor.model.as_mut())
+    {
+        migrate(model);
     }
     if let Some(models) = &mut document.codebase.models {
         migrate(&mut models.embedding_model);

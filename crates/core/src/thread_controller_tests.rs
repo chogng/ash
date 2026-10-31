@@ -2811,6 +2811,36 @@ fn invalid_tool_audio_does_not_commit_a_result_and_the_call_can_still_finish() {
 }
 
 #[test]
+fn advisor_chat_inheritance_freezes_each_chats_model_and_effort() {
+    let controller = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let preference: ash_protocol::AdvisorConfig = serde_json::from_value(serde_json::json!({
+        "enabled": true, "maxCalls": 7, "maxOutputTokens": 8192
+    }))
+    .unwrap();
+    for (name, effort) in [
+        ("first", ash_protocol::ReasoningEffort::High),
+        ("second", ash_protocol::ReasoningEffort::Low),
+    ] {
+        let id = create_thread(&controller, name);
+        let model = ModelRef {
+            provider: ProviderId::new("test").unwrap(),
+            model: ModelId::new(name).unwrap(),
+        };
+        let mut request = start_request(name);
+        request.model = Some(model.clone());
+        request.reasoning_effort = Some(effort);
+        request.advisor = Some(preference.clone());
+        controller.start_turn(&id, request).unwrap();
+        let snapshot = controller.read_thread(&id).unwrap();
+        let frozen = snapshot.turns[0].advisor.as_ref().unwrap();
+        assert_eq!(frozen.model.as_ref(), Some(&model));
+        assert_eq!(frozen.reasoning_effort, Some(effort));
+        assert_eq!((frozen.max_calls, frozen.max_output_tokens), (7, 8192));
+    }
+    assert_eq!(preference.model, None);
+}
+
+#[test]
 fn advisor_selection_is_retry_safe_and_inherited_at_the_fork_boundary() {
     let store = Arc::new(InMemoryThreadStore::default());
     let controller = ThreadController::with_store(store.clone());
@@ -3054,7 +3084,7 @@ fn model_identity_migration_replays_once_and_preserves_completed_turns() {
     );
     assert!(
         matches!(&after.advisor, ash_protocol::AdvisorSelection::Model { config }
-        if config.model.provider.as_str() == "zai")
+        if config.model.as_ref().is_some_and(|model| model.provider.as_str() == "zai"))
     );
     let reopened = ThreadController::with_store(store);
     reopened.migrate_model_providers(&mapping).unwrap();

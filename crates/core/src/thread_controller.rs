@@ -1056,6 +1056,9 @@ impl ThreadController {
                 .validate()
                 .map_err(|message| CoreError::InvalidInput(message.into()))?;
         }
+        request.advisor = request.advisor.and_then(|config| {
+            config.resolve_for_chat(request.model.as_ref(), request.reasoning_effort)
+        });
         if request.kind == ash_protocol::TurnKind::Advisor && request.advisor.is_none() {
             return Err(CoreError::InvalidInput("advisor is off".into()));
         }

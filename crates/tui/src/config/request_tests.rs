@@ -239,6 +239,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
         catalog_statuses: Vec::new(),
         catalog_scopes: None,
         models: vec![ModelCatalogEntry {
+            recommended_for: Vec::new(),
             source: None,
             pricing: Vec::new(),
             retirement: None,
@@ -256,6 +257,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
             acceleration_options: Vec::new(),
             auto_compact_token_limit: None,
             available_context_window: None,
+            usable_context_window: None,
             capabilities: ModelCapabilities::UNKNOWN,
             settings: Default::default(),
             supported_reasoning_efforts: Vec::new(),

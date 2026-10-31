@@ -2607,6 +2607,7 @@ fn configured_model_summary() -> ModelSummary {
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                recommended_for: Vec::new(),
                 source: None,
                 pricing: Vec::new(),
                 retirement: None,
@@ -2627,6 +2628,7 @@ fn configured_model_summary() -> ModelSummary {
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(180_000),
+                usable_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![
@@ -2746,6 +2748,7 @@ fn custom_model_choices(
         catalog_scopes: None,
         models: vec![
             ash_app_server_protocol::protocol::model::ModelCatalogEntry {
+                recommended_for: Vec::new(),
                 source: None,
                 pricing: Vec::new(),
                 retirement: None,
@@ -2766,6 +2769,7 @@ fn custom_model_choices(
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(240_000),
+                usable_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![],

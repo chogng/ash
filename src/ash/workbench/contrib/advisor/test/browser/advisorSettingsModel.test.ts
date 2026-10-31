@@ -15,7 +15,7 @@ import { SettingsSectionRenderer } from '../../../preferences/browser/settingsSe
 import { ModelPurpose } from '../../../../../platform/agentHost/common/agentModels.js';
 import type { ILanguageModelsService } from '../../../chat/common/languageModels.js';
 
-test('Advisor focuses its saved model, Off when disabled and its saved value when the model is hidden', async () => {
+test('Advisor focuses its saved model, Disable when disabled and its saved value when the model is hidden', async () => {
 	const dom = new JSDOM('<body></body>');
 	dom.window.Element.prototype.scrollIntoView = () => { };
 	Object.defineProperty(dom.window.Element.prototype, 'scrollTo', {
@@ -48,9 +48,9 @@ test('Advisor focuses its saved model, Off when disabled and its saved value whe
 			},
 		});
 		for (const state of [
-			{ enabled: true, visible: true, label: 'Custom Advisor' },
-			{ enabled: false, visible: true, label: 'Off' },
-			{ enabled: true, visible: false, label: 'Custom Advisor' },
+			{ enabled: true, visible: true, label: 'Custom Advisor · Default' },
+			{ enabled: false, visible: true, label: 'Disable' },
+			{ enabled: true, visible: false, label: 'Custom Advisor · Default' },
 		]) {
 			saved = { ...saved, enabled: state.enabled };
 			modelVisible = state.visible;
@@ -73,14 +73,54 @@ test('Advisor focuses its saved model, Off when disabled and its saved value whe
 });
 
 
-function advisorFixture(chat: Pick<IChatService, 'readAdvisorDefault' | 'saveAdvisorDefault'>, changes = Event.None) {
+function advisorFixture(chat: Pick<IChatService, 'readAdvisorDefault' | 'saveAdvisorDefault'>, changes = Event.None, models: readonly ModelCatalogEntry[] = []) {
 	const dom = new JSDOM('<body></body>');
 	dom.window.Element.prototype.scrollIntoView = () => { };
 	const resources = new DisposableStore();
 	const { content, domNode } = advisorRenderer(resources, dom.window.document, chat as IChatService,
-		{ onDidChangeModels: changes, listModelCatalog: async () => [], isModelVisible: () => true } as unknown as ILanguageModelsService);
+		{ onDidChangeModels: changes, listModelCatalog: async () => models, isModelVisible: () => true } as unknown as ILanguageModelsService);
 	return { content, domNode, dom, dispose() { resources.dispose(); dom.window.close(); }, [Symbol.dispose]() { this.dispose(); } };
 }
+
+test('Advisor groups inheritance and Disable before models and persists each reasoning choice and inherited budgets', async () => {
+	const model: ModelCatalogEntry = {
+		model: { provider: 'custom', model: 'reasoning' }, displayName: 'Reasoning Advisor', longContext: null,
+		recommendedFor: [ModelPurpose.Advisor], defaultReasoningEffort: 'high', supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'high' }],
+	};
+	let saved: AdvisorConfig | null = { model: model.model, enabled: true, reasoningEffort: 'high', maxCalls: 7, maxOutputTokens: 8192 };
+	using fixture = advisorFixture({ readAdvisorDefault: async () => saved, saveAdvisorDefault: async value => { saved = value; } }, Event.None, [model]);
+	const ready = advisorLoaded(fixture.content); fixture.content.setVisible(true); await ready;
+	const button = fixture.domNode.querySelector<HTMLButtonElement>('[aria-label="Advisor model"]')!;
+	Object.defineProperty(button, 'getClientRects', { value: () => [new fixture.dom.window.DOMRect(0, 0, 100, 20)] });
+	fixture.dom.window.Element.prototype.scrollTo = () => { };
+	button.click();
+	const menu = fixture.dom.window.document.querySelector('[role="listbox"]')!;
+	assert.deepEqual([...menu.querySelectorAll('[role="option"]')].map(option => option.textContent), [
+		'Inherit from chat', 'Disable', 'Reasoning Advisor · High (Default)', 'Reasoning Advisor · Low', 'Reasoning Advisor · High',
+	]);
+	assert.equal(menu.querySelectorAll('.ash-select-box-option-separator-before').length, 1);
+	assert.equal(menu.querySelector('.ash-select-box-option-separator-before')?.textContent, 'Reasoning Advisor · High (Default)');
+	menu.dispatchEvent(new fixture.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	const choose = async (label: string): Promise<void> => {
+		const savedEvent = advisorLoaded(fixture.content);
+		button.click();
+		[...fixture.dom.window.document.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === label)!.click();
+		await savedEvent;
+		assert.equal(button.textContent, label);
+	};
+	await choose('Reasoning Advisor · Low');
+	assert.deepEqual(saved, { model: model.model, enabled: true, reasoningEffort: 'low', maxCalls: 7, maxOutputTokens: 8192 });
+	await choose('Reasoning Advisor · High (Default)');
+	assert.equal(saved?.reasoningEffort, undefined);
+	await choose('Inherit from chat');
+	assert.deepEqual(saved, { model: null, enabled: true, maxCalls: 7, maxOutputTokens: 8192 });
+	await choose('Disable');
+	assert.deepEqual(saved, { model: null, enabled: false, maxCalls: 7, maxOutputTokens: 8192 });
+	fixture.content.setVisible(false);
+	const reopened = advisorLoaded(fixture.content); fixture.content.setVisible(true); await reopened;
+	assert.equal(button.textContent, 'Disable');
+	await choose('Inherit from chat');
+});
 function advisorLoaded(content: SettingsSectionRenderer): Promise<void> {
 	return new Promise(resolve => { const listener = content.onDidChange(() => { if (elementOf(content).querySelector<HTMLButtonElement>('[role="combobox"]')?.disabled === false) { listener.dispose(); resolve(); } }); });
 }
@@ -93,7 +133,7 @@ test('Advisor hide and reopen discard a late load and keep the newer backend pre
 	fixture.content.setVisible(true); fixture.content.setVisible(false);
 	const ready = advisorLoaded(fixture.content); fixture.content.setVisible(true); await ready;
 	await old.complete(null); await Promise.resolve(); await Promise.resolve();
-	assert.equal(fixture.domNode.querySelector('[aria-label="Advisor model"]')?.textContent, 'openai/new-model');
+	assert.equal(fixture.domNode.querySelector('[aria-label="Advisor model"]')?.textContent, 'openai/new-model · Default');
 	assert.equal(fixture.domNode.querySelector('[role="switch"]'), null);
 });
 
@@ -107,15 +147,15 @@ test('Advisor failed writes restore the saved model and turning it off preserves
 	fixture.dom.window.Element.prototype.scrollTo = () => { };
 	const turnOff = (): void => {
 		button.click();
-		fixture.dom.window.document.querySelector<HTMLElement>('[role="option"][data-index="0"]')!.click();
+		fixture.dom.window.document.querySelector<HTMLElement>('[role="option"][data-index="1"]')!.click();
 	};
 	turnOff();
 	await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
-	assert.equal(button.textContent, 'openai/saved-model');
+	assert.equal(button.textContent, 'openai/saved-model · Default');
 	assert.match(fixture.domNode.textContent ?? '', /write rejected/);
 	fail = false;
 	const savedEvent = advisorLoaded(fixture.content); turnOff(); await savedEvent;
-	assert.equal(button.textContent, 'Off');
+	assert.equal(button.textContent, 'Disable');
 	assert.deepEqual(saved?.model, { provider: 'openai', model: 'saved-model' });
 	assert.equal(saved?.enabled, false);
 	assert.equal(reads, 2);
@@ -129,7 +169,7 @@ test('Advisor rechecks a backend update received while its first read is still p
 	const saved: AdvisorConfig = { model: { provider: 'openai', model: 'new-default' }, enabled: true, maxCalls: 3, maxOutputTokens: 2048 };
 	using fixture = advisorFixture({ readAdvisorDefault: () => ++reads === 1 ? old.p : Promise.resolve(saved), saveAdvisorDefault: async () => { } }, changes.event);
 	const refreshed = new Promise<void>(resolve => {
-		const listener = fixture.content.onDidChange(() => { if (fixture.domNode.querySelector('[aria-label="Advisor model"]')?.textContent === 'openai/new-default') { listener.dispose(); resolve(); } });
+		const listener = fixture.content.onDidChange(() => { if (fixture.domNode.querySelector('[aria-label="Advisor model"]')?.textContent === 'openai/new-default · Default') { listener.dispose(); resolve(); } });
 	});
 	fixture.content.setVisible(true); changes.fire(); await old.complete(null); await refreshed;
 	assert.equal(reads, 2);
