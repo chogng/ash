@@ -230,7 +230,6 @@ for (const wording of [ChatSessionArchiveActionWording.Archive, ChatSessionArchi
 	const when = wording === ChatSessionArchiveActionWording.MarkAsDone ? done : ContextKeyExpr.notEquals(`config.${ChatSessionArchiveActionWordingSettingId}`, 'done');
 	for (const [id, action] of [[archiveId, presentation.archive], [restoreId, presentation.unarchive], [archiveAllId, presentation.archiveAll]] as const) {
 		MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id, title: localize2('chatSession.paletteAction', 'Chat: {0}', action.title.value), icon: action.icon }, when });
-		if (id !== archiveAllId) MenusRegistry.appendMenuItem(MenuId.ChatTitle, { command: { id, title: action.title, icon: action.icon }, when, group: 'sessionLifecycle' });
 	}
 }
 

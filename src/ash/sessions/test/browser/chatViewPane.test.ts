@@ -1766,14 +1766,14 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 	);
 });
 
-for (const locale of ['en', 'zh-CN']) {
-	test(`Chat history More captures the selected branch and separates lifecycle actions (${locale})`, async () => {
+for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'archive'], ['zh-CN', 'done']] as const) {
+	test(`Chat history More captures the selected branch and separates lifecycle actions (${locale} ${wording})`, async () => {
 		initializeTestLocalization(locale);
 		try {
 			const dom = new JSDOM('<!doctype html><body><button>More</button></body>');
 			using domCleanup = toDisposable(() => dom.window.close());
 			using services = new InstantiationService();
-			using configuration = new WorkbenchConfigurationService();
+			using configuration = new WorkbenchConfigurationService({ source: JSON.stringify({ 'chat.experimental.sessionArchiveActionWording': wording }) });
 			using storage = createTestStorage();
 			using sessions = new SessionsManagementService(fakeApi({ sessions: [session('source', 'branch'), session('other', 'foreground')] }).api);
 			await sessions.initialize();
@@ -1820,7 +1820,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const actions = openMenu(source);
 			assert.deepEqual(actions.map(action => action.id), ['rename', 'fork', Separator.ID, 'archive', 'delete']);
 			assert.deepEqual(actions.filter(action => !(action instanceof Separator)).map(action => action.label), locale === 'en'
-				? ['Rename', 'Fork', 'Archive', 'Delete'] : ['重命名', '分叉', '归档', '删除']);
+				? ['Rename', 'Fork', wording === 'archive' ? 'Archive' : 'Mark as Done', 'Delete'] : ['重命名', '分叉', wording === 'archive' ? '归档' : '标记为完成', '删除']);
 			sessions.selectThread('other', 'foreground');
 			for (const action of actions.filter(action => !(action instanceof Separator))) {
 				menu!.onHide?.(false);

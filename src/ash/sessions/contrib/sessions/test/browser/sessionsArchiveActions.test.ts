@@ -12,17 +12,23 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../../base/c
 import { resetNlsResolver } from '../../../../../nls.js';
 import { ChatSessionArchiveActionWordingSettingId } from '../../../../../platform/chat/common/sessionArchiveActions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IDialogService, type IConfirmationDialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
+import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
+import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/chat.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { initializeTestLocalization } from '../../../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import '../../../../../workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../../browser/views/sessionsViewActions.js';
+import '../../../../browser/actions/chatActions.js';
 import { TestSessionsManagementService as SessionsManagementService } from '../../../../services/sessions/test/browser/testSessionsManagementService.js';
 import type { IActiveSessionThread, ISession } from '../../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
@@ -98,6 +104,112 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 	const commands = resources.add(new CommandService(services));
 	return Object.assign(resources, { provider, sessions, services, commands, quickInput, opened, configuration, storage });
 }
+
+async function historyFixture(wording: 'archive' | 'done', archived = true) {
+	const current = await fixture(wording, archived);
+	const errors: string[] = [];
+	current.services.registerInstance(ICommandService, current.commands);
+	current.services.registerInstance(IViewsService, { focusView: async () => true } as unknown as IViewsService);
+	current.services.registerInstance(INotificationService, { error: (message: string) => { errors.push(message); } } as unknown as INotificationService);
+	return Object.assign(current, { errors });
+}
+
+test('the existing New Chat action creates a draft without adding a peer to the selected Session', async () => {
+	using current = await historyFixture('archive', false);
+	const before = current.sessions.sessions.map(session => ({ id: session.sessionId, threads: session.chats.map(chat => chat.threadId) }));
+	assert.equal(await current.commands.executeCommand(NEW_CHAT_COMMAND_ID), true);
+	assert.equal(current.sessions.untitledSessions.length, 1);
+	assert.equal(current.sessions.activeUntitledSession, current.sessions.untitledSessions[0]);
+	assert.deepEqual(current.provider.created, []);
+	assert.deepEqual(current.sessions.sessions.map(session => ({ id: session.sessionId, threads: session.chats.map(chat => chat.threadId) })), before);
+});
+
+test('Chat lifecycle actions belong to History and the Command Palette instead of the title menu', () => {
+	const lifecycleIds = (menu: MenuId) => MenusRegistry.getMenuItems(menu)
+		.flatMap(item => 'command' in item && ['agentSession.archive', 'agentSession.restore'].includes(item.command.id) ? [item.command.id] : []);
+	assert.deepEqual(lifecycleIds(MenuId.ChatTitle), []);
+	assert.deepEqual([...new Set(lifecycleIds(MenuId.CommandPalette))], ['agentSession.archive', 'agentSession.restore']);
+});
+
+test('Session actions use Archive wording by default', () => {
+	using configuration = new WorkbenchConfigurationService();
+	assert.equal(configuration.getValue(ChatSessionArchiveActionWordingSettingId), 'archive');
+});
+
+for (const locale of ['en', 'zh-CN']) {
+	for (const wording of ['archive', 'done'] as const) {
+		test(`Chat History restores the selected archived Session and preserves drafts (${locale} ${wording})`, async () => {
+			initializeTestLocalization(locale);
+			try {
+				using current = await historyFixture(wording);
+				const draft = current.sessions.createUntitledSession('Keep this draft');
+				const history = current.commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+				const picker = await pickerFor(current.quickInput);
+				const section = locale === 'en' ? wording === 'archive' ? 'Archived' : 'Done' : wording === 'archive' ? '已归档' : '已完成';
+				const restore = locale === 'en' ? wording === 'archive' ? 'Unarchive' : 'Restore' : wording === 'archive' ? '取消归档' : '恢复';
+				assert.equal(picker.items.at(-2)?.label, section);
+				const item = picker.items.at(-1)! as IQuickPickItem;
+				assert.equal(item.label, 'first');
+				assert.deepEqual(item.buttons?.map(button => button.id), ['restore', 'more']);
+				assert.equal(item.buttons?.[0]?.label, restore);
+				assert.ok(item.detail?.includes(restore));
+				picker.value = 'first';
+				picker.activeItems = [item];
+				picker.selectedItems = [item];
+				picker.accept();
+				await history;
+				assert.deepEqual(current.provider.restored, ['first']);
+				assert.deepEqual(current.opened, ['first/first-root']);
+				assert.equal(current.sessions.sessions.find(session => session.sessionId === 'first')?.status, 'active');
+				assert.ok(current.sessions.untitledSessions.includes(draft));
+				assert.equal(current.quickInput.currentQuickInput, undefined);
+				assert.deepEqual(current.errors, []);
+			} finally { resetNlsResolver(); }
+		});
+	}
+}
+
+test('Chat History refreshes shared archive state without losing its search', async () => {
+	using current = await historyFixture('archive', false);
+	current.services.registerInstance(IDialogService, { confirm: async () => ({ confirmed: true }) } as unknown as IDialogService);
+	const history = current.commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+	const picker = await pickerFor(current.quickInput);
+	picker.value = 'first';
+	await current.commands.executeCommand('agentSession.archive', 'first');
+	assert.equal(picker.value, 'first');
+	assert.deepEqual(current.provider.archived, ['first']);
+	const item = picker.items.at(-1)! as IQuickPickItem;
+	assert.equal(item.label, 'first');
+	assert.equal(item.buttons?.[0]?.id, 'restore');
+	await current.commands.executeCommand('agentSession.restore', 'first');
+	assert.equal(picker.value, 'first');
+	assert.deepEqual(current.provider.restored, ['first']);
+	assert.deepEqual(current.opened, ['first/first-root']);
+	assert.equal(picker.items.some(item => item.label === 'Archived'), false);
+	picker.hide();
+	await history;
+	assert.deepEqual(current.errors, []);
+});
+
+test('Chat History keeps a failed restoration searchable for retry', async () => {
+	using current = await historyFixture('archive');
+	const restore = current.provider.restore.bind(current.provider);
+	current.provider.restore = async () => { throw new Error('Synthetic restore failure'); };
+	const history = current.commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+	let picker = await pickerFor(current.quickInput);
+	picker.value = 'first';
+	picker.selectedItems = [picker.items.at(-1)! as IQuickPickItem];
+	picker.accept();
+	picker = await pickerFor(current.quickInput);
+	assert.equal(picker.value, 'first');
+	assert.deepEqual(current.errors, ['Error: Synthetic restore failure']);
+	assert.deepEqual(current.opened, []);
+	current.provider.restore = restore;
+	picker.selectedItems = [picker.items.at(-1)! as IQuickPickItem];
+	picker.accept();
+	await history;
+	assert.deepEqual(current.opened, ['first/first-root']);
+});
 
 async function pickerFor(input: TestQuickInputService): Promise<IQuickPick<IQuickPickItem>> {
 	for (let attempt = 0; attempt < 100; attempt++) {

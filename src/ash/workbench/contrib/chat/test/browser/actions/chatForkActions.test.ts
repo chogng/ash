@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
-import { registerAction2 } from '../../../../../../platform/actions/common/actions.js';
+import { MenuId, MenusRegistry, registerAction2 } from '../../../../../../platform/actions/common/actions.js';
 import { IAccessibilityService } from '../../../../../../platform/accessibility/common/accessibility.js';
-import { IAgentSessionService, IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
+import { IAgentThreadService } from '../../../../../../platform/agentHost/common/agentService.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IChatService } from '../../../../../services/chat/common/chatService.js';
@@ -14,6 +14,14 @@ import { registerChatActions } from '../../../browser/actions/chatActions.js';
 import { ForkConversationAction, ForkConversationActionId } from '../../../browser/actions/chatForkActions.js';
 
 registerChatActions();
+
+test('New Chat in Session is removed and Fork stays in the Command Palette rather than the title menu', () => {
+	using resources = new DisposableStore();
+	resources.add(registerAction2(ForkConversationAction));
+	assert.equal(CommandsRegistry.getCommand('sessions.chatCompositeBar.addChat'), undefined);
+	assert.equal(MenusRegistry.getMenuItems(MenuId.ChatTitle).some(item => 'command' in item && item.command.id === ForkConversationActionId), false);
+	assert.equal(MenusRegistry.getMenuItems(MenuId.CommandPalette).some(item => 'command' in item && item.command.id === ForkConversationActionId), true);
+});
 
 function fixture(resources: DisposableStore) {
 	const services = resources.add(new InstantiationService());
@@ -35,9 +43,6 @@ function fixture(resources: DisposableStore) {
 	services.registerInstance(IAgentThreadService, {
 		fork: async options => { requests.push(options); await finish; return { sessionId: options.target === 'session' ? 'forked-session' : options.sessionId, threadId: 'forked-thread' }; },
 	} as IAgentThreadService);
-	services.registerInstance(IAgentSessionService, {
-		createThread: async options => { requests.push(options); await finish; return { session: { sessionId: options.sessionId }, threadId: 'new-peer' }; },
-	} as IAgentSessionService);
 	return {
 		services, opened, requests,
 		run: (id: string, context?: unknown) => Promise.resolve(services.invokeFunction(CommandsRegistry.getCommand(id)!, context)),
@@ -64,7 +69,7 @@ for (const window of ['IDE', 'Agents'] as const) {
 	});
 }
 
-test('a title menu keeps its source and a late Fork cannot replace a newer selection', async () => {
+test('a History action keeps its source and a late Fork cannot replace a newer selection', async () => {
 	using resources = new DisposableStore();
 	resources.add(registerAction2(ForkConversationAction));
 	const f = fixture(resources);
@@ -76,23 +81,6 @@ test('a title menu keeps its source and a late Fork cannot replace a newer selec
 	await run;
 	assert.equal((f.requests[0] as { sessionId: string; }).sessionId, 'source');
 	assert.deepEqual(f.opened, []);
-});
-
-test('new chat creates one empty peer in the same Session and leaves draft-only targets alone', async () => {
-	using resources = new DisposableStore();
-	const f = fixture(resources);
-	const pending = new DeferredPromise<void>();
-	f.delay(pending.p);
-	const first = f.run('sessions.chatCompositeBar.addChat');
-	const second = f.run('sessions.chatCompositeBar.addChat');
-	assert.equal(f.requests.length, 1);
-	await pending.complete();
-	await Promise.all([first, second]);
-	assert.deepEqual(f.opened, [{ sessionId: 'source', threadId: 'new-peer' }]);
-	assert.equal((f.requests[0] as { sessionId: string; }).sessionId, 'source');
-	f.select(undefined);
-	await f.run('sessions.chatCompositeBar.addChat');
-	assert.equal(f.requests.length, 1);
 });
 
 test('edited request opens its result only while its original conversation is selected', async () => {
@@ -113,7 +101,7 @@ test('edited request opens its result only while its original conversation is se
 	assert.equal(f.requests.length, 2);
 });
 
-for (const id of [ForkConversationActionId, 'sessions.chatCompositeBar.addChat', 'workbench.action.chat.resendRequest']) {
+for (const id of [ForkConversationActionId, 'workbench.action.chat.resendRequest']) {
 	test(`${id} cannot open a late result after A-B-A navigation`, async () => {
 		using resources = new DisposableStore();
 		resources.add(registerAction2(ForkConversationAction));
