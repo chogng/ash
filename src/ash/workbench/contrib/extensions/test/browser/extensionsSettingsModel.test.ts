@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IExtensionManagementService, type ExtensionUpdatePolicy, type ExtensionUpdatesSnapshot } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { SettingsSectionField } from '../../../../services/preferences/common/preferences.js';
@@ -19,33 +18,27 @@ function changed(model: ExtensionsSettingsModel, predicate: () => boolean = () =
 	});
 }
 
-test('Extension settings read the backend policy, save revisions and reuse source and notification commands', async () => {
+test('Extension settings show only update preferences, save revisions and enforce read-only connections', async () => {
 	using services = new InstantiationService();
 	using changes = new Emitter<void>();
-	let snapshot: ExtensionUpdatesSnapshot = { revision: 3, policy: { autoCheckUpdates: true, autoUpdate: false }, canManage: true, checking: false, lastCheckedAt: undefined, available: [], updated: [], failures: [] };
+	let snapshot: ExtensionUpdatesSnapshot = { revision: 3, policy: { autoCheckUpdates: true, autoUpdate: false }, canManage: true, checking: false, lastCheckedAt: 1000, available: [], updated: [], failures: [] };
 	const writes: unknown[] = [];
-	const commands: string[] = [];
 	services.registerInstance(IExtensionManagementService, {
 		onDidChangeInstalled: changes.event,
 		updates: async () => snapshot,
-		sources: async () => ({ revision: 0, sources: [{ id: 'example', kind: 'ash', enabled: true, productOwned: false }] }),
 		setUpdatePolicy: async (policy: ExtensionUpdatePolicy, expectedRevision: number) => {
 			writes.push({ policy, expectedRevision });
 			snapshot = { ...snapshot, policy, revision: snapshot.revision + 1 };
 			return snapshot;
 		},
-		checkForUpdates: async () => {
-			snapshot = { ...snapshot, lastCheckedAt: 1000 };
-			return snapshot;
-		},
 	} as unknown as IExtensionManagementService);
-	services.registerInstance(ICommandService, { executeCommand: async (id: string) => { commands.push(id); } } as unknown as ICommandService);
 	using model = services.createInstance(ExtensionsSettingsModel);
 	const loaded = changed(model);
 	model.setVisible(true);
 	await loaded;
 	assert.equal(field(model, 'auto-check-updates', 'boolean').value, true);
-	assert.match(field(model, 'sources-status', 'status').text, /example: Enabled/);
+	assert.deepEqual(model.fields.filter(field => field.kind !== 'status').map(field => field.id), ['auto-check-updates', 'auto-update']);
+	assert.equal(field(model, 'update-status', 'status').text, '');
 	const updated = changed(model, () => field(model, 'auto-update', 'boolean').enabled && field(model, 'auto-update', 'boolean').value);
 	field(model, 'auto-update', 'boolean').setValue(true);
 	await updated;
@@ -54,19 +47,13 @@ test('Extension settings read the backend policy, save revisions and reuse sourc
 	field(model, 'auto-check-updates', 'boolean').setValue(false);
 	await disabled;
 	assert.deepEqual(writes[1], { policy: { autoCheckUpdates: false, autoUpdate: false }, expectedRevision: 4 });
-	await field(model, 'check-updates', 'action').run();
-	assert.match(field(model, 'update-status', 'status').text, /Last checked:/);
-	await field(model, 'manage-sources', 'action').run();
-	await field(model, 'restore-notifications', 'action').run();
-	assert.deepEqual(commands, ['ash.extensions.manageSources', 'ash.extensions.resetRecommendationNotifications']);
-	assert.match(field(model, 'update-status', 'status').text, /were restored/);
 	snapshot = { ...snapshot, canManage: false };
 	const readOnly = changed(model);
 	changes.fire();
 	await readOnly;
 	assert.equal(field(model, 'auto-update', 'boolean').enabled, false);
-	assert.equal(field(model, 'manage-sources', 'action').enabled, false);
-	assert.equal(field(model, 'restore-notifications', 'action').enabled, true);
+	assert.equal(field(model, 'auto-check-updates', 'boolean').enabled, false);
+	assert.match(field(model, 'update-status', 'status').text, /authorized desktop or remote host/);
 });
 
 test('Extension settings ignore reads completed after disposal and retain policy after a rejected save', async () => {
@@ -75,10 +62,9 @@ test('Extension settings ignore reads completed after disposal and retain policy
 	const snapshot: ExtensionUpdatesSnapshot = { revision: 1, policy: { autoCheckUpdates: true, autoUpdate: false }, canManage: true, checking: false, lastCheckedAt: undefined, available: [], updated: [], failures: [] };
 	let updates = async () => snapshot;
 	services.registerInstance(IExtensionManagementService, {
-		onDidChangeInstalled: Event.None, updates: () => updates(), sources: async () => ({ revision: 0, sources: [] }),
+		onDidChangeInstalled: Event.None, updates: () => updates(),
 		setUpdatePolicy: async () => { throw new Error('Revision conflict'); },
 	} as unknown as IExtensionManagementService);
-	services.registerInstance(ICommandService, { executeCommand: async () => { } } as unknown as ICommandService);
 	using model = services.createInstance(ExtensionsSettingsModel);
 	const loaded = changed(model);
 	model.setVisible(true);

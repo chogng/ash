@@ -251,7 +251,14 @@ function builtInProviders() {
 const api: IExtensionManagementApi = {
 	updates: async () => { throw new Error('This fixture does not exercise extension updates'); },
 	setUpdatePolicy: async () => { throw new Error('This fixture does not exercise extension updates'); },
-	checkForUpdates: async () => { throw new Error('This fixture does not exercise extension updates'); },
+	checkForUpdates: async () => {
+		requests.push(['checkForUpdates']);
+		return {
+			revision: 1, policy: { autoCheckUpdates: true, autoUpdate: false }, canManage: true, checking: false, lastCheckedAt: 1000,
+			available: [{ installationId: 'sample-installation', current: reference, available: { ...reference, version: '2.0.0' } }],
+			updated: [], failures: ['offline-source'],
+		};
+	},
 	recommendationEnvironment: async () => ({ platform: 'other', executables: new URLSearchParams(location.search).has('productTips') ? ['python3'] : [] }),
 	searchPage: async params => {
 		requests.push(['searchPage', params]);
@@ -411,6 +418,11 @@ services.registerInstance(ILanguageServerService, {
 });
 services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
 services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
+services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
+services.registerInstance(IMenuService, new MenuService(services.get(ICommandService), services.get(IContextKeyService)));
+const titleMenus = disposables.add(new BrowserContextMenuService(services.get(IMenuService), services.get(IContextKeyService),
+	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService, services.get(IContextViewService), disposables.add(new TestNotificationService())));
+services.registerInstance(IContextMenuService, titleMenus);
 services.registerInstance(IQuickInputService, disposables.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) })));
 let pluginRevision = 0;
 const pluginEvents = disposables.add(new Emitter<ServerNotification>());
@@ -456,7 +468,6 @@ services.registerInstance(ILocalGitService, {
 });
 services.registerInstance(ILogService, new NullLoggerService());
 services.registerSingleton(IPluginManagementService, () => disposables.add(services.createInstance(AppServerPluginManagementService, pluginApi, { subscribe: (listener: (event: ServerNotification) => void) => pluginEvents.event(listener) })));
-services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
 services.registerInstance(ILanguagePackService, { onDidChange: Event.None, whenReady: Promise.resolve(), catalogs: [], getInstalledLanguages: async () => [], refresh: async () => { }, getBuiltInExtensionTranslationsUri: async () => undefined });
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, text, parameters) => localize({ bundle, key }, text, ...Object.keys(parameters ?? {}).sort().map(key => parameters![key]!)) });
 services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
@@ -617,10 +628,6 @@ const model: IViewContainerModel = classification
 		onDidChangeAllViewDescriptors: Event.None, onDidChangeActiveViewDescriptors: Event.None, onDidChangeVisibleViewDescriptors: Event.None,
 		isVisible: () => true, setVisible: () => { }, setFilter: () => { },
 	};
-services.registerInstance(IMenuService, new MenuService(services.get(ICommandService), services.get(IContextKeyService)));
-const titleMenus = disposables.add(new BrowserContextMenuService(services.get(IMenuService), services.get(IContextKeyService),
-	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService, services.get(IContextViewService), disposables.add(new TestNotificationService())));
-services.registerInstance(IContextMenuService, titleMenus);
 const extensionsContainer = disposables.add(services.createInstance(ExtensionsViewPaneContainer, host, {
 	viewContainer: descriptor, model,
 }));

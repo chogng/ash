@@ -2205,8 +2205,8 @@ suite('extensions browser component', () => {
 
 			await page.goto(`/extensions.html?classification&locale=${locale}`);
 			const labels = locale === 'en'
-				? ['Browse Marketplace', 'Show installed', 'Manage built-in editor extensions', 'Ignore an extension recommendation', 'Restore an ignored extension recommendation', 'Restore dismissed extension recommendation notifications', 'Show recommended keymaps', 'Manage extension sources', 'Install extension from workspace', 'Install extension from Git repository']
-				: ['浏览扩展市场', '显示已安装', '管理内置编辑器扩展', '忽略扩展推荐', '恢复已忽略的扩展推荐', '恢复已关闭的扩展推荐通知', '显示推荐的键位方案', '管理扩展来源', '从工作区安装扩展', '从 Git 仓库安装扩展'];
+				? ['Browse Marketplace', 'Show installed', 'Manage built-in editor extensions', 'Check for extension updates', 'Ignore an extension recommendation', 'Restore an ignored extension recommendation', 'Restore dismissed extension recommendation notifications', 'Show recommended keymaps', 'Manage extension sources', 'Install extension from workspace', 'Install extension from Git repository']
+				: ['浏览扩展市场', '显示已安装', '管理内置编辑器扩展', '检查扩展更新', '忽略扩展推荐', '恢复已忽略的扩展推荐', '恢复已关闭的扩展推荐通知', '显示推荐的键位方案', '管理扩展来源', '从工作区安装扩展', '从 Git 仓库安装扩展'];
 			const more = page.locator('#extensions [data-action-id="ash.toolbar.moreActions"] button');
 			await expect(more).toHaveCount(1);
 			await more.focus();
@@ -2236,6 +2236,20 @@ suite('extensions browser component', () => {
 			await expect(dialog).toBeVisible();
 			await dialog.getByRole('button', { name: locale === 'en' ? 'Cancel' : '取消', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
+			await more.focus();
+			await more.press('Enter');
+			await page.getByRole('menuitem', { name: labels[3], exact: true }).press('Enter');
+			const updateDialog = page.getByRole('dialog');
+			await expect(updateDialog).toBeVisible();
+			await expect(updateDialog).toContainText(locale === 'en'
+				? '1 available updates; 0 packages updated; 1 packages could not be checked or updated.'
+				: '1 个可用更新；已更新 0 个包；1 个包无法检查或更新。');
+			await expect(updateDialog).toContainText('1.0.0 → 2.0.0');
+			await expect(updateDialog).toContainText('offline-source');
+			expect((await page.evaluate(() => window.ashExtensionsIntegration.requests)).filter(request => Array.isArray(request) && request[0] === 'checkForUpdates')).toHaveLength(1);
+			await updateDialog.getByRole('button', { name: locale === 'en' ? 'OK' : '确定', exact: true }).press('Enter');
+			await expect(updateDialog).toHaveCount(0);
+			await expect(more).toBeFocused();
 		});
 
 		test(`Global refresh preserves selection and expansion while actions reveal on intent in ${locale}`, async function () {

@@ -251,6 +251,27 @@ export function describeConnectorState(state: ConnectorState, enabled = true): s
 export function registerExtensionManagementActions(): DisposableStore {
 	const registrations = new DisposableStore();
 	const extensionsTitle = ContextKeyExpr.equals('viewContainer', 'ash.extensions');
+	registrations.add(registerAction2(class CheckForExtensionUpdates extends Action2 {
+		constructor() {
+			super({
+				id: 'ash.extensions.checkForUpdates',
+				title: localize2({ bundle: 'ash.extensions', key: 'checkUpdatesTitle' }, 'Check for extension updates'),
+				f1: true,
+				menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '1_discovery', order: 4 },
+			});
+		}
+		public override async run(accessor: ServicesAccessor): Promise<void> {
+			const management = accessor.get(IExtensionManagementService);
+			const dialogs = accessor.get(IDialogService);
+			const snapshot = await management.checkForUpdates();
+			const summary = localize({ bundle: 'ash.extensions', key: 'updatesSummary' }, '{0} available updates; {1} packages updated; {2} packages could not be checked or updated.', snapshot.available.length, snapshot.updated.length, snapshot.failures.length);
+			const details = snapshot.available.map(update => localize({ bundle: 'ash.extensions', key: 'updateAvailablePackage' }, '{0}: {1} → {2}', update.current.id, update.current.version, update.available.version));
+			if (snapshot.failures.length) {
+				details.push(localize({ bundle: 'ash.extensions', key: 'updatesFailedPackages' }, 'Check the connection and extension sources, then retry: {0}', snapshot.failures.join(', ')));
+			}
+			await dialogs.info(summary, details.join('\n'));
+		}
+	}));
 	registrations.add(registerAction2(class ShowRecommendedKeymaps extends Action2 {
 		constructor() { super({ id: 'ash.extensions.showRecommendedKeymaps', title: localize2({ bundle: 'ash.extensions', key: 'showRecommendedKeymaps' }, 'Show recommended keymaps'), f1: true, menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '2_recommendations', order: 4 } }); }
 		public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { query: '@recommended keymap' }); }
