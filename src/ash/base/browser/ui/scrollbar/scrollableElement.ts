@@ -951,9 +951,7 @@ export class SmoothScrollableElement extends Disposable {
 		this.vertical.trackNode.setBottom((horizontalRendered ? horizontalSize : 0) + verticalArrow);
 		this.horizontal.track.style.setProperty('--ash-scrollbar-slider-size', `${Math.min(horizontalSize, this.options.horizontalSliderSize ?? horizontalSize)}px`);
 		this.vertical.track.style.setProperty('--ash-scrollbar-slider-size', `${Math.min(verticalSize, this.options.verticalSliderSize ?? verticalSize)}px`);
-		const transform = `translate3d(${scrollLeft}px, ${scrollTop}px, 0)`;
-		this.horizontal.trackNode.setTransform(transform);
-		this.vertical.trackNode.setTransform(transform);
+		// The caller projects content scrolling; controls stay in this fixed host.
 		this.horizontalMetrics = createScrollbarAxisMetrics(width, scrollWidth, scrollLeft, horizontalLength - 2 * horizontalArrow, 20);
 		this.verticalMetrics = createScrollbarAxisMetrics(height, scrollHeight, scrollTop, verticalLength - 2 * verticalArrow, 20);
 		this.horizontal.render(this.horizontalMetrics, horizontalRendered);
@@ -970,7 +968,6 @@ export class SmoothScrollableElement extends Disposable {
 			const offset = direction < 0 ? 0 : length - size;
 			button.style.left = `${horizontal ? offset : width - verticalSize}px`;
 			button.style.top = `${horizontal ? height - horizontalSize : offset}px`;
-			button.style.transform = transform;
 		}
 		this.updateVisibility();
 	}

@@ -182,8 +182,6 @@ export class View extends ViewEventHandler {
 	private readonly editorConfiguration: EditorConfiguration;
 	private readonly pixelRatio: IPixelRatioMonitor;
 	private changingLayout = false;
-	private syncedScrollLeft = 0;
-	private syncedScrollTop = 0;
 	private projectionRevision = 0;
 	private readonly pendingRender = this._register(new MutableDisposable<IDisposable>());
 	private renderedLayout: EditorViewportLayout | undefined;
@@ -491,15 +489,6 @@ export class View extends ViewEventHandler {
 			this.contentWidgets.overflowingContentWidgetsDomNode.domNode,
 			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
 		);
-		const scrollDomNode = this.scrollbar.getDomNode().domNode;
-		this._register(addDisposableListener(scrollDomNode, 'scroll', () => {
-			if (scrollDomNode.scrollLeft === this.syncedScrollLeft && scrollDomNode.scrollTop === this.syncedScrollTop) return;
-			viewport.setScrollPosition({
-				scrollLeft: scrollDomNode.scrollLeft,
-				scrollTop: scrollDomNode.scrollTop,
-			}, ScrollType.Immediate);
-			this.syncScrollPosition(viewport.layout);
-		}));
 		this.updateAccessibilityStatus();
 		const semanticTokenSource = options.semanticTokenSource;
 		const updateTokenReadiness = () => this.domNode.domNode.classList.toggle('tokens-ready', this.textModel.tokenization.modelVersion === this.textModel.version && this.textModel.tokenization.tokenCount > 0);
@@ -1024,9 +1013,7 @@ export class View extends ViewEventHandler {
 				const contentOffsetLeft = this.contentOffsetLeft;
 				// Content rows exclude the left minimap from their gutter; the fixed margin uses editor coordinates.
 				this.contentElement.style.setProperty('--stanza-editor-gutter-width', `${this.gutterWidth}px`);
-				// Text layers retain their editor-relative geometry inside the body viewport.
-				const bodyOffsetLeft = contentOffsetLeft - this.getLayoutInfo().contentLeft;
-				this.contentNode.setTransform(`translate3d(${bodyOffsetLeft}px, 0, 0)`);
+				this.projectScrollPosition(this.viewport.layout);
 				if (this.viewLines.shouldRender()) {
 					this.viewLines.renderText(viewportData);
 					this.viewLines.onDidRender();
@@ -1058,7 +1045,7 @@ export class View extends ViewEventHandler {
 					part.render(context);
 					part.onDidRender();
 				}
-				this.syncScrollPosition(this.viewport.layout);
+				this.projectScrollPosition(this.viewport.layout);
 				this.renderedLayout = layout;
 				this.onDidRender();
 			},
@@ -1150,22 +1137,11 @@ export class View extends ViewEventHandler {
 		return this._register(part);
 	}
 
-	private syncScrollPosition(layout: EditorViewportLayout): void {
-		// Reading native scroll offsets can flush pending layout after Parts paint.
-		// The ViewLayout and native scroll listener already invalidate this position;
-		// unchanged renders need no round trip through browser layout.
-		if (this.syncedScrollLeft === layout.scrollPosition.left && this.syncedScrollTop === layout.scrollPosition.top) return;
-		// Only the scrollbar wrapper scrolls physically. Viewport Parts are its
-		// siblings and consume the same ViewLayout state without browser scrolling.
-		const scrollDomNode = this.scrollbar.getDomNode().domNode;
-		if (scrollDomNode.scrollLeft !== layout.scrollPosition.left) {
-			scrollDomNode.scrollLeft = layout.scrollPosition.left;
-		}
-		if (scrollDomNode.scrollTop !== layout.scrollPosition.top) {
-			scrollDomNode.scrollTop = layout.scrollPosition.top;
-		}
-		this.syncedScrollLeft = scrollDomNode.scrollLeft;
-		this.syncedScrollTop = scrollDomNode.scrollTop;
+	private projectScrollPosition(layout: EditorViewportLayout): void {
+		// ViewLayout is the sole scroll owner. A DOM scroll offset can be reset by
+		// visibility or reparenting without notifying the editor, so paint from the model.
+		const bodyOffsetLeft = this.contentOffsetLeft - this.getLayoutInfo().contentLeft;
+		this.contentNode.setTransform(`translate3d(${bodyOffsetLeft - layout.scrollPosition.left}px, ${-layout.scrollPosition.top}px, 0)`);
 	}
 
 	public override handleEvents(events: viewEvents.ViewEvent[]): void {
@@ -1207,9 +1183,8 @@ export class View extends ViewEventHandler {
 
 	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
 		if (!event.scrollLeftChanged && !event.scrollTopChanged) return false;
-		// Immediate wheel input and interrupted animations publish their physical
-		// scroll position synchronously; repainting the visible rows can share a frame.
-		this.syncScrollPosition(this.viewport.layout);
+		// Move existing rows synchronously with wheel input; reconciliation can share a frame.
+		this.projectScrollPosition(this.viewport.layout);
 		return true;
 	}
 

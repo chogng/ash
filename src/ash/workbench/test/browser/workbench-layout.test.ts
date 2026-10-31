@@ -524,6 +524,35 @@ test('Activity Bar top and bottom positions keep the full sidebar height', () =>
 	dom.window.close();
 });
 
+test('Activity Bar position changes keep the editor mounted and focused', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const harness = createLayoutHarness(dom.window.document);
+	const input = h(dom.window.document, 'textarea');
+	harness.editor.domNode.append(input);
+	input.focus();
+	let blurCount = 0;
+	input.addEventListener('blur', () => blurCount++);
+	const editorAncestors = new Set<Node>();
+	for (let node: Node | null = input; node && node !== harness.container; node = node.parentNode) editorAncestors.add(node);
+	const mutations: MutationRecord[] = [];
+	const observer = new dom.window.MutationObserver(records => mutations.push(...records));
+	observer.observe(harness.container, { childList: true, subtree: true });
+	try {
+		for (const location of [ActivityBarPosition.TOP, ActivityBarPosition.BOTTOM, ActivityBarPosition.HIDDEN, ActivityBarPosition.DEFAULT]) {
+			await harness.configuration.updateValue(WorkbenchConfiguration.activityBarLocation, location);
+			assert.equal(dom.window.document.activeElement, input);
+			assert.equal(blurCount, 0);
+			mutations.push(...observer.takeRecords());
+			assert.equal(mutations.some(record => [...record.removedNodes].some(node => editorAncestors.has(node))), false);
+			assert.equal(harness.layout.isPartVisible('activitybar'), location === ActivityBarPosition.DEFAULT);
+		}
+	} finally {
+		observer.disconnect();
+		harness.disposables.dispose();
+		dom.window.close();
+	}
+});
+
 test('Workbench layout assigns the window edge inset on startup from the Activity Bar position', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document, {

@@ -194,8 +194,9 @@ export class TextAreaEditContext extends AbstractEditContext implements ITextAre
 	}
 
 	positionComposition(position: EditContextPosition): void {
-		this.textArea.setLeft(position.left);
-		this.textArea.setTop(position.top);
+		const scroll = this._context.viewLayout.getScrollable().getCurrentScrollPosition();
+		this.textArea.setLeft(position.left - scroll.scrollLeft);
+		this.textArea.setTop(position.top - scroll.scrollTop);
 		this.textArea.setHeight(position.height);
 	}
 

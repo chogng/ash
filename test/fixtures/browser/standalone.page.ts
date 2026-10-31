@@ -360,6 +360,7 @@ interface StandaloneHarness {
 	configureBracketColors(enabled: boolean, independent: boolean): void;
 	setBracketTheme(scheme: keyof typeof stanza.ColorScheme, colors?: readonly string[]): void;
 	prepareGuides(value: string): void;
+	getControl(): ReturnType<typeof stanza.editor.create>;
 	configureGuides(options: IEditorOptions): void;
 	setGuideTheme(scheme: keyof typeof stanza.ColorScheme, colors?: Record<string, string>): void;
 	prepareBracketToken(): void;
@@ -1989,6 +1990,7 @@ window.ashStandaloneIntegration = {
 			}),
 		});
 	},
+	getControl: () => callerEditor,
 	prepareGuides: value => {
 		callerEditor.setValue(value);
 		callerModel.setLanguage('typescript');
@@ -2842,7 +2844,7 @@ window.ashStandaloneIntegration = {
 			const root = instance.getDomNode()!.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
 			root.scrollTop = 200;
 			root.dispatchEvent(new Event('scroll'));
-			const interrupted = !instance.hasPendingScrollAnimation() && instance.getScrollTop() === 200;
+			const interrupted = !instance.hasPendingScrollAnimation() && instance.getScrollTop() === 800;
 			instance.executeEdits('test', [{ range: new stanza.Range(1, 1, 1, 1), text: 'X' }]);
 			instance.setModel(null);
 			instance.changeViewZones(() => { throw new Error('Detached callback must not run'); });

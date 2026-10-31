@@ -78,9 +78,8 @@ export class DecorationsOverviewRuler extends ViewPart {
 	}
 	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return this.markNeeded(); }
 	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
-		if (event.scrollHeightChanged) return this.markNeeded();
-		// The canvas scrolls with its parent; refresh its viewport transform without repainting unchanged markers.
-		return event.scrollLeftChanged || event.scrollTopChanged;
+		// The ruler stays beside the fixed scrollbar; only its document scale can change.
+		return event.scrollHeightChanged ? this.markNeeded() : false;
 	}
 	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return this.markNeeded(); }
 	public override onThemeChanged(_event: viewEvents.ViewThemeChangedEvent): boolean { return this.updateSettings(); }
@@ -100,8 +99,7 @@ export class DecorationsOverviewRuler extends ViewPart {
 		}
 	}
 
-	public render(context: RestrictedRenderingContext): void {
-		this.domNode.setTransform(`translate3d(${context.scrollLeft}px, ${context.scrollTop}px, 0)`);
+	public render(_context: RestrictedRenderingContext): void {
 		if (this.renderState !== RenderState.Needed) return;
 		this.paint();
 	}

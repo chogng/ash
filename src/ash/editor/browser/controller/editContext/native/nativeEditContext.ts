@@ -390,8 +390,9 @@ export class NativeEditContext extends AbstractEditContext {
 
 	public override onBeforeRender(_viewportData: ViewportData): void {
 		this.parentBounds = this.container.getBoundingClientRect();
-		this.parentScrollLeft = this.container.scrollLeft;
-		this.parentScrollTop = this.container.scrollTop;
+		const position = this._context.viewLayout.getScrollable().getCurrentScrollPosition();
+		this.parentScrollLeft = position.scrollLeft;
+		this.parentScrollTop = position.scrollTop;
 	}
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
@@ -561,8 +562,9 @@ export class NativeEditContext extends AbstractEditContext {
 	positionComposition(position: EditContextPosition): void {
 		this.compositionPosition = position;
 		this.lastPosition = position;
-		this.domNode.setLeft(position.left);
-		this.domNode.setTop(position.top);
+		const scroll = this._context.viewLayout.getScrollable().getCurrentScrollPosition();
+		this.domNode.setLeft(position.left - scroll.scrollLeft);
+		this.domNode.setTop(position.top - scroll.scrollTop);
 		this.domNode.setHeight(position.height);
 		this.updateBounds(position);
 	}
@@ -791,8 +793,9 @@ export class NativeEditContext extends AbstractEditContext {
 		if (typeof Rect !== 'function') return undefined;
 		const hasPreparedBounds = this.parentBounds !== undefined;
 		const parentBounds = this.parentBounds ?? this.container.getBoundingClientRect();
-		const scrollLeft = hasPreparedBounds ? this.parentScrollLeft : this.container.scrollLeft;
-		const scrollTop = hasPreparedBounds ? this.parentScrollTop : this.container.scrollTop;
+		const scroll = this._context.viewLayout.getScrollable().getCurrentScrollPosition();
+		const scrollLeft = hasPreparedBounds ? this.parentScrollLeft : scroll.scrollLeft;
+		const scrollTop = hasPreparedBounds ? this.parentScrollTop : scroll.scrollTop;
 		return new Rect(
 			parentBounds.left + position.left - scrollLeft,
 			parentBounds.top + position.top - scrollTop,

@@ -3,6 +3,7 @@ import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/s
 import type { Locator } from '@playwright/test';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 import { expect, test } from '../../../automation/test.js';
+import { readEditorScrollPosition } from '../../../automation/editor.js';
 
 interface SashMeasurements {
 	readonly paints: number;
@@ -129,22 +130,21 @@ test('editor group lifecycle preserves cursor and scrolling through split and ta
 	const cursor = page.getByText('Ln 80, Col 3', { exact: true });
 	await expect(cursor).toBeVisible();
 	const originalName = (await source.tabs.first().getAttribute('aria-label'))!.split(',')[0]!;
-	const sourceScroll = source.editor.element.locator(':scope > .ash-smooth-scrollable');
-	const scrollTop = await sourceScroll.evaluate(element => element.scrollTop);
+	const scrollTop = (await readEditorScrollPosition(source.editor.element)).top;
 	expect(scrollTop).toBeGreaterThan(0);
 	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
 	await expect(workbench.editors.groups).toHaveCount(2);
 	const target = workbench.editors.groupAt(1);
 	await target.editor.input.focus();
 	await expect(cursor).toBeVisible();
-	await expect.poll(() => target.editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeCloseTo(scrollTop, 0);
+	await expect.poll(async () => (await readEditorScrollPosition(target.editor.element)).top).toBeCloseTo(scrollTop, 0);
 	await page.keyboard.press('ControlOrMeta+N');
 	await expect(target.tabs).toHaveCount(2);
 	await source.editor.input.focus();
 	await page.keyboard.press('ControlOrMeta+Home');
 	for (let index = 0; index < 39; index++) await page.keyboard.press('ArrowDown');
 	await expect(page.getByText('Ln 40, Col 1', { exact: true })).toBeVisible();
-	const movedScrollTop = await sourceScroll.evaluate(element => element.scrollTop);
+	const movedScrollTop = (await readEditorScrollPosition(source.editor.element)).top;
 	await source.tabs.filter({ hasText: originalName }).dragTo(target.tabs.last(), { targetPosition: { x: 8, y: 12 } });
 	await expect(workbench.editors.groups).toHaveCount(1);
 	const remaining = workbench.editors.groupAt(0);
@@ -152,7 +152,45 @@ test('editor group lifecycle preserves cursor and scrolling through split and ta
 	await expect(remaining.tabs.filter({ hasText: originalName })).toHaveAttribute('aria-selected', 'true');
 	await expect(remaining.editor.input).toBeFocused();
 	await expect(page.getByText('Ln 40, Col 1', { exact: true })).toBeVisible();
-	await expect.poll(() => remaining.editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeCloseTo(movedScrollTop, 0);
+	await expect.poll(async () => (await readEditorScrollPosition(remaining.editor.element)).top).toBeCloseTo(movedScrollTop, 0);
+});
+
+test('Activity Bar relocation preserves scrolled editor text and line number alignment', async ({ workbench }) => {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await workbench.quickaccess.runCommand('workbench.action.activityBarLocation.default');
+	await page.keyboard.press('ControlOrMeta+N');
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText(Array.from({ length: 160 }, (_, index) => `line ${index + 1}: activity bar relocation`).join('\n'));
+	await page.keyboard.press('ControlOrMeta+Home');
+	await editor.element.hover();
+	await page.mouse.wheel(0, 600);
+	const scrollContainer = editor.element.locator(':scope > .ash-smooth-scrollable');
+	await expect.poll(async () => (await readEditorScrollPosition(editor.element)).top).toBe(600);
+	const firstLine = await editor.lines.first().textContent();
+	for (const location of ['top', 'default', 'bottom', 'hide', 'top', 'default']) {
+		await workbench.quickaccess.runCommand(`workbench.action.activityBarLocation.${location}`);
+		await expect(page.locator('[data-part="activitybar"]')).toBeVisible({ visible: location === 'default' });
+		await expect.poll(async () => (await readEditorScrollPosition(editor.element)).top).toBe(600);
+		expect(await scrollContainer.evaluate(element => element.scrollTop)).toBe(0);
+		await expect(editor.lines.first()).toHaveText(firstLine!);
+		await expect.poll(() => editor.element.evaluate(root => {
+			const bounds = root.getBoundingClientRect();
+			const rows = [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')]
+				.filter(row => row.getBoundingClientRect().top >= bounds.top && row.getBoundingClientRect().bottom <= bounds.bottom);
+			return rows.length > 0 && rows.every(row => {
+				const number = root.querySelector<HTMLElement>(`.margin-view-overlays > .view-overlay-line[data-line-index="${row.dataset.lineIndex}"] .line-numbers`)!;
+				return number.textContent === String(Number(row.dataset.lineIndex) + 1)
+					&& number.getBoundingClientRect().top === row.getBoundingClientRect().top;
+			});
+		})).toBe(true);
+	}
+	await editor.input.focus();
+	await expect(editor.input).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.insertText(' retained');
+	await expect(editor.lines.last()).toHaveText('line 160: activity bar relocation retained');
 });
 
 test.describe('editor group lifecycle saved state', () => {

@@ -23,6 +23,37 @@ async function clickFileAction(section: Locator, name: string): Promise<void> {
 	await section.getByRole('button', { name, exact: true }).click();
 }
 
+for (const sideBySide of [false, true]) {
+	test(`typing at the end of a scrolled diff renders the new last line (${sideBySide ? 'side-by-side' : 'inline'})`, async ({ page }, testInfo) => {
+		await openDiffPage(page);
+		const lines = Array.from({ length: 200 }, (_, index) => `const line${index + 1} = ${index}; // ${'content '.repeat(14)}`).join('\n') + '\n';
+		await page.evaluate(({ lines, sideBySide }) => {
+			window.ashDiffIntegration.setHiddenRegions(false);
+			window.ashDiffIntegration.setComparisonText(lines, lines.replace('line5 = 4', 'line5 = 500'));
+			window.ashDiffIntegration.setViewMode(sideBySide, false, 900);
+		}, { lines, sideBySide });
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		const editor = page.locator('#single .modified .stanza-editor');
+		await editor.locator('.stanza-editor-input').focus();
+		await page.keyboard.press('ControlOrMeta+End');
+		const before = await page.evaluate(() => window.ashDiffIntegration.linePositions(201, 201));
+		await page.keyboard.type('eof_render_marker');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).toContain('eof_render_marker');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+		await testInfo.attach('eof-scroll.json', { body: JSON.stringify({ before, after: await page.evaluate(() => window.ashDiffIntegration.linePositions(201, 201)), viewport: await editor.boundingBox() }), contentType: 'application/json' });
+		await expect(editor.locator('.view-lines')).toContainText('eof_render_marker');
+		await expect(editor.locator('.view-line').last()).toBeInViewport();
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().modifiedText)).not.toContain('eof_render_marker');
+		await page.keyboard.press('ControlOrMeta+Shift+z');
+		await expect(editor.locator('.view-lines')).toContainText('eof_render_marker');
+		await page.keyboard.press('Enter');
+		await page.keyboard.type('next_eof_line');
+		await expect(editor.locator('.view-line').last()).toHaveText('next_eof_line');
+		await expect(editor.locator('.view-line').last()).toBeInViewport();
+	});
+}
+
 test('diff highlights name hyphens continuously while retaining subtraction in both view modes', async ({ page }, testInfo) => {
 	await openDiffPage(page, 'zh-CN');
 	for (const sideBySide of [true, false]) {
