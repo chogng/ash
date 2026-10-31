@@ -4,6 +4,7 @@
     {
       "provider_id": "google",
       "model_id": "gemini-3.8-flash",
+      "recommended_for": ["review", "commit"],
       "display_name": "Gemini 3.8 Flash",
       "context_window": 1048576,
       "capabilities": {
@@ -84,6 +85,7 @@
     {
       "provider_id": "google",
       "model_id": "gemini-3.7-flash",
+      "recommended_for": ["review", "commit"],
       "display_name": "Gemini 3.7 Flash",
       "context_window": 1048576,
       "capabilities": {
@@ -164,6 +166,7 @@
     {
       "provider_id": "google",
       "model_id": "gemini-3.6-flash",
+      "recommended_for": ["review", "commit"],
       "display_name": "Gemini 3.6 Flash",
       "context_window": 1048576,
       "capabilities": {
@@ -248,6 +251,7 @@
     {
       "provider_id": "google",
       "model_id": "gemini-3.1-pro-preview",
+      "recommended_for": ["advisor", "review", "commit"],
       "display_name": "Gemini 3.1 Pro Preview",
       "context_window": 1048576,
       "capabilities": {

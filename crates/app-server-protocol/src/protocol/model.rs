@@ -65,6 +65,10 @@ pub struct ModelCatalogEntry {
     pub model: ModelRef,
     pub display_name: String,
     pub description: Option<String>,
+    /// Ash-curated picker recommendations, not invocation capabilities or account access.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<ash_protocol::ModelPurpose>>", optional)]
+    pub recommended_for: Vec<ash_protocol::ModelPurpose>,
     /// Retirement evidence for this catalog row, without inferring availability from its date.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -113,6 +117,7 @@ impl ModelCatalogEntry {
             model,
             display_name: info.display_name.clone(),
             description: info.description.clone(),
+            recommended_for: info.recommended_for.clone(),
             retirement: info.retirement.clone(),
             discovered: None,
             context_window: match info.context_window {

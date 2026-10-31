@@ -12,7 +12,8 @@ import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.j
 import { DialogSeverity, IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
-import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
+import { AdvisorConfigurationPicker } from '../../../workbench/contrib/advisor/browser/advisor.js';
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import type { ModelProviderCredentialStatus } from '../../../workbench/services/chat/common/chatService.js';
 import { IPreferencesService } from '../../../workbench/services/preferences/common/preferences.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
@@ -207,66 +208,14 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const chat = accessor.get(IChatService);
+		const preferences = accessor.get(IPreferencesService);
+		const languageModels = accessor.get(ILanguageModelsService);
 		const quickInput = accessor.get(IQuickInputService);
-		const [current, models] = await Promise.all([chat.readAdvisorDefault(), accessor.get(ILanguageModelsService).listAdvisorModels()]);
-		type Setting = { label: string; description?: string; model?: NonNullable<typeof current>; openSettings?: true; manageProviderKeys?: true; clearModel?: true; };
-		const picker = quickInput.createQuickPick<Setting>();
-		const disposables = new DisposableStore();
-		disposables.add(picker);
-		picker.ariaLabel = localize('chat.settings.advisorAria', 'Chat settings and advisor model');
-		picker.placeholder = models.length
-			? localize('chat.settings.advisorPlaceholder', 'Choose an advisor model or open all settings')
-			: localize('chat.settings.advisorProviderRequired', 'Configure a provider in Chat Settings to choose an advisor model');
-		picker.items = [
-			{ label: localize('chat.settings.openAll', 'Open all settings'), openSettings: true },
-			{ label: localize('chat.providerKeys.manage', 'Manage Model Connections'), manageProviderKeys: true },
-			...(current ? [{
-				label: current.enabled ? localize('chat.settings.advisorDisable', 'Turn Advisor off') : localize('chat.settings.advisorEnable', 'Turn Advisor on'),
-				description: `${current.model.provider}/${current.model.model}`,
-				model: { ...current, enabled: !current.enabled },
-			}, {
-				label: localize('chat.settings.advisorClear', 'Clear saved Advisor model'),
-				clearModel: true as const,
-			}] : []),
-			...models.map(entry => ({
-				label: entry.displayName,
-				description: current?.model.provider === entry.model.provider && current.model.model === entry.model.model ? localize('chat.settings.current', 'Current') : `${entry.model.provider}/${entry.model.model}`,
-				model: current?.model.provider === entry.model.provider && current.model.model === entry.model.model
-					? { ...current, enabled: true }
-					: { model: entry.model, enabled: true, maxCalls: 3, maxOutputTokens: 2048 },
-			})),
-		];
-		disposables.add(picker.onDidAccept(() => {
-			const item = picker.selectedItems[0];
-			if (!item) return;
-
-			if (item.openSettings) {
-				picker.hide();
-				void accessor.get(IPreferencesService).openSettings();
-				return;
-			}
-			if (item.manageProviderKeys) {
-				picker.hide();
-				void showModelProviderKeys(accessor.get(ILanguageModelsService), quickInput, accessor.get(IDialogService));
-				return;
-			}
-			if (item.clearModel) {
-				void chat.saveAdvisorDefault(null).then(
-					() => picker.hide(),
-					error => { picker.placeholder = `${localize('chat.settings.advisorSaveFailed', 'Could not save advisor model')}: ${String(error)}`; },
-				);
-				return;
-			}
-			if (!item.model) return;
-			void chat.saveAdvisorDefault(item.model).then(
-				() => picker.hide(),
-				error => { picker.placeholder = `${localize('chat.settings.advisorSaveFailed', 'Could not save advisor model')}: ${String(error)}`; },
-			);
-
-		}));
-		disposables.add(picker.onDidHide(() => disposables.dispose()));
-		picker.show();
+		const dialogs = accessor.get(IDialogService);
+		await accessor.get(IInstantiationService).createInstance(AdvisorConfigurationPicker).show([
+			{ label: localize('chat.settings.openAll', 'Open all settings'), run: () => preferences.openSettings() },
+			{ label: localize('chat.providerKeys.manage', 'Manage Model Connections'), run: () => showModelProviderKeys(languageModels, quickInput, dialogs) },
+		]);
 	}
 });
 

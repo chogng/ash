@@ -8,7 +8,8 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { AccountDto, AccountReadResult, ModelListResult, ProviderListResult, ProviderModelsListResult, ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, ModelPurpose } from '../../../../../platform/agentHost/common/agentModels.js';
+import { modelsRecommendedFor } from '../../../../services/chat/common/modelCatalog.js';
 import type { IAccountApi } from '../../../../../platform/accounts/common/accountApi.js';
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../../services/accounts/browser/appServerAccountService.js';
@@ -85,6 +86,28 @@ function modelEntry(model = 'example', provider = 'openai'): ModelListResult['mo
 		},
 	};
 }
+
+test('task recommendation changes refresh candidate lists without changing selections or previous snapshots', async () => {
+	using resources = new DisposableStore();
+	const { source, models } = catalogFixture(resources);
+	const advisor = modelEntry('advisor-fixture');
+	advisor.recommended_for = ['advisor', 'review'];
+	const commit = modelEntry('commit-fixture');
+	commit.recommended_for = ['commit'];
+	source.catalog = [advisor, commit, modelEntry('unmarked')];
+	const first = await models.refreshModels();
+	assert.deepEqual(modelsRecommendedFor(first, ModelPurpose.Advisor).map(entry => entry.model.model), ['advisor-fixture']);
+	assert.deepEqual(modelsRecommendedFor(first, ModelPurpose.Commit).map(entry => entry.model.model), ['commit-fixture']);
+	const previousChanges = source.changes;
+	advisor.recommended_for = ['commit'];
+	const second = await models.refreshModels();
+	assert.equal(source.changes, previousChanges + 1);
+	assert.deepEqual(first[0].recommendedFor, [ModelPurpose.Advisor, ModelPurpose.Review]);
+	assert.deepEqual(modelsRecommendedFor(second, ModelPurpose.Advisor), []);
+	assert.deepEqual(modelsRecommendedFor(second, ModelPurpose.Commit).map(entry => entry.model.model), ['advisor-fixture', 'commit-fixture']);
+	assert.equal(source.selectionWrites, 0);
+	assert.equal(source.configWrites, 0);
+});
 
 test('model input capabilities notify consumers and do not change previous catalog snapshots', async () => {
 	using resources = new DisposableStore();

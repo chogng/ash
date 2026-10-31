@@ -1,4 +1,3 @@
-import type { Event } from '../../../../base/common/event.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
 import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { TreeVisibility } from '../../../../base/browser/ui/tree/tree.js';
@@ -33,31 +32,6 @@ export interface SettingsSectionReference {
 	readonly hidden?: boolean;
 	readonly itemId: string;
 }
-
-/** Non-configuration service state and actions; Preferences owns their DOM and widgets. */
-export interface SettingsSectionModel {
-	/** Null renders a standalone card without an additional group heading. */
-	readonly groupId?: string | null;
-	readonly groupTitle?: string;
-	readonly itemId?: string;
-	readonly keywords?: readonly string[];
-	readonly settingIds?: readonly string[];
-	readonly categoryId: string;
-	readonly title: string;
-	readonly description: string;
-	readonly help: string;
-	readonly onDidChange: Event<void>;
-	/** Field IDs and kinds remain stable for this section’s lifetime; values and actions may change. */
-	readonly fields: readonly SettingsSectionField[];
-	setVisible(visible: boolean): void;
-}
-
-export type SettingsSectionField =
-	| { readonly id: string; readonly kind: 'status'; readonly text: string; }
-	| { readonly id: string; readonly kind: 'boolean'; readonly label: string; readonly value: boolean; readonly enabled: boolean; readonly setValue: (value: boolean) => void; }
-	| { readonly id: string; readonly kind: 'text'; readonly label: string; readonly value: string; readonly placeholder: string; readonly enabled: boolean; readonly setValue: (value: string) => void; }
-	| { readonly id: string; readonly kind: 'select'; readonly label: string; readonly value: string | undefined; readonly options: readonly { readonly value: string; readonly label: string; }[]; readonly enabled: boolean; readonly setValue: (value: string) => void; }
-	| { readonly id: string; readonly kind: 'action'; readonly label: string; readonly enabled: boolean; readonly run: () => Promise<void>; };
 
 /** Settings group/item model with query filtering over canonical item metadata. */
 export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>> {

@@ -2859,6 +2859,8 @@ use ash_protocol::ModelMoneyAmount;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelOutputTransport;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelPurpose;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReasoningEffortOption;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelReasoningSummary;
@@ -7013,6 +7015,7 @@ typescript_bindings! {
     ModelAcceleration,
     ModelAccelerationOption,
     ModelRetirement,
+    ModelPurpose,
     ModelMetadataQuality,
     ModelTokenPricing,
     ModelToolOutputLimit,

@@ -39,6 +39,36 @@ fn fixed_catalog_request_does_not_accept_an_account_view() {
 }
 
 #[test]
+fn task_recommendations_reach_the_client_and_old_catalogs_default_to_none() {
+    let model = ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("example").unwrap(),
+    );
+    let mut info = ModelInfo::new(model.model.clone(), "Example");
+    info.recommended_for = vec![
+        ash_protocol::ModelPurpose::Advisor,
+        ash_protocol::ModelPurpose::Commit,
+    ];
+    let entry = ModelCatalogEntry::from_info(model, &info);
+    let mut value = serde_json::to_value(&entry).unwrap();
+    assert_eq!(
+        value["recommended_for"],
+        serde_json::json!(["advisor", "commit"])
+    );
+    assert_eq!(
+        serde_json::from_value::<ModelCatalogEntry>(value.clone()).unwrap(),
+        entry
+    );
+    value.as_object_mut().unwrap().remove("recommended_for");
+    assert!(
+        serde_json::from_value::<ModelCatalogEntry>(value)
+            .unwrap()
+            .recommended_for
+            .is_empty()
+    );
+}
+
+#[test]
 fn catalog_metadata_does_not_expose_an_execution_path() {
     let model = ash_protocol::ModelRef::new(
         ash_protocol::ProviderId::new("openai").unwrap(),

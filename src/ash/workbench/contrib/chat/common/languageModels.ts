@@ -11,7 +11,7 @@ import { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/c
 import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
 import { ILanguageModelsConfigurationService } from './languageModelsConfiguration.js';
 import type { ModelRef, ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
-import { modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
+import { ModelPurpose, modelsRecommendedFor, modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 
 /** Model catalog, provider credentials and picker preferences shared by both windows. */
 export interface ILanguageModelsService {
@@ -225,7 +225,7 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	}
 
 	public async listAdvisorModels(): Promise<readonly ModelCatalogEntry[]> {
-		return this.listModelCatalog();
+		return modelsRecommendedFor(await this.listModelCatalog(), ModelPurpose.Advisor);
 	}
 
 	public async refreshModels(): Promise<readonly ModelCatalogEntry[]> {
@@ -350,6 +350,7 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 		return candidate !== undefined
 			&& entry.displayName === candidate.displayName
 			&& entry.description === candidate.description
+			&& JSON.stringify(entry.recommendedFor ?? []) === JSON.stringify(candidate.recommendedFor ?? [])
 			&& entry.capabilities?.toolCalling === candidate.capabilities?.toolCalling
 			&& entry.capabilities?.agentMode === candidate.capabilities?.agentMode
 			&& entry.source?.providerId === candidate.source?.providerId

@@ -48,8 +48,8 @@ Hook 声明保留各自领域 owner，不为复用界面而伪造配置键或改
 准备、导入、取消及凭据保存仍由所属服务负责，Preferences 只呈现数据和操作。
 
 当前 SettingsEditor 使用 SettingsTree 的条目元数据过滤内容，TOC 从同一棵树读取搜索词。
-GitHub、Trace、Sandbox 和 Search 使用数据模型与共享 SettingsSectionRenderer；Hooks 使用同一 renderer 呈现管理入口，
-事件与声明的 DOM、搜索和样式归 Chat 的 Agent Customizations 编辑器。Models、Advisor、Dictation、Language Server 与
+GitHub、Trace、Sandbox、Search 和 Advisor 使用数据模型与共享 SettingsSectionRenderer；Advisor 的模型和命令归 `contrib/advisor`。
+Hooks 使用同一 renderer 呈现管理入口，事件与声明的 DOM、搜索和样式归 Chat 的 Agent Customizations 编辑器。Models、Dictation、Language Server 与
 Network 的设置控件和 CSS 归 Preferences，功能模块通过服务提供数据和操作。设置树只传递区段 ID，DOM 由当前
 Preferences renderer 保留；Sessions 复用这些 renderer，并从注册表取得普通设置元数据。
 

@@ -624,7 +624,7 @@ export const SettingsNavigation = [
 			{
 				id: 'agents',
 				label: localize({ bundle: 'ash.settings', key: 'categories.agents.label' }, 'Agents'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.agents.description' }, 'Configure agents, code review, commit messages, and the Advisor used for second opinions.'),
+				description: '',
 				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation', 'advisor', 'second opinion', 'commit', 'commit message'],
 				presentation: 'general',
 				groups: [],

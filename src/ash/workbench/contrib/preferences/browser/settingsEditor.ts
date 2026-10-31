@@ -55,7 +55,7 @@ import { Event } from '../../../../base/common/event.js';
 import { AICustomizationManagementEditorInput } from '../../chat/browser/aiCustomization/aiCustomizationManagementEditorInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { LanguageServerSettingsRenderer } from './languageServerSettingsRenderer.js';
-import { AdvisorSettingsRenderer } from './advisorSettingsRenderer.js';
+import { getSettingsSections } from '../../../services/preferences/browser/settingsSections.js';
 import { AgentTaskModelSettingsModel } from './agentTaskModelSettingsModel.js';
 import { ModelSettingsRenderer } from './modelSettingsRenderer.js';
 import { DictationSettingsRenderer } from './dictationSettingsRenderer.js';
@@ -271,7 +271,11 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings)),
 			this._register(this.instantiationService.createInstance(NetworkSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(SearchSettingsModel)), AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings)),
-			this._register(this.instantiationService.createInstance(AdvisorSettingsRenderer, settingsContent)),
+			...getSettingsSections().map(section => this._register(this.instantiationService.createInstance(
+				SettingsSectionRenderer, settingsContent,
+				this._register(this.instantiationService.createInstance(section.model)),
+				section.accessibleViewProviderId, section.accessibilityVerbositySettingId,
+			))),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(AgentTaskModelSettingsModel, 'codeReviewModel')), AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, this._register(this.instantiationService.createInstance(AgentTaskModelSettingsModel, 'commitMessageModel')), AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration)),
 			this._register(modelServices.createInstance(ModelSettingsRenderer, settingsContent)),
@@ -629,7 +633,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const searching = this.treeModel.isSearching;
 		this.contentHeading.textContent = searching ? this.localized('chrome.searchResults', 'Search results') : this.localizedCategoryLabel(this.activeCategory);
 		this.contentDescription.textContent = searching ? '' : this.localizedCategoryDescription(this.activeCategory);
-		this.contentDescription.hidden = searching;
+		this.contentDescription.hidden = !this.contentDescription.textContent;
 		this.contentEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
 		this.contentEmpty.hidden = !searching || this.treeModel.visibleItems.some(item => !('rendererId' in item.value) || !item.value.hidden);
 		this.tocTree.refresh();

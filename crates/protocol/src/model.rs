@@ -33,6 +33,7 @@ pub use catalog::ModelInfo;
 pub use catalog::ModelLifecycle;
 pub use catalog::ModelMetadataQuality;
 pub use catalog::ModelPreset;
+pub use catalog::ModelPurpose;
 pub use catalog::ModelRetirement;
 pub use catalog::ModelTokenPricing;
 pub use context_inspection::ModelContextAllocation;

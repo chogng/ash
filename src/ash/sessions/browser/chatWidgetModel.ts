@@ -1,3 +1,4 @@
+import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError } from '../../base/common/async.js';
 import { commitChatSession } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionCommit.js';
 import type { ChatContextUsage } from '../../workbench/services/chat/common/chatService.js';
@@ -610,19 +611,17 @@ export class ChatWidgetModel extends Disposable {
 				const current = await this.awaitOperationPreparation(this.chatService.readAdvisorDefault(), operation);
 				this.requireCurrentOperation(operation);
 				if (argument === 'clear') {
-					await this.chatService.saveAdvisorDefault(null);
+					await this.chatService.saveAdvisorDefault(updateAdvisorConfig(current, { type: 'clear' }));
 					this.requireCurrentOperation(operation);
 				} else if (argument === 'off') {
-					if (current) await this.chatService.saveAdvisorDefault({ ...current, enabled: false });
+					if (current) await this.chatService.saveAdvisorDefault(updateAdvisorConfig(current, { type: 'setEnabled', enabled: false }));
 					this.requireCurrentOperation(operation);
 				} else {
 					const models = await this.awaitOperationPreparation(this.languageModels.listAdvisorModels(), operation);
 					this.requireCurrentOperation(operation);
 					const chosen = models.find(entry => `${entry.model.provider}/${entry.model.model}` === argument);
 					if (!chosen) throw new Error(localize('chat.advisor.modelUnavailable', 'Advisor model is unavailable: {0}', argument));
-					const config = current?.model.provider === chosen.model.provider && current.model.model === chosen.model.model
-						? { ...current, enabled: true }
-						: { model: chosen.model, enabled: true, maxCalls: 3, maxOutputTokens: 2048 };
+					const config = updateAdvisorConfig(current, { type: 'selectModel', model: chosen });
 					await this.chatService.saveAdvisorDefault(config);
 					this.requireCurrentOperation(operation);
 				}

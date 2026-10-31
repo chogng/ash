@@ -3,26 +3,30 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IAgentModelsService, type AgentModelDefaults, type AgentModelDefaultsUpdate } from '../../../../platform/agentHost/common/agentModels.js';
 import { ILanguageModelsService } from '../../chat/common/languageModels.js';
-import { modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
-import type { SettingsSectionField, SettingsSectionModel } from './settingsTreeModels.js';
+import { ModelPurpose, modelsRecommendedFor, modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
+import type { SettingsSectionField, SettingsSectionModel } from '../../../services/preferences/common/preferences.js';
 
 /** Edits a backend task default without changing the conversation model. */
 export class AgentTaskModelSettingsModel extends Disposable implements SettingsSectionModel {
 	public readonly categoryId = 'agents';
 	public readonly groupId = null;
 	public get itemId(): string { return this.kind === 'codeReviewModel' ? 'chat.codeReview' : 'chat.commitMessage'; }
-	public get keywords(): readonly string[] { return this.kind === 'codeReviewModel' ? ['review', 'model', 'code review', 'find issues'] : ['commit', 'model', 'commit message', 'git']; }
+	public get keywords(): readonly string[] {
+		return this.kind === 'codeReviewModel'
+			? ['review', 'model', 'code review', 'find issues', localize('codeReview.settings.keyword', 'Code review'), localize('scm.review.findIssues', 'Find Issues')]
+			: ['commit', 'model', 'commit message', 'git'];
+	}
 	public get title(): string {
 		if (this.kind === 'commitMessageModel') {
-			return localize('commitMessage.settings.title', 'Commit messages');
+			return localize('commitMessage.settings.title', 'Commit');
 		}
-		return localize('codeReview.settings.title', 'Review model');
+		return localize('codeReview.settings.title', 'Review');
 	}
 	public get description(): string {
 		if (this.kind === 'commitMessageModel') {
-			return localize('commitMessage.settings.description', 'Use the model from the conversation that produced the changes, or choose a dedicated model. Source changes are sent only for directories you have authorized. Changing the model clears those authorizations.');
+			return localize('commitMessage.settings.description', 'Changing the model requires authorizing directories again.');
 		}
-		return localize('codeReview.settings.description', 'Choose a dedicated model for Find Issues and code reviews, or follow the current conversation’s model.');
+		return '';
 	}
 	public get help(): string {
 		if (this.kind === 'commitMessageModel') {
@@ -55,17 +59,24 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 
 	public get fields(): readonly SettingsSectionField[] {
 		const selected = this.snapshot?.[this.kind];
+		const purpose = this.kind === 'codeReviewModel' ? ModelPurpose.Review : ModelPurpose.Commit;
 		const options = [
 			{ value: '', label: this.kind === 'commitMessageModel' ? localize('commitMessage.settings.inherit', 'Inherit conversation model') : localize('codeReview.settings.follow', 'Follow Current Model') },
-			...this.models.filter(entry => this.languageModels.isModelVisible(entry.model)).map(entry => ({ value: modelRefIdentity(entry.model), label: entry.displayName })),
+			...modelsRecommendedFor(this.models, purpose).filter(entry => this.languageModels.isModelVisible(entry.model)).map(entry => ({ value: modelRefIdentity(entry.model), label: entry.displayName })),
 		];
 		const value = selected ? modelRefIdentity(selected) : '';
 		if (selected && !options.some(option => option.value === value)) {
-			options.push({ value, label: localize('codeReview.settings.unavailable', '{0} (unavailable)', `${selected.provider}/${selected.model}`) });
+			const saved = this.models.find(entry => modelRefIdentity(entry.model) === value);
+			options.push({ value, label: saved?.displayName ?? localize('codeReview.settings.unavailable', '{0} (unavailable)', `${selected.provider}/${selected.model}`) });
 		}
 		const fields: SettingsSectionField[] = [
 			{
-				id: this.kind === 'codeReviewModel' ? 'code-review-model' : 'commit-message-model', kind: 'select', label: localize('codeReview.settings.selector', 'Model'), value, options, enabled: !!this.snapshot && !this.busy, setValue: value => {
+				id: this.kind === 'codeReviewModel' ? 'code-review-model' : 'commit-message-model',
+				kind: 'select',
+				label: localize('codeReview.settings.selector', 'Model'),
+				description: this.description,
+				value, options, enabled: !!this.snapshot && !this.busy,
+				setValue: value => {
 					const model = this.models.find(entry => modelRefIdentity(entry.model) === value)?.model;
 					if (value && !model) { return; }
 					void this.save({ [this.kind]: model ?? null });

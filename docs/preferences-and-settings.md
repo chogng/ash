@@ -45,14 +45,14 @@ flowchart TD
     SM --> SV["Preferences SettingsSectionRenderer"]
     V --> H["Workbench / Sessions 页面实例"]
     SV --> H
-    D --> RV["Preferences 专用 renderer：Models / Advisor / Dictation / Language Server / Network"]
+    D --> RV["Preferences 专用 renderer：Models / Dictation / Language Server / Network"]
     RV --> H
     H --> T["SettingsTree：注册设置与区段 ID；DOM 由 renderer 保留"]
 ```
 
 Preferences 负责搜索、分类、导航、控件、布局、主题、键盘与无障碍交互；功能模块拥有配置语义和领域业务状态。新接入只提供注册配置或数据与操作，不传 DOM、widget 或渲染回调。完整约束与迁移边界仅在 [Preferences README](../src/ash/workbench/contrib/preferences/README.md) 维护。
 
-普通配置经配置服务读写；账号、密钥、模型发现、Hook 执行与权限继续归各自领域服务。GitHub、Trace、Sandbox、Search 使用数据模型和共享 section renderer，Hooks 使用同一 renderer 提供 Agent Customizations 管理入口。Advisor、Dictation、Language Server 和 Network 的控件及 CSS 归 Preferences。Models 设置使用 Chat 的共享目录 Widget 和 ViewModel；供应商配置表单及其临时探测状态归 Preferences，发现、测试和持久化继续调用 Chat 领域服务。
+普通配置经配置服务读写；账号、密钥、模型发现、Hook 执行与权限继续归各自领域服务。GitHub、Trace、Sandbox、Search 使用数据模型和共享 section renderer，Hooks 使用同一 renderer 提供 Agent Customizations 管理入口。Advisor 由 `contrib/advisor` 注册设置数据模型，两个宿主通过共享 Preferences 注册契约创建模型并使用 section renderer；模型切换规则复用共享 Chat 层，配置继续经 Chat 服务持久化。Dictation、Language Server 和 Network 的控件及 CSS 归 Preferences。Models 设置使用 Chat 的共享目录 Widget 和 ViewModel；供应商配置表单及其临时探测状态归 Preferences，发现、测试和持久化继续调用 Chat 领域服务。
 
 `SettingsTreeModel` 的区段和交互标题只保存 `SettingsSectionReference`，由当前打开实例的 `SettingsRenderer` 找到保留的控件；不再在可搜索元数据中传递 DOM。Sessions 的普通设置只声明 ID 和顺序，由 `DefaultSettings` 解析注册表中的类型、文案与选项。宿主专属条目使用 `setting.included: false` 退出自动目录，仍可按 ID 显式解析，不改变配置的存储、作用域或默认值。
 

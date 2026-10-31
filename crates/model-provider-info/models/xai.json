@@ -4,6 +4,7 @@
     {
       "provider_id": "xai",
       "model_id": "grok-4.7",
+      "recommended_for": ["advisor", "review", "commit"],
       "display_name": "Grok 4.7",
       "context_window": 500000,
       "capabilities": {
@@ -88,6 +89,7 @@
     {
       "provider_id": "xai",
       "model_id": "grok-4.6",
+      "recommended_for": ["review", "commit"],
       "display_name": "Grok 4.6",
       "context_window": 500000,
       "capabilities": {
@@ -172,6 +174,7 @@
     {
       "provider_id": "xai",
       "model_id": "grok-4.5",
+      "recommended_for": ["review", "commit"],
       "display_name": "Grok 4.5",
       "context_window": 500000,
       "capabilities": {

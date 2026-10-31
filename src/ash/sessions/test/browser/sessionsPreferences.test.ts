@@ -1,3 +1,4 @@
+import '../../../workbench/contrib/advisor/browser/advisor.contribution.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
@@ -91,6 +92,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
 	window.HTMLElement.prototype.scrollTo = function () { };
+	window.Element.prototype.scrollIntoView = () => { };
 	// JSDOM has no layout; shared keyboard navigation still checks rendered visibility.
 	Object.defineProperty(window.Element.prototype, 'getClientRects', {
 		value: function (this: Element) { return this.isConnected && !this.closest('[hidden], [inert]') ? [{}] : []; },
@@ -506,11 +508,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	agentsButton.click();
 	await Promise.resolve();
 	await Promise.resolve();
-	const advisorSwitch = window.document.querySelector<HTMLInputElement>('.ash-advisor-settings input[role="switch"]');
-	assert.ok(advisorSwitch);
-	assert.equal(advisorSwitch.checked, true);
-	advisorSwitch.checked = false;
-	advisorSwitch.dispatchEvent(new window.Event('change', { bubbles: true }));
+	assert.equal(window.document.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="switch"]'), null);
+	const advisorSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]');
+	assert.ok(advisorSelector);
+	advisorSelector.click();
+	const off = window.document.querySelector<HTMLElement>('[role="listbox"] [role="option"][data-index="0"]');
+	assert.ok(off);
+	off.click();
 	await Promise.resolve();
 	assert.deepEqual(advisorWrites, [{ model: advisorModel, enabled: false, maxCalls: 5, maxOutputTokens: 4096, reasoningEffort: 'high' }]);
 	const closingMenu = openCopyMenu();

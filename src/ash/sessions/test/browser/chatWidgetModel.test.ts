@@ -828,3 +828,20 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		assert.equal(f.routedChat.getInteractionOffer('session', 'A'), undefined);
 	});
 }
+
+for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} advisor command preserves budgets across model changes and Off`, async () => {
+		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
+		const old: AdvisorConfig = { model: { provider: 'test', model: 'old' }, enabled: true, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: 'high' };
+		let saved: AdvisorConfig | null = old;
+		f.modelApi.readAdvisorDefault = async () => saved;
+		f.modelApi.setAdvisorDefault = async ({ advisor }) => { saved = advisor; };
+		f.models.listAdvisorModels = async () => [{ model: { provider: 'test', model: 'next' }, displayName: 'Next', longContext: null, supportedReasoningEfforts: [{ effort: 'medium', description: 'Medium' }] }];
+		await f.model.executeServerCommand('advisor', 'test/next');
+		assert.deepEqual(saved, { model: { provider: 'test', model: 'next' }, enabled: true, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: undefined });
+		await f.model.executeServerCommand('advisor', 'off');
+		assert.deepEqual(saved, { model: { provider: 'test', model: 'next' }, enabled: false, maxCalls: 7, maxOutputTokens: 8192, reasoningEffort: undefined });
+		await f.model.executeServerCommand('advisor', 'clear');
+		assert.equal(saved, null);
+	});
+}

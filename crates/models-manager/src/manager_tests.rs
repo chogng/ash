@@ -373,6 +373,10 @@ async fn unknown_live_fields_do_not_erase_known_seed_metadata() {
         alpha.info().capabilities.tools,
         CapabilitySupport::Supported
     );
+    assert_eq!(
+        alpha.info().recommended_for,
+        vec![ash_protocol::ModelPurpose::Advisor]
+    );
 }
 
 #[tokio::test]
@@ -540,6 +544,7 @@ fn registry() -> ProviderConfigRegistry {
     let mut alpha = ModelInfo::new(model_id("alpha"), "Alpha");
     alpha.context_window = ContextWindow::Known(128_000);
     alpha.capabilities.tools = CapabilitySupport::Supported;
+    alpha.recommended_for = vec![ash_protocol::ModelPurpose::Advisor];
     let ash = ModelInfo::new(model_id("ash"), "Ash");
     ProviderConfigRegistry::from_definitions([
         definition("strict", ModelCatalogPolicy::ListedOnly).with_models([ash, alpha]),

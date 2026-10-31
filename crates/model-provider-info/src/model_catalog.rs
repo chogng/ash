@@ -95,19 +95,12 @@ fn parse_catalog(json: &str) -> Result<Vec<StaticModelSpec>, serde_json::Error> 
 }
 
 fn validate_model(spec: &StaticModelSpec) -> Result<(), serde_json::Error> {
-    spec.settings
-        .validate()
-        .map_err(serde_json::Error::custom)?;
     ProviderId::new(&spec.provider_id).map_err(serde_json::Error::custom)?;
     ModelId::new(&spec.model_id).map_err(serde_json::Error::custom)?;
+    spec.model().validate().map_err(serde_json::Error::custom)?;
     if spec.display_name.trim().is_empty() {
         return Err(serde_json::Error::custom("model display name is empty"));
     }
-    ash_protocol::ModelInfo::validate_presentation(
-        spec.description.as_deref(),
-        &spec.supported_reasoning_efforts,
-    )
-    .map_err(serde_json::Error::custom)?;
     match (spec.context_window, spec.max_context_window) {
         (ContextWindow::Known(default), ContextWindow::Known(maximum)) if maximum < default => {
             return Err(serde_json::Error::custom(

@@ -45,7 +45,7 @@ import type { ServicesAccessor } from '../../../platform/instantiation/common/in
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { AppServerAccountService } from '../../../workbench/services/accounts/browser/appServerAccountService.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
-import { IAgentModelsService, type ModelCatalogEntry } from '../../../platform/agentHost/common/agentModels.js';
+import { IAgentModelsService, ModelPurpose, type ModelCatalogEntry } from '../../../platform/agentHost/common/agentModels.js';
 import { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { IAppServerApi, IServerEventApi, type AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
@@ -2270,6 +2270,7 @@ interface FakeOptions {
 	readonly models?: readonly {
 		readonly model: ModelRef;
 		readonly displayName: string;
+		readonly recommendedFor?: readonly ModelPurpose[];
 		readonly contextWindow?: number | null;
 		readonly supportedReasoningEfforts?: readonly { readonly effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max'; readonly description?: string | null; }[];
 		readonly defaultReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
@@ -2882,7 +2883,7 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.deepEqual(await oldCatalog, []);
 	const pickerEntry = {
 		model: discovered.model, displayName: discovered.display_name, description: discovered.description, discovered: true,
-		capabilities: { toolCalling: 'supported', agentMode: 'unknown' }, source: undefined, pricing: [],
+		capabilities: { toolCalling: 'supported', agentMode: 'unknown' }, source: undefined, pricing: [], recommendedFor: [],
 		inputModalities: null, retirement: undefined,
 		contextWindow: null, defaultContextWindow: null, maximumContextWindow: null, longContext: null,
 		selectedAcceleration: null, accelerationOptions: [{ id: 'priority', name: 'Priority lane', description: 'Faster processing' }],
@@ -3511,6 +3512,7 @@ function fakeApi(options: FakeOptions = {}): {
 				modelListRequests.push(undefined);
 				return agentModelCatalog((options.models ?? []).map(entry => createTestModel({
 					model: entry.model, display_name: entry.displayName,
+					recommended_for: [...entry.recommendedFor ?? []],
 					context_window: entry.contextWindow ?? null,
 					default_reasoning_effort: entry.defaultReasoningEffort ?? null,
 					supported_reasoning_efforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })),
@@ -4081,7 +4083,7 @@ test('Selecting a custom Agent in a new Chat creates the Session with its exact 
 test('Advisor command selects a model and the off switch preserves its settings', async () => {
 	const fake = fakeApi({
 		configuredProviders: ['openai'],
-		models: [{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', }],
+		models: [{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', recommendedFor: [ModelPurpose.Advisor] }],
 	});
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
@@ -4208,16 +4210,16 @@ test('Chat Settings saves a masked provider key through the model API and refres
 	assert.equal(currentQuickPickItems(quickInput)[0]?.description, 'API key saved');
 });
 
-test('Advisor model choices include the fixed catalog before connection setup', async () => {
+test('Advisor choices come from recommended catalog rows before connection setup', async () => {
 	const fake = fakeApi({
 		configuredProviders: ['openai'],
 		models: [
-			{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', },
+			{ model: { provider: 'openai', model: 'reviewer' }, displayName: 'Reviewer', recommendedFor: [ModelPurpose.Advisor] },
 			{ model: { provider: 'google', model: 'flash' }, displayName: 'Flash', },
 		],
 	});
 	using chat = createChatService(fake.api);
-	assert.deepEqual((await modelsFor(chat).listAdvisorModels()).map(entry => entry.displayName), ['Reviewer', 'Flash']);
+	assert.deepEqual((await modelsFor(chat).listAdvisorModels()).map(entry => entry.displayName), ['Reviewer']);
 });
 
 test('Advisor transcript groups the call and renders advice as a disclosure', () => {

@@ -141,7 +141,7 @@ impl ToolService for AdvisorToolService {
         vec![ToolDefinition {
             strict: true,
             name: protocol::ToolName::new(TOOL_NAME).expect("valid advisor tool name"),
-            description: "Consult the configured advisor for a second opinion on a consequential decision, a recurring unexplained failure, or an unresolved completion risk. Ask a concrete question. Ash supplies conversation evidence. The advisor only advises; verify its claims and continue the task yourself. Use sparingly; each consultation has a separate model cost and a per-Turn limit.".into(),
+            description: "Consult the configured advisor for strategic guidance on complex task planning, consequential decisions, changes of approach, recurring unexplained failures, or unresolved completion risks. Ask a concrete question. Ash supplies conversation evidence. The advisor only advises; verify its claims and continue the task yourself. Consult when guidance can improve the outcome; each consultation has a separate model cost and a per-Turn limit.".into(),
             parameters: json!({"type": "object", "properties": {"question": {"type": "string", "minLength": 1, "maxLength": 8000}}, "required": ["question"], "additionalProperties": false}),
         }]
     }

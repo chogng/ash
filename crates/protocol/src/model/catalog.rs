@@ -65,6 +65,17 @@ pub enum ModelMetadataQuality {
     Unknown,
 }
 
+/// Ash-curated task recommendations, independent of provider capabilities or account access.
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, TS,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelPurpose {
+    Advisor,
+    Review,
+    Commit,
+}
+
 /// A confirmed retirement announcement for the catalog's exact model and connection scope.
 ///
 /// This is independent of lifecycle classification and availability: legacy or preview models
@@ -170,6 +181,10 @@ pub struct ModelInfo {
     pub id: ModelId,
     pub display_name: String,
     pub description: Option<String>,
+    /// Suggested task pickers; an empty list makes no recommendation and does not forbid invocation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<ModelPurpose>>", optional)]
+    pub recommended_for: Vec<ModelPurpose>,
     #[serde(default)]
     pub access: ModelAccess,
     /// Connection-sourced retirement evidence; omission means no known announcement.
@@ -219,6 +234,12 @@ impl ModelInfo {
     }
 
     pub fn validate(&self) -> Result<(), String> {
+        let mut purposes = std::collections::BTreeSet::new();
+        for purpose in &self.recommended_for {
+            if !purposes.insert(purpose) {
+                return Err(format!("duplicate recommended model purpose {purpose:?}"));
+            }
+        }
         Self::validate_presentation(
             self.description.as_deref(),
             &self.supported_reasoning_efforts,
@@ -234,6 +255,7 @@ impl ModelInfo {
             id,
             display_name: display_name.into(),
             description: None,
+            recommended_for: Vec::new(),
             access: ModelAccess::Unknown,
             retirement: None,
             context_window: ContextWindow::Unknown,

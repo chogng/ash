@@ -5,6 +5,13 @@ export interface ModelRef {
 	readonly model: string;
 }
 
+/** Curated picker uses, independent of model capabilities and connection access. */
+export enum ModelPurpose {
+	Advisor = 'advisor',
+	Review = 'review',
+	Commit = 'commit',
+}
+
 export type ModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
 
 export interface ModelReasoningEffortOption {
@@ -50,6 +57,7 @@ export interface ModelTokenPricing {
 }
 
 export interface ModelCatalogEntry {
+	readonly recommendedFor?: readonly ModelPurpose[];
 	readonly capabilities?: { readonly toolCalling: ModelCapabilitySupport; readonly agentMode: ModelCapabilitySupport; };
 	readonly source?: ModelCatalogSource;
 	readonly pricing?: readonly ModelTokenPricing[];

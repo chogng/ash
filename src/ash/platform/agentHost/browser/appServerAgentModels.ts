@@ -1,5 +1,6 @@
 import type { ModelListResult } from '../../../../../.build/protocol/typescript/index.js';
 import type { ModelCatalogEntry } from '../common/agentModels.js';
+import { ModelPurpose } from '../common/agentModels.js';
 import { localize } from '../../../nls.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import type {
@@ -262,9 +263,11 @@ function modelDiscoveryMessage(code: ProviderModelsListFailureCodeDto): string {
 }
 
 function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
+	const purposes = { advisor: ModelPurpose.Advisor, review: ModelPurpose.Review, commit: ModelPurpose.Commit };
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
 		displayName: entry.display_name,
+		recommendedFor: Object.freeze((entry.recommended_for ?? []).map(purpose => purposes[purpose])),
 		capabilities: Object.freeze({ toolCalling: entry.capabilities.tools, agentMode: entry.capabilities.agent_mode ?? 'unknown' }),
 		source: entry.source ? Object.freeze({ providerId: entry.source.provider_id, connectionId: entry.source.connection_id, metadata: entry.source.metadata }) : undefined,
 		pricing: Object.freeze((entry.pricing ?? []).map(price => Object.freeze({

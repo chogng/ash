@@ -158,6 +158,7 @@ JSON 的层级和编辑字段由 [`static_model_spec.rs`](src/static_model_spec.
   "model_id": "model-id",
   "display_name": "Display Name",
   "description": "A short description of the model",
+  "recommended_for": ["advisor", "review", "commit"],
   "context_window": 200000,
   "max_context_window": 1000000,
   "capabilities": {

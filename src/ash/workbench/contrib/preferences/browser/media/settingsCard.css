@@ -1,7 +1,75 @@
+.ash-settings-card-section {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+}
+
+.ash-settings-card-section > .ash-settings-card-title {
+	margin: 0;
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-settings-field-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size200);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size160);
+}
+
+.ash-settings-field-copy {
+	display: flex;
+	flex: 1;
+	min-width: min(100%, 220px);
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-settings-field-copy > :first-child {
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-settings-field-copy > * {
+	margin: 0;
+}
+
+.ash-settings-field-description {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.ash-settings-field-row > .ash-dropdown {
+	width: 260px;
+	max-width: 100%;
+	flex-direction: column;
+	flex-shrink: 0;
+	margin-left: auto;
+}
+
+.ash-settings-field-row > .ash-toggle {
+	flex-shrink: 0;
+	margin-left: auto;
+}
+
 .ash-settings-card {
 	overflow: visible;
 	border-radius: var(--ash-cornerRadius-large);
 	background: var(--ash-settings-itemBackground);
+}
+
+/* A section supplies its own card below its heading, including inside Sessions lists. */
+.ash-settings-card:has(> .ash-settings-card-section) {
+	background: transparent;
+}
+
+.ash-settings-card > .ash-settings-card-section::before {
+	content: none;
 }
 
 .ash-settings-card > * {

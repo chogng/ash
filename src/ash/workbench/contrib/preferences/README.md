@@ -36,7 +36,7 @@ Preferences 拥有设置页的呈现模型，不接管领域业务状态。配�
 
 功能模块通过数据契约提供稳定的字段标识、文字、值、选项、可用状态、变更事件和领域操作。操作可以调用所属服务，但不得接收 DOM 容器或负责创建控件。Preferences 将这些数据纳入设置模型，统一处理搜索、控件更新、焦点、错误呈现和无障碍交互。
 
-当前 [SettingsSectionModel](browser/settingsTreeModels.ts) 与 [SettingsSectionRenderer](browser/settingsSectionRenderer.ts) 提供了非配置内容的数据和渲染分离路径。它们是当前接入入口，不表示全部旧页面已经迁移，也不要求为每个功能重新发明一套字段协议。数据契约的扩展应由具体需求驱动，并保持在 Preferences 的呈现边界内。
+当前 [SettingsSectionModel](../../services/preferences/common/preferences.ts) 与 [SettingsSectionRenderer](browser/settingsSectionRenderer.ts) 提供了非配置内容的数据和渲染分离路径。功能贡献通过 [设置区域注册](../../services/preferences/browser/settingsSections.ts) 声明模型及其无障碍标识；Workbench 与 Sessions 为每次设置页面打开创建并释放模型，功能贡献不依赖 Preferences 内部 renderer。它们是当前接入入口，不表示全部旧页面已经迁移，也不要求为每个功能重新发明一套字段协议。数据契约的扩展应由具体需求驱动，并保持在 Preferences 的呈现边界内。
 
 ## 禁止把页面实现穿过接入边界
 
@@ -61,7 +61,7 @@ Preferences 负责页面控件、监听、焦点与其他 UI 资源的释放。�
 
 ## 当前实现
 
-GitHub、Trace、Sandbox 和 Search 通过数据模型交给共享 `SettingsSectionRenderer`；Hooks 使用同一 renderer 提供 Agent Customizations 管理入口。Models、Advisor、Dictation、Language Server 与 Network 的呈现和 CSS 均位于 Preferences，调用既有领域服务；模型管理的 `ChatModelsViewModel` 继续拥有发现列表和测试状态。
+GitHub、Trace、Sandbox 和 Search 通过数据模型交给共享 `SettingsSectionRenderer`；Hooks 使用同一 renderer 提供 Agent Customizations 管理入口。Advisor 在 `contrib/advisor` 注册设置模型，并由同一 renderer 展示；模型切换、启停及默认参数规则由共享 Chat 层维护，配置仍通过 Chat 服务持久化。Models、Dictation、Language Server 与 Network 的呈现和 CSS 均位于 Preferences，调用既有领域服务；模型管理的 `ChatModelsViewModel` 继续拥有发现列表和测试状态。
 
 设置树的条目与交互标题携带 `SettingsSectionReference`，不携带 DOM。当前页面实例在 `SettingsRenderer` 注册其 Preferences renderer，后者保留控件以保持搜索、重排和更新时的焦点。`SettingsPageRenderer` 是 Preferences 内部的呈现基类，不能由领域模块实现或作为功能接入端口。
 
