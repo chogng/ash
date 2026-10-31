@@ -111,8 +111,18 @@ public static class AshRemoteInput {
     try { $observed = [BitConverter]::ToString($hash.ComputeHash($file)).Replace('-', '').ToLowerInvariant() }
     finally { $file.Dispose(); $hash.Dispose() }
     if ($observed -cne $digest) { Fail 'archive-sha256-mismatch' 65 }
-    & $tar -xzf $archive -C $package
-    if ($LASTEXITCODE -ne 0) { Fail 'archive-extraction-failed' 65 }
+    # Inbox tar can convert Unicode command-line paths through the ANSI code page.
+    # CreateProcess receives its working directory as UTF-16; fixed relative
+    # arguments keep native extraction independent of that argument conversion.
+    $extract = New-Object Diagnostics.ProcessStartInfo
+    $extract.FileName = $tar
+    $extract.Arguments = '-xzf package.tar.gz -C package'
+    $extract.WorkingDirectory = $staging
+    $extract.UseShellExecute = $false
+    $process = [Diagnostics.Process]::Start($extract)
+    try { $process.WaitForExit(); $extractExit = $process.ExitCode }
+    finally { $process.Dispose() }
+    if ($extractExit -ne 0) { Fail 'archive-extraction-failed' 65 }
     foreach ($relative in @('ash-package.json', 'bin/ash-remote-server.exe', 'bin/ash-app-server.exe', 'bin/ash-app-server-daemon.exe', 'ash-path/rg.exe', 'ash-resources/tgrep/tgrep.exe', 'ash-resources/node/bin/node.exe')) {
         if (!(Test-Path -LiteralPath (Join-Path $package $relative) -PathType Leaf)) { Fail 'package-entrypoint-missing' 65 }
     }

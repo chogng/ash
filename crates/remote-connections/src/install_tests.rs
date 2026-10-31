@@ -499,7 +499,7 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
             let uploaded = upload.join().unwrap();
             assert!(
                 output.status.success(),
-                "{}\n{}",
+                "{shell} {expected}\n{}\n{}",
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
