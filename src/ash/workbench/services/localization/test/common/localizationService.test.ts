@@ -1020,6 +1020,9 @@ suite('Workbench localization', () => {
 
 	function createExtensions(): IExtensionManagementService {
 		return {
+			updates: async () => { throw new Error('This fixture does not exercise extension updates'); },
+			setUpdatePolicy: async () => { throw new Error('This fixture does not exercise extension updates'); },
+			checkForUpdates: async () => { throw new Error('This fixture does not exercise extension updates'); },
 			recommendationEnvironment: async () => ({ platform: 'other', executables: [] }),
 			searchPage: async () => {
 				throw new Error('Localization does not use customization paging');

@@ -10,6 +10,9 @@ use super::UpdateBroker;
 pub(crate) struct ExtensionsChangeWatcher {
     shutdown: Option<mpsc::Sender<()>>,
     thread: Option<JoinHandle<()>>,
+    update_shutdown: Option<mpsc::Sender<()>>,
+    update_thread: Option<JoinHandle<()>>,
+    update_cancelled: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl ExtensionsChangeWatcher {
@@ -81,6 +84,9 @@ impl ExtensionsChangeWatcher {
         Some(Self {
             shutdown: Some(shutdown),
             thread: Some(thread),
+            update_shutdown: None,
+            update_thread: None,
+            update_cancelled: None,
         })
     }
 
@@ -121,19 +127,56 @@ impl ExtensionsChangeWatcher {
                 return None;
             }
         };
+        // This watcher is profile-owned, so multiple directory servers share one scheduler.
+        let manager = Arc::clone(manager);
+        let (update_shutdown, update_receiver) = mpsc::channel();
+        let update_cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let cancelled = Arc::clone(&update_cancelled);
+        let update_thread = std::thread::Builder::new()
+            .name("ash-extension-updates".into())
+            .spawn(move || {
+                loop {
+                    match update_receiver.recv_timeout(Duration::from_secs(60)) {
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                    if let Err(error) = manager.check_for_updates_if_due(&cancelled) {
+                        log::error!("failed to check extension updates: {error}");
+                    }
+                }
+            });
+        let update_thread = match update_thread {
+            Ok(thread) => Some(thread),
+            Err(error) => {
+                log::error!("failed to start extension updater: {error}");
+                None
+            }
+        };
         Some(Self {
             shutdown: Some(shutdown),
             thread: Some(thread),
+            update_shutdown: Some(update_shutdown),
+            update_thread,
+            update_cancelled: Some(update_cancelled),
         })
     }
 }
 
 impl Drop for ExtensionsChangeWatcher {
     fn drop(&mut self) {
+        if let Some(cancelled) = self.update_cancelled.take() {
+            cancelled.store(true, std::sync::atomic::Ordering::Release);
+        }
+        if let Some(shutdown) = self.update_shutdown.take() {
+            let _ = shutdown.send(());
+        }
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(());
         }
         if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+        if let Some(thread) = self.update_thread.take() {
             let _ = thread.join();
         }
     }

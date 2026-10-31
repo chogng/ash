@@ -486,6 +486,54 @@ fn extension_packages_source_mutations_share_authenticated_client_authority_and_
         json!({}),
     );
     assert_eq!(listed["result"], paused["result"]);
+    let policy = call(
+        &server,
+        &mut owner,
+        20,
+        "extensions/updates/read",
+        json!({}),
+    );
+    assert_eq!(policy["result"]["canManage"], true);
+    assert_eq!(
+        policy["result"]["policy"],
+        json!({"autoCheckUpdates":true,"autoUpdate":false})
+    );
+    let denied = call(
+        &server,
+        &mut ordinary,
+        21,
+        "extensions/updates/setPolicy",
+        json!({"policy":{"autoCheckUpdates":false,"autoUpdate":false},"expectedRevision":0}),
+    );
+    assert!(denied.get("error").is_some());
+    let configured = call(
+        &server,
+        &mut owner,
+        22,
+        "extensions/updates/setPolicy",
+        json!({"policy":{"autoCheckUpdates":false,"autoUpdate":false},"expectedRevision":0}),
+    );
+    assert_eq!(configured["result"]["revision"], 1);
+    let conflict = call(
+        &server,
+        &mut owner,
+        23,
+        "extensions/updates/setPolicy",
+        json!({"policy":{"autoCheckUpdates":true,"autoUpdate":false},"expectedRevision":0}),
+    );
+    assert!(conflict.get("error").is_some());
+    let checked = call(
+        &server,
+        &mut owner,
+        24,
+        "extensions/updates/check",
+        json!({}),
+    );
+    assert!(checked["result"]["lastCheckedAt"].as_u64().is_some());
+    assert_eq!(
+        checked["result"]["policy"]["autoCheckUpdates"], false,
+        "manual checks do not change persisted policy"
+    );
     drop(server);
     drop(manager);
     let reopened = ash_core_plugins::ExtensionPackageManager::open(
@@ -495,6 +543,8 @@ fn extension_packages_source_mutations_share_authenticated_client_authority_and_
     .unwrap();
     assert_eq!(reopened.sources().unwrap().revision, 2);
     assert!(!reopened.sources().unwrap().sources[0].enabled);
+    assert!(!reopened.updates().unwrap().policy.auto_check_updates);
+    assert_eq!(reopened.updates().unwrap().revision, 1);
 }
 
 #[test]

@@ -249,6 +249,9 @@ function builtInProviders() {
 	return { revision: editorPolicyRevision, canChangeEnablement: !new URLSearchParams(location.search).has('readOnlyProviders'), providers: [...builtInProviderStates].map(([id, state]) => ({ id, ...state })) };
 }
 const api: IExtensionManagementApi = {
+	updates: async () => { throw new Error('This fixture does not exercise extension updates'); },
+	setUpdatePolicy: async () => { throw new Error('This fixture does not exercise extension updates'); },
+	checkForUpdates: async () => { throw new Error('This fixture does not exercise extension updates'); },
 	recommendationEnvironment: async () => ({ platform: 'other', executables: new URLSearchParams(location.search).has('productTips') ? ['python3'] : [] }),
 	searchPage: async params => {
 		requests.push(['searchPage', params]);

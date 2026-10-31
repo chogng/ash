@@ -6,6 +6,21 @@ import type { IExtensionManagementApi } from '../../../../../platform/extensionM
 import { AppServerExtensionManagementService } from '../../browser/appServerExtensionManagementService.js';
 import { ExtensionUiTarget } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 
+test('Extension update adapter reads authoritative snapshots and preserves policy revisions', async () => {
+	const requests: unknown[] = [];
+	const response = { revision: 7, policy: { autoCheckUpdates: true, autoUpdate: false }, canManage: true, checking: false, lastCheckedAt: null, available: [], updated: [], failures: [] };
+	const api: Pick<IExtensionManagementApi, 'updates' | 'setUpdatePolicy' | 'checkForUpdates'> = {
+		updates: async () => response,
+		setUpdatePolicy: async params => { requests.push(params); return { ...response, revision: 8, policy: params.policy }; },
+		checkForUpdates: async () => ({ ...response, lastCheckedAt: 1234 }),
+	};
+	using service = new AppServerExtensionManagementService(api as unknown as IExtensionManagementApi, { subscribe: () => ({ dispose() { } }) } as IServerEventApi);
+	assert.equal((await service.updates()).lastCheckedAt, undefined);
+	assert.deepEqual(await service.setUpdatePolicy({ autoCheckUpdates: false, autoUpdate: false }, 7), { ...response, revision: 8, policy: { autoCheckUpdates: false, autoUpdate: false }, lastCheckedAt: undefined });
+	assert.deepEqual(requests, [{ policy: { autoCheckUpdates: false, autoUpdate: false }, expectedRevision: 7 }]);
+	assert.equal((await service.checkForUpdates()).lastCheckedAt, 1234);
+});
+
 test('Extensions paged adapter preserves source, cursor and filters without keeping a second catalog', async () => {
 	const requests: unknown[] = [];
 	const summary = { id: 'example/review@ash', version: '1.0.0', packageType: 'skill', displayName: 'Review', description: 'Review changes.', uiTargets: ['agents' as const] };
@@ -31,6 +46,9 @@ test('Extensions browse snapshots survive view recreation and invalidate after l
 	const detailRequests: string[] = [];
 	const installed = { installationId: 'installed-1', package: packageReference, state: 'installed' as const, capabilities: [] };
 	const api = {
+		updates: async () => { throw new Error('This fixture does not exercise extension updates'); },
+		setUpdatePolicy: async () => { throw new Error('This fixture does not exercise extension updates'); },
+		checkForUpdates: async () => { throw new Error('This fixture does not exercise extension updates'); },
 		recommendationEnvironment: async () => ({ platform: 'other', executables: [] }),
 		searchPage: async () => { throw new Error('This test exercises the existing browse API'); },
 		builtInProviders: async () => ({ revision: 1, canChangeEnablement: true, providers: [] }),

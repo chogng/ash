@@ -495,6 +495,29 @@ export const SettingsNavigation = [
 				],
 			},
 			{
+				id: 'extensions',
+				label: localize({ bundle: 'ash.settings', key: 'categories.extensions.label' }, 'Extensions'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.extensions.description' }, 'Configure extension management and recommendations.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'extensions',
+						label: localize({ bundle: 'ash.settings', key: 'categories.extensions.label' }, 'Extensions'),
+						description: localize({ bundle: 'ash.settings', key: 'categories.extensions.description' }, 'Configure extension management and recommendations.'),
+						settings: ['extensions.*'],
+					},
+					{
+						id: 'customization-discovery',
+						label: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledTitle' }, 'Discover skills and connections'),
+						description: localize(
+							{ bundle: 'ash.extensions', key: 'marketplaceEnabledDescription' },
+							'Show catalog results in Skills and Connections within Extensions. Installed resources remain available.',
+						),
+						settings: ['chat.customizations.marketplace.enabled'],
+					},
+				],
+			},
+			{
 				id: 'terminal',
 				label: localize({ bundle: 'ash.settings', key: 'categories.terminal.label' }, 'Terminal'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.terminal.description' }, 'Configure terminal fonts, cursor appearance, contrast, and scrollback.'),
@@ -585,8 +608,6 @@ export const SettingsNavigation = [
 							'chat.disableAIFeatures',
 							'sessions.automations.notifyOnSuccess',
 							'task.allowAutomaticTasks',
-							'extensions.ignoreRecommendations',
-							'extensions.showRecommendationsOnlyOnDemand',
 						],
 					},
 				],
@@ -648,15 +669,7 @@ export const SettingsNavigation = [
 						description: localize('settings.chatEditing.description', 'Choose how Agent edits are reviewed.'),
 						settings: ['chat.editing.autoAcceptDelay', 'chat.canvases.enabled'],
 					},
-					{
-						id: 'customization-discovery',
-						label: localize({ bundle: 'ash.extensions', key: 'marketplaceEnabledTitle' }, 'Discover skills and connections'),
-						description: localize(
-							{ bundle: 'ash.extensions', key: 'marketplaceEnabledDescription' },
-							'Show catalog results in Skills and Connections within Extensions. Installed resources remain available.',
-						),
-						settings: ['chat.customizations.marketplace.enabled'],
-					},
+
 				],
 			},
 			{

@@ -3799,6 +3799,23 @@ impl AppServer {
             Some(ClientMethod::ExtensionsSources) => self
                 .extension_packages_processor()
                 .extension_sources(&request.params),
+            Some(ClientMethod::ExtensionsUpdates) => self
+                .extension_packages_processor()
+                .extension_updates(connection, &request.params),
+            Some(
+                ClientMethod::ExtensionsSetUpdatePolicy | ClientMethod::ExtensionsCheckUpdates,
+            ) => {
+                if !connection.allows_extension_source_configuration() {
+                    return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+                }
+                if client_method(&request.method) == Some(ClientMethod::ExtensionsSetUpdatePolicy) {
+                    self.extension_packages_processor()
+                        .extension_update_policy(connection, &request.params)
+                } else {
+                    self.extension_packages_processor()
+                        .extension_check_updates(connection, &request.params)
+                }
+            }
             Some(ClientMethod::ExtensionsAddSource | ClientMethod::ExtensionsSetSourceEnabled) => {
                 if !connection.allows_extension_source_configuration() {
                     return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));

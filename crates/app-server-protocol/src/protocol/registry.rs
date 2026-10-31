@@ -181,9 +181,17 @@ use crate::protocol::extension_host::ExtensionClientRequestParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsAddSourceParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsAvailableUpdateDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsSetSourceEnabledParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsSetUpdatePolicyParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsSourcesResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUpdatePolicyDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsUpdatesResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::{ExtensionRegistryKindDto, ExtensionsSourceDto};
 #[cfg(any(test, feature = "export"))]
@@ -4381,6 +4389,21 @@ client_methods! {
         response: ExtensionsSourcesResult,
         serialization: None,
     },
+    ExtensionsUpdates => "extensions/updates/read" {
+        params: EmptyParams,
+        response: ExtensionsUpdatesResult,
+        serialization: None,
+    },
+    ExtensionsSetUpdatePolicy => "extensions/updates/setPolicy" {
+        params: ExtensionsSetUpdatePolicyParams,
+        response: ExtensionsUpdatesResult,
+        serialization: GlobalExclusive,
+    },
+    ExtensionsCheckUpdates => "extensions/updates/check" {
+        params: EmptyParams,
+        response: ExtensionsUpdatesResult,
+        serialization: None,
+    },
     ExtensionsAddSource => "extensions/sources/add" {
         params: ExtensionsAddSourceParams,
         response: ExtensionsSourcesResult,
@@ -6448,6 +6471,10 @@ typescript_bindings! {
     ExtensionsSearchPageParams,
     ExtensionsSearchPageResult,
     ExtensionsSourcesResult,
+    ExtensionsUpdatesResult,
+    ExtensionsSetUpdatePolicyParams,
+    ExtensionsUpdatePolicyDto,
+    ExtensionsAvailableUpdateDto,
     ExtensionsSourceDto,
     ExtensionRegistryKindDto,
     ExtensionsAddSourceParams,

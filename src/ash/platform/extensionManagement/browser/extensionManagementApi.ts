@@ -5,11 +5,19 @@ import type { IExtensionManagementApi } from '../common/extensionManagementApi.j
 import { localize } from '../../../nls.js';
 
 export function createDisconnectedExtensionsApi(unavailable: UnavailableOperation): IExtensionManagementApi {
-	return { recommendationEnvironment: () => unavailable('extensionManagement.recommendationEnvironment'), searchPage: () => unavailable('extensionManagement.searchPage'), builtInProviders: () => unavailable('extensions.builtInProviders'), setBuiltInProviderEnablement: () => unavailable('extensions.setBuiltInProviderEnablement'), sources: () => unavailable('extensions.sources'), addSource: () => unavailable('extensions.addSource'), setSourceEnabled: () => unavailable('extensions.setSourceEnabled'), search: () => unavailable('extensionManagement.search'), get: () => unavailable('extensionManagement.get'), download: () => unavailable('extensionManagement.download'), install: () => unavailable('extensionManagement.install'), update: () => unavailable('extensionManagement.update'), uninstall: () => unavailable('extensionManagement.uninstall'), listInstalled: () => unavailable('extensionManagement.listInstalled'), editorExtensions: () => unavailable('extensionManagement.editorExtensions'), setEditorExtensionPolicy: () => unavailable('extensionManagement.setEditorExtensionPolicy'), acquireCapability: () => unavailable('extensionManagement.acquireCapability'), releaseCapability: () => unavailable('extensionManagement.releaseCapability'), openResource: () => unavailable('extensionManagement.openResource') };
+	return { updates: () => unavailable('extensions.updates'), setUpdatePolicy: () => unavailable('extensions.setUpdatePolicy'), checkForUpdates: () => unavailable('extensions.checkForUpdates'), recommendationEnvironment: () => unavailable('extensionManagement.recommendationEnvironment'), searchPage: () => unavailable('extensionManagement.searchPage'), builtInProviders: () => unavailable('extensions.builtInProviders'), setBuiltInProviderEnablement: () => unavailable('extensions.setBuiltInProviderEnablement'), sources: () => unavailable('extensions.sources'), addSource: () => unavailable('extensions.addSource'), setSourceEnabled: () => unavailable('extensions.setSourceEnabled'), search: () => unavailable('extensionManagement.search'), get: () => unavailable('extensionManagement.get'), download: () => unavailable('extensionManagement.download'), install: () => unavailable('extensionManagement.install'), update: () => unavailable('extensionManagement.update'), uninstall: () => unavailable('extensionManagement.uninstall'), listInstalled: () => unavailable('extensionManagement.listInstalled'), editorExtensions: () => unavailable('extensionManagement.editorExtensions'), setEditorExtensionPolicy: () => unavailable('extensionManagement.setEditorExtensionPolicy'), acquireCapability: () => unavailable('extensionManagement.acquireCapability'), releaseCapability: () => unavailable('extensionManagement.releaseCapability'), openResource: () => unavailable('extensionManagement.openResource') };
 }
 
 export function createAppServerExtensionManagementApi(connection: AppServerProtocolClient): IExtensionManagementApi {
+	const requireUpdates = (): void => {
+		if (connection.capabilities?.contracts.extensionUpdates?.version !== 1) {
+			throw new Error(localize({ bundle: 'ash.extensions', key: 'updatesUnsupported' }, 'This App Server does not support extension update settings. Update the App Server.'));
+		}
+	};
 	return {
+		updates: async () => { requireUpdates(); return appServerRequest(connection, 'extensions/updates/read', {}); },
+		setUpdatePolicy: async params => { requireUpdates(); return appServerRequest(connection, 'extensions/updates/setPolicy', params); },
+		checkForUpdates: async () => { requireUpdates(); return appServerRequest(connection, 'extensions/updates/check', {}); },
 		recommendationEnvironment: () => connection.capabilities?.contracts.extensionRecommendations?.version === 1
 			? appServerRequest(connection, 'extensions/recommendations/environment', {})
 			: Promise.resolve({ platform: 'other', executables: [] }),

@@ -199,6 +199,9 @@ const { SettingsSearchQuery } = await import('../../browser/settingsSearch.js');
 await import('../../browser/preferencesActions.js');
 await import('../../../../browser/actions/layoutActions.js');
 await import('../../../extensions/browser/extensions.contribution.js');
+await import('../../../chat/browser/aiCustomization/customizationMarketplace.contribution.js');
+await import('../../../../../platform/update/common/update.config.contribution.js');
+await import('../../../../../platform/meteredConnection/common/meteredConnection.config.contribution.js');
 await import('../../../canvases/electron-browser/canvases.contribution.js');
 const { createSettingsLayout, settingsRootNodes, SettingsCategories, SettingsLayout } = await import('../../browser/settingsLayout.js');
 
@@ -1971,6 +1974,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'explorer',
 			'search',
 			'source-control',
+			'extensions',
 			'terminal',
 			'voice-input',
 			'display-language',
@@ -2016,8 +2020,10 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'display-language');
 	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'interaction');
 	for (const key of ['extensions.ignoreRecommendations', 'extensions.showRecommendationsOnlyOnDemand']) {
-		assert.equal(findSettingCategory(layout, key), 'interaction');
+		assert.equal(findSettingCategory(layout, key), 'extensions');
 	}
+	assert.equal(findSettingCategory(layout, 'chat.customizations.marketplace.enabled'), 'extensions');
+	assert.ok([...features.children!].some(node => node.element.id === 'extensions'));
 	assert.equal(findSettingCategory(layout, 'workbench.externalUriOpeners'), 'browser');
 	assert.equal(defaults.get('workbench.externalUriOpeners').valueType, 'stringMap');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'interaction');
@@ -2055,6 +2061,8 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, 'window.restoreFullscreen'), 'startup');
 	assert.equal(findSettingCategory(layout, 'workbench.editor.restoreEditors'), 'startup');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+	assert.equal(chinese?.bundles['ash.settings']?.['categories.extensions.label'], '扩展');
+	assert.equal(chinese?.bundles['ash.settings']?.['categories.extensions.description'], '设置扩展管理和推荐行为。');
 	assert.equal(chinese?.bundles['ash.settings']?.['categories.startup.label'], '启动');
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
@@ -3326,6 +3334,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	);
 	for (const key of ['chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap']) {
 		assert.ok(root.querySelector(`[data-settings-item-id="${key}"]`), key);
+	}
+	await preferences.openSettings({ section: 'extensions' });
+	const extensionCategory = root.querySelector('[data-settings-category-id="extensions"]')!;
+	assert.equal(extensionCategory.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
+	assert.equal(root.querySelector('[data-settings-group-id="features"]')?.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'true');
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Extensions');
+	for (const key of ['extensions.ignoreRecommendations', 'extensions.showRecommendationsOnlyOnDemand']) {
+		assert.ok(root.querySelector(`[data-settings-item-id="${key}"] [role="switch"]`));
 	}
 	await preferences.openSettings({ section: 'github' });
 	assert.equal(root.querySelectorAll('[data-settings-group-id="extensions"]').length, 1);

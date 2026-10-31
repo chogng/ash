@@ -379,6 +379,8 @@
     "categories.search.description": "设置工作区搜索和内容搜索引擎。",
     "categories.source-control.label": "源代码管理",
     "categories.source-control.description": "设置源代码管理提供方和差异装饰。",
+    "categories.extensions.label": "扩展",
+    "categories.extensions.description": "设置扩展管理和推荐行为。",
     "categories.terminal.label": "终端",
     "categories.terminal.description": "设置终端字体、光标外观、对比度和回滚行数。",
     "categories.browser.label": "浏览器",

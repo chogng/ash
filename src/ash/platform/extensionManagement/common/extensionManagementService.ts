@@ -164,11 +164,30 @@ export interface AshExtensionSource {
 	readonly trustedRootJson: string;
 }
 
+export interface ExtensionUpdatePolicy {
+	readonly autoCheckUpdates: boolean;
+	readonly autoUpdate: boolean;
+}
+
+export interface ExtensionUpdatesSnapshot {
+	readonly revision: number;
+	readonly policy: ExtensionUpdatePolicy;
+	readonly canManage: boolean;
+	readonly checking: boolean;
+	readonly lastCheckedAt: number | undefined;
+	readonly available: readonly { readonly installationId: string; readonly current: ExtensionsPackageRef; readonly available: ExtensionsPackageRef; }[];
+	readonly updated: readonly ExtensionsPackageRef[];
+	readonly failures: readonly string[];
+}
+
 /** Frontend Extensions business capability, independent of distribution and package internals. */
 export interface IExtensionManagementService {
 	recommendationEnvironment(): Promise<ExtensionsRecommendationEnvironment>;
 	searchPage(query: string, options: ExtensionsSearchOptions & { readonly sourceId: string; readonly pageSize: number; readonly cursor?: string; }): Promise<ExtensionsSearchPage>;
 	readonly onDidChangeInstalled: Event<void>;
+	updates(): Promise<ExtensionUpdatesSnapshot>;
+	setUpdatePolicy(policy: ExtensionUpdatePolicy, expectedRevision: number): Promise<ExtensionUpdatesSnapshot>;
+	checkForUpdates(): Promise<ExtensionUpdatesSnapshot>;
 	sources(): Promise<ExtensionRegistrySources>;
 	addSource(source: AshExtensionSource, expectedRevision: number): Promise<ExtensionRegistrySources>;
 	setSourceEnabled(sourceId: string, enabled: boolean, expectedRevision: number): Promise<ExtensionRegistrySources>;

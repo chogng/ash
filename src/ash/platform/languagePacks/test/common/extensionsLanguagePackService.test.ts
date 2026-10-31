@@ -80,6 +80,9 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 	}));
 	return {
 		onDidChangeInstalled: Event.None,
+		updates: async () => { throw new Error('This fixture does not exercise extension updates'); },
+		setUpdatePolicy: async () => { throw new Error('This fixture does not exercise extension updates'); },
+		checkForUpdates: async () => { throw new Error('This fixture does not exercise extension updates'); },
 		recommendationEnvironment: async () => ({ platform: 'other', executables: [] }),
 		searchPage: async () => { throw new Error('Language packs do not use customization paging'); },
 		sources: async () => ({ revision: 0, sources: [] }),

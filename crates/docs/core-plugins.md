@@ -89,6 +89,14 @@ acquireCapability / releaseCapability / openResource
 这些方法服务 Plugin 安装与 capability 消费，不是独立的产品领域。`ArtifactHandle`、
 `CapabilityRef`、`ResourceRef` 和 lease 都是 opaque identity，不是路径或 URL。
 
+### 自动更新策略
+
+`ExtensionPackageManager` 在 profile 的 `extensions-manager/manager-state.json` 中保存更新策略和独立 revision。默认自动检查开启、自动安装关闭；开启自动安装必须同时开启检查。App Server 的 profile watcher 只创建一个定时任务，启动一分钟后开始检查，此后按小时检查；关闭 watcher 时停止调度和后续包操作。多个目录或窗口共用该策略与任务。
+
+检查只处理非产品托管的 registry 安装，从已配置的签名来源查找更高的稳定版本；同版本、降级和预发布版本不自动安装。暂停或不可用的来源按包报告失败，其他包继续检查。自动安装复用现有 `update` 和租约流程，不赋予新版本执行授权；内置产品包随 Ash 更新。检查结果只保存在运行时，重启后重新获取。
+
+产品通过 `extensions/updates/read`、`extensions/updates/setPolicy` 和 `extensions/updates/check` 读取、按 revision 修改和手动检查。修改策略与手动检查沿用扩展源配置的连接权限，读取结果携带 `canManage`；支持这些接口的后端声明 `extensionUpdates` contract v1。设置页在“功能 → 扩展”展示该状态，并复用扩展源管理和推荐通知恢复命令。
+
 ### 远端注册表接口
 
 `ExtensionSource` 由来源实现，`ExtensionSources` 负责注册、聚合发现和精确路由：

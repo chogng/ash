@@ -41,6 +41,189 @@ const MCP_DEFINITION: &[u8] = br#"{
 const MCP_EXECUTABLE: &[u8] = b"#!/bin/sh\n";
 
 #[test]
+fn extension_updates_skip_downgrades_and_prereleases_and_report_unavailable_sources() {
+    let root = tempfile::tempdir().unwrap();
+    let manager =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "demo@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    manager
+        .set_update_policy(
+            crate::ExtensionUpdatePolicy {
+                auto_check_updates: true,
+                auto_update: true,
+            },
+            0,
+        )
+        .unwrap();
+    drop(manager);
+    for latest in ["0.9.0", "1.0.0", "2.0.0-beta.1"] {
+        let manager = ExtensionPackageManager::open(
+            root.path(),
+            providers(Arc::new(VersionProvider(latest))),
+        )
+        .unwrap();
+        let checked = manager.check_for_updates().unwrap();
+        assert!(checked.available.is_empty());
+        assert!(checked.updated.is_empty());
+        assert!(checked.failures.is_empty());
+        assert_eq!(
+            manager.list_installed(ListInstalledRequest {}).unwrap(),
+            vec![installed.clone()]
+        );
+    }
+    let manager =
+        ExtensionPackageManager::open(root.path(), crate::ExtensionSources::new([]).unwrap())
+            .unwrap();
+    let checked = manager.check_for_updates().unwrap();
+    assert!(!checked.checking);
+    assert_eq!(checked.failures, vec!["demo@test"]);
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap(),
+        vec![installed]
+    );
+}
+
+#[test]
+fn scheduled_extension_updates_install_from_the_persisted_profile_policy() {
+    let root = tempfile::tempdir().unwrap();
+    let manager =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    manager
+        .install(InstallPackageRequest {
+            package_id: "demo@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    manager
+        .set_update_policy(
+            crate::ExtensionUpdatePolicy {
+                auto_check_updates: true,
+                auto_update: true,
+            },
+            0,
+        )
+        .unwrap();
+    drop(manager);
+    let manager =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    manager
+        .check_for_updates_if_due(&std::sync::atomic::AtomicBool::new(false))
+        .unwrap();
+    assert_eq!(manager.updates().unwrap().updated[0].version, "2.0.0");
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap()[0]
+            .package
+            .version,
+        "2.0.0"
+    );
+}
+
+#[test]
+fn extension_update_checks_preserve_installs_until_automatic_updates_are_enabled() {
+    let root = tempfile::tempdir().unwrap();
+    let manager =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "demo@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let checked = manager.check_for_updates().unwrap();
+    assert_eq!(checked.available.len(), 1);
+    assert_eq!(checked.available[0].current, installed.package);
+    assert_eq!(checked.available[0].available.version, "2.0.0");
+    assert!(checked.updated.is_empty());
+    assert_eq!(
+        manager.list_installed(ListInstalledRequest {}).unwrap(),
+        vec![installed.clone()]
+    );
+    manager
+        .set_update_policy(
+            crate::ExtensionUpdatePolicy {
+                auto_check_updates: true,
+                auto_update: true,
+            },
+            checked.revision,
+        )
+        .unwrap();
+    let updated = manager.check_for_updates().unwrap();
+    assert!(updated.available.is_empty());
+    assert!(updated.failures.is_empty());
+    assert_eq!(updated.updated[0].version, "2.0.0");
+    assert_eq!(
+        manager
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_ne!(
+        manager.list_installed(ListInstalledRequest {}).unwrap()[0].installation_id,
+        installed.installation_id
+    );
+    let reopened =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    assert!(reopened.updates().unwrap().policy.auto_update);
+    assert_eq!(reopened.updates().unwrap().revision, 1);
+}
+
+#[test]
+fn extension_update_policy_validates_revisions_and_scheduled_checks_obey_the_policy() {
+    let root = tempfile::tempdir().unwrap();
+    let manager =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    let disabled = crate::ExtensionUpdatePolicy {
+        auto_check_updates: false,
+        auto_update: false,
+    };
+    manager.set_update_policy(disabled.clone(), 0).unwrap();
+    manager
+        .check_for_updates_if_due(&std::sync::atomic::AtomicBool::new(false))
+        .unwrap();
+    assert_eq!(manager.updates().unwrap().last_checked_at, None);
+    assert!(
+        manager
+            .set_update_policy(crate::ExtensionUpdatePolicy::default(), 0)
+            .is_err()
+    );
+    assert!(
+        manager
+            .set_update_policy(
+                crate::ExtensionUpdatePolicy {
+                    auto_check_updates: false,
+                    auto_update: true
+                },
+                1
+            )
+            .is_err()
+    );
+    assert_eq!(manager.updates().unwrap().policy, disabled);
+    manager
+        .set_update_policy(crate::ExtensionUpdatePolicy::default(), 1)
+        .unwrap();
+    manager
+        .check_for_updates_if_due(&std::sync::atomic::AtomicBool::new(false))
+        .unwrap();
+    let checked = manager.updates().unwrap();
+    assert!(checked.last_checked_at.is_some());
+    let generation = manager.generation().unwrap();
+    manager
+        .check_for_updates_if_due(&std::sync::atomic::AtomicBool::new(false))
+        .unwrap();
+    assert_eq!(
+        manager.generation().unwrap(),
+        generation,
+        "scheduled checks are hourly, including empty catalogs"
+    );
+}
+
+#[test]
 fn local_manager_persists_the_full_installed_state() {
     let root = tempfile::tempdir().unwrap();
     let registry = Arc::new(FakeRegistry);

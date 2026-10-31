@@ -746,6 +746,62 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
         sources_result(manager.sources().map_err(extension_packages_error)?)
     }
 
+    pub(super) fn extension_updates(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        let manager = self
+            .plugins_manager
+            .as_ref()
+            .ok_or_else(|| extension_packages_error(ExtensionsClientError::unavailable()))?;
+        update_result(
+            manager.updates().map_err(extension_packages_error)?,
+            connection.allows_extension_source_configuration(),
+        )
+    }
+
+    pub(super) fn extension_update_policy(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::extension_packages::ExtensionsSetUpdatePolicyParams = decode(params)?;
+        let manager = self
+            .plugins_manager
+            .as_ref()
+            .ok_or_else(|| extension_packages_error(ExtensionsClientError::unavailable()))?;
+        let snapshot = manager
+            .set_update_policy(
+                ash_core_plugins::ExtensionUpdatePolicy {
+                    auto_check_updates: params.policy.auto_check_updates,
+                    auto_update: params.policy.auto_update,
+                },
+                params.expected_revision,
+            )
+            .map_err(extension_packages_error)?;
+        update_result(snapshot, connection.allows_extension_source_configuration())
+    }
+
+    pub(super) fn extension_check_updates(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        let manager = self
+            .plugins_manager
+            .as_ref()
+            .ok_or_else(|| extension_packages_error(ExtensionsClientError::unavailable()))?;
+        let snapshot = manager
+            .check_for_updates()
+            .map_err(extension_packages_error)?;
+        self.reconcile_extension_packages_consumers();
+        self.publish_committed_extension_packages_change();
+        update_result(snapshot, connection.allows_extension_source_configuration())
+    }
+
     pub(super) fn extension_source_add(&self, params: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::extension_packages::ExtensionsAddSourceParams = decode(params)?;
         let id = ash_utils_plugins::ExtensionSourceId::new(params.source_id)
@@ -784,6 +840,40 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
                 .map_err(extension_packages_error)?,
         )
     }
+}
+
+fn update_result(
+    snapshot: ash_core_plugins::ExtensionUpdatesSnapshot,
+    can_manage: bool,
+) -> Result<Value, RpcError> {
+    use ash_app_server_protocol::protocol::extension_packages::ExtensionsAvailableUpdateDto;
+    use ash_app_server_protocol::protocol::extension_packages::ExtensionsUpdatePolicyDto;
+    use ash_app_server_protocol::protocol::extension_packages::ExtensionsUpdatesResult;
+    result(&ExtensionsUpdatesResult {
+        revision: snapshot.revision,
+        policy: ExtensionsUpdatePolicyDto {
+            auto_check_updates: snapshot.policy.auto_check_updates,
+            auto_update: snapshot.policy.auto_update,
+        },
+        can_manage,
+        checking: snapshot.checking,
+        last_checked_at: snapshot.last_checked_at,
+        available: snapshot
+            .available
+            .into_iter()
+            .map(|update| ExtensionsAvailableUpdateDto {
+                installation_id: update.installation_id,
+                current: extension_packages_projection::package_ref(update.current),
+                available: extension_packages_projection::package_ref(update.available),
+            })
+            .collect(),
+        updated: snapshot
+            .updated
+            .into_iter()
+            .map(extension_packages_projection::package_ref)
+            .collect(),
+        failures: snapshot.failures,
+    })
 }
 
 fn sources_result(snapshot: ash_core_plugins::ExtensionSourcesSnapshot) -> Result<Value, RpcError> {
