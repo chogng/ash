@@ -74,10 +74,10 @@ export class WorkbenchTabsControl<T> extends Disposable {
 	private updatePresentation(): void {
 		const layout = this.configuration.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
 		const style = this.configuration.getValue<ModernUIEditorTabStyle>(WorkbenchConfiguration.modernUIEditorTabStyle);
-		const inset = layout === 'modern' && style !== 'standard';
-		this.container.classList.toggle('ash-standard-editor-tabs', style === 'standard');
+		const inset = layout === 'modern' && style === 'pill';
+		this.container.classList.toggle('ash-flush-editor-tabs', !inset);
 		this.tabList.setPresentation(inset ? 'inset' : 'flush');
-		this.connected = inset && style === 'connected' && this.touchesContent;
+		this.connected = style === 'connected' && this.touchesContent;
 		this.container.classList.toggle(CONNECTED_EDITOR_TABS_CLASS, this.connected);
 		this.layout();
 	}

@@ -87,6 +87,8 @@ Git 状态和仓库操作仍归 Rust 后端。`views.css` 负责欢迎内容的�
 - 网格间距、Sash 命中区域和 TabList 展示能力仍由各自组件实现，Modern UI 只选择这些公开能力。
 - 其他 contribution 不得借这个例外修改 Workbench Part；新增全局外观方案必须拥有独立根 class 和独立 media 目录。
 
+设置页在 Workbench → Appearance 中用独立的“工作台样式”卡片选择 Modern / Flat；Editor → Tabs and groups 保留编辑器标签样式。标签样式仅提供 Connected / Pill，默认 Connected，采用满高且与内容区连接的外观；Pill 仅在 Modern 下生效，标签设置的说明通过设置引用跳转到“工作台样式”卡片。设置引用、导航与焦点由 Preferences 拥有，不由 Modern UI contribution 创建页面控件。
+
 ## 列表、树与滚动条
 
 本节定义统一后的目标规范。公共实现及各展示变体完成接入、通过下述验收前，不能把

@@ -38,6 +38,7 @@ import { createBareFontInfoFromRawSettings } from '../../../../editor/common/con
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
+import { Link } from '../../../../platform/opener/browser/link.js';
 
 interface SettingsSearchWidgetOptions {
 	readonly ariaControls: string;
@@ -122,12 +123,14 @@ export interface SettingWidgetOptions {
 	readonly configurationTarget?: ConfigurationTarget;
 	readonly onStatus: (message: string, isError: boolean) => void;
 	readonly onOpenSettings?: (key: string) => Promise<void>;
+	readonly onRevealSetting?: (key: string) => void;
 }
 
 export interface SettingWidget extends IDisposable {
 	readonly domNode: HTMLElement;
 
 	update(setting: ISetting): void;
+	focus(): void;
 }
 
 interface SettingActionsOptions {
@@ -248,11 +251,13 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 
 	private readonly actions: SettingActions;
 	private readonly descriptionDomNode: HTMLSpanElement;
+	private readonly descriptionLinks = this._register(new DisposableStore());
+	private renderedDescription: string | undefined;
 	private readonly indicators: SettingsTreeIndicatorsLabel;
 	private readonly titleDomNode: HTMLSpanElement;
 	private pendingFocus: HTMLElement | undefined;
 
-	protected constructor(container: HTMLElement, descriptor: TSetting, binding: SettingValueBinding<TValue>, private readonly options: SettingWidgetOptions, private readonly configuration: IConfigurationService, contextViewProvider: IContextViewProvider, instantiationService: IInstantiationService, kind?: 'select' | 'toggle') {
+	protected constructor(container: HTMLElement, descriptor: TSetting, binding: SettingValueBinding<TValue>, private readonly options: SettingWidgetOptions, private readonly configuration: IConfigurationService, contextViewProvider: IContextViewProvider, private readonly instantiationService: IInstantiationService, kind?: 'select' | 'toggle') {
 		super();
 		const document = container.ownerDocument;
 		this.descriptor = descriptor;
@@ -314,6 +319,11 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.updateCopy(this.descriptor);
 		this.actions.updateLabel(this.descriptor.title);
 		this.updateControl(this.descriptor);
+	}
+
+	public focus(): void {
+		this.domNode.tabIndex = -1;
+		this.domNode.focus();
 	}
 
 	protected bindState(renderState: (state: SettingState<TValue>) => void): void {
@@ -389,7 +399,29 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	private updateCopy(descriptor: TSetting): void {
 		this.titleDomNode.textContent = descriptor.title;
 		this.domNode.setAttribute('aria-label', descriptor.title);
-		this.descriptionDomNode.textContent = descriptor.description;
+		if (this.renderedDescription !== descriptor.description) {
+			this.descriptionLinks.clear();
+			this.descriptionDomNode.replaceChildren();
+			const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+			let offset = 0;
+			// Setting references use the registry's localized title and stay inside Settings.
+			for (const reference of descriptor.description.matchAll(/`#([^#\s`]+)#`/g)) {
+				this.descriptionDomNode.append(descriptor.description.slice(offset, reference.index));
+				const key = reference[1];
+				const target = registry.getConfiguration(key);
+				const label = target?.setting?.title ?? key;
+				if (target && this.options.onRevealSetting) {
+					this.descriptionLinks.add(this.instantiationService.createInstance(Link, this.descriptionDomNode, { label, href: `#${key}` }, {
+						opener: () => this.options.onRevealSetting!(key),
+					}));
+				} else {
+					this.descriptionDomNode.append(label);
+				}
+				offset = reference.index + reference[0].length;
+			}
+			this.descriptionDomNode.append(descriptor.description.slice(offset));
+			this.renderedDescription = descriptor.description;
+		}
 		this.indicators.updateMetadata(descriptor.tags);
 		this.updateIndicatorDescriptions();
 	}
@@ -610,6 +642,10 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 		this.domNode.append(this.copyDomNode, this.select.element);
 		this.bindState(state => this.renderState(state));
 		this._register(this.select.onDidSelect(({ value }) => void this.handleSelection(value)));
+	}
+
+	public override focus(): void {
+		this.select.focus();
 	}
 
 	protected updateControl(descriptor: ISelectSetting): void {

@@ -1916,6 +1916,9 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(defaults.get('workbench.tips.enabled').valueType, 'boolean');
 	assert.equal(configurationRegistry.getConfiguration('workbench.tips.enabled')?.defaultValue, true);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'appearance');
+	const styleCard = layout.find(category => category.id === 'appearance')?.groups.find(group => group.id === 'style');
+	assert.equal(styleCard?.title, 'Workbench Style');
+	assert.deepEqual(styleCard?.settings.map(setting => setting.id), [WorkbenchConfiguration.layoutStyle]);
 	assert.equal(findSettingCategory(layout, 'chat.viewSessions.orientation'), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.startupWindow'), 'startup');
@@ -1967,10 +1970,10 @@ test('settingsLayout is the single projection from registered settings to catego
 	const tabStyleSetting = defaults.get(WorkbenchConfiguration.modernUIEditorTabStyle);
 	assert.equal(tabStyleSetting.valueType, 'select');
 	if (tabStyleSetting.valueType === 'select') {
-		assert.equal(tabStyleSetting.configuration.defaultValue, 'standard');
+		assert.equal(tabStyleSetting.configuration.defaultValue, 'connected');
 		assert.deepEqual(
 			tabStyleSetting.options.map(option => option.value),
-			['standard', 'connected', 'pill'],
+			['connected', 'pill'],
 		);
 	}
 	assert.equal(findSettingCategory(layout, 'breadcrumbs.filePath'), 'editor-display');
@@ -2070,6 +2073,7 @@ test('feature settings navigation and groups capture the language initialized be
 		assert.equal(style.title, '工作台样式');
 		assert.equal(style.description, '选择采用圆角区域的 Modern 样式或区域贴边的 Flat 样式。更改会立即生效。');
 		assert.equal(findSettingCategory(layout.createSettingsLayout(new DefaultSettings().all), WorkbenchConfiguration.layoutStyle), 'appearance');
+		assert.equal(layout.SettingsCategories.find(category => category.id === 'appearance')?.groups.find(group => group.id === 'style')?.label, '工作台样式');
 		const category = layout.SettingsCategories.find(category => category.id === 'terminal');
 		assert.ok(category);
 		assert.equal(category.label, '终端');
@@ -3756,6 +3760,21 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(search.value, '');
 	assert.ok(root.querySelectorAll('.ash-settings-content-tree [data-settings-item-id]').length > 1);
 	const commands = editorServices.get(ICommandService);
+	await preferences.openSettings({ query: `@id:${WorkbenchConfiguration.modernUIEditorTabStyle}` });
+	const styleBeforeNavigation = configuration.getValue(WorkbenchConfiguration.layoutStyle);
+	const tabStyleRow = root.querySelector<HTMLElement>(`[data-settings-item-id="${WorkbenchConfiguration.modernUIEditorTabStyle}"]`)!;
+	assert.match(tabStyleRow.textContent ?? '', /Pill tabs only take effect when Workbench Style is Modern/);
+	const styleLink = tabStyleRow.querySelector<HTMLElement>('.ash-link')!;
+	assert.equal(styleLink.textContent, 'Workbench Style');
+	styleLink.focus();
+	styleLink.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter' }));
+	assert.equal(search.value, '', 'setting navigation clears the source filter');
+	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'appearance');
+	const styleCard = root.querySelector<HTMLElement>('[data-settings-tree-group-id="appearance.group.style"]')!;
+	assert.equal(styleCard.querySelector('.ash-settings-tree-group-title')?.textContent, 'Workbench Style');
+	assert.deepEqual([...styleCard.querySelectorAll<HTMLElement>('[data-settings-item-id]')].map(row => row.dataset.settingsItemId), [WorkbenchConfiguration.layoutStyle]);
+	assert.equal(ownerDocument.activeElement, styleCard.querySelector('[role="combobox"]'), 'setting navigation focuses the destination control');
+	assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), styleBeforeNavigation, 'navigation leaves the style choice to the user');
 	await commands.executeCommand('workbench.action.configureEditor');
 	assert.equal(search.value, 'workbench.editor');
 	assert.equal(ownerDocument.activeElement, search);
@@ -4238,8 +4257,57 @@ function createSettingWidget(
 		hideContextMenu() { },
 	});
 	services.registerInstance(IHoverService, resources.add(new HoverService(options.configurationService, options.contextViewProvider, services.get(IContextMenuService))));
-	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings }, services);
+	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
+	return instantiateSettingWidget(container, setting, { onStatus: options.onStatus, onOpenSettings: options.onOpenSettings, onRevealSetting: options.onRevealSetting }, services);
 }
+
+test('Chinese editor tab styles link to Workbench Style and retain keyboard focus across metadata updates', () => {
+	using resources = new DisposableStore();
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	resources.add(toDisposable(resetNlsResolver));
+	const root = h(browserEnvironment.window.document, 'div');
+	browserEnvironment.window.document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	const reveals: string[] = [];
+	const descriptor = new DefaultSettings().get(WorkbenchConfiguration.modernUIEditorTabStyle);
+	const widget = resources.add(createSettingWidget(resources, root, descriptor, {
+		configurationService: resources.add(new WorkspaceService()),
+		clipboardService: {
+			triggerPaste() { },
+			read: async () => [],
+			readText: async () => '',
+			writeText: async () => { },
+			readFindText: async () => '',
+			writeFindText: async () => { },
+			readImage: async () => new Uint8Array(),
+			readResources: async () => ({ resources: [], operation: 'copy' }),
+			writeResources: async () => { },
+			hasResources: async () => false,
+		},
+		contextViewProvider: resources.add(new BrowserContextViewService(root)),
+		contextMenuProvider: { showContextMenu() { } },
+		onStatus() { },
+		onRevealSetting: key => reveals.push(key),
+	}));
+	root.append(widget.domNode);
+	assert.match(widget.domNode.textContent ?? '', /独立圆角标签仅在工作台样式为 Modern 时生效/);
+	assert.doesNotMatch(widget.domNode.textContent ?? '', /`#|#`/);
+	const link = widget.domNode.querySelector<HTMLElement>('.ash-link')!;
+	assert.equal(link.textContent, '工作台样式');
+	assert.equal(link.tabIndex, 0);
+	link.focus();
+	widget.update(descriptor);
+	assert.equal(widget.domNode.querySelector('.ash-link'), link);
+	assert.equal(root.ownerDocument.activeElement, link);
+	for (const key of ['Enter', ' ']) {
+		link.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+	}
+	assert.deepEqual(reveals, [WorkbenchConfiguration.layoutStyle, WorkbenchConfiguration.layoutStyle]);
+	widget.dispose();
+	link.click();
+	assert.equal(reveals.length, 2, 'disposing the widget releases its link listeners');
+});
 
 test('Settings widgets require their scoped clipboard registration and clean up when creation fails', async () => {
 	using resources = new DisposableStore();

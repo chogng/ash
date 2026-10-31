@@ -14,8 +14,8 @@ test('editor tab style settings preserve open editors and survive reload', async
 	const group = workbench.editors.groupAt(0);
 	const first = group.tabs.filter({ hasText: 'Untitled-1' });
 	const id = await first.getAttribute('id');
-	await expect(group.title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(/ash-standard-editor-tabs/u);
-	for (const [option, tabListClass] of [['Pill', 'inset'], ['VS Code Standard', 'flush']] as const) {
+	await expect(group.title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(/ash-flush-editor-tabs/u);
+	for (const [option, tabListClass] of [['Pill', 'inset'], ['Connected', 'flush']] as const) {
 		await workbench.settingsEditor.openUserSettingsUI();
 		await workbench.settingsEditor.selectEditorCategory('editor-opening');
 		const settings = page.locator('.ash-settings-editor');
@@ -30,12 +30,12 @@ test('editor tab style settings preserve open editors and survive reload', async
 	}
 	const restored = await reloadWorkbench();
 	await restored.workbench.page.keyboard.press('ControlOrMeta+N');
-	await expect(restored.workbench.editors.groupAt(0).title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(/ash-standard-editor-tabs/u);
+	await expect(restored.workbench.editors.groupAt(0).title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(/ash-flush-editor-tabs/u);
 	await restored.workbench.settingsEditor.openUserSettingsUI();
 	await restored.workbench.settingsEditor.selectEditorCategory('editor-opening');
 	const settings = restored.workbench.page.locator('.ash-settings-editor');
 	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
-	await expect(settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox')).toContainText('VS Code Standard');
+	await expect(settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox')).toContainText('Connected');
 });
 
 test('editor tab width settings resize existing tabs and persist after reload', async ({ workbench, reloadWorkbench }) => {
@@ -133,7 +133,7 @@ test('editor pill style includes the action in tab width and survives reload', {
 		};
 	});
 	await expect(tab).toBeVisible();
-	let initialWidth: number | undefined;
+	const styleWidths = new Map<string, number>();
 	for (const option of ['Pill', 'Connected', 'Pill']) {
 		await workbench.settingsEditor.openUserSettingsUI();
 		await workbench.settingsEditor.selectEditorCategory('editor-opening');
@@ -147,10 +147,11 @@ test('editor pill style includes the action in tab width and survives reload', {
 		await expect(group.title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(option === 'Connected' ? /ash-connected-editor-tabs/u : /^(?!.*ash-connected-editor-tabs)/u);
 		await expect(tab).toHaveAttribute('id', id!);
 		const bounds = await geometry();
-		initialWidth ??= bounds.width;
 		await expectTabActionCentered(item);
-		expect(bounds).toMatchObject({ width: initialWidth, actionWidth: 22, labelOverlay: 'none', textOverflow: 'ellipsis' });
-		expect(bounds.rightInset).toBeCloseTo(2, 2);
+		expect(bounds).toMatchObject({ width: styleWidths.get(option) ?? bounds.width, actionWidth: 22, labelOverlay: 'none', textOverflow: 'ellipsis' });
+		styleWidths.set(option, bounds.width);
+		// Connected includes its separator stroke in addition to the action padding.
+		expect(bounds.rightInset).toBeCloseTo(option === 'Connected' ? 5 : 2, 2);
 		expect(bounds.labelRight).toBeLessThanOrEqual(bounds.actionLeft);
 		expect(bounds.bottomRadius).toBe(option === 'Connected' ? '0px' : bounds.topRadius);
 	}
@@ -161,12 +162,12 @@ test('editor pill style includes the action in tab width and survives reload', {
 		await picker.press('Enter');
 		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
 		await close.hover();
-		expect((await geometry()).width).toBe(initialWidth);
+		expect((await geometry()).width).toBe(styleWidths.get('Pill'));
 		await expectTabActionCentered(item);
 		await tab.focus();
 		await tab.press('Tab');
 		await expect(close).toBeFocused();
-		expect((await geometry()).width).toBe(initialWidth);
+		expect((await geometry()).width).toBe(styleWidths.get('Pill'));
 		await expectTabActionCentered(item);
 	}
 	await page.keyboard.press('ControlOrMeta+N');

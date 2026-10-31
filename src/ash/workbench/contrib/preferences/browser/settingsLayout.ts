@@ -122,8 +122,8 @@ export const SettingsNavigation = [
 				groups: [
 					{
 						id: 'style',
-						label: localize('settings.workbench.style.label', 'Style'),
-						description: localize('settings.workbench.style.description', 'Choose the visual style of Workbench regions.'),
+						label: localize('settings.workbench.style.label', 'Workbench Style'),
+						description: localize('settings.workbench.style.description', 'Choose the appearance of Workbench regions, borders, spacing, and lists.'),
 						settings: ['workbench.layoutStyle'],
 					},
 					{
