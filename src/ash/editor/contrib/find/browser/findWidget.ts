@@ -108,6 +108,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	private readonly replaceInput: HTMLInputElement;
 	private readonly findControl: ContextScopedFindInput;
 	private readonly replaceControl: ContextScopedReplaceInput;
+	private readonly findField: HTMLDivElement;
 	private readonly resultLabel: HTMLSpanElement;
 	private readonly replaceRow: HTMLDivElement;
 	private readonly replaceToggle: SimpleButton;
@@ -156,15 +157,18 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 
 		const findRow = h(ownerDocument, 'div');
 		findRow.className = 'stanza-editor-find-row';
+		this.findField = h(ownerDocument, 'div');
+		this.findField.className = 'stanza-editor-find-field';
 		this.replaceToggle = this.button(
 			ownerDocument,
 			localize('label.toggleReplace', 'Toggle replace'),
-			'›',
+			'',
 			() => this.state.change({ isReplaceRevealed: !this.state.isReplaceRevealed }, false),
+			Lxicon.chevronRight,
 		);
 		this.replaceToggle.domNode.classList.add('stanza-editor-find-replace-toggle');
 		const findLabel = localize('label.find', 'Find');
-		this.findControl = this._register(instantiationService.createInstance(ContextScopedFindInput<false>, findRow, {
+		this.findControl = this._register(instantiationService.createInstance(ContextScopedFindInput<false>, this.findField, {
 			label: findLabel,
 			history: searchHistory,
 			showHistoryHint: () => showHistoryKeybindingHint(keybindingService, contextKeys.getContext(this.findInput)),
@@ -181,10 +185,10 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		this.scopeButton = this.toggle(ownerDocument, localize('label.findInSelection', 'Find in selection'), '', () => this.controller.toggleSearchScope(), findSelectionIcon);
 		this.previousButton = this.button(ownerDocument, localize('label.previousMatch', 'Previous match'), '', () => this.controller.moveToPrevMatch(), findPreviousMatchIcon);
 		this.nextButton = this.button(ownerDocument, localize('label.nextMatch', 'Next match'), '', () => this.controller.moveToNextMatch(), findNextMatchIcon);
-		const close = this.button(ownerDocument, localize('label.closeFind', 'Close find'), '×', () => this.controller.closeFindWidget());
+		const close = this.button(ownerDocument, localize('label.closeFind', 'Close find'), '', () => this.controller.closeFindWidget(), Lxicon.close);
+		this.findField.append(this.matchCaseButton.domNode, this.wholeWordButton.domNode, this.regexButton.domNode);
 		findRow.append(
-			this.replaceToggle.domNode, this.findControl.domNode, this.resultLabel,
-			this.matchCaseButton.domNode, this.wholeWordButton.domNode, this.regexButton.domNode,
+			this.replaceToggle.domNode, this.findField, this.resultLabel,
 			this.scopeButton.domNode, this.previousButton.domNode, this.nextButton.domNode, close.domNode,
 		);
 
@@ -194,7 +198,9 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		const spacer = h(ownerDocument, 'span');
 		spacer.className = 'stanza-editor-replace-spacer';
 		const replaceLabel = localize('label.replace', 'Replace');
-		this.replaceControl = this._register(instantiationService.createInstance(ContextScopedReplaceInput<false>, this.replaceRow, {
+		const replaceField = h(ownerDocument, 'div');
+		replaceField.className = 'stanza-editor-find-field';
+		this.replaceControl = this._register(instantiationService.createInstance(ContextScopedReplaceInput<false>, replaceField, {
 			label: replaceLabel,
 			history: replaceHistory,
 			showHistoryHint: () => showHistoryKeybindingHint(keybindingService, contextKeys.getContext(this.replaceInput)),
@@ -208,13 +214,16 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		);
 		this.replaceButton = this.button(
 			ownerDocument, localize('label.replaceOne', 'Replace current match'),
-			localize('label.replaceButton', 'Replace'), () => this.controller.replace(), findReplaceIcon,
+			'', () => this.controller.replace(), findReplaceIcon,
 		);
 		this.replaceAllButton = this.button(
 			ownerDocument, localize('label.replaceAll', 'Replace all matches'),
-			localize('label.replaceAllButton', 'All'), () => this.controller.replaceAll(), findReplaceAllIcon,
+			'', () => this.controller.replaceAll(), findReplaceAllIcon,
 		);
-		this.replaceRow.append(spacer, this.replaceControl.domNode, this.preserveCaseButton.domNode, this.replaceButton.domNode, this.replaceAllButton.domNode);
+		replaceField.append(this.preserveCaseButton.domNode);
+		this.replaceButton.domNode.classList.add('stanza-editor-replace-one');
+		this.replaceAllButton.domNode.classList.add('stanza-editor-replace-all');
+		this.replaceRow.append(spacer, replaceField, this.replaceButton.domNode, this.replaceAllButton.domNode);
 		this.root.append(findRow, this.replaceRow);
 		this.resizeSash = this._register(new Sash(this.root, this, { orientation: Orientation.VERTICAL }));
 		this.resizeSash.element.setAttribute('aria-label', localize('label.resizeFindWidget', 'Resize find widget'));
@@ -321,7 +330,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		this.replaceButton.setEnabled(canReplace);
 		this.replaceAllButton.setEnabled(canReplace);
 		this.replaceToggle.setExpanded(this.state.isReplaceRevealed);
-		this.replaceToggle.domNode.textContent = this.state.isReplaceRevealed ? '⌄' : '›';
+		this.replaceToggle.domNode.classList.toggle('expanded', this.state.isReplaceRevealed);
 		this.root.hidden = !this.state.isRevealed;
 		this.root.classList.toggle('visible', this.state.isRevealed);
 		this.updateViewZone();
@@ -335,7 +344,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 	}
 	private updateResult(): void {
 		const error = this.model.error;
-		this.findInput.classList.toggle('invalid', error !== null);
+		this.findField.classList.toggle('invalid', error !== null);
 		if (error) {
 			this.findInput.setAttribute('aria-invalid', 'true');
 			this.findInput.title = error.message;
@@ -352,6 +361,7 @@ export class FindWidget extends Disposable implements IOverlayWidget {
 		const minimumWidth = Math.min(FIND_WIDGET_INITIAL_WIDTH, maximumWidth);
 		this.displayedWidth = Math.min(maximumWidth, Math.max(minimumWidth, this.requestedWidth));
 		this.root.style.width = `${this.displayedWidth}px`;
+		this.root.classList.toggle('compact', this.displayedWidth < 400);
 		this.resizeSash.layout();
 		if (maximumWidth <= minimumWidth) {
 			this.resizeSash.state = SashState.Disabled;

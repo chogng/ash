@@ -332,7 +332,7 @@ interface StandaloneHarness {
 	runStandaloneCommand(value: string): Promise<string>;
 	readStandaloneCommands(): { readonly calls: string[]; readonly registered: boolean; };
 	releaseStandaloneCommands(): void;
-	prepareInputHistory(): void;
+	prepareInputHistory(input: 'Find' | 'Replace'): void;
 	runInputHistoryCommand(command: 'undo' | 'redo' | 'default:undo' | 'default:redo'): Promise<string[]>;
 	runSelectAllCommand(): Promise<{ selections: string[]; inputSelection: string; }>;
 	runFocusRouting(): Promise<{
@@ -2147,13 +2147,14 @@ window.ashStandaloneIntegration = {
 			outside.remove();
 		}
 	},
-	prepareInputHistory: () => {
+	prepareInputHistory: input => {
 		callerEditor.setValue('alpha');
 		ownedEditor.setValue('bravo');
 		callerEditor.focus();
 		callerEditor.executeEdits('test', [{ range: new stanza.Range(1, 6, 1, 6), text: '!' }]);
 		callerEditor.pushUndoStop();
-		callerEditor.updateOptions({ readOnly: true });
+		// Replacement controls are only available in writable editors.
+		callerEditor.updateOptions({ readOnly: input === 'Find' });
 		openFindReplace();
 	},
 	runInputHistoryCommand: async id => {
