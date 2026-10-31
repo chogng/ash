@@ -124,6 +124,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 	private deleting = false;
 	private credentialStorageAvailable = true;
 	private readonly removeProvider: Button;
+	private readonly modelConfiguration: HTMLDetailsElement;
 
 	constructor(document: Document, provider: CustomModelProvider, configured: boolean, private readonly isNew: boolean,
 		@IContextViewService contextView: IContextViewService,
@@ -259,7 +260,13 @@ export class ModelProviderSettingsRenderer extends Disposable {
 		this.feedback = h(document, 'p');
 		this.feedback.className = 'ash-chat-models-note';
 		this.feedback.setAttribute('role', 'status');
-		this.domNode.append(toolbar, table, this.empty, this.editor, this.feedback);
+		this.modelConfiguration = h(document, 'details');
+		this.modelConfiguration.className = 'ash-models-custom-declarations';
+		this.modelConfiguration.open = this.isNew;
+		const declarations = h(document, 'summary');
+		declarations.textContent = localize('models.provider.declarations', 'Custom model declarations');
+		this.modelConfiguration.append(declarations, toolbar, table, this.empty, this.editor);
+		this.domNode.append(this.modelConfiguration, this.feedback);
 		this._register(this.add.onDidClick(() => this.openEditor()));
 		this._register(this.cancel.onDidClick(() => this.closeEditor()));
 		this._register(this.largeContext.onDidChange(() => {
@@ -353,6 +360,7 @@ export class ModelProviderSettingsRenderer extends Disposable {
 	}
 
 	private openEditor(model?: ProviderModelItem): void {
+		this.modelConfiguration.open = true;
 		this.editing = !!model;
 		this.modelId.value = model?.id ?? '';
 		this.upstreamModel.value = model?.upstreamModel ?? '';

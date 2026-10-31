@@ -70,6 +70,8 @@ export interface ModelCatalogEntry {
 	readonly discovered?: boolean;
 	readonly retirement?: ModelRetirement;
 	readonly contextWindow?: number | null;
+	/** Usable input capacity after output and safety reservations, independent of compaction. */
+	readonly usableContextWindow?: number | null;
 	readonly defaultContextWindow?: number | null;
 	readonly maximumContextWindow?: number | null;
 	readonly accelerationOptions?: readonly ModelAccelerationOption[];

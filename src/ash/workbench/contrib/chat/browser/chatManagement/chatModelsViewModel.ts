@@ -10,7 +10,7 @@ export const MODEL_ENTRY_TEMPLATE_ID = 'model.entry.template';
 export const VENDOR_ENTRY_TEMPLATE_ID = 'vendor.entry.template';
 
 /** Only advertise capabilities backed by the current catalog contract. */
-export const SEARCH_SUGGESTIONS = { FILTER_TYPES: ['@provider:', '@capability:'], CAPABILITIES: ['@capability:vision', '@capability:tools', '@capability:agent'] };
+export const SEARCH_SUGGESTIONS = { CAPABILITIES: ['@capability:vision', '@capability:tools', '@capability:agent'] };
 
 export interface ILanguageModelProvider {
 	readonly vendor: { readonly vendor: string; readonly displayName: string; readonly connection?: string; readonly catalog?: ModelCatalogStatus; readonly configured?: boolean; };
@@ -37,8 +37,6 @@ export interface ILanguageModelProviderEntry {
 	readonly id: string;
 	readonly label: string;
 	readonly templateId: string;
-	readonly collapsed: boolean;
-	readonly hidden: boolean;
 	readonly vendorEntry: ILanguageModelProvider;
 }
 
@@ -69,7 +67,6 @@ export class ChatModelsViewModel extends Disposable {
 	private catalog: readonly ModelCatalogEntry[] = [];
 	private vendors: ILanguageModelProvider['vendor'][] = [];
 	private entries: IViewModelEntry[] = [];
-	private readonly collapsed = new Set<string>();
 	private query = '';
 	private dirty = true;
 	private generation = 0;
@@ -93,7 +90,6 @@ export class ChatModelsViewModel extends Disposable {
 
 	public filter(searchValue: string): readonly IViewModelEntry[] {
 		if (this.query !== searchValue || this.dirty) {
-			if (this.query !== searchValue) { this.collapsed.clear(); }
 			this.query = searchValue;
 			this.rebuild();
 		}
@@ -133,43 +129,13 @@ export class ChatModelsViewModel extends Disposable {
 		return [...new Set([...this.catalog.map(entry => entry.model.provider), ...this.vendors.filter(vendor => vendor.catalog || vendor.configured).map(vendor => vendor.vendor)])].map(id => this.provider(id));
 	}
 
-	public getModelsForGroup(group: ILanguageModelProviderEntry): ILanguageModel[] {
-		return this.catalog.filter(entry => entry.model.provider === group.vendorEntry.group.vendor).map(entry => this.model(entry));
-	}
-
-	public toggleModelHidden(entry: ILanguageModelEntry): Promise<void> { return this.setModelsHidden([entry], !entry.model.hidden); }
-
-	public async toggleGroupHidden(entry: ILanguageModelProviderEntry): Promise<void> {
-		const models = this.getModelsForGroup(entry);
-		await this.setModelsHidden(models.map(model => this.entry(model)), !models.every(model => model.hidden));
-	}
-
 	/** Persistence is asynchronous in Ash; errors reach the invoking control instead of disappearing. */
-	public async setModelsHidden(entries: readonly ILanguageModelEntry[], hidden: boolean): Promise<void> {
+	public async toggleModelHidden(entry: ILanguageModelEntry): Promise<void> {
 		try {
-			for (const entry of entries) { await this.models.setModelVisible(entry.model.model, !hidden); }
+			await this.models.setModelVisible(entry.model.model, entry.model.hidden);
 		} finally {
 			if (!this.isDisposed) { this.rebuild(); }
 		}
-	}
-
-	public toggleCollapsed(entry: IViewModelEntry): void {
-		if (!isLanguageModelProviderEntry(entry)) { return; }
-		if (this.collapsed.has(entry.id)) { this.collapsed.delete(entry.id); }
-		else { this.collapsed.add(entry.id); }
-		this.rebuild();
-	}
-
-	public collapseAll(): void {
-		for (const provider of this.getConfiguredVendors()) { this.collapsed.add(this.groupId(provider)); }
-		this.rebuild();
-	}
-
-	/** Settings searches and overview transitions must reveal previously collapsed matches. */
-	public expandAll(): void {
-		if (this.collapsed.size === 0) { return; }
-		this.collapsed.clear();
-		this.rebuild();
 	}
 
 	private provider(id: string): ILanguageModelProvider {
@@ -220,12 +186,9 @@ export class ChatModelsViewModel extends Disposable {
 			const status = this.catalogStatus(provider, groupModels.length);
 			if (!models.length && (!status || capabilities.length || !terms.every(term => providerText.includes(term)))) { continue; }
 			const id = this.groupId(provider);
-			const collapsed = this.collapsed.has(id);
-			next.push({ type: 'vendor', id, label: provider.group.name, templateId: VENDOR_ENTRY_TEMPLATE_ID, collapsed, hidden: groupModels.every(model => model.hidden), vendorEntry: provider });
-			if (!collapsed) {
-				if (status) { next.push(status); }
-				next.push(...models.map(model => ({ ...this.entry(model), modelNameMatches: search ? matches(model.displayName) ?? undefined : undefined })));
-			}
+			next.push({ type: 'vendor', id, label: provider.group.name, templateId: VENDOR_ENTRY_TEMPLATE_ID, vendorEntry: provider });
+			if (status) { next.push(status); }
+			next.push(...models.map(model => ({ ...this.entry(model), modelNameMatches: search ? matches(model.displayName) ?? undefined : undefined })));
 		}
 		const removed = this.entries.length;
 		const selection = this.selectedEntry?.id;

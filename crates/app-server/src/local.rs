@@ -3339,6 +3339,7 @@ fn runtime_catalog_entry(
         ContextWindow::Unknown => None,
     };
     result.available_context_window = context.available_input();
+    result.usable_context_window = context.usable_input();
     Ok(result)
 }
 

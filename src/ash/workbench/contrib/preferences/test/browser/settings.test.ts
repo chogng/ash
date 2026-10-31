@@ -2526,7 +2526,7 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	assert.equal(root.querySelector('.ash-models-settings-model-copy > span')?.textContent, 'GPT Test Updated');
 });
 
-test('Models Settings orders enabled models by catalog position and restores disabled positions', async () => {
+test('Models Settings orders enabled models first in a unified list', async () => {
 	using resources = new DisposableStore();
 	const root = h(browserEnvironment.window.document, 'div');
 	browserEnvironment.window.document.body.append(root);
@@ -2607,6 +2607,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
+	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	const tree = resources.add(new SettingsTreeModel<SettingsSectionReference>());
 	resources.add(
@@ -2627,15 +2628,15 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		content.getNodes(query);
 		return [...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent!);
 	};
-	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
+	assert.deepEqual(names(), ['First newest', 'First older', 'Second', 'Third']);
 	// Enable in reverse order so activation order cannot masquerade as catalog order.
 	await models.setModelVisible(catalog[3].model, true);
 	await models.setModelVisible(catalog[2].model, true);
-	assert.deepEqual(names(), ['Second', 'Third', 'First newest']);
+	assert.deepEqual(names(), ['Second', 'Third', 'First newest', 'First older']);
 	await models.setModelVisible(catalog[2].model, false);
-	assert.deepEqual(names(), ['Third', 'First newest', 'Second']);
+	assert.deepEqual(names(), ['Third', 'First newest', 'First older', 'Second']);
 	await models.setModelVisible(catalog[3].model, false);
-	assert.deepEqual(names(), ['First newest', 'Second', 'Third']);
+	assert.deepEqual(names(), ['First newest', 'First older', 'Second', 'Third']);
 	await models.setModelVisible(catalog[1].model, true);
 	const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
 	search.value = 'first';
@@ -4091,7 +4092,7 @@ test('Local model controls share translated snapshots and keep preparation runni
 	assert.equal(buttons.find(button => button.textContent === '取消')?.classList.contains('hidden'), true);
 });
 
-test('Models Settings collapses by provider and saves keys and custom models on blur', async () => {
+test('Models Settings separates its model, subscription and API cards and saves keys on blur', async () => {
 	using disposables = new DisposableStore();
 	const document = browserEnvironment.window.document;
 	document.body.replaceChildren();
@@ -4111,13 +4112,13 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 			{ model: { provider: 'anthropic', model: 'opus' }, displayName: 'Opus' },
 		],
 		listModelProviders: async () =>
-			['openai', 'openai-compatible'].map(connection => ({
+			[...['openai', 'openai-compatible'].map(connection => ({
 				connection,
 				provider: connection,
 				displayName: connection,
 				apiKeyPolicy: 'required',
 				apiKeyConfigured: true,
-			})),
+			})), { connection: 'chatgpt-subscription', provider: 'openai', displayName: 'ChatGPT subscription', access: 'subscription', active: true, configured: true, ready: true, apiKeyPolicy: 'unsupported', apiKeyConfigured: false }, { connection: 'unused-subscription', provider: 'other', displayName: 'Not connected', access: 'subscription', active: true, configured: false, ready: false, apiKeyPolicy: 'unsupported', apiKeyConfigured: false }],
 		setModelPreferences: async () => { },
 		listCustomModelProviders: async () => [],
 		isModelVisible: () => true,
@@ -4201,19 +4202,15 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	await nextTurn();
 	assert.deepEqual(
 		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
-		['Newest OpenAI', 'Opus'],
+		['Newest OpenAI', 'Older OpenAI', 'Opus'],
 	);
-	const expand = root.querySelector<HTMLButtonElement>('.ash-models-settings-expand button')!;
-	expand.click();
 	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 3);
-	assert.equal(expand.getAttribute('aria-expanded'), 'true');
-	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 2);
-	assert.equal(root.querySelector<HTMLDetailsElement>('.ash-chat-models-filters')!.hidden, false);
-	[...root.querySelectorAll<HTMLButtonElement>('.ash-chat-models-catalog > button')].find(button => button.textContent === 'Collapse All')!.click();
-	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 0);
-	expand.click();
-	assert.equal(root.querySelectorAll('.ash-models-settings-model-row').length, 2);
-	assert.equal(root.querySelectorAll('.ash-chat-models-provider').length, 0);
+	assert.equal(root.querySelector('.ash-chat-models-provider'), null);
+	assert.deepEqual(content.getNodes().map(node => node.element.id), ['models.catalog', 'models.subscriptions', 'models.providers']);
+	assert.equal(root.querySelector('.ash-models-settings-subscription-row')?.textContent, 'ChatGPT subscriptionAccount connected');
+	assert.equal(root.querySelectorAll('.ash-models-settings-subscription-row').length, 1);
+	assert.equal(root.querySelector('.ash-chat-models-filters, .ash-models-settings-expand'), null);
+	assert.equal(root.querySelector('.ash-chat-models-provider input'), null);
 	assert.equal(
 		content
 			.getNodes(new SettingsSearchQuery('Older'))
@@ -4246,7 +4243,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	searchModels('');
 	assert.deepEqual(
 		[...root.querySelectorAll('.ash-models-settings-model-copy > span')].map(row => row.textContent),
-		['Newest OpenAI', 'Opus'],
+		['Newest OpenAI', 'Older OpenAI', 'Opus'],
 	);
 	assert.equal(root.querySelectorAll('.ash-models-settings-api-row').length, 1);
 	const input = root.querySelector<HTMLInputElement>('.ash-models-settings-api-row input')!;
@@ -4276,7 +4273,7 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	await nextTurn();
 	assert.equal(input.value, '••••••••');
 	assert.equal(input.hasAttribute('aria-invalid'), false);
-	root.querySelector<HTMLButtonElement>('.ash-models-settings-provider-title button')!.click();
+	[...root.querySelectorAll<HTMLButtonElement>('.ash-models-settings-provider-title button')].find(button => button.textContent === 'New provider')!.click();
 	const card = root.querySelector<HTMLElement>('.ash-chat-models-widget')!;
 	assert.equal(document.activeElement, card.querySelector('input'));
 	edit(card.querySelector<HTMLInputElement>('input[aria-label="Provider name"]')!, 'Gateway');
@@ -4479,6 +4476,7 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
+	services.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(root)));
 	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	content.setVisible(true);
 	await nextTurn();

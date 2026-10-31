@@ -3064,6 +3064,63 @@ fn configured_model_context_enables_core_managed_compaction() {
             command_id: CommandId::new("configure-context").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::ConfigureConnection {
+#[test]
+fn sol_usable_context_is_independent_of_compaction_and_preserves_output_reservations() {
+    let registry = ProviderConfigRegistry::builtin();
+    let manager = ash_models_manager::ModelsManager::new(registry.clone());
+    let model = ModelRef::new(
+        ProviderId::new("openai").unwrap(),
+        ModelId::new("gpt-6.1-sol").unwrap(),
+    );
+    let resolved = manager
+        .resolve_static(&model, &ash_models_manager::ModelRequirements::agent())
+        .unwrap();
+    let entry = resolved.entry();
+    let mut provider = ModelProviderConfig::new(model.provider.clone());
+    for (expanded, window, usable, pressure) in [
+        (false, 500_000, 475_000, 425_000),
+        (true, 872_000, 828_400, 741_200),
+    ] {
+        entry
+            .apply_preferences(
+                &mut provider,
+                &ash_models_manager::ModelPreferencesUpdate {
+                    acceleration: Patch::Missing,
+                    long_context: Some(expanded),
+                },
+            )
+            .unwrap();
+        let context = ModelContext::resolve(entry, &provider, &registry).unwrap();
+        assert_eq!(
+            context.info.context_window,
+            ash_protocol::ContextWindow::Known(window)
+        );
+        assert_eq!(context.usable_input(), Some(usable));
+        assert_eq!(context.available_input(), Some(pressure));
+        let ash_core::ResolvedContextBudget::CoreManaged(limits) =
+            context.require_budget().unwrap().resolve().unwrap()
+        else {
+            panic!("Sol has an explicit context budget");
+        };
+        assert_eq!(limits.hard_maximum_input().get(), usable);
+        assert_eq!(limits.maximum_input().get(), pressure);
+    }
+    provider.max_output_tokens = Some(64_000);
+    let context = ModelContext::resolve(entry, &provider, &registry).unwrap();
+    assert_eq!(context.usable_input(), Some(872_000 - 64_000 - 1_024));
+    let other = ModelRef::new(model.provider.clone(), ModelId::new("gpt-6-astra").unwrap());
+    let resolved = manager
+        .resolve_static(&other, &ash_models_manager::ModelRequirements::agent())
+        .unwrap();
+    let context = ModelContext::resolve(
+        resolved.entry(),
+        &ModelProviderConfig::new(other.provider),
+        &registry,
+    )
+    .unwrap();
+    assert_eq!(context.usable_input(), Some(272_000 - 4_096 - 1_024));
+}
+
                 connection: ash_protocol::ModelConnectionId::new(provider.clone().as_str())
                     .unwrap(),
                 config: provider_config,
@@ -3147,6 +3204,7 @@ fn configured_model_context_enables_core_managed_compaction() {
     let mut invalid = snapshot.values.connections[&connection_id].clone();
     invalid
         .model_context
+    assert_eq!(entry.usable_context_window, Some(20_000 - 2_048 - 1_024));
         .get_mut(&model)
         .unwrap()
         .context_window = Some(1_000);

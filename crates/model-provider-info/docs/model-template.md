@@ -347,7 +347,7 @@ Codex 的完整模型字段定义在相邻源码 `codex-rs/protocol/src/openai_m
 | `tool_mode`、`multi_agent_version`、`multi_agent_reasoning_effort`                                          | 工具模式与协作功能                                                              | 不导入 Codex 的协作选择；Ultra 不是 Ash 模型推理档位                                     |
 | `used_fallback_model_metadata`                                                                              | Codex 内部解析标记                                                              | 不属于 JSON 型号声明，也不写入 Ash 目录                                                  |
 
-当前 GPT 长上下文声明使用默认 `272000`、最大 `872000`；与相邻 Codex 目录一致的旧型号 `gpt-5.5` 保持默认和最大均为 `272000`。容量按具体型号声明，不能给整个 provider 统一开启长上下文。`long_context = true` 使用所选连接的最大容量，`false` 使用默认容量；最大容量不高于默认容量时不提供开关。
+GPT-6.1 Sol 的默认窗口为 `500000`、最大窗口为 `872000`，本次选定的可用窗口策略为 95%，正常输出预留下分别提供 `475000` 和 `828400` 个输入 token；显式输出预留较大时仍以实际预算为限。其他 GPT 型号保留现有目录声明，旧型号 `gpt-5.5` 的默认和最大窗口仍均为 `272000`。容量和策略按具体型号及连接处理，不能给整个 provider 统一套用。Models 设置中所有支持上下文切换的模型都使用容量文字按钮，并读取 App Server 的 `usable_context_window`（前端领域字段 `usableContextWindow`），对应执行层扣除输出、安全预留后的硬输入容量；`available_context_window` 继续表示受自动压缩阈值约束的输入预算，两者分开。切换只更新既有 `long_context` 偏好，前端不另算比例；`true` 使用所选连接的最大窗口，`false` 使用默认窗口，最大窗口不高于默认窗口时不提供切换。
 
 `comp_hash` 若要成为 Ash 的跨 provider 契约，需要同时接入目录合并、压缩历史保存、恢复和切换模型时的兼容性判断。兼容性必须包含 provider 和连接来源，不能因为两个厂商都返回 `3000` 就认定它们的历史可互用。审批模型与专用型号的限制则由各自的执行策略负责；目录中的 `null` 不能代替这些调用链。
 

@@ -44,6 +44,10 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 	private readonly apiRows = this._register(new DisposableMap<string, DisposableStore>());
 	private apiElements: readonly { readonly provider: ModelProviderCredentialStatus; readonly row: HTMLElement; readonly key: ProviderApiKeyInput; }[] = [];
 	private readonly providerTitle: HTMLElement;
+	private readonly subscriptionTitle: HTMLElement;
+	private readonly subscriptionStatus: HTMLElement;
+	private readonly subscriptionRows = this._register(new DisposableMap<string, DisposableStore>());
+	private subscriptionElements: readonly HTMLElement[] = [];
 	private readonly modelsWidget: ChatModelsWidget;
 	private catalogQuery = new SettingsSearchQuery('');
 	private readonly customProviderSubscriptions = this._register(new DisposableMap<string, IDisposable>());
@@ -61,10 +65,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		super();
 		this.document = container.ownerDocument;
 		this.modelsWidget = this._register(instantiation.createInstance(ChatModelsWidget, this.document, {
-			compact: true,
 			matches: (entry: ModelCatalogEntry) => this.catalogQuery.matches({ title: entry.displayName, description: '', keywords: [`${entry.model.provider}/${entry.model.model}`] }),
-			matchesProvider: (connection: string, label: string) => this.catalogQuery.matches({ title: label, description: '', keywords: [connection] }),
-			isFiltering: () => !this.catalogQuery.isEmpty,
 			onStorageError: (error: SecretStorageError) => this.updateStorageStatus({ status: error.status }),
 			onConfigure: (connection: string, model?: string) => this.configure(connection, model),
 		}));
@@ -103,8 +104,23 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		this.providerTitle = h(this.document, 'span');
 		this.providerTitle.className = 'ash-models-settings-provider-title';
 		const title = h(this.document, 'span');
-		title.textContent = localize('models.keys.title', 'API key');
+		title.textContent = localize('models.connections.api', 'API access');
 		this.providerTitle.append(title);
+		this.subscriptionTitle = h(this.document, 'span');
+		this.subscriptionTitle.className = 'ash-models-settings-provider-title';
+		const subscriptionsLabel = h(this.document, 'span');
+		subscriptionsLabel.textContent = localize('models.connections.subscriptions', 'Subscription accounts');
+		this.subscriptionTitle.append(subscriptionsLabel);
+		this._register(new Button(this.subscriptionTitle, {
+			...defaultButtonStyles,
+			label: localize('models.connections.manageAccounts', 'Manage accounts'),
+			presentation: 'secondary',
+			onClick: () => { void this.manageAccounts(); },
+		}));
+		this.subscriptionStatus = h(this.document, 'p');
+		this.subscriptionStatus.className = 'ash-models-settings-empty ash-models-settings-subscription-empty';
+		this.subscriptionStatus.setAttribute('role', 'status');
+		this.subscriptionStatus.textContent = localize('models.connections.loading', 'Loading subscription accounts…');
 		this.addProvider = this._register(new Button(this.providerTitle, {
 			...defaultButtonStyles,
 			label: localize('models.provider.new', 'New provider'),
@@ -125,7 +141,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		}));
 		const hint = (): void => {
 			const message = accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.ChatModelConfiguration);
-			for (const node of [this.providerTitle]) {
+			for (const node of [this.providerTitle, this.subscriptionTitle]) {
 				if (message) node.setAttribute('aria-description', message);
 				else node.removeAttribute('aria-description');
 			}
@@ -140,10 +156,10 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 				getProvider: () => {
 					const focused = this.document.activeElement;
 					if (!this.visible || !isHTMLElement(focused)) return undefined;
-					const nodes = [this.providerTitle, this.storageStatus, ...this.apiElements.map(provider => provider.row), ...[...this.customProviders].map(([, card]) => card.domNode)];
+					const nodes = [this.providerTitle, this.subscriptionTitle, ...this.subscriptionElements, this.subscriptionStatus, this.storageStatus, ...this.apiElements.map(provider => provider.row), ...[...this.customProviders].map(([, card]) => card.domNode)];
 					if (!nodes.some(node => node.contains(focused))) return undefined;
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
-						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n')].filter(Boolean).join('\n\n') : localize('models.settings.help', 'Models shows the newest model from each provider. Enabled models appear first; each group keeps the catalog order. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. Use viewall models to show the full list with provider groups, provider switches and Search filters, or return to the overview. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. If the system keyring is unavailable, credentials are stored only in memory until Ash exits. Authorizing the keyring saves the credentials entered during this run and restores persistent storage. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Delete provider removes its configuration and saved API key after confirmation. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
+						() => type === AccessibleViewType.View ? [this.storageMessage.textContent, [...this.customProviders].map(([, card]) => card.getAccessibleContent()).join('\n\n')].filter(Boolean).join('\n\n') : localize('models.settings.help', 'The Model list card contains all models and their supported settings. Enabled models appear first; enabled and disabled models each keep the catalog order. The Subscription accounts card opens account management for sign-in and sign-out. The API access card manages keys and custom endpoints. Turning a model off restores its place among disabled models. Search models filters the full list by model name or ID. Clear the search to restore the list. API keys save when the field loses focus; clear the field to remove a key. Credential storage checks and retries are silent. If the system keyring is unavailable, credentials are stored only in memory until Ash exits. Authorizing the keyring saves the credentials entered during this run and restores persistent storage. Use Authorize system keyring to explicitly request system access. Use file storage migrates credentials to unencrypted private files after confirmation. Use encrypted storage migrates them back and may request system authorization. Missing original encryption keys block migration and preserve existing credentials. New provider adds a card with provider name, Base URL, API key and API format. Delete provider removes its configuration and saved API key after confirmation. Test models tests the current table, fetching the endpoint list first when empty. Refresh models fetches the list again. Use Add model for a missing ID or to declare its context window. Edit context and delete manual declarations from the row actions. Each Enabled switch controls picker availability independently of test results. Test status: orange means it has not passed and green means it passed. Use Tab and Shift+Tab to move between fields and buttons.'),
 						() => focused.focus(), AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},
 			}));
@@ -157,18 +173,24 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		});
 		if (query && query.key !== this.catalogQuery.key) {
 			this.catalogQuery = query;
-			this.modelsWidget.render({ expandGroups: true });
+			this.modelsWidget.render();
 		}
 		const customNodes = [...this.customProviders].reverse().map(([id, card]) => item(`models.providers.${id}`, card.title, card.domNode.textContent ?? '', card.domNode));
 		const providerNodes = this.apiElements.map(({ provider, row }) => item(`models.providers.${provider.connection}`, provider.displayName, provider.provider, row, ['API key']));
 		return [
 			{
-				element: { kind: 'group', id: 'models.catalog', title: localize('sessions.settings.chatModels', 'Chat models'), description: '' },
+				element: { kind: 'group', id: 'models.catalog', title: localize('models.catalog.listTitle', 'Model list'), description: '' },
 				// The widget has already matched names and IDs; retain those matches in the outer Settings search.
 				children: [item('models.catalog.widget', localize('sessions.settings.chatModels', 'Chat models'), this.modelsWidget.element.textContent ?? '', this.modelsWidget.element, this.modelsWidget.hasResults ? [this.catalogQuery.text] : undefined)],
 			},
 			{
-				element: { kind: 'group', id: `${this.categoryId}.providers`, title: localize('models.keys.title', 'API key'), header: this.retainElement(`${this.categoryId}.providers` + '.heading', this.providerTitle), description: '' },
+				element: { kind: 'group', id: 'models.subscriptions', title: localize('models.connections.subscriptions', 'Subscription accounts'), header: this.retainElement('models.subscriptions.heading', this.subscriptionTitle), description: '' },
+				children: this.subscriptionElements.length
+					? this.subscriptionElements.map(row => item(`models.subscriptions.${row.dataset.connection}`, row.textContent ?? '', '', row))
+					: [item('models.subscriptions.status', localize('models.connections.subscriptions', 'Subscription accounts'), this.subscriptionStatus.textContent ?? '', this.subscriptionStatus)],
+			},
+			{
+				element: { kind: 'group', id: `${this.categoryId}.providers`, title: localize('models.connections.api', 'API access'), header: this.retainElement(`${this.categoryId}.providers` + '.heading', this.providerTitle), description: '' },
 				children: [
 					...(this.storageStatus.hidden ? [] : [item('models.credentials.storage', localize('models.keys.title', 'API key'), this.storageMessage.textContent ?? '', this.storageStatus)]),
 					...customNodes,
@@ -215,6 +237,36 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		await this.commands.executeCommand('workbench.action.manageAccounts');
 	}
 
+	private async manageAccounts(): Promise<void> {
+		try { await this.commands.executeCommand('workbench.action.manageAccounts'); }
+		catch { if (!this.isDisposed) { this.notifications.error(localize('models.connections.manageFailed', 'Could not open account management.')); } }
+	}
+
+	private updateSubscriptions(providers: readonly ModelProviderCredentialStatus[]): void {
+		const subscriptions = providers.filter(provider => provider.access === 'subscription' && provider.configured);
+		const previous = new Map(this.subscriptionElements.map(row => [row.dataset.connection!, row]));
+		const ids = new Set(subscriptions.map(provider => provider.connection));
+		for (const [id] of this.subscriptionRows) { if (!ids.has(id)) { this.subscriptionRows.deleteAndDispose(id); } }
+		this.subscriptionElements = subscriptions.map(provider => {
+			let row = previous.get(provider.connection);
+			if (!row) {
+				const lifetime = new DisposableStore();
+				this.subscriptionRows.set(provider.connection, lifetime);
+				row = h(this.document, 'div');
+				row.className = 'ash-models-settings-subscription-row';
+				row.dataset.connection = provider.connection;
+				row.append(h(this.document, 'span'), h(this.document, 'span'));
+				lifetime.add(toDisposable(() => row!.remove()));
+			}
+			row.children[0].textContent = provider.displayName;
+			row.children[1].textContent = provider.configured
+				? localize('models.connections.connected', 'Account connected')
+				: localize('models.connections.signInRequired', 'Sign in required');
+			return row;
+		});
+		this.subscriptionStatus.textContent = localize('models.connections.none', 'No subscription accounts connected.');
+	}
+
 	private forgetProvider(id: string): void {
 		const card = this.customProviders.get(id);
 		const focused = card?.isDeleting || card?.domNode.contains(this.document.activeElement);
@@ -229,6 +281,9 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		const restoreStorageFocus = this.storageStatus.contains(storageFocused);
 		this.storageRetry.enabled = false;
 		try {
+			const catalog = await this.languageModels.listModelProviders();
+			if (version !== this.apiLoadVersion || this.isDisposed) { return; }
+			this.updateSubscriptions(catalog);
 			const storage = await this.secretStorage.readState();
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			this.storageMode = storage.mode;
@@ -238,8 +293,8 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 				this.changed.fire();
 				return;
 			}
-			const [catalog, custom] = await Promise.all([this.languageModels.listModelProviders(), this.languageModels.listCustomModelProviders()]);
-			const providers = catalog.filter(provider => provider.apiKeyPolicy !== 'unsupported' && provider.connection !== 'openai-compatible' && !provider.connection.startsWith('custom-'));
+			const custom = await this.languageModels.listCustomModelProviders();
+			const providers = catalog.filter(provider => provider.access !== 'subscription' && provider.apiKeyPolicy !== 'unsupported' && provider.connection !== 'openai-compatible' && !provider.connection.startsWith('custom-'));
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			const customIds = new Set(custom.map(provider => provider.id));
 			for (const [id, card] of this.customProviders) {
@@ -283,6 +338,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			}
 			this.apiElements = [];
 			for (const [id] of this.apiRows) this.apiRows.deleteAndDispose(id);
+			this.subscriptionStatus.textContent = localize('models.connections.loadFailed', 'Could not load subscription accounts.');
 			this.providersStatus.textContent = localize('sessions.settings.apiLoadFailed', 'Could not load API keys.');
 			this.notifications.error(this.providersStatus.textContent);
 		} finally {
