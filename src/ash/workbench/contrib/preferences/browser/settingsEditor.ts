@@ -612,12 +612,9 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private navigation(): readonly SettingsNavigationDescriptor[] {
 		const categories = this.settingsLayout.filter(entry => entry.id.startsWith('extension.')).map(entry => entry.descriptor);
 		if (categories.length === 0) return SettingsNavigation;
-		return [...SettingsNavigation, {
-			id: 'extensions',
-			label: this.localized('groups.extensions.label', 'Extensions'),
-			description: this.localized('groups.extensions.description', 'Configure installed extensions.'),
-			categories,
-		}];
+		return SettingsNavigation.map(entry => entry.id === 'extensions'
+			? { ...entry, categories: [...entry.categories, ...categories] }
+			: entry);
 	}
 
 	private rebuildContent(): void {

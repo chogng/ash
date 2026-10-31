@@ -32,7 +32,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly domNode: HTMLElement;
-	private readonly titleDomNode: HTMLElement;
+	private readonly titleDomNode: HTMLElement | undefined;
 	private readonly descriptionDomNode: HTMLElement | undefined;
 	private readonly fieldsDomNode: HTMLElement;
 	private readonly controls = new Map<string, Button | InputBox | SelectBox | Switch | HTMLElement>();
@@ -62,9 +62,12 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 			this.fieldsDomNode.className = 'ash-settings-card';
 			this.domNode.append(this.titleDomNode, this.fieldsDomNode);
 		} else {
-			this.titleDomNode = h(document, 'h5');
+			if (!model.hideInnerTitle) {
+				this.titleDomNode = h(document, 'h5');
+				this.domNode.append(this.titleDomNode);
+			}
 			this.descriptionDomNode = h(document, 'p');
-			this.domNode.append(this.titleDomNode, this.descriptionDomNode);
+			this.domNode.append(this.descriptionDomNode);
 			this.fieldsDomNode = this.domNode;
 		}
 		this.actionsDomNode = h(document, 'div'); this.actionsDomNode.className = 'ash-settings-section-actions';
@@ -137,7 +140,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 	}
 
 	private render(): void {
-		this.titleDomNode.textContent = this.model.title;
+		if (this.titleDomNode) { this.titleDomNode.textContent = this.model.title; }
 		if (this.descriptionDomNode) { this.descriptionDomNode.textContent = this.model.description; }
 		for (const field of this.model.fields) {
 			this.fields.set(field.id, field);

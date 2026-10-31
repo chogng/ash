@@ -13,6 +13,8 @@ export class AgentRolesSettingsRenderer extends SettingsPageRenderer<SettingsSec
 	constructor(container: HTMLElement, @IInstantiationService instantiation: IInstantiationService) {
 		super();
 		this.roles = this._register(instantiation.createInstance(AgentRolesWidget, container, {}));
+		// The Settings tree mounts retained controls only for the selected category or search.
+		this.roles.domNode.remove();
 	}
 
 	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {

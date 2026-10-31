@@ -1949,7 +1949,6 @@ test('settingsLayout is the single projection from registered settings to catego
 		SettingsCategories.map(category => category.id),
 		[
 			'general',
-			'github',
 			'network',
 			'appearance',
 			'layout',
@@ -1983,6 +1982,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'sandbox',
 			'execution-trace',
 			'hooks',
+			'github',
 		],
 	);
 	assert.deepEqual(
@@ -3259,9 +3259,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(host);
 	assert.equal(host.hidden, false);
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
+	assert.equal(root.querySelector('.ash-agent-roles-settings'), null, 'Agent definitions must not leak into Application settings');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network'],
+		['general', 'network'],
 	);
 	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
 	assert.ok(workbenchGroup);
@@ -3269,7 +3270,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'github', 'network', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
+		['general', 'network', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
 	);
 	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
@@ -3284,6 +3285,14 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(agentsGroup.textContent, 'Chat');
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
+	await preferences.openSettings({ section: 'github' });
+	assert.equal(root.querySelectorAll('[data-settings-group-id="extensions"]').length, 1);
+	assert.equal(root.querySelector('[data-settings-group-id="extensions"]')?.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'true');
+	assert.equal(root.querySelector('[data-settings-category-id="github"]')?.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'GitHub');
+	assert.deepEqual([...root.querySelectorAll('.ash-settings-content-tree h4')].map(heading => heading.textContent).filter(title => title === 'Codex PR cloud review'), ['Codex PR cloud review']);
+	assert.equal(root.querySelector('.ash-settings-content-tree .ash-settings-section h5'), null);
+	assert.equal(root.querySelector('.ash-agent-roles-settings'), null, 'GitHub settings must not contain Agent definitions');
 	await nextTurn();
 	await configuration.updateValue(AccessibilityVerbositySettingId.ChatScreenshot, false);
 	await preferences.openSettings({ section: 'extension.ash.snapshot' });
@@ -3536,6 +3545,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	root.querySelector<HTMLElement>('[data-settings-category-id="agents"]')?.click();
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Agents');
+	assert.ok(root.querySelector('.ash-settings-content-tree [data-settings-item-id="agents.definitions"] .ash-agent-roles-actions'));
 	assert.equal(root.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="switch"]'), null);
 	const selectAdvisor = (label: string): void => {
 		root.querySelector<HTMLElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]')!.click();
@@ -3589,6 +3599,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="tools"]'), null);
 	root.querySelector<HTMLElement>('[data-settings-category-id="sandbox"]')?.click();
 	await nextTurn();
+	assert.equal(root.querySelector('.ash-agent-roles-settings'), null, 'Agent definitions leave the page when navigating away');
 	assert.match(root.querySelector('.ash-agent-capabilities-settings')?.textContent ?? '', /\/workspace/);
 	const sandboxPanel = root.querySelector('.ash-agent-capabilities-settings')!;
 	assert.match(sandboxPanel.textContent ?? '', /Policy unsupported/);

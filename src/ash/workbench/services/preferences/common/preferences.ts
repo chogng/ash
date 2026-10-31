@@ -13,6 +13,8 @@ export interface SettingsSectionModel {
 	/** Null renders a standalone section with its title above the card. */
 	readonly groupId?: string | null;
 	readonly groupTitle?: string;
+	/** Omit the grouped card's inner heading when its enclosing group already supplies the title. */
+	readonly hideInnerTitle?: boolean;
 	readonly itemId?: string;
 	readonly keywords?: readonly string[];
 	readonly settingIds?: readonly string[];

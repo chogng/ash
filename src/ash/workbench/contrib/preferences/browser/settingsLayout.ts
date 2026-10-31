@@ -85,21 +85,6 @@ export const SettingsNavigation = [
 				],
 			},
 			{
-				id: 'github',
-				label: localize({ bundle: 'ash.settings', key: 'categories.github.label' }, 'GitHub'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.github.description' }, 'Connect accounts and manage Codex pull request reviews.'),
-				keywords: ['Codex', 'PR', 'review', 'Connector'],
-				presentation: 'general',
-				groups: [
-					{
-						id: 'repository',
-						label: localize({ bundle: 'ash.settings', key: 'github.repository.label' }, 'Repositories'),
-						description: localize({ bundle: 'ash.settings', key: 'github.repository.description' }, 'Choose the Git protocol and protected branch behavior.'),
-						settings: ['github.gitProtocol', 'github.branchProtection'],
-					},
-				],
-			},
-			{
 				id: 'network',
 				label: localize({ bundle: 'ash.settings', key: 'categories.network.label' }, 'Network'),
 				description: localize({ bundle: 'ash.settings', key: 'categories.network.description' }, 'Configure application HTTP compatibility and check service connectivity.'),
@@ -713,6 +698,28 @@ export const SettingsNavigation = [
 				keywords: ['automation', 'workflow hooks'],
 				presentation: 'general',
 				groups: [],
+			},
+		],
+	},
+	{
+		id: 'extensions',
+		label: localize({ bundle: 'ash.settings', key: 'groups.extensions.label' }, 'Extensions'),
+		description: localize({ bundle: 'ash.settings', key: 'groups.extensions.description' }, 'Configure installed extensions.'),
+		categories: [
+			{
+				id: 'github',
+				label: localize({ bundle: 'ash.settings', key: 'categories.github.label' }, 'GitHub'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.github.description' }, 'Connect GitHub accounts and manage Codex PR cloud reviews.'),
+				keywords: ['Codex', 'PR', 'review', 'Connector'],
+				presentation: 'general',
+				groups: [
+					{
+						id: 'repository',
+						label: localize({ bundle: 'ash.settings', key: 'github.repository.label' }, 'Repositories'),
+						description: localize({ bundle: 'ash.settings', key: 'github.repository.description' }, 'Choose the Git protocol and protected branch behavior.'),
+						settings: ['github.gitProtocol', 'github.branchProtection'],
+					},
+				],
 			},
 		],
 	},

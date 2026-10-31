@@ -316,14 +316,14 @@ suite('githubReview browser component', () => {
 
 		await openReview(page);
 		await expect(page.locator('.github-pr-comment')).toContainText('Codex Review Summary');
-		await page.getByRole('button', { name: 'Request Codex review', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Request Codex review', exact: true })).toBeDisabled();
+		await page.getByRole('button', { name: 'Request Codex PR cloud review', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Request Codex PR cloud review', exact: true })).toBeDisabled();
 		await expect(page.locator('.github-review')).toContainText('Posted @codex review');
 		const comments = await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/comment/create'));
 		expect(comments.map(request => request.params)).toEqual([expect.objectContaining({ number: 7, body: '@codex review', accountId: 'alice', repository: { host: 'github.com', owner: 'team', name: 'repo' } })]);
 		await page.getByRole('button', { name: 'Load more PR comments', exact: true }).click();
 		await expect(page.locator('.github-discussions')).toContainText('Follow-up review result');
-		await page.getByRole('button', { name: 'Codex review settings', exact: true }).click();
+		await page.getByRole('button', { name: 'Codex PR cloud review settings', exact: true }).click();
 		await expect(page.getByRole('button', { name: 'Manage official Connector', exact: true })).toBeVisible();
 	});
 
@@ -331,7 +331,11 @@ suite('githubReview browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/githubReview.html?settings');
-		await expect(page.locator('.ash-settings-section')).toContainText('Existing Codex login available');
+		await expect(page.locator('.ash-settings-section').getByRole('heading')).toHaveCount(0);
+		await expect(page.getByRole('button', { name: 'Check repository access', exact: true })).toBeEnabled();
+		await expect(page.locator('.ash-settings-section')).toContainText('Ash’s built-in review');
+		await expect(page.locator('.ash-settings-section')).not.toContainText('Existing Codex account');
+		await expect(page.locator('.ash-settings-section')).not.toContainText('Codex login');
 		await page.getByRole('textbox', { name: 'Repository (owner/name)', exact: true }).fill('team/repo');
 		await page.getByRole('button', { name: 'Check repository access', exact: true }).click();
 		await expect(page.locator('.ash-settings-section')).toContainText('Ash can access team/repo');
@@ -365,7 +369,13 @@ suite('githubReview browser component', () => {
 		await page.goto('/githubReview.html?settings&zh');
 		await expect(page.getByRole('button', { name: '管理自动审查', exact: true })).toBeVisible();
 		await expect(page.getByRole('textbox', { name: '仓库（所有者/名称）', exact: true })).toBeVisible();
-		await expect(page.locator('.ash-settings-section')).toContainText('已有 Codex 登录可用于模型访问');
+		await expect(page.locator('.ash-settings-section').getByRole('heading')).toHaveCount(0);
+		await expect(page.getByRole('button', { name: '检查仓库访问权限', exact: true })).toBeEnabled();
+		await expect(page.locator('.ash-settings-section')).toContainText('聊天 → 智能体 → 审查');
+		await expect(page.locator('.ash-settings-section')).not.toContainText('Codex 登录');
+		await expect(page.locator('.ash-settings-section')).not.toContainText('Existing Codex account');
+		await page.getByRole('textbox', { name: '仓库（所有者/名称）', exact: true }).focus();
+		expect(await page.evaluate(() => window.ashGitHubReview.accessibleContent('help' as import('../../../../../platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain('Codex PR 云端审查');
 	});
 
 	test('managed settings exposes retained policy and keyboard retry through the production protocol adapter', async function () {
