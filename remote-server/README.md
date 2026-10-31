@@ -96,8 +96,9 @@ Downloads allow only GitHub's single HTTPS hop to `release-assets.githubusercont
 other redirects remain rejected. Every hop retains public-Internet-only DNS checks,
 and final catalog/archive bytes must match the product-bound digests and sizes.
 
-For local verification, `archive --unsigned` skips production signing only and is
-never used by release CI. `build/remote_smoke.py --package-dir PATH --report FILE`
+For local verification and retained failure artifacts, `archive --unsigned` skips
+production signing only; it is not used for published release assets.
+`build/remote_smoke.py --package-dir PATH --report FILE`
 exercises both connector entrypoints. Optional `--ssh PATH --host ALIAS` uses an
 isolated loopback OpenSSH host whose test paths share the local filesystem.
 `build/release/verify_remote.py --package-dir PATH --binding-file FILE --report FILE`

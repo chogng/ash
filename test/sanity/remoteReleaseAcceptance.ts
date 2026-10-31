@@ -10,7 +10,7 @@ import { buildAppServerEnvironment } from '../../src/ash/platform/agentHost/comm
 import { checkAppServerInitializeCompatibility } from '../../src/ash/platform/agentHost/common/appServerProtocolCompatibility.js';
 import { decodeAppServerResult } from '../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { AppServerDaemonLauncher } from '../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
-import { createSshRemoteWorkspaceUri } from '../../src/ash/platform/remote/common/remote.js';
+import { createSshRemoteWorkspaceUri, normalizeRemoteWorkspacePath } from '../../src/ash/platform/remote/common/remote.js';
 import { RemoteConnectionProfiles } from '../../src/ash/platform/remote/electron-main/remoteConnectionProfiles.js';
 import { RemoteRuntimeBootstrapMainService } from '../../src/ash/platform/remote/electron-main/remoteRuntimeBootstrapMainService.js';
 import { RemoteRuntimeProvisioner } from '../../src/ash/platform/remote/electron-main/remoteRuntimeProvisioner.js';
@@ -23,7 +23,7 @@ const root = resolve(values.root!);
 const ssh = resolve(values.ssh!);
 const host = values.host!;
 await mkdir(root, { recursive: true });
-const workspace = join(root, 'workspace');
+const workspace = normalizeRemoteWorkspacePath(join(root, 'workspace'));
 await mkdir(workspace);
 const metadata = JSON.parse(await readFile(join(packageRoot, 'ash-package.json'), 'utf8'));
 const catalogRoot = values['catalog-dir'] === undefined ? undefined : resolve(values['catalog-dir']);
@@ -47,7 +47,7 @@ try {
 			source: catalogRoot === undefined
 				? { kind: 'network', catalogUrl: release.catalog.url, expectedSha256: release.catalog.sha256, cacheRoot: join(root, 'cache') }
 				: { kind: 'packaged', bundleRoot: catalogRoot, expectedSha256: createHash('sha256').update(await readFile(join(catalogRoot, 'catalog.json'))).digest('hex') },
-			remoteExecutable, sshExecutable: ssh, environment, installRoot: join(root, 'remote-installation'),
+			remoteExecutable, sshExecutable: ssh, environment, installRoot: normalizeRemoteWorkspacePath(join(root, 'remote-installation')),
 		});
 		const bootstrap = new RemoteRuntimeBootstrapMainService({
 			workspace: createSshRemoteWorkspaceUri(host, workspace), sshExecutable: ssh,
