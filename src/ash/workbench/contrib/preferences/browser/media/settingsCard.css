@@ -30,7 +30,7 @@
 
 .ash-settings-field-copy > :first-child {
 	font-size: var(--ash-fontSize-body1);
-	font-weight: var(--ash-fontWeight-semiBold);
+	font-weight: var(--ash-fontWeight-regular);
 }
 
 .ash-settings-field-copy > * {
@@ -45,7 +45,7 @@
 }
 
 .ash-settings-field-row > .ash-dropdown {
-	width: 260px;
+	width: 120px;
 	max-width: 100%;
 	flex-direction: column;
 	flex-shrink: 0;
