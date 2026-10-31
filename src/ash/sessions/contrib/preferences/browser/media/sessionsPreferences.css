@@ -1,5 +1,6 @@
 .ash-sessions-settings-dialog {
 	width: min(920px, calc(100vw - var(--ash-spacing-size320)));
+	border-radius: var(--ash-cornerRadius-xLarge);
 	overflow: hidden;
 	container-type: inline-size;
 }
@@ -61,6 +62,7 @@
 	width: 100%;
 	flex: 1;
 	padding-left: var(--ash-spacing-size240);
+	border-radius: var(--ash-cornerRadius-large);
 }
 
 .ash-sessions-settings-navigation-label {

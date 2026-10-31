@@ -1,5 +1,4 @@
 import { defaultButtonStyles, defaultDialogStyles, defaultInputBoxStyles, defaultCheckboxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
@@ -34,7 +33,6 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { createSettingsEditorInput } from '../../../../workbench/services/preferences/common/settingsEditorInput.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { WorkbenchConfiguration } from '../../../../workbench/common/configuration.js';
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
 import { DefaultSettings } from '../../../../workbench/services/preferences/common/settingsModels.js';
 import { SettingsRenderer, SettingsPageRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
@@ -45,7 +43,6 @@ import { DictationSettingsRenderer } from '../../../../workbench/contrib/prefere
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
 import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
-import { SettingsSearchMenu } from '../../../../workbench/contrib/preferences/browser/settingsSearchMenu.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
 import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
@@ -127,7 +124,7 @@ export class SessionsPreferences extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsSettings,
 					{ type: AccessibleViewType.Help },
-					() => localize('chat.ai.disabled.help', 'Disable AI features in Settings hides Chat in the Code window and prevents new Chat requests. History and drafts are kept. Active voice conversations stop; running work can still be stopped. Turn the setting off to restore Chat.') + '\n' + localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. General contains dictation settings. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents has Roles and Teams tabs. Roles includes Agent definitions and the Advisor model selector; Teams manages fixed members, roles, tasks and discussion. Select a model to enable Advisor or Off to disable it. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Installed extensions, skills and connections are managed in Extensions. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the shared shortcut editor or keybindings.json. Customize Settings opens all Workbench settings or settings.json. Browser, Tab, Code Intelligence and Environment open their Workbench settings. Use search to filter settings and Down to focus the first result. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.maturityHelp' }, 'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.languageHelp' }, 'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') + ' ' + localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.') + ' ' + localize('sessions.settings.layoutScopeHelp', 'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.'),
+					() => localize('sessions.settings.help', 'Sessions Settings has categories on the left and settings on the right. Voice contains dictation settings. On desktop, Open on startup chooses whether the next launch opens the IDE, Agent window, or the windows from last time. Models contains chat models and API connections. Run Developer: Show Agent Tool Catalog to inspect a grouped read-only tool snapshot. Git & PRs contains Codex review account status, repository access checks, and official review management links. Agents has Roles and Teams tabs. Roles includes Agent definitions and the Advisor model selector; Teams manages fixed members, roles, tasks and discussion. Select a model to enable Advisor or Off to disable it. Execution trace shows the running recorder, detailed recording switch and save directory. Save trace settings explicitly, then restart the owning App Server to apply them. Other changes are saved immediately. Design contains canvas cursor and accessibility settings. Customize has Settings and Hooks tabs. Installed extensions, skills and connections are managed in Extensions. Manage Hooks opens Agent Customizations in the editor. Use Left and Right to move between tabs, then Enter or Space to open one. Use Up and Down, Home or End to navigate categories. Keyboard Shortcuts opens the shared shortcut editor or keybindings.json. Customize Settings opens all Workbench settings or settings.json. Browser, Tab, Code Intelligence and Environment open their Workbench settings. Use search to filter settings and Down to focus the first result. Open More actions for a configuration setting and choose Copy Setting as JSON to copy its key and current value; copying does not save settings. The local dictation table lists available and installed models. Use arrow keys to move between rows and cells, and Tab to reach Install, Use model, Cancel, or Uninstall. Preparation continues after Settings closes. Cloud dictation uses the API connections in Models. Press Escape to close Settings.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.modifiedHelp' }, 'Type @modified or choose Modified in Filter Settings to show settings saved in local user settings, including explicit default values. Combine it with text or @id: filters. Language-only overrides and service status are excluded. Reset removes a saved override; failed saves keep the previous results. Clear Filters keeps your search text.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.maturityHelp' }, 'Settings can be marked Experimental or Preview; these labels describe maturity and do not change enablement. Use @tag:experimental or @tag:preview to filter them, or @stable to exclude both. Combine these filters with text, @id: and @modified.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.openQueryHelp' }, 'Search accepts setting IDs or words. Opening Settings with a query focuses the search field and updates the existing page. An empty query clears the filter. Press Escape in a non-empty search field to clear it.') + ' ' + localize({ bundle: 'ash.settings', key: 'search.languageHelp' }, 'Language queries such as @lang:plaintext open language-specific settings in the shared Workbench editor. Workspace and folder settings use that editor too.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.') + ' ' + localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.') + ' ' + localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.') + ' ' + localize('sessions.settings.layoutScopeHelp', 'Appearance has Layout scope. Session keeps documents per session. Chat with shared visibility keeps documents per chat and shares Editor and Details visibility. Chat keeps documents and visibility per chat.'),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsSettings,
 				);
@@ -140,7 +137,7 @@ export class SessionsPreferences extends Disposable {
 		if (validated.openToSide || validated.groupId !== undefined || validated.folderUri || validated.target === ConfigurationTarget.WORKSPACE || validated.target === ConfigurationTarget.WORKSPACE_FOLDER || new SettingsSearchQuery(validated.query ?? '').languageFilter) {
 			// Sessions owns product preferences; resource and language editing belongs to the shared Workbench pane.
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
-			const jsonEditor = validated.jsonEditor ?? (validated.sectionQuery === undefined && this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json');
+			const jsonEditor = validated.jsonEditor ?? false;
 			this.dialog?.dispose();
 			const inGroup = validated.openToSide || validated.groupId !== undefined;
 			// Revealing Code selects its document group. Settle that layout before opening and focusing the requested pane.
@@ -149,7 +146,8 @@ export class SessionsPreferences extends Disposable {
 			if (jsonEditor && !inGroup) await this.showEditor();
 			return;
 		}
-		if (validated.jsonEditor ?? (validated.sectionQuery === undefined && this.configurationService.getValue(WorkbenchConfiguration.settingsEditor) === 'json')) {
+		// Agent settings always open the UI unless JSON is explicitly requested.
+		if (validated.jsonEditor) {
 			this.dialog?.dispose();
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 			await preferences.openUserSettings({ ...validated, jsonEditor: true });
@@ -254,12 +252,6 @@ export class SessionsPreferences extends Disposable {
 		}])));
 		const contextMenus = resources.add(contentServices.createInstance(BrowserContextMenuService));
 		contentServices.registerInstance(IContextMenuService, contextMenus);
-		resources.add(new SettingsSearchMenu(search, {
-			getValue: () => searchInput.value,
-			setValue: value => { searchInput.value = value; },
-			focus: () => searchInput.focus(),
-			contextMenuProvider: contextMenus,
-		}));
 		// The window owns preferences, editors and notifications. Resolve them before closing
 		// the modal, whose child service scope is released by open()'s finally block.
 		const notifications = this.instantiationService.invokeFunction(accessor => accessor.get(INotificationService));
@@ -276,22 +268,10 @@ export class SessionsPreferences extends Disposable {
 			const editors = this.instantiationService.invokeFunction(accessor => accessor.get(IEditorService));
 			return handoff(async () => { await editors.openEditor(createSettingsEditorInput(section), { pinned: true }, 'modalGroup'); }, false);
 		};
-		const openUserSettings = (key?: string, query?: string): Promise<void> => {
+		const openUserSettings = (key?: string): Promise<void> => {
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
-			return handoff(() => preferences.openUserSettings({ jsonEditor: true, ...(key ? { revealSetting: { key, edit: true } } : query !== undefined ? { query } : {}) }));
+			return handoff(() => preferences.openUserSettings({ jsonEditor: true, ...(key ? { revealSetting: { key, edit: true } } : {}) }));
 		};
-		const openJsonLabel = localize({ bundle: 'ash.settings', key: 'editor.openJSON' }, 'Open Settings (JSON)');
-		const openJson = resources.add(new Button(search, {
-			...defaultButtonStyles,
-			label: openJsonLabel,
-			title: openJsonLabel,
-			icon: Lxicon.code,
-			iconOnly: true,
-			size: 'small',
-			onClick: () => { void openUserSettings(undefined, searchInput.value); },
-		}));
-		openJson.domNode.classList.add('ash-settings-open-json');
-		openJson.domNode.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.'));
 		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[]): SettingsPageRenderer =>
 			resources.add(contentServices.createInstance(SettingsSectionRenderer, list, {
 				categoryId: id, title, description, help: description, fields,
@@ -384,7 +364,7 @@ export class SessionsPreferences extends Disposable {
 			resources.add(renderer.registerPage(section.content));
 		}
 		const categoryIndex = (id: string | undefined): number => {
-			const target = id === 'hooks' ? 'customize' : id === 'dictation' ? 'general' : id;
+			const target = id === 'hooks' ? 'customize' : id;
 			const index = categories.findIndex(category => category.id === target);
 			return index >= 0 ? index : 0;
 		};
@@ -577,16 +557,8 @@ export class SessionsPreferences extends Disposable {
 			SessionsConfiguration.layoutStyle,
 			SessionsConfiguration.activityBarLocation
 		].map(id => defaults.get(id));
-		// Existing accessibility preferences live under General without changing their stored keys.
 		const generalSettings: readonly ISetting[] = [
 			...defaults.all.filter(setting => setting.id === STARTUP_WINDOW_SETTING).map(setting => setting.id),
-			WorkbenchConfiguration.settingsEditor,
-			ChatAIDisabledSettingId,
-			AccessibilityVerbositySettingId.SessionsActivityBar,
-			AccessibilityVerbositySettingId.SessionsSettings,
-			AccessibilityVerbositySettingId.SessionsAgents,
-			AccessibilityVerbositySettingId.ExecutionSettings,
-			AccessibilityVerbositySettingId.ResourceEditor
 		].map(id => defaults.get(id));
 		const designSettings: readonly ISetting[] = [
 			DesignConfiguration.usePointerCursor,
@@ -598,10 +570,11 @@ export class SessionsPreferences extends Disposable {
 		return [{
 			title: localize('sessions.settings.section.basics', 'Basics'),
 			categories: [
-				{ id: 'general', title: localize('sessions.settings.general', 'General'), icon: Lxicon.settings, settings: generalSettings, content: dictationContent },
+				{ id: 'general', title: localize('sessions.settings.general', 'General'), icon: Lxicon.settings, settings: generalSettings },
 				{ id: 'account', title: localize('sessions.settings.account', 'Account'), icon: Lxicon.account, settings: [], content: management.get('account') },
 				{ id: 'appearance', title: localize('sessions.settings.appearance', 'Appearance'), icon: Lxicon.appearance, settings: appearanceSettings },
 				{ id: 'customize', title: localize('sessions.settings.customize', 'Customize'), icon: Lxicon.briefcase, settings: [], content: customizeContent },
+				{ id: 'dictation', title: localize('sessions.settings.voice', 'Voice'), icon: Lxicon.voiceMode, settings: [], content: dictationContent },
 			],
 		}, {
 			title: localize('sessions.settings.section.development', 'Development'),

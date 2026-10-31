@@ -235,6 +235,7 @@ suite('sessions browser component', () => {
 			const { page } = browserTests;
 			const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 			await expect(settings).toBeVisible();
+			await settings.getByRole('button', { name: 'Voice', exact: true }).click();
 			await expect(settings.locator('.ash-dialog-title')).toBeHidden();
 			await expect(settings).toHaveCSS('border-top-width', '1px');
 			await expect(settings.locator('.ash-sessions-settings')).toHaveCSS('border-top-width', '0px');
@@ -271,7 +272,7 @@ suite('sessions browser component', () => {
 			const settingsPage = settings.locator('.ash-sessions-settings-page');
 			const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 			for (const [section, categories] of [
-				['Basics', ['General', 'Account', 'Appearance', 'Customize']],
+				['Basics', ['General', 'Account', 'Appearance', 'Customize', 'Voice']],
 				['Development', ['Agents', 'Design', 'Models', 'Git & PRs', 'Browser', 'Tab', 'Code Intelligence', 'Environment']],
 				['Management', ['Keyboard Shortcuts']],
 			] as const) {
@@ -282,18 +283,23 @@ suite('sessions browser component', () => {
 			}
 			await expect(navigation.getByRole('button', { name: 'Tab', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'keyboard-tab');
 			await expect(navigation.getByRole('button', { name: 'Customize' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'briefcase');
+			await expect(navigation.getByRole('button', { name: 'Voice', exact: true }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'voice-mode');
 			await expect(navigation.getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page');
 			await expect(navigation.getByRole('button', { name: 'General' })).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-			await expect(settings.getByRole('heading', { name: 'General' })).toBeVisible();
-			await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toBeVisible();
-			await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toBeVisible();
+			await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
+			await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toHaveCount(0);
+			await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toHaveCount(0);
+			await navigation.getByRole('button', { name: 'Voice', exact: true }).click();
+			await expect(settings.getByRole('heading', { name: 'Voice', exact: true })).toBeVisible();
+			await expect(settings.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
+			await expect(settings.locator('.ash-local-transcription-model-controls')).toBeVisible();
 			await navigation.getByRole('button', { name: 'Appearance' }).click();
 			await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible();
 			await expect(settings.locator('[data-configuration-key="sessions.layoutStyle"]')).toBeVisible();
 			await expect(settings.locator('[data-configuration-key="sessions.activityBar.location"]')).toBeVisible();
 			await expect(settings.locator('[data-configuration-key="sessions.activityBar.compact"]')).toHaveCount(0);
 			await navigation.getByRole('button', { name: 'General' }).click();
-			await expect(settings.getByRole('heading', { name: 'General' })).toBeVisible();
+			await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
 			await expect(navigation.getByRole('button', { name: 'Archived Chats', exact: true })).toHaveCount(0);
 			await expect(navigation.getByRole('button', { name: 'Worktree', exact: true })).toHaveCount(0);
 			await navigation.getByRole('button', { name: 'Keyboard Shortcuts', exact: true }).click();
