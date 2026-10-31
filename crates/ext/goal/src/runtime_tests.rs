@@ -221,7 +221,7 @@ fn goal_continuation_resolves_session_advisor_inheritance_without_affecting_othe
 }
 
 #[test]
-fn recovered_unresolved_advisor_fails_durably_and_other_sessions_still_execute() {
+fn recovered_unresolved_advisor_fails_durably_without_stopping_other_goal_recovery() {
     let source_store = Arc::new(InMemoryThreadStore::default());
     let source = ThreadController::with_store(source_store.clone());
     let (thread_id, first_turn_id) = start_session_turn(&source, "legacy-goal", None, None);
@@ -285,22 +285,47 @@ fn recovered_unresolved_advisor_fails_durably_and_other_sessions_still_execute()
     let threads = Arc::new(ThreadController::with_store(store.clone()));
     let loaded = threads.read_thread(&thread_id).unwrap();
     assert_eq!(loaded.turns.last().unwrap().status, TurnStatus::Running);
-    let model = Arc::new(ScriptedModel::new([Ok(text_response(
-        "other session answer",
-    ))]));
+    // Sort after the legacy Thread so the same recovery pass must continue past its failure.
+    let (other_thread, first_turn) = start_session_turn(&threads, "z-healthy-session", None, None);
+    threads
+        .complete_turn(&other_thread, &first_turn, "first answer".into())
+        .unwrap();
+    threads
+        .create_goal(&other_thread, "finish the healthy task".into(), Some(1))
+        .unwrap();
+    let mut response = text_response("other session answer");
+    response.usage = Some(ModelUsage {
+        input_tokens: Some(1),
+        output_tokens: Some(0),
+        cached_input_tokens: Some(0),
+        cache_write_input_tokens: Some(0),
+        reasoning_tokens: None,
+    });
+    let model = Arc::new(ScriptedModel::new([Ok(response)]));
     let executor = executor(threads.clone(), model.clone());
-    let sessions = [loaded.session_id].into_iter().collect();
-    assert!(matches!(
-        executor.resume_recovered_extension_turns_in_sessions(&sessions),
-        Err(CoreError::Execution(message)) if message == "Turn Advisor configuration has no frozen model"
-    ));
+    let sessions = [
+        loaded.session_id,
+        SessionId::new("z-healthy-session").unwrap(),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(
+        executor
+            .resume_recovered_extension_turns_in_sessions(&sessions)
+            .unwrap(),
+        1
+    );
     let failed = threads.read_thread(&thread_id).unwrap();
     assert_eq!(failed.turns.last().unwrap().status, TurnStatus::Failed);
     assert_eq!(
         failed.goal.unwrap().status,
         protocol::ThreadGoalStatus::Blocked
     );
-    assert!(model.requests().is_empty());
+    let other_turn = threads.read_thread(&other_thread).unwrap().turns[1]
+        .turn_id
+        .clone();
+    wait_for_turn_status(&threads, &other_thread, &other_turn, TurnStatus::Completed);
+    assert_eq!(model.requests().len(), 1);
     assert_eq!(
         executor
             .resume_recovered_extension_turns_in_sessions(&sessions)
@@ -317,11 +342,6 @@ fn recovered_unresolved_advisor_fails_durably_and_other_sessions_still_execute()
             .status,
         TurnStatus::Failed
     );
-
-    let (other_thread, other_turn) = start_session_turn(&threads, "healthy-session", None, None);
-    executor.start(&other_thread, &other_turn).unwrap();
-    wait_for_turn_status(&threads, &other_thread, &other_turn, TurnStatus::Completed);
-    assert_eq!(model.requests().len(), 1);
 }
 
 fn start_session_turn(

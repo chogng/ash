@@ -7,6 +7,7 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
+import { equals } from '../../../../../base/common/objects.js';
 import { localize } from '../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -107,7 +108,8 @@ export class ChatModelsWidget extends Disposable {
 	private loading = false;
 	private loaded = false;
 	private count = 0;
-	private operationPending = false;
+	private reportedCount = -1;
+	private readonly pendingOperations = new Set<Button>();
 	private readonly completions: HTMLElement;
 	private completionValues: string[] = [];
 	private completionIndex = -1;
@@ -129,13 +131,16 @@ export class ChatModelsWidget extends Disposable {
 		super();
 		this.viewModel = this._register(instantiation.createInstance(ChatModelsViewModel));
 		this.element = h(document, 'section');
-		this.element.className = 'ash-chat-models-catalog';
+		this.element.className = 'ash-chat-models-catalog ash-settings-card';
 		const scopedKeys = this._register(contextKeys.createScoped(this.element));
 		const rowFocus = scopedKeys.createKey<boolean>('ashChatModelsRowFocus', false);
 		this._register(addDisposableListener(this.element, 'focusin', event => { rowFocus.set(isHTMLElement(event.target) && !!event.target.closest('.ash-models-settings-model-row')); }));
 		this._register(addDisposableListener(this.element, 'focusout', event => { if (!this.element.contains(event.relatedTarget as Node | null)) { rowFocus.set(false); } }));
 		this.element.setAttribute('aria-label', localize('sessions.settings.chatModels', 'Chat models'));
-		this.searchInput = this._register(new InputBox(this.element, {
+		const searchRow = h(document, 'div');
+		searchRow.className = 'ash-models-settings-search-row';
+		this.element.append(searchRow);
+		this.searchInput = this._register(new InputBox(searchRow, {
 			inputBoxStyles: defaultInputBoxStyles,
 			type: 'search', presentation: 'field',
 			ariaLabel: localize('models.catalog.search', 'Search models'),
@@ -149,7 +154,7 @@ export class ChatModelsWidget extends Disposable {
 		this.completions.setAttribute('role', 'listbox');
 		this.completions.setAttribute('aria-label', localize('models.catalog.suggestions', 'Model search suggestions'));
 		this.completions.hidden = true;
-		this.element.append(this.completions);
+		searchRow.append(this.completions);
 		this._register(addDisposableListener(this.completions, 'mousedown', event => event.preventDefault()));
 		this._register(addDisposableListener(this.completions, 'click', event => {
 			const option = (event.target as HTMLElement).closest('[role="option"]');
@@ -180,7 +185,7 @@ export class ChatModelsWidget extends Disposable {
 			}
 		}));
 		this.list = h(document, 'div');
-		this.list.className = 'ash-chat-models-list';
+		this.list.className = 'ash-chat-models-list ash-settings-card';
 		this.message = h(document, 'p');
 		this.message.className = 'ash-models-settings-empty';
 		this.message.setAttribute('role', 'status');
@@ -233,7 +238,11 @@ export class ChatModelsWidget extends Disposable {
 	public search(filter: string, options: { readonly focus?: boolean; } = {}): void { if (options.focus !== false) { this.focusSearch(); } this.searchInput.value = filter; }
 	public clearSearch(): void { this.search(''); }
 
-	private fireItemCount(): void { this.changed.fire(this.itemCount); }
+	private fireItemCount(): void {
+		if (this.reportedCount === this.count) { return; }
+		this.reportedCount = this.count;
+		this.changed.fire(this.count);
+	}
 
 	public render(): void {
 		if (this.viewModel.shouldRefilter()) { this.viewModel.filter(this.searchInput.value); }
@@ -277,17 +286,24 @@ export class ChatModelsWidget extends Disposable {
 			if (!ids.has(id)) { this.resources.deleteAndDispose(id); }
 		}
 		this.rows = modelEntries.map(entry => {
-			const row = previous.get(entry.id) ?? this.createRow(entry, entry.id);
+			const existing = previous.get(entry.id);
+			if (existing && equals(existing.entry, entry)) {
+				existing.toggle.checked = !entry.model.hidden;
+				return existing;
+			}
+			const row = existing ?? this.createRow(entry, entry.id);
+			if (!existing || existing.entry.model.displayName !== entry.model.displayName || !equals(existing.entry.modelNameMatches, entry.modelNameMatches)) {
+				row.nameLabel.setLabel(entry.model.displayName, undefined, { matches: entry.modelNameMatches });
+			}
 			row.entry = entry;
-			row.nameLabel.setLabel(entry.model.displayName, undefined, { matches: entry.modelNameMatches });
 			const actions = this.modelActions(entry.model);
 			const restoreFocus = actions.length === 0 && row.details.contains(row.element.ownerDocument.activeElement);
-			row.details.hidden = actions.length === 0;
+			if (row.details.hidden !== (actions.length === 0)) { row.details.hidden = actions.length === 0; }
 			this.updateModelOptions(row, actions);
 			if (restoreFocus) { row.toggle.focus(); }
-			row.toggle.enabled = !this.operationPending;
-			row.element.title = entry.model.displayName;
-			row.toggle.input.setAttribute('aria-label', localize('sessions.settings.modelVisibility', 'Show {0} in model picker', entry.model.displayName));
+			if (row.element.title !== entry.model.displayName) { row.element.title = entry.model.displayName; }
+			const label = localize('sessions.settings.modelVisibility', 'Show {0} in model picker', entry.model.displayName);
+			if (row.toggle.input.getAttribute('aria-label') !== label) { row.toggle.setAriaLabel(label); }
 			row.toggle.checked = !entry.model.hidden;
 			return row;
 		});
@@ -301,28 +317,29 @@ export class ChatModelsWidget extends Disposable {
 		}
 		if (isHTMLElement(focused) && this.list.contains(focused) && focused.ownerDocument.activeElement === focused.ownerDocument.body) { focused.focus(); }
 		this.count = shown.length;
+		if (this.list.hidden !== (shown.length === 0)) { this.list.hidden = shown.length === 0; }
 		const failure = entries.find((entry): entry is IStatusEntry => isStatusEntry(entry) && !entry.provider);
-		this.message.hidden = !failure && (shown.length > 0 || desired.length > 0);
-		this.message.setAttribute('role', failure ? 'alert' : 'status');
-		this.message.textContent = failure?.message ?? (this.loaded
+		const hidden = !failure && shown.length > 0;
+		if (this.message.hidden !== hidden) { this.message.hidden = hidden; }
+		const role = failure ? 'alert' : 'status';
+		if (this.message.getAttribute('role') !== role) { this.message.setAttribute('role', role); }
+		const message = failure?.message ?? (this.loaded
 			? this.viewModel.getConfiguredVendors().length ? localize('models.catalog.noMatches', 'No models found.') : localize('sessions.settings.noModels', 'No models available.')
 			: localize('sessions.settings.modelsLoading', 'Loading models…'));
+		if (this.message.textContent !== message) { this.message.textContent = message; }
 	}
 
-	private async runOperation(operation: () => Promise<void>, failureMessage = localize('models.catalog.savePreferencesFailed', 'Could not save model preferences.')): Promise<void> {
-		if (this.operationPending) { return; }
-		const focused = this.element.ownerDocument.activeElement;
-		this.operationPending = true;
-		this.status.hidden = true;
-		this.updateRows();
+	private async runOperation(button: Button, operation: () => Promise<void>, failureMessage = localize('models.catalog.savePreferencesFailed', 'Could not save model preferences.')): Promise<void> {
+		if (this.pendingOperations.has(button)) { return; }
+		// Keep focus and the rest of the catalog usable while this control saves.
+		this.pendingOperations.add(button);
+		button.domNode.setAttribute('aria-busy', 'true');
+		if (!this.status.hidden) { this.status.hidden = true; }
 		try { await operation(); }
 		catch { if (!this.isDisposed) { this.reportWriteError(failureMessage); } }
 		finally {
-			if (!this.isDisposed) {
-				this.operationPending = false;
-				this.updateRows();
-				if (isHTMLElement(focused) && this.element.contains(focused) && this.element.ownerDocument.activeElement === this.element.ownerDocument.body) { focused.focus(); }
-			}
+			this.pendingOperations.delete(button);
+			button.domNode.removeAttribute('aria-busy');
 		}
 	}
 
@@ -380,14 +397,14 @@ export class ChatModelsWidget extends Disposable {
 	}
 
 	private menuAction(id: string, label: string, run: () => unknown): IAction {
-		return { id, label, tooltip: '', enabled: !this.operationPending, run };
+		return { id, label, tooltip: '', enabled: true, run };
 	}
 
 	private modelActions(model: ILanguageModel): IAction[] {
 		const actions: IAction[] = [];
 		const connection = model.source?.connectionId ?? model.provider.vendor.connection ?? model.model.provider;
 		if (this.host.onConfigure && connection.startsWith('custom-')) {
-			actions.push(this.menuAction('configureModel', localize('models.catalog.configureModel', 'Configure model'), () => this.runOperation(() => this.host.onConfigure!(connection, model.model.model))));
+			actions.push(this.menuAction('configureModel', localize('models.catalog.configureModel', 'Configure model'), () => this.host.onConfigure!(connection, model.model.model)));
 		}
 		return actions;
 	}
@@ -406,7 +423,7 @@ export class ChatModelsWidget extends Disposable {
 			button = new Button(row.content, {
 				...defaultButtonStyles, label: '', presentation: 'quiet', size: 'small',
 				onClick: () => {
-					void this.runOperation(() => this.models.setModelPreferences(row.entry.model.model, { longContext: !row.entry.model.longContext }));
+					void this.runOperation(button!, () => this.models.setModelPreferences(row.entry.model.model, { longContext: !row.entry.model.longContext }));
 				},
 			});
 			button.domNode.classList.add('ash-model-context-button');
@@ -422,15 +439,19 @@ export class ChatModelsWidget extends Disposable {
 			row.contextButton.value = button;
 		}
 		// Both faces reserve the same space; only confirmed catalog values enter the flip.
-		button.domNode.querySelector(model.longContext ? '.ash-model-context-extended' : '.ash-model-context-default')!.textContent = getModelConfigValueLabel(available);
-		button.checked = model.longContext;
-		button.enabled = !this.operationPending;
-		button.domNode.setAttribute('aria-label', localize('models.catalog.contextButtonFor', 'Context size for {0}', model.displayName));
+		const value = button.domNode.querySelector(model.longContext ? '.ash-model-context-extended' : '.ash-model-context-default')!;
+		const valueLabel = getModelConfigValueLabel(available);
+		if (value.textContent !== valueLabel) { value.textContent = valueLabel; }
+		if (button.domNode.getAttribute('aria-pressed') !== String(model.longContext)) { button.checked = model.longContext; }
+		const label = localize('models.catalog.contextButtonFor', 'Context size for {0}', model.displayName);
+		if (button.domNode.getAttribute('aria-label') !== label) { button.domNode.setAttribute('aria-label', label); }
 		const description = model.longContext
 			? localize('models.catalog.contextButtonDefault', '{0} input tokens available under the current budget. Switch to default context.', available.toLocaleString())
 			: localize('models.catalog.contextButtonExtended', '{0} input tokens available under the current budget. Switch to extended context.', available.toLocaleString());
-		button.domNode.setAttribute('aria-description', description);
-		button.setTitle(description);
+		if (button.domNode.getAttribute('aria-description') !== description) {
+			button.domNode.setAttribute('aria-description', description);
+			button.setTitle(description);
+		}
 	}
 
 	private updateModelOptions(row: ModelRow, actions: readonly IAction[]): void {
@@ -442,12 +463,11 @@ export class ChatModelsWidget extends Disposable {
 			if (!button) {
 				button = new Button(row.details, {
 					...defaultButtonStyles, label: action.label, presentation: 'secondary', onClick: () => {
-						void this.modelActions(row.entry.model).find(current => current.id === action.id)?.run();
+						void this.runOperation(button!, async () => { await this.modelActions(row.entry.model).find(current => current.id === action.id)?.run(); });
 					}
 				});
 				row.commands.set(action.id, button);
 			}
-			button.enabled = !this.operationPending;
 		}
 	}
 

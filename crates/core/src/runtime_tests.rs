@@ -306,6 +306,69 @@ fn rejected_start_is_durably_failed_and_retry_never_dispatches_again() {
 }
 
 #[test]
+fn failed_agent_recovery_dispatch_does_not_stop_other_children_or_retry_failed_turns() {
+    let mut fixture = Fixture::new(Failure::None);
+    let parent = fixture
+        .runtime()
+        .submit_turn(&fixture.thread_id, fixture.submit("delegate work"))
+        .unwrap();
+    let mut children = Vec::new();
+    for id in ["first-child", "second-child"] {
+        children.push(
+            fixture
+                .agents
+                .spawn(crate::SpawnAgentRequest {
+                    delegation_id: ash_protocol::DelegationId::new(id).unwrap(),
+                    agent_id: None,
+                    session_id: SessionId::new("thread").unwrap(),
+                    parent_thread_id: fixture.thread_id.clone(),
+                    parent_turn_id: parent.turn_id.clone(),
+                    task: ash_protocol::DelegatedTask {
+                        title: id.into(),
+                        instructions: "Review the task".into(),
+                    },
+                    role: None,
+                    base_instructions: crate::test_turn_instructions(),
+                    inheritance: ash_protocol::AgentContextMode::Fresh,
+                    policy_ceiling: ash_protocol::DelegatedPolicyCeiling {
+                        policy_revision: fixture.executor.policy_revision(),
+                    },
+                    capability_scope: ash_protocol::AgentCapabilityScope {
+                        tools: vec![],
+                        delegation_tools: vec![],
+                        skills: vec![],
+                    },
+                })
+                .unwrap(),
+        );
+    }
+    fixture.backend.failure = Failure::Start;
+    assert_eq!(fixture.runtime().recover_agents().unwrap(), 0);
+    assert_eq!(fixture.backend.starts.load(Ordering::SeqCst), 3);
+    let persisted = ThreadController::with_store(fixture.store.clone());
+    for child in &children {
+        let failed = persisted.read_thread(&child.child_thread_id).unwrap();
+        assert_eq!(failed.turns[0].turn_id, child.child_turn_id);
+        assert_eq!(failed.turns[0].status, TurnStatus::Failed);
+        assert_eq!(
+            failed.turns[0].failure,
+            Some(ash_protocol::StableTurnError::model_invocation_failed())
+        );
+        assert!(fixture.updates.0.lock().unwrap().iter().any(|update| {
+            update.thread_id == child.child_thread_id
+                && matches!(
+                    &update.update,
+                    ash_protocol::ThreadUpdate::Committed {
+                        event: ash_protocol::ThreadEvent::TurnFailed { turn_id, .. }
+                    } if turn_id == &child.child_turn_id
+                )
+        }));
+    }
+    assert_eq!(fixture.runtime().recover_agents().unwrap(), 0);
+    assert_eq!(fixture.backend.starts.load(Ordering::SeqCst), 3);
+}
+
+#[test]
 fn steer_delivery_and_its_receipt_are_owned_by_the_runtime() {
     let fixture = Fixture::new(Failure::None);
     let runtime = fixture.runtime();

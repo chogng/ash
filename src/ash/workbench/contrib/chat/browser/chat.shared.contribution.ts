@@ -121,7 +121,7 @@ configurationRegistry.registerConfiguration<boolean>({
 
 configurationRegistry.registerConfiguration<ChatSessionArchiveActionWording>({
 	key: ChatSessionArchiveActionWordingSettingId,
-	defaultValue: ChatSessionArchiveActionWording.MarkAsDone,
+	defaultValue: ChatSessionArchiveActionWording.Archive,
 	scope: ConfigurationScope.WINDOW,
 	schema: { type: 'string', enum: ['archive', 'done'] },
 	parse(value: unknown): ChatSessionArchiveActionWording {
