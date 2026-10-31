@@ -831,7 +831,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		await page.keyboard.press('Enter');
 		await expect(picker).toHaveAttribute('placeholder', localized(locale, 'Select File Encoding', '选择文件编码'));
 		await expect(page.getByText(localized(locale, 'Guessed from Content', '根据内容猜测'), { exact: true })).toBeVisible();
-		await expect(page.locator('.ash-quick-pick-list').getByRole('option')).toHaveCount(48);
+		// Virtual rows expose the complete catalog through ARIA, even when only a page is mounted.
+		const options = page.locator('.ash-quick-pick-list').getByRole('option');
+		await expect(options.first()).toHaveAttribute('aria-setsize', '48');
+		expect(await options.count()).toBeLessThan(48);
 		await picker.fill('cp1125');
 		await expect(page.locator('.ash-quick-pick-list').getByRole('option')).toHaveText(/CP 1125/);
 		await picker.fill('UTF-16 LE');
