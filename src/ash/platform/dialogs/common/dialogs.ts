@@ -16,6 +16,8 @@ export interface IDialogOptions {
 	readonly title?: string;
 	readonly message: string;
 	readonly detail?: string;
+	/** Use the themed workbench dialog even when the host supports native dialogs. */
+	readonly custom?: boolean;
 	readonly checkbox?: { readonly label: string; readonly checked?: boolean; };
 }
 

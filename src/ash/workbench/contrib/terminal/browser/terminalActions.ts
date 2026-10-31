@@ -295,7 +295,7 @@ export function registerTerminalActions(): void {
 			if (workspaceContext.getWorkspace() !== workspace) return;
 			if (permissions.some(allowed => !allowed?.includes('executeCommands'))) {
 				const accepted = await requests.requestWorkspaceTrust({
-					message: localize('workspaceTrust.terminalRequest', 'Creating a terminal can run code from this workspace. Do you trust its authors?'),
+					message: localize('workspaceTrust.terminalRequest', 'Creating a terminal process requires executing code from this workspace.'),
 				});
 				if (accepted !== true) return;
 			}

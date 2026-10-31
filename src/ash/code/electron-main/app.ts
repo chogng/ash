@@ -2451,7 +2451,7 @@ export class AshApplication extends Disposable {
 			cancelButton: translate('dialog.cancel', localize2('dialog.cancel', 'Cancel').original),
 			message: translate('workspaceTrust.question', localize2('workspaceTrust.question', 'Do you trust the files in this folder?').original),
 			detail: formatNlsMessage(
-				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nYou can edit and save files in Restricted Mode. Trust this folder to enable commands and workspace integrations.').original),
+				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nYou can edit and save files in Restricted Mode. Trust this folder to enable commands, project configuration, instructions, skills, MCP servers, hooks, plugins and language services.').original),
 				{ '0': path },
 			),
 		};

@@ -13,7 +13,7 @@ export class NativeDialogHandler implements IDialogHandler {
 
 	async showDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome> {
 		if (signal.aborted) return { button: DialogResult.Cancel };
-		if (request.kind === 'input') return this.browser.showDialog(request, signal);
+		if (request.kind === 'input' || request.custom) return this.browser.showDialog(request, signal);
 		let buttons: string[];
 		switch (request.kind) {
 			case 'choice':

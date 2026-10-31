@@ -1,5 +1,4 @@
 import { Workbench } from '../../../automation/workbench.js';
-import { Dialogs } from '../../../automation/dialogs.js';
 import { _electron, type ElectronApplication, type Page } from '@playwright/test';
 import { expect, test as baseTest } from '../../../automation/test.js';
 import { execFile } from 'node:child_process';
@@ -554,7 +553,7 @@ for (const surface of ['workbench', 'agents'] as const) {
 			});
 		}
 		if (surface === 'workbench') {
-			test('Restricted Mode saves files and terminal entrypoints wait for Workspace Trust', async ({ connectionHarness: { application, page, workspaceFolder } }) => {
+			test('Restricted Mode saves files and terminal entrypoints wait for Workspace Trust', async ({ connectionHarness: { page, workspaceFolder } }, testInfo) => {
 				const workbench = new Workbench(page);
 				const banner = page.locator('[data-part="banner"]');
 				await expect(banner).toContainText('Restricted Mode is intended for safe code browsing');
@@ -566,21 +565,31 @@ for (const surface of ['workbench', 'agents'] as const) {
 				await editor.waitForTypeInEditor('Saved in Restricted Mode');
 				await workbench.quickaccess.runCommand('workbench.action.files.save');
 				await expect.poll(() => readFile(join(workspaceFolder!, 'example.txt'), 'utf8')).toBe('Workspace permission fixture\nSaved in Restricted Mode');
-				const dialogs = new Dialogs(page);
-				const canceled = await dialogs.confirm(application, 'Workspace Trust', 'Cancel', () => workbench.quickaccess.runCommand('workbench.action.terminal.new'));
-				expect(canceled.message).toContain('Creating a terminal can run code from this workspace');
+				const dialog = page.getByRole('dialog', { name: 'Workspace Trust', exact: true });
+				await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+				await expect(dialog).toContainText('Creating a terminal process requires executing code');
+				await expect(dialog).toContainText(URI.file(await realpath(workspaceFolder!)).fsPath);
+				await expect(dialog).toContainText('MCP servers');
+				await expect(dialog).not.toContainText('Unsaved process state may be lost');
+				await page.screenshot({ path: testInfo.outputPath('terminal-workspace-trust.png') });
+				await dialog.press('Escape');
 				await expect(page.locator('.xterm-screen')).toHaveCount(0);
 				await expect(banner).toContainText('Restricted Mode is intended for safe code browsing');
-				await dialogs.confirm(application, 'Workspace Trust', 'Cancel', () => workbench.quickaccess.runCommand('workbench.action.terminal.focus'));
+				await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
+				await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 				await expect(page.locator('.xterm-screen')).toHaveCount(0);
 				await expect(page.locator('.ash-terminal-status')).toBeHidden();
-				await dialogs.confirm(application, 'Workspace Trust', 'Trust workspace', () => workbench.quickaccess.runCommand('workbench.action.terminal.focus'));
+				await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
+				await dialog.getByRole('button', { name: 'Trust folder and continue', exact: true }).click();
 				await expect(banner).toBeHidden();
 				await expect(page.locator('[data-part="panel"] .xterm-screen')).toBeVisible();
+				await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+				await expect(page.locator('[data-part="panel"] .xterm-screen')).toHaveCount(2);
+				await expect(dialog).toHaveCount(0);
 			});
 		}
 		test('Workspace status manages the current permissions and refreshes effective trust', async ({
-			connectionHarness: { application, page, workspaceFolder },
+			connectionHarness: { page, workspaceFolder },
 		}, testInfo) => {
 			const folder = URI.file(await realpath(workspaceFolder!)).fsPath;
 			const permissionStatus =
@@ -611,13 +620,10 @@ for (const surface of ['workbench', 'agents'] as const) {
 			const readOnly = editor.getByRole('button', { name: 'Open in Restricted Mode', exact: true });
 			const confirm = async (button: string, enableDevelopment: boolean): Promise<void> => {
 				const action = enableDevelopment ? trust : readOnly;
-				if (surface === 'workbench') {
-					const message = await new Dialogs(page).confirm(application, 'Confirm', button, () => action.click());
-					expect(message.message).toContain(basename(folder));
-				} else {
-					await action.click();
-					await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: button, exact: true }).click();
-				}
+				await action.click();
+				const confirmation = page.getByRole('dialog', { name: 'Confirm', exact: true });
+				await expect(confirmation).toContainText(basename(folder));
+				await confirmation.getByRole('button', { name: button, exact: true }).click();
 			};
 			await page.screenshot({ path: testInfo.outputPath(`${surface}-workspace-trust-read-only.png`) });
 			await expect(permissionStatus).toBeVisible();

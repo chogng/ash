@@ -24,6 +24,8 @@ import { localize } from '../../../../nls.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import { ITerminalService } from '../../terminal/browser/terminal.js';
+import { IDebugService } from '../../debug/common/debug.js';
 
 /** Edits a revisioned grant for the window's current roots, never for an Agents session's host. */
 export class WorkspaceTrustEditor extends EditorPane {
@@ -72,6 +74,8 @@ export class WorkspaceTrustEditor extends EditorPane {
 		@IAccessibleViewService private readonly accessible: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ILocalizationService private readonly localization: ILocalizationService,
+		@ITerminalService private readonly terminals: ITerminalService,
+		@IDebugService private readonly debug: IDebugService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
 	) {
@@ -342,17 +346,22 @@ export class WorkspaceTrustEditor extends EditorPane {
 			: localize('workspaceTrust.save', 'Save permissions');
 		this.busy = true; this.render();
 		try {
+			const hasRunningSessions = this.terminals.instances.some(instance => instance.state !== 'exited' && instance.state !== 'error')
+				|| this.debug.sessions.some(session => session.state !== 'terminated' && session.state !== 'error');
 			const result = await this.dialogs.confirm({
+				custom: true,
 				message: development
 					? localize('workspaceTrust.confirmTrust', 'Trust {0} and enable development?', this.folderName.textContent)
 					: restricted
 						? localize('workspaceTrust.confirmRestricted', 'Open {0} in Restricted Mode?', this.folderName.textContent)
 						: localize('workspaceTrust.confirm', 'Apply directory permissions to {0}?', path),
-				detail: development
-					? localize('workspaceTrust.confirmTrustDetail', 'This allows editing files, running commands and loading workspace integrations in {0}. Only continue if you trust this project. The workspace connection will be restored. Saving these changes may terminate running terminal commands and debug sessions. Unsaved process state may be lost.', path)
+				detail: [development
+					? localize('workspaceTrust.confirmTrustDetail', 'This allows editing files, running commands and loading project configuration, instructions, skills, MCP servers, hooks, plugins and language services in {0}. Only continue if you trust this project. The workspace connection will be restored.', path)
 					: restricted
-						? localize('workspaceTrust.confirmRestrictedDetail', 'This allows editing and saving files in {0}. Commands and workspace integrations will be disabled. The workspace connection will be restored. Saving these changes may terminate running terminal commands and debug sessions. Unsaved process state may be lost.', path)
-						: localize('workspaceTrust.confirmDetail', 'Allowed capabilities: {0}\nThis saves a directory grant on the connected host and restores the workspace connection. Saving these changes may terminate running terminal commands and debug sessions. Unsaved process state may be lost.', permissions.map(permission => this.permissionLabel(permission)).join(', ') || localize('workspaceTrust.none', 'None')),
+						? localize('workspaceTrust.confirmRestrictedDetail', 'This allows editing and saving files in {0}. Commands and workspace integrations will be disabled. The workspace connection will be restored.', path)
+						: localize('workspaceTrust.confirmDetail', 'Allowed capabilities: {0}\nThis saves a directory grant on the connected host and restores the workspace connection.', permissions.map(permission => this.permissionLabel(permission)).join(', ') || localize('workspaceTrust.none', 'None')),
+				...(hasRunningSessions ? [localize('workspaceTrust.runningSessionsWarning', 'Changing permissions may terminate running terminal commands and debug sessions. Unsaved process state may be lost.')] : []),
+				].join('\n\n'),
 				primaryButton,
 			});
 			// Confirmation may outlive the selected workspace or connection. It authorizes only this captured target.

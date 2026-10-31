@@ -9,6 +9,10 @@ import { IDialogService } from '../../../../../../platform/dialogs/common/dialog
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import { IDialogsModel } from '../../../../../common/dialogs.js';
 import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialog.js';
+import { NativeDialogHandler } from '../../../../../electron-browser/parts/dialogs/dialogHandler.js';
+import type { INativeHostApi } from '../../../../../../platform/native/common/nativeHost.js';
+import { ITerminalService } from '../../../../../contrib/terminal/browser/terminal.js';
+import { IDebugService } from '../../../../../contrib/debug/common/debug.js';
 import { DialogHandlerContribution } from '../../../../../browser/parts/dialogs/dialog.web.contribution.js';
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
 import { IWorkspaceTrustApi, READ_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, DEVELOPMENT_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../../platform/workspace/common/workspaceTrust.js';
@@ -83,7 +87,10 @@ const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);
 resources.add(bindTestColorTheme(theme, root));
 const dialogs = resources.add(new DialogService());
-resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(root)));
+const dialogHandler = new URLSearchParams(location.search).has('native')
+	? new NativeDialogHandler({ showMessageBox: async () => { throw new Error('Workspace Trust must use a workbench dialog'); } } as unknown as INativeHostApi, root)
+	: new BrowserDialogHandler(root);
+resources.add(new DialogHandlerContribution(dialogs.model, dialogHandler));
 services.registerInstance(IDialogService, dialogs);
 services.registerInstance(IDialogsModel, dialogs.model);
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback, parameters) => formatNlsMessage(new URLSearchParams(location.search).has('zh') ? (settingsChinese as Record<string, Record<string, string>>)[bundle]?.[key] ?? fallback : fallback, parameters) });
@@ -150,6 +157,10 @@ const trustResponses: string[] = [];
 let effectiveKnown = true;
 let granted: readonly WorkspaceTrustPermission[] = DEVELOPMENT_DIR_PERMISSIONS;
 let savedPermissions: readonly WorkspaceTrustPermission[] = granted;
+let runningSessions: 'none' | 'terminal' | 'debug' | 'exited' = 'none';
+// Trust presentation observes session lifetimes without launching real processes in this fixture.
+services.registerInstance(ITerminalService, { get instances() { return runningSessions === 'terminal' ? [{ state: 'running' }] : runningSessions === 'exited' ? [{ state: 'exited' }] : []; } } as unknown as ITerminalService);
+services.registerInstance(IDebugService, { get sessions() { return runningSessions === 'debug' ? [{ state: 'stopped' }] : runningSessions === 'exited' ? [{ state: 'terminated' }] : []; } } as unknown as IDebugService);
 
 const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRecovery['status']; } = {
 	status: 'idle', error: 'Authorization expired', onDidChange: changed.event,
@@ -202,6 +213,11 @@ const contribution = resources.add(WorkbenchContributionsRegistry.createHost(ser
 contribution.advance(WorkbenchPhase.AfterRestored);
 let closed = 0;
 window.ashBannerIntegration = {
+	setRunningSessions(value) { runningSessions = value; },
+	addWorkspaceFolder() {
+		workspace.updateWorkspace({ id: 'multi', folders: [...workspace.getWorkspace().folders, { id: 'second', name: 'second', uri: URI.file('/second'), index: 1 }] });
+		permissionChanges.fire();
+	},
 	setRecovery(status) { recovery.status = status; changed.fire(); },
 	setPermissions(mode) {
 		effectiveKnown = mode !== 'unknown';
@@ -244,6 +260,8 @@ window.ashBannerIntegration = {
 declare global {
 	interface Window {
 		ashBannerIntegration: {
+			setRunningSessions(value: 'none' | 'terminal' | 'debug' | 'exited'): void;
+			addWorkspaceFolder(): void;
 			setRecovery(status: IAppServerConnectionRecovery['status']): void;
 			setManagementAllowed(value: boolean): void;
 			conflictGrant(): void;

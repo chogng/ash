@@ -268,7 +268,7 @@ suite('banner browser component', () => {
 			await trust.press('Enter');
 			const dialog = page.getByRole('dialog');
 			await expect(dialog).toContainText(zh ? '信任' : 'Trust');
-			await expect(dialog).toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
+			await expect(dialog).not.toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
 			await dialog.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click();
 			await expect(heading).toHaveText(zh ? '受限模式' : 'Restricted Mode');
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
@@ -286,6 +286,7 @@ suite('banner browser component', () => {
 				expect(colors.foreground).not.toBe(colors.background);
 				await page.screenshot({ path: testInfo.outputPath(`trust-${locale}-theme-${index}.png`) });
 			}
+			await page.evaluate(() => window.ashBannerIntegration.setRunningSessions('terminal'));
 			await restricted.click();
 			await expect(dialog).toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
 			await expect(dialog).toContainText(zh ? '进程中未保存的状态可能丢失' : 'Unsaved process state may be lost');
@@ -369,6 +370,7 @@ suite('banner browser component', () => {
 			await expect(write).not.toBeChecked();
 			await write.focus();
 			await write.press('Space');
+			await page.evaluate(() => window.ashBannerIntegration.setRunningSessions('debug'));
 			await save.click();
 			await expect(dialog).toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
 			await expect(dialog).toContainText(zh ? '进程中未保存的状态可能丢失' : 'Unsaved process state may be lost');
@@ -440,7 +442,7 @@ suite('banner browser component', () => {
 		test(`Workspace Trust requests coalesce, cancel with Escape and complete after recovery (${locale})`, async function () {
 			const { page } = browserTests;
 			const zh = locale === 'zh';
-			await page.goto(`/banner.html${zh ? '?zh' : ''}`);
+			await page.goto(`/banner.html?native${zh ? '&zh' : ''}`);
 			await page.waitForFunction(() => !!window.ashBannerIntegration);
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
 			const origin = page.getByRole('textbox', { name: 'Editor draft' });
@@ -449,14 +451,19 @@ suite('banner browser component', () => {
 			const dialog = page.getByRole('dialog', { name: zh ? '工作区信任' : 'Workspace Trust', exact: true });
 			await expect(dialog).toHaveCount(1);
 			await expect(dialog).toContainText(zh ? '你是否信任此工作区中文件的作者' : 'Do you trust the authors');
-			await expect(dialog).toContainText(zh ? '未保存的状态可能丢失' : 'Unsaved process state may be lost');
+			await expect(dialog).not.toContainText(zh ? '未保存的状态可能丢失' : 'Unsaved process state may be lost');
+			await expect(dialog).toContainText(zh ? 'MCP 服务器' : 'MCP servers');
+			await expect(dialog).toContainText(zh ? '将信任的文件夹' : 'Folders to trust');
+			await expect(dialog).toContainText((await page.evaluate(() => window.ashBannerIntegration.managementState())).path);
+			await expect(dialog.getByRole('button', { name: zh ? '在受限模式下打开' : 'Open in Restricted Mode', exact: true })).toHaveCount(0);
 			await dialog.press('Escape');
 			await expect(dialog).toBeHidden();
 			await expect(origin).toBeFocused();
 			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled']);
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
-			await page.evaluate(() => window.ashBannerIntegration.requestTrust());
-			const trust = dialog.getByRole('button', { name: zh ? '信任工作区' : 'Trust workspace', exact: true });
+			await page.evaluate(() => { window.ashBannerIntegration.setRunningSessions('terminal'); window.ashBannerIntegration.requestTrust(); });
+			await expect(dialog).toContainText(zh ? '未保存的状态可能丢失' : 'Unsaved process state may be lost');
+			const trust = dialog.getByRole('button', { name: zh ? '信任文件夹并继续' : 'Trust folder and continue', exact: true });
 			await trust.focus();
 			await trust.press('Enter');
 			await expect(dialog).toBeHidden();
@@ -464,6 +471,31 @@ suite('banner browser component', () => {
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(1);
 			expect((await page.evaluate(() => window.ashBannerIntegration.state())).retries).toBe(1);
 			await expect(page.locator('[data-part="banner"]')).toBeHidden();
+			await page.evaluate(() => window.ashBannerIntegration.requestTrust());
+			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled', 'trusted', 'trusted']);
+			await expect(dialog).toHaveCount(0);
+			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(1);
+		});
+
+		test(`Workspace Trust names all roots and warns only for live sessions (${locale})`, async function () {
+			const { page } = browserTests;
+			const zh = locale === 'zh';
+			await page.goto(`/banner.html?native${zh ? '&zh' : ''}`);
+			await page.waitForFunction(() => !!window.ashBannerIntegration);
+			await page.evaluate(() => { window.ashBannerIntegration.setPermissions('restricted'); window.ashBannerIntegration.addWorkspaceFolder(); });
+			const dialog = page.getByRole('dialog', { name: zh ? '工作区信任' : 'Workspace Trust', exact: true });
+			for (const state of ['none', 'terminal', 'debug', 'exited'] as const) {
+				await page.evaluate(state => { window.ashBannerIntegration.setRunningSessions(state); window.ashBannerIntegration.requestTrust(); }, state);
+				await expect(dialog).toBeVisible();
+				await expect(dialog).toContainText('second');
+				await expect(dialog).toContainText((await page.evaluate(() => window.ashBannerIntegration.managementState())).path);
+				await expect(dialog.getByRole('button', { name: zh ? '信任工作区并继续' : 'Trust workspace and continue', exact: true })).toBeVisible();
+				if (state === 'terminal' || state === 'debug') await expect(dialog).toContainText(zh ? '未保存的状态可能丢失' : 'Unsaved process state may be lost');
+				else await expect(dialog).not.toContainText(zh ? '未保存的状态可能丢失' : 'Unsaved process state may be lost');
+				await dialog.press('Escape');
+				await expect(dialog).toBeHidden();
+			}
+			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
 		});
 	}
 

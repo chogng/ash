@@ -106,7 +106,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		// All entrypoints, including opening an empty panel, must obtain trust before profile discovery.
 		if (permissions.some(allowed => !allowed?.includes('executeCommands'))) {
 			const accepted = await this.trustRequests.requestWorkspaceTrust({
-				message: localize('workspaceTrust.terminalRequest', 'Creating a terminal can run code from this workspace. Do you trust its authors?'),
+				message: localize('workspaceTrust.terminalRequest', 'Creating a terminal process requires executing code from this workspace.'),
 			});
 			if (accepted !== true || this.isDisposed || this.workspaceContext.getWorkspace() !== workspace) throw new CancellationError();
 		}
