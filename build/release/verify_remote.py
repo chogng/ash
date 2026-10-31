@@ -132,6 +132,10 @@ def ssh_fixture(root: Path, reports: Path):
     reports.mkdir(parents=True, exist_ok=True)
     fixture = root / "ssh"
     fixture.mkdir(mode=0o700)
+    if os.name == "nt":
+        # sshd creates -E logs with mode 0600 as LocalSystem. Keep the fixture
+        # user as the owner so diagnostics remain readable after the service stops.
+        (fixture / "sshd.log").touch(mode=0o600)
 
     keygen = (
         str(Path(os.environ["SystemRoot"]) / "System32/OpenSSH/ssh-keygen.exe")
