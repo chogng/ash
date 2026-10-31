@@ -27,8 +27,8 @@ matching Visual Studio Developer PowerShell. Use `just remote-package --target
 x86_64-pc-windows-msvc --package-dir dist/ash-remote`. Programs use `.exe`; the
 client recognizes drive/UNC workspace paths and invokes Windows PowerShell 5.1
 explicitly over OpenSSH. Installation requires Windows `tar.exe` and defaults to
-`%LOCALAPPDATA%\Ash\remote`. The published release matrix below is separate from
-source-build target support; it does not yet publish Windows artifacts.
+`%LOCALAPPDATA%\Ash\remote`. Windows x64 and ARM64 are built and verified
+on native Windows runners before their archives enter the release catalog.
 The first SSH initialization includes installing the profile's immutable package,
 so SSH clients allow up to three minutes for that handshake. Later connections
 verify and reuse the selection without recopying the package; the smoke runner
@@ -44,16 +44,28 @@ The client and Server share a protocol; they do not need separate source reposit
 publishing an immutable `remote-<commit>-<run>-<attempt>` GitHub release. It exercises
 connections, files, terminals and an Agent turn, signs/notarizes macOS executables,
 and publishes rootless `ash-remote-<target>.tar.gz` archives with separate symbols.
-The default release matrix covers macOS ARM64/x64 and Linux glibc ARM64/x64. Musl
+The default release matrix covers macOS, Linux glibc and Windows MSVC ARM64/x64. Musl
 remains a source-build target requiring an explicit compatible Node executable.
-Manual dispatch may select `platforms=linux` without Apple signing credentials.
+Manual dispatch may select `platforms=linux` or `platforms=windows` without Apple
+signing credentials. Windows Remote archives currently do not use Authenticode or
+require an Azure signing account. Their trust comes from the catalog digest bound
+into the client product, archive SHA-256 and remote verification before activation.
+This exception applies only to the Remote distribution; other Windows product
+archives retain their system-signing requirements. Windows application-control
+policies can still reject an unsigned runtime.
 The existing Platform checks workflow also exposes `remote_only=true`, which runs
 only this Linux release and its published-asset acceptance checks.
 
 `build/release/remote.py archive` creates a release archive; `catalog` verifies all
 archives and requires the complete selected platform set at one protocol/version.
 It emits `catalog.json` and `remote-release.json`, which binds the catalog's immutable
-HTTPS URL and digest to that protocol/version. Desktop release jobs wait for this
+HTTPS URL and digest to that protocol/version. Each selected native platform then
+tests the published bytes through Desktop's bootstrap and an isolated OpenSSH
+server: first connection downloads and installs the missing runtime, verifies the
+protocol/schema, starts the backend, edits a file and reconnects without provisioning
+again; the installed runtime also passes terminal and Agent smoke checks. Only
+after every platform passes does the workflow publish the
+`remote-server-release-binding` artifact. Desktop release jobs wait for this
 independent release and pass the binding through `ASH_REMOTE_RELEASE_BINDING` or
 `--remote-release FILE`. Packaging rejects a protocol/version mismatch, omits the
 remote connector and remote archives, and retains the local App Server and SSH client.
@@ -65,6 +77,9 @@ SSH and commits an immutable remote installation. A successful initialize/schema
 handshake activates its exact path; later connections reuse it. The remote machine
 does not need Internet access. Cancellation clears staging; a failed download,
 upload or handshake never activates a partial runtime.
+Installation receipts live beside the immutable runtime directory. Reusing an
+older installation moves its receipt out of the package before backend activation,
+so installation state cannot invalidate the packaged file manifest.
 
 Downloads allow only GitHub's single HTTPS hop to `release-assets.githubusercontent.com`;
 other redirects remain rejected. Every hop retains public-Internet-only DNS checks,
@@ -79,6 +94,9 @@ uses Desktop's actual bootstrap, provisioner and profile store against a real is
 SSH server. An initially missing runtime triggers the public HTTPS download; a second
 connection reuses the activated path without provisioning. Editing, terminal and
 Agent smoke checks then run from that installed published package.
+On Windows this verifier requires an elevated session and `rustc`; it creates and
+removes a separate loopback-only SSH service and a temporary client proxy, without
+changing an existing SSH service or the user's SSH configuration.
 
 Before publishing, use the same acceptance entrypoint with `--catalog-dir DIR`
 instead of `--binding-file FILE`. `DIR` contains a locally built archive and its

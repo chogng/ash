@@ -6,7 +6,12 @@ import unittest
 from pathlib import Path
 
 from build.lib.package_test_support import create_runtime_package
-from build.lib.package import package_build_id, package_files
+from build.lib.package import (
+    package_build_id,
+    package_files,
+    require_verified_system_signing,
+)
+from build.lib.targets import target_spec
 from build.release.remote import (
     archive_package,
     archive_record,
@@ -16,6 +21,40 @@ from build.release.remote import (
 
 
 class RemoteReleaseTests(unittest.TestCase):
+    def test_one_client_binding_covers_linux_and_both_windows_architectures(self):
+        targets = [
+            "x86_64-unknown-linux-gnu",
+            "x86_64-pc-windows-msvc",
+            "aarch64-pc-windows-msvc",
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for target in targets:
+                source = root / target
+                source.mkdir()
+                package = create_runtime_package(
+                    source, target, media_distribution="none"
+                )
+                archive_package(
+                    package, root / f"ash-remote-{target}.tar.gz", unsigned=True
+                )
+            catalog, binding = root / "catalog.json", root / "remote-release.json"
+            write_catalog(
+                root, catalog, binding, "chogng/ash", "remote-fixture", targets
+            )
+            records = json.loads(catalog.read_text())["artifacts"]
+            self.assertEqual({record["target"] for record in records}, set(targets))
+            self.assertEqual(len({record["version"] for record in records}), 1)
+            read_binding(
+                binding, json.loads((package / "ash-package.json").read_text())
+            )
+            # A partial Windows release must not produce a Desktop download binding.
+            (root / "ash-remote-aarch64-pc-windows-msvc.tar.gz").unlink()
+            with self.assertRaisesRegex(ValueError, "every selected target"):
+                write_catalog(
+                    root, catalog, binding, "chogng/ash", "remote-fixture", targets
+                )
+
     def test_windows_runtime_archives_bind_exe_payloads_to_the_catalog(self):
         for target in ("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"):
             with (
@@ -29,8 +68,12 @@ class RemoteReleaseTests(unittest.TestCase):
                 )
                 self.assertTrue((package / "bin/ash-remote-server.exe").is_file())
                 archive = root / f"ash-remote-{target}.tar.gz"
-                archive_package(package, archive, unsigned=True)
+                # Remote's catalog-authenticated Windows release needs no Azure
+                # account. Other Windows product archives still require signing.
+                archive_package(package, archive)
                 self.assertEqual(archive_record(archive)[0]["target"], target)
+                with self.assertRaisesRegex(RuntimeError, "verified system signing"):
+                    require_verified_system_signing(package, target_spec(target))
 
     def test_publication_rejects_local_media_download_descriptors(self):
         with tempfile.TemporaryDirectory() as temporary:

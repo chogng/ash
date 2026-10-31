@@ -33,7 +33,9 @@ try {
     [IO.Directory]::CreateDirectory($parent) | Out-Null
     $runtime = Join-Path $parent $digest
     $executable = Join-Path $runtime 'bin\ash-remote-server.exe'
-    $receipt = Join-Path $runtime '.ash-remote-runtime-sha256'
+    # Installation state must not add files to the immutable package manifest.
+    $receipt = $runtime + '.sha256'
+    $legacyReceipt = Join-Path $runtime '.ash-remote-runtime-sha256'
     $lockPath = $runtime + '.installing'
     CheckPath $lockPath
     try { $lock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None') }
@@ -41,6 +43,12 @@ try {
     # Keep the lock file: deleting it after releasing the handle races a new installer.
     CheckPath $executable
     CheckPath $receipt
+    CheckPath $legacyReceipt
+    if ((Test-Path -LiteralPath $legacyReceipt -PathType Leaf) -and
+        [IO.File]::ReadAllText($legacyReceipt).Trim() -ceq $digest) {
+        [IO.File]::WriteAllText($receipt, $digest, (New-Object Text.UTF8Encoding($false)))
+        [IO.File]::Delete($legacyReceipt)
+    }
     if ((Test-Path -LiteralPath $executable -PathType Leaf) -and
         (Test-Path -LiteralPath $receipt -PathType Leaf) -and
         [IO.File]::ReadAllText($receipt).Trim() -ceq $digest) {
@@ -105,7 +113,7 @@ public static class AshRemoteInput {
     foreach ($relative in @('ash-package.json', 'bin/ash-remote-server.exe', 'bin/ash-app-server.exe', 'bin/ash-app-server-daemon.exe', 'ash-path/rg.exe', 'ash-resources/tgrep/tgrep.exe', 'ash-resources/node/bin/node.exe')) {
         if (!(Test-Path -LiteralPath (Join-Path $package $relative) -PathType Leaf)) { Fail 'package-entrypoint-missing' 65 }
     }
-    [IO.File]::WriteAllText((Join-Path $package '.ash-remote-runtime-sha256'), $digest, (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($receipt, $digest, (New-Object Text.UTF8Encoding($false)))
     [IO.Directory]::Move($package, $runtime)
     Report 'INSTALLED'
 } catch {

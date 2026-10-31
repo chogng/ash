@@ -47,7 +47,11 @@ def archive_package(package: Path, output: Path, *, unsigned: bool = False) -> N
         or output.name != f"ash-remote-{spec.target}.tar.gz"
     ):
         raise ValueError("Remote releases require a media-free release package")
-    if not unsigned:
+    # Windows Remote runs behind SSH and is authenticated by the catalog digest
+    # pinned in the client product plus each archive's SHA-256. It does not require
+    # Authenticode; Desktop/Code and other package publishers retain their own
+    # system-signing gates. macOS Remote still requires its platform signature.
+    if not unsigned and not spec.is_windows:
         require_verified_system_signing(package, spec)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_name(output.name + ".partial")

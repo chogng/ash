@@ -352,9 +352,25 @@ fn generated_remote_script_commits_a_package_and_is_idempotent() {
     let executable_text = executable.to_string_lossy().into_owned();
     assert!(receipt.contains(&executable_text));
     assert_eq!(fs::read(&executable).unwrap(), b"ash");
+    let package = executable.parent().unwrap().parent().unwrap();
+    let sidecar = package.with_extension("sha256");
+    let legacy_receipt = package.join(".ash-remote-runtime-sha256");
+    assert!(
+        !legacy_receipt.exists(),
+        "installation must preserve the package manifest"
+    );
+    assert_eq!(
+        fs::read_to_string(&sidecar).unwrap().trim(),
+        artifact.integrity().sha256()
+    );
+    // Existing installs used an in-package receipt. Reuse must migrate it out
+    // before the shared package store validates and activates this runtime.
+    fs::rename(&sidecar, &legacy_receipt).unwrap();
 
     let output = Command::new("sh").arg("-c").arg(command).output().unwrap();
     assert!(output.status.success());
+    assert!(sidecar.is_file());
+    assert!(!legacy_receipt.exists());
     assert!(
         String::from_utf8(output.stdout)
             .unwrap()
@@ -495,6 +511,16 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
                 fs::read(package.join("ash-resources/binary.dat")).unwrap(),
                 binary_fixture()
             );
+            let sidecar = package.with_extension("sha256");
+            let legacy_receipt = package.join(".ash-remote-runtime-sha256");
+            assert!(!legacy_receipt.exists());
+            assert_eq!(
+                fs::read_to_string(&sidecar).unwrap().trim(),
+                artifact.integrity().sha256()
+            );
+            if expected == "__ASH_REMOTE_RUNTIME_INSTALLED__:" {
+                fs::rename(sidecar, legacy_receipt).unwrap();
+            }
         }
     }
 }
