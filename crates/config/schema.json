@@ -66,7 +66,7 @@
             "type": "automatic"
           }
         },
-        "commitMessageModel": {
+        "codeReviewModel": {
           "anyOf": [
             {
               "$ref": "#/$defs/ModelRef"
@@ -75,6 +75,21 @@
               "type": "null"
             }
           ]
+        },
+        "commitMessageEnabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "commitMessageModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "No override inherits the model of the Turn that produced the changes."
         },
         "context": {
           "$ref": "#/$defs/ContextCompactionPolicy",
@@ -1864,6 +1879,7 @@
         "approvalReviewModel": {
           "type": "automatic"
         },
+        "commitMessageEnabled": false,
         "context": {
           "mode": "summary",
           "recentTokens": 16384,
@@ -2010,7 +2026,7 @@
       }
     },
     "schemaVersion": {
-      "const": 11,
+      "const": 12,
       "type": "integer"
     },
     "skills": {
