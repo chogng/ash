@@ -5,6 +5,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 /// Extension-owned view model. Transport response normalization stays in `api`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -176,6 +177,7 @@ pub struct Repository {
     pub root_uri: ResourceUri,
     pub configuration: Configuration,
     pub status: Option<Status>,
+    pub incoming_changes: Option<Arc<IncomingChanges>>,
     pub catalog: Option<Catalog>,
     pub draft: String,
     pub input_revision: u64,
@@ -218,6 +220,17 @@ pub enum RemoteOperationPhase {
     AwaitingInput,
 }
 impl Repository {
+    pub fn incoming_change(&self, path: &RepoPath) -> Option<&str> {
+        if !self.configuration.boolean("decorations.enabled", true) {
+            return None;
+        }
+        let incoming = self.incoming_changes.as_ref()?;
+        if !incoming.matches(self.status.as_ref()?) {
+            return None;
+        }
+        incoming.changes.get(path).map(String::as_str)
+    }
+
     /// Reserves repository mutations and watched updates for the whole invocation.
     pub fn is_busy(&self) -> bool {
         self.operation.is_some()
@@ -773,6 +786,21 @@ pub struct CommitChange {
     pub path: RepoPath,
     pub original_path: Option<RepoPath>,
     pub status: String,
+}
+
+/// Derived from immutable local/upstream commits, never from the working tree.
+pub struct IncomingChanges {
+    pub head: Head,
+    pub stream_instance_id: String,
+    pub history_revision: u64,
+    pub changes: BTreeMap<RepoPath, String>,
+}
+impl IncomingChanges {
+    pub fn matches(&self, status: &Status) -> bool {
+        self.head == status.head
+            && self.stream_instance_id == status.stream_instance_id
+            && self.history_revision == status.history_revision
+    }
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

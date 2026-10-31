@@ -209,6 +209,7 @@ impl GitRuntime {
         if self.stopped.load(Ordering::Acquire) {
             return Ok(());
         }
+        self.refresh_incoming_changes();
         let (revision, snapshots) = {
             let mut state = self.lock();
             state.revision += 1;
@@ -237,6 +238,97 @@ impl GitRuntime {
             )
         };
         self.publication.enqueue(revision, snapshots)
+    }
+
+    fn refresh_incoming_changes(&self) {
+        let repositories: Vec<_> = self.lock().repositories.values().cloned().collect();
+        for repository in repositories {
+            if !repository.configuration.boolean("enabled", true)
+                || !repository
+                    .configuration
+                    .boolean("decorations.enabled", true)
+            {
+                continue;
+            }
+            let Some(status) = &repository.status else {
+                continue;
+            };
+            if repository
+                .incoming_changes
+                .as_ref()
+                .is_some_and(|incoming| incoming.matches(status))
+            {
+                continue;
+            }
+            let Some(local) = status.head.object_id() else {
+                continue;
+            };
+            let Some(upstream) = status
+                .head
+                .upstream()
+                .filter(|upstream| upstream.behind > 0)
+            else {
+                continue;
+            };
+            let remote = match &upstream.object_id {
+                Some(remote) => remote.clone(),
+                None => {
+                    let Ok(refs) = self.api.history_refs(&repository, None) else {
+                        continue;
+                    };
+                    if refs.status.head != status.head
+                        || refs.status.history_revision != status.history_revision
+                        || refs.status.stream_instance_id != status.stream_instance_id
+                    {
+                        continue;
+                    }
+                    let Some(reference) = refs.references.into_iter().find(|reference| {
+                        matches!(reference.kind, model::ReferenceKind::RemoteBranch)
+                            && reference.name == upstream.name
+                    }) else {
+                        continue;
+                    };
+                    reference.object_id
+                }
+            };
+            // Query outside the state lock. Missing history must not prevent local
+            // changes from publishing; a later publication can retry the comparison.
+            let Ok(comparison) = self.api.compare_changes(
+                &repository,
+                &remote,
+                local,
+                model::CompareMode::MergeBase,
+                None,
+            ) else {
+                continue;
+            };
+            let incoming = model::IncomingChanges {
+                head: status.head.clone(),
+                stream_instance_id: status.stream_instance_id.clone(),
+                history_revision: status.history_revision,
+                changes: comparison
+                    .changes
+                    .into_iter()
+                    .map(|change| {
+                        // A remote rename affects the old path in the local checkout.
+                        let path = if change.status == "renamed" {
+                            change.original_path.unwrap_or(change.path)
+                        } else {
+                            change.path
+                        };
+                        (path, change.status)
+                    })
+                    .collect(),
+            };
+            if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id)
+                && current
+                    .status
+                    .as_ref()
+                    .is_some_and(|status| incoming.matches(status))
+            {
+                current.incoming_changes = Some(Arc::new(incoming));
+            }
+        }
     }
     fn repository(&self, id: Option<&str>) -> Result<Repository, ExtensionError> {
         let state = self.lock();
@@ -562,6 +654,7 @@ impl GitRuntime {
                     root_uri: root_uri.clone(),
                     configuration: config.clone(),
                     status: None,
+                    incoming_changes: None,
                     catalog: None,
                     draft: String::new(),
                     input_revision: 0,
@@ -668,6 +761,7 @@ impl GitRuntime {
                     repository.notice = current.notice.clone();
                     repository.commit_editor_head = current.commit_editor_head.clone();
                     repository.blame = current.blame.clone();
+                    repository.incoming_changes = current.incoming_changes.clone();
                     repository.retired_streams = current.retired_streams.clone();
                     repository.pending_paths = current.pending_paths.clone();
                     if let Some(status) = repository.status.take() {
@@ -915,6 +1009,13 @@ fn accept_repository_status(repository: &mut Repository, status: Status) {
                 .retired_streams
                 .insert(current.stream_instance_id.clone());
         }
+    }
+    if repository
+        .incoming_changes
+        .as_ref()
+        .is_some_and(|incoming| !incoming.matches(&status))
+    {
+        repository.incoming_changes = None;
     }
     repository.status = Some(status);
     repository.pending_paths = None;

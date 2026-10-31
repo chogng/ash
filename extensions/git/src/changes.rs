@@ -431,12 +431,20 @@ impl GitRuntime {
             .as_ref()
             .ok_or_else(|| invalid("Git status unavailable"))?;
         if let Some(change) = status.changes.iter().find(|change| change.path == path) {
-            let data =
-                crate::scm::decoration(&self.api, change, change.worktree_status == "unmodified");
+            let data = crate::scm::decoration(
+                &self.api,
+                repository,
+                change,
+                change.worktree_status == "unmodified",
+            );
             let kind = data["kind"].as_str().unwrap_or("modified");
             return Ok(
                 json!({"letter":data["badge"],"tooltip":data["tooltip"],"color":format!("gitDecoration.{kind}ResourceForeground"),"weight":10,"bubble":true,"strikethrough":kind=="deleted"}),
             );
+        }
+        if let Some(status) = repository.incoming_change(&path) {
+            let data = crate::scm::incoming_decoration(&self.api, status);
+            return Ok(json!({"letter":data["badge"],"tooltip":data["tooltip"],"weight":10}));
         }
         if self.api.ignored(repository, &path, token)? {
             Ok(

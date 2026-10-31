@@ -30,7 +30,7 @@ fn action(api: &Api, id: &str, key: &str, icon: &str, enabled: bool) -> Value {
     let label = api.text(key, &[]);
     json!({"id":id,"label":label,"tooltip":label,"icon":icon,"enabled":enabled})
 }
-pub fn decoration(api: &Api, change: &Change, staged: bool) -> Value {
+pub fn decoration(api: &Api, repository: &Repository, change: &Change, staged: bool) -> Value {
     let status = if change.conflicted {
         "unmerged"
     } else if staged {
@@ -47,7 +47,28 @@ pub fn decoration(api: &Api, change: &Change, staged: bool) -> Value {
         "unmerged" => ("!", "git.status.conflicted", "conflicting"),
         _ => ("M", "git.status.modified", "modified"),
     };
-    json!({"badge":badge,"tooltip":api.text(key,&[]),"kind":kind})
+    let tooltip = api.text(key, &[]);
+    if let Some(status) = repository.incoming_change(&change.path) {
+        let incoming = incoming_decoration(api, status);
+        json!({
+            "badge":format!("{}, {badge}", incoming["badge"].as_str().unwrap_or_default()),
+            "tooltip":api.text("git.incomingAndLocalChanges", &[incoming["tooltip"].as_str().unwrap_or_default(), &tooltip]),
+            "kind":kind,
+        })
+    } else {
+        json!({"badge":badge,"tooltip":tooltip,"kind":kind})
+    }
+}
+
+pub fn incoming_decoration(api: &Api, status: &str) -> Value {
+    let (badge, key) = match status {
+        "added" => ("↓A", "git.incoming.added"),
+        "deleted" => ("↓D", "git.incoming.deleted"),
+        "renamed" => ("↓R", "git.incoming.renamed"),
+        "modified" => ("↓M", "git.incoming.modified"),
+        _ => ("↓~", "git.incoming.other"),
+    };
+    json!({"badge":badge,"tooltip":api.text(key,&[])})
 }
 pub fn snapshot(
     api: &Api,
@@ -131,8 +152,13 @@ pub fn snapshot(
             if !change.conflicted && change.worktree_status != "unmodified" { actions.push(action(api,&action_id("discard"),"git.discardChanges","discard",!repository.is_busy())); }
             if !staged { actions.push(action(api,&action_id("stage"),"git.stageChanges","add",!repository.is_busy())); }
             if staged { actions.push(action(api,&action_id("unstage"),"git.unstageChanges","remove",!repository.is_busy())); }
+            let decorations = decoration(api, repository, change, staged);
+            let mut open_label = api.text("git.openChangePath", &[&change.path, &api.text(key, &[])]);
+            if repository.incoming_change(&change.path).is_some() {
+                open_label = api.text("git.openChangeWithStatus", &[&open_label, decorations["tooltip"].as_str().unwrap_or_default()]);
+            }
             Ok(json!({"id":format!("{group}:{}",change.path),"sourceUri":change.path.resolve(&repository.root_uri)?,
-                "path":change.path,"originalPath":change.original_path,"decorations":decoration(api,change,staged),"openLabel":api.text("git.openChangePath",&[&change.path,&api.text(key,&[])]),"actions":actions}))
+                "path":change.path,"originalPath":change.original_path,"decorations":decorations,"openLabel":open_label,"actions":actions}))
         }).collect::<Result<_, external_ext_sdk::ExtensionError>>()?;
         if resources.is_empty()
             && !(group == "staged"

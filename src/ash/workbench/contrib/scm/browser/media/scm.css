@@ -793,12 +793,12 @@
 }
 
 .ash-scm-change-actions {
-	/* Actions cover the label on intent; only the status marker reserves row width. */
-	position: absolute;
+	/* Share the label's grid cell so compound status badges keep their full width. */
+	position: relative;
 	z-index: 1;
-	top: 0;
-	inset-inline-end: var(--ash-toolbar-actionSize);
-	bottom: 0;
+	grid-area: 1 / 1;
+	justify-self: end;
+	align-self: stretch;
 	display: flex;
 	align-items: center;
 	padding-inline-start: var(--ash-spacing-size40);
@@ -968,10 +968,6 @@
 	}
 }
 
-.ash-scm-change {
-	position: relative;
-}
-
 .ash-scm-change,
 .ash-scm-folder {
 	display: flex;
@@ -983,7 +979,13 @@
 	line-height: var(--ash-list-rowHeight);
 }
 
+.ash-scm-change {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .ash-scm-change-open {
+	grid-area: 1 / 1;
 	display: flex;
 	min-width: 0;
 	height: var(--ash-list-rowHeight);
@@ -1016,13 +1018,14 @@
 }
 
 .ash-scm-change-status {
-	flex: 0 0 var(--ash-spacing-size200);
-	width: var(--ash-spacing-size200);
-	margin-left: var(--ash-spacing-size40);
+	grid-area: 1 / 2;
+	min-width: var(--ash-spacing-size200);
+	margin-inline-start: var(--ash-spacing-size40);
 	color: color-mix(in srgb, currentColor 78%, transparent);
 	font-size: var(--ash-fontSize-label2);
 	font-weight: var(--ash-fontWeight-semiBold);
 	text-align: center;
+	white-space: nowrap;
 }
 
 .ash-scm-change-status.status-added,

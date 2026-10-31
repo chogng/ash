@@ -113,6 +113,7 @@ const progressCommands = lifetime.add(new CommandService(services));
 const toastServices = lifetime.add(new InstantiationService());
 toastServices.registerInstance(INotificationService, backendNotifications);
 toastServices.registerInstance(IHostService, new TestHostService());
+toastServices.registerInstance(IClipboardService, lifetime.add(new BrowserClipboardService(navigator.clipboard)));
 toastServices.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
 toastServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { throw new Error('Unexpected notification menu'); }, hideContextMenu() { } } satisfies IContextMenuService);
 lifetime.add(toastServices.createInstance(NotificationsToasts, document.body, backendNotifications.model, lifetime.add(new NotificationActionRunner(backendNotifications))));
@@ -167,7 +168,11 @@ let failSettingsWrite = false;
 let revision = 1;
 let clean = false;
 let includeUntracked = false;
-let upstream: { name: string; ahead: number; behind: number; } | null = null;
+let upstream: { name: string; objectId?: string; ahead: number; behind: number; } | null = null;
+let headObjectId = 'a'.repeat(40);
+let incomingRemoteObjectId: string | undefined;
+let incomingHistoryRevision = 1;
+let incomingChanges: { path: string; originalPath: string | null; status: string; }[] = [];
 let pullGate: DeferredPromise<void> | undefined;
 let pullFailure = false;
 let pullAhead: number | undefined;
@@ -186,7 +191,7 @@ let startupStateGate: DeferredPromise<void> | undefined;
 let startupDiscoveryGate: DeferredPromise<void> | undefined;
 let startupStatusGate: DeferredPromise<void> | undefined;
 let startupStateReads = 0;
-const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: 1, path: '', head: { type: 'branch', name: 'main', objectId: 'a'.repeat(40), upstream }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }, ...(includeUntracked ? [{ path: 'new.ts', originalPath: null, indexStatus: 'unmodified', worktreeStatus: 'untracked', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }] : [])] });
+const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: incomingHistoryRevision, path: '', head: { type: 'branch', name: 'main', objectId: headObjectId, upstream }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }, ...(includeUntracked ? [{ path: 'new.ts', originalPath: null, indexStatus: 'unmodified', worktreeStatus: 'untracked', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }] : [])] });
 const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 	request: async (method, params): Promise<JsonValue> => {
 		calls.push({ method, params });
@@ -253,7 +258,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			case 'git/branch/list': return { branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }] };
 			case 'git/history/refs': {
 				const commitDetails = { authorName: 'Fixture', timestampSeconds: Math.floor(Date.now() / 1000) - 7320, subject: 'First commit' };
-				return { status: status(), graphRevision: 1, references: [{ name: 'main', objectId: 'a'.repeat(40), kind: 'localBranch', current: true, commitDetails }, { name: 'occupied', objectId: 'a'.repeat(40), kind: 'localBranch', current: false, commitDetails }], branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }], remotes: [] };
+				return { status: status(), graphRevision: 1, references: [{ name: 'main', objectId: 'a'.repeat(40), kind: 'localBranch', current: true, commitDetails }, { name: 'occupied', objectId: 'a'.repeat(40), kind: 'localBranch', current: false, commitDetails }, ...(incomingRemoteObjectId ? [{ name: 'origin/main', objectId: incomingRemoteObjectId, kind: 'remoteBranch', current: false, commitDetails }] : [])], branches: [{ name: 'main', objectId: 'a'.repeat(40), current: true, upstream: null, checkedOutElsewhere: false }, { name: 'occupied', objectId: 'a'.repeat(40), current: false, upstream: 'origin/occupied', checkedOutElsewhere: true }], remotes: [] };
 			}
 			case 'git/graph': return { commits: [{ objectId: 'a'.repeat(40), parentObjectIds: [], timestampSeconds: 1, subject: 'First commit' }], references: [], remotes: [], hasMore: false, nextCursor: null };
 			case 'git/commitDetails': return { authorName: 'Fixture', authorEmail: 'fixture@example.invalid', timestampSeconds: 1, message: 'First commit', statistics: { files: 1, additions: 1, deletions: 0 } };
@@ -262,6 +267,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			case 'git/stage': revision++; return { status: status() };
 			case 'git/changeFile': return { original: { kind: 'text', text: 'old' }, modified: { kind: 'text', text: 'new' } };
 			case 'git/checkIgnore': return { ignoredPaths: [] };
+			case 'git/compareChanges': return { baseObjectId: '0'.repeat(40), changes: incomingChanges };
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
@@ -279,10 +285,11 @@ const quickDiff = lifetime.add(new QuickDiffService());
 const resolvers = lifetime.add(new MultiDiffSourceResolverService());
 const commands = { executeCommand: async (id: string, ...args: unknown[]) => invoke(id, args) } as unknown as ICommandService;
 const decorationProviders = new Set<IDecorationsProvider>();
+let decorationInvalidations = 0;
 const scmContexts = lifetime.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, scmContexts);
 const timeline = lifetime.add(new TimelineService(scmContexts, {} as IViewsService, new NullLoggerService()));
-const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), CommandsRegistry, host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService, scmContexts, timeline, { activeGroup: { inputs: [] } } as unknown as IEditorPart));
+const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), CommandsRegistry, host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); lifetime.add(provider.onDidChange(() => decorationInvalidations++)); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService, scmContexts, timeline, { activeGroup: { inputs: [] } } as unknown as IEditorPart));
 const hostChanges = host.onDidChange(() => { void host.list().then(snapshot => bridge.update(snapshot)); });
 lifetime.add(toDisposable(() => hostChanges.dispose()));
 let scmUpdateGate: DeferredPromise<void> | undefined;
@@ -409,6 +416,34 @@ const presentationIntegration = {
 };
 declare global { interface Window { gitPresentationIntegration: typeof presentationIntegration; } }
 window.gitPresentationIntegration = presentationIntegration;
+
+const incomingChangesIntegration = {
+	configure(changes: typeof incomingChanges, capturedCommit: boolean) {
+		incomingChanges = changes;
+		incomingRemoteObjectId = 'b'.repeat(40);
+		upstream = { name: 'origin/main', ...(capturedCommit ? { objectId: incomingRemoteObjectId } : {}), ahead: 1, behind: 1 };
+	},
+	async fetch(changes: typeof incomingChanges) {
+		incomingChanges = changes;
+		incomingRemoteObjectId = 'c'.repeat(40);
+		incomingHistoryRevision++;
+		upstream = { name: 'origin/main', ...(upstream?.objectId ? { objectId: incomingRemoteObjectId } : {}), ahead: 1, behind: 1 };
+		revision++;
+		await invoke('git.fetch');
+	},
+	async checkout() {
+		headObjectId = 'd'.repeat(40);
+		upstream = null;
+		revision++;
+		await invoke('git.refresh');
+	},
+	async decoration(path: string) {
+		return [...decorationProviders][0]!.provideDecorations(URI.joinPath(URI.file('/workspace'), path), CancellationToken.None);
+	},
+	invalidations: () => decorationInvalidations,
+};
+declare global { interface Window { gitIncomingChangesIntegration: typeof incomingChangesIntegration; } }
+window.gitIncomingChangesIntegration = incomingChangesIntegration;
 
 const startupIntegration = {
 	setInstallation: (installation: JsonValue) => { gitInstallation = installation; },
