@@ -317,7 +317,8 @@
     "git-branch-changes": "E13A",
     "git-compare": "E13B",
     "language-server": "E13C",
-    "beaker": "E13D"
+    "beaker": "E13D",
+    "layout-grid": "E13E"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -487,6 +488,7 @@
     "kebab-vertical": "3406c85d1c928683ae6f4140cc891fb24ae9e12cd959f67098b5efee5efdfd4f",
     "keyboard-tab": "de33482d3f27e9f5ee44da3afbc6d375ad2b0039170f10303046bed224f93b6f",
     "language-server": "93e7940f2a542062b411e96470ec3355f684a034ebf530804ffa42ac55a3a9dd",
+    "layout-grid": "db667b6387f02f69112ffff25cd03485fe9f78b146b6e6f95ac00213f668990a",
     "layout-panel-1": "cf03f884110877fcaf99747daa998dfe6d274a6696e4971ad851142d4bafd46b",
     "layout-panel-off-1": "50ebfa180343e8c268aa33b6e2cba44a207b7d466f8a8fdf2d8dcf991b6bbe59",
     "layout-sidebar-left-1": "abcc02d7dabc22760ff6e3337ee014f119d356e2324c778deb2aae5ba9560c9c",
@@ -593,7 +595,7 @@
     "symbol-property": "d846752e135d0e3f3938a75b5d775a4927c0bb04df468f159a086c509bba1287",
     "sync": "065ab7b26a18d2f783f91d9fdd47be8644bb6b48bd11fd879f4d891f38c124ca",
     "table": "6cbc10fe07eb4fb06921296350f50e08e0a4d9773e45549402ff86cdf4fe1f94",
-    "tag": "1b64d31f94aee2d55b192752aa5fc20c8fa34d83fd878723774d620a8efebd64",
+    "tag": "e21f4607138f78c8f5bdf391713e1945e4c460f61b9009c811fa88346a2267e9",
     "target": "b6536dccead7936840c2f82e5c3112855ee5e2a0c735a7baad1125aeb99b1651",
     "terminal-cmd": "5bd7f052cb71dbebb67b1c5794c419399630d06751b978c8b6b242ffc274ea08",
     "terminal-git-bash": "945a5d98bb8c69d01295af6415597e2568e960dd25b2cff7d8960d477ee291fe",

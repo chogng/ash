@@ -172,6 +172,7 @@ export const lxiconsLibrary = {
 	keyboardTab: registerLxicon("keyboard-tab", 0xe098),
 	languageServer: registerLxicon("language-server", 0xe13c),
 	layout: registerLxicon("layout", 0xe0a3),
+	layoutGrid: registerLxicon("layout-grid", 0xe13e),
 	layoutPanel1: registerLxicon("layout-panel-1", 0xe099),
 	layoutPanelOff1: registerLxicon("layout-panel-off-1", 0xe09a),
 	layoutSidebarLeft1: registerLxicon("layout-sidebar-left-1", 0xe09b),

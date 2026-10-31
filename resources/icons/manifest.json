@@ -842,6 +842,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "layout-grid",
+      "file": "layout-grid.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "layout-panel-1",
       "file": "layout-panel-1.svg",
       "rendering": "symbolic"
