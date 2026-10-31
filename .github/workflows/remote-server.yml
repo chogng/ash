@@ -107,7 +107,7 @@ jobs:
           pnpm install --frozen-lockfile
       - name: Test Windows binary upload, immutable package and receipt migration
         if: runner.os == 'Windows'
-        run: ${{ matrix.python }} -B scripts/workflow.py test ash-remote-connections --profile ci-test --lib --filter powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime
+        run: ${{ matrix.python }} -B scripts/cargo.py test -p ash-remote-connections --profile ci-test --locked --target "${{ matrix.target }}" --lib install_tests::powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime -- --exact
       - name: Build standalone Remote package
         run: ${{ matrix.python }} -B build/remote.py --target "${{ matrix.target }}" --package-dir .build/remote-release/runtime
       - name: Verify connection, editing, terminal and Agent without media installation
