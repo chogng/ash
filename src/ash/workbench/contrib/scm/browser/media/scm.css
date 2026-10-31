@@ -25,6 +25,10 @@
 	font-weight: var(--ash-fontWeight-regular);
 }
 
+.ash-scm-history-filter > .ash-button > .ash-button-content {
+	gap: var(--ash-spacing-size20);
+}
+
 .ash-scm-empty {
 	margin: 0;
 	padding: 8px;
