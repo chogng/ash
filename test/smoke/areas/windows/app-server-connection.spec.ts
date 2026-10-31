@@ -575,14 +575,26 @@ for (const surface of ['workbench', 'agents'] as const) {
 				await dialog.press('Escape');
 				await expect(page.locator('.xterm-screen')).toHaveCount(0);
 				await expect(banner).toContainText('Restricted Mode is intended for safe code browsing');
+				await page.clock.install();
 				await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
+				await expect(dialog).toBeVisible();
+				// Advance beyond the progress delay while the trust decision remains pending.
+				await page.clock.runFor(300);
+				const terminalProgress = page.locator('.ash-terminal-view .ash-view-pane-progress-indicator');
+				await expect(terminalProgress).toBeHidden();
+				await page.screenshot({ path: testInfo.outputPath('terminal-waiting-for-trust.png') });
 				await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
 				await expect(page.locator('.xterm-screen')).toHaveCount(0);
 				await expect(page.locator('.ash-terminal-status')).toBeHidden();
+				await expect(terminalProgress).toBeHidden();
 				await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
+				await expect(dialog).toBeVisible();
+				await page.clock.runFor(300);
+				await expect(terminalProgress).toBeHidden();
 				await dialog.getByRole('button', { name: 'Trust folder and continue', exact: true }).click();
 				await expect(banner).toBeHidden();
 				await expect(page.locator('[data-part="panel"] .xterm-screen')).toBeVisible();
+				await expect(terminalProgress).toBeHidden();
 				await workbench.quickaccess.runCommand('workbench.action.terminal.new');
 				await expect(page.locator('[data-part="panel"] .xterm-screen')).toHaveCount(2);
 				await expect(dialog).toHaveCount(0);

@@ -162,14 +162,15 @@ export class TerminalViewPane extends ViewPane {
 	private async initialize(): Promise<void> {
 		if (!this.isBodyVisible() || this.isDisposed || this.initializing) return;
 		this.initializing = true;
-		const progress = this.getProgressIndicator().show(true, 150);
 		try {
-			await this.terminalService.whenConnected;
+			const connectionProgress = this.getProgressIndicator().show(true, 150);
+			try { await this.terminalService.whenConnected; }
+			finally { connectionProgress.done(); }
 			// A transfer window may restore a visible panel before Main offers the PTY.
 			// Its first terminal belongs to that handoff, not an implicit new shell.
 			if (this.awaitingTransfer && this.terminalService.instances.length === 0) return;
 			if (this.terminalService.instances.length === 0) {
-				// Creation requests trust before discovering profiles or starting a process.
+				// Creation can wait for trust or folder selection; keep user decisions outside progress.
 				if (!this.isBodyVisible() || this.isDisposed || this.terminalService.instances.length > 0) return;
 				this.titleActions.setCreating(true);
 				this.creating = this.terminalService.createTerminal();
@@ -179,7 +180,9 @@ export class TerminalViewPane extends ViewPane {
 					if (!this.isDisposed) { this.titleActions.setCreating(false); this.updateInstances(); }
 				}
 			} else {
-				await this.profileService.refreshAvailableProfiles(this.terminalService.activeInstance?.dirId);
+				const profileProgress = this.getProgressIndicator().show(true, 150);
+				try { await this.profileService.refreshAvailableProfiles(this.terminalService.activeInstance?.dirId); }
+				finally { profileProgress.done(); }
 			}
 			if (this.isDisposed) return;
 			this.updateProfiles();
@@ -188,7 +191,6 @@ export class TerminalViewPane extends ViewPane {
 			this.setStatus(terminalErrorMessage(error, 'Terminal is unavailable'));
 			this.updateProfiles();
 		} finally {
-			progress.done();
 			this.initializing = false;
 		}
 	}
