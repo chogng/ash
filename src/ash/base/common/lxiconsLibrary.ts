@@ -214,6 +214,7 @@ export const lxiconsLibrary = {
 	mute: registerLxicon("mute", 0xe0be),
 	newFile: registerLxicon("new-file", 0xe0bf),
 	newFolder: registerLxicon("new-folder", 0xe0c0),
+	openInProduct: registerLxicon("open-in-product", 0xe147),
 	openPreview: registerLxicon("open-preview", 0xe0c1),
 	openai: registerLxicon("openai", 0xe0c2),
 	origin: registerLxicon("origin", 0xe0c3),

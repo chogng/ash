@@ -326,7 +326,8 @@
     "regex": "E143",
     "whole-word": "E144",
     "case-sensitive": "E145",
-    "chat-session": "E146"
+    "chat-session": "E146",
+    "open-in-product": "E147"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -539,6 +540,7 @@
     "mute": "71e5930888ff194c5c3752a06b88ebb96108aecbfbfb739fa527cc9c4a782b84",
     "new-file": "e9b99be816657425edc1edbaada3889ecd36c7b392f2cec7f7b9816ce10d9d69",
     "new-folder": "3cf718c0061744861cbe9c47ce741e60c32e3b2441a92ae2c63370b0a002d3cf",
+    "open-in-product": "b206ba8c8d706a57b6dcd2cb8aa93f21c0189fd3767434480bbb998d9de5d8f7",
     "open-preview": "89b59e96966a3654bbcc2ccc9395df15e9f036ff4b2d0f64182d8955a4066b15",
     "openai": "4b0f2799e8b75e6d379bd524cfec5aa39c31e8d9085b6cdb2278cafa5132b636",
     "origin": "1e0058aab9fe02411d9b02d9ce298011b8ae4d7d313ce520c6d3da8bfba57f7e",

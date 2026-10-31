@@ -1052,6 +1052,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "open-in-product",
+      "file": "open-in-product.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "open-preview",
       "file": "open-preview.svg",
       "rendering": "symbolic"
