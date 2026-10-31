@@ -183,7 +183,7 @@ test('tab close and split menus operate on the clicked group and selected editor
 		[CLOSE_EDITORS_TO_THE_RIGHT_COMMAND_ID, 'Close to the Right'],
 		[CLOSE_SAVED_EDITORS_COMMAND_ID, 'Close Saved'],
 		[CLOSE_EDITORS_IN_GROUP_COMMAND_ID, 'Close All in Group'],
-		[CloseAllEditorsCommandId, 'Close All Tabs'],
+		[CloseAllEditorsCommandId, 'Close All'],
 	]);
 	for (const [id, expected] of [
 		[CLOSE_OTHER_EDITORS_IN_GROUP_COMMAND_ID, [inputs[2], inputs[3]]],

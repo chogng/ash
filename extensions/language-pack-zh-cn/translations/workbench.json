@@ -1126,7 +1126,7 @@
     "workbench.keepEditor": "保持打开",
     "workbench.pinEditor": "固定",
     "workbench.unpinEditor": "取消固定",
-    "workbench.closeAllEditors": "关闭所有标签页",
+    "workbench.closeAllEditors": "全部关闭",
     "workbench.navigateEditorBack": "后退",
     "workbench.navigateEditorForward": "前进",
     "workbench.navigateBackInEditLocations": "返回上一编辑位置",
