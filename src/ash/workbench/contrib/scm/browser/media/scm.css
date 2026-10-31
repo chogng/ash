@@ -38,30 +38,11 @@
 
 .ash-scm-graph {
 	--scm-graph-accent: var(--ash-accent-background);
-	--scm-graph-lane-0: var(--ash-accent-foreground);
-	--scm-graph-lane-1: var(--ash-success-foreground);
-	--scm-graph-lane-2: var(--ash-warning-foreground);
-	--scm-graph-lane-3: var(--ash-error-foreground);
-	--scm-graph-lane-4: color-mix(
-		in srgb,
-		var(--ash-accent-foreground) 70%,
-		var(--ash-foreground)
-	);
-	--scm-graph-lane-5: color-mix(
-		in srgb,
-		var(--ash-success-foreground) 70%,
-		var(--ash-foreground)
-	);
-	--scm-graph-lane-6: color-mix(
-		in srgb,
-		var(--ash-warning-foreground) 70%,
-		var(--ash-foreground)
-	);
-	--scm-graph-lane-7: color-mix(
-		in srgb,
-		var(--ash-error-foreground) 70%,
-		var(--ash-foreground)
-	);
+	--scm-graph-lane-0: var(--ash-scmGraph-foreground1);
+	--scm-graph-lane-1: var(--ash-scmGraph-foreground2);
+	--scm-graph-lane-2: var(--ash-scmGraph-foreground3);
+	--scm-graph-lane-3: var(--ash-scmGraph-foreground4);
+	--scm-graph-lane-4: var(--ash-scmGraph-foreground5);
 	min-height: 0;
 	flex: 1 1 auto;
 	padding: 2px 0 8px;
@@ -183,26 +164,11 @@
 
 .ash-scm-graph-path[data-lane-color="5"],
 .ash-scm-graph-node[data-lane-color="5"] {
-	--scm-graph-lane-color: var(--scm-graph-lane-5);
+	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRefColor);
 }
 
 .ash-scm-graph-path[data-lane-color="6"],
 .ash-scm-graph-node[data-lane-color="6"] {
-	--scm-graph-lane-color: var(--scm-graph-lane-6);
-}
-
-.ash-scm-graph-path[data-lane-color="7"],
-.ash-scm-graph-node[data-lane-color="7"] {
-	--scm-graph-lane-color: var(--scm-graph-lane-7);
-}
-
-.ash-scm-graph-path[data-lane-color="8"],
-.ash-scm-graph-node[data-lane-color="8"] {
-	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRefColor);
-}
-
-.ash-scm-graph-path[data-lane-color="9"],
-.ash-scm-graph-node[data-lane-color="9"] {
 	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRemoteRefColor);
 }
 

@@ -22,12 +22,19 @@ import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { createThemePreviewHost, connectThemePreview, openThemePreviewEditors } from './themePreviewHost.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
+import { Event } from '../../../../base/common/event.js';
+import { observableValue } from '../../../../base/common/observable.js';
+import { ISCMService, VIEW_PANE_ID } from '../../scm/common/scm.js';
+import type { ISCMHistoryItem, ISCMHistoryItemRef, ISCMHistoryProvider } from '../../scm/common/history.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
+import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
 
 const host = await createThemePreviewHost();
 const { resources, root, workspaceFiles, workspaceRoot, samples, storage, api, clipboard, serviceCollection } = host;
 const sample = new URLSearchParams(location.search).get('sample');
 const diffPreview = sample === 'diff';
 const codePreview = sample === 'code';
+const scmPreview = sample === 'scm';
 // Code preview owns no conversations or media. Shared Chat contributions can
 // observe that empty scope without borrowing the enclosing product's history.
 const chatUnavailable = () =>
@@ -139,7 +146,7 @@ const workbench = resources.add(
 		defaultLayout: {
 			parts: {
 				sidebar: !diffPreview && !codePreview,
-				panel: !diffPreview && !codePreview,
+				panel: !diffPreview && !codePreview && !scmPreview,
 				auxiliarybar: false,
 				agentSidebar: false,
 			},
@@ -147,6 +154,7 @@ const workbench = resources.add(
 		// Keep the production Parts and editor rendering without starting
 		// backend observers, history, account, update or extension contributions.
 		contributionIds: [
+			...(scmPreview ? ['workbench.contrib.scmRepositories'] : []),
 			'workbench.contrib.layoutActionsContext',
 			'workbench.contrib.modernUI',
 			'workbench.contrib.sash',
@@ -188,6 +196,74 @@ const workbench = resources.add(
 	}),
 );
 await workbench.whenRestored;
+if (scmPreview) {
+	// The real SCM pane owns rendering and interaction; only its repository data
+	// is synthetic, scoped to this memory-only preview document.
+	const current: ISCMHistoryItemRef = {
+		id: 'refs/heads/main', name: 'main', revision: 'preview-merge', category: 'localBranch',
+	};
+	const remote: ISCMHistoryItemRef = {
+		id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'preview-base', category: 'remoteBranch',
+	};
+	const branches = Array.from({ length: 5 }, (_, index) => `preview-branch-${index + 1}`);
+	const history: readonly ISCMHistoryItem[] = [
+		{
+			id: current.revision!, parentIds: ['preview-main', ...branches],
+			subject: localize('themeEditor.scm.merge', 'Merge branches into main'), message: '', references: [current],
+		},
+		...branches.map((id, index) => ({
+			id, parentIds: ['preview-base'],
+			subject: localize('themeEditor.scm.branch', 'Branch change {0}', index + 1), message: '',
+		})),
+		{
+			id: 'preview-main', parentIds: ['preview-base'],
+			subject: localize('themeEditor.scm.main', 'Local branch change'), message: '',
+		},
+		{
+			id: remote.revision!, parentIds: ['preview-root'],
+			subject: localize('themeEditor.scm.pushed', 'Latest pushed change'), message: '', references: [remote],
+		},
+		{
+			id: 'preview-root', parentIds: [],
+			subject: localize('themeEditor.scm.root', 'Shared history'), message: '',
+		},
+	];
+	const historyProvider: ISCMHistoryProvider = {
+		onDidChange: Event.None,
+		historyItemRef: observableValue('themePreview.head', current),
+		historyItemRemoteRef: observableValue('themePreview.remote', remote),
+		refresh: () => { },
+		provideHistoryItemRefs: async () => [current, remote],
+		provideHistoryItems: async options =>
+			history.slice(options.skip ?? 0, (options.skip ?? 0) + (options.limit ?? history.length)),
+		provideHistoryItemChanges: async () => [{
+			uri: URI.joinPath(workspaceRoot, 'palette.ts'), path: 'palette.ts', status: 'modified',
+		}],
+		resolveHistoryItemChangeContents: async () => ({
+			parentId: 'preview-base',
+			original: { kind: 'text', text: 'export const accent = "Ocean";\n' },
+			modified: { kind: 'text', text: 'export const accent = "Forest";\n' },
+		}),
+		resolveHistoryItemChatContext: async () => undefined,
+		resolveHistoryItemChangeRangeChatContext: async () => undefined,
+	};
+	resources.add(services.get(ISCMService).registerSCMProvider({
+		id: 'theme-preview-scm', providerId: 'git', label: 'theme-preview', rootUri: workspaceRoot,
+		groups: [], onDidChangeResources: Event.None,
+		input: {
+			visible: false, value: '', placeholder: '', enabled: false, canAccept: false,
+			buttonLabel: '', buttonTooltip: '', accept: async () => undefined,
+		},
+		activeRepositoryName: 'theme-preview', statusBarCommands: [], statusMessage: '', isBusy: false,
+		historyProvider, refresh: async () => { }, activate: async () => { },
+	}));
+	const views = services.get(IViewsService);
+	await views.openView('ash.gitGraph');
+	views.closeView(VIEW_PANE_ID);
+	views.closeView('ash.gitAgentReview');
+	const layout = services.get(IWorkbenchLayoutService);
+	layout.resizePart('sidebar', { width: 480, height: layout.getPartSize('sidebar').height });
+}
 const editorService = services.get(IEditorService);
 await openThemePreviewEditors(host, services, diffPreview ? 'diff' : 'code');
 
@@ -198,12 +274,16 @@ const publishContent = connectThemePreview(
 	() => {
 		const editors = services.get(ICodeEditorService).listCodeEditors();
 		const output = root.querySelector('.ash-theme-preview-terminal')?.textContent ?? '';
+		const history = [...root.querySelectorAll<HTMLElement>('.ash-scm-graph-commit')]
+			.map(row => row.getAttribute('aria-label') ?? row.innerText).join('\n');
 		return (
 			editors
 				.map(editor => `${editor.getModel()?.uri.path ?? ''}\n${editor.getModel()?.getValue() ?? ''}`)
 				.join('\n') +
 			'\n' +
-			output
+			output +
+			'\n' +
+			history
 		);
 	},
 );
