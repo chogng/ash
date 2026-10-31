@@ -101,7 +101,7 @@ suite('SCM Agent Review', () => {
 		using context = fixture();
 		assert.equal(context.primary.textContent, 'Find Issues');
 		assert.equal(context.pane.element.querySelector<HTMLElement>('.ash-scm-empty')?.hidden, true);
-		assert.ok(context.primary.classList.contains('label-centered'));
+		assert.equal(context.primary.classList.contains('label-centered'), false);
 		assert.equal(context.dropdown.getAttribute('aria-haspopup'), 'menu');
 		const menu = context.menu();
 		assert.deepEqual(menu.getActions().filter(item => item.label).map(item => item.label), [

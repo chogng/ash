@@ -55,7 +55,7 @@ export class ScmAgentReviewViewPane extends ViewPane {
 			label: localize('scm.review.findIssues', 'Find Issues'),
 			icon: Lxicon.codeReview,
 			presentation: 'primary',
-			contentAlignment: 'labelCentered',
+			contentAlignment: 'groupCentered',
 			title: localize('scm.review.currentHint', 'Review staged, unstaged and untracked changes in the selected repository'),
 			contextMenuProvider: contextMenuService,
 			addPrimaryActionToDropdown: false,

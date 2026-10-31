@@ -353,7 +353,7 @@ export class ScmViewPane extends ViewPane {
 				: actionButton?.hasFocus();
 			const options = {
 				...defaultButtonStyles, label: localize('scm.commit', 'Commit'), presentation: 'primary' as const,
-				contentAlignment: 'labelCentered' as const, type: 'submit' as const,
+				contentAlignment: 'groupCentered' as const, type: 'submit' as const,
 			};
 			actionButton = hasDropdown ? new ButtonWithDropdown(this.commitActions, {
 				...options, contextMenuProvider: this.contextMenuProvider,
