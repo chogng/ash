@@ -126,6 +126,7 @@ import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import type { IOpenerService, OpenOptions } from '../../../platform/opener/common/opener.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
+import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { FileNotFoundError } from '../../../platform/files/common/files.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
@@ -5160,6 +5161,48 @@ test('Chat tabs retain independent drafts and closing only removes the opened pr
 	assert.equal(title.querySelectorAll('[role=tab]').length, 2);
 	assert.equal(pane.element.querySelector('.ash-chat:not([hidden])')?.getAttribute('aria-labelledby'), title.querySelector('[role=tab][aria-selected=true]')?.id);
 });
+
+for (const kind of ['session', 'untitled'] as const) {
+	for (const trigger of ['click', 'Delete'] as const) {
+		test(`Closing the last ${kind} Chat tab by ${trigger} hides the side bar and retains its draft`, async () => {
+			await import('../../../workbench/browser/parts/auxiliarybar/auxiliaryBarActions.js');
+			const fixture = await createNavigationInputPane();
+			using resources = fixture.resources;
+			const { pane, sessions, dom, fake, layout, commandServices } = fixture;
+			const title = chatTitleContent(pane);
+			if (kind === 'untitled') {
+				sessions.createUntitledSession();
+				title.querySelector<HTMLButtonElement>('.ash-tab-label')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+				await waitFor(() => title.querySelectorAll('[role=tab]').length === 1);
+			}
+			const editor = dom.window.document.createElement('button');
+			dom.window.document.body.append(editor);
+			layout.showPart('editor');
+			layout.hasFocus = partId => partId === 'auxiliarybar' && title.contains(dom.window.document.activeElement);
+			commandServices.registerInstance(IEditorGroupsService, { activeGroup: { focus: () => editor.focus() } } as IEditorGroupsService);
+			const input = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;
+			typeChatText(dom.window, input, 'Keep the final chat draft');
+			const selection = { active: sessions.active, untitled: sessions.activeUntitledSession, drafts: sessions.untitledSessions.length };
+			const label = title.querySelector<HTMLButtonElement>('.ash-tab-label')!;
+			label.focus();
+			if (trigger === 'click') {
+				title.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!.click();
+			} else {
+				label.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+			}
+			await waitFor(() => !layout.isPartVisible('auxiliarybar'));
+			assert.equal(dom.window.document.activeElement, editor);
+			assert.deepEqual({ active: sessions.active, untitled: sessions.activeUntitledSession, drafts: sessions.untitledSessions.length }, selection);
+			assert.equal(title.querySelectorAll('[role=tab]').length, 1);
+			assert.equal(fake.archiveRequests.length, 0);
+			assert.equal(fake.stopRequests.length, 0);
+			assert.equal(fake.turnStartRequests.length, 0);
+			layout.showPart('auxiliarybar');
+			assert.equal(pane.element.querySelector('.ash-chat:not([hidden]) .ash-chat-textarea-input'), input);
+			assert.equal(input.value, 'Keep the final chat draft');
+		});
+	}
+}
 
 test('Chat restores opened tabs and leaves closed sessions available in the catalog', async () => {
 	using storage = createTestStorage();
