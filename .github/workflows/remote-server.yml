@@ -6,6 +6,9 @@ on:
       platforms:
         type: string
         default: all
+      verify_runtime_run:
+        type: string
+        default: ""
     secrets:
       ASH_MACOS_CERTIFICATE_P12:
         required: false
@@ -24,6 +27,10 @@ on:
         type: choice
         options: [all, linux, windows]
         default: all
+      verify_runtime_run:
+        description: Recheck failed Windows runtime artifacts from this workflow run without publishing
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -38,12 +45,16 @@ jobs:
       - id: platforms
         env:
           PLATFORMS: ${{ inputs.platforms }}
+          VERIFY_RUNTIME_RUN: ${{ inputs.verify_runtime_run }}
           MACOS_SIGNING_READY: ${{ vars.ASH_MACOS_SIGNING_IDENTITY != '' && secrets.ASH_MACOS_CERTIFICATE_P12 != '' && secrets.ASH_MACOS_CERTIFICATE_PASSWORD != '' && secrets.ASH_MACOS_NOTARY_KEY_P8 != '' && secrets.ASH_MACOS_NOTARY_KEY_ID != '' && secrets.ASH_MACOS_NOTARY_ISSUER != '' }}
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, re
           scope = os.environ['PLATFORMS']
           assert scope in ('all', 'linux', 'windows'), 'Remote platforms must be all, linux or windows'
+          replay = os.environ.get('VERIFY_RUNTIME_RUN', '')
+          if replay and (scope != 'windows' or not re.fullmatch(r'[1-9][0-9]*', replay)):
+              raise SystemExit('Runtime recheck requires platforms=windows and a numeric workflow run ID')
           if scope == 'all' and os.environ['MACOS_SIGNING_READY'] != 'true':
               raise SystemExit('Configure the macOS signing variable and five Apple secrets documented in remote-server/README.md, or select platforms=linux/windows')
           platforms = [
@@ -63,6 +74,7 @@ jobs:
           PY
 
   build:
+    if: ${{ inputs.verify_runtime_run == '' }}
     needs: plan
     name: Remote ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
@@ -207,6 +219,7 @@ jobs:
           path: |
             .build/remote-release/smoke.json
             .build/remote-release/*-wire.json
+            .build/remote-release/*-stop.json
             .build/remote-release/*.log
       - name: Preserve constructed runtime for failure reproduction
         if: failure() && hashFiles('.build/remote-release/runtime/ash-package.json') != ''
@@ -223,6 +236,7 @@ jobs:
           if-no-files-found: ignore
 
   publish:
+    if: ${{ inputs.verify_runtime_run == '' }}
     needs: [plan, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -262,6 +276,84 @@ jobs:
         with:
           name: remote-server-candidate-binding
           path: .build/remote-release/remote-release.json
+          if-no-files-found: error
+
+  recheck:
+    if: ${{ inputs.verify_runtime_run != '' }}
+    needs: plan
+    name: Recheck Windows runtime ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate the same-repository runtime producer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFY_RUNTIME_RUN: ${{ inputs.verify_runtime_run }}
+        run: |
+          mkdir -p .build/remote-recheck/reports
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFY_RUNTIME_RUN" > .build/remote-recheck/reports/source-run.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          run = json.loads(Path('.build/remote-recheck/reports/source-run.json').read_text())
+          assert run['id'] == int(os.environ['VERIFY_RUNTIME_RUN'])
+          assert run['head_repository']['full_name'] == os.environ['GITHUB_REPOSITORY']
+          assert run['path'] == '.github/workflows/remote-server.yml'
+          assert run['event'] == 'workflow_dispatch' and run['status'] == 'completed'
+          PY
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: remote-failed-runtime-${{ matrix.target }}
+          path: .build/remote-recheck/assets
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.verify_runtime_run }}
+      - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3
+        with:
+          install: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Prepare current acceptance runner
+        run: pnpm install --frozen-lockfile
+      - name: Install Windows OpenSSH fixture prerequisites
+        shell: pwsh
+        run: |
+          $capability = Get-WindowsCapability -Online -Name 'OpenSSH.Server~~~~0.0.1.0'
+          if ($capability.State -ne 'Installed') {
+            $installation = Add-WindowsCapability -Online -Name $capability.Name
+            if ($installation.RestartNeeded) { throw 'OpenSSH installation requires a restart' }
+          }
+      - name: Verify archive contents before execution
+        run: |
+          python -B build/release/remote.py catalog --archives-dir .build/remote-recheck/assets \
+            --output .build/remote-recheck/assets/catalog.json --binding-file .build/remote-recheck/local-binding.json \
+            --repository "$GITHUB_REPOSITORY" --release-tag "recheck-${{ inputs.verify_runtime_run }}" --target "${{ matrix.target }}"
+          mkdir -p .build/remote-recheck/runtime
+          tar -xzf ".build/remote-recheck/assets/ash-remote-${{ matrix.target }}.tar.gz" -C .build/remote-recheck/runtime
+      - name: Run current native acceptance against the retained package
+        run: python -B build/remote_smoke.py --package-dir .build/remote-recheck/runtime --report .build/remote-recheck/reports/native/smoke.json
+      - name: Run current Desktop bootstrap and SSH acceptance against the retained package
+        run: |
+          python -B build/release/verify_remote.py --package-dir .build/remote-recheck/runtime \
+            --catalog-dir .build/remote-recheck/assets --report .build/remote-recheck/reports/ssh/acceptance.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: remote-runtime-recheck-${{ matrix.target }}
+          path: .build/remote-recheck/reports
           if-no-files-found: error
 
   verify:

@@ -22,6 +22,34 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CiWorkflowTests(unittest.TestCase):
+    def test_runtime_recheck_does_not_build_or_publish(self):
+        workflow = (ROOT / ".github/workflows/remote-server.yml").read_text()
+        for job in ("build", "publish"):
+            self.assertIn(
+                f"  {job}:\n    if: ${{{{ inputs.verify_runtime_run == '' }}}}",
+                workflow,
+            )
+        self.assertIn(
+            "  recheck:\n    if: ${{ inputs.verify_runtime_run != '' }}", workflow
+        )
+        self.assertIn(
+            "assert run['head_repository']['full_name'] == os.environ['GITHUB_REPOSITORY']",
+            workflow,
+        )
+        self.assertIn("persist-credentials: false", workflow)
+        plan = textwrap.dedent(
+            workflow.split("python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        )
+        for scope, run in (("linux", "123"), ("windows", "../123")):
+            result = subprocess.run(
+                [sys.executable, "-c", plan],
+                env={**os.environ, "PLATFORMS": scope, "VERIFY_RUNTIME_RUN": run},
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("numeric workflow run ID", result.stderr)
+
     def test_real_windows_ssh_preflight_runs_before_the_full_backend_build(self):
         workflow = (ROOT / ".github/workflows/remote-server.yml").read_text()
         self.assertLess(

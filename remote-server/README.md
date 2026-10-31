@@ -59,6 +59,11 @@ OpenSSH service, before compiling the full backend. On a prepared native Windows
 checkout, run this preflight separately with `python -B
 build/release/verify_windows_installer.py --target x86_64-pc-windows-msvc --reports
 .build/remote-installer-check`; it does not build or publish the full runtime.
+To diagnose an acceptance failure using retained packages, dispatch this workflow
+with `platforms=windows` and `verify_runtime_run=<completed Remote workflow run ID>`.
+It checks the same-repository producer and archive manifests, runs the current
+acceptance scripts against those binaries, and uploads diagnostics. This mode
+does not build packages, publish a release, or emit a client release binding.
 The existing Platform checks workflow also exposes `remote_only=true`, which runs
 only this Linux release and its published-asset acceptance checks.
 

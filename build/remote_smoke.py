@@ -29,12 +29,54 @@ def remote_fixture_directory(*, prefix: str):
             try:
                 temporary.cleanup()
                 break
-            except PermissionError:
+            except PermissionError as error:
                 # A stopped process or virus scanner can retain its image mapping
                 # briefly. A persistent lock still fails this fixture's cleanup.
                 if os.name != "nt" or time.monotonic() >= deadline:
+                    if os.name == "nt" and error.filename:
+                        _record_windows_executable_lock(error.filename)
                     raise
                 time.sleep(0.1)
+
+
+def _record_windows_executable_lock(filename: str) -> None:
+    """Retain scoped process evidence without suppressing a cleanup failure."""
+    import base64
+
+    path = str(Path(filename).resolve()).replace("'", "''")
+    script = (
+        "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; "
+        "[Console]::OutputEncoding=New-Object Text.UTF8Encoding($false); "
+        "$items=@(Get-CimInstance Win32_Process -Filter \"Name='ash-app-server.exe'\" "
+        f"| Where-Object {{$_.ExecutablePath -eq '{path}'}} "
+        "| Select-Object ProcessId,ParentProcessId,ExecutablePath,CommandLine); "
+        "ConvertTo-Json -InputObject $items -Compress"
+    )
+    try:
+        result = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-EncodedCommand",
+                base64.b64encode(script.encode("utf-16le")).decode(),
+            ],
+            capture_output=True,
+            timeout=20,
+        )
+        details = {
+            "file": filename,
+            "exitCode": result.returncode,
+            "processes": result.stdout.decode("utf-8", errors="replace"),
+            "stderr": result.stderr.decode("utf-8", errors="replace"),
+        }
+    except (OSError, subprocess.TimeoutExpired) as error:
+        details = {"file": filename, "diagnosticError": str(error)}
+    print(
+        "Windows cleanup diagnostics: " + json.dumps(details),
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 class Model(http.server.BaseHTTPRequestHandler):
@@ -497,6 +539,29 @@ def verify(
                         )
                         + "\n"
                     )
+                    if managed:
+                        try:
+                            state = subprocess.run(
+                                command(
+                                    [
+                                        str(
+                                            package
+                                            / f"bin/ash-app-server-daemon{suffix}"
+                                        ),
+                                        "version",
+                                    ]
+                                ),
+                                env=env,
+                                capture_output=True,
+                                timeout=15,
+                            )
+                            (base / f"{mode}-before-stop.json").write_bytes(
+                                state.stdout
+                            )
+                        except (OSError, subprocess.TimeoutExpired) as error:
+                            (base / f"{mode}-before-stop.json").write_text(
+                                json.dumps({"diagnosticError": str(error)}) + "\n"
+                            )
                     process.stdin.close()
                     try:
                         process.wait(timeout=10)
@@ -552,6 +617,7 @@ def verify(
                             stderr=subprocess.PIPE,
                             timeout=30,
                         )
+                        (base / f"{mode}-stop.json").write_bytes(stopped.stdout)
                         assert stopped.returncode == 0, stopped.stderr
     finally:
         server.shutdown()

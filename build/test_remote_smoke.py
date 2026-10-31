@@ -96,3 +96,21 @@ class RemoteFixtureCleanupTests(unittest.TestCase):
             with remote_smoke.remote_fixture_directory(prefix="test-"):
                 raise RuntimeError("acceptance failed")
         temporary.cleanup.assert_called_once()
+
+    def test_persistent_windows_lock_is_reported_and_still_raises(self):
+        temporary = SimpleNamespace(
+            name="fixture",
+            cleanup=Mock(side_effect=PermissionError(13, "locked", "fixture.exe")),
+        )
+        with (
+            patch.object(
+                remote_smoke.tempfile, "TemporaryDirectory", return_value=temporary
+            ),
+            patch.object(remote_smoke, "os", SimpleNamespace(name="nt")),
+            patch.object(remote_smoke.time, "monotonic", side_effect=[0, 11]),
+            patch.object(remote_smoke, "_record_windows_executable_lock") as diagnostic,
+            self.assertRaises(PermissionError),
+        ):
+            with remote_smoke.remote_fixture_directory(prefix="test-"):
+                pass
+        diagnostic.assert_called_once_with("fixture.exe")
