@@ -904,11 +904,6 @@
       ],
       "scm/history/title": [
         {
-          "command": "git.fetch",
-          "when": "scmHistoryProviderId == git",
-          "group": "2_git@1"
-        },
-        {
           "command": "git.fetchAll",
           "when": "scmHistoryProviderId == git",
           "group": "navigation@900"
