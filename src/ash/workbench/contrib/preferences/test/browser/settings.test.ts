@@ -1916,6 +1916,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(defaults.get('workbench.tips.enabled').valueType, 'boolean');
 	assert.equal(configurationRegistry.getConfiguration('workbench.tips.enabled')?.defaultValue, true);
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
+	assert.equal(findSettingCategory(layout, 'chat.viewSessions.orientation'), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.startupWindow'), 'startup');
 	const startupWindow = defaults.get('window.startupWindow');

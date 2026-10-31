@@ -299,7 +299,7 @@
     "notifications.showList": "显示通知",
     "notifications.hideList": "隐藏通知",
     "notifications.clearAllCommand": "清除所有通知",
-    "notifications.accessibilityHelp": "通知中心\n按 Tab 和 Shift+Tab 在通知与操作间移动。在通知上，按上下方向键或 Home 和 End 导航，按右方向键展开、左方向键收起，按 Enter 或空格切换详情。按 Ctrl+Enter（macOS 上为 Command+Enter）运行第一个操作。按 Delete、macOS 上的 Command+Backspace 或鼠标中键可移除未在运行的通知。在标题工具栏中，按左右方向键切换操作，按 Home 和 End 移到首尾操作，按上下方向键打开配置菜单。通知有更多操作时，将焦点移到“更多操作”按钮，按 Enter 或方向键打开菜单。右键点击通知，或按菜单键或 Shift+F10，然后选择复制文本，可复制通知消息。按 Escape 可关闭菜单并返回通知。在通知上按 Delete 可移除通知。按 Escape 关闭通知中心。通知弹出提示或其中的操作获得焦点时，按 Escape 可收起弹出提示并保留通知历史。按 <keybinding:editor.action.accessibleView> 可朗读通知历史。",
+    "notifications.accessibilityHelp": "通知中心\n按 Tab 和 Shift+Tab 在通知与操作间移动。在通知上，按上下方向键或 Home 和 End 导航，按右方向键展开、左方向键收起，按 Enter 或空格切换详情。按 Ctrl+Enter（macOS 上为 Command+Enter）运行第一个操作。按 Delete、macOS 上的 Command+Backspace 或鼠标中键可移除未在运行的通知。在标题工具栏中，按左右方向键切换操作，按 Home 和 End 移到首尾操作，按上下方向键打开配置菜单。通知有更多操作时，将焦点移到“更多操作”按钮，按 Enter 或方向键打开菜单。在弹出通知或通知中心中，右键点击通知，或按菜单键或 Shift+F10，然后选择复制文本，可复制完整消息。也可以选中消息文字并按 Ctrl+C（macOS 上为 Command+C）复制选区。按 Escape 可关闭菜单并返回通知。在通知上按 Delete 可移除通知。按 Escape 关闭通知中心。通知弹出提示或其中的操作获得焦点时，按 Escape 可收起弹出提示并保留通知历史。按 <keybinding:editor.action.accessibleView> 可朗读通知历史。",
     "accessibility.explorerVerbosityDescription": "文件树获得焦点时播报打开无障碍帮助的方法。",
     "accessibility.gettingStartedVerbosityTitle": "欢迎页无障碍帮助",
     "accessibility.gettingStartedVerbosityDescription": "欢迎页获得焦点时播报打开无障碍帮助的方法。",
