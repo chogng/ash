@@ -245,18 +245,15 @@ pub fn snapshot(
                     &[&upstream.behind.to_string(), &upstream.ahead.to_string()],
                 );
                 (
-                    if upstream.ahead + upstream.behind > 0 {
-                        if repository
-                            .catalog
-                            .as_ref()
-                            .is_some_and(|catalog| catalog.upstream_read_only)
-                        {
-                            format!("{}↓", upstream.behind)
-                        } else {
-                            format!("{}↓ {}↑", upstream.behind, upstream.ahead)
+                    {
+                        let mut directions = Vec::new();
+                        if upstream.behind > 0 {
+                            directions.push(format!("{}↓", upstream.behind));
                         }
-                    } else {
-                        String::new()
+                        if !read_only && upstream.ahead > 0 {
+                            directions.push(format!("{}↑", upstream.ahead));
+                        }
+                        directions.join(" ")
                     },
                     if read_only {
                         api.text(
@@ -331,8 +328,15 @@ pub fn snapshot(
                 },
                 &[&behind, &ahead],
             );
+            let mut directions = Vec::new();
+            if upstream.behind > 0 {
+                directions.push(format!("↓{behind}"));
+            }
+            if upstream.ahead > 0 {
+                directions.push(format!("↑{ahead}"));
+            }
             (
-                api.text("git.syncButton", &[&behind, &ahead]),
+                api.text("git.syncButton", &[&directions.join(" ")]),
                 api.text("git.status.sync", &[&counts]),
             )
         }
