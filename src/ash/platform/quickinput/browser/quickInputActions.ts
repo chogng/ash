@@ -46,6 +46,8 @@ for (const command of commands) {
 	CommandsRegistry.register(command.id, (accessor, mods) => run(command, accessor.get(IQuickInputService).currentQuickInput, mods as IKeyMods | undefined));
 	const when = ContextKeyExpr.and(
 		inQuickInputContext.isEqualTo(true),
+		// An owned menu can live outside the picker. Its Escape must dismiss that menu first.
+		command.anywhere ? ContextKeyExpr.has(quickInputTypeContextKey.key) : undefined,
 		command.anywhere ? undefined : quickInputFocusContext.isEqualTo(true),
 		command.pickOnly ? quickInputTypeContextKey.isEqualTo(QuickInputType.QuickPick) : undefined,
 		command.endOnly ? endOfQuickInputBoxContext.isEqualTo(true) : undefined,

@@ -482,6 +482,9 @@ test('Chat title and history switching retain conversations and drafts', async (
 			shownContextMenuActions = options.getActions();
 		},
 	} as unknown as IContextMenuService;
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IContextMenuService, contextMenuService);
+	services.registerInstance(INotificationService, notifications);
 	using pane = new ChatViewPane(
 		dom.window.document.body,
 		{
@@ -543,6 +546,23 @@ test('Chat title and history switching retain conversations and drafts', async (
 		['New Chat', '', 'Show Chat History', 'More Actions'],
 	);
 	for (const button of toolbar?.querySelectorAll('button') ?? []) assert.ok(button.querySelector('.ash-icon'));
+	const historyButton = toolbar?.querySelector<HTMLButtonElement>(`[data-action-id="${SHOW_CHAT_HISTORY_COMMAND_ID}"] button`);
+	assert.ok(historyButton);
+	assert.equal(historyButton.getAttribute('aria-haspopup'), 'dialog');
+	for (const anchor of [historyButton, titleButton]) {
+		anchor.focus();
+		anchor.click();
+		await nextTask();
+		const picker = quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		assert.equal(picker.anchor, anchor);
+		assert.equal(picker.anchorPosition, 'below');
+		assert.equal(picker.anchorAlignment, 'right');
+		assert.equal(anchor.getAttribute('aria-expanded'), 'true');
+		await quickInput.cancel();
+		await nextTask();
+		assert.equal(anchor.getAttribute('aria-expanded'), 'false');
+		assert.equal(dom.window.document.activeElement, anchor);
+	}
 	newChatButton.click();
 	const titleDraftId = sessions.activeUntitledSession?.untitledSessionId;
 	assert.ok(titleDraftId);
@@ -1707,6 +1727,9 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 		getViewWithId: () => undefined,
 	} as unknown as IViewsService);
 	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IContextMenuService, { showContextMenu: () => { } } as unknown as IContextMenuService);
+	services.registerInstance(INotificationService, notifications);
 	await sessions.initialize();
 
 	const picking = commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);

@@ -960,6 +960,7 @@ fn session_manager_items_hover_and_activate_without_changing_the_draft() {
             thread_id: thread_id.clone(),
             title: "Pointer thread".into(),
             created_at_unix_ms: 0,
+            last_activity_at_unix_ms: Some(0),
             completed_turn_duration_ms: 0,
             active_turn_started_at_unix_ms: None,
             usage: Default::default(),

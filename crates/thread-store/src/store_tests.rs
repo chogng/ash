@@ -49,6 +49,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 title: "test".into(),
                 created_at_unix_ms: 1,
+                last_activity_at_unix_ms: Some(1),
                 completed_turn_duration_ms: 0,
                 active_turn_started_at_unix_ms: None,
                 usage: Default::default(),

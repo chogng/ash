@@ -362,6 +362,8 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 			const prior = previous?.chats.find(candidate => candidate.threadId === thread.threadId);
 			return {
 				threadId: thread.threadId,
+				createdAt: thread.createdAtUnixMs === undefined ? undefined : new Date(thread.createdAtUnixMs),
+				updatedAt: thread.lastActivityAtUnixMs === undefined ? undefined : new Date(thread.lastActivityAtUnixMs),
 				workspace: snapshot ? buildAgentHostChatWorkspace(snapshot.directory ?? null) : prior?.workspace,
 				origin: thread.parentThreadId || thread.forkedFromId
 					? { type: 'fork' as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }

@@ -381,6 +381,57 @@ fn thread_catalog_marks_only_unfinished_work_for_startup_recovery() {
 }
 
 #[test]
+fn catalog_activity_tracks_turns_and_survives_organization_and_reload() {
+    let journal = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(journal.clone());
+    let id = create_thread(&threads, "activity");
+    let created = threads.read_thread(&id).unwrap().created_at_unix_ms;
+    assert_eq!(
+        threads
+            .thread_catalog_record(&id)
+            .unwrap()
+            .thread
+            .last_activity_at_unix_ms,
+        Some(created)
+    );
+    let turn = start_turn(&threads, &id, "activity-turn");
+    threads.complete_turn(&id, &turn, "done".into()).unwrap();
+    let last_turn = threads
+        .read_thread(&id)
+        .unwrap()
+        .turns
+        .last()
+        .unwrap()
+        .status_changed_at_unix_ms;
+    let activity = Some(last_turn.max(created));
+    threads
+        .rename_thread(
+            &id,
+            CommandId::new("activity-rename").unwrap(),
+            "Renamed".into(),
+            ash_protocol::ThreadTitleSource::Manual,
+        )
+        .unwrap();
+    threads.archive_thread(&id).unwrap();
+    assert_eq!(
+        threads
+            .thread_catalog_record(&id)
+            .unwrap()
+            .thread
+            .last_activity_at_unix_ms,
+        activity
+    );
+    drop(threads);
+    let reopened = ThreadController::with_store(journal);
+    assert_eq!(
+        reopened.list_thread_catalog().unwrap()[0]
+            .thread
+            .last_activity_at_unix_ms,
+        activity
+    );
+}
+
+#[test]
 fn failure_is_durable_before_snapshot_exposes_it() {
     let journal = Arc::new(InMemoryThreadStore::default());
     let threads = ThreadController::with_store(journal.clone());

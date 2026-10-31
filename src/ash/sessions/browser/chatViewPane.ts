@@ -174,7 +174,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.titleControl = this._register(this.instantiationService.createInstance(ChatViewTitleControl,
 			this.element,
 			viewId,
-			() => this.commandService.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID),
+			(anchor: HTMLElement) => this.commandService.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID, anchor),
 		));
 		this.paneHost = h(container.ownerDocument, 'div');
 		this.paneHost.className = 'ash-chat-pane-host';

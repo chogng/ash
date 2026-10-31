@@ -7,8 +7,24 @@ import { defaultButtonStyles } from '../../../../../platform/theme/browser/defau
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import type { AsyncTreeDataSource } from '../../../../../base/browser/ui/tree/tree.js';
-import { localize } from '../../../../../nls.js';
+import { getNLSLanguage, localize } from '../../../../../nls.js';
 import { isAgentSessionSection, type AgentSessionListItem, type IAgentSessionListItem, type IAgentSessionsModel, type IAgentSessionSection } from './agentSessionsModel.js';
+
+/** Formats a provider's per-chat timestamp without assigning a time to unknown activity. */
+export function sessionDateFromNow(sessionTime: number, appendAgoLabel = false): string {
+	const elapsed = Math.max(0, Date.now() - sessionTime);
+	if (elapsed < 60_000) return localize('sessions.history.now', 'now');
+	const today = new Date();
+	today.setHours(0, 0, 0, 0);
+	const date = new Date(sessionTime);
+	const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+	// Calendar days keep "yesterday" stable across midnight and daylight-saving changes.
+	const calendarDays = Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) - Date.UTC(day.getFullYear(), day.getMonth(), day.getDate())) / 86_400_000);
+	const unit = calendarDays > 0 ? 'day' : elapsed >= 3_600_000 ? 'hour' : 'minute';
+	const amount = calendarDays > 0 ? calendarDays : Math.floor(elapsed / (unit === 'hour' ? 3_600_000 : 60_000));
+	if (appendAgoLabel) return new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'auto', style: 'short' }).format(-amount, unit);
+	return new Intl.NumberFormat(getNLSLanguage(), { style: 'unit', unit, unitDisplay: 'short' }).format(amount);
+}
 
 export function agentSessionSectionId(item: IAgentSessionListItem): string {
 	if (item.pinned) return 'pinned';

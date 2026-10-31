@@ -7,6 +7,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem, type Picks, type FastAndSlowPicks } from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import type { IKeyMods } from '../../../../../platform/quickinput/common/quickInput.js';
 import { inQuickInputContext } from '../../../../../platform/quickinput/browser/quickInput.js';
+import { KeybindingResolver, KeybindingResolveKind } from '../../../../../platform/keybinding/common/keybindingResolver.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -292,6 +293,54 @@ test('QuickInputList owns filtering, looping focus, and acceptance', () => {
 	activeListener.dispose();
 	list.dispose();
 	dom.window.close();
+});
+
+test('Quick Input section headings follow filtering and never accept a conversation', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	using list = new QuickInputList<IQuickPickItem>(dom.window.document.body);
+	let accepted = 0;
+	using listener = list.onDidAccept(() => accepted++);
+	list.sortByLabel = false;
+	list.canSelectMany = true;
+	list.items = [
+		{ type: 'separator', label: 'Pinned', presentation: 'section' }, { label: 'Alpha' },
+		{ type: 'separator', label: 'Recent', presentation: 'section' }, { label: 'Beta' },
+	];
+	assert.deepEqual([...list.element.querySelectorAll('.ash-quick-pick-section-header')].map(header => header.textContent), ['Pinned', 'Recent']);
+	assert.equal(list.element.querySelectorAll('.ash-quick-pick-row-checkbox').length, 2);
+	list.element.querySelector<HTMLElement>('.ash-quick-pick-section-header')!.click();
+	assert.equal(accepted, 0);
+	list.filter('beta');
+	assert.deepEqual(list.visibleItems.map(item => item.label), ['Beta']);
+	assert.equal(list.element.querySelectorAll('.ash-quick-pick-row-checkbox').length, 1);
+	assert.deepEqual([...list.element.querySelectorAll('.ash-quick-pick-section-header')].map(header => header.textContent), ['Recent']);
+});
+
+test('Quick Input Escape stays scoped to its host while an owned menu has focus', () => {
+	const dom = new JSDOM('<!doctype html><body><button>History</button><button>Menu item</button></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using heights = installTestElementHeights(dom.window.document);
+	installDomGlobals(dom);
+	using contexts = new ContextKeyService();
+	using service = new TestQuickInputService({ container: dom.window.document.body, contextKeyService: contexts });
+	using picker = service.createQuickPick();
+	picker.anchor = dom.window.document.querySelector('button');
+	picker.ignoreFocusOut = true;
+	picker.items = [{ label: 'Chat' }];
+	picker.show();
+	const input = dom.window.document.querySelector<HTMLInputElement>('.ash-quick-pick input')!;
+	const menu = dom.window.document.querySelectorAll('button')[1];
+	const resolver = new KeybindingResolver();
+	const escape = [{ key: 'Escape', code: 'Escape', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false }];
+	const inside = resolver.resolve(contexts.getContext(input), escape);
+	assert.equal(inside.kind, KeybindingResolveKind.Command);
+	if (inside.kind === KeybindingResolveKind.Command) assert.equal(inside.command, 'quickInput.hide');
+	menu.focus();
+	assert.equal(contexts.getValue(inQuickInputContext.key), true);
+	assert.equal(resolver.resolve(contexts.getContext(menu), escape).kind, KeybindingResolveKind.NoMatch);
 });
 
 test('Command Palette filters, executes, closes, and restores focus', async () => {

@@ -882,6 +882,8 @@ function toAgentSession(session: SessionDto, sshHost?: string): AgentSession {
 		threads: session.threads.map((thread) => ({
 			threadId: thread.threadId,
 			title: thread.title,
+			createdAtUnixMs: thread.createdAtUnixMs,
+			lastActivityAtUnixMs: thread.lastActivityAtUnixMs ?? undefined,
 			status: thread.status,
 			parentThreadId: thread.parentThreadId,
 			forkedFromId: thread.forkedFromId,

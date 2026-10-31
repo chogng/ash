@@ -126,6 +126,8 @@ export interface AgentSession {
 	readonly threads: readonly {
 		readonly threadId: string;
 		readonly title: string;
+		readonly createdAtUnixMs?: number;
+		readonly lastActivityAtUnixMs?: number;
 		readonly parentThreadId?: string | null;
 		readonly forkedFromId?: string | null;
 		readonly status: 'active' | 'archived';

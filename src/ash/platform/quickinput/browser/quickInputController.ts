@@ -66,6 +66,7 @@ export class QuickInputController extends Disposable {
 			}
 		}));
 		this._register(addDisposableListener(this.host.ownerDocument, 'mousedown', event => {
+			if (this.active instanceof QuickPick && this.active.ignoreFocusOut) return;
 			const anchor = this.active instanceof QuickPick ? this.active.anchor : undefined;
 			if (this.active && !event.composedPath().includes(this.host) && !(isHTMLElement(anchor) && event.composedPath().includes(anchor))) {
 				this.active.hide();
@@ -318,11 +319,11 @@ export class QuickInputController extends Disposable {
 				// Native focus changes briefly pass through body before reaching the trigger.
 				// Check after that transition; leaving the document produces no focusin event.
 				const focused = this.host.ownerDocument.activeElement;
-				if (!quickPick.element.contains(focused) && !anchor.contains(focused)) quickPick.hide();
+				if (!quickPick.ignoreFocusOut && !quickPick.element.contains(focused) && !anchor.contains(focused)) quickPick.hide();
 			}, 0));
 			this.visibleListeners.add(quickPick.onDidBlur(() => checkFocus.schedule()));
 			this.visibleListeners.add(addDisposableListener(this.host.ownerDocument, 'focusin', event => {
-				if (!event.composedPath().includes(this.host) && !event.composedPath().includes(anchor)) quickPick.hide();
+				if (!quickPick.ignoreFocusOut && !event.composedPath().includes(this.host) && !event.composedPath().includes(anchor)) quickPick.hide();
 			}));
 		}
 		this.shown.fire();

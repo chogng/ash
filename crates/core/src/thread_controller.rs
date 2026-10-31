@@ -3665,6 +3665,15 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             thread_id: snapshot.thread_id.clone(),
             title: snapshot.title.clone(),
             created_at_unix_ms: snapshot.created_at_unix_ms,
+            last_activity_at_unix_ms: Some(
+                snapshot
+                    .turns
+                    .iter()
+                    .map(|turn| turn.status_changed_at_unix_ms)
+                    .max()
+                    .unwrap_or(0)
+                    .max(snapshot.created_at_unix_ms),
+            ),
             completed_turn_duration_ms: snapshot.completed_turn_duration_ms(),
             active_turn_started_at_unix_ms: snapshot.active_turn_started_at_unix_ms(),
             usage: snapshot.usage.clone(),

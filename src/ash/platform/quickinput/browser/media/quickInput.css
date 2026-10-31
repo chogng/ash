@@ -222,6 +222,17 @@
 	font-size: var(--ash-fontSize-label1);
 }
 
+.ash-quick-pick-section-header {
+	box-sizing: border-box;
+	height: var(--ash-list-rowHeight);
+	padding: 0 var(--ash-spacing-size60);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-semiBold);
+	line-height: var(--ash-list-rowHeight);
+	background: var(--ash-quickInput-background);
+}
+
 .ash-quick-pick-progress {
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 	color: var(--ash-description-foreground);
