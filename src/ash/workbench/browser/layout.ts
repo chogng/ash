@@ -361,7 +361,8 @@ export class WorkbenchLayout extends BrowserLayoutService implements IWorkbenchL
 		if (this.activityBarLocation === location) return;
 		this.activityBarLocation = location;
 		this.domNode.classList.toggle('activitybar-absent', location !== ActivityBarPosition.DEFAULT);
-		this.rebuildGrid();
+		// The vertical slot already exists. Keep other Parts mounted to preserve editor focus and state.
+		this.updatePartsVisibility(['activitybar'], location === ActivityBarPosition.DEFAULT);
 	}
 
 	setSideBarLocation(location: SideBarLocation): void {

@@ -7,7 +7,7 @@
 > 成功读取文件命中的 Contextual Instructions 会进入后续 model invocation。Skills 已有 metadata catalog、显式 activation 和通用
 > context injection，可信 built-in Skill 自动 selector 与 Agent delegation definition 选择已经接通。
 > 已有指令列表与显式附件 API；已授权环境目录的 Agent 定义可在新聊天选择器中列出并用于创建根会话。
-> 独立指令管理界面、完整 Agent 管理界面和完整 import apply 仍未实现。
+> Agents 设置已提供统一定义目录、内置只读详情、自定义来源编辑和常用内置角色复制草稿；独立指令管理界面和完整 import apply 仍未实现。
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
 > [`external-agent-migration` README](../crates/external-agent-migration/README.md)；配置与事务边界见
@@ -20,7 +20,7 @@ Ash 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 位于小写 `.ash/`；共享的 `AGENTS.md` 与 Ash 专属 `ASH.md` 位于目录根，始终加载。其他产品的
 专有目录和格式必须经过 `external-agent-migration`。
 
-内置 Agent 不是 `.ash` 自定义对象。它们随产品发布、不会进入设置或被同名自定义定义覆盖，但与自定义 Agent 使用同一种定义契约；会话入口、委托和工作流只表示本次运行的启动来源，不产生“主 Agent 定义”或“子 Agent 定义”。
+内置 Agent 不是 `.ash` 自定义对象。它们随产品发布、在 Agents 设置中只读展示，不会被同名自定义定义覆盖，但与自定义 Agent 使用同一种定义契约；会话入口、委托和工作流只表示本次运行的启动来源，不产生“主 Agent 定义”或“子 Agent 定义”。
 
 | 用户想表达什么               | Ash 对象             | 何时进入运行时                                   | 典型入口                   |
 | ---------------------------- | -------------------- | ------------------------------------------------ | -------------------------- |
@@ -228,20 +228,20 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 
 ## 7. 当前能力与限制
 
-| 能力                                                             | 状态     | 实现证据或前置条件                                                                                                                            |
-| ---------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.ash/config.toml` Directory intent                              | 已实现   | `ash-config` / App Server local composition                                                                                                   |
-| Skill built-in/user/Directory catalog 与 enablement              | 已实现   | `ash-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md)                                                                     |
-| Skill activation snapshot 与通用 context injection               | 已实现   | validated `SkillRef`、正文加载、safe-point freezing 与 extension contributors                                                                 |
-| Skill metadata 自动 selector                                     | 已实现   | 仅 `BuiltInVerified`、唯一高置信、pinned `SkillRef` 后加载正文                                                                                |
-| Codex/Claude known-path inspection                               | 已实现   | `external-agent-migration::inspect_agent_paths`                                                                                               |
-| Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；sessions、apply adapter、wire contract 未实现                             |
-| User Instructions authority                                      | 部分具备 | `ash-home` + `ash-instructions`；`AGENTS.md`、`ASH.md`、Global 与已读文件 Contextual 注入已实现                                               |
-| Directory Instructions authority                                 | 部分具备 | `ash-instructions` + `DirContributions`；共享/专属 always-on、Global 与已读文件 Contextual 注入已实现                                         |
-| Directory Agents authority                                       | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing、已授权环境目录的 list/picker 和根 Session 选择已实现；独立管理界面未实现 |
-| `.ash/{instructions,skills,agents}` loader                       | 已实现   | 固定 roots、有界校验、Directory activation 与 watcher refresh                                                                                 |
-| External parser、preview 与 apply                                | 部分具备 | 四种来源的项目指令已有 typed fragment、摘要预览和逐文件发布；其他 apply、跨领域事务与持久回执未完成                                           |
-| `$name` Skill selector                                           | 已实现   | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文                                                    |
+| 能力                                                             | 状态     | 实现证据或前置条件                                                                                                                                                            |
+| ---------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.ash/config.toml` Directory intent                              | 已实现   | `ash-config` / App Server local composition                                                                                                                                   |
+| Skill built-in/user/Directory catalog 与 enablement              | 已实现   | `ash-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md)                                                                                                     |
+| Skill activation snapshot 与通用 context injection               | 已实现   | validated `SkillRef`、正文加载、safe-point freezing 与 extension contributors                                                                                                 |
+| Skill metadata 自动 selector                                     | 已实现   | 仅 `BuiltInVerified`、唯一高置信、pinned `SkillRef` 后加载正文                                                                                                                |
+| Codex/Claude known-path inspection                               | 已实现   | `external-agent-migration::inspect_agent_paths`                                                                                                                               |
+| Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；sessions、apply adapter、wire contract 未实现                                                             |
+| User Instructions authority                                      | 部分具备 | `ash-home` + `ash-instructions`；`AGENTS.md`、`ASH.md`、Global 与已读文件 Contextual 注入已实现                                                                               |
+| Directory Instructions authority                                 | 部分具备 | `ash-instructions` + `DirContributions`；共享/专属 always-on、Global 与已读文件 Contextual 注入已实现                                                                         |
+| Directory Agents authority                                       | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing、已授权环境目录的 list/picker 和根 Session 选择已实现；设置可查看、编辑来源及复制常用内置定义为自定义草稿 |
+| `.ash/{instructions,skills,agents}` loader                       | 已实现   | 固定 roots、有界校验、Directory activation 与 watcher refresh                                                                                                                 |
+| External parser、preview 与 apply                                | 部分具备 | 四种来源的项目指令已有 typed fragment、摘要预览和逐文件发布；其他 apply、跨领域事务与持久回执未完成                                                                           |
+| `$name` Skill selector                                           | 已实现   | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文                                                                                    |
 
 `$create-instructions` 是创建或更新细分 Instruction 的内置 Skill，复用通用激活机制；`/init`
 保留为初始化 `ASH.md` 的产品命令。两者使用正常文件工具和目录授权；已有文件先读取再修改。
@@ -251,7 +251,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 复制到 Ash 的目标文件；已有非空目标报告冲突，不交给 Agent 合并。来源正文不进入 `/init`
 或任何用于整理导入内容的 Agent Turn。四种来源的项目指令均已接通预览与目标写入。
 
-Skill 与 Agent 的独立管理界面仍需接入。cross-authority reference 在具备明确 authority contract 前继续拒绝；导入条目仅在具备对应 target authority 时开放 apply，不由 parser 或 preview 自动授予写入权。
+Skill 的独立管理界面仍需接入。Agent 定义由 Agents 设置展示，自定义文件仍由编辑器保存与处理冲突。cross-authority reference 在具备明确 authority contract 前继续拒绝；导入条目仅在具备对应 target authority 时开放 apply，不由 parser 或 preview 自动授予写入权。
 
 ## 8. 长期不变量
 

@@ -1,7 +1,28 @@
-/* Inset row hit areas without shrinking the viewport that positions the scrollbar. */
-.ash-workbench.modern-ui .ash-sidebar-part .ash-list-row {
-	margin: 0 var(--ash-spacing-size40);
-	width: calc(100% - 2 * var(--ash-spacing-size40));
+/* List owns row geometry; this policy leaves the full viewport and its track in place. */
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
+	:is(.ash-sidebar-part, .ash-workbench-auxiliarybar, .ash-workbench-panel) {
+	--ash-list-row-inset-start: var(--ash-spacing-size40);
+	--ash-list-row-inset-end: var(--ash-spacing-size40);
+	--ash-list-row-reserve-scrollbar: 0;
+	--ash-list-row-default-padding-end: var(--ash-spacing-size40);
+	--ash-list-row-extra-scrollbar-padding: 0px;
+	--ash-list-row-radius: var(--ash-cornerRadius-small);
+}
+
+/* Preserve external trees' content inset until their scroll owner supplies its geometry. */
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
+	:is(.ash-sidebar-part, .ash-workbench-auxiliarybar, .ash-workbench-panel)
+	.ash-tree:not(.ash-list-managed) {
+	--ash-list-row-default-padding-end: var(--ash-spacing-size80);
+}
+
+/* Floating Quick Picks keep their own inset, separate from docked Workbench rows. */
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
+	.ash-quick-pick-list:not(.ash-quick-pick-list-menu) {
+	--ash-list-row-inset-start: var(--ash-spacing-size60);
+	--ash-list-row-inset-end: var(--ash-spacing-size60);
+	--ash-list-row-reserve-scrollbar: 0;
+	--ash-list-row-radius: var(--ash-cornerRadius-small);
 }
 
 .ash-workbench.modern-ui

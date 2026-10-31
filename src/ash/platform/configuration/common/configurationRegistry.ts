@@ -90,6 +90,8 @@ export interface IRegisteredConfiguration<T = unknown> {
 	readonly key: string;
 	/** Catalog identity supplied by the extension owner, never inferred from a setting key. */
 	readonly source?: IExtensionInfo;
+	/** Declared section identity and label retained for Settings navigation. */
+	readonly section?: { readonly id?: string; readonly title?: string; };
 	readonly defaultValue: T;
 	readonly parse: (value: unknown) => T;
 	readonly serialize: (value: T) => unknown;
@@ -187,7 +189,8 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 		for (const node of add) {
 			if (nodes.has(node)) continue;
 			const keys: string[] = [];
-			const visit = (node: IConfigurationNode, inheritedScope?: ConfigurationScope, source = node.extensionInfo): void => {
+			const visit = (node: IConfigurationNode, inheritedScope?: ConfigurationScope, source = node.extensionInfo, inheritedSection?: IRegisteredConfiguration['section']): void => {
+				const section = node.id || node.title ? Object.freeze({ id: node.id, title: node.title }) : inheritedSection;
 				for (const [key, schema] of Object.entries(node.properties ?? {})) {
 					if (schema.included === false) continue;
 					if (!isConfigurationKey(key) || next.has(key)) throw new TypeError(localize('configuration.contributedKey', "Invalid or duplicate contributed setting '{0}'.", key));
@@ -199,7 +202,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 					const type = Array.isArray(schema.type) ? schema.type[0] : schema.type;
 					const defaultValue = schema.default === undefined ? (type === 'string' ? '' : type === 'boolean' ? false : type === 'number' || type === 'integer' ? 0 : type === 'array' ? [] : type === 'object' ? {} : null) : schema.default;
 					next.set(key, Object.freeze({
-						key, source, defaultValue: parse(defaultValue), parse, serialize: parse, schema,
+						key, source, section, defaultValue: parse(defaultValue), parse, serialize: parse, schema,
 						tags: registeredTags(schema.tags),
 						policy: registeredPolicy(schema.policy, defaultValue, next.values()),
 						setting: schema.ashSetting, extensionBinding: schema.ashBinding,
@@ -208,7 +211,7 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 					}));
 					keys.push(key); properties.add(key);
 				}
-				for (const child of node.allOf ?? []) visit(child, node.scope ?? inheritedScope, source);
+				for (const child of node.allOf ?? []) visit(child, node.scope ?? inheritedScope, source, section);
 			};
 			visit(node);
 			nodes.set(node, keys);

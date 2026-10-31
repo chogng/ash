@@ -1,9 +1,8 @@
 import { defaultListStyles, defaultFindWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { localize2, localize } from '../../../../nls.js';
-import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { StandardKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { observeResize } from '../../../../base/browser/observer.js';
-import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
@@ -285,6 +284,7 @@ class HistoryItemRow extends Disposable {
 	public referenceLabels: HTMLSpanElement | undefined;
 	public visibleReferences: readonly ISCMHistoryItemRef[] = [];
 	public headReferenceId: string | undefined;
+	public labelReferenceId: string | undefined;
 	public scope: IScopedContextKeyService | undefined;
 	public target: SCMHistoryItemViewModelTreeElement | undefined;
 	public hover: IManagedHover | undefined;
@@ -410,6 +410,12 @@ export class SCMHistoryViewPane extends ViewPane {
 			MenuId.SCMHistoryTitle,
 			{
 				ariaLabel: localize('scm.history.actions', 'History actions'), menuOptions: { arg: this },
+				responsiveBehavior: {
+					enabled: true,
+					observedElement: this.headerElement,
+					// Keep the collapse control and a readable title beside the operation strip.
+					getAvailableWidth: () => Math.max(0, this.headerElement.clientWidth - 64),
+				},
 				actionViewItemProvider: (action, options) => {
 					if (action.id !== 'workbench.scm.action.graph.pickHistoryItemRefs') { return undefined; }
 					const presentation = this.filterPresentation;
@@ -435,16 +441,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			},
 		));
 		toolbar.element.classList.add('ash-scm-remote-actions');
-		const layoutToolbar = this._register(new AnimationFrameScheduler(getWindow(this.element), () => {
-			const width = this.headerElement.clientWidth;
-			if (width === 0) return;
-			// Keep the collapse control and a readable title beside the operation strip.
-			toolbar.layout(Math.max(0, width - 64));
-		}));
-		this._register(observeResize([this.headerElement, toolbar.element], () => layoutToolbar.schedule()));
-		this._register(toolbar.onDidChangeMenuItems(() => layoutToolbar.schedule()));
-		this._register(this.filterPresentation.onDidChange(() => layoutToolbar.schedule()));
-		layoutToolbar.schedule();
+		this._register(this.filterPresentation.onDidChange(() => toolbar.relayout()));
 		this._register(this.scmViewService.onDidChangeActiveRepository(() => void this.refresh()));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('scm.graph.pageSize') || event.affectsConfiguration('scm.graph.showIncomingChanges') || event.affectsConfiguration('scm.graph.showOutgoingChanges')) { void this.refresh(); }
@@ -1277,6 +1274,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		const visibleReferences = this.getHistoryItemReferences(historyItem);
 		rendered.visibleReferences = visibleReferences;
 		rendered.headReferenceId = visibleReferences.find(reference => reference.id === this.head?.id)?.id;
+		rendered.labelReferenceId = this.getHistoryItemLabelReference(visibleReferences)?.id;
 		const overlay = h(document, 'div');
 		overlay.className = 'ash-scm-graph-overlay';
 		if (visibleReferences.length > 0) {
@@ -1311,6 +1309,7 @@ export class SCMHistoryViewPane extends ViewPane {
 		resources.add(addDisposableListener(container, 'keydown', event => event.stopPropagation()));
 		const menu = resources.add(this.menuService.createMenu(menuId, scope));
 		const toolbar = resources.add(new WorkbenchToolBar(container, this.contextMenuService, { ariaLabel }));
+		resources.add(toolbar.onDidChangeDropdownVisibility(visible => container.classList.toggle('dropdown-visible', visible)));
 		const update = (): void => {
 			// Secondary actions remain available through the row's context menu.
 			const { primary } = getActionBarActions(menu.getActions({ arg: target }), 'inline');
@@ -1347,13 +1346,15 @@ export class SCMHistoryViewPane extends ViewPane {
 		row.scope?.setContext('scmHistoryItemHasUpstream', historyItem.references?.some(reference => reference.upstream !== undefined) ?? false);
 		const references = this.getHistoryItemReferences(historyItem);
 		const headReferenceId = references.find(reference => reference.id === this.head?.id)?.id;
-		if (row.headReferenceId !== headReferenceId || !equals(row.visibleReferences, references, (left, right) => left.id === right.id && left.name === right.name && left.revision === right.revision && left.category === right.category && left.description === right.description && left.color === right.color && left.upstream === right.upstream && left.canDelete === right.canDelete)) {
+		const labelReferenceId = this.getHistoryItemLabelReference(references)?.id;
+		if (row.headReferenceId !== headReferenceId || row.labelReferenceId !== labelReferenceId || !equals(row.visibleReferences, references, (left, right) => left.id === right.id && left.name === right.name && left.revision === right.revision && left.category === right.category && left.description === right.description && left.color === right.color && left.upstream === right.upstream && left.canDelete === right.canDelete)) {
 			if (row.referenceLabels?.contains(row.element.ownerDocument.activeElement)) this.focusHistoryElement(`commit:${model.historyItem.id}`);
 			row.references.clear();
 			row.referenceLabels?.remove();
 			row.referenceLabels = undefined;
 			row.visibleReferences = references;
 			row.headReferenceId = headReferenceId;
+			row.labelReferenceId = labelReferenceId;
 			if (references.length > 0) {
 				row.referenceLabels = this.renderReferenceLabels(references, row.target, row.scope!, row.references);
 				row.element.querySelector('.ash-scm-graph-overlay')!.prepend(row.referenceLabels);
@@ -1383,15 +1384,26 @@ export class SCMHistoryViewPane extends ViewPane {
 		else { this.focusHistoryElement(`commit:${historyItemId}`); }
 	}
 
+	private getHistoryItemLabelReference(references: readonly ISCMHistoryItemRef[]): ISCMHistoryItemRef | undefined {
+		for (const reference of [this.head, this.provider?.historyItemRemoteRef?.get(), this.provider?.historyItemBaseRef?.get()]) {
+			const match = references.find(candidate => candidate.id === reference?.id);
+			if (match) { return match; }
+		}
+		return undefined;
+	}
+
 	private renderReferenceLabels(references: readonly ISCMHistoryItemRef[], target: SCMHistoryItemViewModelTreeElement | undefined, rowScope: IScopedContextKeyService, resources: DisposableStore): HTMLSpanElement {
 		const document = this.graphElement.ownerDocument;
 		const container = h(document, 'span');
 		container.className = 'ash-scm-graph-label-container';
 		container.setAttribute('aria-label', localize('scm.history.references', 'History references'));
 		const groups = new Map<string, ISCMHistoryItemRef[]>();
-		// Keep HEAD distinct; other refs share a badge to keep the overlay compact.
+		// Name the primary tracked ref on each commit; keep other badges compact.
+		const labelReference = this.getHistoryItemLabelReference(references);
+		if (labelReference) { groups.set('label', [labelReference]); }
 		for (const reference of references) {
-			const key = reference.id === this.head?.id ? 'head' : reference.category ?? 'localBranch';
+			if (reference === labelReference) { continue; }
+			const key = reference.category ?? 'localBranch';
 			const group = groups.get(key);
 			if (group) {
 				group.push(reference);
@@ -1399,24 +1411,25 @@ export class SCMHistoryViewPane extends ViewPane {
 				groups.set(key, [reference]);
 			}
 		}
-		for (const [category, group] of groups) {
+		for (const group of groups.values()) {
 			const reference = group[0];
-			const isCurrent = category === 'head';
+			const isCurrent = reference.id === this.head?.id;
+			const showName = reference === labelReference;
 			let icon = Lxicon.gitBranch;
 			let kind = 'local';
 			if (isCurrent) {
 				kind = 'head';
 				icon = Lxicon.target;
-			} else if (category === 'remoteBranch') {
+			} else if (reference.category === 'remoteBranch') {
 				kind = 'remote';
 				icon = Lxicon.cloud;
-			} else if (category === 'tag') {
+			} else if (reference.category === 'tag') {
 				icon = Lxicon.tag;
 			}
 			const names = group.map(reference => reference.name).join(', ');
 			const label = h(document, 'span');
 			label.className = `ash-scm-graph-label ${kind}`;
-			label.classList.toggle('icon-only', !isCurrent && group.length === 1);
+			label.classList.toggle('icon-only', !showName && group.length === 1);
 			label.dataset.icon = icon.id;
 			label.setAttribute('role', 'button');
 			label.tabIndex = 0;
@@ -1455,7 +1468,7 @@ export class SCMHistoryViewPane extends ViewPane {
 				label.append(count);
 			}
 			appendIcon(icon, label);
-			if (isCurrent) {
+			if (showName) {
 				const name = h(document, 'span');
 				name.className = 'ash-scm-graph-label-name';
 				name.textContent = reference.name;

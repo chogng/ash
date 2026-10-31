@@ -151,9 +151,17 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			trackWorkspaceInitialization(operation.then(() => { }));
 			return operation;
 		};
+		// Preserve the user-triggered cause until both transport and directory setup settle.
+		let permissionRecoveries = 0;
 		const recovery: IAppServerConnectionRecovery = {
+			get phase() {
+				if (permissionRecoveries > 0) return 'permissions';
+				return connection.recovery.status === 'idle' && workspaceInitialization?.generation === client.generation
+					&& workspaceInitialization.state !== 'ready' ? 'workspace' : 'connection';
+			},
 			get status() {
 				const status = connection.recovery.status;
+				if (status === 'idle' && permissionRecoveries > 0) return 'recovering';
 				if (status !== 'idle' || workspaceInitialization?.generation !== client.generation) return status;
 				return workspaceInitialization.state === 'restoring' ? 'recovering' : workspaceInitialization.state === 'failed' ? 'failed' : 'idle';
 			},
@@ -163,11 +171,17 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					: connection.recovery.error;
 			},
 			onDidChange: Event.any(connection.recovery.onDidChange, workspaceChanges.event),
-			reconnect: async () => {
-				// A ready carrier needs only its failed directory binding retried.
-				const bindingPending = workspaceInitialization?.generation === client.generation && workspaceInitialization.state !== 'ready';
-				if (connection.recovery.status !== 'idle' || !bindingPending) await connection.recovery.reconnect();
-				await restoreWorkspace(true);
+			reconnect: async options => {
+				const permissions = options?.reason === 'permissions';
+				if (permissions) { permissionRecoveries++; workspaceChanges.fire(); }
+				try {
+					// A ready carrier needs only its failed directory binding retried.
+					const bindingPending = workspaceInitialization?.generation === client.generation && workspaceInitialization.state !== 'ready';
+					if (connection.recovery.status !== 'idle' || !bindingPending) await connection.recovery.reconnect();
+					await restoreWorkspace(true);
+				} finally {
+					if (permissions) { permissionRecoveries--; workspaceChanges.fire(); }
+				}
 			},
 		};
 		if (enabled) {
@@ -303,6 +317,9 @@ export async function createElectronRendererApi(contributions: readonly Electron
 						get operatingSystem() { return connectionApi.operatingSystem; },
 						get userHome() { return connectionApi.userHome; },
 						recovery: {
+							get phase() {
+								return lease.recovery.status === 'idle' && (scope.initializing || scope.error) ? 'workspace' : 'connection';
+							},
 							get status() {
 								const status = lease.recovery.status;
 								return status === 'unavailable' || status === 'suspended' ? status : scope.error ? 'failed' : scope.initializing && status === 'idle' ? 'recovering' : status;

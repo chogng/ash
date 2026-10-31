@@ -185,6 +185,26 @@ test('creation uses the atomic root Thread and never invents a catalog model fro
 	assert.deepEqual({ thread: active.threadId, created: active.session.model, persisted: persisted?.model, modelReads, extraThreads }, { thread: 'created-root', created: undefined, persisted: undefined, modelReads: 0, extraThreads: 0 });
 });
 
+test('catalog timing preserves each chat timestamp and omits unknown activity', async () => {
+	const original = session('timed-session', 'timed-thread');
+	const fake = sessionHost([{
+		...original,
+		manager: { status: 'idle', statusChangedAtUnixMs: 9000 },
+		threads: [
+			{ ...original.threads[0]!, createdAtUnixMs: 100, lastActivityAtUnixMs: 300 },
+			{ ...original.threads[0]!, threadId: 'older-thread', createdAtUnixMs: 50, lastActivityAtUnixMs: 200 },
+			{ ...original.threads[0]!, threadId: 'unknown-thread', createdAtUnixMs: 25 },
+		],
+	}]);
+	using service = createManagement(fake);
+	await service.initialize();
+	assert.deepEqual(service.sessions[0]?.chats.map(chat => ({ createdAt: chat.createdAt?.getTime(), updatedAt: chat.updatedAt?.getTime() })), [
+		{ createdAt: 100, updatedAt: 300 },
+		{ createdAt: 50, updatedAt: 200 },
+		{ createdAt: 25, updatedAt: undefined },
+	]);
+});
+
 for (const selected of [true, false]) {
 	test(`model-only catalog changes update the Session without reloading details (selected: ${selected})`, async () => {
 		const initialModel = { provider: 'provider', model: 'old' };
@@ -894,6 +914,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		async delete({ sessionId }) { const index = sessions.findIndex(candidate => candidate.sessionId === sessionId); if (index >= 0) sessions.splice(index, 1); },
 		async create() { throw new Error('Not used'); },
 		async listAgents() { return { agents: [] }; },
+		async readRoleCatalog() { throw new Error('Session management does not inspect Agent definitions'); },
 		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree }; },
 		async readCatalog({ sessionId }) { readCatalogCount += 1; return { session: sessions.find(candidate => candidate.sessionId === sessionId) ?? null }; },
 		async list() { listCount += 1; return { sessions }; },

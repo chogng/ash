@@ -130,7 +130,7 @@ export class SessionInfoRail extends Disposable {
 								type === AccessibleViewType.Help
 									? localize(
 										'sessions.info.help',
-										'The Code toolbar independently toggles Terminal, Files and session information. Closing the Terminal panel keeps its sessions running. Drag a card header onto an edge of another card to arrange it. Separators resize cards. Tab reaches Arrange, Open in new window, Expand and Close; the Arrange menu also moves and resizes cards with the keyboard. Expanding preserves the layout; closing a separate window returns the card. Enter or Space expands Environment and Context. Escape cancels dragging. Context shows estimated input against the automatic compaction budget; the unsent draft is excluded.',
+										'The Code toolbar independently toggles Terminal, Files and session information. Closing the Terminal panel keeps its sessions running. Drag a card header onto an edge of another card to arrange it. Separators resize cards. Tab reaches Open in new window, Expand and Close. Expanding preserves the layout; closing a separate window returns the card. Enter or Space expands Environment and Context. Escape cancels dragging. Context shows estimated input against the automatic compaction budget; the unsent draft is excluded.',
 									)
 									: this.environment.textContent + '\n' + this.summary.textContent,
 							() => (focused.isConnected ? focused.focus() : this.focusChat()),

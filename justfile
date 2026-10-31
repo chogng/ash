@@ -96,6 +96,10 @@ analyze-rust *args:
 prune-build-cache *args:
     {{ python }} -B -m build.lib.cargo_cache {{ recipe_args }}
 
+# Maintain local Docker build caches; --install enables hourly macOS maintenance.
+prune-docker-cache *args:
+    {{ python }} -B -m build.lib.docker_cache {{ recipe_args }}
+
 # Build the terminal and Electron products from the repository root.
 build: build-code build-ash
 

@@ -1,4 +1,7 @@
 import { Range } from '../../../../../../editor/common/core/range.js';
+import { ModernUIContribution } from '../../../../modernUI/browser/modernUI.contribution.js';
+import { IWorkbenchLayoutService } from '../../../../../services/layout/browser/layoutService.js';
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { ILanguageFeaturesService } from '../../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../../editor/common/services/languageFeaturesService.js';
 import { IWorkingCopyService } from '../../../../../services/workingCopy/common/workingCopyService.js';
@@ -42,11 +45,11 @@ import { IDialogService } from '../../../../../../platform/dialogs/common/dialog
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
 import type { IUserFriendlyKeybinding } from '../../../../../../platform/keybinding/common/keybinding.js';
-import { Event } from '../../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
 import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browser/themeFixture.js';
-import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { IEditorPartsService } from '../../../../../browser/parts/editor/editorParts.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
@@ -73,6 +76,7 @@ import { WorkbenchConfiguration } from '../../../../../common/configuration.js';
 import setiDocument from '../../../../../../../../extensions/theme-seti/icons/vs-seti-icon-theme.json' with { type: 'json' };
 import setiFontUrl from '../../../../../../../../extensions/theme-seti/icons/seti.woff?url';
 import '../../../../../browser/media/style.css';
+import '../../../../../services/quickinput/browser/media/quickInput.css';
 import '../../../../../../base/browser/ui/inputbox/inputbox.css';
 
 declare global {
@@ -83,6 +87,7 @@ declare global {
 			showInput(): void;
 			setNavigationBinding(mode: 'default' | 'rebound' | 'blocked'): void;
 			setHistoryLength(value: number): Promise<void>;
+			setLayoutStyle(style: 'flat' | 'modern'): Promise<void>;
 			setSearchPatterns(include: string, exclude: string): Promise<void>;
 			setIconTheme(id: string | null): Promise<void>;
 			writeShortcutBindings(bindings: readonly IUserFriendlyKeybinding[]): Promise<void>;
@@ -98,6 +103,7 @@ declare global {
 }
 
 const parameters = new URLSearchParams(location.search);
+document.documentElement.dir = parameters.get('dir') === 'rtl' ? 'rtl' : 'ltr';
 if (parameters.get('locale') === 'zh-CN') {
 	const catalog = productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, values) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, values));
@@ -109,6 +115,21 @@ const resources = new DisposableStore();
 const services = resources.add(new InstantiationService());
 const configuration = resources.add(new InMemoryConfigurationService());
 services.registerInstance(IConfigurationService, configuration);
+if (parameters.has('layoutStyle')) {
+	const auxiliary = parameters.get('host') === 'auxiliary';
+	document.body.classList.add(auxiliary ? 'ash-auxiliary-window-container' : 'ash-workbench');
+	await configuration.updateValue(WorkbenchConfiguration.layoutStyle, parameters.get('layoutStyle'));
+	const openedWindows = resources.add(new Emitter<IAuxiliaryWindow>());
+	services.registerInstance(IWorkbenchLayoutService, {
+		mainContainer: auxiliary ? document.createElement('main') : document.body,
+		setLayoutStyle() { },
+	} as unknown as IWorkbenchLayoutService);
+	services.registerInstance(IAuxiliaryWindowService, { onDidOpenWindow: openedWindows.event } as IAuxiliaryWindowService);
+	resources.add(services.createInstance(ModernUIContribution));
+	if (auxiliary) {
+		openedWindows.fire({ id: 1, container: document.body, onDidClose: Event.None } as unknown as IAuxiliaryWindow);
+	}
+}
 const languages = resources.add(new LanguageService());
 resources.add(languages.registerLanguage({ id: 'typescript', extensions: ['.ts'] }));
 resources.add(languages.registerLanguage({ id: 'markdown', extensions: ['.md'] }));
@@ -262,7 +283,7 @@ if (parameters.get('reopen') === '1') {
 	}));
 }
 const quickAccess = quickInput.quickAccess;
-const theme = parameters.get('theme') === 'hc' ? highContrastDarkColorTheme : parameters.get('theme') === 'dark' ? darkColorTheme : lightColorTheme;
+const theme = parameters.get('theme') === 'hc' ? highContrastDarkColorTheme : parameters.get('theme') === 'hcLight' ? highContrastLightColorTheme : parameters.get('theme') === 'dark' ? darkColorTheme : lightColorTheme;
 if (parameters.has('fileIcons')) {
 	const seti = await FileIconThemeData.load('vs-seti', 'Seti', setiDocument, async () => new Uint8Array(await (await fetch(setiFontUrl)).arrayBuffer()));
 	const registration = resources.add(WorkbenchFileIconThemesRegistry.registerThemes());
@@ -392,6 +413,10 @@ if (parameters.has('manyCommands')) {
 			public override run(): void { document.querySelector('output')!.textContent = title; }
 		}));
 	}
+	resources.add(registerAction2(class extends Action2 {
+		constructor() { super({ id: 'test.quickAccess.geometryResult', title: 'Geometry result sentinel', f1: true }); }
+		public override run(): void { document.querySelector('output')!.textContent = 'Geometry result sentinel'; }
+	}));
 }
 if (parameters.has('scrollRows')) {
 	for (let index = 0; index < 60; index++) {
@@ -460,6 +485,7 @@ window.ashQuickAccessIntegration = {
 		if (mode === 'rebound') bindings.add(KeybindingsRegistry.registerKeybindingRule({ command: 'quickInput.next', keybinding: KeyCode.F8, when: inQuickInputContext.isEqualTo(true), source: KeybindingSource.User }));
 	},
 	setHistoryLength: value => configuration.updateValue('workbench.commandPalette.history', value),
+	setLayoutStyle: style => configuration.updateValue(WorkbenchConfiguration.layoutStyle, style),
 	setIconTheme: id => configuration.updateValue(WorkbenchConfiguration.iconTheme, id),
 	setSearchPatterns: async (include, exclude) => {
 		await configuration.updateValue('search.includePatterns', include);

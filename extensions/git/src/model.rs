@@ -5,6 +5,7 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 /// Extension-owned view model. Transport response normalization stays in `api`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -176,6 +177,7 @@ pub struct Repository {
     pub root_uri: ResourceUri,
     pub configuration: Configuration,
     pub status: Option<Status>,
+    pub incoming_changes: Option<Arc<IncomingChanges>>,
     pub catalog: Option<Catalog>,
     pub draft: String,
     pub input_revision: u64,
@@ -206,12 +208,74 @@ pub struct Catalog {
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum RepositoryOperation {
     Preparing,
-    Synchronize,
+    /// A remote operation has started, even if it is now waiting for user input.
+    Synchronize {
+        phase: RemoteOperationPhase,
+    },
     Other,
 }
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum RemoteOperationPhase {
+    Running,
+    AwaitingInput,
+}
 impl Repository {
+    pub fn incoming_change(&self, path: &RepoPath) -> Option<&str> {
+        if !self.configuration.boolean("decorations.enabled", true) {
+            return None;
+        }
+        let incoming = self.incoming_changes.as_ref()?;
+        if !incoming.matches(self.status.as_ref()?) {
+            return None;
+        }
+        incoming.changes.get(path).map(String::as_str)
+    }
+
+    /// Reserves repository mutations and watched updates for the whole invocation.
     pub fn is_busy(&self) -> bool {
         self.operation.is_some()
+    }
+    pub fn is_running(&self) -> bool {
+        match self.operation {
+            None | Some(RepositoryOperation::Preparing) => false,
+            Some(RepositoryOperation::Synchronize { phase }) => match phase {
+                RemoteOperationPhase::Running => true,
+                RemoteOperationPhase::AwaitingInput => false,
+            },
+            Some(RepositoryOperation::Other) => true,
+        }
+    }
+    pub fn is_synchronizing(&self) -> bool {
+        matches!(
+            self.operation,
+            Some(RepositoryOperation::Synchronize {
+                phase: RemoteOperationPhase::Running
+            })
+        )
+    }
+    pub fn await_remote_input(&mut self) {
+        self.operation = Some(match self.operation {
+            Some(RepositoryOperation::Synchronize { .. }) => RepositoryOperation::Synchronize {
+                phase: RemoteOperationPhase::AwaitingInput,
+            },
+            None | Some(RepositoryOperation::Preparing | RepositoryOperation::Other) => {
+                RepositoryOperation::Preparing
+            }
+        });
+    }
+    pub fn finish_operation(&mut self) {
+        // A cancelled picker has no history effect. A cancelled prompt after a
+        // fetch/pull still completes that operation, including coalesced updates.
+        if matches!(
+            self.operation.take(),
+            Some(RepositoryOperation::Synchronize { .. })
+        ) {
+            self.history_operation_revision = self
+                .history_operation_revision
+                .checked_add(1)
+                .expect("Git history operation revision overflowed");
+        }
+        self.pending_paths = None;
     }
 }
 #[derive(Clone, PartialEq)]
@@ -722,6 +786,21 @@ pub struct CommitChange {
     pub path: RepoPath,
     pub original_path: Option<RepoPath>,
     pub status: String,
+}
+
+/// Derived from immutable local/upstream commits, never from the working tree.
+pub struct IncomingChanges {
+    pub head: Head,
+    pub stream_instance_id: String,
+    pub history_revision: u64,
+    pub changes: BTreeMap<RepoPath, String>,
+}
+impl IncomingChanges {
+    pub fn matches(&self, status: &Status) -> bool {
+        self.head == status.head
+            && self.stream_instance_id == status.stream_instance_id
+            && self.history_revision == status.history_revision
+    }
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

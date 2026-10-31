@@ -70,6 +70,8 @@ export interface ModelCatalogEntry {
 	readonly discovered?: boolean;
 	readonly retirement?: ModelRetirement;
 	readonly contextWindow?: number | null;
+	/** Usable input capacity after output and safety reservations, independent of compaction. */
+	readonly usableContextWindow?: number | null;
 	readonly defaultContextWindow?: number | null;
 	readonly maximumContextWindow?: number | null;
 	readonly accelerationOptions?: readonly ModelAccelerationOption[];
@@ -79,7 +81,8 @@ export interface ModelCatalogEntry {
 }
 
 export interface AdvisorConfig {
-	readonly model: ModelRef;
+	/** An absent model inherits the initiating chat's model and reasoning effort. */
+	readonly model?: ModelRef | null;
 	readonly enabled: boolean;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 	readonly maxCalls: number;

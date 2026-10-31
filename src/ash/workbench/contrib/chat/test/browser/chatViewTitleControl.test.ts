@@ -24,13 +24,19 @@ test('Conversation title keeps one history picker open and restores focus when d
 		services.registerInstance(IContextMenuService, { showContextMenu: () => { } } as unknown as IContextMenuService);
 		const dismissed = new DeferredPromise<void>();
 		let opened = 0;
-		using control = services.createInstance(ChatViewTitleControl, dom.window.document.body, 'chat', () => { opened++; return dismissed.p; });
+		let historyAnchor: HTMLElement | undefined;
+		using control = services.createInstance(ChatViewTitleControl, dom.window.document.body, 'chat', (anchor: HTMLElement) => {
+			opened++;
+			historyAnchor = anchor;
+			return dismissed.p;
+		});
 		control.update('Working conversation', 'chat-panel');
 		const button = dom.window.document.querySelector<HTMLButtonElement>('.ash-chat-view-title-button')!;
 		button.focus();
 		button.click();
 		button.click();
 		assert.equal(opened, 1);
+		assert.equal(historyAnchor, button);
 		assert.equal(button.getAttribute('aria-expanded'), 'true');
 		assert.equal(button.getAttribute('aria-controls'), 'chat-panel');
 		assert.equal(dom.window.document.querySelector('[role="tablist"]'), null);

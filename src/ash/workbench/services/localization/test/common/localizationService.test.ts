@@ -309,7 +309,7 @@ suite('Workbench localization', () => {
 				'Close to the Right',
 				'Close Saved',
 				'Close All in Group',
-				'Close All Tabs',
+				'Close All',
 				'Reopen Closed Tab',
 			],
 		);
@@ -886,8 +886,8 @@ suite('Workbench localization', () => {
 		);
 		assert.equal(commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close')), '关闭');
 		assert.equal(
-			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All Tabs')),
-			'关闭所有标签页',
+			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.closeAllEditors' }, 'Close All')),
+			'全部关闭',
 		);
 		assert.equal(
 			commandActionLabel(localize2({ bundle: 'ash', key: 'workbench.reopenClosedEditor' }, 'Reopen Closed Tab')),

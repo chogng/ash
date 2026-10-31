@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
+import { readEditorScrollPosition } from '../../../automation/editor.js';
 
 const run = promisify(execFile);
 
@@ -204,19 +205,24 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await page.getByRole('button', { name: 'Open main.ts for Merge Changes' }).click();
 	const group = workbench.editors.groupAt(0);
 	await expect(group.content.locator('.ash-merge-hunk')).toHaveCount(2);
+	// Reserve enough width for all four editors during the resize assertion.
+	await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
+	await workbench.quickaccess.runCommand('workbench.action.closeAuxiliaryBar');
 	const editors = ['current', 'incoming'].map(side => group.content.locator(`.ash-merge-input-${side} .stanza-editor`));
 	editors.push(group.content.locator('.ash-merge-result-editor .stanza-editor'));
 	for (const editor of editors) {
 		await expect(editor).toBeVisible();
 		expect(await editor.evaluate(node => node.getBoundingClientRect().height)).toBeGreaterThan(0);
 	}
-	await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate(node => { node.scrollTop = 600; node.dispatchEvent(new Event('scroll')); });
-	await expect.poll(async () => Promise.all(editors.map(editor => editor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)))).toEqual([600, 600, 600]);
+	await editors[0].dispatchEvent('wheel', { deltaY: 600, deltaMode: 0 });
+	await expect.poll(async () => Promise.all(editors.map(async editor => (await readEditorScrollPosition(editor)).top))).toEqual([600, 600, 600]);
 	await page.getByRole('button', { name: 'Show Base' }).click();
 	const baseEditor = group.content.locator('.ash-merge-input-base .stanza-editor');
 	await expect(baseEditor).toBeVisible();
-	await expect.poll(async () => baseEditor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)).toBe(600);
+	await expect.poll(async () => (await readEditorScrollPosition(baseEditor)).top).toBe(600);
 	await page.getByRole('button', { name: 'Conflict 1' }).click();
+	// Range reveal targets conflict text; bring its preceding action row into the viewport.
+	await editors[0].dispatchEvent('wheel', { deltaY: -40, deltaMode: 0 });
 	const alignedTops = await Promise.all(['.ash-merge-input-base', '.ash-merge-input-current', '.ash-merge-input-incoming', '.ash-merge-result-editor'].map(selector => group.content.locator(`${selector} .ash-merge-inline-actions[data-visible-view-zone]`).evaluate(node => {
 		const editor = node.closest('.stanza-editor')!;
 		return node.getBoundingClientRect().top - editor.getBoundingClientRect().top;
@@ -240,12 +246,10 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 		return Math.max(...tops) - Math.min(...tops);
 	};
 	await group.content.locator('.ash-merge-result-editor .stanza-editor-input').focus();
-	await page.keyboard.press('F1');
-	const picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('View: Toggle Word Wrap');
-	await picker.locator('.ash-quick-pick-row-label', { hasText: /^View: Toggle Word Wrap$/u }).click();
+	await workbench.quickaccess.runCommand('editor.action.toggleWordWrap');
 	await expect(group.content.locator('.ash-merge-result-editor .stanza-editor')).toHaveClass(/word-wrapped/);
 	await page.getByRole('button', { name: 'Conflict 1' }).click();
+	await editors[0].dispatchEvent('wheel', { deltaY: -40, deltaMode: 0 });
 	await expect.poll(readActionTopSpread).toBeLessThan(2);
 	const viewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
 	const resultWidth = await editors[2].evaluate(node => node.getBoundingClientRect().width);
@@ -256,21 +260,18 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	await expect.poll(readActionTopSpread).toBeLessThan(2);
 	await expect(currentAction).toBeFocused();
 	await page.setViewportSize(viewport);
-	const actionScrollTop = await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop);
-	await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate(node => {
+	const actionScrollTop = (await readEditorScrollPosition(editors[0])).top;
+	const actionOffset = await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate(node => {
 		const line = [...node.querySelectorAll('.view-line')].find(row => row.textContent?.includes('const currentExtra = 30;'));
 		if (!line) throw new Error('Current conflict line is not rendered');
-		node.scrollTop += line.getBoundingClientRect().top - node.getBoundingClientRect().top + 8;
-		node.dispatchEvent(new Event('scroll'));
+		return line.getBoundingClientRect().top - node.getBoundingClientRect().top + 8;
 	});
+	await editors[0].dispatchEvent('wheel', { deltaY: actionOffset, deltaMode: 0 });
 	await expect.poll(async () => {
-		const scrollTops = await Promise.all([...editors, baseEditor].map(editor => editor.locator(':scope > .ash-smooth-scrollable').evaluate(node => node.scrollTop)));
+		const scrollTops = await Promise.all([...editors, baseEditor].map(async editor => (await readEditorScrollPosition(editor)).top));
 		return Math.max(...scrollTops) - Math.min(...scrollTops);
 	}).toBeLessThan(2);
-	await editors[0].locator(':scope > .ash-smooth-scrollable').evaluate((node, scrollTop) => {
-		node.scrollTop = scrollTop;
-		node.dispatchEvent(new Event('scroll'));
-	}, actionScrollTop);
+	await editors[0].dispatchEvent('wheel', { deltaY: actionScrollTop - (await readEditorScrollPosition(editors[0])).top, deltaMode: 0 });
 	await expect(group.content.locator('.ash-merge-input-current .ash-merge-inline-actions[data-visible-view-zone]')).toBeVisible();
 	await group.content.locator('.ash-merge-input-current .ash-merge-inline-actions[data-visible-view-zone]').getByRole('button', { name: 'Accept Current' }).click();
 	await expect(group.content.locator('.ash-merge-progress')).toHaveText('1 of 2 conflicts resolved');
@@ -284,6 +285,7 @@ test('SCM merge editors synchronize scrolling across the three sources and resul
 	})));
 	expect(Math.abs(resolvedLines[0] - resolvedLines[1])).toBeLessThan(2);
 	await page.getByRole('button', { name: 'Next Unresolved' }).click();
+	await editors[0].dispatchEvent('wheel', { deltaY: -40, deltaMode: 0 });
 	await expect(group.content.locator('.ash-merge-hunk').nth(1)).toHaveClass(/active/);
 	await expect(group.content.locator('.ash-merge-inline-actions[data-visible-view-zone]')).toHaveCount(4);
 	expect(await group.content.locator('.ash-merge-input-current .ash-merge-spacer').count()).toBeGreaterThan(0);

@@ -1,30 +1,38 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import type { IActionRunner } from '../../../../base/common/actions.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import type { NotificationItem } from '../../../common/notifications.js';
 import { NotificationTemplateRenderer } from './notificationsViewer.js';
+import { CopyNotificationMessageAction } from './notificationsActions.js';
 
 /** Owns retained notification rows and their controls, never the shared history. */
 export class NotificationsList extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	private readonly renderers = this._register(new DisposableMap<number, NotificationTemplateRenderer>());
+	private readonly itemChanges = this._register(new DisposableMap<number>());
 	private readonly removeEmitter = this._register(new Emitter<number>());
 	public readonly onDidRequestRemove = this.removeEmitter.event;
 	private readonly items: NotificationItem[] = [];
 	private readonly itemsById = new Map<number, NotificationItem>();
 	private readonly visible = new Set<number>();
+	private readonly copyAction: CopyNotificationMessageAction;
+	private copyMenu: CancellationTokenSource | undefined;
 
 	constructor(
 		container: HTMLElement,
 		private readonly presentation: 'toast' | 'center',
 		private readonly actionRunner: IActionRunner,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 	) {
 		super();
+		this.copyAction = instantiationService.createInstance(CopyNotificationMessageAction, CopyNotificationMessageAction.ID, CopyNotificationMessageAction.LABEL);
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = presentation === 'toast' ? 'ash-notification-host' : 'ash-notifications-list';
 		this.domNode.setAttribute('role', presentation === 'toast' ? 'region' : 'list');
@@ -32,7 +40,12 @@ export class NotificationsList extends Disposable {
 			this.domNode.setAttribute('aria-label', localize('notifications.toasts', 'Notifications'));
 		}
 		container.append(this.domNode);
+		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showCopyMenu(event)));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
+			if (!event.defaultPrevented && !event.isComposing && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) {
+				this.showCopyMenu(event);
+				return;
+			}
 			if (event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey) return;
 			const target = event.target as HTMLElement;
 			const row = target.closest<HTMLElement>('[data-notification-id]');
@@ -69,6 +82,7 @@ export class NotificationsList extends Disposable {
 			}
 		}));
 		this._register(toDisposable(() => {
+			this.cancelCopyMenu();
 			for (const id of this.visible) this.itemsById.get(id)?.updateVisibility(false);
 			this.visible.clear();
 			this.itemsById.clear();
@@ -81,10 +95,13 @@ export class NotificationsList extends Disposable {
 	}
 
 	public updateNotificationsList(start: number, deleteCount: number, items: readonly NotificationItem[] = []): void {
+		// A replaced or hidden presentation must not leave an actionable stale menu.
+		this.cancelCopyMenu();
 		this.items.splice(start, deleteCount, ...items);
 		for (const [id] of this.renderers) {
 			if (!this.items.some(item => item.id === id)) {
 				this.renderers.deleteAndDispose(id);
+				this.itemChanges.deleteAndDispose(id);
 				if (this.visible.delete(id)) this.itemsById.get(id)?.updateVisibility(false);
 				this.itemsById.delete(id);
 			}
@@ -100,6 +117,9 @@ export class NotificationsList extends Disposable {
 					this.actionRunner,
 					(id: number) => this.removeEmitter.fire(id),
 				));
+				this.itemChanges.set(item.id, item.onDidChange(current => {
+					this.itemsById.set(item.id, current);
+				}));
 			}
 			const position = this.domNode.children[index];
 			if (position !== renderer.domNode) {
@@ -113,5 +133,44 @@ export class NotificationsList extends Disposable {
 				item.updateVisibility(visible);
 			}
 		}
+	}
+
+	private showCopyMenu(event: MouseEvent | KeyboardEvent): void {
+		if (this.isDisposed) return;
+		const document = this.domNode.ownerDocument;
+		const Element = document.defaultView?.Element;
+		if (!Element || !(event.target instanceof Element)) return;
+		const row = event.target.closest<HTMLElement>('[data-notification-id]');
+		if (!row || row.parentElement !== this.domNode) return;
+		const item = this.itemsById.get(Number(row.dataset.notificationId));
+		if (!item) return;
+		event.preventDefault();
+		event.stopPropagation();
+		this.cancelCopyMenu();
+		row.focus();
+		const source = this.copyMenu = new CancellationTokenSource();
+		try {
+			this.contextMenuService.showContextMenu({
+				getAnchor: () => event.type === 'contextmenu' ? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: document.defaultView ?? undefined } : row,
+				getActions: () => [this.copyAction],
+				getActionsContext: () => item,
+				cancellationToken: source.token,
+				autoSelectFirstItem: true,
+				onHide: () => {
+					if (this.copyMenu === source) this.copyMenu = undefined;
+					// Selection releases the menu without canceling the started clipboard write.
+					source.dispose();
+				},
+			});
+		} catch (error) {
+			if (this.copyMenu === source) this.cancelCopyMenu();
+			throw error;
+		}
+	}
+
+	private cancelCopyMenu(): void {
+		const source = this.copyMenu;
+		this.copyMenu = undefined;
+		source?.dispose(true);
 	}
 }

@@ -298,6 +298,10 @@ macOS 和 Windows 发布组包使用同一个准备入口，不再无条件重�
 
 开发运行版本由发布器按租约回收，保留当前版本与仍在运行的版本。验证脚本应在结束时删除自行创建的临时编译、索引目录，只保留报告和复现材料；`just bench-build` 会自动清理自己的编译目录。开发包的发布与回收规则见 [共享包构建](../build/README.md)和 [Code 构建](../build/code/README.md)。
 
+Docker 缓存单独用 `just prune-docker-cache` 维护，默认固定本机 `desktop-linux` context，拒绝远端 endpoint；其他本机 context 用 `--context` 指定。macOS 执行 `just prune-docker-cache --install` 安装当前用户的每小时 launchd 任务，不依赖宿主机继续构建。任务不启动 Docker Desktop；未运行时记录失败，下一小时重试。卸载时执行 `launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/dev.ash.docker-cache.plist` 并删除该 plist。
+
+Docker 维护通过 BuildKit 按最近使用顺序回收超过 8 GB 的构建缓存，保留最近 24 小时使用过的记录，并请求 Docker 内至少 32 GB 可用空间；正在使用的记录由 BuildKit 保留。当前 checkout 的开发容器停止满 24 小时后，其 `.build` 卷内 Cargo 缓存使用同一套租约和 Cargo 锁保护，增量预算为 8 GiB、全部产物预算为 32 GiB；`--empty` 将本次闲置 Cargo 预算降为零。宿主机 checkout 所在卷不足 32 GiB 可用时，闲置 Cargo 预算降为 8 GiB、BuildKit 降为 1 GB。仅删除无任何容器引用的标准 Ash `build-output`、`tool-cache` 卷及已知旧测试缓存卷，不删除容器、镜像、依赖卷或其他业务卷。仍被容器引用的工具缓存卷保留，其中 Bazel disk cache 由 Bazel 在空闲时按 4 GiB、7 天的限制自行回收；Cargo 以外的验证报告和产物不在 Docker 维护任务中删除。日志位于 `~/Library/Caches/ash/docker-maintenance/`。
+
 `scripts/cargo.py` 的普通 check、test、clippy 命令默认使用共享 `ci-test` profile，包括 `just check`、`just test` 和 `just rust-warnings`；显式 `--profile`、`--release` 或 `-r` 优先。`ci-test` 只是编译配置名，不执行 CI 流水线。产品开发程序和协议生成器继续复用 `dev-small`，发布使用 release；普通 build/run 保留 Cargo 默认配置及现有工具的产物路径，保留各自的体积与调试约束。`just rust-warnings` 检查新生成与已缓存的编译警告，保持 `RUSTFLAGS` 与普通构建一致，避免生成另一套产物。
 
 单次纯类型检查使用锁定的 Bun 1.4.4：Renderer、Common、Protocol、Extensions、Memories、Stanza、构建工具和单元测试运行器工具均通过 `bun check -p <config> --all` 检查。Browser integration、Smoke automation 和 Scenario 的配置也都是 `noEmit`，其准备阶段使用 Bun 检查类型。现有 pnpm 入口继续准备协议、本地化等生成输入；多个检查顺序执行，避免大型 Bun 进程同时争抢 CPU。共享机器可对直接检查添加 `--threads 4`。Bun 不生成 JavaScript 或 `.tsbuildinfo`；对照测量与工具职责见 [构建工具说明](../build/README.md)。

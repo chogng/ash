@@ -43,6 +43,21 @@
 	outline: none;
 }
 
+.ash-select-box-option-separator-before {
+	position: relative;
+	margin-top: var(--ash-spacing-size80);
+}
+
+.ash-select-box-option-separator-before::before {
+	content: "";
+	position: absolute;
+	top: calc(-1 * var(--ash-spacing-size40));
+	left: 0;
+	right: 0;
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
+	pointer-events: none;
+}
+
 /* Only enabled options override List's default row cursor. */
 .ash-select-box-option:not(.ash-select-box-option-disabled) {
 	cursor: pointer;

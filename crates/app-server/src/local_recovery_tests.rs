@@ -70,7 +70,7 @@ fn model_provider_migration_keeps_idle_history_lazy_across_directory_hosts() {
     assert_eq!(loaded.len(), 1);
     assert!(
         matches!(&loaded[0].advisor, ash_protocol::AdvisorSelection::Model { config }
-        if config.model.provider.as_str() == "glm")
+        if config.model.as_ref().is_some_and(|model| model.provider.as_str() == "glm"))
     );
 }
 

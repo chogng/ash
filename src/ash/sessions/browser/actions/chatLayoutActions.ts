@@ -138,9 +138,11 @@ registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 			? AgentSessionsViewerOrientation.Stacked : AgentSessionsViewerOrientation.SideBySide;
 		// Capture the target's last geometry before visibility or configuration can relayout it.
 		const previousDimensions = view.getLastDimensions(target);
-		if (view.toggleSessionsSidebar()) {
+		if (target === AgentSessionsViewerOrientation.SideBySide) {
 			await accessor.get(IConfigurationService).updateValue(ChatConfiguration.ChatViewSessionsOrientation, 'sideBySide', ConfigurationTarget.USER_LOCAL);
 		}
+		// Reveal and resize together so a settings write cannot expose the stacked layout.
+		view.toggleSessionsSidebar({ visible: target === AgentSessionsViewerOrientation.SideBySide });
 		resizeChatForSessions(accessor, view, target, previousDimensions?.width);
 	}
 });

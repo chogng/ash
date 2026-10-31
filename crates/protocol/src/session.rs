@@ -78,6 +78,11 @@ pub struct SessionThread {
     pub title: String,
     #[ts(type = "number")]
     pub created_at_unix_ms: u64,
+    /// Latest Turn activity or Thread creation. Renaming, configuration and archive do not advance it.
+    /// Absent only in older catalog rows, which Core repairs from durable history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable, type = "number")]
+    pub last_activity_at_unix_ms: Option<u64>,
     /// Sum of durations for terminal Turns that started in this Thread.
     #[serde(default)]
     #[ts(type = "number")]

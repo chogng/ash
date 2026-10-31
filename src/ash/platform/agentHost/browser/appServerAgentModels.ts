@@ -286,6 +286,7 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 		longContext: entry.long_context,
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.context_window,
+		usableContextWindow: entry.usable_context_window,
 		supportedReasoningEfforts: Object.freeze(
 			entry.supported_reasoning_efforts.map((option) => Object.freeze({ ...option }))
 		),

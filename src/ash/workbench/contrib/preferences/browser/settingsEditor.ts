@@ -57,6 +57,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { LanguageServerSettingsRenderer } from './languageServerSettingsRenderer.js';
 import { getSettingsSections } from '../../../services/preferences/browser/settingsSections.js';
 import { AgentTaskModelSettingsModel } from './agentTaskModelSettingsModel.js';
+import { AgentRolesSettingsRenderer } from './agentRolesSettingsRenderer.js';
 import { ModelSettingsRenderer } from './modelSettingsRenderer.js';
 import { DictationSettingsRenderer } from './dictationSettingsRenderer.js';
 import { AgentCapabilitiesSettings } from './agentCapabilitiesSettings.js';
@@ -94,6 +95,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private languageServerSettings!: LanguageServerSettingsRenderer;
 	private readonly contents: SettingsPageRenderer[] = [];
 	private settingsTree!: SettingsTree<ISetting | SettingsSectionReference>;
+	private settingsRenderer!: SettingsRenderer;
 	private tocTree!: TOCTree;
 	private treeModel!: SettingsTreeModel<ISetting | SettingsSectionReference>;
 	private activeCategory!: SettingsCategoryDescriptor;
@@ -116,6 +118,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			configurationOverrides: {},
 			onStatus: (message, isError) => this.settingsModel.reportStatus(message, isError),
 			onOpenSettings: key => this.openSettingsJson(key),
+			onRevealSetting: key => this.revealSetting(key),
 		};
 
 	constructor(
@@ -156,6 +159,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		}));
 		this.treeModel.setChildren(settingsRootNodes(this.settingsLayout));
 		const settingsRenderer = this._register(this.instantiationService.createInstance(SettingsRenderer, container, this.widgetOptions));
+		this.settingsRenderer = settingsRenderer;
 
 		const ownerDocument = container.ownerDocument;
 		const rootDomNode = h(ownerDocument, 'div');
@@ -264,6 +268,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const traceSettings = this._register(this.instantiationService.createInstance(TraceSettingsModel));
 		const sandboxSettings = this._register(this.instantiationService.createInstance(SandboxSettingsModel));
 		this.contents.push(
+			this._register(this.instantiationService.createInstance(AgentRolesSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SnapshotSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(BrowserPasswordSettingsRenderer, settingsContent)),
 			this._register(this.instantiationService.createInstance(SettingsSectionRenderer, settingsContent, sandboxSettings, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings)),
@@ -535,6 +540,16 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const top = section.getBoundingClientRect().top - this.contentScrollable.scrollableElement.getBoundingClientRect().top + this.contentScrollable.state.top;
 		this.contentScrollable.scrollTo(0, top);
 		this.sectionToReveal = undefined;
+	}
+
+	private revealSetting(key: string): void {
+		for (const category of this.settingsLayout) {
+			const group = category.groups.find(group => group.settings.some(setting => setting.id === key));
+			if (!group) continue;
+			this.setOptions({ section: `${category.id}.group.${group.id}`, focusSearch: false });
+			this.settingsRenderer.focusSetting(key);
+			return;
+		}
 	}
 
 	private search(text: string): void {

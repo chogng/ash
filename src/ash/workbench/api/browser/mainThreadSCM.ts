@@ -683,6 +683,10 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		const historyOperationCompleted = this.snapshot.historyOperationRevision !== value.historyOperationRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		const resourcesChanged = !structuralEquals(value.groups, this.snapshot.groups);
+		// Incoming file decorations can change after fetch with no working-tree changes.
+		const decorationsChanged = resourcesChanged || historyChanged
+			|| !structuralEquals(value.historyRef, this.snapshot.historyRef)
+			|| !structuralEquals(value.historyRemoteRef, this.snapshot.historyRemoteRef);
 		// An index write can change original content while path/status entries stay equal.
 		const diffChanged = resourcesChanged
 			|| value.label !== this.snapshot.label
@@ -712,7 +716,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		if (!structuralEquals(this.historyBaseRef.get(), value.historyBaseRef)) { this.historyBaseRef.set(value.historyBaseRef); }
 		if (presentationChanged) this.changed.fire();
 		if (diffChanged) this.diffChanged.fire();
-		if (resourcesChanged) this.decorationChanged.fire([]);
+		if (decorationsChanged) this.decorationChanged.fire([]);
 		if (timelineChanged) this.timelineChanged.fire();
 		if (historyChanged || historyOperationCompleted) {
 			this.historyChanged.fire({ silent: !historyOperationCompleted && value.historyChangeSilent });

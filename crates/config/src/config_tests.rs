@@ -2748,6 +2748,36 @@ fn advisor_default_validates_provider_and_survives_reopening() {
     remove_config_files(&path);
 }
 
+#[test]
+fn inherited_advisor_survives_reopening_without_a_pinned_provider() {
+    let path = config_path("advisor-inherit");
+    let store = ConfigStore::open(&path).unwrap();
+    let advisor: ash_protocol::AdvisorConfig = serde_json::from_value(serde_json::json!({
+        "enabled": true, "maxCalls": 7, "maxOutputTokens": 8192
+    }))
+    .unwrap();
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("inherit-advisor").unwrap(),
+            expected_revision: store.read_snapshot().unwrap().revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                advisor: Patch::Value(advisor.clone()),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    assert_eq!(
+        ConfigStore::open(&path)
+            .unwrap()
+            .read_snapshot()
+            .unwrap()
+            .values
+            .advisor,
+        Some(advisor)
+    );
+    remove_config_files(&path);
+}
+
 fn connection_id(id: &str) -> ash_protocol::ModelConnectionId {
     ash_protocol::ModelConnectionId::new(id).unwrap()
 }

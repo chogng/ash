@@ -1,3 +1,12 @@
 .ash-workbench {
 	position: relative;
 }
+
+/* The Workbench selects row presentation; Quick Input retains its overlay layout. */
+:is(.ash-workbench, .ash-auxiliary-window-container)
+	.ash-quick-pick-list:not(.ash-quick-pick-list-menu) {
+	--ash-list-row-inset-start: 0px;
+	--ash-list-row-inset-end: 0px;
+	--ash-list-row-reserve-scrollbar: 0;
+	--ash-list-row-radius: 0px;
+}

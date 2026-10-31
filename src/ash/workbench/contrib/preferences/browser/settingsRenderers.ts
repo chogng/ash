@@ -47,6 +47,12 @@ export class SettingsRenderer extends Disposable {
 		this.widgets.deleteAndDispose(id);
 	}
 
+	public focusSetting(id: string): void {
+		const widget = this.getWidget(id);
+		widget?.domNode.scrollIntoView({ block: 'nearest' });
+		widget?.focus();
+	}
+
 	private getWidget(id: string): SettingWidget | undefined {
 		for (const [candidateId, widget] of this.widgets) {
 			if (candidateId === id) return widget;

@@ -1277,25 +1277,6 @@ export class DesktopWorkbenchLayout
 		}
 	}
 
-	resizeCard(id: CodeCardId, widthDelta: number, heightDelta: number): void {
-		if (!this.active || this.detachedCards.has(id)) return;
-		if (this.expandedCard) this.expandCard(this.expandedCard);
-		const view = this.cardView(id),
-			size = this.getViewSize(view);
-		this.updateParts(() => {
-			this.resizeView(
-				view,
-				new Dimension(
-					Math.max(view.minimumWidth, size.width + widthDelta),
-					Math.max(view.minimumHeight, size.height + heightDelta),
-				),
-			);
-			if (this.isViewVisible(this.view('auxiliarybar')))
-				this.detailsWidth = this.getViewSize(this.view('auxiliarybar')).width;
-			this.rememberDetachedArrangement();
-		});
-	}
-
 	moveCard(id: CodeCardId, target: CodeCardTarget, direction: Direction): void {
 		if (!this.active || id === target || this.detachedCards.has(id)) return;
 		if (this.expandedCard) this.expandCard(this.expandedCard);

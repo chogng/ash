@@ -47,6 +47,8 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 				onDidFailCreateView: (error: unknown) => { throw error; },
 				...part.getPaneCompositeOptions(),
 				...(container.mergeViewWithContainerWhenSingleView === undefined ? {} : { mergeViewWithContainerWhenSingleView: container.mergeViewWithContainerWhenSingleView }),
+				// An explicitly unmerged view retains its own title even in a fill host.
+				...(container.mergeViewWithContainerWhenSingleView === false ? { paneHeaders: 'visible' as const } : {}),
 			};
 			const created = container.ctorDescriptor
 				? this.instantiation.createInstance(container.ctorDescriptor, part.domNode, options)

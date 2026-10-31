@@ -49,3 +49,8 @@
 .ash-pane-composite-title-part-actions {
 	flex-shrink: 0;
 }
+
+/* The theme already mutes this divider; ActionBar's extra dimming erases its contrast. */
+.ash-pane-composite-title-part-actions > .ash-pane-composite-title-separator {
+	opacity: 1;
+}

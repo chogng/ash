@@ -4,6 +4,8 @@ import { isFiniteNumber } from '../../../common/numbers.js';
 export type ScrollbarVisibility = 'auto' | 'visible' | 'hidden';
 export type ScrollDirection = 'horizontal' | 'vertical' | 'both';
 
+export const DEFAULT_SCROLLBAR_SIZE = 10;
+
 export interface ScrollbarWheelOptions {
 	/** Multiplier applied after wheel deltas are normalized to CSS pixels. */
 	readonly sensitivity?: number;
@@ -90,7 +92,7 @@ export function resolveScrollableElementOptions(
 		vertical: direction === 'horizontal'
 			? 'hidden'
 			: options.vertical ?? 'auto',
-		scrollbarSize: positiveFinite(options.scrollbarSize, 10),
+		scrollbarSize: positiveFinite(options.scrollbarSize, DEFAULT_SCROLLBAR_SIZE),
 		minimumThumbSize: positiveFinite(options.minimumThumbSize, 20),
 		trackClickBehavior: options.trackClickBehavior ?? 'jump',
 		wheel: {

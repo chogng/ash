@@ -1051,11 +1051,11 @@ impl ThreadController {
                 "independent actions require their owning Core command".into(),
             ));
         }
-        if let Some(advisor) = &request.advisor {
-            advisor
-                .validate()
-                .map_err(|message| CoreError::InvalidInput(message.into()))?;
-        }
+        request.advisor = resolve_turn_advisor(
+            request.advisor,
+            request.model.as_ref(),
+            request.reasoning_effort,
+        )?;
         if request.kind == ash_protocol::TurnKind::Advisor && request.advisor.is_none() {
             return Err(CoreError::InvalidInput("advisor is off".into()));
         }
@@ -1291,7 +1291,7 @@ impl ThreadController {
     pub fn start_goal_turn(
         &self,
         thread_id: &ThreadId,
-        request: StartGoalTurnRequest,
+        mut request: StartGoalTurnRequest,
     ) -> Result<Option<StartTurnResult>, CoreError> {
         request
             .context_policy
@@ -1303,6 +1303,11 @@ impl ThreadController {
             .instructions
             .validate()
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        request.advisor = resolve_turn_advisor(
+            request.advisor,
+            request.model.as_ref(),
+            request.reasoning_effort,
+        )?;
         let command = ThreadCommand::StartTurn {
             context_policy: request.context_policy.clone(),
             kind: TurnKind::Coding,
@@ -3535,6 +3540,19 @@ fn append_tool_repetition_reminder(text: &mut String, content: &mut Option<Vec<C
     }
 }
 
+fn resolve_turn_advisor(
+    advisor: Option<ash_protocol::AdvisorConfig>,
+    model: Option<&ModelRef>,
+    reasoning_effort: Option<ash_protocol::ReasoningEffort>,
+) -> Result<Option<ash_protocol::AdvisorConfig>, CoreError> {
+    if let Some(config) = &advisor {
+        config
+            .validate()
+            .map_err(|message| CoreError::InvalidInput(message.into()))?;
+    }
+    Ok(advisor.and_then(|config| config.resolve_for_chat(model, reasoning_effort)))
+}
+
 fn validate_command_id(command_id: &CommandId) -> Result<(), CoreError> {
     if command_id.as_str().trim().is_empty() {
         Err(CoreError::InvalidInput(
@@ -3665,6 +3683,15 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             thread_id: snapshot.thread_id.clone(),
             title: snapshot.title.clone(),
             created_at_unix_ms: snapshot.created_at_unix_ms,
+            last_activity_at_unix_ms: Some(
+                snapshot
+                    .turns
+                    .iter()
+                    .map(|turn| turn.status_changed_at_unix_ms)
+                    .max()
+                    .unwrap_or(0)
+                    .max(snapshot.created_at_unix_ms),
+            ),
             completed_turn_duration_ms: snapshot.completed_turn_duration_ms(),
             active_turn_started_at_unix_ms: snapshot.active_turn_started_at_unix_ms(),
             usage: snapshot.usage.clone(),

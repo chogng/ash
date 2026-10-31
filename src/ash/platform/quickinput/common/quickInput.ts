@@ -12,6 +12,7 @@ export interface IQuickPickItem {
 	readonly label: string;
 	readonly description?: string;
 	readonly detail?: string;
+	readonly tooltip?: string;
 	/** Marks the chosen item independently of the row being browsed. */
 	readonly picked?: boolean;
 	readonly keybinding?: ResolvedKeybinding;
@@ -26,6 +27,8 @@ export interface IQuickPickItem {
 export interface IQuickPickSeparator {
 	readonly type: 'separator';
 	readonly label?: string;
+	/** Section headings take their own line; inline labels retain the compact default. */
+	readonly presentation?: 'section';
 }
 
 export interface IKeyMods {
@@ -38,6 +41,7 @@ export interface IQuickPickItemButton {
 	readonly id: string;
 	readonly label: string;
 	readonly iconClass?: string;
+	readonly hasPopup?: 'menu';
 }
 
 export interface IQuickInputSelection {
@@ -90,7 +94,7 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	readonly onDidChangeValue: Event<string>;
 	readonly onDidHide: Event<void>;
 	readonly onDidBlur: Event<void>;
-	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton; }>;
+	readonly onDidTriggerItemButton: Event<{ readonly item: TItem; readonly button: IQuickPickItemButton; readonly anchor?: unknown; }>;
 
 	items: readonly (TItem | IQuickPickSeparator)[];
 	/** Disable search sorting when the provider owns item order and grouping. */
@@ -99,12 +103,18 @@ export interface IQuickPick<TItem extends IQuickPickItem>
 	selectedItems: readonly TItem[];
 	readonly onDidChangeSelection: Event<readonly TItem[]>;
 	busy?: boolean;
+	/** Keeps the picker open while an owned action menu has focus. */
+	ignoreFocusOut?: boolean;
 	canAcceptInBackground?: boolean;
 	keyMods?: IKeyMods;
 	ariaLabel: string;
 	/** An optional HTMLElement anchor; unanchored pickers retain the window's default placement. */
 	anchor?: unknown;
 	anchorPosition?: 'above' | 'below';
+	/** Preferred edge alignment; placement can flip to remain inside the viewport. */
+	anchorAlignment?: 'left' | 'right';
+	/** Preferred anchored-picker width in CSS pixels, capped by the available viewport. */
+	width?: number;
 	placeholder: string;
 	value: string;
 	valueSelection: IQuickInputSelection;

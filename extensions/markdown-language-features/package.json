@@ -154,6 +154,87 @@
     ],
     "configuration": [
       {
+        "id": "markdown",
+        "title": "%settings.markdown%",
+        "properties": {
+          "markdown.suggest.paths.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "title": "%markdown.suggest.paths.enabled.title%",
+            "description": "%markdown.suggest.paths.enabled.description%"
+          },
+          "markdown.suggest.paths.includeWorkspaceHeaderCompletions": {
+            "type": "string",
+            "default": "onDoubleHash",
+            "enum": [
+              "never",
+              "onDoubleHash",
+              "onSingleOrDoubleHash"
+            ],
+            "scope": "resource",
+            "title": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.title%",
+            "description": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.title%",
+              "description": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.description%",
+              "options": [
+                {
+                  "value": "never",
+                  "label": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.option.never%"
+                },
+                {
+                  "value": "onDoubleHash",
+                  "label": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.option.onDoubleHash%"
+                },
+                {
+                  "value": "onSingleOrDoubleHash",
+                  "label": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.option.onSingleOrDoubleHash%"
+                }
+              ]
+            }
+          },
+          "markdown.preferredMdPathExtensionStyle": {
+            "type": "string",
+            "default": "auto",
+            "enum": [
+              "auto",
+              "includeExtension",
+              "removeExtension"
+            ],
+            "title": "%markdown.preferredMdPathExtensionStyle.title%",
+            "description": "%markdown.preferredMdPathExtensionStyle.description%",
+            "ashSetting": {
+              "valueType": "select",
+              "title": "%markdown.preferredMdPathExtensionStyle.title%",
+              "description": "%markdown.preferredMdPathExtensionStyle.description%",
+              "options": [
+                {
+                  "value": "auto",
+                  "label": "%markdown.preferredMdPathExtensionStyle.option.auto%"
+                },
+                {
+                  "value": "includeExtension",
+                  "label": "%markdown.preferredMdPathExtensionStyle.option.includeExtension%"
+                },
+                {
+                  "value": "removeExtension",
+                  "label": "%markdown.preferredMdPathExtensionStyle.option.removeExtension%"
+                }
+              ]
+            }
+          },
+          "markdown.occurrencesHighlight.enabled": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "title": "%markdown.occurrencesHighlight.enabled.title%",
+            "description": "%markdown.occurrencesHighlight.enabled.description%"
+          }
+        }
+      },
+      {
         "title": "%settings.markdownvalidation%",
         "properties": {
           "markdown.validate.enabled": {
@@ -369,92 +450,8 @@
             "title": "%markdown.validate.ignoredLinks.title%",
             "description": "%markdown.validate.ignoredLinks.description%"
           }
-        }
-      },
-      {
-        "title": "%settings.markdowncompletion%",
-        "properties": {
-          "markdown.suggest.paths.enabled": {
-            "type": "boolean",
-            "default": true,
-            "scope": "resource",
-            "title": "%markdown.suggest.paths.enabled.title%",
-            "description": "%markdown.suggest.paths.enabled.description%"
-          },
-          "markdown.suggest.paths.includeWorkspaceHeaderCompletions": {
-            "type": "string",
-            "default": "onDoubleHash",
-            "enum": [
-              "never",
-              "onDoubleHash",
-              "onSingleOrDoubleHash"
-            ],
-            "scope": "resource",
-            "title": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.title%",
-            "description": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.description%",
-            "ashSetting": {
-              "valueType": "select",
-              "title": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.title%",
-              "description": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.description%",
-              "options": [
-                {
-                  "value": "never",
-                  "label": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.option.never%"
-                },
-                {
-                  "value": "onDoubleHash",
-                  "label": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.option.onDoubleHash%"
-                },
-                {
-                  "value": "onSingleOrDoubleHash",
-                  "label": "%markdown.suggest.paths.includeWorkspaceHeaderCompletions.option.onSingleOrDoubleHash%"
-                }
-              ]
-            }
-          },
-          "markdown.preferredMdPathExtensionStyle": {
-            "type": "string",
-            "default": "auto",
-            "enum": [
-              "auto",
-              "includeExtension",
-              "removeExtension"
-            ],
-            "title": "%markdown.preferredMdPathExtensionStyle.title%",
-            "description": "%markdown.preferredMdPathExtensionStyle.description%",
-            "ashSetting": {
-              "valueType": "select",
-              "title": "%markdown.preferredMdPathExtensionStyle.title%",
-              "description": "%markdown.preferredMdPathExtensionStyle.description%",
-              "options": [
-                {
-                  "value": "auto",
-                  "label": "%markdown.preferredMdPathExtensionStyle.option.auto%"
-                },
-                {
-                  "value": "includeExtension",
-                  "label": "%markdown.preferredMdPathExtensionStyle.option.includeExtension%"
-                },
-                {
-                  "value": "removeExtension",
-                  "label": "%markdown.preferredMdPathExtensionStyle.option.removeExtension%"
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "title": "%settings.markdowneditor%",
-        "properties": {
-          "markdown.occurrencesHighlight.enabled": {
-            "type": "boolean",
-            "default": true,
-            "scope": "resource",
-            "title": "%markdown.occurrencesHighlight.enabled.title%",
-            "description": "%markdown.occurrencesHighlight.enabled.description%"
-          }
-        }
+        },
+        "id": "markdown.validate"
       },
       {
         "title": "%settings.markdownpreview%",
@@ -465,8 +462,62 @@
             "scope": "resource",
             "title": "%markdown.preview.breaks.title%",
             "description": "%markdown.preview.breaks.description%"
+          },
+          "markdown.preview.fontFamily": {
+            "type": "string",
+            "format": "font-family",
+            "default": "system-ui, \"Segoe UI\", \"Microsoft YaHei\", sans-serif",
+            "minLength": 1,
+            "maxLength": 1024,
+            "scope": "resource",
+            "title": "%markdown.preview.fontFamily.title%",
+            "description": "%markdown.preview.fontFamily.description%"
+          },
+          "markdown.preview.codeFontFamily": {
+            "type": "string",
+            "format": "font-family",
+            "default": "ui-monospace, Consolas, monospace",
+            "minLength": 1,
+            "maxLength": 1024,
+            "scope": "resource",
+            "title": "%markdown.preview.codeFontFamily.title%",
+            "description": "%markdown.preview.codeFontFamily.description%"
+          },
+          "markdown.preview.blockquoteFontFamily": {
+            "type": "string",
+            "format": "font-family",
+            "default": "",
+            "maxLength": 1024,
+            "scope": "resource",
+            "title": "%markdown.preview.blockquoteFontFamily.title%",
+            "description": "%markdown.preview.blockquoteFontFamily.description%",
+            "ashSetting": {
+              "valueType": "text",
+              "title": "%markdown.preview.blockquoteFontFamily.title%",
+              "description": "%markdown.preview.blockquoteFontFamily.description%",
+              "placeholder": "%markdown.preview.blockquoteFontFamily.default%"
+            }
+          },
+          "markdown.preview.fontSize": {
+            "type": "number",
+            "default": 13,
+            "minimum": 1,
+            "maximum": 100,
+            "scope": "resource",
+            "title": "%markdown.preview.fontSize.title%",
+            "description": "%markdown.preview.fontSize.description%"
+          },
+          "markdown.preview.lineHeight": {
+            "type": "number",
+            "default": 1.75,
+            "minimum": 1,
+            "maximum": 4,
+            "scope": "resource",
+            "title": "%markdown.preview.lineHeight.title%",
+            "description": "%markdown.preview.lineHeight.description%"
           }
-        }
+        },
+        "id": "markdown.preview"
       }
     ]
   },

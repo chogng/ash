@@ -10,7 +10,7 @@ import { IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickPi
 import { ILanguageModelsService } from '../../../chat/common/languageModels.js';
 import { IChatService, type AdvisorConfig } from '../../../../services/chat/common/chatService.js';
 import { AdvisorSettingsModel } from '../../browser/advisorSettingsModel.js';
-import { ModelPurpose, modelRefIdentity, type ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
+import { ModelPurpose, type ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 
 test('Advisor settings and Quick Pick preserve budgets and remove incompatible effort on the same model change', async () => {
 	using resources = new DisposableStore();
@@ -62,6 +62,6 @@ test('Advisor settings and Quick Pick preserve budgets and remove incompatible e
 	await loaded.p;
 	const field = settings.fields.find(field => field.kind === 'select');
 	assert.ok(field?.kind === 'select');
-	field.setValue(modelRefIdentity(next.model));
+	field.setValue(field.options.find(option => option.label === 'Next Advisor · Default')!.value);
 	assert.deepEqual([...writes], [expected, expected]);
 });

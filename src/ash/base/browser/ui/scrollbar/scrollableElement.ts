@@ -20,6 +20,7 @@ import {
 	type ScrollbarAxisMetrics,
 } from './scrollbarState.js';
 import {
+	DEFAULT_SCROLLBAR_SIZE,
 	resolveScrollableElementOptions,
 	type ScrollableElementUpdateOptions,
 	type ResolvedScrollableElementOptions,
@@ -35,6 +36,18 @@ export type {
 	ScrollDirection,
 } from './scrollableElementOptions.js';
 export type { ScrollbarAxis } from './abstractScrollbar.js';
+export { DEFAULT_SCROLLBAR_SIZE } from './scrollableElementOptions.js';
+
+let defaultScrollbarSize = DEFAULT_SCROLLBAR_SIZE;
+const defaultScrollbarSizeChanged = new Emitter<number>();
+
+/** Update implicit sizes, including existing containers; explicit component sizes are preserved. */
+export function setGlobalDefaultScrollbarSize(size: number): void {
+	if (!Number.isFinite(size) || size <= 0) throw new RangeError('Scrollbar size must be a positive finite number');
+	if (size === defaultScrollbarSize) return;
+	defaultScrollbarSize = size;
+	defaultScrollbarSizeChanged.fire(size);
+}
 
 export interface ScrollPosition {
 	readonly left: number;
@@ -85,6 +98,7 @@ export class ScrollableElement extends Disposable {
 	private readonly corner: HTMLDivElement;
 	private readonly cornerNode: FastDomNode<HTMLDivElement>;
 	private options: ResolvedScrollableElementOptions;
+	private explicitScrollbarSize: boolean;
 	private hovered = false;
 	private scrolling = false;
 	private readonly onScrollOption: ((position: ScrollPosition) => void) | undefined;
@@ -98,7 +112,8 @@ export class ScrollableElement extends Disposable {
 
 	constructor(container: HTMLElement, options: ScrollableElementOptions = {}) {
 		super();
-		this.options = resolveScrollableElementOptions(options);
+		this.options = resolveScrollableElementOptions({ ...options, scrollbarSize: options.scrollbarSize ?? defaultScrollbarSize });
+		this.explicitScrollbarSize = options.scrollbarSize !== undefined;
 		this.onScrollOption = options.onScroll;
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'div');
@@ -133,10 +148,7 @@ export class ScrollableElement extends Disposable {
 		element.className = 'ash-scrollable-element ash-scrollbar';
 		element.dataset.scrollDirection = this.options.direction;
 		element.tabIndex = options.tabIndex ?? 0;
-		element.style.setProperty(
-			'--ash-scrollbar-size',
-			`${this.options.scrollbarSize}px`,
-		);
+		this.updateScrollbarDimensions();
 		if (options.ariaLabel) {
 			element.setAttribute('role', 'region');
 			element.setAttribute('aria-label', options.ariaLabel);
@@ -187,6 +199,12 @@ export class ScrollableElement extends Disposable {
 		this._register(addDisposableListener(ownerWindow(element), 'blur', () => this.smoothScroll.clear()));
 
 		this._register(observeResize([element, content], () => this.layout()));
+		this._register(defaultScrollbarSizeChanged.event(size => {
+			if (this.explicitScrollbarSize) return;
+			this.options = { ...this.options, scrollbarSize: size };
+			this.updateScrollbarDimensions();
+			this.layout();
+		}));
 		this.layout();
 	}
 
@@ -195,6 +213,7 @@ export class ScrollableElement extends Disposable {
 	}
 
 	public updateOptions(options: ScrollableElementUpdateOptions): void {
+		if (options.scrollbarSize !== undefined) this.explicitScrollbarSize = true;
 		const direction = this.options.direction;
 		const resolved = resolveScrollableElementOptions({ ...this.options, ...options, direction: 'both' });
 		// Axis ownership is fixed at creation; changing presentation must not enable another axis.
@@ -205,10 +224,16 @@ export class ScrollableElement extends Disposable {
 			vertical: direction === 'horizontal' ? 'hidden' : resolved.vertical,
 		};
 		if (!this.options.mouseWheelSmoothScroll) this.smoothScroll.clear();
-		this.element.style.setProperty('--ash-scrollbar-size', `${this.options.scrollbarSize}px`);
+		this.updateScrollbarDimensions();
 		this.horizontal.setVisibility(scrollbarVisibility(this.options.horizontal));
 		this.vertical.setVisibility(scrollbarVisibility(this.options.vertical));
 		this.layout();
+	}
+
+	private updateScrollbarDimensions(): void {
+		this.element.style.setProperty('--ash-scrollbar-size', `${this.options.scrollbarSize}px`);
+		// Reservation follows the configured axis, including while an auto track is faded or unnecessary.
+		this.element.style.setProperty('--ash-scrollbar-vertical-size', `${this.options.vertical === 'hidden' ? 0 : this.options.scrollbarSize}px`);
 	}
 
 	setContent(content: Element): void {
@@ -803,6 +828,9 @@ export class SmoothScrollableElement extends Disposable {
 			}
 			if (!this.options.lazyRender) this.renderNow();
 		}));
+		this._register(defaultScrollbarSizeChanged.event(() => {
+			if (this.options.horizontalScrollbarSize === undefined || this.options.verticalScrollbarSize === undefined) this.renderNow();
+		}));
 	}
 
 	public getDomNode(): HTMLElement { return this.domNode; }
@@ -905,12 +933,14 @@ export class SmoothScrollableElement extends Disposable {
 	public renderNow(): void {
 		const { width, height, scrollWidth, scrollHeight } = this.scrollable.getScrollDimensions();
 		const { scrollLeft, scrollTop } = this.scrollable.getCurrentScrollPosition();
-		const horizontalSize = this.options.horizontalScrollbarSize ?? 10;
-		const verticalSize = this.options.verticalScrollbarSize ?? 10;
+		const horizontalSize = this.options.horizontalScrollbarSize ?? defaultScrollbarSize;
+		const verticalSize = this.options.verticalScrollbarSize ?? defaultScrollbarSize;
 		const horizontalRendered = horizontalSize > 0 && this.isRendered(this.options.horizontal, scrollWidth > width);
 		const verticalRendered = verticalSize > 0 && this.isRendered(this.options.vertical, scrollHeight > height);
 		this.horizontal.trackNode.setHeight(horizontalSize);
 		this.vertical.trackNode.setWidth(verticalSize);
+		this.horizontal.track.style.setProperty('--ash-scrollbar-size', `${horizontalSize}px`);
+		this.vertical.track.style.setProperty('--ash-scrollbar-size', `${verticalSize}px`);
 		const horizontalLength = Math.max(0, width - (verticalRendered ? verticalSize : 0));
 		const verticalLength = Math.max(0, height - (horizontalRendered ? horizontalSize : 0));
 		const horizontalArrow = this.options.horizontalHasArrows ? Math.min(this.options.arrowSize ?? 11, horizontalLength / 2) : 0;
@@ -921,9 +951,7 @@ export class SmoothScrollableElement extends Disposable {
 		this.vertical.trackNode.setBottom((horizontalRendered ? horizontalSize : 0) + verticalArrow);
 		this.horizontal.track.style.setProperty('--ash-scrollbar-slider-size', `${Math.min(horizontalSize, this.options.horizontalSliderSize ?? horizontalSize)}px`);
 		this.vertical.track.style.setProperty('--ash-scrollbar-slider-size', `${Math.min(verticalSize, this.options.verticalSliderSize ?? verticalSize)}px`);
-		const transform = `translate3d(${scrollLeft}px, ${scrollTop}px, 0)`;
-		this.horizontal.trackNode.setTransform(transform);
-		this.vertical.trackNode.setTransform(transform);
+		// The caller projects content scrolling; controls stay in this fixed host.
 		this.horizontalMetrics = createScrollbarAxisMetrics(width, scrollWidth, scrollLeft, horizontalLength - 2 * horizontalArrow, 20);
 		this.verticalMetrics = createScrollbarAxisMetrics(height, scrollHeight, scrollTop, verticalLength - 2 * verticalArrow, 20);
 		this.horizontal.render(this.horizontalMetrics, horizontalRendered);
@@ -940,7 +968,6 @@ export class SmoothScrollableElement extends Disposable {
 			const offset = direction < 0 ? 0 : length - size;
 			button.style.left = `${horizontal ? offset : width - verticalSize}px`;
 			button.style.top = `${horizontal ? height - horizontalSize : offset}px`;
-			button.style.transform = transform;
 		}
 		this.updateVisibility();
 	}

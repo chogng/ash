@@ -3,7 +3,9 @@ import bundledLightTheme from '../../../extensions/theme-defaults/themes/ash-lig
 import bundledHighContrastDarkTheme from '../../../extensions/theme-defaults/themes/ash-high-contrast-dark.json' with { type: 'json' };
 import bundledHighContrastLightTheme from '../../../extensions/theme-defaults/themes/ash-high-contrast-light.json' with { type: 'json' };
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { createTestEditorServices, createTestFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
+import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
@@ -11,6 +13,7 @@ import '../../../src/ash/workbench/contrib/callHierarchy/browser/callHierarchy.c
 import '../../../src/ash/workbench/contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
+import { IDiffService } from '../../../src/ash/workbench/services/diff/common/diffService.js';
 import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
@@ -329,7 +332,7 @@ interface StandaloneHarness {
 	runStandaloneCommand(value: string): Promise<string>;
 	readStandaloneCommands(): { readonly calls: string[]; readonly registered: boolean; };
 	releaseStandaloneCommands(): void;
-	prepareInputHistory(): void;
+	prepareInputHistory(input: 'Find' | 'Replace'): void;
 	runInputHistoryCommand(command: 'undo' | 'redo' | 'default:undo' | 'default:redo'): Promise<string[]>;
 	runSelectAllCommand(): Promise<{ selections: string[]; inputSelection: string; }>;
 	runFocusRouting(): Promise<{
@@ -360,6 +363,7 @@ interface StandaloneHarness {
 	configureBracketColors(enabled: boolean, independent: boolean): void;
 	setBracketTheme(scheme: keyof typeof stanza.ColorScheme, colors?: readonly string[]): void;
 	prepareGuides(value: string): void;
+	getControl(): ReturnType<typeof stanza.editor.create>;
 	configureGuides(options: IEditorOptions): void;
 	setGuideTheme(scheme: keyof typeof stanza.ColorScheme, colors?: Record<string, string>): void;
 	prepareBracketToken(): void;
@@ -1989,6 +1993,7 @@ window.ashStandaloneIntegration = {
 			}),
 		});
 	},
+	getControl: () => callerEditor,
 	prepareGuides: value => {
 		callerEditor.setValue(value);
 		callerModel.setLanguage('typescript');
@@ -2142,13 +2147,14 @@ window.ashStandaloneIntegration = {
 			outside.remove();
 		}
 	},
-	prepareInputHistory: () => {
+	prepareInputHistory: input => {
 		callerEditor.setValue('alpha');
 		ownedEditor.setValue('bravo');
 		callerEditor.focus();
 		callerEditor.executeEdits('test', [{ range: new stanza.Range(1, 6, 1, 6), text: '!' }]);
 		callerEditor.pushUndoStop();
-		callerEditor.updateOptions({ readOnly: true });
+		// Replacement controls are only available in writable editors.
+		callerEditor.updateOptions({ readOnly: input === 'Find' });
 		openFindReplace();
 	},
 	runInputHistoryCommand: async id => {
@@ -2842,7 +2848,7 @@ window.ashStandaloneIntegration = {
 			const root = instance.getDomNode()!.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
 			root.scrollTop = 200;
 			root.dispatchEvent(new Event('scroll'));
-			const interrupted = !instance.hasPendingScrollAnimation() && instance.getScrollTop() === 200;
+			const interrupted = !instance.hasPendingScrollAnimation() && instance.getScrollTop() === 800;
 			instance.executeEdits('test', [{ range: new stanza.Range(1, 1, 1, 1), text: 'X' }]);
 			instance.setModel(null);
 			instance.changeViewZones(() => { throw new Error('Detached callback must not run'); });
@@ -2973,7 +2979,11 @@ window.ashStandaloneIntegration = {
 		actionPreviewResources.clear();
 		const uriIdentityServices = actionPreviewResources.add(new TestUriIdentityServices());
 		callerEditor.setValue('value');
-		const parent = StandaloneServices.get(IInstantiationService);
+		const parent = StandaloneServices.initialize();
+		// Seed the host on the parent that owns the inherited label registrations.
+		if (!parent.has(IRendererHostService)) {
+			parent.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+		}
 		const services = actionPreviewResources.add(parent.createChild());
 		const snapshots = actionPreviewResources.add(uriIdentityServices.createInstance(BrowserTextModelService, actionPreviewResources.add(new MemoryResourceStore([])), {}));
 		services.registerInstance(ITextModelResourceService, {
@@ -3017,10 +3027,9 @@ window.ashStandaloneIntegration = {
 				document.body.append(host);
 				actionPreviewResources.add(bindTestColorTheme(parent.get(IThemeService), host));
 				actionPreviewResources.add(toDisposable(() => host.remove()));
-				const diff = actionPreviewResources.add(registerTestComponentServices(services).createInstance(MultiDiffEditor, {
-					modelService: services.get(ITextModelResourceService),
-					createComputationService: () => services.createInstance(DiffService).createComputationService(),
-				}));
+				const editorServices = actionPreviewResources.add(createTestEditorServices(undefined, services));
+				editorServices.registerSingleton(IDiffService, () => editorServices.createInstance(DiffService));
+				const diff = actionPreviewResources.add(editorServices.createInstance(MultiDiffEditor, {}));
 				diff.create(host);
 				diff.layout({ width: 800, height: 320 });
 				await diff.setInput(input, new AbortController().signal);

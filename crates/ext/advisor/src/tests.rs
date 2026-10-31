@@ -235,7 +235,8 @@ impl Fixture {
 #[test]
 fn manual_consultation_uses_frozen_evidence_without_worker_or_tools() {
     let f = Fixture::new([Ok(text("Check the cancellation path", 400))]);
-    let config = AdvisorConfig::new(model("reviewer"));
+    let mut config = AdvisorConfig::new(model("reviewer"));
+    config.reasoning_effort = Some(protocol::ReasoningEffort::High);
     let turn = f.start(TurnKind::Advisor, Some(config.clone()));
     f.threads
         .configure_advisor(
@@ -248,12 +249,16 @@ fn manual_consultation_uses_frozen_evidence_without_worker_or_tools() {
     f.run(&turn);
     let requests = f.model.requests.lock().unwrap();
     assert_eq!(requests.len(), 1);
-    assert_eq!(requests[0].0, config.model);
+    assert_eq!(Some(requests[0].0.clone()), config.model);
     let request = &requests[0].1;
     assert!(request.tools.is_empty());
     assert_eq!(request.tool_choice, protocol::ToolChoice::None);
     assert!(!request.parallel_tool_calls);
     assert_eq!(request.max_output_tokens, Some(config.max_output_tokens));
+    assert_eq!(
+        request.reasoning.as_ref().map(|reasoning| reasoning.effort),
+        config.reasoning_effort
+    );
     assert!(
         request.instructions.as_deref().unwrap().contains(
             agent_roles::built_in_roles()

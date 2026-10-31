@@ -3455,6 +3455,7 @@ impl AppServer {
             }
             Some(ClientMethod::AgentRead) => self.session_processor().agent_read(&request.params),
             Some(ClientMethod::AgentRoleList) => self.session_processor().agent_roles_list(),
+            Some(ClientMethod::AgentRoleCatalog) => self.session_processor().agent_role_catalog(),
             Some(ClientMethod::AgentCapabilitiesRead) => {
                 self.agent_processor().agent_capabilities_read(connection)
             }

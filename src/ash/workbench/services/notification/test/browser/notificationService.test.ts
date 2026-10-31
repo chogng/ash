@@ -406,7 +406,9 @@ test('notification accessibility help explains toast Escape and retained history
 	const implementation = AccessibleViewRegistry.getImplementations().find(item => item.name === 'notificationsHelp')!;
 	using provider = implementation.getProvider(services)!;
 	assert.match(provider.provideContent(), /When a notification toast or one of its actions has focus, press Escape to hide the toasts without removing them from history\./);
-	assert.match(provider.provideContent(), /Context Menu key or Shift\+F10, and choose Copy Text to copy its message/);
+	assert.match(provider.provideContent(), /In a toast or the notification center, right-click a notification/);
+	assert.match(provider.provideContent(), /Context Menu key or Shift\+F10, and choose Copy Text to copy its full message/);
+	assert.match(provider.provideContent(), /Command\+C on macOS/);
 	assert.match(provider.provideContent(), /Press Escape to close the menu and return to the notification/);
 });
 
@@ -768,10 +770,11 @@ function createNotificationActionRunner(service: TestNotificationService): Notif
 	return services.createInstance(NotificationActionRunner);
 }
 
-function openCopyMenu(fixture: NotificationsFixture, id: number, input: 'mouse' | 'ContextMenu' | 'Shift+F10' = 'ContextMenu'): HTMLElement {
+function openCopyMenu(fixture: NotificationsFixture, id: number, input: 'mouse' | 'ContextMenu' | 'Shift+F10' = 'ContextMenu', presentation: 'center' | 'toast' = 'center'): HTMLElement {
 	const { document, center, panel } = fixture;
-	center.show();
-	const row = panel.querySelector<HTMLElement>(`[data-notification-id="${id}"]`)!;
+	if (presentation === 'center') center.show();
+	const list = presentation === 'center' ? panel : document.querySelector<HTMLElement>('.ash-notification-host')!;
+	const row = list.querySelector<HTMLElement>(`[data-notification-id="${id}"]`)!;
 	row.focus();
 	const event = input === 'mouse'
 		? new document.defaultView!.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 25, clientY: 40 })
@@ -792,22 +795,57 @@ test('notification copying requires the clipboard registration and the center re
 	assert.throws(() => incomplete.createInstance(NotificationsCenter, fixture.document.body, fixture.service.model, fixture.document.body, fixture.runner, undefined, undefined), /Unknown service: contextMenuService/);
 });
 
-for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
-	test(`notification ${input} copies the raw message without source, actions, or presentation text`, async () => {
-		using fixture = new NotificationsFixture();
-		const message = 'First line\n[链接](https://example.test) <b>literal</b>\n第二行\t🙂';
-		const handle = fixture.service.notify({ severity: Severity.Warning, message, source: 'Excluded source', actions: { primary: [{ tooltip: '', enabled: true, id: 'primary', label: 'Excluded action', run() { } }] } });
-		const handleItem = fixture.service.model.getNotifications().at(-1)!;
-		const copied = promiseWithResolvers<void>();
-		fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); copied.resolve(); };
-		const row = openCopyMenu(fixture, handleItem.id, input);
-		const menuItem = fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!;
-		assert.equal(menuItem.textContent, 'Copy Text');
-		menuItem.click();
-		await copied.promise;
-		assert.deepEqual({ writes: fixture.presentation.writes, history: fixture.service.model.getNotifications(), centerHidden: fixture.panel.hidden, focused: fixture.document.activeElement }, {
-			writes: [message], history: [handleItem], centerHidden: false, focused: row,
+for (const presentation of ['center', 'toast'] as const) {
+	for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
+		test(`notification ${presentation} ${input} copies the raw message without source, actions, or presentation text`, async () => {
+			using fixture = new NotificationsFixture();
+			const message = 'First line\n[链接](https://example.test) <b>literal</b>\n第二行\t🙂';
+			const handle = fixture.service.notify({ severity: Severity.Warning, message, source: 'Excluded source', actions: { primary: [{ tooltip: '', enabled: true, id: 'primary', label: 'Excluded action', run() { } }] } });
+			const handleItem = fixture.service.model.getNotifications().at(-1)!;
+			const copied = promiseWithResolvers<void>();
+			fixture.presentation.writeText = async value => { fixture.presentation.writes.push(value); copied.resolve(); };
+			const row = openCopyMenu(fixture, handleItem.id, input, presentation);
+			const menuItem = fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!;
+			assert.equal(menuItem.textContent, 'Copy Text');
+			menuItem.click();
+			await copied.promise;
+			assert.deepEqual({ writes: fixture.presentation.writes, history: fixture.service.model.getNotifications(), centerHidden: fixture.panel.hidden, focused: fixture.document.activeElement }, {
+				writes: [message], history: [handleItem], centerHidden: presentation === 'toast', focused: row,
+			});
 		});
+	}
+}
+
+for (const change of ['remove', 'hide', 'dispose'] as const) {
+	test(`toast ${change} invalidates its copy menu without removing retained history`, async () => {
+		using fixture = new NotificationsFixture();
+		const handle = fixture.service.notify({ severity: Severity.Info, message: 'Toast message' });
+		const item = fixture.service.model.getNotifications().at(-1)!;
+		const row = openCopyMenu(fixture, item.id, 'ContextMenu', 'toast');
+		const menuItem = fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!;
+		if (change === 'remove') handle.close();
+		else if (change === 'hide') fixture.center.show();
+		else fixture.center.dispose();
+		menuItem.click();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual({ menu: fixture.document.querySelector('[role="menu"]'), writes: fixture.presentation.writes, history: fixture.service.model.getNotifications() }, {
+			menu: null, writes: [], history: change === 'remove' ? [] : [item],
+		});
+		assert.equal(row.isConnected, false);
+	});
+}
+
+for (const presentation of ['center', 'toast'] as const) {
+	test(`notification ${presentation} copies the current message after the producer updates it`, async () => {
+		using fixture = new NotificationsFixture();
+		const handle = fixture.service.notify({ severity: Severity.Info, message: 'Original message' });
+		const id = fixture.service.model.getNotifications().at(-1)!.id;
+		if (presentation === 'center') fixture.center.show();
+		handle.updateMessage('Updated message\n第二行');
+		openCopyMenu(fixture, id, 'ContextMenu', presentation);
+		fixture.document.querySelector<HTMLElement>('[role="menuitem"]')!.click();
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(fixture.presentation.writes, ['Updated message\n第二行']);
 	});
 }
 

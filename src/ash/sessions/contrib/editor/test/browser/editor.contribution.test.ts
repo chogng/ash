@@ -19,7 +19,7 @@ import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../../layout/browser/desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../browser/editor.contribution.js';
 
-test('editor contributions follow layout state, serialize Add tab commands and release window registrations', async () => {
+test('editor contributions follow layout state, serialize open commands without Add tab UI and release window registrations', async () => {
 	using services = new InstantiationService();
 	using contextKeys = new ContextKeyService();
 	using commands = new CommandService(services);
@@ -79,8 +79,8 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	dynamic.dispose();
 	assert.ok(!desktopIds().includes('test.desktopEditor.action'));
 	const titleState = () => title.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.enabled, action.checked]);
-	assert.deepEqual(titleState(), [['Add tab', true, undefined], ['Toggle details', true, true], ['Show editor', true, undefined]]);
-	assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.id), [NEW_FILE_TAB_COMMAND_ID]);
+	assert.deepEqual(titleState(), [['Toggle details', true, true], ['Show editor', true, undefined]]);
+	assert.deepEqual(addTab.getActions(), []);
 	assert.deepEqual(paletteIds(), [
 		...existingPaletteIds,
 		NEW_FILE_TAB_COMMAND_ID,
@@ -91,7 +91,7 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	].sort());
 
 	await commands.executeCommand('ash.sessions.showEditor');
-	assert.deepEqual(titleState(), [['Add tab', true, undefined], ['Toggle details', true, true], ['Hide editor', true, undefined]]);
+	assert.deepEqual(titleState(), [['Toggle details', true, true], ['Hide editor', true, undefined]]);
 	await commands.executeCommand('ash.sessions.toggleDetails');
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
 	supportsDetails = false;
@@ -133,8 +133,9 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 		setNlsResolver((bundle, key, original) => catalog.bundles[bundle]?.[key] ?? original);
 		documentContent.set(true, undefined);
 		using translated = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
-		assert.deepEqual(titleState().map(([label]) => label), ['添加标签', '切换详情', '显示编辑器']);
-		assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.label), ['打开文件标签']);
+		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
+		assert.deepEqual(addTab.getActions(), []);
+		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件标签');
 	} finally {
 		resetNlsResolver();
 	}

@@ -1,4 +1,6 @@
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
+import { URI } from '../../../base/common/uri.js';
+import { createSshRemoteWorkspaceUri } from '../../remote/common/remote.js';
 import type { IAgentHostResourceService } from '../common/agentHostResourceService.js';
 import type { InputItem } from '../../../../../.build/protocol/typescript/index.js';
 import type { AgentInput } from '../common/agent.js';
@@ -63,6 +65,7 @@ export function createDisconnectedAgentSessionService(unavailable: UnavailableOp
 		collectDebugLogs: () => unavailable('session.collectDebugLogs'),
 		create: () => unavailable('session.create'),
 		listAgents: () => unavailable('session.listAgents'),
+		readRoleCatalog: () => unavailable('session.readRoleCatalog'),
 		read: () => unavailable('session.read'),
 		readCatalog: () => unavailable('session.readCatalog'),
 		list: () => unavailable('session.list'),
@@ -203,6 +206,17 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 				: params.executionTarget
 		}).then(result => toSessionResult(result, sshHost)),
 		listAgents: () => appServerRequest(connection, 'agent/roles/list', {}),
+		async readRoleCatalog() {
+			const catalog = await appServerRequest(connection, 'agent/roles/catalog', {});
+			return {
+				agents: catalog.agents.map(({ path, ...role }) => {
+					let resource: URI | undefined;
+					if (path) { resource = sshHost ? createSshRemoteWorkspaceUri(sshHost, path) : URI.file(path); }
+					return { ...role, resource };
+				}),
+				diagnostics: catalog.diagnostics,
+			};
+		},
 		read: (params) => appServerRequest(connection, 'session/read', params).then(result => toSessionResult(result, sshHost)),
 		readCatalog: async (params) => {
 			const result = await appServerRequest(connection, 'session/catalog/read', params);
@@ -882,6 +896,8 @@ function toAgentSession(session: SessionDto, sshHost?: string): AgentSession {
 		threads: session.threads.map((thread) => ({
 			threadId: thread.threadId,
 			title: thread.title,
+			createdAtUnixMs: thread.createdAtUnixMs,
+			lastActivityAtUnixMs: thread.lastActivityAtUnixMs ?? undefined,
 			status: thread.status,
 			parentThreadId: thread.parentThreadId,
 			forkedFromId: thread.forkedFromId,

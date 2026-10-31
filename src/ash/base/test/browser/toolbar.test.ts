@@ -1,17 +1,85 @@
 import type { IDelayedHoverOptions } from '../../browser/ui/hover/hover.js';
 import { HoverPosition } from '../../browser/ui/hover/hoverWidget.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { expect } from '@playwright/test';
+import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 import { JSDOM } from 'jsdom';
 import type { IContextMenuDelegate, IContextMenuProvider } from '../../browser/contextmenu.js';
 import { setHoverDelegate, type IManagedHover } from '../../browser/ui/hover/hoverDelegate.js';
 import { ToolBar } from '../../browser/ui/toolbar/toolbar.js';
 import type { IAction } from '../../common/actions.js';
-import { Separator } from '../../common/actions.js';
+import { ActionRunner, Separator } from '../../common/actions.js';
 import { AnchorPosition } from '../../common/layout.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+test('ToolBar shares a borrowed runner while an open menu retains its captured context', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const provider = new TestContextMenuProvider();
+		using runner = new ActionRunner();
+		const calls: unknown[] = [];
+		const operation = { ...action('operation'), run(context: unknown) { calls.push(context); } };
+		using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: provider, actionRunner: runner });
+		toolbar.context = 'first';
+		toolbar.setActions([operation], [operation]);
+		toolbar.element.querySelector<HTMLButtonElement>('[data-action-id="operation"] button')!.click();
+		using listener = toolbar.onDidChangeDropdownVisibility(visible => {
+			if (visible) toolbar.context = 'changed during opening';
+		});
+		toolbar.element.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!.click();
+		toolbar.context = 'second';
+		const menu = provider.lastOptions!;
+		assert.equal(menu.actionRunner, runner);
+		await menu.actionRunner!.run(menu.getActions()[0]!, menu.getActionsContext?.());
+		assert.deepEqual(calls, ['first', 'first']);
+		menu.onHide?.(false);
+		toolbar.dispose();
+		await runner.run(operation, 'after disposal');
+		assert.deepEqual(calls, ['first', 'first', 'after disposal'], 'The supplied runner remains owned by its caller');
+	} finally { dom.window.close(); }
+});
+
+test('ToolBar preserves focusability across action replacement and reports its rendered actions', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: new TestContextMenuProvider() });
+		toolbar.setFocusable(false);
+		toolbar.setActions([action('first'), action('second')]);
+		assert.deepEqual([...toolbar.element.querySelectorAll('button')].map(button => button.tabIndex), [-1, -1]);
+		toolbar.focus(1);
+		const focused = dom.window.document.activeElement as HTMLElement;
+		assert.equal(toolbar.getItemAction(focused)?.id, 'second');
+		toolbar.setActions([action('first'), action('second'), action('third')]);
+		assert.deepEqual([...toolbar.element.querySelectorAll('button')].map(button => button.tabIndex), [-1, -1, -1]);
+		toolbar.setFocusable(true);
+		assert.equal(dom.window.document.activeElement?.getAttribute('tabindex'), '0');
+		assert.equal(toolbar.getItemsLength(), 3);
+	} finally { dom.window.close(); }
+});
+
+test('ToolBar reports menu visibility once per presentation and drops removed item listeners', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const provider = new TestContextMenuProvider();
+		using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: provider });
+		const visibility: boolean[] = [];
+		using listener = toolbar.onDidChangeDropdownVisibility(value => visibility.push(value));
+		toolbar.setActions([], [action('secondary')]);
+		toolbar.element.querySelector('button')!.click();
+		const menu = provider.lastOptions!;
+		toolbar.setActions([action('replacement')]);
+		assert.deepEqual(visibility, [true]);
+		menu.onHide?.(true);
+		await Promise.resolve();
+		assert.deepEqual(visibility, [true, false]);
+		assert.equal(toolbar.getItemAction(0)?.id, 'replacement');
+		menu.onHide?.(true);
+		assert.deepEqual(visibility, [true, false]);
+	} finally { dom.window.close(); }
+});
 
 test('ToolBar repeated actions keep DOM and Tab stops unchanged while enabled-state changes still move the stop', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -215,7 +283,11 @@ test('ToolBar folds measured action widths into More Actions and restores their 
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		const provider = new TestContextMenuProvider();
-		using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: provider });
+		let width = 240;
+		using toolbar = new ToolBar(dom.window.document.body, {
+			contextMenuProvider: provider,
+			responsiveBehavior: { enabled: true, getAvailableWidth: () => width },
+		});
 		toolbar.element.style.columnGap = '4px';
 		dom.window.HTMLElement.prototype.getBoundingClientRect = function () {
 			return { width: this.dataset.actionId === 'filter' ? 70 : 22 } as DOMRect;
@@ -225,14 +297,16 @@ test('ToolBar folds measured action widths into More Actions and restores their 
 		toolbar.setActions(operations, [view]);
 		const filter = toolbar.element.querySelector('[data-action-id="filter"]');
 		toolbar.element.querySelector<HTMLButtonElement>('[data-action-id="refresh"] button')!.focus();
-		toolbar.layout(110);
+		width = 110;
+		toolbar.relayout();
 		assert.deepEqual([...toolbar.element.children].map(item => (item as HTMLElement).dataset.actionId), ['filter', 'ash.toolbar.moreActions']);
 		const more = toolbar.element.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')!;
 		assert.equal(dom.window.document.activeElement, more);
 		more.click();
 		assert.deepEqual(provider.lastOptions!.getActions().map(item => item.id), ['pull', 'push', 'refresh', Separator.ID, 'view']);
 		provider.lastOptions!.onHide?.(true);
-		toolbar.layout(240);
+		width = 240;
+		toolbar.relayout();
 		assert.deepEqual([...toolbar.element.children].map(item => (item as HTMLElement).dataset.actionId), ['filter', 'pull', 'push', 'refresh', 'ash.toolbar.moreActions']);
 		assert.equal(toolbar.element.querySelector('[data-action-id="filter"]'), filter);
 	} finally { dom.window.close(); }
@@ -242,14 +316,18 @@ test('ToolBar reserves a menu trigger even without secondary actions and invokes
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		const provider = new TestContextMenuProvider();
-		using toolbar = new ToolBar(dom.window.document.body, { contextMenuProvider: provider });
+		let width = 22;
+		using toolbar = new ToolBar(dom.window.document.body, {
+			contextMenuProvider: provider,
+			responsiveBehavior: { enabled: true, getAvailableWidth: () => width },
+		});
 		dom.window.HTMLElement.prototype.getBoundingClientRect = () => ({ width: 22 }) as DOMRect;
 		toolbar.element.style.columnGap = '4px';
 		let calls = 0;
 		const first = { ...action('first'), run() { calls++; } };
 		const disabled = { ...action('disabled'), enabled: false };
 		toolbar.setActions([first, disabled]);
-		toolbar.layout(22);
+		toolbar.relayout();
 		assert.equal(toolbar.element.children.length, 1);
 		toolbar.element.querySelector<HTMLButtonElement>('button')!.click();
 		const menuActions = provider.lastOptions!.getActions();
@@ -258,7 +336,8 @@ test('ToolBar reserves a menu trigger even without secondary actions and invokes
 		assert.equal(calls, 1);
 		provider.lastOptions!.onHide?.(true);
 		await Promise.resolve();
-		toolbar.layout(48);
+		width = 48;
+		toolbar.relayout();
 		assert.deepEqual([...toolbar.element.children].map(item => (item as HTMLElement).dataset.actionId), ['first', 'disabled']);
 		assert.equal(toolbar.element.querySelector('[aria-haspopup="menu"]'), null);
 	} finally { dom.window.close(); }
@@ -292,3 +371,47 @@ function managedHover(): IManagedHover {
 		[Symbol.dispose]() { },
 	};
 }
+
+suite('ToolBar browser foundation', () => {
+	const browser = useBrowserTests();
+	for (const [locale, theme] of [['en', 'hcLight'], ['zh-CN', 'dark']] as const) {
+		test(`resizes with keyboard focus and preserves an open menu and its execution context (${locale}, ${theme})`, async () => {
+			const { page } = browser;
+			await page.goto(`/button.html?locale=${locale}`);
+			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+			await page.evaluate(value => window.ashButtonIntegration.theme(value), theme);
+			const host = page.locator('#foundation-toolbar');
+			const toolbar = host.getByRole('toolbar');
+			await expect(toolbar.getByRole('button')).toHaveCount(4);
+			await toolbar.getByRole('button', { name: 'Second operation', exact: true }).focus();
+			await page.keyboard.press('ArrowRight');
+			await expect(toolbar.getByRole('button', { name: 'Third operation', exact: true })).toBeFocused();
+			await page.evaluate(() => window.ashButtonIntegration.resizeFoundationToolbar(35));
+			await expect(toolbar.getByRole('button')).toHaveCount(1);
+			const more = toolbar.locator('[aria-haspopup="menu"]');
+			await expect(more).toBeFocused();
+			const geometry = await host.evaluate(element => {
+				const host = element.getBoundingClientRect();
+				const button = element.querySelector('button')!.getBoundingClientRect();
+				return { hostRight: host.right, actionRight: button.right };
+			});
+			expect(geometry.actionRight).toBeLessThanOrEqual(geometry.hostRight + 1);
+			await page.keyboard.press('ArrowDown');
+			await expect(host).toHaveAttribute('data-dropdown-visible', 'true');
+			await expect(page.getByRole('menu')).toBeVisible();
+			await page.evaluate(() => {
+				window.ashButtonIntegration.setFoundationContext('updated');
+				window.ashButtonIntegration.resizeFoundationToolbar(600);
+			});
+			await expect(more).toHaveAttribute('aria-expanded', 'true');
+			await page.getByRole('menuitem', { name: 'Secondary operation', exact: true }).click();
+			await expect(host).toHaveAttribute('data-dropdown-visible', 'false');
+			await expect(toolbar.getByRole('button')).toHaveCount(4);
+			expect(await page.evaluate(() => window.ashButtonIntegration.foundationRuns())).toEqual([{ action: 'secondary', context: 'initial' }]);
+			await toolbar.getByRole('button', { name: 'First operation', exact: true }).click();
+			expect(await page.evaluate(() => window.ashButtonIntegration.foundationRuns())).toEqual([
+				{ action: 'secondary', context: 'initial' }, { action: 'First operation', context: 'updated' },
+			]);
+		});
+	}
+});

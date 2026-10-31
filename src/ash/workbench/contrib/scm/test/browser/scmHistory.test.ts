@@ -1089,6 +1089,50 @@ suite('scmHistory browser component', () => {
 		});
 	}
 
+	for (const locale of ['en', 'zh-CN']) test(`history labels name the upstream separately and prefer HEAD on shared commits (${locale})`, async function () {
+		const { page } = browserTests;
+		await page.goto(`/scmHistory.html?locale=${locale}`);
+		await expect(page.getByRole('treeitem', { name: /History metadata:/u })).toBeVisible();
+		const references = await page.evaluate(() => {
+			const head = { id: 'refs/heads/main', name: 'main', revision: 'local', category: 'localBranch' };
+			const remote = { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'remote', category: 'remoteBranch' };
+			const other = { id: 'refs/remotes/aaa/topic', name: 'aaa/topic', revision: 'remote', category: 'remoteBranch' };
+			const items = [
+				{ id: 'local', parentIds: ['remote'], subject: 'Local commit', message: '', references: [head] },
+				{ id: 'remote', parentIds: [], subject: 'Upstream commit', message: '', references: [other, remote] },
+			];
+			window.ashSCMHistoryIntegration.setHistoryReferences({ head, remote }, items);
+			return { head, remote, other, items };
+		});
+		const upstream = page.locator('[data-history-item-id="remote"]');
+		const badge = upstream.getByRole('button', { name: 'origin/main', exact: true });
+		await expect(badge.locator('.ash-scm-graph-label-name')).toHaveText('origin/main');
+		await expect(upstream.getByRole('button', { name: 'aaa/topic', exact: true })).toHaveClass(/icon-only/u);
+		await expect(page.locator('[data-history-item-id="local"] .ash-scm-graph-label-name')).toHaveText('main');
+		for (const width of [280, 560]) {
+			await page.evaluate(width => window.ashSCMHistoryIntegration.resize(width), width);
+			await expect(badge).toBeVisible();
+			expect(await badge.evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThan(18);
+		}
+		await badge.focus();
+		await expect(badge).toBeFocused();
+		const retained = await upstream.elementHandle();
+		await page.evaluate(({ head, other, items }) => window.ashSCMHistoryIntegration.setHistoryReferences({ head, remote: other }, items), references);
+		await expect(upstream.locator('.ash-scm-graph-label-name')).toHaveText('aaa/topic');
+		await expect(badge).toHaveClass(/icon-only/u);
+		expect(await retained!.evaluate(element => element.isConnected)).toBe(true);
+		await retained?.dispose();
+		await page.evaluate(() => {
+			const head = { id: 'refs/heads/main', name: 'main', revision: 'remote', category: 'localBranch' };
+			const remote = { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'remote', category: 'remoteBranch' };
+			window.ashSCMHistoryIntegration.setHistoryReferences({ head, remote }, [
+				{ id: 'remote', parentIds: [], subject: 'Upstream commit', message: '', references: [remote, head] },
+			]);
+		});
+		await expect(upstream.locator('.ash-scm-graph-label-name')).toHaveText('main');
+		await expect(badge).toHaveClass(/icon-only/u);
+	});
+
 	test('history rows retain identity and reserve title width when the pane resizes', async function () {
 		const { page } = browserTests;
 
@@ -1126,7 +1170,7 @@ suite('scmHistory browser component', () => {
 		await retainedActions?.dispose();
 	});
 
-	test('history graph aligns with the pane chevron and keeps Open Changes at the trailing edge', async function () {
+	test('history graph aligns with the pane chevron and preserves padding around Open Changes', async function () {
 		const { page } = browserTests;
 		for (const [locale, modernUI] of [['en', false], ['zh-CN', false], ['en', true], ['zh-CN', true]] as const) {
 			await page.goto(`/scmHistory.html?headerActions&locale=${locale}${modernUI ? '&modernUI' : ''}`);
@@ -1134,6 +1178,7 @@ suite('scmHistory browser component', () => {
 			const commit = pane.getByRole('treeitem', { name: /History metadata:/u });
 			const row = commit.locator('.ash-scm-graph-row');
 			const openChanges = row.locator('[data-action-id="workbench.scm.action.graph.viewChanges"] > button');
+			await expect(commit).toBeVisible();
 			for (const width of [280, 560]) {
 				await page.evaluate(width => window.ashSCMHistoryIntegration.resize(width), width);
 				await row.hover({ position: { x: 80, y: 10 } });
@@ -1153,11 +1198,99 @@ suite('scmHistory browser component', () => {
 					};
 				});
 				expect(geometry.axisOffset).toBeCloseTo(0, 1);
-				expect(geometry.trailingInset).toBeCloseTo(8, 1);
+				expect(geometry.trailingInset).toBeCloseTo(modernUI ? 4 : 18, 1);
 				expect(geometry.labelsBeforeAction).toBe(true);
 				await browserTests.info.attach(`scm-row-layout-${locale}-${modernUI ? 'modern' : 'classic'}-${width}.png`, { body: await pane.screenshot(), contentType: 'image/png' });
 			}
 		}
+	});
+
+	for (const locale of ['en', 'zh-CN']) for (const modernUI of [false, true]) test(`history rows follow the shared scrollbar policy (${locale}, ${modernUI ? 'modern' : 'flat'})`, async function () {
+		const { page } = browserTests;
+		await page.goto(`/scmHistory.html?paging&manual&locale=${locale}${modernUI ? '&modernUI' : ''}`);
+		const graph = page.locator('.ash-scm-graph');
+		const tree = graph.locator('.ash-scm-graph-tree');
+		const row = tree.getByRole('treeitem').filter({ has: page.locator('[data-history-item-id="paging-0"]') });
+		const viewport = graph.locator('.ash-scm-graph-viewport > .ash-scrollbar-viewport');
+		const track = graph.locator('.ash-scm-graph-viewport > .ash-scrollbar-track-vertical');
+		const action = row.locator('[data-action-id="workbench.scm.action.graph.viewChanges"] > button');
+		await row.click({ position: { x: 70, y: 10 } });
+		await expect(row).toHaveAttribute('aria-selected', 'true');
+		for (const width of [280, 560]) {
+			await page.evaluate(width => window.ashSCMHistoryIntegration.resize(width), width);
+			for (let theme = 0; theme < 4; theme++) {
+				await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+				await row.hover({ position: { x: 70, y: 10 } });
+				await expect(track).toHaveCSS('opacity', '1');
+				await expect(action).toBeVisible();
+				const geometry = await row.evaluate(row => {
+					const graph = row.closest('.ash-scm-graph')!;
+					const viewport = graph.querySelector<HTMLElement>('.ash-scm-graph-viewport > .ash-scrollbar-viewport')!;
+					const track = graph.querySelector('.ash-scm-graph-viewport > .ash-scrollbar-track-vertical')!.getBoundingClientRect();
+					const button = row.querySelector('[data-action-id="workbench.scm.action.graph.viewChanges"] > button')!;
+					const action = button.getBoundingClientRect();
+					const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
+					const bounds = row.getBoundingClientRect();
+					const hit = row.ownerDocument.elementFromPoint(action.right - 1, action.top + action.height / 2);
+					return {
+						trackWidth: track.width,
+						selectionGap: track.left - bounds.right,
+						actionGap: track.left - action.right,
+						actionInset: bounds.right - action.right,
+						buttonWidth: action.width,
+						buttonHeight: action.height,
+						trailingPadding: Number.parseFloat(getComputedStyle(button).paddingInlineEnd),
+						iconInset: bounds.right - icon.right,
+						nativeGutter: viewport.offsetWidth - viewport.clientWidth,
+						canClickTrailingEdge: hit === button || button.contains(hit),
+					};
+				});
+				expect(geometry).toEqual({ trackWidth: modernUI ? 8 : 10, selectionGap: modernUI ? -4 : -10, actionGap: modernUI ? 0 : 8, actionInset: modernUI ? 4 : 18, buttonWidth: 22, buttonHeight: 22, trailingPadding: 0, iconInset: modernUI ? 7 : 21, nativeGutter: 0, canClickTrailingEdge: true });
+			}
+			const before = await row.boundingBox();
+			await page.locator('#outside').hover();
+			await expect(track).toHaveCSS('opacity', '0');
+			const after = await row.boundingBox();
+			expect({ x: after!.x, width: after!.width }).toEqual({ x: before!.x, width: before!.width });
+		}
+		if (modernUI) {
+			await row.hover({ position: { x: 70, y: 10 } });
+			await expect(action).toBeVisible();
+			try {
+				await page.evaluate(() => window.ashSCMHistoryIntegration.setScrollbarSize(14));
+				const widerTrack = await row.evaluate(row => {
+					const track = row.closest('.ash-scm-graph')!.querySelector('.ash-scm-graph-viewport > .ash-scrollbar-track-vertical')!.getBoundingClientRect();
+					const action = row.querySelector('[data-action-id="workbench.scm.action.graph.viewChanges"] > button')!.getBoundingClientRect();
+					return { trackWidth: track.width, actionGap: track.left - action.right, selectionGap: track.left - row.getBoundingClientRect().right, padding: Number.parseFloat(getComputedStyle(row).paddingInlineEnd) };
+				});
+				expect(widerTrack).toEqual({ trackWidth: 14, actionGap: 0, selectionGap: -10, padding: 10 });
+			} finally { await page.evaluate(() => window.ashSCMHistoryIntegration.setScrollbarSize(8)); }
+		}
+		await row.hover({ position: { x: 70, y: 10 } });
+		await expect(track).toHaveCSS('opacity', '1');
+		const thumb = await track.locator('.ash-scrollbar-thumb').boundingBox();
+		await page.mouse.move(thumb!.x + thumb!.width / 2, thumb!.y + thumb!.height / 2);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(thumb!.x + thumb!.width / 2, thumb!.y + thumb!.height / 2 + 40);
+		} finally { await page.mouse.up(); }
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		await tree.focus();
+		await tree.press('Home');
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
+		await tree.press('End');
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		await tree.press('Home');
+		await expect(row).toBeInViewport();
+		await action.focus();
+		await expectVisibleFocusOutline(action);
+		await browserTests.info.attach(`scm-scrollbar-gap-${locale}-${modernUI ? 'modern' : 'classic'}.png`, { body: await graph.screenshot(), contentType: 'image/png' });
+		const longRowWidth = (await row.boundingBox())!.width;
+		await page.evaluate(() => window.ashSCMHistoryIntegration.setHistoryReferences({}, [
+			{ id: 'paging-0', parentIds: [], subject: 'Paging commit 0', message: '' },
+		]));
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+		expect((await row.boundingBox())!.width).toBe(longRowWidth);
 	});
 
 	test('history actions reveal on hover or keyboard focus without following retained row focus', async function () {
@@ -1362,7 +1495,8 @@ suite('scmHistory browser component', () => {
 		await expect(hover).toBeVisible();
 		const pointerCopy = hover.getByRole('button', { name: 'Copy Commit Hash', exact: true });
 		const hoverId = await hover.getAttribute('id');
-		const commitBounds = (await commit.boundingBox())!;
+		// The hover anchors to content; Flat's row background also extends beneath the track.
+		const commitBounds = (await commit.locator('.ash-scm-graph-commit').boundingBox())!;
 		const hoverBounds = (await hover.boundingBox())!;
 		expect(hoverBounds.x).toBeGreaterThan(commitBounds.x + commitBounds.width);
 		await page.mouse.move((commitBounds.x + commitBounds.width + hoverBounds.x) / 2, commitBounds.y + commitBounds.height / 2);

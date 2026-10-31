@@ -80,7 +80,15 @@ class AppServerRecoveryContribution extends Disposable {
 					actions: [{ label: localize('appServer.reconnect', 'Reconnect'), href: `command:${ReconnectAppServerCommandId}` }],
 				});
 			} else if (recovery.status === 'recovering') {
-				banners.show({ id, icon: Lxicon.info, priority: 100, message: localize('appServer.recovering', 'Reconnecting to the Agent Host…') });
+				let message: string;
+				if (recovery.phase === 'permissions') {
+					message = localize('appServer.applyingPermissions', 'Applying workspace permissions…');
+				} else if (recovery.phase === 'workspace') {
+					message = localize('appServer.preparingWorkspace', 'Preparing the workspace…');
+				} else {
+					message = localize('appServer.recovering', 'Reconnecting to the Agent Host…');
+				}
+				banners.show({ id, icon: Lxicon.info, priority: 100, message });
 			} else if (recovery.status === 'unavailable') {
 				banners.show({ id, icon: Lxicon.warning, priority: 100, message: localize('appServer.recoveryUnavailable', 'The Agent Host connection cannot be restored. {0}', recovery.error ?? '') });
 			} else {

@@ -12,9 +12,9 @@ for (const inputMode of ['EditContext', 'textarea'] as const) {
 		await page.evaluate(() => {
 			const editor = window.ashTextModelIntegration.getControl();
 			editor.updateOptions({ wordWrap: 'off', smoothScrolling: false, minimap: { enabled: true, side: 'left' } });
-			editor.setValue('long line '.repeat(100));
-			editor.setPosition({ lineNumber: 1, column: 50 });
-			editor.setScrollLeft(80);
+			editor.setValue(Array.from({ length: 160 }, () => 'long line '.repeat(100)).join('\n'));
+			editor.setPosition({ lineNumber: 35, column: 50 });
+			editor.setScrollPosition({ scrollLeft: 80, scrollTop: 600 });
 			editor.focus();
 		});
 		const input = page.locator('.stanza-editor-input');
@@ -25,7 +25,9 @@ for (const inputMode of ['EditContext', 'textarea'] as const) {
 		await expect(page.locator('.stanza-editor')).toHaveClass(/\bcomposing\b/u);
 		await expect.poll(() => input.evaluate(element => {
 			const caret = element.closest('.stanza-editor')!.querySelector('.stanza-editor-caret')!;
-			return Math.abs(element.getBoundingClientRect().left - caret.getBoundingClientRect().left);
+			const inputBounds = element.getBoundingClientRect();
+			const caretBounds = caret.getBoundingClientRect();
+			return Math.max(Math.abs(inputBounds.left - caretBounds.left), Math.abs(inputBounds.top - caretBounds.top));
 		})).toBeLessThanOrEqual(1);
 	});
 }
@@ -480,23 +482,23 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 	await expect(horizontal.locator('.ash-scrollbar-thumb')).toHaveCSS('height', '4px');
 	await expect(vertical.locator('.ash-scrollbar-thumb')).toHaveCSS('width', '6px');
 	await editor.dispatchEvent('wheel', { deltaY: 20, deltaMode: 0 });
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(40);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(40);
 	await editor.dispatchEvent('wheel', { deltaY: 10, deltaMode: 0, altKey: true });
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(100);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(100);
 	await editor.dispatchEvent('wheel', { deltaY: 10, deltaMode: 0, shiftKey: true });
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollLeft)).toBe(20);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollLeft())).toBe(20);
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ handleMouseWheel: false }));
 	await editor.dispatchEvent('wheel', { deltaY: 20, deltaMode: 0 });
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(100);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(100);
 	const box = await vertical.boundingBox();
 	assertBox(box, 'vertical scrollbar');
 	await vertical.click({ position: { x: box.width / 2, y: box.height - 3 } });
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(520);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(520);
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ scrollByPage: false }));
 	await page.locator('.decorationsOverviewRuler').dispatchEvent('pointerdown', {
 		button: 0, buttons: 1, clientX: box.x + box.width / 2, clientY: box.y + box.height - 3,
 	});
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(520);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBeGreaterThan(520);
 });
 
 test('editor scrollbar arrows support click, hold, keyboard and runtime removal', async ({ page }) => {
@@ -514,10 +516,10 @@ test('editor scrollbar arrows support click, hold, keyboard and runtime removal'
 	await expect(down).toHaveCSS('height', '18px');
 	await expect(up).toBeDisabled();
 	await down.click();
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(40);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(40);
 	await right.focus();
 	await page.keyboard.press('Enter');
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollLeft)).toBe(40);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollLeft())).toBe(40);
 	const thumb = editor.locator('.ash-scrollbar-track-vertical .ash-scrollbar-thumb');
 	const upBox = await up.boundingBox();
 	const thumbBox = await thumb.boundingBox();
@@ -527,17 +529,17 @@ test('editor scrollbar arrows support click, hold, keyboard and runtime removal'
 
 	await down.hover();
 	await page.mouse.down();
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(80);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBeGreaterThan(80);
 	await page.mouse.up();
-	const released = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+	const released = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 	await page.waitForTimeout(180);
-	expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(released);
+	expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(released);
 	await page.mouse.down();
 	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ verticalHasArrows: false, horizontalHasArrows: false }));
 	await expect(down).toBeHidden();
-	const disabled = await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop);
+	const disabled = await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop());
 	await page.waitForTimeout(400);
-	expect(await editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(disabled);
+	expect(await page.evaluate(() => window.ashTextModelIntegration.getControl().getScrollTop())).toBe(disabled);
 	await page.mouse.up();
 	await expect(editor.locator('.ash-scrollbar-track-vertical')).toHaveCSS('top', '0px');
 	await page.evaluate(() => {

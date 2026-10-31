@@ -1,5 +1,5 @@
 import { h } from '../../../../base/browser/dom.js';
-import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -8,16 +8,16 @@ import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.j
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { localize } from '../../../../nls.js';
 import { VIEW_ID } from '../../files/common/files.js';
-import type { IEditorService } from '../../../services/editor/common/editorService.js';
-import type { IViewsService } from '../../../services/views/common/viewsService.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInput } from './multiDiffEditorInput.js';
 import { IMultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';
 import type { MultiDiffEditorWidget } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 
 export interface MultiDiffEditorToolbarOptions {
-	readonly container: HTMLElement; readonly input: MultiDiffEditorInput;
-	readonly contextMenuProvider: IContextMenuProvider; readonly editorService?: IEditorService;
-	readonly viewsService?: IViewsService; readonly editor: MultiDiffEditorWidget;
+	readonly container: HTMLElement;
+	readonly input: MultiDiffEditorInput;
+	readonly editor: MultiDiffEditorWidget;
 }
 
 /** Source owners contribute repository actions; the editor owns their accessible presentation. */
@@ -27,7 +27,11 @@ export class MultiDiffEditorToolbar extends Disposable {
 	private busy = false;
 	constructor(private readonly options: MultiDiffEditorToolbarOptions,
 		@IMultiDiffSourceResolverService private readonly sourceResolvers: IMultiDiffSourceResolverService,
-		@IHoverService hoverService: IHoverService) {
+		@IHoverService hoverService: IHoverService,
+		@IEditorService editorService: IEditorService,
+		@IViewsService viewsService: IViewsService,
+		@IContextMenuService contextMenuService: IContextMenuService,
+	) {
 		super();
 		const document = options.container.ownerDocument;
 		this.domNode = h(document, 'div'); this.domNode.className = 'stanza-multi-diff-editor-toolbar';
@@ -39,14 +43,14 @@ export class MultiDiffEditorToolbar extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 		const sourceActions = this.sourceResolvers.sourceActions().map(action => this.wrap(action));
 		if (options.input.source?.kind === 'external' && sourceActions.length) {
-			const primary = new ToolbarAction('multiDiff.source', options.input.source.label, localize('multiDiff.selectSource', 'Select change source'), undefined, options.editorService !== undefined, () => this.run(async () => {
+			const primary = new ToolbarAction('multiDiff.source', options.input.source.label, localize('multiDiff.selectSource', 'Select change source'), undefined, true, () => this.run(async () => {
 				const resolved = await this.sourceResolvers.resolve(options.input.resource);
-				if (resolved) await options.editorService?.openEditor(createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source), { pinned: true });
+				if (resolved) await editorService.openEditor(createMultiDiffEditorInput(resolved.resource, resolved.resources, resolved.label, resolved.source), { pinned: true });
 			}));
 			const dropdown = new ToolbarAction('multiDiff.source.menu', localize('multiDiff.selectSource', 'Select change source'), localize('multiDiff.selectSource', 'Select change source'), Lxicon.chevronDown, true, () => { });
-			const toolbar = this._register(new WorkbenchToolBar(left, options.contextMenuProvider, {
+			const toolbar = this._register(new WorkbenchToolBar(left, contextMenuService, {
 				ariaLabel: localize('multiDiff.changeSource', 'Multi-diff change source'),
-				actionViewItemProvider: action => action.id === primary.id ? new DropdownWithPrimaryActionViewItem(primary, dropdown, sourceActions, options.contextMenuProvider) : undefined,
+				actionViewItemProvider: action => action.id === primary.id ? new DropdownWithPrimaryActionViewItem(primary, dropdown, sourceActions, contextMenuService) : undefined,
 			}));
 			toolbar.setActions([primary]); toolbar.element.classList.add('stanza-multi-diff-editor-source-toolbar');
 		} else {
@@ -57,11 +61,11 @@ export class MultiDiffEditorToolbar extends Disposable {
 		const repositoryActions = this.sourceResolvers.repositoryActions?.(options.input).map(action => this.wrap(action)) ?? [];
 		const wrapped = primary ? this.wrap(primary) : undefined;
 		const dropdown = new ToolbarAction('multiDiff.repository.menu', localize('multiDiff.repositoryActions', 'Multi-diff repository actions'), localize('multiDiff.repositoryActions', 'Multi-diff repository actions'), Lxicon.chevronDown, true, () => { });
-		const toolbar = this._register(new WorkbenchToolBar(right, options.contextMenuProvider, {
+		const toolbar = this._register(new WorkbenchToolBar(right, contextMenuService, {
 			ariaLabel: localize('multiDiff.repositoryActions', 'Multi-diff repository actions'),
-			actionViewItemProvider: action => wrapped && action.id === wrapped.id && repositoryActions.length ? new DropdownWithPrimaryActionViewItem(wrapped, dropdown, repositoryActions, options.contextMenuProvider) : undefined,
+			actionViewItemProvider: action => wrapped && action.id === wrapped.id && repositoryActions.length ? new DropdownWithPrimaryActionViewItem(wrapped, dropdown, repositoryActions, contextMenuService) : undefined,
 		}));
-		const files = new ToolbarAction('multiDiff.files', localize('multiDiff.files', 'Files'), localize('multiDiff.openFiles', 'Open Files'), Lxicon.files, options.viewsService !== undefined, () => options.viewsService?.focusView(VIEW_ID));
+		const files = new ToolbarAction('multiDiff.files', localize('multiDiff.files', 'Files'), localize('multiDiff.openFiles', 'Open Files'), Lxicon.files, true, () => viewsService.focusView(VIEW_ID));
 		toolbar.setActions(wrapped ? [wrapped, files] : [files], [
 			{
 				id: 'multiDiff.toggleCollapseAll',

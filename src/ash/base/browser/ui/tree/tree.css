@@ -1,4 +1,9 @@
 .ash-tree {
+	--ash-list-row-padding-start: var(--ash-spacing-size80);
+	--ash-list-row-padding-end: var(
+		--ash-list-row-default-padding-end,
+		var(--ash-spacing-size80)
+	);
 	position: relative;
 	box-sizing: border-box;
 	margin: 0;
@@ -50,18 +55,15 @@
 .ash-tree-row {
 	display: flex;
 	position: relative;
-	width: 100%;
 	box-sizing: border-box;
 	align-items: center;
 	overflow: hidden;
 	border: 0;
-	border-radius: var(--ash-cornerRadius-small);
 	background: transparent;
 	color: inherit;
 	cursor: default;
 	font: inherit;
 	line-height: var(--ash-list-rowHeight);
-	padding: 0 8px;
 	text-align: left;
 	text-overflow: ellipsis;
 	white-space: nowrap;

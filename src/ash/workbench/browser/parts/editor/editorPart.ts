@@ -20,7 +20,7 @@ import { validateJsonValue } from '../../../../base/common/jsonValue.js';
 import { computeScreenAwareSize, Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { type IPositionedRectangle } from '../../../../base/browser/geometry.js';
 import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView as ISerializableGridView } from '../../../../base/browser/ui/grid/grid.js';
-import { DisposableMap, Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { rot } from '../../../../base/common/numbers.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { IMenuService } from '../../../../platform/actions/common/actions.js';
@@ -980,10 +980,13 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				end: () => this.tabDragAndDrop.end(),
 			},
 		} satisfies EditorGroupOptions);
-		const host = new EditorGroupHost(group, group.onDidChangeEditors(event => {
+		const listeners = new DisposableStore();
+		listeners.add(group.onDidChangeEditors(event => {
 			this.handleEditorGroupChange(event);
 			this.editorChangeEmitter.fire(Object.freeze({ kind: 'groupChanged', groupId: group.id, event }));
 		}));
+		listeners.add(group.onDidChange(() => this.layoutEmitter.fire(this.dimension)));
+		const host = new EditorGroupHost(group, listeners);
 		if (this.groupHosts.has(group.id)) {
 			host.dispose();
 			throw new Error(`Duplicate editor group ID: ${group.id}`);

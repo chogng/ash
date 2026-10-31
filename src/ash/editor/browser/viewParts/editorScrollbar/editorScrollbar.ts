@@ -1,8 +1,10 @@
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { SmoothScrollableElement, type IOverviewRulerLayoutInfo } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { type ScrollableElementChangeOptions } from '../../../../base/browser/ui/scrollbar/scrollableElementOptions.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
+import { ScrollType } from '../../../common/editorCommon.js';
 import * as viewEvents from '../../../common/viewEvents.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
@@ -29,6 +31,24 @@ export class EditorScrollbar extends ViewPart {
 		PartFingerprints.write(this.domNode, PartFingerprint.ScrollableElement);
 		this.domNode.domNode.dataset.colorScheme = context.theme.type;
 		this.domNode.domNode.setAttribute('aria-label', viewDomNode.domNode.getAttribute('aria-label') ?? 'Editor content');
+		// Focus reveal can scroll these clipping containers. Consume that movement
+		// as a delta, then leave the DOM at zero so it cannot become a second owner.
+		for (const node of new Set([this.domNode.domNode, linesContent.domNode, viewDomNode.domNode, overflowGuardDomNode.domNode])) {
+			this._register(addDisposableListener(node, 'scroll', () => {
+				const deltaLeft = node.scrollLeft;
+				const deltaTop = node.scrollTop;
+				if (deltaLeft === 0 && deltaTop === 0) {
+					return;
+				}
+				node.scrollLeft = 0;
+				node.scrollTop = 0;
+				const position = context.viewLayout.getScrollable().getCurrentScrollPosition();
+				context.viewLayout.setScrollPosition({
+					scrollLeft: position.scrollLeft + deltaLeft,
+					scrollTop: position.scrollTop + deltaTop,
+				}, ScrollType.Immediate);
+			}));
+		}
 	}
 
 	public getDomNode(): FastDomNode<HTMLElement> { return this.domNode; }

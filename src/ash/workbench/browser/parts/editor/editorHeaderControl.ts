@@ -77,10 +77,9 @@ export class EditorHeaderControl extends Disposable {
 	) {
 		super();
 		if (viewOptions.showHeader) {
-			this.headerRow = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-group-header' });
-			titleContainer.append(this.headerRow);
-			this._register(toDisposable(() => this.headerRow?.remove()));
-			titleContainer.classList.add('ash-editor-separate-header');
+			// Retained group controls share the tab row, including when only Details is visible.
+			this.headerRow = tabsRow;
+			tabsRow.classList.add('ash-editor-group-header');
 		}
 		const actionRow = this.headerRow ?? tabsRow;
 		if (actions && viewOptions.menuIds?.headerPrimary && this.headerRow) {
@@ -130,7 +129,6 @@ export class EditorHeaderControl extends Disposable {
 			}));
 		}
 		this.breadcrumbs = this._register(instantiationService.createInstance(EditorBreadcrumbsControl, titleContainer, onSelectBreadcrumb, (element: SymbolElement) => this.selectSymbol(element)));
-		this.headerRow?.prepend(this.breadcrumbs.domNode);
 		if (group !== undefined && breadcrumbsService) this._register(breadcrumbsService.register(group, this.breadcrumbs));
 		const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			.getConfiguration(BreadcrumbsEnabledConfiguration) as IRegisteredConfiguration<boolean> | undefined;
@@ -169,7 +167,7 @@ export class EditorHeaderControl extends Disposable {
 	}
 
 	get height(): number {
-		return this.headerRow ? EditorHeaderControl.HEIGHT : this.breadcrumbs.domNode.hidden ? 0 : 22;
+		return this.breadcrumbs.domNode.hidden ? 0 : 22;
 	}
 
 	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {

@@ -512,7 +512,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const advisorSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]');
 	assert.ok(advisorSelector);
 	advisorSelector.click();
-	const off = window.document.querySelector<HTMLElement>('[role="listbox"] [role="option"][data-index="0"]');
+	const off = window.document.querySelector<HTMLElement>('[role="listbox"] [role="option"][data-index="1"]');
 	assert.ok(off);
 	off.click();
 	await Promise.resolve();

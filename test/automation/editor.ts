@@ -1,5 +1,19 @@
 import { expect, type Locator } from '@playwright/test';
 
+/** Reads the rendered editor scroll position through its accessible scrollbar contract. */
+export async function readEditorScrollPosition(element: Locator): Promise<{ left: number; top: number; }> {
+	return element.evaluate(root => {
+		const position = (orientation: string): number => {
+			const track = root.querySelector(`[role="scrollbar"][aria-orientation="${orientation}"]`);
+			if (!track?.hasAttribute('aria-valuenow')) {
+				throw new Error(`Missing ${orientation} editor scrollbar position`);
+			}
+			return Number(track.getAttribute('aria-valuenow'));
+		};
+		return { left: position('horizontal'), top: position('vertical') };
+	});
+}
+
 /** Text editing automation scoped to the active editor in one group. */
 export class Editor {
 	readonly element: Locator;

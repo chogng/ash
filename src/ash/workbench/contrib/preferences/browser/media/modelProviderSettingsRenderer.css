@@ -115,3 +115,11 @@
 .ash-chat-models-note.is-error {
 	color: var(--ash-error-foreground);
 }
+
+.ash-models-custom-declarations {
+	margin-top: var(--ash-spacing-size160);
+}
+
+.ash-models-custom-declarations > summary {
+	color: var(--ash-description-foreground);
+}

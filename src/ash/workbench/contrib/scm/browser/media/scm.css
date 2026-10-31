@@ -2,7 +2,7 @@
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
-	padding: 8px 0;
+	padding: var(--ash-spacing-size80) 0 0;
 }
 
 .ash-scm-secondary-pane {
@@ -23,6 +23,10 @@
 	padding-inline: var(--ash-spacing-size40);
 	font-size: var(--ash-fontSize-label2);
 	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-scm-history-filter > .ash-button > .ash-button-content {
+	gap: var(--ash-spacing-size20);
 }
 
 .ash-scm-empty {
@@ -80,13 +84,8 @@
 	margin-inline-start: calc(
 		var(--ash-spacing-size40) + var(--ash-spacing-size20) +
 			var(--ash-lxiconFontSize) / 2 - var(--ash-spacing-size80) -
-			var(--scm-graph-lane-width) - var(--scm-graph-row-inset, 0px)
+			var(--scm-graph-lane-width) - var(--ash-list-row-inset-start, 0px)
 	);
-}
-
-.ash-workbench.modern-ui .ash-sidebar-part .ash-scm-graph-tree {
-	/* Modern UI insets sidebar list rows independently of their content padding. */
-	--scm-graph-row-inset: var(--ash-spacing-size40);
 }
 
 .ash-scm-graph-commit {
@@ -320,7 +319,6 @@
 	position: absolute;
 	z-index: 1;
 	top: 0;
-	/* The tree row already supplies the trailing gutter. */
 	inset-inline-end: 0;
 	bottom: 0;
 	display: flex;
@@ -373,7 +371,7 @@
 
 /* A remembered row focus reveals actions only while the tree has keyboard focus. */
 .ash-scm-graph-row:hover > .ash-scm-graph-overlay > .ash-scm-graph-actions,
-.ash-scm-graph-actions:has(button[aria-expanded="true"]),
+.ash-scm-graph-actions.dropdown-visible,
 .ash-scm-graph-commit:is(
 		:focus-within,
 		.ash-scm-graph-tree:focus-visible:not(.pointer-navigation) .focused
@@ -795,12 +793,12 @@
 }
 
 .ash-scm-change-actions {
-	/* Actions cover the label on intent; only the status marker reserves row width. */
-	position: absolute;
+	/* Share the label's grid cell so compound status badges keep their full width. */
+	position: relative;
 	z-index: 1;
-	top: 0;
-	inset-inline-end: var(--ash-toolbar-actionSize);
-	bottom: 0;
+	grid-area: 1 / 1;
+	justify-self: end;
+	align-self: stretch;
 	display: flex;
 	align-items: center;
 	padding-inline-start: var(--ash-spacing-size40);
@@ -970,10 +968,6 @@
 	}
 }
 
-.ash-scm-change {
-	position: relative;
-}
-
 .ash-scm-change,
 .ash-scm-folder {
 	display: flex;
@@ -985,7 +979,13 @@
 	line-height: var(--ash-list-rowHeight);
 }
 
+.ash-scm-change {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .ash-scm-change-open {
+	grid-area: 1 / 1;
 	display: flex;
 	min-width: 0;
 	height: var(--ash-list-rowHeight);
@@ -1018,13 +1018,14 @@
 }
 
 .ash-scm-change-status {
-	flex: 0 0 var(--ash-spacing-size200);
-	width: var(--ash-spacing-size200);
-	margin-left: var(--ash-spacing-size40);
+	grid-area: 1 / 2;
+	min-width: var(--ash-spacing-size200);
+	margin-inline-start: var(--ash-spacing-size40);
 	color: color-mix(in srgb, currentColor 78%, transparent);
 	font-size: var(--ash-fontSize-label2);
 	font-weight: var(--ash-fontWeight-semiBold);
 	text-align: center;
+	white-space: nowrap;
 }
 
 .ash-scm-change-status.status-added,

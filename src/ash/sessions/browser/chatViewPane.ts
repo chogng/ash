@@ -174,7 +174,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.titleControl = this._register(this.instantiationService.createInstance(ChatViewTitleControl,
 			this.element,
 			viewId,
-			() => this.commandService.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID),
+			(anchor: HTMLElement) => this.commandService.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID, anchor),
 		));
 		this.paneHost = h(container.ownerDocument, 'div');
 		this.paneHost.className = 'ash-chat-pane-host';
@@ -438,8 +438,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			? sideBySideSessionsWidth : defaultChatWidth;
 	}
 
-	toggleSessionsSidebar(): boolean {
-		const visible = this.getSessionsViewerOrientation() !== AgentSessionsViewerOrientation.SideBySide;
+	toggleSessionsSidebar(options?: { readonly visible: boolean; }): boolean {
+		const visible = options?.visible ?? this.getSessionsViewerOrientation() !== AgentSessionsViewerOrientation.SideBySide;
 		this.sessionsSidebarManualVisibility = visible;
 		this.setSessionsSidebarVisible(visible);
 		this.updateSessionsSidebarLayout(this.chatBodyWidth || this.body.getBoundingClientRect().width);
@@ -855,6 +855,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		try {
 			await pane.captureDraft();
 			if (this.viewDisposed || this.panes.get(id) !== pane) return;
+			if (!this.editorMount && this.openedPaneIds.length === 1) {
+				// Keep the last conversation available when the retained side bar is reopened.
+				await this.commandService.executeCommand('workbench.action.closeAuxiliaryBar');
+				return;
+			}
 			const index = this.openedPaneIds.indexOf(id);
 			this.openedPaneIds = this.openedPaneIds.filter(candidate => candidate !== id);
 			if (this.activePane === pane) {

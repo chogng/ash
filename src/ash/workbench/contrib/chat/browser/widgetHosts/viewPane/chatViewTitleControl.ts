@@ -17,6 +17,9 @@ import { IChatSessionNavigationService } from '../../../../../services/chat/comm
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { WorkbenchTabsControl } from '../../../../../browser/parts/editor/workbenchTabsControl.js';
 import type { TabListItem, TabListOptions } from '../../../../../../base/browser/ui/tablist/tabList.js';
+import { ButtonActionViewItem, type ActionViewItemOptions } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
+import type { IAction } from '../../../../../../base/common/actions.js';
+import { SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../common/chat.js';
 
 /** Shows the current conversation and delegates switching to the shared history picker. */
 export class ChatViewTitleControl extends Disposable {
@@ -33,7 +36,7 @@ export class ChatViewTitleControl extends Disposable {
 	constructor(
 		container: HTMLElement,
 		idPrefix: string,
-		private readonly showHistory: () => Promise<unknown>,
+		private readonly showHistory: (anchor: HTMLElement) => Promise<unknown>,
 		@IMenuService private readonly menuService: IMenuService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
@@ -60,12 +63,7 @@ export class ChatViewTitleControl extends Disposable {
 		container.append(this.titleElement);
 		this._register(toDisposable(() => this.titleElement.remove()));
 		this._register(addDisposableListener(this.titleButton, 'click', () => {
-			if (this.titleButton.getAttribute('aria-expanded') === 'true') return;
-			this.titleButton.setAttribute('aria-expanded', 'true');
-			void this.showHistory().catch(onUnexpectedError).finally(() => {
-				this.titleButton.setAttribute('aria-expanded', 'false');
-				if (ownerDocument.activeElement === ownerDocument.body && this.titleButton.isConnected) this.titleButton.focus();
-			});
+			this.openHistory(this.titleButton);
 		}));
 		this._register(addDisposableListener(this.titleButton, 'contextmenu', event => this.showTitleContextMenu(event)));
 		this._register(addDisposableListener(this.titleButton, 'keydown', event => {
@@ -81,7 +79,13 @@ export class ChatViewTitleControl extends Disposable {
 			menuService,
 			contextMenuService,
 			MenuId.ChatTitle,
-			{ hoverAnchorPosition: AnchorPosition.Below, menuOptions: { renderShortTitle: true } },
+			{
+				hoverAnchorPosition: AnchorPosition.Below,
+				menuOptions: { renderShortTitle: true },
+				actionViewItemProvider: (action, options) => action.id === SHOW_CHAT_HISTORY_COMMAND_ID
+					? new ChatHistoryActionViewItem(action, options, anchor => this.openHistory(anchor))
+					: undefined,
+			},
 		));
 		toolbar.element.setAttribute('aria-label', localize('chat.title.actions', 'Chat actions'));
 		this.layoutToolbar = this._register(new MenuWorkbenchToolBar(
@@ -98,6 +102,16 @@ export class ChatViewTitleControl extends Disposable {
 
 	get partTitleProjection(): PartTitleProjection {
 		return { content: this.titleElement, actions: this.actionsElement };
+	}
+
+	private openHistory(anchor: HTMLElement): void {
+		if (anchor.getAttribute('aria-expanded') === 'true') return;
+		anchor.setAttribute('aria-expanded', 'true');
+		void this.showHistory(anchor).catch(onUnexpectedError).finally(() => {
+			anchor.setAttribute('aria-expanded', 'false');
+			const ownerDocument = anchor.ownerDocument;
+			if (ownerDocument.activeElement === ownerDocument.body && anchor.isConnected) anchor.focus();
+		});
 	}
 
 	/** Shares editor tab presentation while the caller retains conversation identity and lifetime. */
@@ -150,5 +164,22 @@ export class ChatViewTitleControl extends Disposable {
 		this.titleButton.setAttribute('aria-label', localize('chat.title.switch', 'Switch conversation: {0}', label));
 		if (panelId) this.titleButton.setAttribute('aria-controls', panelId);
 		else this.titleButton.removeAttribute('aria-controls');
+	}
+}
+
+/** Keeps the history trigger in the shared toolbar while supplying its actual anchor. */
+class ChatHistoryActionViewItem extends ButtonActionViewItem {
+	constructor(action: IAction, options: ActionViewItemOptions, private readonly showHistory: (anchor: HTMLElement) => void) {
+		super(action, options);
+	}
+
+	public override render(container: HTMLElement): void {
+		super.render(container);
+		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
+		this.button.domNode.setAttribute('aria-expanded', 'false');
+	}
+
+	protected override runAction(): void {
+		this.showHistory(this.button.domNode);
 	}
 }

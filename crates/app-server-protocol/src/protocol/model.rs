@@ -92,6 +92,10 @@ pub struct ModelCatalogEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub available_context_window: Option<u32>,
+    /// Hard input capacity after output and safety reservations, independent of auto-compaction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub usable_context_window: Option<u32>,
     pub capabilities: ModelCapabilities,
     /// Provenance and access of this catalog row; never credentials or an execution endpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -143,6 +147,7 @@ impl ModelCatalogEntry {
             },
             auto_compact_token_limit: info.auto_compact_token_limit,
             available_context_window: None,
+            usable_context_window: None,
             capabilities: info.capabilities,
             source: None,
             pricing: Vec::new(),

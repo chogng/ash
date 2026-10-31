@@ -926,9 +926,8 @@ suite('diff browser component', () => {
 		await page.evaluate(() => window.ashDiffIntegration.scrollModified(400));
 		await expect(action).toBeFocused();
 		await page.locator('#single .modified .stanza-editor-input').focus();
-		// Input focus reveals the caret; restore the offscreen hunk before checking disposal.
-		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(3, 3).modifiedScrollTop)).toBe(0);
-		await page.evaluate(() => window.ashDiffIntegration.scrollModified(400));
+		// Input focus preserves the viewport; the offscreen hunk can be released once its action loses focus.
+		await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.linePositions(3, 3).modifiedScrollTop)).toBe(400);
 		await expect(action).toBeHidden();
 		await page.evaluate(() => {
 			window.ashDiffIntegration.scrollModified(0);

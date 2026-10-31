@@ -108,7 +108,7 @@ export class ModelPickerWidget extends Disposable {
 		const model = this.delegate.getModels().find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
 		const label = this.delegate.isAutomaticModel()
 			? localize('chat.modelPicker.auto', 'Auto')
-			: model?.displayName ?? (selected ? `${selected.provider}/${selected.model}` : localize('chat.modelPicker.selectModel', 'Select model'));
+			: selected?.model ?? localize('chat.modelPicker.selectModel', 'Select model');
 		this.nameButton!.querySelector('.ash-chat-input-picker-label')!.textContent = label;
 		this.nameButton!.setAttribute('aria-label', label);
 		this.nameHover.clear();

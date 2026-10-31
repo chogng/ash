@@ -1,12 +1,12 @@
 import './actionbar.css';
 import { addDisposableListener, h, isElement, isHTMLElement } from '../../dom.js';
 import { DataTransfers, DragAndDropObserver } from '../../dnd.js';
-import type { IAction } from '../../../common/actions.js';
+import { ActionRunner, type IAction, type IActionRunner } from '../../../common/actions.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { rot } from '../../../common/numbers.js';
 import { type ActionViewItem, type ActionViewItemOptions, createActionViewItem } from './actionViewItems.js';
 import { DndCssClasses } from '../dnd/dnd.js';
-import type { Event } from '../../../common/event.js';
+import { Emitter, type Event } from '../../../common/event.js';
 import { DropdownMenuActionViewItem } from '../dropdown/dropdownMenuActionViewItem.js';
 import { disposableWindowTimeout } from '../../scheduler.js';
 import { createUuid } from '../../../common/uuid.js';
@@ -31,6 +31,7 @@ export interface ActionBarDragAndDrop {
 }
 
 export interface ActionBarOptions {
+	readonly actionRunner?: IActionRunner;
 	readonly actions?: readonly IAction[];
 	readonly ariaLabel?: string;
 	readonly ariaRole?: 'toolbar' | 'tablist';
@@ -62,6 +63,12 @@ interface DropdownActionViewItem extends ActionViewItem {
  */
 export class ActionBar extends Disposable {
 	readonly element: HTMLDivElement;
+	private readonly defaultActionRunner = this._register(new ActionRunner());
+	private _actionRunner: IActionRunner = this.defaultActionRunner;
+	private actionContext: unknown;
+	private focusable = true;
+	private readonly dropdownVisibilityEmitter = this._register(new Emitter<boolean>());
+	readonly onDidChangeDropdownVisibility = this.dropdownVisibilityEmitter.event;
 	private readonly entries: ActionBarEntry[] = [];
 	private readonly visibleDropdowns = new Set<ActionViewItem>();
 	private readonly pointerActivation = this._register(new MutableDisposable<DisposableStore>());
@@ -93,6 +100,7 @@ export class ActionBar extends Disposable {
 			element.setAttribute('aria-label', options.ariaLabel);
 		}
 		this.actionViewItemProvider = options.actionViewItemProvider;
+		this._actionRunner = options.actionRunner ?? this.defaultActionRunner;
 		this.actionViewItemOptions = {
 			...options.actionViewItemOptions,
 			hoverGroupId: options.actionViewItemOptions?.hoverGroupId ?? createUuid(),
@@ -191,7 +199,7 @@ export class ActionBar extends Disposable {
 			?? next.find(entry => entry.action.enabled);
 		// Retained slots already project their Tab state; only new or changed slots need a DOM write.
 		for (const entry of next) {
-			if (created.has(entry) || (entry.item === this.tabStop) !== (entry === tabStop)) entry.item.setTabbable(entry === tabStop);
+			if (created.has(entry) || (entry.item === this.tabStop) !== (entry === tabStop)) entry.item.setTabbable(this.focusable && entry === tabStop);
 		}
 		this.tabStop = tabStop?.item;
 		if (focusedActionId && this.element.ownerDocument.activeElement !== activeElement) {
@@ -258,10 +266,43 @@ export class ActionBar extends Disposable {
 		return this.entries[index]?.container.getBoundingClientRect().width ?? 0;
 	}
 
-	focus(): void {
-		const entry = this.entries.find(({ item, action }) => item === this.tabStop && action.enabled)
+	get actionRunner(): IActionRunner {
+		return this._actionRunner;
+	}
+
+	set actionRunner(runner: IActionRunner) {
+		this._actionRunner = runner;
+		for (const entry of this.entries) entry.item.actionRunner = runner;
+	}
+
+	set context(context: unknown) {
+		this.actionContext = context;
+		for (const entry of this.entries) entry.item.setActionContext(context);
+	}
+
+	getAction(indexOrElement: number | HTMLElement): IAction | undefined {
+		return typeof indexOrElement === 'number' ? this.entries[indexOrElement]?.action
+			: this.entries.find(entry => entry.container.contains(indexOrElement))?.action;
+	}
+
+	getItemElement(index: number): HTMLElement | undefined {
+		return this.entries[index]?.container;
+	}
+
+	length(): number {
+		return this.entries.length;
+	}
+
+	setFocusable(focusable: boolean): void {
+		this.focusable = focusable;
+		this.tabStop?.setTabbable(focusable);
+	}
+
+	focus(index?: number): void {
+		const entry = (index === undefined ? undefined : this.entries[index])
+			?? this.entries.find(({ item, action }) => item === this.tabStop && action.enabled)
 			?? this.entries.find(({ action }) => action.enabled);
-		if (!entry) return;
+		if (!entry?.action.enabled) return;
 		this._setTabStop(entry.item);
 		entry.item.focus();
 	}
@@ -306,7 +347,7 @@ export class ActionBar extends Disposable {
 		if (item === this.tabStop) return;
 		this.tabStop?.setTabbable(false);
 		this.tabStop = item;
-		item.setTabbable(true);
+		item.setTabbable(this.focusable);
 	}
 
 	private clearActions(): void {
@@ -328,12 +369,15 @@ export class ActionBar extends Disposable {
 	}
 
 	private dropdownVisibilityChanged(item: ActionViewItem, visible: boolean): void {
+		const wasVisible = this.visibleDropdowns.size > 0;
 		if (visible) {
 			this.visibleDropdowns.add(item);
-			return;
+		} else {
+			this.visibleDropdowns.delete(item);
+			this.schedulePendingActions();
 		}
-		this.visibleDropdowns.delete(item);
-		this.schedulePendingActions();
+		const isVisible = this.visibleDropdowns.size > 0;
+		if (wasVisible !== isVisible) this.dropdownVisibilityEmitter.fire(isVisible);
 	}
 
 	private schedulePendingActions(): void {
@@ -391,8 +435,10 @@ export class ActionBar extends Disposable {
 		const visibility = item instanceof DropdownMenuActionViewItem ? item.onDidChangeVisibility : item.onDidChangeDropdownVisibility;
 		if (visibility) {
 			store.add(visibility(visible => this.dropdownVisibilityChanged(item, visible)));
-			store.add(toDisposable(() => this.visibleDropdowns.delete(item)));
+			store.add(toDisposable(() => this.dropdownVisibilityChanged(item, false)));
 		}
+		item.actionRunner = this.actionRunner;
+		item.setActionContext(this.actionContext);
 		item.setHoverGroupId(this.actionViewItemOptions.hoverGroupId);
 		item.render(container);
 		const entry = { action, container, item, store };
@@ -577,7 +623,7 @@ export class ActionBar extends Disposable {
 		entry.item = replacement.item;
 		entry.store = replacement.store;
 		if (wasTabStop) this.tabStop = entry.item;
-		entry.item.setTabbable(wasTabStop);
+		entry.item.setTabbable(this.focusable && wasTabStop);
 		if (hadFocus && action.enabled) this.focusEntry(entry, focusedControl);
 	}
 

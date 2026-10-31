@@ -12,7 +12,7 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { noFileIconTheme } from '../../../../../platform/theme/common/themeService.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
-import type { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { MultiDiffEditorOptions } from '../../browser/multiDiffEditor.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { validateJsonValue } from '../../../../../base/common/jsonValue.js';
@@ -29,9 +29,10 @@ import { type IDocumentDiff, type IDocumentDiffProvider, type IDocumentDiffProvi
 import { DefaultLinesDiffComputer } from '../../../../../editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.js';
 import { type ITextModel } from '../../../../../editor/common/model.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
-import { registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { IMenuService, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { DialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -46,12 +47,15 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService, type IMultiDiffSourceResolver } from '../../browser/multiDiffSourceResolverService.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 import { EditorLineWrapping, EditorOption } from '../../../../../editor/common/config/editorOptions.js';
-import { type ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { ITextModelResourceService, type TextModelInput, type TextModelReference } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IDiffService } from '../../../../services/diff/common/diffService.js';
+import { EditorPanes } from '../../../../browser/editor.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost/' });
+setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
 	observe(): void { }
@@ -70,7 +74,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+const { createCodeEditorServices, registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import('../../../../services/textmodelResolver/browser/browserTextModelService.js');
 const { BrowserTextResourceStore } = await import('../../../codeEditor/browser/browserTextResourceStore.js');
 const { createMultiDiffEditorInput } = await import('../../browser/multiDiffEditorInput.js');
@@ -81,6 +85,9 @@ await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contri
 const { MultiDiffGoToFileAction } = await import('../../browser/multiDiffEditorActions.js');
 
 function registerMultiDiffTestServices(services: InstantiationService): InstantiationService {
+	if (!services.has(IDiffService)) services.registerInstance(IDiffService, { createComputationService: () => new PaneTestDiffComputationService() });
+	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { openEditor: async () => assert.fail('Unexpected editor open') } as unknown as IEditorService);
+	if (!services.has(IViewsService)) services.registerInstance(IViewsService, { focusView: async () => assert.fail('Unexpected view focus') } as unknown as IViewsService);
 	if (!services.has(IResourceIconRenderer)) services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 	if (!services.has(IResourceLabelService)) services.registerInstance(IResourceLabelService, {
 		createGroup: () => new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
@@ -111,9 +118,11 @@ function registerDialogs(services: InstantiationService, owner: DisposableStore,
 		prompt: async () => { throw new Error('Unexpected prompt'); },
 		input: async () => ({ confirmed: false }),
 	});
-	const resolvers = owner.add(new MultiDiffSourceResolverService());
+	const resolvers = services.has(IMultiDiffSourceResolverService)
+		? services.get(IMultiDiffSourceResolverService)
+		: owner.add(new MultiDiffSourceResolverService());
 	if (sourceResolver) owner.add(resolvers.registerResolver(sourceResolver));
-	services.registerInstance(IMultiDiffSourceResolverService, resolvers);
+	if (!services.has(IMultiDiffSourceResolverService)) services.registerInstance(IMultiDiffSourceResolverService, resolvers);
 }
 
 test('Stanza multi-diff pane resolves visible comparisons and releases the complete session', async () => {
@@ -144,7 +153,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 		}) : undefined,
 	};
 	using editorServices = new DisposableStore();
-	const services = createCodeEditorServices(editorServices);
+	const services = editorServices.add(new InstantiationService());
 	registerDialogs(services, editorServices, externalSourceResolver);
 	using commands = new CommandService(services);
 	const menus = new MenuService(commands, contexts);
@@ -152,32 +161,31 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	services.registerInstance(IEditorService, {
 		openEditor: async (input: IResourceEditorInput) => { opened.push(input.resource.toString()); },
 	} as IEditorService);
-	const configuration = services.get(IConfigurationService);
-	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
 	const seenOptions: boolean[] = [];
 	const seenLimits: number[] = [];
-	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-		modelService: models,
+	services.registerInstance(ITextModelResourceService, models);
+	services.registerInstance(IDiffService, {
 		createComputationService: () => new PaneTestDiffComputationService(options => {
 			seenOptions.push(options.ignoreTrimWhitespace);
 			seenLimits.push(options.maxComputationTimeMs);
 		}),
+	});
+	services.registerInstance(IViewsService, {
+		focusView: async (viewId: string) => { focusedViews.push(viewId); return true; },
+	} as unknown as IViewsService);
+	services.registerInstance(IMenuService, menus);
+	services.registerInstance(IContextKeyService, contexts);
+	services.registerInstance(IContextMenuService, {
+		contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+		showContextMenu(options) { contextMenus.push(options.getActions!().map(action => action.label)); },
+		hideContextMenu() { },
+	});
+	registerCodeEditorServices(services);
+	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false, { overrideIdentifier: 'typescript' });
+	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
 		lineHeight: 24,
 		showLineNumbers: false,
-
-		editorService: {
-			openEditor: async (input: IResourceEditorInput) => { opened.push(input.resource.toString()); },
-		} as unknown as IEditorService,
-		viewsService: {
-			openView: async () => undefined,
-			focusView: async (viewId: string) => { focusedViews.push(viewId); return true; },
-			getViewWithId: () => null,
-		} as unknown as IViewsService,
-		fileActions: {
-			menuService: menus,
-			contextMenuProvider: { showContextMenu(options) { contextMenus.push(options.getActions().map(action => action.label)); } },
-			contextKeyService: contexts,
-		},
 	} satisfies MultiDiffEditorOptions);
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
@@ -197,6 +205,7 @@ test('Stanza multi-diff pane resolves visible comparisons and releases the compl
 	], 'Review changes', {
 		kind: 'external', providerId: 'sessions.turn', label: 'Current Turn', repositoryId: 'repo', branchName: 'feature/turn-preview',
 	}), new AbortController().signal);
+	assert.deepEqual(focusedViews, [], 'Opening a comparison must leave view selection to its caller');
 	assert.deepEqual(seenOptions, [false, true]);
 	await configuration.updateValue(CodeEditorConfiguration.diffIgnoreTrimWhitespace, false);
 	assert.deepEqual(seenOptions, [false, true, false]);
@@ -344,10 +353,8 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 		dispose: () => models.dispose(),
 		[Symbol.dispose]: () => models.dispose(),
 	};
-	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-		modelService: trackedModels,
-		createComputationService: () => new PaneTestDiffComputationService(),
-	} satisfies MultiDiffEditorOptions);
+	services.registerInstance(ITextModelResourceService, trackedModels);
+	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
 	pane.create(parent);
 	pane.layout({ width: 600, height: 240 });
 	const items = Array.from({ length: 100 }, (_, index) => ({
@@ -370,7 +377,7 @@ test('Multi-diff pane acquires text models as files enter the viewport and relea
 	editor.dispatchEvent(new dom.window.Event('scroll', { bubbles: true }));
 	await new Promise<void>(resolve => {
 		const ready = (): boolean => [...editor.querySelectorAll('.stanza-multi-diff-editor-section')].some(section =>
-			section.querySelector('.stanza-multi-diff-editor-title')?.textContent === 'file-99.ts'
+			section.getAttribute('aria-label') === 'file-99.ts'
 			&& section.querySelector('.stanza-diff-editor') !== null);
 		if (ready()) return resolve();
 		const observer = new dom.window.MutationObserver(() => {
@@ -429,10 +436,8 @@ test('Multi-diff evicts unused snapshots, reloads them for navigation and bounds
 		dispose: () => models.dispose(),
 		[Symbol.dispose]: () => models.dispose(),
 	};
-	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-		modelService: trackedModels,
-		createComputationService: () => new PaneTestDiffComputationService(),
-	} satisfies MultiDiffEditorOptions);
+	services.registerInstance(ITextModelResourceService, trackedModels);
+	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
 	pane.create(parent);
 	pane.layout({ width: 600, height: 240 });
 	const items = Array.from({ length: 12 }, (_, index) => ({
@@ -477,10 +482,8 @@ test('Multi-diff pane keeps available files open when one comparison fails to lo
 		dispose: () => models.dispose(),
 		[Symbol.dispose]: () => models.dispose(),
 	};
-	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-		modelService: partialModels,
-		createComputationService: () => new PaneTestDiffComputationService(),
-	} satisfies MultiDiffEditorOptions);
+	services.registerInstance(ITextModelResourceService, partialModels);
+	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
 	pane.create(parent);
 	pane.layout({ width: 600, height: 300 });
 	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/partial'), [
@@ -527,10 +530,8 @@ for (const cancellation of ['signal', 'clear'] as const) {
 			dispose: () => models.dispose(),
 			[Symbol.dispose]: () => models.dispose(),
 		};
-		using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-			modelService: delayedModels,
-			createComputationService: () => new PaneTestDiffComputationService(),
-		} satisfies MultiDiffEditorOptions);
+		services.registerInstance(ITextModelResourceService, delayedModels);
+		using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
 		pane.create(parent);
 		pane.layout({ width: 400, height: 240 });
 		const controller = new AbortController();
@@ -567,10 +568,8 @@ test('Multi-diff collapse command updates mounted and remounted comparisons and 
 		if (key === CodeEditorConfiguration.diffHideUnchangedRegionsEnabled && value === false && configuration.getValue(key) === false) return;
 		await updateValue(key, value);
 	};
-	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-		modelService: models,
-		createComputationService: () => new PaneTestDiffComputationService(),
-	});
+	services.registerInstance(ITextModelResourceService, models);
+	using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
 	pane.create(parent);
 	pane.layout({ width: 1000, height: 900 });
 	const lines = Array.from({ length: 36 }, (_, index) => `shared ${index + 1}`);
@@ -623,10 +622,8 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
-	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-		modelService: models,
-		createComputationService: () => new PaneTestDiffComputationService(),
-	} satisfies MultiDiffEditorOptions);
+	services.registerInstance(ITextModelResourceService, models);
+	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
 	pane.create(parent);
 	pane.layout({ width: 400, height: 200 });
 	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/wrap'), [{
@@ -658,7 +655,7 @@ test('Multi-diff configuration and registered file menus work in Chinese', async
 	try {
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		using resources = new DisposableStore();
-		const services = createCodeEditorServices(resources);
+		const services = resources.add(new InstantiationService());
 		registerDialogs(services, resources);
 		using contexts = new ContextKeyService();
 		using commands = new CommandService(services);
@@ -668,10 +665,11 @@ test('Multi-diff configuration and registered file menus work in Chinese', async
 		const editors = { openEditor: async (input: IResourceEditorInput) => { opened.push(input.resource.toString()); } } as IEditorService;
 		services.registerInstance(IEditorService, editors);
 		using models = uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {});
-		using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-			modelService: models, createComputationService: () => new PaneTestDiffComputationService(), editorService: editors,
-			fileActions: { menuService: menus, contextKeyService: contexts, contextMenuProvider: { showContextMenu() { } } },
-		});
+		services.registerInstance(ITextModelResourceService, models);
+		services.registerInstance(IMenuService, menus);
+		services.registerInstance(IContextKeyService, contexts);
+		registerCodeEditorServices(services);
+		using pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
 		const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 		pane.create(parent);
 		pane.layout({ width: 600, height: 400 });
@@ -840,9 +838,8 @@ suite('Multi-diff extension source lifecycle', () => {
 	const resolvers = services.get(IMultiDiffSourceResolverService);
 	resources.add(resolvers.registerResolver({ canHandleUri: uri => uri.scheme === 'ash-scm', resolveDiffSource: async () => { const input = await resolveFixtureInput(); return { resource: input.resource, resources: input.items, label: input.label, source: input.source }; }, sourceActions: () => [], primaryRepositoryAction: () => undefined }));
 	resources.add(updates.event(status => { if (status.repositoryId === 'repo') resolvers.notifyChanged(); }));
-	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {
-		modelService: tracked, createComputationService: () => new PaneTestDiffComputationService(),
-	});
+	services.registerInstance(ITextModelResourceService, tracked);
+	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
 	pane.create(parent);
 	pane.layout({ width: 600, height: 400 });
 	suiteSetup(async () => {
@@ -907,6 +904,72 @@ suite('Multi-diff extension source lifecycle', () => {
 
 
 
+suite('Multi-diff production service assembly', () => {
+	test('editor groups inject independent contexts into their multi-diff panes', async () => {
+		await import('../../browser/multiDiffEditor.contribution.js');
+		const { EditorPart } = await import('../../../../browser/parts/editor/editorPart.js');
+		const { createTestEditorServices } = await import('../../../../test/common/testEditorServices.js');
+		using resources = new DisposableStore();
+		const parentServices = resources.add(createTestEditorServices(undefined, undefined, browserEnvironment.window.document));
+		const services = registerMultiDiffTestServices(resources.add(parentServices.createChild()));
+		registerCodeEditorServices(services);
+		registerDialogs(services, resources);
+		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {}));
+		services.registerInstance(ITextModelResourceService, models);
+		const contexts = services.get(IContextKeyService);
+		const host = browserEnvironment.window.document.createElement('div');
+		browserEnvironment.window.document.body.append(host);
+		resources.add({ dispose: () => host.remove(), [Symbol.dispose]: () => host.remove() });
+		using editor = services.createInstance(EditorPart, host, { contextKeyService: contexts });
+		editor.layout({ width: 1200, height: 600 });
+		for (const name of ['first', 'second']) {
+			await editor.openEditor(createMultiDiffEditorInput(URI.parse(`ash-multi-diff:/${name}`), [{
+				label: `${name}.ts`,
+				original: { resource: URI.parse(`snapshot:/${name}-before`), initialText: 'before', readOnly: true },
+				modified: { resource: URI.parse(`snapshot:/${name}-after`), initialText: 'after', readOnly: true },
+			}], name), { pinned: true }, name === 'first' ? undefined : 'sideGroup');
+			assert.ok(editor.activePane instanceof MultiDiffEditor);
+		}
+		const first = editor.groups[0]!.activePane as InstanceType<typeof MultiDiffEditor>;
+		const second = editor.groups[1]!.activePane as InstanceType<typeof MultiDiffEditor>;
+		first.collapseAll();
+		const groups = host.querySelectorAll<HTMLElement>('.ash-editor-group');
+		assert.deepEqual([...groups].map(group => contexts.getContext(group).getValue(MultiDiffEditorAllCollapsed.key)), [true, false]);
+		second.collapseAll();
+		first.expandAll();
+		assert.deepEqual([...groups].map(group => contexts.getContext(group).getValue(MultiDiffEditorAllCollapsed.key)), [false, true]);
+		assert.equal(contexts.getValue(MultiDiffEditorAllCollapsed.key), undefined);
+	});
+
+	test('registered pane requires injected models and can recover after the host supplies them', async () => {
+		await import('../../browser/multiDiffEditor.contribution.js');
+		using resources = new DisposableStore();
+		const services = registerMultiDiffTestServices(createCodeEditorServices(resources));
+		registerDialogs(services, resources);
+		const host = browserEnvironment.window.document.createElement('div');
+		browserEnvironment.window.document.body.append(host);
+		resources.add({ dispose: () => host.remove(), [Symbol.dispose]: () => host.remove() });
+		const input = createMultiDiffEditorInput(URI.parse('ash-multi-diff:/injected'), [{
+			label: 'injected.ts',
+			original: { resource: URI.parse('snapshot:/injected-before'), initialText: 'before', readOnly: true },
+			modified: { resource: URI.parse('snapshot:/injected-after'), initialText: 'after', readOnly: true },
+		}], 'Injected comparison');
+		const descriptor = EditorPanes.getEditorPane(input)!;
+		const pane = resources.add(await descriptor.create({ input, instantiationService: services }));
+		pane.create(host);
+		pane.layout({ width: 600, height: 300 });
+		await assert.rejects(pane.setInput(input, new AbortController().signal), /Unknown service: textModelResourceService/);
+		assert.equal(host.querySelector('.stanza-multi-diff-editor-session'), null);
+		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, new BrowserTextResourceStore(new BootstrapTextFiles()), {}));
+		services.registerInstance(ITextModelResourceService, models);
+		await pane.setInput(input, new AbortController().signal);
+		assert.equal(host.querySelectorAll('.stanza-multi-diff-editor-section').length, 1);
+		assert.deepEqual(models.getModels().map(model => model.getText()), ['before', 'after']);
+		pane.clearInput();
+		assert.deepEqual(models.getModels(), []);
+	});
+});
+
 suite('MultiDiff binary and persistence', () => {
 	const sharedResources = new DisposableStore();
 	let sharedServices: InstantiationService;
@@ -919,7 +982,8 @@ suite('MultiDiff binary and persistence', () => {
 		const host = browserEnvironment.window.document.createElement('div');
 		browserEnvironment.window.document.body.append(host);
 		resources.add({ dispose: () => host.remove(), [Symbol.dispose]: () => host.remove() });
-		const pane = resources.add(sharedServices.createInstance(MultiDiffEditor, { modelService: models, createComputationService: () => new PaneTestDiffComputationService() }));
+		sharedServices.registerInstance(ITextModelResourceService, models);
+		const pane = resources.add(sharedServices.createInstance(MultiDiffEditor, {}));
 		pane.create(host);
 		pane.layout({ width: 600, height: 300 });
 		await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/warmup'), [{ label: 'warmup.ts', original: { resource: URI.parse('snapshot:/warmup-before'), initialText: 'before' }, modified: { resource: URI.parse('snapshot:/warmup-after'), initialText: 'after', readOnly: true } }], 'Warmup'), new AbortController().signal);
@@ -947,9 +1011,8 @@ suite('MultiDiff binary and persistence', () => {
 		const host = browserEnvironment.window.document.createElement('div');
 		browserEnvironment.window.document.body.append(host);
 		resources.add({ dispose: () => host.remove(), [Symbol.dispose]: () => host.remove() });
-		const pane = resources.add(services.createInstance(MultiDiffEditor, {
-			modelService: models, createComputationService: () => new PaneTestDiffComputationService(),
-		}));
+		services.registerInstance(ITextModelResourceService, models);
+		const pane = resources.add(services.createInstance(MultiDiffEditor, {}));
 		pane.create(host);
 		pane.layout({ width: 600, height: 300 });
 		await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/detected-binary'), [{
@@ -983,9 +1046,8 @@ suite('MultiDiff binary and persistence', () => {
 		const host = browserEnvironment.window.document.createElement('div');
 		browserEnvironment.window.document.body.append(host);
 		resources.add({ dispose: () => host.remove(), [Symbol.dispose]: () => host.remove() });
-		const pane = resources.add(services.createInstance(MultiDiffEditor, {
-			modelService: models, createComputationService: () => new PaneTestDiffComputationService(),
-		}));
+		services.registerInstance(ITextModelResourceService, models);
+		const pane = resources.add(services.createInstance(MultiDiffEditor, {}));
 		pane.create(host);
 		pane.layout({ width: 600, height: 300 });
 		const items = [

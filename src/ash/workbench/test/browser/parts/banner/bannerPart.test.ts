@@ -58,6 +58,11 @@ suite('banner browser component', () => {
 			const editorTop = (await page.locator('[data-part="editor"]').boundingBox())!.y;
 			await expect(banner).toBeHidden();
 			await editor.fill('unsaved draft');
+			await page.evaluate(() => window.ashBannerIntegration.setRecovery('recovering', 'permissions'));
+			await expect(banner).toContainText(locale === 'zh' ? '正在应用工作区权限…' : 'Applying workspace permissions…');
+			await page.evaluate(() => window.ashBannerIntegration.setRecovery('recovering', 'workspace'));
+			await expect(banner).toContainText(locale === 'zh' ? '正在准备工作区…' : 'Preparing the workspace…');
+			await expect(editor).toBeFocused();
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('recovering'));
 			await expect(banner).toBeVisible();
 			await expect(banner).toContainText(locale === 'zh' ? '正在重新连接到 Agent Host…' : 'Reconnecting to the Agent Host…');
@@ -275,6 +280,7 @@ suite('banner browser component', () => {
 			await trust.click();
 			await dialog.getByRole('button', { name: zh ? '信任工作区' : 'Trust workspace', exact: true }).click();
 			await expect(heading).toHaveText(zh ? '已信任工作区' : 'Trusted workspace');
+			expect((await page.evaluate(() => window.ashBannerIntegration.state())).retries).toBe(1);
 			await expect(banner).toBeHidden();
 			await expect(editor).toBeFocused();
 			await expect(trust).toBeHidden();
@@ -364,6 +370,7 @@ suite('banner browser component', () => {
 			await save.click();
 			await dialog.getByRole('button', { name: zh ? '保存权限' : 'Save permissions', exact: true }).click();
 			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().grantWrites)).toBe(1);
+			expect((await page.evaluate(() => window.ashBannerIntegration.state())).retries).toBe(1);
 			await expect(banner).toBeHidden();
 			await expect(save).toBeDisabled();
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
@@ -439,7 +446,7 @@ suite('banner browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh']) {
-		test(`Workspace Trust requests coalesce, cancel with Escape and complete after recovery (${locale})`, async function () {
+		test(`Workspace Trust requests coalesce, cancel with Escape and complete after permission recovery (${locale})`, async function () {
 			const { page } = browserTests;
 			const zh = locale === 'zh';
 			await page.goto(`/banner.html?native${zh ? '&zh' : ''}`);

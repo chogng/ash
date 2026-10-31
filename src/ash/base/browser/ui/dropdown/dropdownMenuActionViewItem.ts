@@ -94,10 +94,15 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 
 		const cancellation = new CancellationTokenSource();
 		this.menuCancellation.value = cancellation;
+		// Native hosts can read context at selection time; bind both hosts to the opened menu's target.
+		const context = this.actionContext;
+		const actionRunner = this.actionRunner;
 		this.setVisible(true);
 		const options: IContextMenuDelegate = {
 			getAnchor: () => button.domNode,
 			getActions: () => actions,
+			getActionsContext: () => context,
+			actionRunner,
 			...this.getAnchorOptions?.(button.domNode),
 			cancellationToken: cancellation.token,
 			onHide: () => {

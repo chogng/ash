@@ -441,6 +441,7 @@ fn session_catalog() -> Vec<ash_protocol::Session> {
                 thread_id: ash_protocol::ThreadId::new(name).unwrap(),
                 title: "main".into(),
                 created_at_unix_ms: 1,
+                last_activity_at_unix_ms: Some(1),
                 completed_turn_duration_ms: 0,
                 active_turn_started_at_unix_ms: None,
                 usage: Default::default(),

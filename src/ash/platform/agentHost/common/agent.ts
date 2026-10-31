@@ -1,4 +1,5 @@
 import type { SkillReference } from './appServerApi.js';
+import type { URI } from '../../../base/common/uri.js';
 import type { ModelRef, ModelReasoningEffort, AdvisorConfig, AdvisorSelection } from './agentModels.js';
 import type { ApprovalMode } from './approvalModes.js';
 import type { WorkspaceTrustPermission } from '../../workspace/common/workspaceTrust.js';
@@ -126,6 +127,8 @@ export interface AgentSession {
 	readonly threads: readonly {
 		readonly threadId: string;
 		readonly title: string;
+		readonly createdAtUnixMs?: number;
+		readonly lastActivityAtUnixMs?: number;
 		readonly parentThreadId?: string | null;
 		readonly forkedFromId?: string | null;
 		readonly status: 'active' | 'archived';
@@ -182,6 +185,34 @@ export interface AgentRoleListResult {
 		readonly description: string;
 		readonly source: { readonly type: 'builtIn'; } | { readonly type: 'directory'; readonly id: string; };
 	}[];
+}
+
+/** Validated source definitions for inspection; visibility does not grant launch permission. */
+export interface AgentRoleDefinition {
+	readonly name: string;
+	readonly description: string;
+	readonly source: AgentRoleListResult['agents'][number]['source'];
+	readonly launch: 'any' | 'workflow' | 'delegation' | 'host';
+	readonly callers: readonly string[];
+	readonly delegates: readonly string[] | null;
+	readonly resource?: URI;
+	readonly contentDigest: string;
+	readonly model: string | null;
+	readonly tools: readonly string[] | null;
+	readonly disallowedTools: readonly string[];
+	readonly requiredTools: readonly string[];
+	readonly delegationTools: readonly string[] | null;
+	readonly disallowedDelegationTools: readonly string[];
+	readonly requiredDelegationTools: readonly string[];
+	readonly skills: readonly string[] | null;
+	readonly requiredSkills: readonly string[];
+	readonly instructions: readonly string[];
+	readonly prompt: string;
+}
+
+export interface AgentRoleCatalog {
+	readonly agents: readonly AgentRoleDefinition[];
+	readonly diagnostics: readonly string[];
 }
 
 export interface TurnStartResult {

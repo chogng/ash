@@ -155,7 +155,7 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 					}
 				} finally {
 					// Even a partially saved multi-root change must be reflected in the active environment.
-					if (written) { assertTarget(); await this.api.recovery!.reconnect(); }
+					if (written) { assertTarget(); await this.api.recovery!.reconnect({ reason: 'permissions' }); }
 				}
 			} finally {
 				this.permissionChange = undefined;

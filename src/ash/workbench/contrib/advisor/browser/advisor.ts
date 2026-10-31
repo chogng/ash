@@ -33,7 +33,7 @@ export class AdvisorConfigurationPicker extends Disposable {
 				...navigation,
 				...current ? [{
 					label: current.enabled ? localize('chat.settings.advisorDisable', 'Turn Advisor off') : localize('chat.settings.advisorEnable', 'Turn Advisor on'),
-					description: `${current.model.provider}/${current.model.model}`,
+					description: current.model ? `${current.model.provider}/${current.model.model}` : localize('advisor.settings.inherit', 'Inherit from chat'),
 					change: { type: 'setEnabled' as const, enabled: !current.enabled },
 				}, {
 					label: localize('chat.settings.advisorClear', 'Clear saved Advisor model'),
@@ -41,7 +41,7 @@ export class AdvisorConfigurationPicker extends Disposable {
 				}] : [],
 				...models.filter(entry => this.languageModels.isModelVisible(entry.model)).map(entry => ({
 					label: entry.displayName,
-					description: current && modelRefIdentity(current.model) === modelRefIdentity(entry.model)
+					description: current?.model && modelRefIdentity(current.model) === modelRefIdentity(entry.model)
 						? localize('chat.settings.current', 'Current') : `${entry.model.provider}/${entry.model.model}`,
 					change: { type: 'selectModel' as const, model: entry },
 				})),

@@ -89,6 +89,83 @@ suite('quickAccess browser component', () => {
 		});
 	}
 
+	const presentationVariants = [
+		{ locale: 'en', theme: 'light', dir: 'ltr', host: 'main' },
+		{ locale: 'zh-CN', theme: 'dark', dir: 'ltr', host: 'auxiliary' },
+		{ locale: 'en', theme: 'hc', dir: 'ltr', host: 'main' },
+		{ locale: 'en', theme: 'hcLight', dir: 'rtl', host: 'auxiliary' },
+	];
+	for (const { locale, theme, dir, host } of presentationVariants) for (const layout of ['flat', 'modern'] as const) test(`Quick Access follows live Workbench row presentation for virtual results (${locale}, ${layout}, ${theme}, ${dir}, ${host})`, async () => {
+		const { page } = browserTests;
+		if (locale === 'zh-CN') await page.setViewportSize({ width: 420, height: 640 });
+		await page.goto(`/quickAccess.html?manyCommands&locale=${locale}&layoutStyle=${layout}&theme=${theme}&dir=${dir}&host=${host}`);
+		await page.getByRole('button', { name: 'Open commands' }).click();
+		const picker = page.getByRole('dialog');
+		const input = picker.getByRole('combobox');
+		await input.fill('>Bulk command');
+		const active = picker.locator('.ash-list-row.is-active');
+		await expect(active).toHaveAttribute('aria-setsize', '600');
+		const readGeometry = () => active.evaluate(row => {
+			const scrollable = row.closest('.ash-list-scrollable')!;
+			const track = scrollable.querySelector('.ash-scrollbar-track-vertical')!.getBoundingClientRect();
+			const viewport = scrollable.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+			const bounds = row.getBoundingClientRect();
+			const viewportBounds = viewport.getBoundingClientRect();
+			const picker = row.closest('.ash-quick-pick')!;
+			const pickerBounds = picker.getBoundingClientRect();
+			const pickerStyle = getComputedStyle(picker);
+			const leftInset = bounds.left - pickerBounds.left - parseFloat(pickerStyle.borderLeftWidth);
+			const rightInset = pickerBounds.right - bounds.right - parseFloat(pickerStyle.borderRightWidth);
+			const content = row.querySelector('.ash-quick-pick-row-content')!.getBoundingClientRect();
+			const action = row.querySelector<HTMLElement>('.ash-quick-pick-row-action')!;
+			const actionBounds = action.getBoundingClientRect();
+			const style = getComputedStyle(row);
+			const rtl = style.direction === 'rtl';
+			return {
+				gap: rtl ? bounds.left - track.right : track.left - bounds.right,
+				start: rtl ? viewportBounds.right - bounds.right : bounds.left - viewportBounds.left,
+				end: rtl ? bounds.left - viewportBounds.left : viewportBounds.right - bounds.right,
+				outerStart: rtl ? rightInset : leftInset,
+				outerEnd: rtl ? leftInset : rightInset,
+				contentGap: rtl ? content.left - track.right : track.left - content.right,
+				actionGap: rtl ? actionBounds.left - track.right : track.left - actionBounds.right,
+				actionHit: action.contains(document.elementFromPoint(actionBounds.x + actionBounds.width / 2, actionBounds.y + actionBounds.height / 2)),
+				radius: style.borderTopLeftRadius,
+				trackWidth: track.width,
+				nativeGutter: viewport.offsetWidth - viewport.clientWidth,
+				width: bounds.width,
+			};
+		});
+		const activeId = await active.getAttribute('id');
+		for (const style of [layout, layout === 'modern' ? 'flat' : 'modern', layout] as const) {
+			await page.evaluate(style => window.ashQuickAccessIntegration.setLayoutStyle(style), style);
+			await expect.poll(readGeometry).toMatchObject(style === 'modern'
+				? { gap: -2, start: 6, end: 6, outerStart: 6, outerEnd: 6, radius: '4px', trackWidth: 8, nativeGutter: 0 }
+				: { gap: -10, start: 0, end: 0, outerStart: 0, outerEnd: 0, radius: '0px', trackWidth: 10, nativeGutter: 0 });
+			expect((await readGeometry()).contentGap).toBeGreaterThanOrEqual(0);
+			expect((await readGeometry()).actionGap).toBeGreaterThanOrEqual(0);
+			expect((await readGeometry()).actionHit).toBe(true);
+			await expect(input).toBeFocused();
+			await expect(input).toHaveAttribute('aria-activedescendant', activeId!);
+			await browserTests.info.attach(`quick-access-presentation-${locale}-${layout}-${style}.png`, { body: await picker.screenshot(), contentType: 'image/png' });
+		}
+		const geometry = await readGeometry();
+		await input.press('ArrowUp');
+		await expect(active).toHaveAttribute('aria-posinset', '600');
+		await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+		await expect(input).toBeFocused();
+		await input.fill('>Bulk command 599');
+		await expect(active).toBeInViewport();
+		await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('Bulk command 599');
+		await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+		await input.fill('>Geometry result sentinel');
+		await expect(active).toHaveAttribute('aria-setsize', '1');
+		expect((await active.boundingBox())!.width).toBe(geometry.width);
+		const sparseGeometry = await readGeometry();
+		expect(sparseGeometry.outerStart).toBe(sparseGeometry.outerEnd);
+		await browserTests.info.attach(`quick-access-shared-geometry-${locale}-${layout}.png`, { body: await picker.screenshot(), contentType: 'image/png' });
+	});
+
 	test('Quick Input releases an interrupted drag when the picker closes', async () => {
 		const { page } = browserTests;
 		await page.goto('/quickAccess.html');

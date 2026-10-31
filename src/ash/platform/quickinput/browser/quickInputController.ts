@@ -13,6 +13,7 @@ import { dispatchQuickInputKeyDown } from './quickInputActions.js';
 import { QuickPick, type BrowserQuickInputHostOptions, type IBrowserQuickInputHost } from './quickInput.js';
 import { QuickInputBox } from './quickInputBox.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../storage/common/storage.js';
+import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 
 const viewStateStorageKey = 'workbench.quickInput.viewState';
 
@@ -46,7 +47,10 @@ export class QuickInputController extends Disposable {
 		readonly getContext?: (target: Node) => Context;
 		readonly shouldRestoreFocus?: () => boolean;
 		readonly onDispose?: () => void;
-	}, @IStorageService private readonly storageService: IStorageService) {
+	},
+		@IStorageService private readonly storageService: IStorageService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) {
 		super();
 		this.host = h(container.ownerDocument, 'div');
 		this.host.className = 'ash-quick-input-host';
@@ -66,6 +70,7 @@ export class QuickInputController extends Disposable {
 			}
 		}));
 		this._register(addDisposableListener(this.host.ownerDocument, 'mousedown', event => {
+			if (this.active instanceof QuickPick && this.active.ignoreFocusOut) return;
 			const anchor = this.active instanceof QuickPick ? this.active.anchor : undefined;
 			if (this.active && !event.composedPath().includes(this.host) && !(isHTMLElement(anchor) && event.composedPath().includes(anchor))) {
 				this.active.hide();
@@ -111,14 +116,14 @@ export class QuickInputController extends Disposable {
 
 	public createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		this.assertNotDisposed();
-		const quickPick = new QuickPick<TItem>(this.host, {
+		const quickPick = this.instantiationService.createInstance(QuickPick<TItem>, this.host, {
 			onShow: candidate => this.show(candidate),
 			onHide: candidate => this.hide(candidate),
 			onDispose: candidate => {
 				this.quickInputs.delete(candidate);
 				this.hide(candidate);
 			},
-		});
+		} satisfies BrowserQuickInputHostOptions);
 		this.quickInputs.add(quickPick);
 		return quickPick;
 	}
@@ -318,11 +323,11 @@ export class QuickInputController extends Disposable {
 				// Native focus changes briefly pass through body before reaching the trigger.
 				// Check after that transition; leaving the document produces no focusin event.
 				const focused = this.host.ownerDocument.activeElement;
-				if (!quickPick.element.contains(focused) && !anchor.contains(focused)) quickPick.hide();
+				if (!quickPick.ignoreFocusOut && !quickPick.element.contains(focused) && !anchor.contains(focused)) quickPick.hide();
 			}, 0));
 			this.visibleListeners.add(quickPick.onDidBlur(() => checkFocus.schedule()));
 			this.visibleListeners.add(addDisposableListener(this.host.ownerDocument, 'focusin', event => {
-				if (!event.composedPath().includes(this.host) && !event.composedPath().includes(anchor)) quickPick.hide();
+				if (!quickPick.ignoreFocusOut && !event.composedPath().includes(this.host) && !event.composedPath().includes(anchor)) quickPick.hide();
 			}));
 		}
 		this.shown.fire();

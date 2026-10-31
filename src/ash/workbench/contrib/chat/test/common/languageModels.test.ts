@@ -87,6 +87,27 @@ function modelEntry(model = 'example', provider = 'openai'): ModelListResult['mo
 	};
 }
 
+test('Usable capacity changes reach consumers independently of compaction budgets and old snapshots', async () => {
+	using resources = new DisposableStore();
+	const { source, models } = catalogFixture(resources);
+	const entry = modelEntry('gpt-6.1-sol');
+	entry.context_window = 500000;
+	entry.available_context_window = 425000;
+	entry.usable_context_window = 475000;
+	source.catalog = [entry];
+	const first = await models.refreshModels();
+	assert.equal(first[0].usableContextWindow, 475000);
+	const before = source.changes;
+	entry.usable_context_window = 450000;
+	const second = await models.refreshModels();
+	assert.equal(second[0].usableContextWindow, 450000);
+	assert.equal(second[0].contextWindow, 500000);
+	assert.equal(first[0].usableContextWindow, 475000);
+	assert.equal(source.changes, before + 1);
+	await models.refreshModels();
+	assert.equal(source.changes, before + 1);
+});
+
 test('task recommendation changes refresh candidate lists without changing selections or previous snapshots', async () => {
 	using resources = new DisposableStore();
 	const { source, models } = catalogFixture(resources);

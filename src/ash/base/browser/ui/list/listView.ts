@@ -112,6 +112,7 @@ export class ListView<T> extends Disposable {
 		if (options.domFocusable === true) this.element.tabIndex = 0;
 		this.element.style.overflow = options.scrolling === 'external' || options.scrolling === 'managed' ? 'visible' : 'auto';
 		if (options.scrolling === 'managed') {
+			this.element.classList.add('ash-list-managed');
 			if (options.getHeight) this.element.style.position = 'relative';
 			this.scrollable = this._register(new ScrollableElement(container, { direction: 'vertical', tabIndex: -1, mouseWheelSmoothScroll: options.smoothScrolling }));
 			this.scrollable.setContent(this.element);

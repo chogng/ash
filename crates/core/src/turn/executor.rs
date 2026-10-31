@@ -503,6 +503,23 @@ impl TurnExecutor {
     /// lock. Completion, failure, and cancellation remain durable Core transitions.
     pub fn start(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
         let mut executor = self.clone();
+        let snapshot = self.threads.read_thread(thread_id)?;
+        let turn = snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == turn_id)
+            .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+        // Older Goal continuations may contain an unresolved Advisor preference. Reject them
+        // before taking the shared model lock so recovery cannot disrupt other Sessions.
+        let advisor_model = turn
+            .advisor
+            .as_ref()
+            .map(|advisor| {
+                advisor.model.as_ref().ok_or_else(|| {
+                    CoreError::Execution("Turn Advisor configuration has no frozen model".into())
+                })
+            })
+            .transpose()?;
         // Duplicate wakeups for one Turn must share the very same connection snapshot.
         let mut models = self
             .turn_models
@@ -517,12 +534,6 @@ impl TurnExecutor {
             executor.policy = Arc::clone(policy);
             Arc::clone(model)
         } else {
-            let snapshot = self.threads.read_thread(thread_id)?;
-            let turn = snapshot
-                .turns
-                .iter()
-                .find(|turn| &turn.turn_id == turn_id)
-                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
             let selection = turn
                 .model
                 .as_ref()
@@ -535,9 +546,9 @@ impl TurnExecutor {
                 .policy_source
                 .snapshot(Arc::clone(&model))?
                 .unwrap_or_else(|| Arc::clone(&self.policy_source));
-            if let Some(advisor) = &turn.advisor {
+            if let Some(advisor_model) = advisor_model {
                 let auxiliary = model
-                    .snapshot(ModelSelection::Session(&advisor.model))?
+                    .snapshot(ModelSelection::Session(advisor_model))?
                     .unwrap_or_else(|| Arc::clone(&model));
                 self.threads
                     .turn_tool_models
@@ -545,7 +556,7 @@ impl TurnExecutor {
                     .map_err(|_| CoreError::Execution("Turn model state lock poisoned".into()))?
                     .insert(
                         thread_id.clone(),
-                        (turn_id.clone(), advisor.model.clone(), auxiliary),
+                        (turn_id.clone(), advisor_model.clone(), auxiliary),
                     );
             }
             models.insert(

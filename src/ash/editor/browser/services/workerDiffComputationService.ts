@@ -26,10 +26,11 @@ export class WorkerDiffComputationService extends Disposable implements IDocumen
 		const cancellation = cancellationToken.onCancellationRequested(() => controller.abort(new CancellationError()));
 		try {
 			throwIfCancelled(cancellationToken);
+			const languageId = original.getLanguageId();
 			const request: DiffComputationRequest = {
 				original: snapshot(original),
 				modified: snapshot(modified),
-				options,
+				options: { ...options, languageId: languageId === modified.getLanguageId() ? languageId : undefined },
 			};
 			if (request.original.text === request.modified.text) {
 				throwIfCancelled(cancellationToken);

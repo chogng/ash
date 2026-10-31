@@ -122,6 +122,9 @@ export class SessionsAgentSessionService implements IAgentSessionService {
 			return result;
 		});
 	}
+	readRoleCatalog(): ReturnType<IAgentSessionService['readRoleCatalog']> {
+		return this.run(undefined, scope => scope.services.host.session.readRoleCatalog());
+	}
 }
 function projectResult<T extends SessionResult>(value: T, scope: ISessionProviderScope): T {
 	return { ...value, session: mapAgentSession(value.session, scope.identity), agentTree: { ...value.agentTree, roots: value.agentTree.roots.map(node => mapAgentExecutionNode(node, scope.identity)) } };

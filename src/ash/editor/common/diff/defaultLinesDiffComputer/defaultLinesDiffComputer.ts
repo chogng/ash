@@ -64,6 +64,7 @@ function* diffLines(original: readonly string[], modified: readonly string[], op
 				modified[modifiedStart + right]!,
 				originalStart + left + 1,
 				modifiedStart + right + 1,
+				options.languageId,
 			)));
 			yield;
 		}
@@ -153,7 +154,7 @@ function lineIndentation(line: string): number {
 	return indentation < 0 ? 0 : indentation;
 }
 
-function* diffCharacters(original: string, modified: string, originalLineNumber: number, modifiedLineNumber: number): Generator<void, RangeMapping[]> {
+function* diffCharacters(original: string, modified: string, originalLineNumber: number, modifiedLineNumber: number, languageId: string | undefined): Generator<void, RangeMapping[]> {
 	const originalTokens = diffTokens(original);
 	const modifiedTokens = diffTokens(modified);
 	const originalContent = tokenContentRange(originalTokens.values);
@@ -192,31 +193,45 @@ function* diffCharacters(original: string, modified: string, originalLineNumber:
 		originalIndex = originalMatch + 1;
 		modifiedIndex = modifiedMatch + 1;
 	}
-	return coalesceCharacterChanges(original, changes, matchingWords);
+	return coalesceCharacterChanges(original, modified, changes, matchingWords, languageId);
 }
 
-function coalesceCharacterChanges(original: string, changes: readonly RangeMapping[], matchingWords: number): RangeMapping[] {
-	if (matchingWords === 0 && changes.length > 1) {
-		// Spaces and delimiters alone do not establish shared code in a rewrite.
-		const first = changes[0]!;
-		const last = changes.at(-1)!;
-		return [new RangeMapping(first.originalRange.plusRange(last.originalRange), first.modifiedRange.plusRange(last.modifiedRange))];
-	}
+function coalesceCharacterChanges(original: string, modified: string, changes: readonly RangeMapping[], matchingWords: number, languageId: string | undefined): RangeMapping[] {
+	const originalNameHyphens = nameHyphens(original, languageId);
+	const modifiedNameHyphens = nameHyphens(modified, languageId);
 	const result: RangeMapping[] = [];
 	for (const change of changes) {
 		const previous = result.at(-1);
 		if (previous) {
 			const gap = original.slice(previous.originalRange.endColumn - 1, change.originalRange.startColumn - 1);
+			const isNameHyphen = /^-+$/u.test(gap)
+				&& originalNameHyphens.has(previous.originalRange.endColumn - 1)
+				&& modifiedNameHyphens.has(previous.modifiedRange.endColumn - 1);
 			const beforeLength = Math.max(previous.originalRange.endColumn - previous.originalRange.startColumn, previous.modifiedRange.endColumn - previous.modifiedRange.startColumn);
 			const afterLength = Math.max(change.originalRange.endColumn - change.originalRange.startColumn, change.modifiedRange.endColumn - change.modifiedRange.startColumn);
-			// Nearby renamed words form one phrase or argument list. Keep unchanged
-			// identifiers, operators and call boundaries as meaningful separators.
-			if (gap.length <= 4 && /^[\s,.]*$/u.test(gap) && Math.min(beforeLength, afterLength) > gap.length) {
+			// Internal name hyphens join neighboring edits, including single-letter names.
+			// A rewrite may span incidental punctuation, but subtraction still separates expressions.
+			if (isNameHyphen || matchingWords === 0 && !gap.includes('-')
+				|| gap.length <= 4 && /^[\s,.]*$/u.test(gap) && Math.min(beforeLength, afterLength) > gap.length) {
 				result[result.length - 1] = new RangeMapping(previous.originalRange.plusRange(change.originalRange), previous.modifiedRange.plusRange(change.modifiedRange));
 				continue;
 			}
 		}
 		result.push(change);
+	}
+	return result;
+}
+
+/** Only stylesheet identifiers unambiguously allow bare hyphens; a-b is subtraction in code. */
+function nameHyphens(text: string, languageId: string | undefined): ReadonlySet<number> {
+	const result = new Set<number>();
+	if (languageId !== 'css' && languageId !== 'scss' && languageId !== 'less') {
+		return result;
+	}
+	for (const name of text.matchAll(/(?<![-\p{ID_Continue}])(?:--|-?[_\p{ID_Start}])[-_\p{ID_Continue}]*/gu)) {
+		for (const hyphens of name[0].matchAll(/(?<=[_\p{ID_Continue}])-+(?=[_\p{ID_Continue}])/gu)) {
+			result.add(name.index + hyphens.index);
+		}
 	}
 	return result;
 }

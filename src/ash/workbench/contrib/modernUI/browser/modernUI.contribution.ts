@@ -1,4 +1,5 @@
 import { Disposable, DisposableMap, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DEFAULT_SCROLLBAR_SIZE, setGlobalDefaultScrollbarSize } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
@@ -31,6 +32,7 @@ export class ModernUIContribution extends Disposable {
 			if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) this.update();
 		}));
 		this._register(toDisposable(() => {
+			setGlobalDefaultScrollbarSize(DEFAULT_SCROLLBAR_SIZE);
 			this.clear(layoutService.mainContainer);
 			for (const window of this.auxiliaryWindows) {
 				this.clear(window.container);
@@ -42,6 +44,7 @@ export class ModernUIContribution extends Disposable {
 
 	private update(): void {
 		const style = this.getStyle();
+		setGlobalDefaultScrollbarSize(style === 'modern' ? 8 : DEFAULT_SCROLLBAR_SIZE);
 		this.layoutService.setLayoutStyle(style);
 		this.applyTo(this.layoutService.mainContainer, style);
 		for (const window of this.auxiliaryWindows) this.applyTo(window.container, style);

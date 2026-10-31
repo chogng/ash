@@ -10,6 +10,7 @@ import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { diffEditorDefaultOptions, type HideUnchangedRegionsOptions } from '../../../common/config/diffEditor.js';
 import { Range } from '../../../common/core/range.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
+import { StableEditorBottomScrollState, StableEditorScrollState } from '../../stableEditorScroll.js';
 import { LineDiffKind, LineDiffRows, type LineDiff, type LineDiffRow } from '../../../common/diff/lineDiff.js';
 import { LineRangeMapping, type RangeMapping } from '../../../common/diff/rangeMapping.js';
 import type { MovedText } from '../../../common/diff/linesDiffComputer.js';
@@ -563,6 +564,12 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 	}
 
 	private refresh(): void {
+		// Pending comparisons can remove alignment zones before the next result
+		// adds them back. Preserve a model row, including the last row at EOF,
+		// rather than a pixel offset that can be clamped by that temporary layout.
+		const scrollState = this.modifiedEditor.getScrollTop() + this.modifiedEditor.getLayoutInfo().height >= this.modifiedEditor.getContentHeight()
+			? StableEditorBottomScrollState.capture(this.modifiedEditor)
+			: StableEditorScrollState.capture(this.modifiedEditor);
 		this.activeChangeRow = -1;
 		this.accessibilityStatusElement.textContent = this.model.state.kind === 'loading'
 			? localize('diffEditor.computing', 'Computing differences')
@@ -574,6 +581,7 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		this.diffDecorations.update(this.displayedDiff?.rows ?? LineDiffRows.empty, this.showInlineChanges, this.diffOptions.renderIndicators);
 		this.overviewRuler.setRows(this.displayedDiff?.rows ?? LineDiffRows.empty);
 		this.layout({ width: this.viewportWidth, height: this.viewportHeight });
+		scrollState.restore(this.modifiedEditor);
 	}
 
 	private updateFeatures(): void {

@@ -364,6 +364,7 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.retirement?.shutdownDate === candidate.retirement?.shutdownDate
 			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model)
 			&& entry.contextWindow === candidate.contextWindow
+			&& entry.usableContextWindow === candidate.usableContextWindow
 			&& entry.defaultContextWindow === candidate.defaultContextWindow
 			&& entry.maximumContextWindow === candidate.maximumContextWindow
 			&& entry.selectedAcceleration === candidate.selectedAcceleration

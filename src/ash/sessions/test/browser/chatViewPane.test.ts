@@ -67,7 +67,8 @@ import { JSDOM } from 'jsdom';
 import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from '../../../../../.build/protocol/typescript/index.js';
 import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from '../../../platform/agentHost/common/agent.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
-import type { IAction } from '../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../base/common/actions.js';
+import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
@@ -83,7 +84,9 @@ import { IContextMenuService } from '../../../platform/contextview/browser/conte
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem, type IQuickPickItemButton } from '../../../platform/quickinput/common/quickInput.js';
+import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { ForkConversationActionId } from '../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import type { IPaneComposite } from '../../../workbench/common/panecomposite.js';
 import { IViewDescriptorService, ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
@@ -123,6 +126,7 @@ import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import type { IOpenerService, OpenOptions } from '../../../platform/opener/common/opener.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
+import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { FileNotFoundError } from '../../../platform/files/common/files.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
@@ -482,6 +486,9 @@ test('Chat title and history switching retain conversations and drafts', async (
 			shownContextMenuActions = options.getActions();
 		},
 	} as unknown as IContextMenuService;
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(IContextMenuService, contextMenuService);
+	services.registerInstance(INotificationService, notifications);
 	using pane = new ChatViewPane(
 		dom.window.document.body,
 		{
@@ -543,6 +550,23 @@ test('Chat title and history switching retain conversations and drafts', async (
 		['New Chat', '', 'Show Chat History', 'More Actions'],
 	);
 	for (const button of toolbar?.querySelectorAll('button') ?? []) assert.ok(button.querySelector('.ash-icon'));
+	const historyButton = toolbar?.querySelector<HTMLButtonElement>(`[data-action-id="${SHOW_CHAT_HISTORY_COMMAND_ID}"] button`);
+	assert.ok(historyButton);
+	assert.equal(historyButton.getAttribute('aria-haspopup'), 'dialog');
+	for (const anchor of [historyButton, titleButton]) {
+		anchor.focus();
+		anchor.click();
+		await nextTask();
+		const picker = quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+		assert.equal(picker.anchor, anchor);
+		assert.equal(picker.anchorPosition, 'below');
+		assert.equal(picker.anchorAlignment, 'right');
+		assert.equal(anchor.getAttribute('aria-expanded'), 'true');
+		await quickInput.cancel();
+		await nextTask();
+		assert.equal(anchor.getAttribute('aria-expanded'), 'false');
+		assert.equal(dom.window.document.activeElement, anchor);
+	}
 	newChatButton.click();
 	const titleDraftId = sessions.activeUntitledSession?.untitledSessionId;
 	assert.ok(titleDraftId);
@@ -1707,6 +1731,8 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 		getViewWithId: () => undefined,
 	} as unknown as IViewsService);
 	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
+	services.registerInstance(INotificationService, notifications);
 	await sessions.initialize();
 
 	const picking = commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
@@ -1739,6 +1765,84 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 		null,
 	);
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Chat history More captures the selected branch and separates lifecycle actions (${locale})`, async () => {
+		initializeTestLocalization(locale);
+		try {
+			const dom = new JSDOM('<!doctype html><body><button>More</button></body>');
+			using domCleanup = toDisposable(() => dom.window.close());
+			using services = new InstantiationService();
+			using configuration = new WorkbenchConfigurationService();
+			using storage = createTestStorage();
+			using sessions = new SessionsManagementService(fakeApi({ sessions: [session('source', 'branch'), session('other', 'foreground')] }).api);
+			await sessions.initialize();
+			const draft = sessions.createUntitledSession('Unsent draft');
+			using hidden = new Emitter<void>();
+			using triggered = new Emitter<{ item: IQuickPickItem; button: IQuickPickItemButton; anchor: HTMLElement; }>();
+			const picker: IQuickPick<IQuickPickItem> = {
+				type: QuickInputType.QuickPick, items: [], activeItems: [], selectedItems: [],
+				ariaLabel: '', placeholder: '', value: 'Keep search', valueSelection: { start: 0, end: 0 },
+				sortByLabel: true, canSelectMany: false, filterValue: value => value,
+				onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
+				onDidAccept: Event.None, onDidChangeValue: Event.None, onDidBlur: Event.None, onDidChangeSelection: Event.None,
+				show() { }, hide() { hidden.fire(); }, focus() { }, accept() { }, toggle() { }, dispose() { },
+				[Symbol.dispose]() { this.dispose(); },
+			};
+			let menu: IContextMenuDelegate | undefined;
+			const calls: { id: string; target: unknown; }[] = [];
+			services.registerInstance(ISessionsManagementService, sessions);
+			services.registerInstance(IConfigurationService, configuration);
+			services.registerInstance(IStorageService, storage);
+			services.registerInstance(IViewsService, {} as IViewsService);
+			services.registerInstance(INotificationService, notifications);
+			services.registerInstance(IQuickInputService, {
+				...quickInputServiceTestControls, input: async () => undefined,
+				createQuickPick: <T extends IQuickPickItem>() => picker as IQuickPick<T>,
+			});
+			services.registerInstance(ICommandService, {
+				onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
+				executeCommand: async <T>(id: string, target: unknown): Promise<T> => { calls.push({ id, target }); return undefined as T; },
+			});
+			services.registerInstance(IContextMenuService, {
+				contextMenuStyle: 'system', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+				showContextMenu: delegate => { menu = delegate as IContextMenuDelegate; }, hideContextMenu() { },
+			});
+			using commands = new CommandService(services);
+			const picking = commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+			const items = picker.items.filter((item): item is IQuickPickItem => !('type' in item));
+			const source = items.find(item => item.label === 'Session source')!;
+			const openMenu = (item: IQuickPickItem): readonly IAction[] => {
+				triggered.fire({ item, button: item.buttons!.find(button => button.id === 'more')!, anchor: dom.window.document.querySelector('button')! });
+				assert.ok(menu);
+				return menu.getActions();
+			};
+			const actions = openMenu(source);
+			assert.deepEqual(actions.map(action => action.id), ['rename', 'fork', Separator.ID, 'archive', 'delete']);
+			assert.deepEqual(actions.filter(action => !(action instanceof Separator)).map(action => action.label), locale === 'en'
+				? ['Rename', 'Fork', 'Archive', 'Delete'] : ['重命名', '分叉', '归档', '删除']);
+			sessions.selectThread('other', 'foreground');
+			for (const action of actions.filter(action => !(action instanceof Separator))) {
+				menu!.onHide?.(false);
+				await action.run();
+			}
+			assert.deepEqual(calls, [
+				{ id: 'agentSession.rename', target: 'source' },
+				{ id: ForkConversationActionId, target: { sessionId: 'source', threadId: 'branch' } },
+				{ id: 'agentSession.archive', target: 'source' },
+				{ id: 'agentSession.delete', target: 'source' },
+			]);
+			const draftActions = openMenu(items.find(item => item.label === draft.title)!);
+			assert.equal(draftActions.find(action => action.id === 'fork')?.enabled, false);
+			menu!.onHide?.(false);
+			await draftActions.find(action => action.id === 'delete')!.run();
+			assert.deepEqual(calls.at(-1), { id: 'agentSession.delete', target: { kind: 'untitled', session: draft } });
+			assert.equal(picker.value, 'Keep search');
+			picker.hide();
+			await picking;
+		} finally { resetNlsResolver(); }
+	});
+}
 
 test('ViewsService resolves, opens, and focuses contributed views', async () => {
 	const registry = ViewsRegistry;
@@ -5058,6 +5162,48 @@ test('Chat tabs retain independent drafts and closing only removes the opened pr
 	assert.equal(pane.element.querySelector('.ash-chat:not([hidden])')?.getAttribute('aria-labelledby'), title.querySelector('[role=tab][aria-selected=true]')?.id);
 });
 
+for (const kind of ['session', 'untitled'] as const) {
+	for (const trigger of ['click', 'Delete'] as const) {
+		test(`Closing the last ${kind} Chat tab by ${trigger} hides the side bar and retains its draft`, async () => {
+			await import('../../../workbench/browser/parts/auxiliarybar/auxiliaryBarActions.js');
+			const fixture = await createNavigationInputPane();
+			using resources = fixture.resources;
+			const { pane, sessions, dom, fake, layout, commandServices } = fixture;
+			const title = chatTitleContent(pane);
+			if (kind === 'untitled') {
+				sessions.createUntitledSession();
+				title.querySelector<HTMLButtonElement>('.ash-tab-label')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+				await waitFor(() => title.querySelectorAll('[role=tab]').length === 1);
+			}
+			const editor = dom.window.document.createElement('button');
+			dom.window.document.body.append(editor);
+			layout.showPart('editor');
+			layout.hasFocus = partId => partId === 'auxiliarybar' && title.contains(dom.window.document.activeElement);
+			commandServices.registerInstance(IEditorGroupsService, { activeGroup: { focus: () => editor.focus() } } as IEditorGroupsService);
+			const input = pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')!;
+			typeChatText(dom.window, input, 'Keep the final chat draft');
+			const selection = { active: sessions.active, untitled: sessions.activeUntitledSession, drafts: sessions.untitledSessions.length };
+			const label = title.querySelector<HTMLButtonElement>('.ash-tab-label')!;
+			label.focus();
+			if (trigger === 'click') {
+				title.querySelector<HTMLButtonElement>('.ash-tab-close-action button')!.click();
+			} else {
+				label.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+			}
+			await waitFor(() => !layout.isPartVisible('auxiliarybar'));
+			assert.equal(dom.window.document.activeElement, editor);
+			assert.deepEqual({ active: sessions.active, untitled: sessions.activeUntitledSession, drafts: sessions.untitledSessions.length }, selection);
+			assert.equal(title.querySelectorAll('[role=tab]').length, 1);
+			assert.equal(fake.archiveRequests.length, 0);
+			assert.equal(fake.stopRequests.length, 0);
+			assert.equal(fake.turnStartRequests.length, 0);
+			layout.showPart('auxiliarybar');
+			assert.equal(pane.element.querySelector('.ash-chat:not([hidden]) .ash-chat-textarea-input'), input);
+			assert.equal(input.value, 'Keep the final chat draft');
+		});
+	}
+}
+
 test('Chat restores opened tabs and leaves closed sessions available in the catalog', async () => {
 	using storage = createTestStorage();
 	const fixture = await createNavigationInputPane('{}', undefined, {}, storage);
@@ -5117,6 +5263,55 @@ test('Sessions layout is explicit, persists across recreation and starts with fu
 });
 
 for (const presentation of [AgentSessionsPresentation.Tabs, AgentSessionsPresentation.List]) {
+	for (const width of [380, 720]) {
+		test(`Sessions button waits for its layout setting before revealing ${presentation} at ${width}px`, async () => {
+			const fixture = await createNavigationInputPane(JSON.stringify({
+				[AGENT_SESSIONS_PRESENTATION_SETTING]: presentation,
+				[ChatConfiguration.ChatViewSessionsOrientation]: 'stacked',
+			}));
+			using resources = fixture.resources;
+			const { pane, commands, configuration, layout, input, dom } = fixture;
+			pane.layout(600, 0, width);
+			const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+			const sidebar = body.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+			const wasHidden = sidebar.hidden;
+			input.value = 'Keep this draft while saving';
+			input.focus();
+			const saving = new DeferredPromise<void>();
+			const releaseSave = new DeferredPromise<void>();
+			const updateValue = configuration.updateValue.bind(configuration);
+			configuration.updateValue = async (key, value) => {
+				assert.equal(key, ChatConfiguration.ChatViewSessionsOrientation);
+				await saving.complete();
+				await releaseSave.p;
+				await updateValue(key, value);
+			};
+			const resize = layout.resizePart.bind(layout);
+			const requests: WorkbenchPartId[] = [];
+			layout.resizePart = (part, size) => {
+				requests.push(part);
+				resize(part, size);
+				pane.layout(size.height, 0, size.width);
+			};
+			const opening = commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+			await saving.p;
+			try {
+				assert.equal(sidebar.hidden, wasHidden);
+				assert.equal(body.classList.contains('sessions-side-by-side'), false);
+				assert.equal(dom.window.document.activeElement, input);
+				assert.deepEqual(requests, []);
+			} finally {
+				await releaseSave.complete();
+				await opening;
+			}
+			assert.equal(sidebar.hidden, false);
+			assert.equal(body.classList.contains('sessions-side-by-side'), true);
+			assert.equal(sidebar.contains(dom.window.document.activeElement), true);
+			assert.equal(body.querySelector('.ash-chat-textarea-input'), input);
+			assert.equal(input.value, 'Keep this draft while saving');
+		});
+	}
+
 	test(`Sessions button widens its host from ${presentation} without replacing the draft`, async () => {
 		const fixture = await createNavigationInputPane(JSON.stringify({
 			[AGENT_SESSIONS_PRESENTATION_SETTING]: presentation,

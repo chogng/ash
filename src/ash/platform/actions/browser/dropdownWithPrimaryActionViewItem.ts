@@ -5,7 +5,7 @@ import { addDisposableListener, stopEvent, h } from '../../../base/browser/dom.j
 import { observeElementSize } from '../../../base/browser/observer.js';
 import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem, type DropdownMenuActions } from '../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
-import type { IAction } from '../../../base/common/actions.js';
+import type { IAction, IActionRunner } from '../../../base/common/actions.js';
 import { Emitter } from '../../../base/common/event.js';
 import { DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
 import { assertDefined } from '../../../base/common/types.js';
@@ -34,6 +34,22 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 	private dropdownButton: HTMLButtonElement | undefined;
 	private dropdownContainer: HTMLElement | undefined;
 	private dropdownVisible = false;
+
+	override get actionRunner(): IActionRunner | undefined {
+		return super.actionRunner;
+	}
+
+	override set actionRunner(runner: IActionRunner | undefined) {
+		super.actionRunner = runner;
+		this.primaryItem.actionRunner = runner;
+		if (this.dropdownItem.value) this.dropdownItem.value.actionRunner = runner;
+	}
+
+	override setActionContext(context: unknown): void {
+		super.setActionContext(context);
+		this.primaryItem.setActionContext(context);
+		this.dropdownItem.value?.setActionContext(context);
+	}
 
 	constructor(
 		primaryAction: IAction,
@@ -135,6 +151,8 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 			this.viewItemOptions,
 		);
 		this.dropdownItem.value = item;
+		item.actionRunner = this.actionRunner;
+		item.setActionContext(this.actionContext);
 		this.dropdownVisibilityListener.value = item.onDidChangeVisibility((visible) => {
 			this.dropdownVisible = visible;
 			this.changeDropdownVisibilityEmitter.fire(visible);

@@ -9,7 +9,7 @@ import { WorkerBasedDiffProviderFactoryService } from '../../../browser/widget/d
 import { DiffModel } from '../../../common/diff/diffModel.js';
 import { type DiffComputationRequest } from '../../../common/diff/diffComputationService.js';
 import { type IDocumentDiff, type IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
-import { readDiffResult } from '../../../common/diff/diffWorker.js';
+import { diffWorkerHandler, readDiffResult } from '../../../common/diff/diffWorker.js';
 import { DetailedLineRangeMapping } from '../../../common/diff/rangeMapping.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { DiffTestPort } from './diffTestPort.js';
@@ -123,6 +123,56 @@ suite('Frontend diff Worker', () => {
 		assert.deepEqual(moved.moves.map(move => [move.lineRangeMapping.original.startLineNumber, move.lineRangeMapping.modified.startLineNumber]), [[1, 3]]);
 	});
 
+	test('uses model languages to distinguish stylesheet names from unspaced subtraction', async () => {
+		using service = new WorkerDiffComputationService(() => new DiffTestPort());
+		const originalText = 'width: first-second;';
+		const modifiedText = 'width: alpha-beta;';
+		using original = new TextModel(originalText, { languageId: 'css' });
+		using modified = new TextModel(modifiedText, { languageId: 'css' });
+		for (const [originalLanguage, modifiedLanguage, expected] of [
+			['css', 'css', [['first-second'], ['alpha-beta']]],
+			['javascript', 'javascript', [['first', 'second'], ['alpha', 'beta']]],
+			['css', 'javascript', [['first', 'second'], ['alpha', 'beta']]],
+		] as const) {
+			original.setLanguage(originalLanguage);
+			modified.setLanguage(modifiedLanguage);
+			const diff = await service.computeDiff(original, modified, options, CancellationToken.None);
+			assert.deepEqual([
+				diff.changes[0]!.innerChanges!.map(change => originalText.slice(change.originalRange.startColumn - 1, change.originalRange.endColumn - 1)),
+				diff.changes[0]!.innerChanges!.map(change => modifiedText.slice(change.modifiedRange.startColumn - 1, change.modifiedRange.endColumn - 1)),
+			], expected);
+		}
+	});
+
+	test('recomputes diff highlights when model languages change without text edits', async () => {
+		using original = new TextModel('.ash-old-host {', { languageId: 'css' });
+		using modified = new TextModel('.ash-new-sidebar {', { languageId: 'css' });
+		using diffProvider = new WorkerDiffComputationService(() => new DiffTestPort());
+		using model = new DiffModel({ original, modified, diffProvider, diffOptions: options });
+		const ready = (): Promise<void> => new Promise((resolve, reject) => {
+			const listener = model.onDidChange(state => {
+				if (state.kind === 'loading') return;
+				listener.dispose();
+				if (state.kind === 'error') reject(state.error);
+				else resolve();
+			});
+		});
+		await ready();
+		assert.equal(model.diff!.rows.get(0)!.originalChanges.length, 1);
+		let pending = ready();
+		original.setLanguage('javascript');
+		await pending;
+		assert.equal(model.diff!.rows.get(0)!.originalChanges.length, 2);
+		pending = ready();
+		original.setLanguage('css');
+		await pending;
+		assert.equal(model.diff!.rows.get(0)!.originalChanges.length, 1);
+		pending = ready();
+		modified.setLanguage('javascript');
+		await pending;
+		assert.equal(model.diff!.rows.get(0)!.originalChanges.length, 2);
+	});
+
 	test('compares logical lines when document line endings differ', async () => {
 		using service = new WorkerDiffComputationService(() => new DiffTestPort());
 		const same = await compute(service, 'first\r\nsecond\r\n', 'first\nsecond\n');
@@ -206,6 +256,12 @@ suite('Frontend diff Worker', () => {
 		const next = await compute(service, '', '');
 		assert.deepEqual(next.changes, []);
 		assert.equal(next.identical, true);
+	});
+
+	test('rejects malformed language context at the Worker boundary', async () => {
+		await assert.rejects(async () => diffWorkerHandler.handleRequest({
+			request: { ...request('old', 'new'), options: { ...options, languageId: 42 } },
+		}, new AbortController().signal), { name: 'TypeError', message: 'Invalid editor diff request' });
 	});
 
 	test('rejects out-of-range standard mappings returned by a Worker', () => {

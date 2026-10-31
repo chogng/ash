@@ -9297,6 +9297,8 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
             .as_ref()
             .unwrap()
             .model
+            .as_ref()
+            .unwrap()
             .model
             .as_str(),
         "reviewer"

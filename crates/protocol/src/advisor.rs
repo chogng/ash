@@ -5,11 +5,14 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
-/// Immutable model and budget selected for consultations in one Turn.
+/// Advisor preference; chat inheritance is resolved before freezing a Turn.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AdvisorConfig {
-    pub model: ModelRef,
+    /// An absent model inherits the initiating chat's model and reasoning effort.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub model: Option<ModelRef>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -26,12 +29,25 @@ pub struct AdvisorConfig {
 impl AdvisorConfig {
     pub fn new(model: ModelRef) -> Self {
         Self {
-            model,
+            model: Some(model),
             enabled: true,
             reasoning_effort: None,
             max_calls: default_max_calls(),
             max_output_tokens: default_max_output_tokens(),
         }
+    }
+
+    /// Freeze inherited settings with the same model and effort as the initiating Turn.
+    pub fn resolve_for_chat(
+        mut self,
+        model: Option<&ModelRef>,
+        reasoning_effort: Option<ReasoningEffort>,
+    ) -> Option<Self> {
+        if self.model.is_none() {
+            self.model = Some(model?.clone());
+            self.reasoning_effort = reasoning_effort;
+        }
+        Some(self)
     }
 
     pub fn validate(&self) -> Result<(), &'static str> {
@@ -88,6 +104,34 @@ impl AdvisorSelection {
 mod tests {
     use super::*;
     use crate::{ModelId, ProviderId};
+
+    #[test]
+    fn inherited_model_and_effort_are_resolved_together_without_changing_budgets() {
+        let preference: AdvisorConfig = serde_json::from_value(serde_json::json!({
+            "enabled": true, "maxCalls": 7, "maxOutputTokens": 8192
+        }))
+        .unwrap();
+        let model = ModelRef::new(
+            ProviderId::new("openai").unwrap(),
+            ModelId::new("chat").unwrap(),
+        );
+        let resolved = preference
+            .clone()
+            .resolve_for_chat(Some(&model), Some(ReasoningEffort::High))
+            .unwrap();
+        assert_eq!(resolved.model, Some(model.clone()));
+        assert_eq!(resolved.reasoning_effort, Some(ReasoningEffort::High));
+        assert_eq!((resolved.max_calls, resolved.max_output_tokens), (7, 8192));
+        assert_eq!(preference.model, None);
+        assert_eq!(preference.resolve_for_chat(None, None), None);
+        let explicit = AdvisorConfig::new(model);
+        assert_eq!(
+            explicit
+                .clone()
+                .resolve_for_chat(None, Some(ReasoningEffort::Low)),
+            Some(explicit)
+        );
+    }
 
     #[test]
     fn old_config_defaults_to_enabled_and_disabled_config_does_not_resolve() {

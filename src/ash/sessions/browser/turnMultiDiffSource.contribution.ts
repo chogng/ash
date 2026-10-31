@@ -3,12 +3,16 @@ import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../workbench/contrib/chat/commo
 import { localize } from '../../nls.js';
 import { IChatService } from '../../workbench/services/chat/common/chatService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
+import { IViewsService } from '../../workbench/services/views/common/viewsService.js';
+import { VIEW_PANE_ID } from '../../workbench/contrib/scm/common/scm.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { createThreadMultiDiffEditorInput, ThreadChangesNotCurrentError } from './turnMultiDiffSource.js';
 
 CommandsRegistry.register(OPEN_CHAT_CHANGES_COMMAND_ID, async (accessor, sessionId, threadId, revision) => {
 	if (sessionId === undefined && threadId === undefined) {
+		const views = accessor.get(IViewsService);
 		await accessor.get(ICommandService).executeCommand('git.openWorkspaceChanges');
+		await views.focusView(VIEW_PANE_ID);
 		return;
 	}
 	if (typeof sessionId !== 'string' || !sessionId || typeof threadId !== 'string' || !threadId) {

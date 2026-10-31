@@ -66,26 +66,29 @@ async function pressNotificationContextMenuKey(application: PlaywrightApplicatio
 	await new Promise<void>((resolve, reject) => execFile('osascript', ['-e', `tell application "System Events"\n tell first application process whose unix id is ${pid}\n  key code 109 using {shift down}\n end tell\nend tell`], { timeout: 10_000 }, error => { if (error) reject(error); else resolve(); }));
 }
 
-for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
-	test(`notification Copy Text via ${input} writes the message through the host clipboard and retains history`, async ({ application, workbench }) => {
-		const page = workbench.page;
-		const clipboard = await notificationClipboard(application, page);
-		await workbench.quickaccess.runCommand('notifications.clearAll');
-		await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
-		await workbench.quickaccess.runCommand('notifications.showList');
-		const row = page.locator('.ash-notifications-center [data-notification-id]');
-		const id = await row.getAttribute('data-notification-id');
-		const message = await row.locator('.ash-notification-message').textContent();
-		await workbench.menus.select(application, async () => {
-			await row.focus();
-			if (input === 'mouse') await row.click({ button: 'right' });
-			else await row.press(input);
-		}, ['Copy Text']);
-		await expect.poll(() => clipboard.read()).toBe(message);
-		await expect(row).toHaveAttribute('data-notification-id', id!);
-		await expect(row.getByRole('button', { name: 'Always Enable', exact: true })).toBeVisible();
-		await expect(page.locator('.ash-notifications-center')).toBeVisible();
-	});
+for (const presentation of ['center', 'toast'] as const) {
+	for (const input of ['mouse', 'ContextMenu', 'Shift+F10'] as const) {
+		test(`notification ${presentation} Copy Text via ${input} writes the message through the host clipboard and retains history`, async ({ application, workbench }) => {
+			const page = workbench.page;
+			const clipboard = await notificationClipboard(application, page);
+			await workbench.quickaccess.runCommand('notifications.clearAll');
+			await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
+			if (presentation === 'center') await workbench.quickaccess.runCommand('notifications.showList');
+			const row = page.locator(`${presentation === 'center' ? '.ash-notifications-center' : '.ash-notification-host'} [data-notification-id]`);
+			const id = await row.getAttribute('data-notification-id');
+			const message = await row.locator('.ash-notification-message').textContent();
+			await workbench.menus.select(application, async () => {
+				await row.focus();
+				if (input === 'mouse') await row.click({ button: 'right' });
+				else await row.press(input);
+			}, ['Copy Text']);
+			await expect.poll(() => clipboard.read()).toBe(message);
+			await expect(row).toHaveAttribute('data-notification-id', id!);
+			await expect(row.getByRole('button', { name: 'Always Enable', exact: true })).toBeVisible();
+			if (presentation === 'center') await expect(page.locator('.ash-notifications-center')).toBeVisible();
+			else await expect(page.locator('.ash-notifications-center')).toBeHidden();
+		});
+	}
 }
 
 test('notification Copy Text reports the real browser clipboard permission rejection once', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, application, workbench }, testInfo) => {

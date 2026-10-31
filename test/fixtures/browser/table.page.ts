@@ -88,6 +88,7 @@ import { createSettingWidget } from '../../../src/ash/workbench/contrib/preferen
 declare global {
 	interface Window {
 		ashTableIntegration: {
+			showSelectSettings(presentation: 'editor' | 'general', options: readonly { value: string; label: string; }[]): Promise<void>;
 			showPolicySettings(presentation: 'editor' | 'general'): Promise<void>;
 			setSettingsPolicy(managed: boolean): void;
 			readPolicySettings(): Promise<string>;
@@ -336,6 +337,41 @@ const searchSaved: string[] = [];
 let policySettings: WorkbenchConfigurationService | undefined;
 let setSettingsPolicy: ((managed: boolean) => void) | undefined;
 window.ashTableIntegration = {
+	showSelectSettings: async (presentation, options) => {
+		const registry = new ConfigurationRegistry();
+		for (const [key, choices] of [
+			['choice', options],
+			['minimum', [{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }]],
+			['maximum', [{ value: 'short', label: 'Short' }, { value: 'long', label: 'A very long option label '.repeat(12) }]],
+		] as const) {
+			registry.registerConfiguration({
+				key: `width.${key}`, defaultValue: choices[0].value, parse: value => value as string,
+				setting: { valueType: 'select', title: key, description: '', options: choices },
+			});
+		}
+		registry.registerConfiguration({
+			key: 'width.font', defaultValue: 'system-ui', parse: value => value as string,
+			schema: { type: 'string', format: 'font-family' },
+			setting: { valueType: 'text', title: 'Font', description: '', placeholder: '' },
+		});
+		const configuration = resources.add(new WorkbenchConfigurationService({ registry }));
+		const scope = resources.add(services.createChild());
+		scope.registerInstance(IConfigurationService, configuration);
+		const root = document.createElement('div');
+		root.id = 'select-settings';
+		root.className = 'ash-settings-editor';
+		root.style.width = '720px';
+		document.body.append(root);
+		resources.add(toDisposable(() => root.remove()));
+		for (const setting of new DefaultSettings(registry).all) {
+			const widget = resources.add(createSettingWidget(root, { ...setting, presentation }, {
+				onStatus: (message, error) => { if (error) throw new Error(message); },
+			}, scope));
+			// Also exercise a wide form column, where the shared maximum must cap the control.
+			if (setting.id === 'width.maximum') widget.domNode.style.gridTemplateColumns = 'minmax(0, 1fr) 320px';
+			root.append(widget.domNode);
+		}
+	},
 	showPolicySettings: async presentation => {
 		const registry = new ConfigurationRegistry();
 		registry.registerConfiguration({ key: 'policy.flag', defaultValue: false, parse: value => value as boolean, policy: { name: 'ManagedFlag' }, setting: { valueType: 'boolean', title: 'Flag', description: '' } });

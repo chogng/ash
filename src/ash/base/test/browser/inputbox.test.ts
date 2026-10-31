@@ -41,6 +41,29 @@ suite('InputBox focus selection in the browser', () => {
 		await expect(input).toHaveValue('ABCDEF');
 	});
 
+	test('flexible input keeps scrollbar controls fixed while its textarea scrolls', async () => {
+		const { page } = browser;
+		const input = page.getByRole('textbox', { name: 'Select multiline', exact: true });
+		const value = Array.from({ length: 40 }, (_, index) => `input line ${index}`).join('\n');
+		await input.fill(value);
+		await input.evaluate((element: HTMLTextAreaElement) => { element.scrollTop = 0; });
+		await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.scrollHeight > element.clientHeight)).toBe(true);
+		const host = input.locator('..');
+		const track = host.getByRole('scrollbar', { name: 'Vertical scrollbar' });
+		const trackOffset = (): Promise<number> => track.evaluate(element => element.getBoundingClientRect().top - element.parentElement!.getBoundingClientRect().top);
+		const initialOffset = await trackOffset();
+		await input.hover();
+		await page.mouse.wheel(0, 200);
+		await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.scrollTop)).toBeGreaterThan(0);
+		await expect.poll(trackOffset).toBe(initialOffset);
+		await expect.poll(async () => Number(await track.getAttribute('aria-valuenow')) - Math.round(await input.evaluate((element: HTMLTextAreaElement) => element.scrollTop))).toBe(0);
+		expect(await host.evaluate(element => element.scrollTop)).toBe(0);
+		await track.focus();
+		await track.press('Home');
+		await expect.poll(() => input.evaluate((element: HTMLTextAreaElement) => element.scrollTop)).toBe(0);
+		await expect(input).toHaveValue(value);
+	});
+
 	test('Tab entry selects text and numeric values and programmatic focus selects multiline values', async () => {
 		const { page } = browser;
 		await page.getByRole('textbox', { name: 'Disabled selection', exact: true }).focus();

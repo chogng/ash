@@ -1,0 +1,58 @@
+.ash-chat-history-item.ash-quick-pick-row-content {
+	position: relative;
+}
+
+.ash-chat-history-item .ash-quick-pick-row-text {
+	grid-template-columns:
+		minmax(0, 1fr)
+		minmax(
+			calc(2 * var(--ash-toolbar-actionSize) + var(--ash-spacing-size40)),
+			auto
+		);
+}
+
+.ash-chat-history-item .ash-quick-pick-row-description {
+	text-align: right;
+}
+
+.ash-chat-history-item .ash-quick-pick-row-actions.ash-action-bar {
+	position: absolute;
+	top: 0;
+	right: var(--ash-spacing-size60);
+	height: var(--ash-list-rowHeight);
+	gap: var(--ash-spacing-size40);
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.ash-quick-pick-list
+	.ash-list-row:hover
+	.ash-chat-history-item
+	.ash-quick-pick-row-actions,
+.ash-quick-pick-list
+	.ash-list-row.is-active
+	.ash-chat-history-item
+	.ash-quick-pick-row-actions,
+.ash-chat-history-item:focus-within .ash-quick-pick-row-actions,
+.ash-chat-history-item.has-open-actions .ash-quick-pick-row-actions {
+	visibility: visible;
+	pointer-events: auto;
+}
+
+.ash-quick-pick-list
+	.ash-list-row:hover
+	.ash-chat-history-item
+	.ash-quick-pick-row-description,
+.ash-quick-pick-list
+	.ash-list-row.is-active
+	.ash-chat-history-item
+	.ash-quick-pick-row-description,
+.ash-chat-history-item:focus-within .ash-quick-pick-row-description,
+.ash-chat-history-item.has-open-actions .ash-quick-pick-row-description {
+	visibility: hidden;
+}
+
+.ash-chat-history-item:focus-within .ash-quick-pick-row-action.icon-only,
+.ash-chat-history-item.has-open-actions .ash-quick-pick-row-action.icon-only {
+	opacity: 1;
+}

@@ -958,8 +958,9 @@ suite('standalone browser component', () => {
 		await page.mouse.wheel(0, 180);
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop)).toBeGreaterThan(0);
 		await page.mouse.move(900, 600);
-		await page.clock.runFor(800);
 		await input.focus();
+		// Focus reveal can produce a final scroll event; expire activity after focus settles.
+		await page.clock.runFor(800);
 		await expect(track).toHaveCSS('opacity', '0');
 		await editor.hover();
 		const thumb = track.locator('.ash-scrollbar-thumb');
@@ -3000,7 +3001,8 @@ suite('standalone browser component', () => {
 					const immediate = await page.evaluate(mode => window.ashStandaloneIntegration.appendAndReveal(mode), mode);
 					const settled = await readAfterFrames(page);
 					await testInfo.attach('scroll-geometry.json', { body: JSON.stringify({ before, immediate, settled, events: await page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometryEvents()) }, null, 2), contentType: 'application/json' });
-					expect(settled).toEqual({ ...before, version: immediate.version, lineCount: 20, logicalTop: 234, domTop: 234, domHeight: 360, contentHeight: 360 });
+					// The clipping host stays viewport-sized while ViewLayout owns the document extent.
+					expect(settled).toEqual({ ...before, version: immediate.version, lineCount: 20, logicalTop: 234, domTop: 0, domHeight: 126, contentHeight: 360 });
 					expect(immediate.version).toBeGreaterThan(before.version);
 					await expect(page.locator('#caller .view-line').filter({ hasText: /^row-20$/ })).toBeVisible();
 				} finally {
@@ -3020,7 +3022,7 @@ suite('standalone browser component', () => {
 					await readAfterFrames(page);
 					await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(234));
 					const before = await readAfterFrames(page);
-					expect(before).toMatchObject({ logicalTop: 234, domTop: 234, focus: 'editor', caretLine: 1, lineCount: 20 });
+					expect(before).toMatchObject({ logicalTop: 234, domTop: 0, focus: 'editor', caretLine: 1, lineCount: 20 });
 					await page.evaluate(() => window.ashStandaloneIntegration.openScrollGeometryPicker());
 					const input = page.locator('.ash-quick-pick-input input');
 					await expect(input).toBeFocused();
@@ -7202,7 +7204,6 @@ suite('standalone browser component', () => {
 		const editor = new Editor(page.locator('#caller'));
 		await editor.waitForEditorFocus();
 		const minimap = editor.element.locator('.minimap');
-		const scrollable = editor.element.locator(':scope > .ash-smooth-scrollable');
 		const readShadow = () => minimap.evaluate(element => {
 			const style = getComputedStyle(element, '::after');
 			return { content: style.content, shadow: style.boxShadow, pointerEvents: style.pointerEvents, left: style.left };
@@ -7210,8 +7211,8 @@ suite('standalone browser component', () => {
 		await page.keyboard.insertText('short line');
 		await expect.poll(async () => (await readShadow()).shadow).toBe('none');
 		await page.keyboard.insertText(' long text'.repeat(100));
-		await scrollable.evaluate(element => { element.scrollLeft = 0; });
-		await expect.poll(() => scrollable.evaluate(element => element.scrollWidth > element.clientWidth && element.scrollLeft === 0)).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.getControl().setScrollLeft(0));
+		await expect.poll(() => page.evaluate(() => { const editor = window.ashStandaloneIntegration.getControl(); return editor.getContentWidth() > editor.getLayoutInfo().width && editor.getScrollLeft() === 0; })).toBe(true);
 		await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
 		expect(await readShadow()).toMatchObject({ content: '""', pointerEvents: 'none', left: '-6px' });
 		await minimap.evaluate(element => element.style.setProperty('--ash-minimap-shadow', '#123456'));
@@ -7224,10 +7225,10 @@ suite('standalone browser component', () => {
 		await expect.poll(async () => (await readShadow()).shadow).toBe('none');
 		await page.emulateMedia({ forcedColors: 'none' });
 		await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
-		await scrollable.evaluate(element => { element.scrollLeft = element.scrollWidth; });
-		await expect.poll(() => scrollable.evaluate(element => element.scrollLeft + element.clientWidth >= element.scrollWidth)).toBe(true);
+		await page.evaluate(() => { const editor = window.ashStandaloneIntegration.getControl(); editor.setScrollLeft(editor.getContentWidth()); });
+		await expect.poll(() => page.evaluate(() => { const editor = window.ashStandaloneIntegration.getControl(); return editor.getScrollLeft() === editor.getContentWidth() - editor.getLayoutInfo().width; })).toBe(true);
 		await expect.poll(async () => (await readShadow()).shadow).toBe('none');
-		await scrollable.evaluate(element => { element.scrollLeft = 0; });
+		await page.evaluate(() => window.ashStandaloneIntegration.getControl().setScrollLeft(0));
 		await expect.poll(async () => (await readShadow()).shadow).not.toBe('none');
 	});
 
@@ -7411,7 +7412,7 @@ suite('standalone browser component', () => {
 				await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2 + 20);
 				await expect(vertical).toHaveClass(/\bactive\b/u);
 				await expect(vertical).toHaveCSS('background-color', 'rgb(18, 52, 86)');
-				await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getControl().getScrollTop())).toBeGreaterThan(0);
 			} finally {
 				await page.mouse.up();
 			}
@@ -7440,7 +7441,7 @@ suite('standalone browser component', () => {
 		await page.keyboard.press('ControlOrMeta+Home');
 		await expect.poll(async () => (await slider.boundingBox())!.y - (await thumb.boundingBox())!.y).toBeCloseTo(0, 1);
 		await page.keyboard.press('ControlOrMeta+End');
-		await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop > 0 && element.scrollTop === element.scrollHeight - element.clientHeight)).toBe(true);
+		await expect.poll(() => page.evaluate(() => { const editor = window.ashStandaloneIntegration.getControl(); return editor.getScrollTop() > 0 && editor.getScrollTop() === editor.getContentHeight() - editor.getLayoutInfo().height; })).toBe(true);
 		await expect.poll(async () => {
 			const map = (await slider.boundingBox())!;
 			const bar = (await thumb.boundingBox())!;
@@ -7454,7 +7455,7 @@ suite('standalone browser component', () => {
 		await page.mouse.down();
 		await page.mouse.move(box.x + box.width / 2, root.y - box.height);
 		await page.mouse.up();
-		await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getControl().getScrollTop())).toBe(0);
 		await expect(editor.element.locator('.stanza-editor-input')).toBeFocused();
 	});
 
@@ -7542,6 +7543,99 @@ suite('standalone browser component', () => {
 		await expect(editor.input).toBeFocused();
 	});
 
+	test('editor scroll state survives reparenting and visibility changes without native scroll ownership', async function () {
+		const { page } = browserTests;
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(() => {
+			const editor = window.ashStandaloneIntegration.getControl();
+			editor.updateOptions({ smoothScrolling: false, minimap: { enabled: false }, wordWrap: 'off' });
+			editor.setValue(Array.from({ length: 160 }, (_, index) => `line-${index + 1} ${'content '.repeat(40)}`).join('\n'));
+			editor.setSelection({ startLineNumber: 35, startColumn: 5, endLineNumber: 35, endColumn: 10 });
+			editor.setScrollPosition({ scrollTop: 600, scrollLeft: 120 });
+			return { top: editor.getScrollTop(), left: editor.getScrollLeft(), selection: editor.getSelection()!.toString() };
+		});
+		const root = page.locator('#caller .stanza-editor');
+		for (const operation of ['reparent', 'hide', 'reparent'] as const) {
+			await page.evaluate(operation => {
+				const editor = window.ashStandaloneIntegration.getControl();
+				const root = editor.getDomNode()!;
+				const parent = root.parentElement!;
+				if (operation === 'reparent') {
+					root.remove();
+					parent.append(root);
+				} else {
+					root.style.display = 'none';
+					root.getBoundingClientRect();
+					root.style.display = '';
+				}
+				editor.layout();
+			}, operation);
+			await expect.poll(() => page.evaluate(() => {
+				const editor = window.ashStandaloneIntegration.getControl();
+				return { top: editor.getScrollTop(), left: editor.getScrollLeft(), selection: editor.getSelection()!.toString() };
+			})).toEqual(initial);
+			await expect.poll(() => root.evaluate(root => {
+				const bounds = root.getBoundingClientRect();
+				const scroll = root.querySelector<HTMLElement>(':scope > .ash-smooth-scrollable')!;
+				const rows = [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')]
+					.filter(row => row.getBoundingClientRect().top >= bounds.top && row.getBoundingClientRect().bottom <= bounds.bottom);
+				return {
+					native: { left: scroll.scrollLeft, top: scroll.scrollTop },
+					visible: rows.length > 0,
+					aligned: rows.every(row => row.getBoundingClientRect().top === root.querySelector(`.margin-view-overlays > .view-overlay-line[data-line-index="${row.dataset.lineIndex}"]`)!.getBoundingClientRect().top),
+				};
+			})).toEqual({ native: { left: 0, top: 0 }, visible: true, aligned: true });
+		}
+	});
+
+	test('browser reveal scroll is consumed as a delta by the editor layout', async function () {
+		const { page } = browserTests;
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			const editor = window.ashStandaloneIntegration.getControl();
+			editor.updateOptions({ smoothScrolling: false, minimap: { enabled: false }, wordWrap: 'off' });
+			editor.setValue(Array.from({ length: 160 }, () => 'long content '.repeat(100)).join('\n'));
+			editor.setScrollPosition({ scrollTop: 600, scrollLeft: 120 });
+		});
+		const scroll = page.locator('#caller .stanza-editor > .ash-smooth-scrollable');
+		await expect(page.locator('#caller .view-lines > .view-line').first()).not.toHaveAttribute('data-line-index', '0');
+		await scroll.evaluate(element => {
+			element.scrollTop = 60;
+			element.scrollLeft = 40;
+			element.dispatchEvent(new Event('scroll'));
+		});
+		await expect.poll(() => page.evaluate(() => {
+			const editor = window.ashStandaloneIntegration.getControl();
+			return { top: editor.getScrollTop(), left: editor.getScrollLeft() };
+		})).toEqual({ top: 660, left: 160 });
+		await expect.poll(() => scroll.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual({ left: 0, top: 0 });
+	});
+
+	test('focusing a view zone reveals it through editor scroll state', async function () {
+		const { page } = browserTests;
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			const editor = window.ashStandaloneIntegration.getControl();
+			editor.updateOptions({ lineHeight: 20, smoothScrolling: false, minimap: { enabled: false } });
+			editor.setValue(Array.from({ length: 160 }, (_, index) => `line-${index + 1}`).join('\n'));
+			editor.changeViewZones(accessor => {
+				const zone = document.createElement('div');
+				const button = document.createElement('button');
+				button.textContent = 'Focus view zone';
+				button.style.marginTop = '120px';
+				zone.append(button);
+				accessor.addZone({ afterLineNumber: Math.floor((600 + editor.getLayoutInfo().height - 40) / 20), heightInPx: 160, domNode: zone, isAccessible: true });
+			});
+			editor.setScrollTop(600);
+		});
+		const button = page.getByRole('button', { name: 'Focus view zone' });
+		await button.focus();
+		await expect(button).toBeFocused();
+		await expect(button).toBeInViewport();
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getControl().getScrollTop())).toBeGreaterThan(600);
+		await expect.poll(() => page.locator('#caller .stanza-editor > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
+	});
+
 	test('line numbers stay aligned while scrolling and gutter clicks edit the visible line', async function () {
 		const { page } = browserTests;
 
@@ -7551,11 +7645,10 @@ suite('standalone browser component', () => {
 		await editor.waitForEditorFocus();
 		await page.keyboard.insertText(Array.from({ length: 160 }, (_, index) => `line-${index + 1} ${'text '.repeat(40)}`).join('\n'));
 		await editor.input.press('ControlOrMeta+Home');
-		const scrollContainer = editor.element.locator(':scope > .ash-smooth-scrollable');
-		await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBe(0);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getControl().getScrollTop())).toBe(0);
 		await editor.element.hover();
 		await page.mouse.wheel(0, 600);
-		await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBe(600);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getControl().getScrollTop())).toBe(600);
 		await expect.poll(() => editor.element.evaluate(root => {
 			const bounds = root.getBoundingClientRect();
 			const rows = [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')]
@@ -7701,7 +7794,7 @@ suite('standalone browser component', () => {
 			try {
 				await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 20);
 				await expect(thumb).toHaveCSS('background-color', active);
-				await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getControl().getScrollTop())).toBeGreaterThan(0);
 			} finally {
 				await page.mouse.up();
 			}

@@ -778,26 +778,27 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     config
                         .validate()
                         .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-                    let saved = self
-                        .config
-                        .as_ref()
-                        .map(|store| store.read_snapshot())
-                        .transpose()
-                        .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;
-                    if !self
-                        .model_catalog
-                        .list()
-                        .map_err(core_error)?
-                        .iter()
-                        .any(|entry| entry.model == config.model)
-                        && !saved.is_some_and(|snapshot| {
-                            snapshot
-                                .values
-                                .providers
-                                .contains_key(&config.model.provider)
-                        })
-                    {
-                        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                    if let Some(model) = &config.model {
+                        let saved = self
+                            .config
+                            .as_ref()
+                            .map(|store| store.read_snapshot())
+                            .transpose()
+                            .map_err(|_| {
+                                RpcError::new(-32603, AppServerErrorName::InternalError)
+                            })?;
+                        if !self
+                            .model_catalog
+                            .list()
+                            .map_err(core_error)?
+                            .iter()
+                            .any(|entry| &entry.model == model)
+                            && !saved.is_some_and(|snapshot| {
+                                snapshot.values.providers.contains_key(&model.provider)
+                            })
+                        {
+                            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                        }
                     }
                 }
                 let sequence = self

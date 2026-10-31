@@ -162,9 +162,11 @@ let runningSessions: 'none' | 'terminal' | 'debug' | 'exited' = 'none';
 services.registerInstance(ITerminalService, { get instances() { return runningSessions === 'terminal' ? [{ state: 'running' }] : runningSessions === 'exited' ? [{ state: 'exited' }] : []; } } as unknown as ITerminalService);
 services.registerInstance(IDebugService, { get sessions() { return runningSessions === 'debug' ? [{ state: 'stopped' }] : runningSessions === 'exited' ? [{ state: 'terminated' }] : []; } } as unknown as IDebugService);
 
-const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRecovery['status']; } = {
+const recovery: IAppServerConnectionRecovery & { status: IAppServerConnectionRecovery['status']; phase: IAppServerConnectionRecovery['phase']; } = {
+	phase: 'connection',
 	status: 'idle', error: 'Authorization expired', onDidChange: changed.event,
-	reconnect: async () => {
+	reconnect: async options => {
+		recovery.phase = options?.reason === 'permissions' ? 'permissions' : 'connection';
 		retries++; recovery.status = 'recovering'; changed.fire();
 		if (managementMode) {
 			await Promise.resolve();
@@ -184,7 +186,7 @@ services.registerInstance(IWorkspaceTrustApi, {
 	setDirectoryPermissions: async (path, permissions, expectedRevision) => {
 		if (!managementAllowed || expectedRevision !== revision) throw new Error('Directory grant revision conflict');
 		if (path !== workspace.getWorkspace().folders[0]!.uri.fsPath) throw new Error('Wrong workspace path');
-		grantWrites++; savedPermissions = permissions; revision++; permissionChanges.fire();
+		grantWrites++; savedPermissions = permissions; granted = permissions; revision++; permissionChanges.fire();
 		return { revision, generation: 1, disposition: 'updated' };
 	},
 	forgetDirectory: async () => { throw new Error('Not used'); }, createGrant: async () => { throw new Error('Not used'); }, persistGrant: async () => { throw new Error('Not used'); },
@@ -218,7 +220,7 @@ window.ashBannerIntegration = {
 		workspace.updateWorkspace({ id: 'multi', folders: [...workspace.getWorkspace().folders, { id: 'second', name: 'second', uri: URI.file('/second'), index: 1 }] });
 		permissionChanges.fire();
 	},
-	setRecovery(status) { recovery.status = status; changed.fire(); },
+	setRecovery(status, phase = 'connection') { recovery.status = status; recovery.phase = phase; changed.fire(); },
 	setPermissions(mode) {
 		effectiveKnown = mode !== 'unknown';
 		granted = mode === 'trusted' ? DEVELOPMENT_DIR_PERMISSIONS : mode === 'readonly' ? READ_DIR_PERMISSIONS : RESTRICTED_DIR_PERMISSIONS;
@@ -262,7 +264,7 @@ declare global {
 		ashBannerIntegration: {
 			setRunningSessions(value: 'none' | 'terminal' | 'debug' | 'exited'): void;
 			addWorkspaceFolder(): void;
-			setRecovery(status: IAppServerConnectionRecovery['status']): void;
+			setRecovery(status: IAppServerConnectionRecovery['status'], phase?: IAppServerConnectionRecovery['phase']): void;
 			setManagementAllowed(value: boolean): void;
 			conflictGrant(): void;
 			bumpConnection(): void;

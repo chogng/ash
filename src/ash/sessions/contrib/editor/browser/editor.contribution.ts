@@ -37,7 +37,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			mirrored.clear();
 			for (const item of MenusRegistry.getMenuItems(MenuId.EditorTitle)) {
 				// The dedicated layout toolbar owns card controls; group-layout commands remain available in overflow.
-				const layoutItem = 'command' in item ? layoutCommands.has(item.command.id) : item.submenu === Menus.CodeAddTab;
+				const layoutItem = 'command' in item && layoutCommands.has(item.command.id);
 				mirrored.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, layoutItem ? { ...item, group: '9_layout' } : item));
 			}
 		};
@@ -163,16 +163,6 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 							icon: Lxicon.diffChanges,
 						},
 						when: codeWhen, group: 'navigation', order: 4,
-					},
-				},
-				{
-					id: MenuId.EditorTitle,
-					item: {
-						title: localize2({ bundle: 'ash', key: 'sessions.layout.addTab' }, 'Add tab'),
-						submenu: Menus.CodeAddTab,
-						when: codeWhen,
-						group: 'navigation',
-						order: 89,
 					},
 				},
 				{

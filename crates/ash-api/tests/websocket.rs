@@ -754,6 +754,7 @@ async fn realtime_handles_pcm_text_tools_and_cancelled_terminal_usage() {
         send(&mut socket, json!({"type":"session.created","session":{"id":"session","type":"realtime","audio":{"output":{"voice":"marin"}}}})).await;
         let config = read(&mut socket).await;
         assert_eq!(config["session"]["audio"]["input"]["format"]["rate"], 24000);
+        assert_eq!(config["session"]["max_output_tokens"], 64);
         assert!(config["session"]["audio"]["input"]["turn_detection"].is_null());
         send(&mut socket, json!({"type":"session.updated","session":{"id":"session","audio":{"output":{"voice":"marin"}}}})).await;
         assert_eq!(read(&mut socket).await["type"], "conversation.item.create");
@@ -784,8 +785,23 @@ async fn realtime_handles_pcm_text_tools_and_cancelled_terminal_usage() {
         output: RealtimeOutput::Audio {
             voice: "marin".into(),
         },
+        max_output_tokens: Some(64),
         ..Default::default()
     };
+    for limit in [0, 4097] {
+        assert!(matches!(
+            session
+                .send(
+                    RealtimeCommand::Configure(RealtimeConfig {
+                        max_output_tokens: Some(limit),
+                        ..config.clone()
+                    }),
+                    &token,
+                )
+                .await,
+            Err(ApiError::InvalidRequest(_))
+        ));
+    }
     session
         .send(RealtimeCommand::Configure(config.clone()), &token)
         .await
