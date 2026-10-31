@@ -9,7 +9,7 @@
 
 ## 调用与模型选择
 
-`advisor` 工具只接收 `question`。执行模型无需传入模型标识或重新复述整段对话；后端使用当前 Turn 已冻结的 `AdvisorConfig.model`。模型身份是 `ModelRef { provider, model }`，其中 `model` 为模型 ID，显示名称只用于界面。修改全局选择不影响已接受的 Turn。
+`advisor({ question })` 只接收必填字符串 `question`，不能全为空白，UTF-8 编码长度最多 8000 字节。执行模型无需传入模型标识或重新复述整段对话；后端使用当前 Turn 已冻结的 `AdvisorConfig.model`。模型身份是 `ModelRef { provider, model }`，其中 `model` 为模型 ID，显示名称只用于界面。修改全局选择不影响已接受的 Turn。
 
 工具描述提示执行模型在复杂任务规划、重要决策、策略调整、反复且原因不明的失败或尚未消除的完成风险中寻求战略指导。当指导能改善结果时按需调用，是否调用由执行模型判断。建议以 ToolResult 返回给执行模型，由它核实建议并继续完成原任务。
 
