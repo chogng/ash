@@ -8,6 +8,7 @@ import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { Emitter } from '../../../base/common/event.js';
 import { appServerConnectionChannel, getAppServerReadConsumption, type AppServerConnectionTarget } from '../common/appServerTransport.js';
+import { AppServerConnectionStoppedError } from '../common/appServerError.js';
 import { SocketCloseEventType, type ISocket, type SocketCloseEvent, type SocketDiagnosticsEventType } from '../../../base/parts/ipc/common/ipc.net.js';
 
 /** Acquires and owns a renderer-exclusive MessagePort without interpreting protocol messages. */
@@ -33,9 +34,13 @@ export class AppServerMessagePortTransport extends Disposable {
 
 	public get socket(): ISocket {
 		const socket = this.socketOwner.value;
-		if (!socket || socket.isClosed) {
+		if (!socket) {
 			throw new Error('App Server port was not acquired or was closed');
 		}
+		// Main can close the port before its acquisition reply or protocol lease arrives.
+		// Retain that cause even when no close listener was attached yet.
+		const error = socket.closeError;
+		if (error) { throw error; }
 		return socket;
 	}
 
@@ -123,8 +128,8 @@ class MessagePortSocket extends Disposable implements ISocket {
 	private closed = false;
 	private ending = false;
 	private failure: Error | undefined;
-	public get isClosed(): boolean {
-		return this.closed;
+	public get closeError(): Error | undefined {
+		return this.closed ? this.failure ?? new AppServerConnectionStoppedError('App Server socket is closed') : undefined;
 	}
 
 	constructor(private readonly port: MessagePort) {

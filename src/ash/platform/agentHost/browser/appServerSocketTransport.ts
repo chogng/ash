@@ -4,6 +4,7 @@ import { isRecord } from '../../../base/common/types.js';
 import { SocketCloseEventType, type ISocket, type SocketCloseEvent } from '../../../base/parts/ipc/common/ipc.net.js';
 import { IRemoteSocketFactoryService } from '../../remote/common/remoteSocketFactoryService.js';
 import { RemoteConnectionType } from '../../remote/common/remoteAuthorityResolver.js';
+import { AppServerConnectionStoppedError } from '../common/appServerError.js';
 import type { IAddressProvider } from '../../remote/common/remoteAgentConnection.js';
 import { AppServerFrame, deferAppServerRead, type AppServerTransport, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT } from '../common/appServerTransport.js';
 
@@ -107,7 +108,7 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 		} catch (error) {
 			if (!this.isDisposed && revision === this.revision) {
 				this.disconnect();
-				this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: String(error) });
+				this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: String(error), intentional: error instanceof AppServerConnectionStoppedError });
 			}
 		}
 	}

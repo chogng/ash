@@ -694,9 +694,9 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 			this.task = undefined;
 			if (this.isDisposed) return;
 			this.failure = toError(error);
+			if (error instanceof AppServerConnectionStoppedError) { this.publish('unavailable'); return; }
 			this.onFailure('App Server connection recovery failed', error);
-			if (error instanceof AppServerConnectionStoppedError) this.publish('unavailable');
-			else if (!this.isActive) this.publish('failed');
+			if (!this.isActive) this.publish('failed');
 			else this.schedule();
 		});
 		return operation;

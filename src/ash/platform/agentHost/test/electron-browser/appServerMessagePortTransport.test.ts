@@ -320,7 +320,7 @@ suite('App Server MessagePort transport', () => {
 			channel.port2.postMessage({ intentional: true });
 			await closed.p;
 			assert.deepEqual(notifications, ['intentional', 'EOF']);
-			assert.throws(() => transport.socket, /was closed/);
+			assert.throws(() => transport.socket, /socket is closed/);
 		} finally {
 			channel.port1.close();
 			channel.port2.close();
@@ -365,7 +365,7 @@ suite('App Server MessagePort transport', () => {
 			const rejected = assert.rejects(socket.drain(), /capacity exceeded/);
 			assert.throws(() => socket.write(VSBuffer.fromString('{}\n')), /capacity exceeded/);
 			await rejected;
-			assert.throws(() => transport.socket, /was closed/);
+			assert.throws(() => transport.socket, /capacity exceeded/);
 		} finally {
 			channel.port1.close();
 			channel.port2.close();
