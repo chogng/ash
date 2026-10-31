@@ -7,7 +7,7 @@ import { ILanguageFeaturesService } from '../../../src/ash/editor/common/service
 import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { BreadcrumbsSymbolPicker } from '../../../src/ash/workbench/browser/parts/editor/breadcrumbsPicker.js';
-import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/common/workingCopyService.js';
 import { Icon } from '../../../src/ash/base/common/icon.js';
 import type { ITextResourceStore } from '../../../src/ash/workbench/services/textmodelResolver/common/textResourceStore.js';
@@ -42,6 +42,7 @@ import { toLineDiff } from '../../../src/ash/editor/common/diff/lineDiff.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { DiffService } from '../../../src/ash/workbench/services/diff/browser/diffService.js';
+import { IDiffService } from '../../../src/ash/workbench/services/diff/common/diffService.js';
 import { QuickDiffModelService } from '../../../src/ash/workbench/contrib/scm/browser/quickDiffModel.js';
 import { QuickDiffService } from '../../../src/ash/workbench/contrib/scm/common/quickDiffService.js';
 import { CodeEditorConfiguration } from '../../../src/ash/workbench/contrib/codeEditor/common/editorConfiguration.js';
@@ -129,7 +130,7 @@ import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browse
 import { createMultiDiffEditorInput, isMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { BrowserWorkingCopyService } from '../../../src/ash/workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
-import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IChatService, type TurnChangeSetSummary } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import { CHANGESET_REVIEW_ACTION_ID, SessionChangesEditor } from '../../../src/ash/sessions/contrib/changes/browser/sessionChangesEditor.js';
@@ -338,11 +339,15 @@ function createSessionChangesPane(): SessionChangesEditor {
 			resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }),
 			save: async () => { throw new Error('Session review is read-only'); },
 		} satisfies ITextResourceStore, {}));
+		sessionServices.registerInstance(ITextModelResourceService, models);
+		sessionServices.registerInstance(IDiffService, service);
+		sessionServices.registerInstance(IViewsService, {
+			focusView: async () => { throw new Error('Session comparisons must not change the selected view'); },
+		} as unknown as IViewsService);
 		resources.add(EditorPanes.registerEditorPane({
 			id: 'integration.sessionMultiDiff', name: 'Session review', canOpen: matchMultiDiffEditor,
 			create: () => sessionServices!.createInstance(MultiDiffEditor, {
-				modelService: models, createComputationService: () => service.createComputationService(), lineHeight: 0, activeEditorId: SessionChangesEditor.ID,
-				fileActions: { menuService: sessionServices!.get(IMenuService), contextMenuProvider: sessionServices!.get(IContextMenuService), contextKeyService: sessionServices!.get(IContextKeyService) },
+				lineHeight: 0, activeEditorId: SessionChangesEditor.ID,
 			}),
 		}));
 		const badgeContainer = document.createElement('div');
@@ -536,6 +541,11 @@ const harness = {
 		};
 		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, store, {}));
 		services.registerInstance(IFileTextModelService, models);
+		services.registerInstance(ITextModelResourceService, models);
+		services.registerInstance(IDiffService, service);
+		services.registerInstance(IViewsService, {
+			focusView: async (viewId: string) => { focusedHistoryView = viewId; return true; },
+		} as IViewsService);
 		const registry = new EditorPaneRegistry();
 		resources.add(registry.registerEditorPane({
 			id: DIFF_EDITOR_ID,
@@ -547,17 +557,7 @@ const harness = {
 			id: MULTI_DIFF_EDITOR_ID,
 			name: 'Multi-diff editor',
 			canOpen: matchMultiDiffEditor,
-			create: () => services.createInstance(MultiDiffEditor, {
-				modelService: models,
-				createComputationService: () => service.createComputationService(),
-				editorService: services.get(IEditorService),
-				commandService: services.get(ICommandService),
-				sourceResolverService: services.get(IMultiDiffSourceResolverService),
-				viewsService: {
-					focusView: async (viewId: string) => { focusedHistoryView = viewId; return true; },
-				} as IViewsService,
-				fileActions: { menuService: services.get(IMenuService), contextMenuProvider: services.get(IContextMenuService), contextKeyService: contexts },
-			}),
+			create: () => services.createInstance(MultiDiffEditor, {}),
 		}));
 		titleEditor = resources.add(services.createInstance(EditorPart, host, {
 			registry,

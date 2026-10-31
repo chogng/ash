@@ -247,6 +247,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 	test(`multi diff updates configuration and uses scoped file menus (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);
 		await page.evaluate(() => window.ashDiffIntegration.openTitleComparison('git'));
+		expect(await page.evaluate(() => window.ashDiffIntegration.focusedHistoryView())).toBeUndefined();
 		const host = page.locator('#title-comparison');
 		const sections = host.locator('.stanza-multi-diff-editor-section');
 		await expect(sections).toHaveCount(2);

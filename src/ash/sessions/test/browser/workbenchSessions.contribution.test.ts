@@ -3,6 +3,7 @@ import { IRendererHostService } from '../../../platform/renderer/common/renderer
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { VIEW_PANE_ID } from '../../../workbench/contrib/scm/common/scm.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -45,6 +46,32 @@ await import('../../browser/workbenchChat.contribution.js');
 await import('../../browser/turnMultiDiffSource.contribution.js');
 await import('../../contrib/changes/browser/changesMultiDiffSourceResolver.js');
 const { SESSIONS_FILES_CONTAINER_ID } = await import('../../contrib/files/browser/files.contribution.js');
+
+test('Workspace changes focus SCM only after their opening command completes', async () => {
+	using services = new InstantiationService();
+	const opening = new DeferredPromise<void>();
+	const calls: string[] = [];
+	let unavailable = false;
+	services.registerInstance(ICommandService, {
+		executeCommand: async (id: string) => {
+			if (unavailable) throw new Error('Git changes unavailable');
+			calls.push(id);
+			await opening.p;
+		},
+	} as unknown as ICommandService);
+	services.registerInstance(IViewsService, {
+		focusView: async (id: string) => { calls.push(id); return true; },
+	} as unknown as IViewsService);
+	const command = CommandsRegistry.getCommand(OPEN_CHAT_CHANGES_COMMAND_ID)!;
+	const result = command(services);
+	assert.deepEqual(calls, ['git.openWorkspaceChanges']);
+	await opening.complete();
+	await result;
+	assert.deepEqual(calls, ['git.openWorkspaceChanges', VIEW_PANE_ID]);
+	unavailable = true;
+	await assert.rejects(async () => command(services), /Git changes unavailable/);
+	assert.deepEqual(calls, ['git.openWorkspaceChanges', VIEW_PANE_ID]);
+});
 
 test('Sessions Files contribution loads and opens its container through the invoking window', async () => {
 	using services = new InstantiationService();

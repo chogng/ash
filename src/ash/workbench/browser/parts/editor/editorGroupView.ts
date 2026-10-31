@@ -49,7 +49,8 @@ import type { EditorHeaderActions } from './editorHeaderControl.js';
 import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../../editor/common/languages.js';
 import type { ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
 import type { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
-import type { IContextKeyService, IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import type { EditorCloseReason, EditorGroupChangeEvent, EditorGroupId, EditorGroupState, EditorInstanceId, EditorInstanceState } from '../../../services/editor/common/editorState.js';
@@ -199,7 +200,6 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.textFileService = options.textFileService;
 		this.languageResolver = options.languageResolver;
 		this.diffService = options.diffService;
-		this.instantiationService = instantiationService;
 		this.accessibilityService = options.accessibilityService;
 		this.languageDiagnosticsService = options.languageDiagnosticsService;
 		this.documentCollaborationApi = options.documentCollaborationApi;
@@ -246,6 +246,10 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		this.scopedContextKeyService = options.contextKeyService
 			? this._register(options.contextKeyService.createScoped(this.domNode))
 			: undefined;
+		// Pane dependencies share the group's context with its title and file actions.
+		this.instantiationService = this.scopedContextKeyService
+			? this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, this.scopedContextKeyService])))
+			: instantiationService;
 		if (this.scopedContextKeyService && this.configurationService) {
 			const context = this.scopedContextKeyService;
 			const configuration = this.configurationService;
