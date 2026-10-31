@@ -10,12 +10,10 @@ import { addDisposableListener, Dimension, h } from '../../base/browser/dom.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { status } from '../../base/browser/ui/aria/aria.js';
 import { Direction } from '../../base/browser/ui/grid/grid.js';
-import { Separator, SubmenuAction, type IAction } from '../../base/common/actions.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import type { Icon } from '../../base/common/icon.js';
 import { localize } from '../../nls.js';
-import { IContextMenuService } from '../../platform/contextview/browser/contextView.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import {
@@ -43,7 +41,6 @@ export class CodeCardControls extends Disposable {
 		private readonly layout: ICodeCardLayout,
 		private readonly cards: ReadonlyMap<CodeCardTarget, ICodeCardPresentation>,
 		@IAuxiliaryWindowService private readonly windows: IAuxiliaryWindowService,
-		@IContextMenuService private readonly menus: IContextMenuService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
@@ -69,13 +66,6 @@ export class CodeCardControls extends Disposable {
 					header.classList.remove('ash-code-card-draggable');
 				}),
 			);
-			const arrange = this.button(
-				controls,
-				Lxicon.ellipsis,
-				localize('sessions.cards.arrange', 'Arrange card'),
-				() => this.arrange(id, arrange.domNode),
-			);
-			arrange.domNode.dataset.cardAction = 'arrange';
 			this.button(controls, Lxicon.linkExternal, localize('sessions.cards.popout', 'Open in new window'), () => {
 				void this.popout(id).catch(error => this.notifications.error(String(error)));
 			}).domNode.dataset.cardAction = 'popout';
@@ -123,7 +113,7 @@ export class CodeCardControls extends Disposable {
 						() =>
 							localize(
 								'sessions.cards.help',
-								'Use Tab and arrow keys to reach editor actions and the Arrange card, Open in new window, Expand and Close layout actions. Arrange card offers keyboard movement to each edge of another card and width or height adjustments. You can also drag the header; Escape cancels dragging. Separators resize neighboring cards. Expanding preserves the original layout. Closing a separate window returns the same content to its previous slot. Closing a card keeps its content and terminal sessions for the next time it is shown.',
+								'Use Tab and arrow keys to reach editor actions and Open in new window, Expand and Close. Drag the header to move a card; Escape cancels dragging. Separators resize neighboring cards. Expanding preserves the original layout. Closing a separate window returns the same content to its previous slot. Closing a card keeps its content and terminal sessions for the next time it is shown.',
 							),
 						() => focused.isConnected && focused.focus(),
 						AccessibilityVerbositySettingId.Chat,
@@ -155,12 +145,6 @@ export class CodeCardControls extends Disposable {
 		this._register(toDisposable(() => { visible.reset(); expanded.reset(); }));
 		update();
 		const actions = [
-			{
-				name: 'arrange',
-				title: localize('sessions.cards.arrange', 'Arrange card'),
-				icon: Lxicon.ellipsis,
-				run: () => this.arrange(id, card.domNode.ownerDocument.activeElement as HTMLElement),
-			},
 			{
 				name: 'popout',
 				title: localize('sessions.cards.popout', 'Open in new window'),
@@ -237,60 +221,6 @@ export class CodeCardControls extends Disposable {
 			button.domNode.setAttribute('aria-pressed', String(expanded));
 			if ((!this.layout.active || !this.layout.isCardVisible(id)) && popup) this.popouts.get(id)!.window.close();
 		}
-	}
-
-	private arrange(id: CodeCardId, anchor: HTMLElement): void {
-		if (this.popouts.has(id)) {
-			this.popouts.get(id)!.window.close();
-			return;
-		}
-		const labels = Object.fromEntries([...this.cards].map(([id, card]) => [id, card.title]));
-		const directions: readonly [Direction, string][] = [
-			[Direction.Left, localize('sessions.cards.left', 'Move to the left of {0}', '{0}')],
-			[Direction.Right, localize('sessions.cards.right', 'Move to the right of {0}', '{0}')],
-			[Direction.Up, localize('sessions.cards.above', 'Move above {0}', '{0}')],
-			[Direction.Down, localize('sessions.cards.below', 'Move below {0}', '{0}')],
-		];
-		const action = (key: string, label: string, run: () => void): IAction => ({
-			id: key,
-			label,
-			tooltip: '',
-			enabled: true,
-			run,
-		});
-		const actions: IAction[] = this.targets(id).map(
-			target =>
-				new SubmenuAction(
-					target,
-					labels[target],
-					directions.map(([direction, label]) =>
-						action(Direction[direction].toLowerCase(), label.replace('{0}', labels[target]), () => {
-							this.layout.moveCard(id, target, direction);
-							anchor.focus();
-							status(localize('sessions.cards.moved', '{0} moved', labels[id]));
-						}),
-					),
-				),
-		);
-		actions.push(new Separator());
-		for (const [key, label, width, height] of [
-			['wider', localize('sessions.cards.wider', 'Increase width'), 48, 0],
-			['narrower', localize('sessions.cards.narrower', 'Decrease width'), -48, 0],
-			['taller', localize('sessions.cards.taller', 'Increase height'), 0, 48],
-			['shorter', localize('sessions.cards.shorter', 'Decrease height'), 0, -48],
-		] as const)
-			actions.push(
-				action(key, label, () => {
-					this.layout.resizeCard(id, width, height);
-					anchor.focus();
-				}),
-			);
-		this.menus.showContextMenu({
-			getAnchor: () => anchor,
-			getActions: () => actions,
-			autoSelectFirstItem: true,
-			onHide: () => anchor.focus(),
-		});
 	}
 
 	private targets(id: CodeCardId): CodeCardTarget[] {

@@ -4,7 +4,6 @@ import { CommandsRegistry } from '../../../../platform/commands/common/commands.
 import { MenusRegistry, MenuId } from '../../../../platform/actions/common/actions.js';
 import type { ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../../../../nls.js';
-import { Menus } from '../../../browser/menus.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../../common/sessionCommands.js';
 import { SessionsCategories } from '../../../common/categories.js';
 import { VIEW_SESSION_CHANGES_COMMAND_ID } from '../../changes/common/changes.js';
@@ -33,10 +32,6 @@ export function registerAddTabActions(
 	for (const [order, action] of actions.entries()) {
 		registrations.add(CommandsRegistry.register(action.id, action.run));
 		registrations.add(MenusRegistry.appendMenuItems([
-			...(action.id === NEW_FILE_TAB_COMMAND_ID ? [{
-				id: Menus.CodeAddTab,
-				item: { command: { id: action.id, title: action.title, icon: action.icon }, order },
-			}] : []),
 			...([MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
 				id,
 				item: {

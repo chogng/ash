@@ -83,6 +83,60 @@ class TestDesktopEditorPart extends DesktopMainEditorPart {
 	public retain(resource: import('../../../base/common/lifecycle.js').IDisposable): void { this._register(resource); }
 }
 
+test('Desktop editor retains one tab-and-actions row above editor-only breadcrumbs', async () => {
+	const { URI } = await import('../../../base/common/uri.js');
+	const { EditorPaneRegistry } = await import('../../../workbench/browser/editor.js');
+	const { EditorPane } = await import('../../../workbench/browser/parts/editor/editorPane.js');
+	const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
+	using services = registerTestComponentServices(createTestEditorServices(), browserEnvironment.window.document);
+	const configuration = services.get(IConfigurationService);
+	using registry = new EditorPaneRegistry();
+	registry.registerEditorPane({
+		id: 'test.header', name: 'Header fixture',
+		canOpen: () => 1,
+		create: () => new class extends EditorPane {
+			readonly id = 'test.header';
+			async setInput(): Promise<void> { }
+			clearInput(): void { }
+			layout(): void { }
+			focus(): void { }
+		}('test.header', services.get(IThemeService), services.get(IStorageService)),
+	});
+	using editor = services.createInstance(DesktopMainEditorPart, browserEnvironment.window.document.body, { registry, configurationService: configuration });
+	editor.layout(new Dimension(800, 600));
+	const title = editor.activeGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!;
+	const header = title.querySelector<HTMLElement>('.ash-editor-group-header')!;
+	assert.equal(header.hidden, false);
+	assert.equal(editor.getTabsHeight(), 32);
+	const input = { resource: URI.file('/fixture/sample.txt') };
+	await editor.openEditor(input, { pinned: true });
+	assert.ok(header.querySelector('[role="tab"]'));
+	assert.ok(header.querySelector('.ash-editor-title-actions'));
+	const breadcrumbs = title.querySelector<HTMLElement>(':scope > .ash-editor-breadcrumbs')!;
+	assert.equal(breadcrumbs.hidden, false);
+	assert.equal(header.nextElementSibling, breadcrumbs);
+	assert.deepEqual((editor.activeGroup as import('../../../workbench/browser/parts/editor/editorGroupView.js').EditorGroupView).titleHeight, { offset: 32, total: 54 });
+	editor.setContentRightInset(220);
+	assert.equal(title.style.getPropertyValue('--ash-editor-content-right-inset'), '220px');
+	const second = { resource: URI.file('/fixture/second.txt') };
+	await editor.openEditor(second, { pinned: true });
+	editor.activeGroup.stickEditor(input);
+	assert.equal(editor.getTabsHeight(), 64);
+	let layouts = 0;
+	using layoutListener = editor.onDidLayout(() => { layouts++; });
+	await configuration.updateValue('workbench.editor.showTabs', 'single');
+	assert.ok(layouts > 0, 'Tab mode changes must update the surrounding docked layout');
+	assert.equal(editor.getTabsHeight(), 32);
+	await configuration.updateValue('workbench.editor.showTabs', 'multiple');
+	assert.equal(editor.getTabsHeight(), 64);
+	await editor.activeGroup.closeEditor(second);
+	await editor.activeGroup.closeEditor(input);
+	assert.equal(header.hidden, false);
+	assert.equal(title.hidden, false);
+	assert.equal(breadcrumbs.hidden, true);
+	assert.equal(editor.getTabsHeight(), 32);
+});
+
 function createParts(ownerDocument: Document, storage?: import('../../../platform/storage/common/storage.js').IStorageService): Map<SessionsPartId, WorkbenchPartInstance> {
 	const parts: Map<SessionsPartId, WorkbenchPartInstance> = new Map(sessionsPartIds.filter(id => id !== 'editor').map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
 	const services = registerTestComponentServices(createTestEditorServices(undefined, undefined, ownerDocument, storage), ownerDocument);
@@ -1005,7 +1059,8 @@ test('Code cards move in the Grid and restore exact dimensions after expanding e
 		layout.showPart('editor');
 		layout.moveCard('info', 'files', Direction.Down);
 		layout.moveCard('files', 'terminal', Direction.Up);
-		layout.resizeCard('files', 0, 60);
+		const initialFiles = layout.getPartSize('auxiliarybar');
+		layout.resizePart('auxiliarybar', new Dimension(initialFiles.width, initialFiles.height + 60));
 		const terminal = layout.getPartSize('panel');
 		const files = layout.getPartSize('auxiliarybar');
 		for (const id of ['terminal', 'files', 'info'] as const) {
@@ -1064,7 +1119,8 @@ test('Code card topology survives product composition, hide/show and profile rel
 	});
 	layout.showPart('panel');
 	layout.moveCard('files', 'terminal', Direction.Up);
-	layout.resizeCard('files', 0, -50);
+	const initialFiles = layout.getPartSize('auxiliarybar');
+	layout.resizePart('auxiliarybar', new Dimension(initialFiles.width, initialFiles.height - 50));
 	const files = layout.getPartSize('auxiliarybar');
 	layout.setPrimaryPart('editor');
 	layout.setPrimaryPart('sessions');

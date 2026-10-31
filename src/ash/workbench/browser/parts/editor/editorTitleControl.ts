@@ -101,19 +101,20 @@ export class EditorTitleControl extends Disposable {
 			}));
 		}
 		this.domNode.hidden = model.editorLimit !== 1 && !viewOptions.showHeader;
-		if (viewOptions.showHeader) {
-			this.tabsAndActionsDomNode.hidden = true;
-			this.domNode.style.setProperty('--ash-editor-tab-rows', '0');
-		}
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(toDisposable(() => this.tabsAndActionsDomNode.remove()));
 	}
 
 	get height(): number {
 		if (this.domNode.hidden) return 0;
-		const rows = this.viewOptions.showHeader && this.editors.length === 0 ? 0 : this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
+		return this.tabsHeight + this.header.height;
+	}
+
+	get tabsHeight(): number {
+		if (this.domNode.hidden) return 0;
+		const rows = this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1;
 		const rowHeight = this.viewOptions.showHeader ? EditorHeaderControl.HEIGHT : EditorTitleControl.HEIGHT;
-		return rowHeight * rows + this.header.height;
+		return rowHeight * rows;
 	}
 
 	setEditorTypes(choices: readonly IEditorPaneDescriptor[], select: (id: string) => Promise<unknown>): void {
@@ -141,14 +142,14 @@ export class EditorTitleControl extends Disposable {
 		// Single-content hosts retain their group controls even without an editor.
 		this.domNode.hidden = (!this.viewOptions.showHeader && this.model.editorLimit !== 1 && editors.length === 0)
 			|| (editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
-		this.tabsAndActionsDomNode.hidden = this.domNode.hidden || (this.viewOptions.showHeader === true && editors.length === 0);
+		this.tabsAndActionsDomNode.hidden = this.domNode.hidden;
 		this.domNode.style.setProperty('--ash-editor-tab-rows', this.tabsAndActionsDomNode.hidden ? '0' : String(this.tabs instanceof MultiRowEditorControl ? this.tabs.rowCount : 1));
 		if (this.domNode.hidden !== wasHidden || this.height !== previousHeight) this.heightEmitter.fire();
 	}
 
 	private createTabsControl(mode: EditorTabsMode): EditorTabsControl {
 		this.tabsAndActionsDomNode.classList.toggle('multiple', mode === 'multiple');
-		const firstAction = this.tabsAndActionsDomNode.querySelector(':scope > .ash-editor-title-actions');
+		const firstAction = this.tabsAndActionsDomNode.querySelector(':scope > .ash-editor-header-primary, :scope > .ash-editor-title-actions');
 		const control = mode === 'single'
 			? this.instantiationService.createInstance(SingleEditorTabsControl, this.tabsAndActionsDomNode, this.delegate, this.model)
 			: mode === 'none'

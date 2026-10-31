@@ -12,7 +12,6 @@ export class SessionsExplorerView extends ExplorerView {
 	public override setVisible(visible: boolean): void {
 		if (visible) {
 			this.element.classList.add('ash-sessions-files-view');
-			this.setFindPresentation('inline');
 		}
 		super.setVisible(visible);
 	}

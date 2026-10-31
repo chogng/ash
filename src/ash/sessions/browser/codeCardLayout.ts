@@ -37,7 +37,6 @@ export interface ICodeCardLayout {
 	setInformation(element: HTMLElement | undefined): void;
 	toggleInformation(): void;
 	closeCard(id: CodeCardId): void;
-	resizeCard(id: CodeCardId, widthDelta: number, heightDelta: number): void;
 	moveCard(id: CodeCardId, target: CodeCardTarget, direction: Direction): void;
 	expandCard(id: CodeCardId): void;
 	detachCard(id: CodeCardId, detached: boolean): void;

@@ -2992,6 +2992,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 		id: 'test.panel.second',
 		title: 'Second',
 		location: ViewContainerLocation.Panel,
+		mergeViewWithContainerWhenSingleView: false,
 	});
 	registry.registerStaticViewContainer({
 		id: 'test.panel.transient',
@@ -3069,7 +3070,11 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	assert.equal(await panes.openPaneComposite('test.panel.transient', ViewContainerLocation.Panel), undefined);
 	const first = await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel);
 	await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel);
-	await panes.openPaneComposite('test.panel.second', ViewContainerLocation.Panel);
+	const second = await panes.openPaneComposite('test.panel.second', ViewContainerLocation.Panel);
+	context.setContext('test.enabled', true);
+	assert.equal(second!.getView('test.panel.conditional')!.isHeaderVisible(), true,
+		'Explicitly unmerged panes keep their title even in a fill-layout host');
+	context.setContext('test.enabled', false);
 	panes.hideActivePaneComposite(ViewContainerLocation.Panel);
 	assert.deepEqual(
 		{

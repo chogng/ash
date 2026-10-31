@@ -343,6 +343,7 @@
 		"--ash-diff-original-line-numbers-left",
 		"--ash-diff-original-line-numbers-width",
 		"--ash-diff-overview-width",
+		"--ash-editor-content-right-inset",
 		"--ash-editor-tab-rows",
 		"--ash-editor-token-foreground",
 		"--ash-feedback-statusbar-height",
