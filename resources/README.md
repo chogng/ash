@@ -138,6 +138,50 @@ the Dock and menu bar at their actual display sizes. Apple's [Icon Composer
 guide](https://developer.apple.com/documentation/xcode/creating-your-app-icon-using-icon-composer)
 explains layer replacement and platform previews.
 
+## Fonts
+
+`fonts/*.sfd` contains the nine editable FontForge projects imported from the
+supplied Ash Type System v2.1 TTF bundle using FontForge 20230101. These are
+static-font projects reconstructed from the compiled fonts; they do not recover
+the original design masters or editing history. `fonts/reference/` retains the
+unmodified input TTFs for comparison; edit the `.sfd` projects and keep new
+exports in `.build/fonts/`.
+
+| Family       | Projects                                                            | Weights       |
+| ------------ | ------------------------------------------------------------------- | ------------- |
+| Ash Sans     | `AshSans-Regular.sfd`, `AshSans-Medium.sfd`, `AshSans-SemiBold.sfd` | 400, 500, 600 |
+| Ash Serif    | `AshSerif-Regular.sfd`, `AshSerif-Medium.sfd`                       | 400, 500      |
+| Ash Mono     | `AshMono-Regular.sfd`                                               | 400           |
+| Ash Sans SC  | `AshSansSC-Regular.sfd`                                             | 400           |
+| Ash Serif SC | `AshSerifSC-Regular.sfd`                                            | 400           |
+| Ash Mono SC  | `AshMonoSC-Regular.sfd`                                             | 400           |
+
+Open the relevant `.sfd` in FontForge, then double-click a glyph to edit its
+outline or metrics. Save changes to the `.sfd`. Use **File > Generate Fonts**
+with the TrueType format to export a TTF into the ignored `.build/fonts/`
+directory; enable OpenType layout and retain the imported TrueType instructions
+when exporting an unedited project. These projects are editing sources; runtime
+font loading belongs to each product host.
+
+Saving and reopening the SFDs preserves the imported quadratic outlines,
+available layout lookups and TrueType instructions. Re-export checks retain the
+original Unicode mappings, explicit advance widths and line metrics. FontForge
+reconciles outline origins with side bearings during import and recalculates
+composite bounding boxes during export; regenerated TTFs are not byte-identical
+to the supplied binaries.
+`AshSerif-Medium.ttf` contained 362 composite glyphs whose `USE_MY_METRICS`
+bindings disagreed with their explicit `hmtx` advances. Those conflicting
+bindings were disabled in `AshSerif-Medium.sfd` so saving and reopening the
+project preserves the explicit source widths. This changes the component-metrics
+binding and can affect hinted spacing, which needs review before using a
+regenerated Medium font. The other projects retain their original bindings.
+Mono SC retains the supplied 600-unit Latin and 1000-unit CJK advances. Compare
+new exports with the reference fonts before adopting them in a product host.
+
+The supplied Ash and upstream copyright notices are retained in
+[`fonts/OFL-LICENSE.txt`](fonts/OFL-LICENSE.txt), with the complete SIL Open Font
+License 1.1 text. The font sources remain under that license.
+
 ## Icons
 
 The cross-client ownership and rendering contract is documented in [`docs/icons.md`](../docs/icons.md).
