@@ -450,6 +450,16 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
     // a regular input file hides ConsoleStream's nonblocking-pipe failure.
     assert!(artifact.integrity().archive_size().get() > 3 * 1024 * 1024);
     artifact.open_verified().unwrap();
+    // A developer shell can put Git/MSYS tar first on PATH. It treats C: as a
+    // remote host; the installer must select the inbox tar instead of this entry.
+    let shadow_tar = root.path().join("shadow-tar");
+    fs::create_dir(&shadow_tar).unwrap();
+    fs::write(shadow_tar.join("tar.exe"), b"not the Windows inbox tar").unwrap();
+    let inherited_path = std::env::var_os("PATH").unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(shadow_tar).chain(std::env::split_paths(&inherited_path)),
+    )
+    .unwrap();
     for (shell, args) in [
         ("cmd.exe", vec!["/d", "/s", "/c"]),
         (
@@ -468,6 +478,7 @@ fn powershell_installer_preserves_binary_uploads_and_reuses_immutable_runtime() 
         ] {
             let mut process = Command::new(shell);
             process.args(&args);
+            process.env("PATH", &path);
             if shell == "cmd.exe" {
                 // OpenSSH supplies shell syntax after /c. Rust's normal CRT quoting
                 // would turn the nested PowerShell command into a string expression.

@@ -26,7 +26,8 @@ Windows builds accept `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc` fro
 matching Visual Studio Developer PowerShell. Use `just remote-package --target
 x86_64-pc-windows-msvc --package-dir dist/ash-remote`. Programs use `.exe`; the
 client recognizes drive/UNC workspace paths and invokes Windows PowerShell 5.1
-explicitly over OpenSSH. Installation requires Windows `tar.exe` and defaults to
+explicitly over OpenSSH. Installation uses the Windows inbox
+`%SystemRoot%\System32\tar.exe` and defaults to
 `%LOCALAPPDATA%\Ash\remote`. Windows x64 and ARM64 are built and verified
 on native Windows runners before their archives enter the release catalog.
 The first SSH initialization includes installing the profile's immutable package,

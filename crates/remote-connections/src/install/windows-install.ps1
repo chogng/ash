@@ -56,7 +56,10 @@ try {
         exit 0
     }
     if (Test-Path -LiteralPath $runtime) { Fail 'incomplete-runtime' }
-    if (!(Get-Command tar.exe -CommandType Application -ErrorAction SilentlyContinue)) { Fail 'tar-unavailable' 69 }
+    # Git/MSYS tar can interpret a drive letter as a remote archive host. The
+    # Windows inbox tar accepts native drive/UNC paths independent of PATH order.
+    $tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+    if (!(Test-Path -LiteralPath $tar -PathType Leaf)) { Fail 'tar-unavailable' 69 }
     $staging = Join-Path $parent ('.staging-' + [Guid]::NewGuid().ToString('N'))
     [IO.Directory]::CreateDirectory($staging) | Out-Null
     # Match POSIX umask 077 for new content, including caller-selected install roots.
@@ -108,7 +111,7 @@ public static class AshRemoteInput {
     try { $observed = [BitConverter]::ToString($hash.ComputeHash($file)).Replace('-', '').ToLowerInvariant() }
     finally { $file.Dispose(); $hash.Dispose() }
     if ($observed -cne $digest) { Fail 'archive-sha256-mismatch' 65 }
-    & tar.exe -xzf $archive -C $package
+    & $tar -xzf $archive -C $package
     if ($LASTEXITCODE -ne 0) { Fail 'archive-extraction-failed' 65 }
     foreach ($relative in @('ash-package.json', 'bin/ash-remote-server.exe', 'bin/ash-app-server.exe', 'bin/ash-app-server-daemon.exe', 'ash-path/rg.exe', 'ash-resources/tgrep/tgrep.exe', 'ash-resources/node/bin/node.exe')) {
         if (!(Test-Path -LiteralPath (Join-Path $package $relative) -PathType Leaf)) { Fail 'package-entrypoint-missing' 65 }
