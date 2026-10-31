@@ -73,6 +73,38 @@ async function openHost(page: Page, locale = 'en', view = 'vscode.markdown.edito
 	return frame;
 }
 
+test('Markdown preview applies typography updates through the Rust provider and rejects invalid sandbox styles', async ({ page }) => {
+	const preview: Record<string, unknown> = { fontFamily: 'Georgia, serif', fontSize: 20, lineHeight: 2 };
+	const runtime = await startMarkdownExtension('en', [], { markdown: { preview } });
+	try {
+		await page.route('**/__markdown_render**', async route => {
+			await route.fulfill({ json: await runtime.render('vscode.markdown.preview.editor', { document: { languageId: 'markdown', ...route.request().postDataJSON() } }) });
+		});
+		const frame = await openHost(page, 'en', 'vscode.markdown.preview.editor');
+		const main = frame.locator('main');
+		await expect(main).toHaveCSS('font-family', 'Georgia, serif');
+		await expect(main).toHaveCSS('font-size', '20px');
+		await expect(main).toHaveCSS('line-height', '40px');
+		await expect(main.locator('h1')).toHaveCSS('font-size', '40px');
+		await main.evaluate(element => element.setAttribute('data-retained', 'true'));
+		Object.assign(preview, { fontFamily: 'Arial, sans-serif', fontSize: 18, lineHeight: 1.5 });
+		await page.evaluate(() => window.ashMarkdownHost.edit(0, 0, '# Updated typography\n\n'));
+		await expect(main.getByRole('heading', { name: 'Updated typography', exact: true })).toBeVisible();
+		await expect(main).toHaveCSS('font-family', 'Arial, sans-serif');
+		await expect(main).toHaveCSS('font-size', '18px');
+		await expect(main).toHaveCSS('line-height', '27px');
+		await expect(main).toHaveAttribute('data-retained', 'true');
+		Object.assign(preview, { fontFamily: 'serif; color: red', fontSize: '18px', lineHeight: 0 });
+		await page.evaluate(() => window.ashMarkdownHost.edit(0, 0, '# Invalid styles\n\n'));
+		await expect(main.getByRole('heading', { name: 'Invalid styles', exact: true })).toBeVisible();
+		await expect(main).toHaveCSS('font-size', '13px');
+		await expect(main).toHaveCSS('line-height', '22.75px');
+		expect(await main.evaluate(element => getComputedStyle(element).fontFamily)).toContain('system-ui');
+	} finally {
+		await runtime.dispose();
+	}
+});
+
 test('Markdown rich editor formula updates preserve document styles', async ({ page }) => {
 	await page.goto('/markdownEditor.html');
 	await expect(page.locator('.katex')).toHaveCount(2);

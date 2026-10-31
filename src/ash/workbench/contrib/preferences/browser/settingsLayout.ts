@@ -757,25 +757,31 @@ export function createSettingsLayout(settings: readonly ISetting[]): readonly Se
 	for (const [id, entries] of extensions) {
 		const source = entries[0].configuration.source!;
 		const label = source.displayName ?? id;
+		const sections = new Map<ISetting['configuration']['section'], ISetting[]>();
+		for (const setting of entries) {
+			const section = setting.configuration.section;
+			const matches = sections.get(section) ?? [];
+			matches.push(setting);
+			sections.set(section, matches);
+		}
+		const groups: ISettingsGroup[] = [...sections].map(([section, settings]) => ({
+			id: section?.id ?? (section?.title ? settings[0].id : 'settings'),
+			title: section?.title ?? label,
+			description: '',
+			settings: settings.map(setting => ({ ...setting, presentation: 'general' })),
+		}));
 		const descriptor: SettingsCategoryDescriptor = {
 			id: `extension.${id}`,
 			label,
 			description: '',
 			keywords: [id],
 			presentation: 'general',
-			groups: [],
+			groups: groups.map(group => ({ id: group.id, label: group.title, description: group.description, settings: group.settings.map(setting => setting.id) })),
 		};
 		categories.push({
 			id: descriptor.id,
 			descriptor,
-			groups: [
-				{
-					id: 'settings',
-					title: label,
-					description: '',
-					settings: entries.map(setting => ({ ...setting, presentation: descriptor.presentation })),
-				},
-			],
+			groups,
 		});
 	}
 	return categories;

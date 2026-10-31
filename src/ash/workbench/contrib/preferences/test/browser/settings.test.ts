@@ -723,6 +723,8 @@ test('Extension settings use catalog identities and standard schemas without a p
 	assert.equal(defaults.get('sample.text').description, 'Sample text');
 	assert.deepEqual(defaults.get('editor.sample.enabled').tags, ['preview']);
 	assert.equal(registry.getConfiguration('sample.nested')?.source?.id, 'test.sample');
+	assert.deepEqual(registry.getConfiguration('sample.nested')?.section, { id: 'preferences', title: 'Sample settings' });
+	assert.equal(registry.getConfiguration('sample.nested')?.section, registry.getConfiguration('sample.text')?.section);
 	registry.updateConfigurations({ add: [], remove: [...parsed.contributes.configuration] });
 	assert.equal(
 		createSettingsLayout(new DefaultSettings(registry).all).some(category => category.id === extension.id),
@@ -754,12 +756,29 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 		layout.filter(category => category.id.startsWith('extension.')).map(category => [category.id, category.groups.flatMap(group => group.settings).length]),
 		[
 			['extension.ash.git', 103],
-			['extension.ash.markdown-language-features', 13],
+			['extension.ash.markdown-language-features', 16],
 			['extension.ash.media-preview', 2],
 		],
 	);
 	assert.equal(defaults.get('mediaPreview.video.loop').title, '循环播放视频');
 	assert.equal(defaults.get('markdown.validate.enabled').title, '检查链接');
+	const markdown = layout.find(category => category.id === 'extension.ash.markdown-language-features')!;
+	assert.deepEqual(markdown.groups.map(group => [group.id, group.title]), [
+		['markdown', '语言功能'],
+		['markdown.validate', '验证'],
+		['markdown.preview', '预览'],
+	]);
+	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>();
+	tree.setChildren(settingsRootNodes(layout));
+	const toc = new TOCTreeModel(tree, () => [markdown.descriptor]);
+	assert.deepEqual([...toc.children[0].children!].map(child => child.element.id), [
+		'extension.ash.markdown-language-features.group.markdown',
+		'extension.ash.markdown-language-features.group.markdown.validate',
+		'extension.ash.markdown-language-features.group.markdown.preview',
+	]);
+	tree.setQuery('@id:markdown.preview.fontSize');
+	assert.deepEqual([...toc.children[0].children!].map(child => child.element.id), ['extension.ash.markdown-language-features.group.markdown.preview']);
+	assert.deepEqual(tree.visibleItems.map(item => item.id), ['markdown.preview.fontSize']);
 	const severity = defaults.get('markdown.validate.fragmentLinks.enabled');
 	assert.equal(severity.valueType, 'select');
 	assert.deepEqual(severity.configuration.setting?.valueType === 'select' ? severity.configuration.setting.options.map(option => option.label) : [], ['忽略', '警告', '错误']);
@@ -767,14 +786,27 @@ test('Built-in Git, Markdown and Media settings localize, persist and reset thro
 	await configuration.updateValue('mediaPreview.video.loop', true);
 	await configuration.updateValue('markdown.validate.enabled', false);
 	await configuration.updateValue('git.untrackedChanges', 'separate');
+	await configuration.updateValue('markdown.preview.fontFamily', '"Microsoft YaHei", sans-serif');
+	await configuration.updateValue('markdown.preview.fontSize', 20);
+	await configuration.updateValue('markdown.preview.lineHeight', 2);
 	const document = (await configuration.read()).source;
 	assert.deepEqual(JSON.parse(document), {
 		'mediaPreview.video.loop': true,
 		'markdown.validate.enabled': false,
 		'git.untrackedChanges': 'separate',
+		'markdown.preview.fontFamily': '"Microsoft YaHei", sans-serif',
+		'markdown.preview.fontSize': 20,
+		'markdown.preview.lineHeight': 2,
 	});
 	using reopened = new WorkspaceService({ registry, source: document });
 	assert.equal(reopened.getValue('git.untrackedChanges'), 'separate');
+	assert.equal(reopened.getValue('markdown.preview.fontSize'), 20);
+	assert.equal(reopened.getValue('markdown.preview.lineHeight'), 2);
+	await assert.rejects(reopened.updateValue('markdown.preview.fontSize', 0), TypeError);
+	await assert.rejects(reopened.updateValue('markdown.preview.lineHeight', 0), TypeError);
+	await assert.rejects(reopened.updateValue('markdown.preview.fontFamily', []), TypeError);
+	await reopened.updateValue('markdown.preview.fontSize', undefined);
+	assert.equal(reopened.getValue('markdown.preview.fontSize'), 13);
 	await assert.rejects(reopened.updateValue('git.untrackedChanges', 'unsupported'), TypeError);
 	await reopened.updateValue('mediaPreview.video.loop', undefined);
 	assert.equal(reopened.getValue('mediaPreview.video.loop'), false);
