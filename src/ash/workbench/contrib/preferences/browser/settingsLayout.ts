@@ -599,10 +599,10 @@ export const SettingsNavigation = [
 		description: localize({ bundle: 'ash.settings', key: 'groups.agents.description' }, 'Configure chats, agents, models, and shared capabilities.'),
 		categories: [
 			{
-				id: 'chat-input',
-				label: localize({ bundle: 'ash.settings', key: 'categories.chat-input.label' }, 'Message input'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.chat-input.description' }, 'Set the font and spacing for messages you type.'),
-				keywords: ['chat input', 'prompt', 'font', 'typography'],
+				id: 'chat-appearance',
+				label: localize({ bundle: 'ash.settings', key: 'categories.chat-appearance.label' }, 'Appearance'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.chat-appearance.description' }, 'Customize the message input and code blocks in replies.'),
+				keywords: ['chat input', 'prompt', 'chat code', 'font', 'typography', 'word wrap'],
 				presentation: 'general',
 				groups: [
 					{
@@ -611,15 +611,6 @@ export const SettingsNavigation = [
 						description: localize('settings.chatInput.description', 'Choose a font, text size, and line spacing for the message input.'),
 						settings: ['chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight'],
 					},
-				],
-			},
-			{
-				id: 'chat-code-blocks',
-				label: localize({ bundle: 'ash.settings', key: 'categories.chat-code-blocks.label' }, 'Code blocks'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.chat-code-blocks.description' }, 'Set the font, spacing, and word wrap for code blocks in replies.'),
-				keywords: ['chat code', 'font', 'typography', 'word wrap'],
-				presentation: 'general',
-				groups: [
 					{
 						id: 'chat-code-blocks',
 						label: localize('settings.chatCodeBlocks.label', 'Code blocks'),

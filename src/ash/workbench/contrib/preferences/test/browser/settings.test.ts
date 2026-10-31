@@ -1913,10 +1913,12 @@ test('font preferences show translated labels and the actual platform defaults',
 		assert.ok(family.description.includes(EDITOR_FONT_DEFAULTS.fontFamily));
 		assert.ok(defaults.get('editor.fontSize').description.includes(String(EDITOR_FONT_DEFAULTS.fontSize)));
 		assert.equal(defaults.get('editor.lineHeight').description, '编辑器每行的高度（像素）。');
-		const input = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-input')!;
-		assert.equal(input.groups[0]?.title, '消息输入');
+		const appearance = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-appearance')!;
+		assert.equal(appearance.descriptor.label, '外观');
+		assert.equal(appearance.descriptor.description, '设置消息输入框和回复中代码块的显示方式。');
+		assert.deepEqual(appearance.groups.map(group => group.title), ['消息输入', '代码块']);
 		assert.deepEqual(
-			input.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])),
+			appearance.groups[0]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
 				['chat.input.fontFamily', '字体', ''],
 				['chat.input.fontSize', '字号', 13],
@@ -1925,10 +1927,8 @@ test('font preferences show translated labels and the actual platform defaults',
 		);
 		const inputFamily = defaults.get('chat.input.fontFamily');
 		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
-		const blocks = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-code-blocks')!;
-		assert.equal(blocks.groups[0]?.title, '代码块');
 		assert.deepEqual(
-			blocks.groups.flatMap(group => group.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue])),
+			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[
 				['chat.editor.fontFamily', '字体', ''],
 				['chat.editor.fontSize', '字号', 0],
@@ -1977,8 +1977,7 @@ test('settingsLayout is the single projection from registered settings to catego
 			'updates',
 			'network',
 			'interaction',
-			'chat-input',
-			'chat-code-blocks',
+			'chat-appearance',
 			'agents',
 			'teams',
 			'agent-defaults',
@@ -3315,6 +3314,19 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(agentsGroup.textContent, 'Chat');
 	assert.equal(agentsGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
+	await preferences.openSettings({ section: 'chat-appearance' });
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Appearance');
+	assert.equal(root.querySelector('[data-settings-category-id="chat-appearance"]')?.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
+	assert.equal(root.querySelector('[data-settings-category-id="chat-appearance"]')?.closest('.ash-tree-row')?.getAttribute('aria-selected'), 'true');
+	assert.equal(root.querySelector('[data-settings-category-id="chat-input"]'), null);
+	assert.equal(root.querySelector('[data-settings-category-id="chat-code-blocks"]'), null);
+	assert.deepEqual(
+		[...root.querySelectorAll('.ash-settings-content-tree h4')].map(heading => heading.textContent),
+		['Appearance', 'Message input', 'Code blocks'],
+	);
+	for (const key of ['chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap']) {
+		assert.ok(root.querySelector(`[data-settings-item-id="${key}"]`), key);
+	}
 	await preferences.openSettings({ section: 'github' });
 	assert.equal(root.querySelectorAll('[data-settings-group-id="extensions"]').length, 1);
 	assert.equal(root.querySelector('[data-settings-group-id="extensions"]')?.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'true');
