@@ -10,7 +10,7 @@ import { FileKind, IFileService } from '../../../../../platform/files/common/fil
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IResourceIconRenderer } from '../../../../browser/labels.js';
-import { ListConfiguration, WorkbenchCompressibleAsyncDataTree, type ResourceOpenEvent, type TreeExpandMode } from '../../../../../platform/list/browser/listService.js';
+import { ListConfiguration, WorkbenchCompressibleAsyncDataTree, type WorkbenchCompressibleAsyncDataTreeOptions, type ResourceOpenEvent, type TreeExpandMode } from '../../../../../platform/list/browser/listService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../browser/parts/views/viewPane.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
@@ -109,7 +109,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		this.contentElement.append(this.scrollContent);
 		const sorter = instantiationService.createInstance(FileSorter);
 		const dataSource = this._register(instantiationService.createInstance(ExplorerDataSource, sorter));
-		this.tree = this._register(new WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>(this.scrollContent, dataSource, {
+		this.tree = this._register(instantiationService.createInstance(WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>, this.scrollContent, dataSource, {
 			ariaLabel: localize('accessibility.explorerTreeLabel', 'Workspace files'),
 			multipleSelectionSupport: true,
 			dnd: this._register(instantiationService.createInstance(FileDragAndDrop, (error: unknown) => {
@@ -122,7 +122,6 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 				return items.map(item => item === focused && segment ? segment : item);
 			})),
 			scrolling: 'managed',
-			configurationService,
 			getHeight: () => 22,
 			findMode: 'filter',
 			compressionEnabled: configurationService.getValue<boolean>('explorer.compactFolders'),
@@ -144,7 +143,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 					twistie.append(loading);
 				} else if (state.collapsible) appendIcon(state.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
 			},
-		}));
+		} satisfies WorkbenchCompressibleAsyncDataTreeOptions<ExplorerItem>));
 		const updateTwistieLayout = () => {
 			const theme = resourceIconRenderer.getFileIconTheme();
 			// Without folder icons, a file icon occupies the same column as a folder arrow.

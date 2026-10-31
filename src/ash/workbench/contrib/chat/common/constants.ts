@@ -6,6 +6,10 @@ import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTra
 
 export const MANAGE_CHAT_COMMAND_ID = 'workbench.action.chat.manage';
 
+export enum ChatConfiguration {
+	ChatViewSessionsOrientation = 'chat.viewSessions.orientation',
+}
+
 export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';
 /** The illustration preference is interpreted by the TypeScript Welcome page. */
 export enum AgentsWindowGraphicVariant {

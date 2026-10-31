@@ -24,12 +24,15 @@ test('The Chat session catalog shows current activity and restores its workspace
 	} as unknown as ISessionsManagementService;
 	const storage = { getBoolean: () => false, onDidChangeValue: Event.None } as unknown as IStorageService;
 	const groups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
-	const model = createAgentSessionsModel(sessions, storage, groups, () => []);
+	const preserveFocus: boolean[] = [];
+	const model = createAgentSessionsModel(sessions, storage, groups, () => [], value => preserveFocus.push(value));
 	let updates = 0;
 	using listener = model.onDidChange(() => { updates++; });
 	assert.equal(model.items[0]!.description, 'Reading files');
 	model.items[0]!.open();
 	assert.deepEqual(opened, [['session', 'root']]);
+	model.items[0]!.open({ preserveFocus: true });
+	assert.deepEqual(preserveFocus, [false, true]);
 	session = { ...session, chats: [{ ...session.chats[0]!, management: { status: 'completed', statusChangedAtUnixMs: 1, activity: { type: 'operation', text: 'Old operation' } } }] };
 	changed.fire();
 	assert.equal(updates, 1);

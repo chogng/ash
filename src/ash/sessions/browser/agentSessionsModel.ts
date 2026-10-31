@@ -11,7 +11,7 @@ import type { ISessionsManagementService } from '../services/sessions/common/ses
 import { getInProgressSessionDescription } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionDescription.js';
 
 /** Exposes the Sessions catalog to the Chat view without moving session ownership into Workbench. */
-export function createAgentSessionsModel(sessions: ISessionsManagementService, storage: IStorageService, groups: ISessionGroupsService, actions: (selection: SessionsViewSelection) => readonly IAction[], onDidOpen?: () => void): IAgentSessionsModel {
+export function createAgentSessionsModel(sessions: ISessionsManagementService, storage: IStorageService, groups: ISessionGroupsService, actions: (selection: SessionsViewSelection) => readonly IAction[], onDidOpen?: (preserveFocus: boolean) => void): IAgentSessionsModel {
 	return {
 		onDidChange: Event.any(sessions.onDidChange, groups.onDidChange, (listener: () => void) => storage.onDidChangeValue(event => { if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.pinned.')) listener(); })),
 		get items() { return sessionItems(sessions, storage, groups, actions, onDidOpen); },
@@ -20,7 +20,7 @@ export function createAgentSessionsModel(sessions: ISessionsManagementService, s
 	};
 }
 
-function sessionItems(sessions: ISessionsManagementService, storage: IStorageService, groups: ISessionGroupsService, actions: (selection: SessionsViewSelection) => readonly IAction[], onDidOpen?: () => void): readonly IAgentSessionListItem[] {
+function sessionItems(sessions: ISessionsManagementService, storage: IStorageService, groups: ISessionGroupsService, actions: (selection: SessionsViewSelection) => readonly IAction[], onDidOpen?: (preserveFocus: boolean) => void): readonly IAgentSessionListItem[] {
 	const items: IAgentSessionListItem[] = sessions.untitledSessions.map(draft => ({
 		id: `draft:${draft.untitledSessionId}`,
 		title: draft.title.trim() || localize('chat.sessions.new', 'New Session'),
@@ -28,9 +28,9 @@ function sessionItems(sessions: ISessionsManagementService, storage: IStorageSer
 		kind: 'draft',
 		getActions: () => actions({ kind: 'untitled', session: draft }),
 		active: sessions.activeUntitledSession?.untitledSessionId === draft.untitledSessionId,
-		open: () => {
+		open: options => {
 			sessions.selectUntitledSession(draft.untitledSessionId);
-			onDidOpen?.();
+			onDidOpen?.(options?.preserveFocus === true);
 		},
 	}));
 	for (const session of sessions.sessions) {
@@ -49,9 +49,9 @@ function sessionItems(sessions: ISessionsManagementService, storage: IStorageSer
 			group: groups.groups.find(group => group.sessionIds.includes(session.sessionId)),
 			getActions: () => actions({ kind: 'session', active: { session, threadId: thread.threadId } }),
 			active: sessions.activeUntitledSession === undefined && sessions.active?.session.sessionId === session.sessionId,
-			open: () => {
+			open: options => {
 				sessions.selectThread(session.sessionId, thread.threadId);
-				onDidOpen?.();
+				onDidOpen?.(options?.preserveFocus === true);
 			},
 		});
 	}

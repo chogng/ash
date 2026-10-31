@@ -541,7 +541,7 @@ test('Workbench layout assigns the window edge inset on startup from the Activit
 	dom.window.close();
 });
 
-test('Workbench pane sashes snap closed while Auxiliary Bar stops at its minimum', () => {
+test('Workbench pane sashes snap closed and reopen their retained Parts', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const contextKeys = new ContextKeyService();
 	const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(1_200, 800) });
@@ -556,15 +556,15 @@ test('Workbench pane sashes snap closed while Auxiliary Bar stops at its minimum
 	assert.equal(harness.layout.isPartVisible('sidebar'), true);
 
 	dragWorkbenchSash(dom.window, harness.container, 'auxiliarybar', 1, 320);
-	assert.equal(harness.layout.isPartVisible('auxiliarybar'), true);
-	assert.equal(contextKeys.getValue('auxiliaryBarVisible'), true);
-	const auxiliaryFrame = harness.container.querySelector<HTMLElement>("[data-part='auxiliarybar']")!.parentElement!;
-	const frameInsets =
-		(Number.parseFloat(auxiliaryFrame.style.paddingLeft) || 0) +
-		(Number.parseFloat(auxiliaryFrame.style.paddingRight) || 0);
-	assert.equal(harness.layout.getPartSize('auxiliarybar').width, 170 + frameInsets);
+	assert.equal(harness.layout.isPartVisible('auxiliarybar'), false);
+	assert.equal(contextKeys.getValue('auxiliaryBarVisible'), false);
+	const auxiliary = harness.container.querySelector<HTMLElement>("[data-part='auxiliarybar']")!;
+	assert.equal(auxiliary.hidden, true);
 	dragWorkbenchSash(dom.window, harness.container, 'auxiliarybar', 1, -110);
 	assert.equal(harness.layout.isPartVisible('auxiliarybar'), true);
+	assert.equal(contextKeys.getValue('auxiliaryBarVisible'), true);
+	assert.equal(auxiliary.hidden, false);
+	assert.equal(harness.container.querySelector("[data-part='auxiliarybar']"), auxiliary);
 
 	dragWorkbenchSash(dom.window, harness.container, 'panel', 0, harness.layout.getPartSize('panel').height);
 	assert.equal(harness.layout.isPartVisible('panel'), false);
@@ -1437,7 +1437,7 @@ test('Workbench layout restores scoped state through the storage service', async
 	});
 	first.layout.layout(new Dimension(1_000, 700));
 	first.layout.resizePart('auxiliarybar', first.layout.getPartSize('auxiliarybar').with(310));
-	first.layout.hidePart('auxiliarybar');
+	dragWorkbenchSash(dom.window, first.container, 'auxiliarybar', 1, 310);
 	first.layout.resizePart('panel', new Dimension(first.layout.getPartSize('panel').width, 175));
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
 	first.disposables.dispose();

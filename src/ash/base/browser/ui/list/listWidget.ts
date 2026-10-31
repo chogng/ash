@@ -1,4 +1,5 @@
 import './list.css';
+import type { ContextMenuAnchor } from '../../contextmenu.js';
 import { addDisposableListener, getWindow, isHTMLElement, stopEvent } from '../../dom.js';
 import { equals } from '../../../common/arrays.js';
 import { Emitter, type Event } from '../../../common/event.js';
@@ -65,6 +66,12 @@ export interface ListPointerEvent<T> {
 	readonly browserEvent: MouseEvent;
 }
 
+export interface ListContextMenuEvent<T> {
+	readonly element: T | undefined;
+	readonly anchor: ContextMenuAnchor;
+	readonly browserEvent: MouseEvent | KeyboardEvent;
+}
+
 export interface ListAcceptEvent<T> {
 	readonly item: T;
 	readonly index: number;
@@ -80,6 +87,7 @@ export class List<T> extends Disposable {
 	private readonly _onDidChangeActive = this._register(new Emitter<ListActiveChangeEvent<T>>());
 	private readonly _onDidChangeSelection = this._register(new Emitter<ListSelectionChangeEvent<T>>());
 	private readonly _onPointer = this._register(new Emitter<ListPointerEvent<T>>());
+	private readonly _onContextMenu = this._register(new Emitter<ListContextMenuEvent<T>>());
 	private readonly _onDidDoubleClick = this._register(new Emitter<ListPointerEvent<T>>());
 	private readonly _onDidAccept = this._register(new Emitter<ListAcceptEvent<T>>());
 	private _activeIndex = -1;
@@ -92,6 +100,7 @@ export class List<T> extends Disposable {
 	readonly onDidChangeFocus: Event<ListActiveChangeEvent<T>> = this._onDidChangeActive.event;
 	readonly onDidChangeSelection: Event<ListSelectionChangeEvent<T>> = this._onDidChangeSelection.event;
 	readonly onPointer: Event<ListPointerEvent<T>> = this._onPointer.event;
+	readonly onContextMenu: Event<ListContextMenuEvent<T>> = this._onContextMenu.event;
 	readonly onDidDoubleClick: Event<ListPointerEvent<T>> = this._onDidDoubleClick.event;
 	readonly onDidAccept: Event<ListAcceptEvent<T>> = this._onDidAccept.event;
 	readonly onDidScroll: Event<number>;
@@ -160,7 +169,27 @@ export class List<T> extends Disposable {
 			this._register(addDisposableListener(this.element, 'dblclick', (event: MouseEvent) => this.onDoubleClick(event)));
 		}
 		if (options.keyboardNavigation === true) this._register(addDisposableListener(this.element, 'keydown', (event: KeyboardEvent) => this.onKeyDown(event)));
-		this._register(addDisposableListener(this.element, 'focusout', () => this.resetNavigationPrefix()));
+		// Open on release so the trigger key cannot also act on the newly opened menu.
+		let contextMenuKeyDown = false;
+		const isContextMenuKey = (event: KeyboardEvent) => event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10';
+		this._register(addDisposableListener(this.element, 'keydown', (event: KeyboardEvent) => {
+			if (event.target !== this.element || !isContextMenuKey(event)) return;
+			contextMenuKeyDown = true;
+			stopEvent(event);
+		}));
+		this._register(addDisposableListener(this.element, 'keyup', (event: KeyboardEvent) => {
+			contextMenuKeyDown = false;
+			if (event.target !== this.element || !isContextMenuKey(event)) return;
+			stopEvent(event);
+			this._onContextMenu.fire({ element: this.activeItem, anchor: this.row(this.activeIndex) ?? this.element, browserEvent: event });
+		}));
+		if (options.mouseSupport !== false) this._register(addDisposableListener(this.domNode, 'contextmenu', (event: MouseEvent) => {
+			if (contextMenuKeyDown) { stopEvent(event); return; }
+			const index = this.view.getRowIndex(event);
+			if (index !== undefined) this.setActiveIndex(index, event);
+			this._onContextMenu.fire({ element: index === undefined ? undefined : this.items[index], anchor: { x: event.clientX, y: event.clientY, targetWindow: this.element.ownerDocument.defaultView! }, browserEvent: event });
+		}));
+		this._register(addDisposableListener(this.element, 'focusout', () => { contextMenuKeyDown = false; this.resetNavigationPrefix(); }));
 	}
 
 	updateOptions(options: Pick<ListOptions<T>, 'smoothScrolling'>): void { this.view.updateOptions(options); }

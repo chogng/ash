@@ -17,12 +17,19 @@ import { IInstantiationService } from '../../../platform/instantiation/common/in
 import type { ModelProviderCredentialStatus } from '../../../workbench/services/chat/common/chatService.js';
 import { IPreferencesService } from '../../../workbench/services/preferences/common/preferences.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
-import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation, AgentSessionsPresentationContext, AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation, AgentSessionsPresentationContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { AgentSessionsViewerOrientation } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessions.js';
 import { ChatViewPane } from '../chatViewPane.js';
 import { Menus } from '../menus.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
+import { ChatConfiguration } from '../../../workbench/contrib/chat/common/constants.js';
+import { Dimension } from '../../../base/browser/dom.js';
+import { IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import { IViewDescriptorService, ViewContainerLocation } from '../../../workbench/common/views.js';
+import { IPaneCompositePartService } from '../../../workbench/services/panecomposite/browser/panecomposite.js';
+import { IWorkbenchLayoutService, isHorizontal } from '../../../workbench/services/layout/browser/layoutService.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsPresentation>({
 	key: AGENT_SESSIONS_PRESENTATION_SETTING,
@@ -35,7 +42,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 	setting: {
 		title: localize('chat.sessions.presentation.title', 'Session display'),
-		description: localize('chat.sessions.presentation.description', 'Show opened sessions as tabs or switch conversations using a list.'),
+		description: localize('chat.sessions.presentation.description', 'Show opened sessions as tabs or switch conversations using a list. The list opens beside Chat when there is enough width.'),
 		valueType: 'select',
 		options: [
 			{ value: AgentSessionsPresentation.Tabs, label: localize('chat.sessions.presentation.tabs', 'Tabs') },
@@ -73,6 +80,30 @@ for (const [presentation, title, id] of [
 
 const ChatBrowserAvailable = ContextKeyExpr.equals('chatBrowserAvailable', true);
 
+for (const [orientation, id, title] of [
+	['stacked', 'agentSessions.hideAgentSessionsSidebar', localize2('chat.sessions.orientation.stackCommand', 'Stack Agent Sessions Above Chat')],
+	['sideBySide', 'agentSessions.showAgentSessionsSidebar', localize2('chat.sessions.orientation.sidebarCommand', 'Show Agent Sessions Sidebar')],
+] as const) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({ id, title, precondition: AgentSessionsPresentationContext.isEqualTo(AgentSessionsPresentation.List), f1: true });
+		}
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const view = await accessor.get(IViewsService).openView(CHAT_VIEW_ID, false);
+			if (!(view instanceof ChatViewPane)) {
+				return;
+			}
+			const target = orientation === 'sideBySide' ? AgentSessionsViewerOrientation.SideBySide : AgentSessionsViewerOrientation.Stacked;
+			const previousDimensions = view.getLastDimensions(target);
+			await accessor.get(IConfigurationService).updateValue(ChatConfiguration.ChatViewSessionsOrientation, orientation, ConfigurationTarget.USER_LOCAL);
+			if (target === AgentSessionsViewerOrientation.SideBySide && view.getSessionsViewerOrientation() !== target) {
+				view.toggleSessionsSidebar();
+			}
+			resizeChatForSessions(accessor, view, target, previousDimensions?.width);
+		}
+	});
+}
+
 
 registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 	constructor() {
@@ -82,7 +113,7 @@ registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 			tooltip: localize('chat.sessions.showSidebar', 'Show Agent Sessions'),
 			icon: Lxicon.layoutSidebarRightOff1,
 			toggled: {
-				condition: AgentSessionsSidebarVisibleContext.isEqualTo(true),
+				condition: ChatContextKeys.agentSessionsViewerOrientation.isEqualTo(AgentSessionsViewerOrientation.SideBySide),
 				title: localize('chat.sessions.hideSidebar', 'Hide Agent Sessions'),
 				tooltip: localize('chat.sessions.hideSidebar', 'Hide Agent Sessions'),
 				icon: Lxicon.layoutSidebarRight1,
@@ -99,10 +130,63 @@ registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
-		const view = await accessor.get(IViewsService).openView(CHAT_VIEW_ID);
-		if (view instanceof ChatViewPane) view.toggleSessionsSidebar();
+		const view = await accessor.get(IViewsService).openView(CHAT_VIEW_ID, false);
+		if (!(view instanceof ChatViewPane)) {
+			return;
+		}
+		const target = view.getSessionsViewerOrientation() === AgentSessionsViewerOrientation.SideBySide
+			? AgentSessionsViewerOrientation.Stacked : AgentSessionsViewerOrientation.SideBySide;
+		// Capture the target's last geometry before visibility or configuration can relayout it.
+		const previousDimensions = view.getLastDimensions(target);
+		if (view.toggleSessionsSidebar()) {
+			await accessor.get(IConfigurationService).updateValue(ChatConfiguration.ChatViewSessionsOrientation, 'sideBySide', ConfigurationTarget.USER_LOCAL);
+		}
+		resizeChatForSessions(accessor, view, target, previousDimensions?.width);
 	}
 });
+
+function resizeChatForSessions(accessor: ServicesAccessor, view: ChatViewPane, orientation: AgentSessionsViewerOrientation, previousContentWidth: number | undefined): void {
+	if (accessor.get(IContextKeyService).getValue<boolean>('chatInEditor')) {
+		return;
+	}
+	const descriptors = accessor.get(IViewDescriptorService);
+	const container = descriptors.getViewContainerForView(CHAT_VIEW_ID);
+	const location = container ? descriptors.getViewContainerLocation(container) : null;
+	if (location === null) {
+		return;
+	}
+	const layout = accessor.get(IWorkbenchLayoutService);
+	// A horizontal Panel shares its width with the editor and cannot be widened independently.
+	if (location === ViewContainerLocation.Panel && isHorizontal(layout.getPanelPosition())) {
+		return;
+	}
+	const part = accessor.get(IPaneCompositePartService).getPartId(location);
+	let size = layout.getPartSize(part);
+	const paneWidth = view.element.getBoundingClientRect().width;
+	const frameWidth = paneWidth > 0 ? Math.max(0, size.width - paneWidth) : 0;
+	// The view owns its preferred content width; the Part adds its frame insets.
+	const sideBySide = orientation === AgentSessionsViewerOrientation.SideBySide;
+	const minimumWidth = view.getOptimalWidth() + frameWidth + 1;
+	if (sideBySide && size.width >= minimumWidth) {
+		return;
+	}
+	// Maximization belongs to the Workbench; closing the inner sidebar keeps that state.
+	if (!sideBySide && part === 'auxiliarybar' && layout.isAuxiliaryBarMaximized()) {
+		return;
+	}
+	if (part === 'auxiliarybar' && layout.isAuxiliaryBarMaximized()) {
+		layout.setAuxiliaryBarMaximized(false);
+		size = layout.getPartSize(part);
+	}
+	const previousWidth = previousContentWidth === undefined ? undefined : previousContentWidth + frameWidth;
+	const width = sideBySide
+		? Math.max(minimumWidth, previousWidth ?? layout.mainContainerDimension.width / 2)
+		: previousWidth ?? Math.max(view.getOptimalWidth() + frameWidth, size.width - view.getOptimalWidth());
+	layout.resizePart(part, new Dimension(width, size.height));
+	if (sideBySide && part === 'auxiliarybar' && layout.getPartSize(part).width < minimumWidth) {
+		layout.setAuxiliaryBarMaximized(true);
+	}
+}
 
 registerAction2(class OpenChatBrowserAction extends Action2 {
 	constructor() {

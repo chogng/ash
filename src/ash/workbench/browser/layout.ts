@@ -778,8 +778,7 @@ function requiredPart(parts: ReadonlyMap<WorkbenchPartId, Part>, partId: Workben
 }
 
 function isSnappableWorkbenchPart(partId: WorkbenchPartId): boolean {
-	// Auxiliary Bar resizing stops at its content minimum; explicit toggles own hiding it.
-	return partId === 'sidebar' || partId === 'agentSidebar' || partId === 'panel';
+	return partId === 'sidebar' || partId === 'auxiliarybar' || partId === 'agentSidebar' || partId === 'panel';
 }
 
 function createWorkbenchGridDescriptor(

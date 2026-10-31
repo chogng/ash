@@ -1,3 +1,6 @@
+import './tree.css';
+import type { TreeContextMenuEvent } from './tree.js';
+import type { ListAccessibilityProvider } from '../list/list.js';
 import type { IInputBoxStyles } from '../inputbox/inputbox.js';
 import type { IButtonStyles } from '../button/button.js';
 import type { IListStyles } from '../list/listWidget.js';
@@ -30,6 +33,8 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly styles?: IListStyles;
 	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly ariaLabel?: string;
+	/** Content labels come from the host; Tree owns structural ARIA. */
+	readonly accessibilityProvider?: Pick<ListAccessibilityProvider<T>, 'getAriaLabel'>;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
@@ -85,6 +90,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private findWidget: { readonly element: HTMLElement; readonly input: InputBox; } | undefined;
 
 	readonly onPointer: Event<TreePointerEvent<TNode>> = this._onPointer.event;
+	readonly onContextMenu: Event<TreeContextMenuEvent<TNode>>;
 	readonly onDidDoubleClick: Event<TreePointerEvent<TNode>> = this._onDidDoubleClick.event;
 	readonly onDidAccept: Event<TreeAcceptEvent<TNode>> = this._onDidAccept.event;
 	readonly onDidChangeFocus: Event<TreeFocusChangeEvent<TNode>> = this._onDidChangeFocus.event;
@@ -124,6 +130,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			dnd: options.dnd ? this.asListDragAndDrop(options.dnd) : undefined,
 			accessibilityProvider: {
 				getRole: () => 'treeitem',
+				getAriaLabel: node => options.accessibilityProvider?.getAriaLabel?.(node.element),
 				getAriaLevel: (node) => node.depth,
 				getAriaSetSize: (node) => node.visibleChildrenCount,
 				getAriaPosInSet: (node) => node.visibleChildIndex + 1,
@@ -136,6 +143,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		}));
 		this.element = this.list.element;
 		this.domNode = this.list.domNode;
+		this.onContextMenu = this.list.onContextMenu;
 		this.onDidScroll = this.list.onDidScroll;
 		this.element.classList.add(
 			'ash-tree',
@@ -163,6 +171,13 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		}));
 		this._register(addDisposableListener(this.element, 'keydown', (event: KeyboardEvent) => this.onKeyDown(event)));
 		this._register(this.list.onDidScroll(() => this.updateActiveIndentGuides()));
+	}
+
+	public layout(height: number, width?: number): void {
+		if (width !== undefined) {
+			this.domNode.style.width = `${width}px`;
+		}
+		this.list.layout(height);
 	}
 
 	get items(): readonly TNode[] { return this.list.items; }

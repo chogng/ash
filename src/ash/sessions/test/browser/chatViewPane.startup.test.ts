@@ -7,7 +7,6 @@ import { ImageEditorService } from '../../../workbench/services/imageEditor/brow
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
-import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
@@ -138,7 +137,6 @@ test('opens a local Chat conversation before the backend session request settles
 		services,
 		services.get(IConfigurationService),
 		services.get(IStorageService),
-		new UserDataProfileService(),
 		services.get(ILifecycleService), { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, services.get(IAuxiliaryWindowService),
 	);
 

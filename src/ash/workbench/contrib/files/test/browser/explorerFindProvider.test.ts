@@ -1,8 +1,10 @@
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ExplorerFindProvider } from '../../browser/views/explorerViewer.js';
-import { WorkbenchCompressibleAsyncDataTree } from '../../../../../platform/list/browser/listService.js';
+import { WorkbenchCompressibleAsyncDataTree, type WorkbenchCompressibleAsyncDataTreeOptions } from '../../../../../platform/list/browser/listService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { ExplorerItem } from '../../common/explorerModel.js';
@@ -20,23 +22,24 @@ test('Explorer find reads collapsed workspace names and cancels late results on 
 		let completeRead: ((children: ExplorerItem[]) => void) | undefined;
 		let reads = 0;
 		using config = new InMemoryConfigurationService(new ConfigurationRegistry());
-		using tree = new WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>(host, {
-			hasChildren: item => item.kind === FileKind.Directory,
-			getChildren: async item => {
+		using services = new InstantiationService();
+		services.registerInstance(IConfigurationService, config);
+		using tree = services.createInstance(WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>, host, {
+			hasChildren: (item: ExplorerItem) => item.kind === FileKind.Directory,
+			getChildren: async (item: ExplorerItem) => {
 				if (item === root) return [folder];
 				if (item.resource.path === '/other') return [];
 				reads++;
 				return new Promise<ExplorerItem[]>(resolve => { completeRead = resolve; });
 			},
 		}, {
-			configurationService: config,
 			compressionEnabled: false,
 			findMode: 'filter',
 			identityProvider: { getId: item => item.resource.toString() },
 			collapseByDefault: () => true,
 			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: item => item.name, getCompressedNodeKeyboardNavigationLabel: items => items.map(item => item.name).join('/') },
 			renderCompressedElements: items => Object.assign(browser.window.document.createElement('span'), { textContent: items.map(item => item.name).join('/') }),
-		});
+		} satisfies WorkbenchCompressibleAsyncDataTreeOptions<ExplorerItem>);
 		await tree.setInput(root);
 		using provider = new ExplorerFindProvider(tree, header);
 		const input = header.querySelector('input')!;

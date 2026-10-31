@@ -82,17 +82,31 @@
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
-.ash-chat-body.sessions-sidebar-visible > .ash-chat-pane-host {
+.ash-chat-body.sessions-side-by-side {
+	flex-direction: row-reverse;
+}
+
+.ash-chat-body.sessions-side-by-side > .ash-chat-sessions-sidebar {
+	flex: 0 0 auto;
+	min-width: 200px;
+	border-bottom: 0;
+	border-left: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-side-by-side)
+	> .ash-chat-pane-host {
 	/* Let the composer grow with its input and attachments before allocating list space. */
 	flex: 0 0 auto;
 	min-height: 116px;
 }
 
-.ash-chat-body.sessions-sidebar-visible > .ash-chat-pane-host > .ash-chat {
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-side-by-side)
+	> .ash-chat-pane-host
+	> .ash-chat {
 	height: auto;
 }
 
-.ash-chat-body.sessions-sidebar-visible
+.ash-chat-body.sessions-sidebar-visible:not(.sessions-side-by-side)
 	> .ash-chat-pane-host
 	> .ash-chat
 	> .ash-chat-list-widget {

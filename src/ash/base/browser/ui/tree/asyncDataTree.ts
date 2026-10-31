@@ -1,3 +1,5 @@
+import type { ListAccessibilityProvider } from '../list/list.js';
+import type { TreeContextMenuEvent } from './tree.js';
 import type { IFindWidgetStyles } from './abstractTree.js';
 import type { IListStyles } from '../list/listWidget.js';
 import { Emitter, type Event } from '../../../common/event.js';
@@ -17,6 +19,7 @@ interface AsyncDataTreeCommonOptions<T> {
 	readonly styles?: IListStyles;
 	readonly findWidgetStyles?: IFindWidgetStyles;
 	readonly ariaLabel?: string;
+	readonly accessibilityProvider?: Pick<ListAccessibilityProvider<T>, 'getAriaLabel'>;
 	readonly multipleSelectionSupport?: boolean;
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
@@ -112,6 +115,8 @@ interface AsyncTreeCollapseEvent<T> {
 }
 
 interface AsyncTreeView<T> extends IDisposable {
+	readonly onContextMenu: Event<TreeContextMenuEvent<T>>;
+	layout(height: number, width?: number): void;
 	updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean; }): void;
 	readonly element: HTMLDivElement;
 	readonly domNode: HTMLDivElement;
@@ -201,7 +206,10 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 
 	protected abstract createTree(container: HTMLElement, options: TOptions): AsyncTreeView<T>;
 
+	public layout(height: number, width?: number): void { this.tree.layout(height, width); }
+
 	getInput(): TInput | undefined { return this.input; }
+	get onContextMenu(): Event<TreeContextMenuEvent<T>> { return this.tree.onContextMenu; }
 	public updateOptions(options: Pick<AsyncDataTreeCommonOptions<T>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'> & { readonly compressionEnabled?: boolean; }): void {
 		const state = this.getViewState();
 		if (options.compressionEnabled !== undefined) this.compressionEnabled = options.compressionEnabled;
@@ -514,6 +522,7 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 			styles: options.styles,
 			findWidgetStyles: options.findWidgetStyles,
 			ariaLabel: options.ariaLabel,
+			accessibilityProvider: options.accessibilityProvider,
 			multipleSelectionSupport: options.multipleSelectionSupport,
 			scrolling: options.scrolling,
 			smoothScrolling: options.smoothScrolling,
@@ -558,6 +567,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 			styles: options.styles,
 			findWidgetStyles: options.findWidgetStyles,
 			ariaLabel: options.ariaLabel,
+			accessibilityProvider: options.accessibilityProvider,
 			multipleSelectionSupport: options.multipleSelectionSupport,
 			scrolling: options.scrolling,
 			smoothScrolling: options.smoothScrolling,
@@ -588,9 +598,11 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 
 function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): AsyncTreeView<T> {
 	return {
+		layout: (height, width) => tree.layout(height, width),
 		element: tree.element,
 		domNode: tree.domNode,
 		onPointer: tree.onPointer,
+		onContextMenu: tree.onContextMenu,
 		onDidDoubleClick: tree.onDidDoubleClick,
 		onDidAccept: tree.onDidAccept,
 		onDidChangeFocus: tree.onDidChangeFocus,
@@ -627,9 +639,11 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 
 function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView<T> {
 	return {
+		layout: (height, width) => tree.layout(height, width),
 		element: tree.element,
 		domNode: tree.domNode,
 		onPointer: tree.onPointer,
+		onContextMenu: tree.onContextMenu,
 		onDidDoubleClick: tree.onDidDoubleClick,
 		onDidAccept: tree.onDidAccept,
 		onDidChangeFocus: tree.onDidChangeFocus,

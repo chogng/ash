@@ -1,5 +1,12 @@
 import { mapDragAndDropData, type DragAndDropData } from '../dnd/dnd.js';
 import type { ListDragOverPosition, ListDragTargetSector } from '../list/list.js';
+import type { ContextMenuAnchor } from '../../contextmenu.js';
+
+export interface TreeContextMenuEvent<T> {
+	readonly element: T | undefined;
+	readonly anchor: ContextMenuAnchor;
+	readonly browserEvent: MouseEvent | KeyboardEvent;
+}
 
 export const TreeVisibility = Object.freeze({
 	Hidden: 'hidden',
