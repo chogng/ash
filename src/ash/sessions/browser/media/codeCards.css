@@ -17,7 +17,7 @@
 	display: none;
 }
 
-.ash-code-card-managed > .ash-code-card-draggable {
+.ash-sessions-code-tools .ash-code-card-draggable {
 	cursor: grab;
 	touch-action: none;
 }

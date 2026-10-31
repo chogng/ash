@@ -1,6 +1,5 @@
-import { CodeCardControls } from './codeCardControls.js';
 import { Menus } from './menus.js';
-import type { CodeCardTarget, ICodeCardLayout, ICodeCardPresentation } from './codeCardLayout.js';
+import type { ICodeCardLayout } from './codeCardLayout.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -1008,35 +1007,7 @@ export abstract class Workbench extends Disposable {
 					}
 				}).catch(error => { if (!this.isDisposed) notificationService.error(getErrorMessage(error)); });
 			}));
-			const presentations = new Map<CodeCardTarget, ICodeCardPresentation>([
-				['terminal', panel.card],
-				['files', {
-					title: localize('sessions.cards.files', 'Files'),
-					domNode: cards.files.card,
-					header: cards.files.header,
-					layoutMenuId: Menus.SessionsEditorHeaderLayout,
-					layout: dimension => cards.files.layoutCard(dimension),
-				}],
-				['changes', {
-					title: localize('sessions.changes.title', 'Changes'),
-					domNode: cards.changes.card,
-					header: cards.changes.header,
-					layout: dimension => cards.changes.layoutCard(dimension),
-				}],
-				['info', {
-					title: localize('sessions.cards.information', 'Session information'),
-					domNode: cards.information.card,
-					header: cards.information.header,
-					layout: () => cards.information.layout(),
-				}],
-				['sessions', {
-					title: localize('sessions.cards.conversation', 'Conversation'),
-					domNode: sessionsPart.domNode,
-					header: undefined,
-					layout: dimension => sessionsPart.layout(new Dimension(dimension.width, dimension.height)),
-				}],
-			]);
-			this._register(services.createInstance(CodeCardControls, cards, presentations));
+
 		}
 		setActivityBarLocation(activityBarLocation);
 		const customViews = services.get(ICustomViewService);

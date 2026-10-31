@@ -19,6 +19,8 @@ const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentV
 const detailsVisibleContext = new RawContextKey<boolean>('sessions.detailsVisible', false);
 const codeContext = new RawContextKey<boolean>('sessions.desktopCode', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
+const filesLayoutContext = new RawContextKey<boolean>('sessions.filesCardLayoutActive', false);
+const filesExpandedContext = new RawContextKey<boolean>('sessions.filesCardExpanded', false);
 
 /** Window-owned editor commands and menu state derive from the existing layout owner. */
 export class EditorTitleMenuBridgeContribution extends Disposable {
@@ -33,9 +35,11 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		// Existing editor contributions keep their menu identity; Desktop groups consume its live projection.
 		const mirrored = this._register(new DisposableStore());
 		const layoutCommands = new Set(['ash.sessions.toggleDetails', 'ash.sessions.hideEditor', 'ash.sessions.showEditor', 'workbench.action.splitEditor']);
+		const navigationCommands = new Set(['multiDiffEditor.goToPreviousChange', 'multiDiffEditor.goToNextChange']);
 		const updateEditorMenu = (): void => {
 			mirrored.clear();
 			for (const item of MenusRegistry.getMenuItems(MenuId.EditorTitle)) {
+				if ('command' in item && navigationCommands.has(item.command.id)) { continue; }
 				// The dedicated layout toolbar owns card controls; group-layout commands remain available in overflow.
 				const layoutItem = 'command' in item && layoutCommands.has(item.command.id);
 				mirrored.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, layoutItem ? { ...item, group: '9_layout' } : item));
@@ -49,22 +53,28 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		const detailsVisible = detailsVisibleContext.bindTo(contextKeys);
 		const code = codeContext.bindTo(contextKeys);
 		const supportedDetails = supportedDetailsContext.bindTo(contextKeys);
+		const filesLayout = filesLayoutContext.bindTo(contextKeys);
+		const filesExpanded = filesExpandedContext.bindTo(contextKeys);
+		const cards = layout.codeCards;
 		const updateContext = (): void =>
 			contextKeys.bufferChangeEvents(() => {
 				code.set(context.isDocumentContent);
 				editorVisible.set(context.isDocumentContent && layout.isPartVisible('editor'));
 				detailsVisible.set(layout.isPartVisible('auxiliarybar'));
 				supportedDetails.set(context.isDocumentContent && controller.supportsDetails);
+				filesLayout.set(context.isDocumentContent && cards?.active === true);
+				filesExpanded.set(cards?.expandedCard === 'files');
 			});
 		this._register(
 			toDisposable(() => {
-				for (const key of [editorVisible, detailsVisible, code, supportedDetails]) {
+				for (const key of [editorVisible, detailsVisible, code, supportedDetails, filesLayout, filesExpanded]) {
 					key.reset();
 				}
 			}),
 		);
 		this._register(layout.onDidLayoutMainContainer(updateContext));
 		this._register(editor.onDidChangeEditors(updateContext));
+		if (cards) { this._register(cards.onDidChangeCards(updateContext)); }
 		this._register(
 			autorun(reader => {
 				context.documentContent.read(reader);
@@ -83,13 +93,14 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			[
 				'ash.sessions.closeDetails',
 				async () => {
-					layout.hidePart('auxiliarybar');
-					layout.focus();
+					if (layout.isPartVisible('auxiliarybar')) { await controller.toggleDetails(); }
 				},
 			],
 			['ash.sessions.hideEditor', () => controller.hideEditor()],
 			['ash.sessions.showEditor', () => controller.showEditor()],
 			['ash.sessions.toggleSidePane', () => controller.toggleSidePane()],
+			['sessions.cards.files.expand', async () => { if (cards?.active) { cards.expandCard('files'); } }],
+			['sessions.cards.files.close', async () => { if (cards?.active) { cards.closeCard('files'); } }],
 		] as const) {
 			this._register(CommandsRegistry.register(id, () => run(operation)));
 		}
@@ -125,6 +136,42 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		this._register(
 			MenusRegistry.appendMenuItems([
 				{
+					id: Menus.SessionsEditorHeaderLayout,
+					item: {
+						command: {
+							id: 'sessions.cards.files.expand',
+							title: localize2({ bundle: 'ash', key: 'sessions.cards.expand' }, 'Expand card'),
+							icon: Lxicon.screenFull,
+							toggled: {
+								condition: filesExpandedContext.isEqualTo(true),
+								icon: Lxicon.screenNormal,
+								title: localize2({ bundle: 'ash', key: 'sessions.cards.restore' }, 'Restore card size'),
+							},
+						},
+						when: filesLayoutContext.isEqualTo(true), group: 'navigation', order: 0,
+					},
+				},
+				{
+					id: Menus.SessionsEditorHeaderLayout,
+					item: {
+						command: {
+							id: 'sessions.cards.files.close',
+							title: localize2({ bundle: 'ash', key: 'sessions.cards.close' }, 'Close card'),
+							icon: Lxicon.close,
+						},
+						when: filesLayoutContext.isEqualTo(true), group: 'navigation', order: 1,
+					},
+				},
+				{
+					id: Menus.SessionsEditorHeaderLayout,
+					item: {
+						command: { ...toggleDetails, icon: Lxicon.listUnordered },
+						when: codeWhen,
+						group: 'navigation',
+						order: -1,
+					},
+				},
+				{
 					id: MenuId.AuxiliaryBarTitle,
 					item: {
 						command: {
@@ -145,7 +192,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 							title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleFiles' }, 'Toggle files'),
 							icon: Lxicon.folder,
 							toggled: ContextKeyExpr.and(
-								detailsVisibleContext.isEqualTo(true),
+								ContextKeyExpr.or(editorVisibleContext.isEqualTo(true), detailsVisibleContext.isEqualTo(true)),
 								ActiveAuxiliaryContext.isEqualTo(SESSIONS_FILES_CONTAINER_ID),
 							),
 						},
@@ -168,7 +215,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				{
 					id: MenuId.EditorTitle,
 					item: {
-						command: { ...toggleDetails, icon: Lxicon.files },
+						command: { ...toggleDetails, icon: Lxicon.listUnordered },
 						when: codeWhen,
 						group: 'navigation',
 						order: 90,

@@ -210,6 +210,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
+				const filesVisible = this.layout.codeCards?.filesVisible;
 				// Navigation visibility belongs to the window, independently of the page's side content.
 				const sidebarVisible = this.layout.isPartVisible('sidebar');
 				const state = this.visibility.get(entry.id) ?? {
@@ -239,7 +240,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				this.setVisible('sidebar', sidebarVisible);
 				if (entry.detailsContainerId) { await this.views.openViewContainer(entry.detailsContainerId); }
 				if (this.isDisposed) { return; }
-				if (documents && !this.customViews.activeCustomView.get()) { await this.controller.activate(state.details); }
+				if (documents && !this.customViews.activeCustomView.get()) {
+					await this.controller.activate(state.details && filesVisible !== false);
+					if (!this.isDisposed && filesVisible !== undefined) { this.layout.codeCards!.setFilesVisible(filesVisible); }
+				}
 				else { this.setVisible('auxiliarybar', state.details); }
 				if (this.isDisposed) { return; }
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -269,9 +273,11 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	private saveVisibility(): void {
 		const entry = this.activeEntry.get();
 		if (this.isDisposed || this.isChangingContent || !entry || this.customViews.activeCustomView.get()) { return; }
+		const files = this.isDocumentContent ? this.layout.codeCards?.files : undefined;
 		this.visibility.set(entry.id, {
-			details: this.layout.isPartVisible('auxiliarybar'),
-			panel: this.layout.isPartVisible('panel'), documents: this.isDocumentContent && this.layout.isPartVisible('editor'),
+			// Closing the outer card must not discard its retained child composition.
+			details: files?.auxiliaryBarVisible ?? this.layout.isPartVisible('auxiliarybar'),
+			panel: this.layout.isPartVisible('panel'), documents: this.isDocumentContent && (files?.editorVisible ?? this.layout.isPartVisible('editor')),
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}

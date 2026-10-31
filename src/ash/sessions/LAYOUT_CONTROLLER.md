@@ -33,16 +33,17 @@ It is the detailed companion to the [layout-controller boundary](LAYOUT.md#layou
 
 The Agents window keeps a single active selection but lets the user move between many. `sessions.experimental.layoutScope` defaults to `session-shared`: each Session owns its document working set and panel view, with shared visibility. `chat-shared` scopes those documents and views to a Session/Thread pair while sharing Editor/Details visibility. `chat` additionally remembers Editor/Details visibility for that pair. BaseLayoutController remains the only owner of these maps and the restore queue. A newly selected scope adopts current documents until it has its own saved working set.
 
-| State                          | Storage                             | Scope                                                        |
-| ------------------------------ | ----------------------------------- | ------------------------------------------------------------ |
-| Editor working set             | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                   |
-| Panel view                     | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                   |
-| Entry content visibility       | `sessions.layout.entryVisibility`   | Profile, per entry                                           |
-| Active entry's restore command | `sessions.layout.activeEntry`       | Workspace                                                    |
-| Creator workspace selection    | `sessions.creator.activeMode`       | Workspace, owned by Creator                                  |
-| Normal Code card tree          | `sessions.code.cardLayout`          | Profile, window geometry; excludes expansion and detachment  |
-| Last open Code side pane       | `sessions.layout.sidePane.lastOpen` | Profile                                                      |
-| Side-pane and panel visibility | Workbench part visibility           | Window; Editor/Details also restore per Chat in `chat` scope |
+| State                          | Storage                             | Scope                                                           |
+| ------------------------------ | ----------------------------------- | --------------------------------------------------------------- |
+| Editor working set             | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                      |
+| Panel view                     | `sessions.singlePane.layoutState`   | Session or Session/Thread, by layout scope                      |
+| Entry content visibility       | `sessions.layout.entryVisibility`   | Profile, per entry                                              |
+| Active entry's restore command | `sessions.layout.activeEntry`       | Workspace                                                       |
+| Creator workspace selection    | `sessions.creator.activeMode`       | Workspace, owned by Creator                                     |
+| Normal Code card tree          | `sessions.code.cardLayout`          | Profile, window geometry; excludes expansion and detachment     |
+| Files card visibility          | `sessions.code.filesVisible`        | Profile; independent of its retained Editor/Details preferences |
+| Last open Code side pane       | `sessions.layout.sidePane.lastOpen` | Profile                                                         |
+| Side-pane and panel visibility | Workbench part visibility           | Window; Editor/Details also restore per Chat in `chat` scope    |
 
 Session changes restore document working sets without selecting another product mode. Shared scopes preserve visibility; `chat` restores the pair's saved Editor/Details visibility. A Code composition with only managed inputs initially shows Details-only; opening an ordinary document reveals its content. Persistence retains existing `session:<id>` keys and adds `chat:[sessionId,threadId]` entries with optional validated `partVisibility`. Draft materialization transfers all three maps to the durable scope key.
 
@@ -58,7 +59,9 @@ On initial restoration, a saved working set is applied under editor-auto-visibil
 
 ## 3. Desktop tools
 
-DesktopWorkbenchLayout owns independent Editor, Auxiliary Bar and Panel leaves. In Code's default right column, Panel and Auxiliary Bar stack vertically; hiding one lets the other fill the column. Card headers may rearrange Terminal, Files and information relative to each other or the conversation/editor. Grid topology, sash sizes and explicit panel position remain window layout state; expansion and auxiliary-window detachment preserve the normal tree.
+DesktopWorkbenchLayout owns the outer card tree. Files groups the retained Editor and Auxiliary Bar in one leaf; Panel remains an independent leaf. In Code's default right column, Panel and Files stack vertically; hiding one lets the other fill the column. Card headers may rearrange Terminal, Files and information relative to each other or the conversation/editor. Grid topology, sash sizes and explicit panel position remain window layout state; expansion and auxiliary-window detachment preserve the normal tree.
+
+DesktopExistingSessionStrategy controls the Editor/Details composition inside Files. Hiding Details keeps Editor visible; hiding Editor reveals Details. Closing Files hides the whole card while retaining both child preferences and the preferred tree width. DesktopWorkbenchLayout persists card visibility separately from child Part visibility, so an Editor-only Files card can remain closed across reload. Changes and other cards do not participate in this strategy or replace Files content.
 
 DesktopLayoutController restores document working sets and retains the existing combined side-pane command for compatibility. Files and Terminal toolbar actions independently open or hide their retained view containers. DesktopDetailPanelCoordinator opens Files and migrates a retired Auxiliary Bar Changes selection back to Files. Files hosts the retained document EditorPart and file tree in one card, with document tabs projected into its header. Changes opens in a separate retained EditorPart, whose Changes editor owns the list/comparison composition. The window editor coordinator routes Changes inputs to that host and workspace files to Files; document working sets exclude the Changes host. Document selection never implicitly hides Files; closing the last document hides only EditorPart. Restored Changes inputs migrate out of document working sets. The Changes host follows the selected session without reopening a closed card; tool visibility belongs to the window layout.
 

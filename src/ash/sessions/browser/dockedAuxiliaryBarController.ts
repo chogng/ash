@@ -40,6 +40,7 @@ export class DockedAuxiliaryBarController extends Disposable implements ISeriali
 	private dragWidth = 0;
 	private visible = true;
 	public editorVisible = false;
+	public auxiliaryBarVisible = true;
 
 	constructor(
 		private readonly editor: IDockedEditorLayout,
@@ -73,7 +74,7 @@ export class DockedAuxiliaryBarController extends Disposable implements ISeriali
 
 	public get isMounted(): boolean { return !!this.auxiliary; }
 	public get minimumWidth(): number {
-		return Math.max(300, (this.editorVisible ? this.editor.minimumWidth : 0) + (this.auxiliary?.minimumWidth ?? 180) + 2 * AGENTS_FLOATING_PANEL_GAP);
+		return Math.max(300, (this.editorVisible ? this.editor.minimumWidth : 0) + (this.auxiliaryBarVisible ? (this.auxiliary?.minimumWidth ?? 180) : 0) + 2 * AGENTS_FLOATING_PANEL_GAP);
 	}
 	public get minimumHeight(): number { return Math.max(240, this.editor.minimumHeight); }
 	public get editorSize(): IDimension {
@@ -114,11 +115,19 @@ export class DockedAuxiliaryBarController extends Disposable implements ISeriali
 		this.changed.fire();
 	}
 
+	public setAuxiliaryBarVisible(visible: boolean): void {
+		if (this.auxiliaryBarVisible === visible) { return; }
+		this.auxiliaryBarVisible = visible;
+		this.auxiliary?.part.setVisible(this.visible && visible);
+		this.layoutCard(this.dimension);
+		this.changed.fire();
+	}
+
 	public setVisible(visible: boolean): void {
 		this.visible = visible || this.isDetached();
 		this.editor.setVisible(this.visible);
 		this.editor.setEditorContentVisible(this.visible && this.editorVisible);
-		this.auxiliary?.part.setVisible(this.visible);
+		this.auxiliary?.part.setVisible(this.visible && this.auxiliaryBarVisible);
 	}
 
 	public layout(dimension: IDimension): void {
@@ -130,9 +139,10 @@ export class DockedAuxiliaryBarController extends Disposable implements ISeriali
 		if (!this.auxiliary) { return; }
 		this.dimension = dimension;
 		const available = Math.max(0, dimension.width - 2);
-		this.treeWidth = this.editorVisible
-			? Math.max(this.auxiliary.minimumWidth, Math.min(this.preferredTreeWidth, available - this.editor.minimumWidth))
-			: available;
+		if (!this.auxiliaryBarVisible) { this.treeWidth = 0; }
+		else if (this.editorVisible) {
+			this.treeWidth = Math.max(this.auxiliary.minimumWidth, Math.min(this.preferredTreeWidth, available - this.editor.minimumWidth));
+		} else { this.treeWidth = available; }
 		this.editor.setContentRightInset(this.treeWidth);
 		this.editor.layoutEditor(new Dimension(available, Math.max(0, dimension.height - 2)));
 		this.editor.setEditorContentVisible(this.visible && this.editorVisible);
@@ -145,8 +155,8 @@ export class DockedAuxiliaryBarController extends Disposable implements ISeriali
 		const height = Math.max(0, this.dimension.height - top - 2);
 		Object.assign(this.auxiliary.part.domNode.style, { top: `${top}px`, right: '0px', width: `${this.treeWidth}px`, height: `${height}px` });
 		this.auxiliary.part.layout(new Dimension(this.treeWidth, height));
-		this.sash.state = this.editorVisible ? SashState.Enabled : SashState.Disabled;
-		if (this.editorVisible) {
+		this.sash.state = this.editorVisible && this.auxiliaryBarVisible ? SashState.Enabled : SashState.Disabled;
+		if (this.editorVisible && this.auxiliaryBarVisible) {
 			this.sash.element.setAttribute('aria-valuemin', String(this.editor.minimumWidth));
 			this.sash.element.setAttribute('aria-valuemax', String(this.dimension.width - this.auxiliary.minimumWidth));
 			this.sash.element.setAttribute('aria-valuenow', String(this.editorSize.width));
@@ -155,13 +165,14 @@ export class DockedAuxiliaryBarController extends Disposable implements ISeriali
 	}
 
 	public resizeEditor(dimension: IDimension): void {
+		if (!this.auxiliaryBarVisible) { return; }
 		this.preferredTreeWidth = Math.max(0, this.dimension.width - dimension.width);
 		this.layoutCard(this.dimension);
 		this.rememberTreeWidth();
 	}
 
 	public rememberTreeWidth(): void {
-		if (!this.editorVisible) { return; }
+		if (!this.editorVisible || !this.auxiliaryBarVisible) { return; }
 		this.preferredTreeWidth = this.treeWidth;
 		this.storage.store('sessions.code.filesTreeWidth', this.preferredTreeWidth, StorageScope.PROFILE, StorageTarget.MACHINE);
 	}

@@ -44,8 +44,40 @@ import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayo
 import { EmptyFileEditorInput } from '../../../editor/browser/emptyFileEditorInput.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
+import type { ICodeCardLayout } from '../../../../browser/codeCardLayout.js';
 
 suite('SessionsLayoutService lifecycle and focus', () => {
+	test('entry restoration preserves a closed Files card and its retained Editor-only composition', async () => {
+		const restoredVisibility: boolean[] = [];
+		const cards = {
+			active: true,
+			expandedCard: undefined,
+			onDidChangeCards: Event.None,
+			filesVisible: false,
+			files: { editorVisible: true, auxiliaryBarVisible: false },
+			setFilesVisible: (visible: boolean) => {
+				restoredVisibility.push(visible);
+				if (!visible) {
+					fixture.visible.set('editor', false);
+					fixture.visible.set('auxiliarybar', false);
+				}
+			},
+		} as unknown as ICodeCardLayout;
+		using fixture = new EntryFixture({ code: { details: false, panel: false, documents: true } }, cards);
+		fixture.documentInputs.push({ resource: URI.file('/fixture/retained.txt') });
+		await fixture.service.openEntry(documentEntry);
+		await fixture.storage.flush();
+		const saved = JSON.parse(fixture.storage.get('sessions.layout.entryVisibility', StorageScope.PROFILE)!);
+		assert.deepEqual(saved.code, { details: false, panel: false, documents: true });
+		assert.equal(fixture.visible.get('editor'), false);
+		await fixture.service.openEntry(chatEntry);
+		await fixture.service.openEntry(documentEntry);
+		assert.deepEqual(restoredVisibility, [false, false]);
+		assert.equal(fixture.visible.get('editor'), false);
+		assert.equal(fixture.visible.get('auxiliarybar'), false);
+		assert.equal(fixture.documentInputs[0]!.resource.path, '/fixture/retained.txt');
+	});
+
 	test('New follows the active entry and does not retain an override under a Custom View', async () => {
 		using fixture = new EntryFixture();
 		const entry = { ...chatEntry, newSessionCommand: 'test.entry.newChat' };
@@ -387,7 +419,7 @@ class EntryFixture extends Disposable {
 	public readonly service: SessionsLayoutService;
 	public readonly outputReveal = this._register(new Emitter<void>());
 	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
-	constructor(savedVisibility?: unknown) {
+	constructor(savedVisibility?: unknown, codeCards?: ICodeCardLayout) {
 		super();
 		this._register(toDisposable(() => this.dom.window.close()));
 		if (savedVisibility) { this.storage.store('sessions.layout.entryVisibility', JSON.stringify(savedVisibility), StorageScope.PROFILE, StorageTarget.MACHINE); }
@@ -452,6 +484,7 @@ class EntryFixture extends Disposable {
 			onDidPaneCompositeOpen: Event.None, getActivePaneComposite: () => ({ focus: () => { this.focused = 'details'; } }),
 		} as unknown as IPaneCompositePartService);
 		this.services.registerInstance(ILayoutService, {
+			codeCards,
 			onDidChangePartVisibility: Event.None, onDidLayoutMainContainer: Event.None,
 			isPartVisible: (id: string) => this.visible.get(id) ?? false,
 			showPart: (id: string) => { this.visible.set(id, true); this.partChanges.push('show:' + id); },

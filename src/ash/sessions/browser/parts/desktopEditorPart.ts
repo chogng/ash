@@ -47,6 +47,12 @@ export class DesktopMainEditorPart extends EditorPart {
 		return this.docking ??= this._register(this.services.createInstance(DockedAuxiliaryBarController, this));
 	}
 
+	/** Outer card interactions use the live group header without inspecting editor content. */
+	public getHeaderElement(target: HTMLElement): HTMLElement | undefined {
+		const header = target.closest<HTMLElement>('.ash-editor-group-header, .ash-editor-tabs-and-actions');
+		return header && this.groups.some(group => group.domNode.contains(header)) ? header : undefined;
+	}
+
 	/** Docking calls the shared group layout; the Workbench still owns the outer card dimensions. */
 	public layoutEditor(dimension: IDimension): void {
 		super.layout(dimension);

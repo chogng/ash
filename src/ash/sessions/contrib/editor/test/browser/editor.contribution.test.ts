@@ -3,6 +3,7 @@ import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { observableValue } from '../../../../../base/common/observable.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
@@ -16,8 +17,11 @@ import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { Menus } from '../../../../browser/menus.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../../../common/sessionCommands.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
+import type { CodeCardId, ICodeCardLayout } from '../../../../browser/codeCardLayout.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../../layout/browser/desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../browser/editor.contribution.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test('editor contributions follow layout state, serialize open commands without Add tab UI and release window registrations', async () => {
 	using services = new InstantiationService();
@@ -25,8 +29,27 @@ test('editor contributions follow layout state, serialize open commands without 
 	using commands = new CommandService(services);
 	using layoutChanged = new Emitter<void>();
 	using editorChanged = new Emitter<void>();
+	using cardsChanged = new Emitter<void>();
 	const documentContent = observableValue('document content', true);
 	const parts = { editor: false, auxiliarybar: true };
+	let expandedCard: CodeCardId | undefined;
+	const cardCalls: string[] = [];
+	const cards = {
+		active: true,
+		onDidChangeCards: cardsChanged.event,
+		get expandedCard() { return expandedCard; },
+		expandCard(id: CodeCardId) {
+			cardCalls.push('expand:' + id);
+			expandedCard = expandedCard === id ? undefined : id;
+			cardsChanged.fire();
+		},
+		closeCard(id: CodeCardId) {
+			cardCalls.push('close:' + id);
+			parts.editor = false;
+			parts.auxiliarybar = false;
+			cardsChanged.fire();
+		},
+	} as unknown as ICodeCardLayout;
 	const effects: string[] = [];
 	const pending = new DeferredPromise<void>();
 	const started = new DeferredPromise<void>();
@@ -56,6 +79,7 @@ test('editor contributions follow layout state, serialize open commands without 
 		async toggleSidePane() { parts.editor = false; parts.auxiliarybar = false; },
 	} as unknown as DesktopLayoutController;
 	services.registerInstance(ILayoutService, {
+		codeCards: cards,
 		isPartVisible: (part: keyof typeof parts) => parts[part],
 		onDidLayoutMainContainer: layoutChanged.event,
 	} as unknown as IAgentWorkbenchLayoutService);
@@ -70,6 +94,10 @@ test('editor contributions follow layout state, serialize open commands without 
 	const existingPaletteIds = paletteIds();
 	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 	using desktopTitle = menus.createMenu(Menus.SessionsEditorTitle);
+	using headerLayout = menus.createMenu(Menus.SessionsEditorHeaderLayout);
+	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'sessions.cards.files.expand', 'sessions.cards.files.close']);
+	assert.equal(headerActions()[1]!.checked, false);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
 	assert.deepEqual(desktopIds(), title.getActions().flatMap(([, actions]) => actions).map(action => action.id));
 	const dynamic = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
@@ -108,7 +136,16 @@ test('editor contributions follow layout state, serialize open commands without 
 	await pending.complete();
 	await Promise.all([files, changes]);
 	assert.deepEqual(effects, ['files', 'changes']);
+	await commands.executeCommand('sessions.cards.files.expand');
+	assert.equal(headerActions()[1]!.checked, true);
+	assert.equal(headerActions()[1]!.label, 'Restore card size');
+	await commands.executeCommand('sessions.cards.files.expand');
+	assert.equal(headerActions()[1]!.checked, false);
+	await commands.executeCommand('sessions.cards.files.close');
+	assert.deepEqual(cardCalls, ['expand:files', 'expand:files', 'close:files']);
+	assert.deepEqual(parts, { editor: false, auxiliarybar: false });
 	documentContent.set(false, undefined);
+	assert.deepEqual(headerActions(), []);
 	assert.deepEqual(title.getActions(), []);
 	assert.deepEqual(paletteIds(), existingPaletteIds);
 	await commands.executeCommand('workbench.agentSessions.action.viewChanges');
@@ -120,13 +157,18 @@ test('editor contributions follow layout state, serialize open commands without 
 	assert.equal(CommandsRegistry.getCommand('workbench.agentSessions.action.viewChanges'), undefined);
 	assert.equal(CommandsRegistry.getCommand(NEW_FILE_TAB_COMMAND_ID), undefined);
 	assert.equal(CommandsRegistry.getCommand('ash.sessions.openFilesTab'), undefined);
+	assert.equal(CommandsRegistry.getCommand('sessions.cards.files.expand'), undefined);
+	assert.equal(CommandsRegistry.getCommand('sessions.cards.files.close'), undefined);
 	for (const id of ['toggleDetails', 'hideEditor', 'showEditor', 'toggleSidePane']) {
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.' + id), undefined);
 	}
 	assert.equal(layoutChanged.hasListeners(), false);
 	assert.equal(editorChanged.hasListeners(), false);
+	assert.equal(cardsChanged.hasListeners(), false);
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
 	assert.equal(contextKeys.getValue('sessions.supportedDetails'), false);
+	assert.equal(contextKeys.getValue('sessions.filesCardLayoutActive'), false);
+	assert.equal(contextKeys.getValue('sessions.filesCardExpanded'), false);
 
 	const catalog = productLanguagePackCatalogs.find(pack => pack.locale === 'zh-CN')!;
 	try {
@@ -134,6 +176,7 @@ test('editor contributions follow layout state, serialize open commands without 
 		documentContent.set(true, undefined);
 		using translated = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
+		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '展开卡片', '关闭卡片']);
 		assert.deepEqual(addTab.getActions(), []);
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件标签');
 	} finally {

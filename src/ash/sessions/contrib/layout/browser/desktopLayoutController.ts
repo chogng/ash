@@ -1,4 +1,3 @@
-import { SESSIONS_FILES_CONTAINER_ID } from '../../files/browser/files.contribution.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { localize } from '../../../../nls.js';
@@ -19,6 +18,7 @@ import { IPaneCompositePartService } from '../../../../workbench/services/paneco
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import { DesktopDockedTabsCoordinator } from './desktop/desktopDockedTabsCoordinator.js';
 import { DesktopDetailPanelCoordinator } from './desktop/desktopDetailPanelCoordinator.js';
+import { DesktopExistingSessionStrategy } from './desktop/desktopExistingSessionStrategy.js';
 import type { IEditorGroupView } from '../../../../workbench/browser/parts/editor/editor.js';
 
 /** The entry owner supplies policy; the controller never owns another product selection. */
@@ -36,6 +36,7 @@ const lastOpenKey = 'sessions.layout.sidePane.lastOpen';
 export class DesktopLayoutController extends BaseLayoutController {
 	private readonly tabs: DesktopDockedTabsCoordinator;
 	private readonly detailPanel: DesktopDetailPanelCoordinator;
+	private readonly existingSession: DesktopExistingSessionStrategy;
 	private closedProfile = { documents: true, details: true };
 
 	constructor(private readonly pageGroupId: number, private readonly context: IDesktopLayoutContext,
@@ -54,6 +55,7 @@ export class DesktopLayoutController extends BaseLayoutController {
 		super(panes, sessions, management, editor, editors, workspace, layout, storage, notifications, lifecycle, instantiation);
 		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
+		this.existingSession = instantiation.createInstance(DesktopExistingSessionStrategy);
 		const lastOpen = storage.get(lastOpenKey, StorageScope.PROFILE);
 		if (lastOpen !== undefined) {
 			const profile: unknown = JSON.parse(lastOpen);
@@ -145,8 +147,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 	public async hideEditor(): Promise<void> {
 		if (this.isDisposed) return;
-		this.setDocumentsVisible(false);
-		this.layout.focus();
+		this.existingSession.hideEditor();
+		await this.detailPanel.update(true);
+		this.focus();
 	}
 	public async showEditor(): Promise<void> {
 		if (this.isDisposed) { return; }
@@ -159,20 +162,23 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 	public async toggleFiles(): Promise<void> {
 		if (this.isDisposed) return;
-		if (
-			this.layout.isPartVisible('auxiliarybar') &&
-			this.panes.getActivePaneComposite(ViewContainerLocation.AuxiliaryBar)?.getId() ===
-			SESSIONS_FILES_CONTAINER_ID
-		)
-			await this.toggleDetails();
+		const cards = this.layout.codeCards;
+		if (cards) {
+			if (cards.isCardVisible('files')) {
+				cards.closeCard('files');
+				this.layout.focus();
+			} else {
+				cards.setFilesVisible(true);
+				await this.detailPanel.update(this.layout.isPartVisible('auxiliarybar'));
+				if (!this.isDisposed) { this.focus(); }
+			}
+		}
 		else await this.openFiles();
 	}
 	public async toggleDetails(): Promise<void> {
 		if (this.isDisposed) return;
-		if (this.layout.isPartVisible('auxiliarybar')) {
-			this.layout.hidePart('auxiliarybar');
-			this.layout.focus();
-		} else await this.detailPanel.openFiles();
+		if (this.existingSession.toggleDetails()) { await this.detailPanel.openFiles(); }
+		if (!this.isDisposed) { this.focus(); }
 	}
 	public async toggleSidePane(): Promise<void> {
 		if (this.isDisposed) { return; }

@@ -1,4 +1,5 @@
-import { createTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { DesktopMainEditorPart } from '../../browser/parts/desktopEditorPart.js';
+import { createTestEditorServices, createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import '../../../editor/test/browser/testEditorDom.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -46,7 +47,9 @@ test('Sessions layout commands update menu state from their owners and release w
 	using services = new InstantiationService();
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
-	const parts = new Map(sessionsPartIds.map(id => [id, resources.add(new TestPart(browser.window.document.body, id))]));
+	const parts = new Map<SessionsPartId, Part>(sessionsPartIds.map(id => [id, resources.add(new TestPart(browser.window.document.body, id))]));
+	const editorServices = resources.add(registerTestComponentServices(createTestEditorServices(undefined, undefined, browser.window.document), browser.window.document));
+	parts.set('editor', resources.add(editorServices.createInstance(DesktopMainEditorPart, browser.window.document.body, {})));
 	using layout = createLayout(browser.window.document.body, parts, { initialDimension: new Dimension(1_200, 800) });
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
@@ -131,7 +134,7 @@ suiteTeardown(() => layoutTestResources.dispose());
 function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, Part>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
-	using services = new InstantiationService();
+	const services = layoutTestResources.add(new InstantiationService());
 	services.registerInstance(IStorageService, storage);
 	const layout = services.createInstance(DesktopWorkbenchLayout, container, options);
 	try {

@@ -2,7 +2,13 @@ import { Orientation } from '../../../base/browser/ui/sash/sash.js';
 import { Direction } from '../../../base/browser/ui/grid/grid.js';
 import { createTestComponentServices, createTestEditorServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
-import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
+import { DeferredPromise } from '../../../base/common/async.js';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
+import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { sessionsPartIds } from '../../common/layoutConstants.js';
 import { Position, positionToString } from '../../../workbench/services/layout/browser/layoutService.js';
 import assert from 'node:assert/strict';
@@ -30,6 +36,8 @@ const { WorkbenchWindowBarHeight } = await import('../../../workbench/browser/pa
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
 const { IStorageService, WillSaveStateReason } = await import('../../../platform/storage/common/storage.js');
 const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
+const { ILayoutService } = await import('../../../platform/layout/browser/layoutService.js');
+const { DesktopExistingSessionStrategy } = await import('../../contrib/layout/browser/desktop/desktopExistingSessionStrategy.js');
 const { DesktopMainEditorPart } = await import('../../browser/parts/desktopEditorPart.js');
 const { DesktopWorkbenchLayout } = await import('../../../sessions/browser/desktopWorkbench.js');
 const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
@@ -106,6 +114,10 @@ test('Desktop editor retains one tab-and-actions row above editor-only breadcrum
 	editor.layout(new Dimension(800, 600));
 	const title = editor.activeGroup.domNode.querySelector<HTMLElement>('.ash-editor-title-control')!;
 	const header = title.querySelector<HTMLElement>('.ash-editor-group-header')!;
+	assert.equal(editor.getHeaderElement(header), header);
+	const foreignHeader = browserEnvironment.window.document.createElement('div');
+	foreignHeader.className = 'ash-editor-group-header';
+	assert.equal(editor.getHeaderElement(foreignHeader), undefined);
 	assert.equal(header.hidden, false);
 	assert.equal(editor.getTabsHeight(), 32);
 	const input = { resource: URI.file('/fixture/sample.txt') };
@@ -113,6 +125,7 @@ test('Desktop editor retains one tab-and-actions row above editor-only breadcrum
 	assert.ok(header.querySelector('[role="tab"]'));
 	assert.ok(header.querySelector('.ash-editor-title-actions'));
 	const breadcrumbs = title.querySelector<HTMLElement>(':scope > .ash-editor-breadcrumbs')!;
+	assert.equal(editor.getHeaderElement(breadcrumbs), undefined, 'Editor content and breadcrumbs are not outer card drag handles');
 	assert.equal(breadcrumbs.hidden, false);
 	assert.equal(header.nextElementSibling, breadcrumbs);
 	assert.deepEqual((editor.activeGroup as import('../../../workbench/browser/parts/editor/editorGroupView.js').EditorGroupView).titleHeight, { offset: 32, total: 54 });
@@ -410,8 +423,9 @@ test('Code stacks Terminal and the complete Files card and restores their retain
 			1000 - WorkbenchWindowBarHeight,
 		);
 		layout.hidePart('auxiliarybar');
-		assert.equal(layout.getPartSize('editor').width, editorWidth);
+		assert.ok(layout.getPartSize('editor').width > editorWidth);
 		layout.showPart('auxiliarybar');
+		assert.equal(layout.getPartSize('editor').width, editorWidth);
 		assert.equal(layout.getPartSize('panel').height, 280);
 		const input = dom.window.document.createElement('input');
 		parts.get('auxiliarybar')!.domNode.append(input);
@@ -493,6 +507,88 @@ test('Changes is an independent card while Files retains its open document', () 
 		assert.equal(layout.isCardVisible('files'), true);
 	} finally {
 		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Files strategy toggles only its details and preserves the editor, card geometry and Changes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(2000, 1000) });
+		using services = new InstantiationService();
+		services.registerInstance(ILayoutService, layout);
+		const strategy = services.createInstance(DesktopExistingSessionStrategy);
+		layout.showPart('editor');
+		layout.resizePart('auxiliarybar', new Dimension(900, 1000));
+		layout.setChangesVisible(true);
+		const cardWidth = layout.getPartSize('auxiliarybar').width;
+		const editorWidth = layout.getPartSize('editor').width;
+		const tree = parts.get('auxiliarybar')!.domNode;
+		const treeWidth = tree.style.width;
+		const content = dom.window.document.createElement('textarea');
+		content.value = 'unsaved Files document';
+		parts.get('editor')!.domNode.append(content);
+		content.focus();
+		content.setSelectionRange(2, 6);
+
+		assert.equal(strategy.toggleDetails(), false);
+		assert.equal(layout.isPartVisible('auxiliarybar'), false);
+		assert.equal(tree.hidden, true);
+		assert.equal(layout.isCardVisible('files'), true);
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.equal(layout.isCardVisible('changes'), true);
+		assert.ok(layout.getPartSize('editor').width > editorWidth);
+		assert.equal(layout.getPartSize('auxiliarybar').width, cardWidth);
+		assert.equal(strategy.toggleDetails(), true);
+		assert.equal(tree.hidden, false);
+		assert.equal(tree.style.width, treeWidth);
+		assert.equal(content.value, 'unsaved Files document');
+		assert.equal(content.selectionStart, 2);
+		assert.equal(dom.window.document.activeElement, content);
+		layout.expandCard('files');
+		strategy.toggleDetails();
+		assert.equal(layout.expandedCard, 'files');
+		strategy.toggleDetails();
+		layout.expandCard('files');
+
+		strategy.toggleDetails();
+		strategy.hideEditor();
+		assert.equal(layout.isPartVisible('editor'), false);
+		assert.equal(layout.isPartVisible('auxiliarybar'), true);
+		assert.equal(strategy.toggleDetails(), false, 'Details-only switches to Editor-only');
+		assert.equal(layout.isPartVisible('editor'), true);
+		assert.equal(layout.isCardVisible('changes'), true);
+	} finally {
+		for (const part of parts.values()) { part.dispose(); }
+		dom.window.close();
+	}
+});
+
+test('closing Files retains its editor-only composition across reload and reopening', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://files-layout.test' });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'files', backend: dom.window.localStorage, flushInterval: 0 });
+	const parts = createParts(dom.window.document);
+	const layout = createLayout(dom.window.document.body, parts, { storageService: storage, initialDimension: new Dimension(1800, 1000) });
+	layout.showPart('editor');
+	layout.hidePart('auxiliarybar');
+	layout.closeCard('files');
+	assert.equal(layout.isCardVisible('files'), false);
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	layout.dispose();
+	for (const part of parts.values()) { part.dispose(); }
+	const restoredParts = createParts(dom.window.document);
+	try {
+		using restored = createLayout(dom.window.document.body, restoredParts, { storageService: storage, initialDimension: new Dimension(1800, 1000) });
+		assert.equal(restored.isCardVisible('files'), false);
+		assert.equal(restored.isPartVisible('editor'), false);
+		assert.equal(restored.isPartVisible('auxiliarybar'), false);
+		restored.setFilesVisible(true);
+		assert.equal(restored.isCardVisible('files'), true);
+		assert.equal(restored.isPartVisible('editor'), true);
+		assert.equal(restored.isPartVisible('auxiliarybar'), false);
+	} finally {
+		for (const part of restoredParts.values()) { part.dispose(); }
 		dom.window.close();
 	}
 });
@@ -787,6 +883,7 @@ test('Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	first.hidePart('sidebar');
 	first.hidePart('auxiliarybar');
 	first.showPart('editor');
+	first.showPart('auxiliarybar');
 	first.resizePart('auxiliarybar', new Dimension(720, first.getPartSize('auxiliarybar').height));
 	first.resizePart('editor', new Dimension(420, first.getPartSize('editor').height));
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
@@ -1013,10 +1110,10 @@ test('Sessions layout creation requires the registered storage service', () => {
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPartInstance>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
+function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPartInstance>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}, testServices?: import('../../../platform/instantiation/common/instantiationService.js').InstantiationService): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
 	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
 	const storage = options.storageService ?? ownedStorage!;
-	using services = new InstantiationService();
+	const services = testServices ?? layoutTestResources.add(new InstantiationService());
 	services.registerInstance(IStorageService, storage);
 	const layout = services.createInstance(DesktopWorkbenchLayout, container, options);
 	try {
@@ -1047,6 +1144,161 @@ test('Sessions compositions keep the content directly below the titlebar without
 	}
 });
 
+test('Changes and information Views own keyboard toolbars across layout changes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts);
+		const information = dom.window.document.createElement('aside');
+		layout.setInformation(information);
+		layout.toggleInformation();
+		layout.setChangesVisible(true);
+		for (const [id, view] of [['changes', layout.changes], ['info', layout.information]] as const) {
+			const toolbar = view.header.querySelector<HTMLElement>('[role="toolbar"]')!;
+			const button = (action: string) => toolbar.querySelector<HTMLButtonElement>(`[data-action-id="sessions.views.${id}.${action}"] button`)!;
+			button('openWindow').focus();
+			button('openWindow').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+			assert.equal(dom.window.document.activeElement, button('expand'));
+			button('expand').click();
+			assert.equal(layout.expandedCard, id);
+			assert.equal(button('expand').getAttribute('aria-pressed'), 'true');
+			button('expand').click();
+			assert.equal(layout.expandedCard, undefined);
+			button('close').click();
+			assert.equal(layout.isCardVisible(id), false);
+		}
+		layout.setPrimaryPart('editor');
+		layout.setPrimaryPart('sessions');
+		assert.equal(layout.information.body.firstElementChild, information);
+		assert.equal(layout.changes.header.querySelectorAll('[role="toolbar"]').length, 1);
+		assert.equal(layout.information.header.querySelectorAll('[role="toolbar"]').length, 1);
+	} finally {
+		for (const part of parts.values()) { part.dispose(); }
+		dom.window.close();
+	}
+});
+
+class TestLayoutAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
+	readonly id = 1;
+	readonly dom = new JSDOM('<!doctype html><body><main></main></body>');
+	readonly window = this.dom.window as unknown as Window;
+	readonly container = this.dom.window.document.querySelector('main')!;
+	readonly onWillLayout = Event.None;
+	readonly onDidLayout = Event.None;
+	readonly onBeforeUnload = Event.None;
+	private readonly closed = this._register(new Emitter<void>());
+	readonly onDidClose = this.closed.event;
+	readonly whenStylesHaveLoaded = Promise.resolve();
+	private readonly closeDocument = this.dom.window.close.bind(this.dom.window);
+	constructor() {
+		super();
+		this.dom.window.focus = () => { };
+		this.dom.window.close = () => this.dispose();
+		Object.defineProperties(this.container, { clientWidth: { value: 900 }, clientHeight: { value: 700 } });
+	}
+	layout(): void { }
+	createState() { return { width: 900, height: 700, left: 0, top: 0, featureWidthOffset: 0, featureHeightOffset: 0 }; }
+	protected override disposeCore(): void {
+		this.closed.fire();
+		super.disposeCore();
+		this.closeDocument();
+	}
+}
+
+class TestLayoutAuxiliaryWindows extends Disposable implements IAuxiliaryWindowService {
+	readonly onDidOpenWindow = Event.None;
+	readonly windows: TestLayoutAuxiliaryWindow[] = [];
+	opening: Promise<void> | undefined;
+	openCount = 0;
+	async open(): Promise<IAuxiliaryWindow> {
+		this.openCount++;
+		await this.opening;
+		const window = this._register(new TestLayoutAuxiliaryWindow());
+		this.windows.push(window);
+		return window;
+	}
+	getWindow(id: number) { return this.windows.find(window => window.id === id); }
+}
+
+function registerAuxiliaryViewServices(services: import('../../../platform/instantiation/common/instantiationService.js').InstantiationService, windows: IAuxiliaryWindowService, notifications: INotificationService): void {
+	services.registerInstance(IAuxiliaryWindowService, windows);
+	services.registerInstance(INotificationService, notifications);
+	services.registerInstance(IAccessibleViewService, {
+		show: () => false, getOpenAriaHint: () => undefined, async disableHint() { },
+		showAccessibleViewHelp() { }, dispose() { }, [Symbol.dispose]() { },
+	});
+}
+
+test('Layout cancels a pending auxiliary open when its composition or lifetime ends', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	using services = new InstantiationService();
+	using windows = new TestLayoutAuxiliaryWindows();
+	using notifications = new TestNotificationService();
+	registerAuxiliaryViewServices(services, windows, notifications);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, {}, services);
+		layout.setChangesVisible(true);
+		const content = layout.changes.card;
+		for (const disposeOwner of [false, true]) {
+			const pending = new DeferredPromise<void>();
+			windows.opening = pending.p;
+			const opening = layout.openAuxiliaryView('changes');
+			const count = windows.openCount;
+			await layout.openAuxiliaryView('changes');
+			assert.equal(windows.openCount, count, 'A repeated request reuses the pending view host');
+			if (disposeOwner) { layout.dispose(); }
+			else { layout.setPrimaryPart('editor'); }
+			await pending.complete();
+			await opening;
+			assert.equal(windows.windows.at(-1)!.isDisposed, true);
+			assert.equal(content.ownerDocument, dom.window.document);
+			assert.equal(layout.isViewDetached('changes'), false);
+			if (!disposeOwner) { layout.setPrimaryPart('sessions'); }
+		}
+	} finally {
+		for (const part of parts.values()) { part.dispose(); }
+		dom.window.close();
+	}
+});
+
+test('Auxiliary Views return their original content and exact Grid geometry through every close path', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	using services = new InstantiationService();
+	using windows = new TestLayoutAuxiliaryWindows();
+	using notifications = new TestNotificationService();
+	registerAuxiliaryViewServices(services, windows, notifications);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, {}, services);
+		layout.setChangesVisible(true);
+		const content = layout.changes.card;
+		const marker = dom.window.document.createElement('input');
+		marker.value = 'retained view state';
+		content.append(marker);
+		const size = layout.getPartSize('auxiliarybar');
+		for (const close of ['return', 'native', 'hide'] as const) {
+			await layout.openAuxiliaryView('changes');
+			const popup = windows.windows.at(-1)!;
+			assert.equal(popup.container.querySelector('[data-code-card="changes"]'), content);
+			assert.equal(layout.isViewDetached('changes'), true);
+			assert.equal(marker.value, 'retained view state');
+			if (close === 'return') { content.querySelector<HTMLButtonElement>('[data-action-id="sessions.views.changes.expand"] button')!.click(); }
+			else if (close === 'native') { popup.dispose(); }
+			else { layout.setChangesVisible(false); }
+			assert.equal(popup.isDisposed, true);
+			assert.equal(layout.isViewDetached('changes'), false);
+			assert.equal(content.ownerDocument, dom.window.document);
+			assert.equal(marker.value, 'retained view state');
+			layout.setChangesVisible(true);
+			assert.deepEqual(layout.getPartSize('auxiliarybar'), size);
+		}
+	} finally {
+		for (const part of parts.values()) { part.dispose(); }
+		dom.window.close();
+	}
+});
+
 test('Code cards move in the Grid and restore exact dimensions after expanding every card', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);
@@ -1057,13 +1309,14 @@ test('Code cards move in the Grid and restore exact dimensions after expanding e
 		layout.toggleInformation();
 		layout.showPart('panel');
 		layout.showPart('editor');
+		layout.setChangesVisible(true);
 		layout.moveCard('info', 'files', Direction.Down);
 		layout.moveCard('files', 'terminal', Direction.Up);
 		const initialFiles = layout.getPartSize('auxiliarybar');
 		layout.resizePart('auxiliarybar', new Dimension(initialFiles.width, initialFiles.height + 60));
 		const terminal = layout.getPartSize('panel');
 		const files = layout.getPartSize('auxiliarybar');
-		for (const id of ['terminal', 'files', 'info'] as const) {
+		for (const id of ['terminal', 'files', 'changes', 'info'] as const) {
 			layout.expandCard(id);
 			assert.equal(layout.expandedCard, id);
 			assert.equal(layout.isPartVisible('sessions'), false);
