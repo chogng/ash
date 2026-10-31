@@ -20,6 +20,7 @@ import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabel
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { getThemeColorReferences, ThemePreview, type ThemeColorReferences } from './themePreview.js';
+import { getThemeColorGroup, themeEditorColorGroups } from './themeEditorColors.js';
 import { SplitView } from '../../../../base/browser/ui/splitview/splitview.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
@@ -66,6 +67,7 @@ import {
 } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { IFileTextModelService } from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import {
 	IExtensionService,
@@ -204,6 +206,7 @@ export class ThemeEditor extends EditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IExtensionService private readonly extensions: IExtensionService,
 		@IExtensionResourceLoaderService private readonly extensionResources: IExtensionResourceLoaderService,
+		@IWorkbenchLayoutService private readonly workbenchLayout: IWorkbenchLayoutService,
 	) {
 		super(ThemeEditorId, themeService, storageService);
 		this._register(toDisposable(() => this.clearInput()));
@@ -359,86 +362,13 @@ export class ThemeEditor extends EditorPane {
 		this._register(this.scrollable.onDidScroll(() => this.scheduleViewport()));
 		this._register(addDisposableListener<KeyboardEvent>(this.list, 'keydown', event => this.navigateRows(event)));
 		this._register(addDisposableListener(this.list, 'focusout', () => this.scheduleViewport()));
-		const groups = [
-			{ id: 'sessions', label: localize('themeEditor.group.sessions', 'Agent Window'), pattern: /^sessions\./u },
-			{
-				id: 'syntax',
-				label: localize('themeEditor.group.syntax', 'Syntax highlighting'),
-				pattern: /^(?:editor\.(?:token|semanticToken)\.|semanticTokenColors\.)/u,
-			},
-			{
-				id: 'diff',
-				label: localize('themeEditor.group.diff', 'Diff'),
-				pattern:
-					/^(?:diffEditor|diff\.|editorGutter\.(?:added|deleted|modified)|editorOverviewRuler\.(?:added|deleted|modified))/u,
-			},
-			{
-				id: 'surface',
-				label: localize('themeEditor.group.surface', 'Surface'),
-				pattern: /^(?:background$|workbench\.|widget\.|titleBar\.|commandCenter\.|window\.)/u,
-			},
-			{
-				id: 'text',
-				label: localize('themeEditor.group.text', 'Text and borders'),
-				pattern:
-					/^(?:foreground$|description\.|muted\.|disabled|accent\.|error\.|warning\.|success\.|focusBorder$|contrast|border$|icon\.|selection\.|text)/u,
-			},
-			{
-				id: 'editor',
-				label: localize('themeEditor.group.editor', 'Editor'),
-				pattern: /^(?:editor(?!Group)|diffEditor|merge\.|peekView|problems\.|searchEditor)/u,
-			},
-			{
-				id: 'tabs',
-				label: localize('themeEditor.group.tabs', 'Tabs'),
-				pattern: /^(?:tab\.|tabList\.|editorGroup)/u,
-			},
-			{
-				id: 'sidebar',
-				label: localize('themeEditor.group.sidebar', 'Sidebar and navigation'),
-				pattern: /^(?:sideBar|activityBar|breadcrumb|navigation|files\.)/u,
-			},
-			{
-				id: 'panel',
-				label: localize('themeEditor.group.panel', 'Panels'),
-				pattern: /^(?:panel|auxiliaryBar|debugConsole|outputView)/u,
-			},
-			{
-				id: 'controls',
-				label: localize('themeEditor.group.controls', 'Controls'),
-				pattern: /^(?:input|button|checkbox|radio|dropdown|toolbar|keybinding|sash|badge)/u,
-			},
-			{
-				id: 'lists',
-				label: localize('themeEditor.group.lists', 'Lists and menus'),
-				pattern: /^(?:list\.|tree\.|menu\.|menubar\.|quickInput|quickPick)/u,
-			},
-			{
-				id: 'status',
-				label: localize('themeEditor.group.status', 'Status and notifications'),
-				pattern: /^(?:statusBar|notification|progressBar)/u,
-			},
-			{ id: 'terminal', label: localize('themeEditor.group.terminal', 'Terminal'), pattern: /^terminal/u },
-			{
-				id: 'scm',
-				label: localize('themeEditor.group.scm', 'Version control'),
-				pattern: /^(?:git|scm\.|diff\.)/u,
-			},
-			{
-				id: 'scrollbar',
-				label: localize('themeEditor.group.scrollbar', 'Scrollbar and minimap'),
-				pattern: /^(?:scrollbar|scrollView|scrollShadow|minimap)/u,
-			},
-			{ id: 'other', label: localize('themeEditor.group.other', 'Other'), pattern: /./u },
-		];
-		for (const group of groups) {
+		for (const group of themeEditorColorGroups) {
 			this.groups.push(
 				this._register(
 					new ThemeColorGroup(
 						this.list,
 						group.id,
 						group.label,
-						group.pattern,
 						['surface', 'syntax', 'diff', 'sessions'].includes(group.id),
 						() => {
 							this.picker?.cancel();
@@ -583,6 +513,10 @@ export class ThemeEditor extends EditorPane {
 	public override setVisible(visible: boolean): void {
 		if (!visible) this.picker?.cancel();
 		super.setVisible(visible);
+		if (visible) {
+			// Use the containing window's layout owner; embedded previews keep their own Parts.
+			for (const part of ['sidebar', 'auxiliarybar', 'panel'] as const) this.workbenchLayout.hidePart(part);
+		}
 		this.textEditor.setVisible(false);
 		this.applyPreview();
 	}
@@ -902,9 +836,10 @@ export class ThemeEditor extends EditorPane {
 		const state = this.inspectorStates.get(this.inspectorScope);
 		// Search expansion is temporary; restore each scene's ordinary category state first.
 		this.filtering = false;
+		const defaultGroups = this.preview!.selection.scene === 'scm' ? ['scm'] : ['surface', 'syntax', 'diff', 'sessions'];
 		for (const [index, group] of this.groups.entries()) {
 			group.setFiltering(false);
-			group.setExpanded(state?.expanded[index] ?? ['surface', 'syntax', 'diff', 'sessions'].includes(group.id));
+			group.setExpanded(state?.expanded[index] ?? defaultGroups.includes(group.id));
 		}
 		if (this.search) this.search.value = state?.query ?? '';
 		this.allColors = state?.allColors ?? false;
@@ -917,11 +852,12 @@ export class ThemeEditor extends EditorPane {
 	private includesColor(id: string): boolean {
 		if (this.allColors) return true;
 		const selection = this.preview?.selection;
-		const syntax = /^(?:editor\.(?:token|semanticToken)\.|semanticTokenColors\.)/u.test(id);
-		const diff =
-			/^(?:diffEditor|diff\.|editorGutter\.(?:added|deleted|modified)|editorOverviewRuler\.(?:added|deleted|modified))/u.test(
-				id,
-			);
+		const groupId = getThemeColorGroup(id);
+		if (selection?.scene === 'scm') {
+			return groupId === 'scm' || /^(?:sideBar\.|list\.|tree\.|badge\.|foreground$|description\.|focusBorder$|contrast|scrollbar|scrollShadow)/u.test(id);
+		}
+		const syntax = groupId === 'syntax';
+		const diff = groupId === 'diff';
 		if (selection?.scene === 'code')
 			return !diff && (syntax || /^(?:editor(?!Group)|minimap|scrollbar|scrollShadow)/u.test(id));
 		if (selection?.scene === 'diff')
@@ -967,7 +903,8 @@ export class ThemeEditor extends EditorPane {
 		const current = this.compiled;
 		for (const entry of entries) {
 			if (!this.includesColor(entry.id)) continue;
-			const group = this.groups.find(group => group.pattern.test(entry.id))!;
+			const groupId = getThemeColorGroup(entry.id);
+			const group = this.groups.find(group => group.id === groupId)!;
 			if (query && !`${entry.id} ${entry.description} ${group.label}`.toLowerCase().includes(query)) continue;
 			group.entries.push({
 				id: entry.id,
@@ -1130,7 +1067,8 @@ export class ThemeEditor extends EditorPane {
 		// Clearing a search restores expansion first. Materialize the target
 		// category before resolving its row; it may never have been constructed.
 		this.renderRows();
-		this.groups.find(group => group.pattern.test(id))?.setExpanded(true);
+		const groupId = getThemeColorGroup(id);
+		this.groups.find(group => group.id === groupId)?.setExpanded(true);
 		this.renderRows();
 		this.renderViewport(id);
 		const row = this.rows.get(id);
@@ -1320,7 +1258,6 @@ class ThemeColorGroup extends Disposable {
 		parent: HTMLElement,
 		public readonly id: string,
 		public readonly label: string,
-		public readonly pattern: RegExp,
 		expanded: boolean,
 		changed: () => void,
 	) {

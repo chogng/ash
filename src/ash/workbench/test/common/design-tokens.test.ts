@@ -21,6 +21,7 @@ import { colorCssVariable } from '../../../platform/theme/common/colorUtils.js';
 import { Colors } from '../../../platform/theme/common/colorRegistry.js';
 import { Sizes } from '../../../platform/theme/common/sizeRegistry.js';
 import { asCssVariableName } from '../../../platform/theme/common/sizeUtils.js';
+import { getThemeColorGroup } from '../../contrib/themeEditor/browser/themeEditorColors.js';
 import '../../../editor/common/core/editorColorRegistry.js';
 import '../../contrib/debug/browser/debugColors.js';
 import '../../../sessions/contrib/creator/browser/widget/designToolsWidget.js';
@@ -39,6 +40,24 @@ test('CSS variable manifest matches registered colors and sizes', async () => {
 	const variables = JSON.parse(await readFile(path, 'utf8'));
 	assert.deepEqual(variables.colors, Colors.getColors().map(({ id }) => colorCssVariable(id)).sort(), 'Run pnpm stylelint:update and review the manifest.');
 	assert.deepEqual(variables.sizes, Sizes.getSizes().map(({ id }) => asCssVariableName(id)).sort(), 'Run pnpm stylelint:update and review the manifest.');
+});
+
+test('every built-in color has a specific Theme Editor category', () => {
+	const unclassified = Colors.getColors().filter(color => getThemeColorGroup(color.id) === 'other').map(color => color.id);
+	assert.deepEqual(unclassified, [], 'Add the color family to the owning Theme Editor category.');
+	const scmColors = Colors.getColors().filter(color => /^(?:scm\.|scmGraph\.|git)/u.test(color.id));
+	assert.ok(scmColors.length > 0);
+	assert.deepEqual([...new Set(scmColors.map(color => getThemeColorGroup(color.id)))], ['scm']);
+	const expectedGroups = {
+		'actionBar.background': 'controls', 'banner.foreground': 'status', 'charts.blue': 'charts',
+		'chat.tabBackground': 'chat', 'collaboration.selection0Background': 'collaboration',
+		'compositeBar.foreground': 'sidebar', 'debugIcon.startForeground': 'debug',
+		'dialog.background': 'surface', 'hover.foreground': 'surface', 'screenshot.maskBackground': 'surface',
+		'modernActivityBarItem.activeBackground': 'sidebar', 'multiDiffEditor.background': 'diff',
+		'search.matchBackground': 'editor', 'sectionHeader.foreground': 'text', 'settings.headerBorder': 'settings',
+	};
+	for (const [id, group] of Object.entries(expectedGroups)) assert.equal(getThemeColorGroup(id), group, id);
+	assert.equal(getThemeColorGroup('exampleExtension.customAccent'), 'other', 'Unrecognized extension colors stay editable without an incorrect built-in category.');
 });
 
 test('CSS isolates intentional color samples', async () => {

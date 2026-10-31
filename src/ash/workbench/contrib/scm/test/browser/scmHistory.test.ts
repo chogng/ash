@@ -432,6 +432,44 @@ suite('scmHistory browser component', () => {
 		await expect.poll(async () => ({ mounted: await page.getByRole('treeitem', { name: /History metadata:/u }).count(), errors })).toEqual({ mounted: 1, errors: [] });
 	});
 
+	for (const locale of ['en', 'zh-CN']) test(`merge branches use a distinct graph palette across themes (${locale})`, async function () {
+		const { page } = browserTests;
+		await page.goto(`/scmHistory.html?changes&locale=${locale}`);
+		await expect(page.getByRole('treeitem', { name: /History metadata:/u })).toBeVisible();
+		await page.evaluate(() => {
+			const current = { id: 'refs/heads/main', name: 'main', revision: 'merge', category: 'localBranch' };
+			const remote = { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'merge', category: 'remoteBranch' };
+			const branches = Array.from({ length: 5 }, (_, index) => `branch-${index}`);
+			window.ashSCMHistoryIntegration.setHistoryReferences({ head: current, remote }, [
+				{ id: 'merge', subject: 'Merge branches', message: '', parentIds: ['main', ...branches], references: [current, remote] },
+				...branches.map(id => ({ id, subject: id, message: '', parentIds: ['root'] })),
+				{ id: 'main', subject: 'Main history', message: '', parentIds: ['root'] },
+				{ id: 'root', subject: 'Shared root', message: '', parentIds: [] },
+			]);
+		});
+		const merge = page.locator('[data-history-item-id="merge"]');
+		const branch = page.locator('[data-history-item-id="branch-0"]');
+		await expect(branch).toBeVisible();
+		for (let theme = 0; theme < 4; theme++) {
+			await page.evaluate(index => window.ashSCMHistoryIntegration.setTheme(index), theme);
+			const headColor = await merge.locator('circle.outer').evaluate(element => getComputedStyle(element).fill);
+			await expect(merge.locator('.ash-scm-graph-label.head')).toHaveCSS('background-color', headColor);
+			const branchColors = await page.locator('[data-history-item-id^="branch-"] circle').evaluateAll(nodes => nodes.map(node => getComputedStyle(node).fill));
+			expect(branchColors[0]).toBe('rgb(255, 176, 0)');
+			expect(new Set([headColor, ...branchColors]).size).toBe(6);
+			await expect(merge.locator('path[d$="22 22"]')).toHaveCSS('stroke', branchColors[0]!);
+			await expect(branch.locator('path[d="M 22 0 V 11"]')).toHaveCSS('stroke', branchColors[0]!);
+			await expect(branch.locator('path[d="M 22 11 V 22"]')).toHaveCSS('stroke', branchColors[0]!);
+			await expect(branch.locator('svg')).toHaveAttribute('aria-hidden', 'true');
+			await browserTests.info.attach(`merge-palette-${locale}-${theme}`, { body: await page.locator('.ash-scm-graph').screenshot(), contentType: 'image/png' });
+		}
+		await branch.click();
+		await expect(page.locator('.ash-scm-graph-change-row')).toHaveCount(3);
+		for (const child of await page.locator('.ash-scm-graph-change-row').all()) {
+			await expect(child.locator('path[d="M 22 0 V 22"]')).toHaveCSS('stroke', 'rgb(255, 176, 0)');
+		}
+	});
+
 	for (const locale of ['en', 'zh-CN']) test(`history title actions overflow by available width and return when widened (${locale})`, async function () {
 		const { page } = browserTests;
 		await page.goto(`/scmHistory.html?toolbarOverflow&locale=${locale}`);
