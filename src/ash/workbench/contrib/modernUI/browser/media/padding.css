@@ -16,6 +16,15 @@
 	--ash-list-row-default-padding-end: var(--ash-spacing-size80);
 }
 
+/* Floating Quick Picks keep their own inset, separate from docked Workbench rows. */
+:is(.ash-workbench, .ash-auxiliary-window-container).modern-ui
+	.ash-quick-pick-list:not(.ash-quick-pick-list-menu) {
+	--ash-list-row-inset-start: var(--ash-spacing-size60);
+	--ash-list-row-inset-end: var(--ash-spacing-size60);
+	--ash-list-row-reserve-scrollbar: 0;
+	--ash-list-row-radius: var(--ash-cornerRadius-small);
+}
+
 .ash-workbench.modern-ui
 	:is(.ash-sidebar-composite-bar-top, .ash-sidebar-composite-bar-bottom) {
 	box-sizing: border-box;

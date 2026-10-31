@@ -138,7 +138,7 @@
 }
 
 .ash-quick-pick-list {
-	/* Floating pickers select their own row presentation in either Workbench layout. */
+	/* Floating defaults; product hosts can select a different row presentation. */
 	--ash-list-row-inset-start: var(--ash-spacing-size60);
 	--ash-list-row-inset-end: var(--ash-spacing-size60);
 	--ash-list-row-reserve-scrollbar: 1;
