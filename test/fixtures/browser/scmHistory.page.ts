@@ -2,6 +2,7 @@ import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/workbench/contrib/scm/browser/scm.contribution.js';
 import { Button } from '../../../src/ash/base/browser/ui/button/button.js';
+import { setGlobalDefaultScrollbarSize } from '../../../src/ash/base/browser/ui/scrollbar/scrollableElement.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
@@ -45,8 +46,9 @@ import { ViewDescriptorService } from '../../../src/ash/workbench/services/views
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
 import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
 import { ISCMService, ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
-import type { ISCMHistoryItem, ISCMHistoryProvider } from '../../../src/ash/workbench/contrib/scm/common/history.js';
+import type { ISCMHistoryItem, ISCMHistoryItemRef, ISCMHistoryProvider } from '../../../src/ash/workbench/contrib/scm/common/history.js';
 const resources = new DisposableStore();
+setGlobalDefaultScrollbarSize(new URLSearchParams(location.search).has('modernUI') ? 8 : 10);
 let toolbarCalls = 0;
 if (new URLSearchParams(location.search).has('toolbarOverflow')) {
 	for (const [index, name] of ['Fetch', 'Pull', 'Push'].entries()) {
@@ -112,9 +114,14 @@ const historyReads: { skip: number; limit: number; }[] = [];
 let changeReads = 0;
 const heldContents = new Map<string, DeferredPromise<void>>();
 const completedContents: string[] = [];
+const head = observableValue<ISCMHistoryItemRef | undefined>('fixture.history.head', undefined);
+const remote = observableValue<ISCMHistoryItemRef | undefined>('fixture.history.remote', undefined);
+const base = observableValue<ISCMHistoryItemRef | undefined>('fixture.history.base', undefined);
 const provider: ISCMHistoryProvider = {
 	onDidChange: historyChanged.event,
-	historyItemRef: observableValue('fixture.history.head', undefined),
+	historyItemRef: head,
+	historyItemRemoteRef: remote,
+	historyItemBaseRef: base,
 	refresh() { },
 	provideHistoryItems: async options => {
 		historyReads.push({ skip: options.skip ?? 0, limit: options.limit ?? 50 });
@@ -172,6 +179,13 @@ const fixture = {
 	finishContents(path: string): void { void heldContents.get(path)?.complete(); heldContents.delete(path); },
 	setViewMode(mode: 'list' | 'tree'): void { (panes.getView('fixture.history') as SCMHistoryViewPane).setViewMode(mode); },
 	refresh(): void { historyChanged.fire(); },
+	setHistoryReferences(references: { head?: ISCMHistoryItemRef; remote?: ISCMHistoryItemRef; base?: ISCMHistoryItemRef; }, items: readonly ISCMHistoryItem[]): void {
+		historyItems = items;
+		head.set(references.head, undefined);
+		remote.set(references.remote, undefined);
+		base.set(references.base, undefined);
+		historyChanged.fire();
+	},
 	manualRefresh(): Promise<void> { return (panes.getView('fixture.history') as SCMHistoryViewPane).runTitleOperation(); },
 	prependHistoryItem(id: string, silent = false): void {
 		historyItems = [{ id, parentIds: historyItems?.length ? [historyItems[0].id] : [], subject: id, message: id }, ...historyItems ?? []];
@@ -195,6 +209,7 @@ const fixture = {
 		else void pending?.complete();
 	},
 	resize(width: number): void { root.style.width = `${width}px`; panes.layout({ height: 600, width }); },
+	setScrollbarSize(size: number): void { setGlobalDefaultScrollbarSize(size); },
 	setAlwaysShowHeaderActions(value: unknown): Promise<void> { return configuration.updateValue('workbench.view.alwaysShowHeaderActions', value); },
 	addDefaultView(): void { resources.add(registry.registerViews(viewContainer.id, [{ id: 'late-default', title: 'Late default', ctorDescriptor: new SyncDescriptor(HeaderActionsPane) }])); },
 	setTheme(index: number): void { themes.setColorTheme([darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme][index]!); },

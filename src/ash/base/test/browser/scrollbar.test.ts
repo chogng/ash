@@ -26,6 +26,67 @@ for (const [name, value] of Object.entries({
 const { ScrollableElement, Scrollbar } = await import(
 	'../../browser/ui/scrollbar/scrollbar.js'
 );
+const { DEFAULT_SCROLLBAR_SIZE, setGlobalDefaultScrollbarSize, SmoothScrollableElement } = await import('../../browser/ui/scrollbar/scrollableElement.js');
+const { Scrollable } = await import('../../common/scrollable.js');
+
+test('caller-owned scrolling updates only axes with implicit scrollbar sizes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using state = new Scrollable({ forceIntegerValues: true, smoothScrollDuration: 0, scheduleAtNextAnimationFrame: () => toDisposable(() => { }) });
+		state.setScrollDimensions({ width: 200, height: 100, scrollWidth: 600, scrollHeight: 800 }, false);
+		state.setScrollPositionNow({ scrollLeft: 40, scrollTop: 80 });
+		using view = new SmoothScrollableElement(h(dom.window.document, 'div'), { horizontalScrollbarSize: 14 }, state);
+		view.renderNow();
+		const horizontal = requireElement(view.getDomNode(), '.ash-scrollbar-track-horizontal');
+		const vertical = requireElement(view.getDomNode(), '.ash-scrollbar-track-vertical');
+		setGlobalDefaultScrollbarSize(8);
+		assert.equal(horizontal.style.height, '14px');
+		assert.equal(vertical.style.width, '8px');
+		assert.equal(state.getCurrentScrollPosition().scrollLeft, 40);
+		assert.equal(state.getCurrentScrollPosition().scrollTop, 80);
+		view.updateOptions({ verticalScrollbarSize: 6 });
+		setGlobalDefaultScrollbarSize(DEFAULT_SCROLLBAR_SIZE);
+		assert.equal(vertical.style.width, '6px');
+		assert.equal(horizontal.style.height, '14px');
+	} finally {
+		setGlobalDefaultScrollbarSize(DEFAULT_SCROLLBAR_SIZE);
+		dom.window.close();
+	}
+});
+
+test('implicit scrollbar sizes follow layout changes without losing position or overriding explicit sizes', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using implicit = new ScrollableElement(dom.window.document.body, { direction: 'vertical' });
+		using explicit = new ScrollableElement(dom.window.document.body, { direction: 'vertical', scrollbarSize: 14 });
+		const viewport = implicit.scrollableElement;
+		installMetrics(viewport, { width: 100, height: 100, scrollWidth: 100, scrollHeight: 500 });
+		implicit.layout();
+		implicit.scrollTo(0, 160);
+		implicit.element.focus();
+		for (const size of [8, DEFAULT_SCROLLBAR_SIZE, 8]) {
+			setGlobalDefaultScrollbarSize(size);
+			assert.equal(implicit.element.style.getPropertyValue('--ash-scrollbar-size'), `${size}px`);
+			assert.equal(implicit.element.style.getPropertyValue('--ash-scrollbar-vertical-size'), `${size}px`);
+			assert.equal(explicit.element.style.getPropertyValue('--ash-scrollbar-size'), '14px');
+			assert.equal(implicit.scrollableElement, viewport);
+			assert.equal(implicit.state.top, 160);
+			assert.equal(dom.window.document.activeElement, implicit.element);
+		}
+		using createdAfterSwitch = new ScrollableElement(dom.window.document.body, { direction: 'horizontal' });
+		assert.equal(createdAfterSwitch.element.style.getPropertyValue('--ash-scrollbar-size'), '8px');
+		assert.equal(createdAfterSwitch.element.style.getPropertyValue('--ash-scrollbar-vertical-size'), '0px');
+		implicit.updateOptions({ scrollbarSize: 6, vertical: 'hidden' });
+		setGlobalDefaultScrollbarSize(DEFAULT_SCROLLBAR_SIZE);
+		assert.equal(implicit.element.style.getPropertyValue('--ash-scrollbar-size'), '6px');
+		assert.equal(implicit.element.style.getPropertyValue('--ash-scrollbar-vertical-size'), '0px');
+		implicit.updateOptions({ vertical: 'auto' });
+		assert.equal(implicit.element.style.getPropertyValue('--ash-scrollbar-vertical-size'), '6px');
+	} finally {
+		setGlobalDefaultScrollbarSize(DEFAULT_SCROLLBAR_SIZE);
+		dom.window.close();
+	}
+});
 
 test('ScrollableElement exposes a persistent directional content container', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

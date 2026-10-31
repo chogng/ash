@@ -89,6 +89,38 @@ suite('quickAccess browser component', () => {
 		});
 	}
 
+	for (const { locale, theme, dir } of [{ locale: 'en', theme: 'light', dir: 'ltr' }, { locale: 'zh-CN', theme: 'dark', dir: 'ltr' }, { locale: 'en', theme: 'hc', dir: 'ltr' }, { locale: 'en', theme: 'hcLight', dir: 'rtl' }]) for (const layout of ['flat', 'modern']) test(`Quick Access shares scrollbar geometry for virtual results (${locale}, ${layout}, ${theme}, ${dir})`, async () => {
+		const { page } = browserTests;
+		await page.goto(`/quickAccess.html?manyCommands&locale=${locale}&layoutStyle=${layout}&theme=${theme}&dir=${dir}`);
+		await page.getByRole('button', { name: 'Open commands' }).click();
+		const picker = page.getByRole('dialog');
+		const input = picker.getByRole('combobox');
+		await input.fill('>Bulk command');
+		const active = picker.locator('.ash-list-row.is-active');
+		await expect(active).toHaveAttribute('aria-setsize', '600');
+		const geometry = await active.evaluate(row => {
+			const scrollable = row.closest('.ash-list-scrollable')!;
+			const track = scrollable.querySelector('.ash-scrollbar-track-vertical')!.getBoundingClientRect();
+			const viewport = scrollable.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+			const bounds = row.getBoundingClientRect();
+			const rtl = getComputedStyle(row).direction === 'rtl';
+			return { gap: rtl ? bounds.left - track.right : track.left - bounds.right, start: rtl ? viewport.getBoundingClientRect().right - bounds.right : bounds.left - viewport.getBoundingClientRect().left, trackWidth: track.width, nativeGutter: viewport.offsetWidth - viewport.clientWidth, width: bounds.width };
+		});
+		expect(geometry).toMatchObject({ gap: 6, start: 6, trackWidth: layout === 'modern' ? 8 : 10, nativeGutter: 0 });
+		await input.press('ArrowUp');
+		await expect(active).toHaveAttribute('aria-posinset', '600');
+		await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+		await expect(input).toBeFocused();
+		await input.fill('>Bulk command 599');
+		await expect(active).toBeInViewport();
+		await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('Bulk command 599');
+		await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+		await input.fill('>Geometry result sentinel');
+		await expect(active).toHaveAttribute('aria-setsize', '1');
+		expect((await active.boundingBox())!.width).toBe(geometry.width);
+		await browserTests.info.attach(`quick-access-shared-geometry-${locale}-${layout}.png`, { body: await picker.screenshot(), contentType: 'image/png' });
+	});
+
 	test('Quick Input releases an interrupted drag when the picker closes', async () => {
 		const { page } = browserTests;
 		await page.goto('/quickAccess.html');

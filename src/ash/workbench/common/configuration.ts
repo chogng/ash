@@ -197,12 +197,14 @@ export const WorkbenchConfiguration = Object.freeze({
 		},
 		setting: {
 			valueType: 'select',
-			title: 'Layout style',
-			description: 'Choose floating Modern surfaces or edge-to-edge Flat Workbench regions.',
-			options: [
-				{ value: 'modern', label: 'Modern' },
-				{ value: 'flat', label: 'Flat' },
-			],
+			get title() { return localize('workbench.layoutStyle.title', 'Workbench Style'); },
+			get description() { return localize('workbench.layoutStyle.description', 'Choose rounded Modern surfaces or edge-to-edge Flat regions. Changes apply immediately.'); },
+			get options() {
+				return [
+					{ value: 'modern', label: localize('workbench.layoutStyle.modern', 'Modern') },
+					{ value: 'flat', label: localize('workbench.layoutStyle.flat', 'Flat') },
+				] as const;
+			},
 		},
 	}),
 	modernUIEditorTabStyle: configurationRegistry.registerConfiguration<ModernUIEditorTabStyle>({

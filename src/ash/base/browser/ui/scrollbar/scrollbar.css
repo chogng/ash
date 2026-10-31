@@ -78,6 +78,13 @@
 	width: var(--ash-scrollbar-size);
 }
 
+/* Single-axis lists reserve the logical trailing rail in either writing direction. */
+.ash-scrollable-element[data-scroll-direction="vertical"]
+	> .ash-scrollbar-track-vertical {
+	right: auto;
+	inset-inline-end: 0;
+}
+
 .ash-scrollbar-track[data-visibility="auto"] {
 	opacity: 0;
 	pointer-events: none;

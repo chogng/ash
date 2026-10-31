@@ -80,13 +80,8 @@
 	margin-inline-start: calc(
 		var(--ash-spacing-size40) + var(--ash-spacing-size20) +
 			var(--ash-lxiconFontSize) / 2 - var(--ash-spacing-size80) -
-			var(--scm-graph-lane-width) - var(--scm-graph-row-inset, 0px)
+			var(--scm-graph-lane-width) - var(--ash-list-row-inset-start, 0px)
 	);
-}
-
-.ash-workbench.modern-ui .ash-sidebar-part .ash-scm-graph-tree {
-	/* Modern UI insets sidebar list rows independently of their content padding. */
-	--scm-graph-row-inset: var(--ash-spacing-size40);
 }
 
 .ash-scm-graph-commit {
@@ -320,7 +315,6 @@
 	position: absolute;
 	z-index: 1;
 	top: 0;
-	/* The tree row already supplies the trailing gutter. */
 	inset-inline-end: 0;
 	bottom: 0;
 	display: flex;

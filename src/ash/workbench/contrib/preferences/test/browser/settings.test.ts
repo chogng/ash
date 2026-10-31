@@ -1915,7 +1915,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, 'workbench.tips.enabled'), 'appearance');
 	assert.equal(defaults.get('workbench.tips.enabled').valueType, 'boolean');
 	assert.equal(configurationRegistry.getConfiguration('workbench.tips.enabled')?.defaultValue, true);
-	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'layout');
+	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle), 'appearance');
 	assert.equal(findSettingCategory(layout, 'chat.viewSessions.orientation'), 'layout');
 	assert.equal(findSettingCategory(layout, StartupEditorConfigurationKey), 'startup');
 	assert.equal(findSettingCategory(layout, 'window.startupWindow'), 'startup');
@@ -2032,6 +2032,8 @@ test('settingsLayout is the single projection from registered settings to catego
 		);
 	}
 	const layoutStyleSetting = defaults.get(WorkbenchConfiguration.layoutStyle);
+	assert.equal(layoutStyleSetting.title, 'Workbench Style');
+	assert.equal(layoutStyleSetting.configuration.defaultValue, 'modern');
 	assert.equal(layoutStyleSetting.valueType, 'select');
 	if (layoutStyleSetting.valueType === 'select') {
 		assert.deepEqual(layoutStyleSetting.options, [
@@ -2064,6 +2066,10 @@ test('feature settings navigation and groups capture the language initialized be
 	try {
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 		const layout = await loadChineseSettingsLayout();
+		const style = new DefaultSettings().get(WorkbenchConfiguration.layoutStyle);
+		assert.equal(style.title, '工作台样式');
+		assert.equal(style.description, '选择采用圆角区域的 Modern 样式或区域贴边的 Flat 样式。更改会立即生效。');
+		assert.equal(findSettingCategory(layout.createSettingsLayout(new DefaultSettings().all), WorkbenchConfiguration.layoutStyle), 'appearance');
 		const category = layout.SettingsCategories.find(category => category.id === 'terminal');
 		assert.ok(category);
 		assert.equal(category.label, '终端');

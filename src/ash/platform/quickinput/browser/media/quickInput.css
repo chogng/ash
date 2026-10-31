@@ -138,6 +138,13 @@
 }
 
 .ash-quick-pick-list {
+	/* Floating pickers select their own row presentation in either Workbench layout. */
+	--ash-list-row-inset-start: var(--ash-spacing-size60);
+	--ash-list-row-inset-end: var(--ash-spacing-size60);
+	--ash-list-row-reserve-scrollbar: 1;
+	--ash-list-row-radius: var(--ash-cornerRadius-small);
+	--ash-list-row-padding-start: 0px;
+	--ash-list-row-padding-end: 0px;
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
@@ -148,24 +155,11 @@
 .ash-quick-pick-list .ash-quick-pick-list-items {
 	min-height: 0;
 	box-sizing: border-box;
-	/* Inset content without moving the scrollbar away from the picker's edge. */
-	padding-left: var(--ash-spacing-size60);
-	padding-right: calc(var(--ash-scrollbar-size) + var(--ash-spacing-size60));
 }
 
 .ash-quick-pick-list-scrollable {
 	flex: 0 1 auto;
 	min-height: 0;
-}
-
-.ash-quick-pick-list .ash-list-row {
-	border-radius: var(--ash-cornerRadius-small);
-}
-
-/* Absolute rows need the same inset as content-sized rows inside the padded list. */
-.ash-quick-pick-list-virtualized .ash-list-row {
-	margin-left: var(--ash-spacing-size60);
-	margin-right: calc(var(--ash-scrollbar-size) + var(--ash-spacing-size60));
 }
 
 .ash-quick-pick-row-content {
@@ -303,16 +297,10 @@
 }
 
 .ash-quick-pick-list-compact-menu {
+	--ash-list-row-inset-start: 0px;
+	--ash-list-row-inset-end: 0px;
+	--ash-list-row-reserve-scrollbar: 0;
 	padding: var(--ash-spacing-size40);
-}
-
-.ash-quick-pick-list-compact-menu .ash-quick-pick-list-items {
-	padding-right: 0;
-}
-
-/* Reserve room for the scrollbar inside the row, keeping menu backgrounds aligned. */
-.ash-quick-pick-list-compact-menu.scrolling .ash-quick-pick-row-content {
-	padding-right: calc(var(--ash-spacing-size80) + var(--ash-scrollbar-size));
 }
 
 .ash-quick-pick-list-compact-menu .ash-quick-pick-row-text {

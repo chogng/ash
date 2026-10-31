@@ -121,6 +121,12 @@ export const SettingsNavigation = [
 				presentation: 'general',
 				groups: [
 					{
+						id: 'style',
+						label: localize('settings.workbench.style.label', 'Style'),
+						description: localize('settings.workbench.style.description', 'Choose the visual style of Workbench regions.'),
+						settings: ['workbench.layoutStyle'],
+					},
+					{
 						id: 'theme',
 						label: 'Color theme',
 						description: 'Choose the colors used by the Workbench.',
@@ -158,7 +164,6 @@ export const SettingsNavigation = [
 						label: localize('settings.workbench.layout.group.label', 'Workbench layout'),
 						description: localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'),
 						settings: [
-							'workbench.layoutStyle',
 							'workbench.activityBar.location',
 							'workbench.activityBar.autoHide',
 							'workbench.activityBar.badges',

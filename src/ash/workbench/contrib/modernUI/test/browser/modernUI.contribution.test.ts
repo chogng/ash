@@ -20,6 +20,7 @@ const { IAuxiliaryWindowService } = await import('../../../../services/auxiliary
 const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../../services/configuration/test/common/testServices.js');
 const { IWorkbenchLayoutService, Position } = await import('../../../../services/layout/browser/layoutService.js');
 const { BrowserLayoutService } = await import('../../../../../platform/layout/browser/layoutService.js');
+const { ScrollableElement } = await import('../../../../../base/browser/ui/scrollbar/scrollableElement.js');
 await import('../../browser/modernUI.contribution.js');
 
 class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbenchLayoutServiceContract {
@@ -105,6 +106,10 @@ test('Modern UI contribution starts at restore and owns live window layout style
 	auxiliaryWindows.publish(auxiliaryWindow);
 	assert.equal(auxiliaryContainer.dataset.layoutStyle, 'modern');
 	assert.equal(auxiliaryContainer.classList.contains('modern-ui'), true);
+	using scrollable = new ScrollableElement(layout.mainContainer, { direction: 'vertical' });
+	using auxiliaryScrollable = new ScrollableElement(auxiliaryContainer, { direction: 'vertical' });
+	using explicit = new ScrollableElement(auxiliaryContainer, { direction: 'vertical', scrollbarSize: 14 });
+	assert.equal(scrollable.element.style.getPropertyValue('--ash-scrollbar-size'), '8px');
 
 	await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'flat');
 	assert.deepEqual(layout.styles, ['modern', 'flat']);
@@ -112,8 +117,15 @@ test('Modern UI contribution starts at restore and owns live window layout style
 	assert.equal(layout.mainContainer.classList.contains('modern-ui'), false);
 	assert.equal(auxiliaryContainer.dataset.layoutStyle, 'flat');
 	assert.equal(auxiliaryContainer.classList.contains('modern-ui'), false);
+	assert.equal(scrollable.element.style.getPropertyValue('--ash-scrollbar-size'), '10px');
+	assert.equal(auxiliaryScrollable.element.style.getPropertyValue('--ash-scrollbar-size'), '10px');
+	assert.equal(explicit.element.style.getPropertyValue('--ash-scrollbar-size'), '14px');
+	await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'modern');
+	assert.equal(scrollable.element.style.getPropertyValue('--ash-scrollbar-size'), '8px');
+	assert.equal(auxiliaryScrollable.element.style.getPropertyValue('--ash-scrollbar-size'), '8px');
 
 	host.dispose();
+	assert.equal(scrollable.element.style.getPropertyValue('--ash-scrollbar-size'), '10px');
 	assert.equal(layout.mainContainer.hasAttribute('data-layout-style'), false);
 	assert.equal(layout.mainContainer.classList.contains('modern-ui'), false);
 	assert.equal(auxiliaryContainer.hasAttribute('data-layout-style'), false);

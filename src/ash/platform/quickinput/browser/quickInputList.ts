@@ -307,6 +307,9 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this.list.domNode.hidden = empty;
 		this.empty.hidden = !empty;
 		this.layout();
+		// A replacement result set falls back to its first item. Reveal it after layout,
+		// otherwise a retained scroll offset can leave the logical active row unmounted.
+		if (activeIndex < 0 && this.list.activeIndex >= 0) this.list.reveal(this.list.activeIndex);
 	}
 
 	private renderItem(item: TItem, row: HTMLDivElement): HTMLDivElement {

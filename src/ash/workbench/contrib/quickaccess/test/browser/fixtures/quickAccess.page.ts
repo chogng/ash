@@ -1,4 +1,5 @@
 import { Range } from '../../../../../../editor/common/core/range.js';
+import { setGlobalDefaultScrollbarSize } from '../../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { ILanguageFeaturesService } from '../../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../../editor/common/services/languageFeaturesService.js';
 import { IWorkingCopyService } from '../../../../../services/workingCopy/common/workingCopyService.js';
@@ -46,7 +47,7 @@ import { Event } from '../../../../../../base/common/event.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
 import { bindTestColorTheme } from '../../../../../../../../test/fixtures/browser/themeFixture.js';
-import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { IEditorPartsService } from '../../../../../browser/parts/editor/editorParts.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
@@ -98,6 +99,8 @@ declare global {
 }
 
 const parameters = new URLSearchParams(location.search);
+setGlobalDefaultScrollbarSize(parameters.get('layoutStyle') === 'modern' ? 8 : 10);
+document.documentElement.dir = parameters.get('dir') === 'rtl' ? 'rtl' : 'ltr';
 if (parameters.get('locale') === 'zh-CN') {
 	const catalog = productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, values) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, values));
@@ -262,7 +265,7 @@ if (parameters.get('reopen') === '1') {
 	}));
 }
 const quickAccess = quickInput.quickAccess;
-const theme = parameters.get('theme') === 'hc' ? highContrastDarkColorTheme : parameters.get('theme') === 'dark' ? darkColorTheme : lightColorTheme;
+const theme = parameters.get('theme') === 'hc' ? highContrastDarkColorTheme : parameters.get('theme') === 'hcLight' ? highContrastLightColorTheme : parameters.get('theme') === 'dark' ? darkColorTheme : lightColorTheme;
 if (parameters.has('fileIcons')) {
 	const seti = await FileIconThemeData.load('vs-seti', 'Seti', setiDocument, async () => new Uint8Array(await (await fetch(setiFontUrl)).arrayBuffer()));
 	const registration = resources.add(WorkbenchFileIconThemesRegistry.registerThemes());
@@ -392,6 +395,10 @@ if (parameters.has('manyCommands')) {
 			public override run(): void { document.querySelector('output')!.textContent = title; }
 		}));
 	}
+	resources.add(registerAction2(class extends Action2 {
+		constructor() { super({ id: 'test.quickAccess.geometryResult', title: 'Geometry result sentinel', f1: true }); }
+		public override run(): void { document.querySelector('output')!.textContent = 'Geometry result sentinel'; }
+	}));
 }
 if (parameters.has('scrollRows')) {
 	for (let index = 0; index < 60; index++) {
