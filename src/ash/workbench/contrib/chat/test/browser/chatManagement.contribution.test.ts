@@ -430,18 +430,37 @@ test('Context buttons save model-specific usable capacities across providers', a
 	assert.equal(otherButton.querySelector('.ash-model-context-default')!.textContent, '123.5K');
 	assert.equal(otherButton.closest('label'), null);
 	assert.equal(root.querySelectorAll('.ash-select-box').length, 0);
+	const otherRow = otherButton.closest('.ash-models-settings-model-row')!;
+	const unrelatedMutations: MutationRecord[] = [];
+	const observer = new browserEnvironment.window.MutationObserver(records => unrelatedMutations.push(...records));
+	observer.observe(otherRow, { subtree: true, attributes: true, childList: true, characterData: true });
+	resources.add(toDisposable(() => observer.disconnect()));
+	let countChanges = 0;
+	resources.add(widget.onDidChangeItemCount(() => countChanges++));
+	const nameText = button.closest('.ash-models-settings-model-row')!.querySelector('.ash-icon-label-text')!.firstChild;
 	button.focus(); button.click();
-	assert.equal(button.disabled, true);
+	assert.equal(button.disabled, false);
+	assert.equal(button.getAttribute('aria-busy'), 'true');
+	assert.equal(otherButton.disabled, false);
+	assert.ok([...root.querySelectorAll<HTMLInputElement>('input[role="switch"]')].every(toggle => !toggle.disabled));
+	button.click();
+	assert.equal(writes.length, 1, 'Repeated activation of the saving control is coalesced');
 	assert.equal(button.getAttribute('aria-pressed'), 'false', 'Saving does not invent an optimistic capacity');
 	await pending.complete(); await nextTurn();
 	assert.equal(button.getAttribute('aria-pressed'), 'true');
 	assert.equal(button.querySelector('.ash-model-context-extended')!.textContent, '828.4K');
 	assert.equal(document.activeElement, button);
+	assert.equal(button.hasAttribute('aria-busy'), false);
+	assert.equal(countChanges, 0, 'A capacity change does not invalidate the Settings tree');
+	assert.deepEqual(unrelatedMutations, [], 'Unchanged rows receive no DOM updates');
+	assert.equal(button.closest('.ash-models-settings-model-row')!.querySelector('.ash-icon-label-text')!.firstChild, nameText);
+	observer.disconnect();
 	assert.deepEqual(writes, [{ model: sol.model, update: { longContext: true } }]);
 	fail = true;
 	button.click(); await nextTurn();
 	assert.equal(button.getAttribute('aria-pressed'), 'true');
 	assert.equal(button.disabled, false);
+	assert.equal(button.hasAttribute('aria-busy'), false);
 	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not save model preferences.');
 	fail = false;
 	button.click(); await nextTurn();
@@ -456,6 +475,46 @@ test('Context buttons save model-specific usable capacities across providers', a
 	sol = { ...sol, usableContextWindow: null }; changes.fire(); await nextTurn();
 	assert.equal(button.isConnected, false);
 	assert.equal(document.activeElement, root.querySelector('input[aria-label="Show GPT-6.1 Sol in model picker"]'));
+});
+
+test('Context saves keep other models interactive and complete independently', async () => {
+	using resources = new DisposableStore();
+	let entries: readonly ModelCatalogEntry[] = ['first', 'second'].map(id => ({
+		model: { provider: 'openai', model: id }, displayName: id, longContext: false, usableContextWindow: 128000,
+	}));
+	const { services, root, models, changes } = setup(resources, async () => entries);
+	const pending = [new DeferredPromise<void>(), new DeferredPromise<void>()];
+	const writes: string[] = [];
+	models.setModelPreferences = async (model, update) => {
+		writes.push(model.model);
+		const index = entries.findIndex(entry => entry.model.model === model.model);
+		await pending[index].p;
+		entries = entries.map((entry, candidate) => candidate === index ? { ...entry, longContext: update.longContext!, usableContextWindow: 256000 } : entry);
+		changes.fire();
+	};
+	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {}));
+	root.append(widget.element);
+	widget.render();
+	await nextTurn();
+	const first = root.querySelector<HTMLButtonElement>('button[aria-label="Context size for first"]')!;
+	const second = root.querySelector<HTMLButtonElement>('button[aria-label="Context size for second"]')!;
+	first.click();
+	second.click();
+	first.click();
+	second.click();
+	assert.deepEqual(writes, ['first', 'second']);
+	assert.ok([first, second].every(button => !button.disabled && button.getAttribute('aria-busy') === 'true'));
+	assert.ok([...root.querySelectorAll<HTMLInputElement>('input[role="switch"]')].every(toggle => !toggle.disabled));
+	await pending[0].complete();
+	await nextTurn();
+	assert.equal(first.getAttribute('aria-pressed'), 'true');
+	assert.equal(first.hasAttribute('aria-busy'), false);
+	assert.equal(second.getAttribute('aria-pressed'), 'false');
+	assert.equal(second.getAttribute('aria-busy'), 'true');
+	await pending[1].complete();
+	await nextTurn();
+	assert.equal(second.getAttribute('aria-pressed'), 'true');
+	assert.equal(second.hasAttribute('aria-busy'), false);
 });
 
 test('Inline model settings save supported preferences and reveal the matching custom model', async () => {

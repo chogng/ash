@@ -55,6 +55,8 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 	private readonly customProviders = this._register(new DisposableMap<string, ModelProviderSettingsRenderer>());
 	private visible = false;
 	private apiLoadVersion = 0;
+	/** Render key for the last applied connection and credential observation. */
+	private connectionState: string | undefined;
 	public readonly categoryId = 'models';
 	public override readonly sectionSearch = {
 		search: (query: string): void => this.modelsWidget.search(query, { focus: false }),
@@ -66,7 +68,10 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 		this.document = container.ownerDocument;
 		this.modelsWidget = this._register(instantiation.createInstance(ChatModelsWidget, this.document, {
 			matches: (entry: ModelCatalogEntry) => this.catalogQuery.matches({ title: entry.displayName, description: '', keywords: [`${entry.model.provider}/${entry.model.model}`] }),
-			onStorageError: (error: SecretStorageError) => this.updateStorageStatus({ status: error.status }),
+			onStorageError: (error: SecretStorageError) => {
+				this.connectionState = undefined;
+				this.updateStorageStatus({ status: error.status });
+			},
 			onConfigure: (connection: string, model?: string) => this.configure(connection, model),
 		}));
 		this.modelsWidget.element.hidden = true;
@@ -86,7 +91,14 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			presentation: 'secondary',
 		}));
 		this._register(this.storageRetry.onDidClick(() => {
-			void this.loadApiConnections(++this.apiLoadVersion);
+			const restoreFocus = this.storageRetry.hasFocus();
+			const pending = this.loadApiConnections(++this.apiLoadVersion);
+			this.storageRetry.enabled = false;
+			void pending.finally(() => {
+				if (this.isDisposed) { return; }
+				this.storageRetry.enabled = true;
+				if (restoreFocus && !this.storageRetry.domNode.hidden && this.document.activeElement === this.document.body) { this.storageRetry.focus(); }
+			});
 			this.modelsWidget.render();
 		}));
 		this.storageAuthorize = this._register(new Button(this.storageStatus, {
@@ -208,7 +220,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			this.apiLoadVersion++;
 			return;
 		}
-		this.providersStatus.textContent = localize('sessions.settings.apiLoading', 'Loading API keys…');
+		if (this.connectionState === undefined) { this.providersStatus.textContent = localize('sessions.settings.apiLoading', 'Loading API keys…'); }
 		this.changed.fire();
 		this.modelsWidget.render();
 		void this.loadApiConnections(++this.apiLoadVersion);
@@ -279,21 +291,32 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 	private async loadApiConnections(version: number): Promise<void> {
 		const storageFocused = this.document.activeElement;
 		const restoreStorageFocus = this.storageStatus.contains(storageFocused);
-		this.storageRetry.enabled = false;
+		let changed = false;
 		try {
 			const catalog = await this.languageModels.listModelProviders();
 			if (version !== this.apiLoadVersion || this.isDisposed) { return; }
-			this.updateSubscriptions(catalog);
 			const storage = await this.secretStorage.readState();
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
+			const available = storage.status === 'available' || storage.storageType === 'in-memory';
+			const custom = available ? await this.languageModels.listCustomModelProviders() : [];
+			if (version !== this.apiLoadVersion || this.isDisposed) return;
+			// Discovery status belongs to the catalog; only connection fields affect these cards.
+			const connections = catalog.map(({ connection, provider, access, displayName, configured, apiKeyPolicy, apiKeyConfigured }) => ({
+				connection, provider, access, displayName,
+				configured: access === 'subscription' ? configured : undefined,
+				apiKeyPolicy, apiKeyConfigured,
+			}));
+			const state = JSON.stringify([connections, storage, custom]);
+			if (state === this.connectionState) { return; }
+			changed = true;
+			this.updateSubscriptions(catalog);
 			this.storageMode = storage.mode;
 			this.updateStorageStatus(storage);
 			if (!this.storageAvailable) {
 				this.providersStatus.textContent = '';
-				this.changed.fire();
+				this.connectionState = state;
 				return;
 			}
-			const custom = await this.languageModels.listCustomModelProviders();
 			const providers = catalog.filter(provider => provider.access !== 'subscription' && provider.apiKeyPolicy !== 'unsupported' && provider.connection !== 'openai-compatible' && !provider.connection.startsWith('custom-'));
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
 			const customIds = new Set(custom.map(provider => provider.id));
@@ -328,12 +351,14 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 				return { provider, ...this.apiConnectionRow(provider, resources) };
 			});
 			this.providersStatus.textContent = localize('sessions.settings.noApiConnections', 'No API key providers available.');
+			this.connectionState = state;
 		} catch (error) {
 			if (version !== this.apiLoadVersion || this.isDisposed) return;
+			changed = true;
+			this.connectionState = undefined;
 			if (error instanceof SecretStorageError) {
 				this.updateStorageStatus({ status: error.status });
 				this.providersStatus.textContent = '';
-				this.changed.fire();
 				return;
 			}
 			this.apiElements = [];
@@ -342,8 +367,7 @@ export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionR
 			this.providersStatus.textContent = localize('sessions.settings.apiLoadFailed', 'Could not load API keys.');
 			this.notifications.error(this.providersStatus.textContent);
 		} finally {
-			if (version === this.apiLoadVersion && !this.isDisposed) {
-				this.storageRetry.enabled = true;
+			if (changed && version === this.apiLoadVersion && !this.isDisposed) {
 				this.changed.fire();
 				if (restoreStorageFocus && !this.storageStatus.hidden) {
 					if (isHTMLElement(storageFocused) && !storageFocused.hidden) storageFocused.focus();

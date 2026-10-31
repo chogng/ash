@@ -2525,19 +2525,33 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	modelTree.setNavigationTarget(undefined);
 	catalog = [{ model, displayName: 'GPT Test Updated' }];
 	changed.fire();
-	resolveProviders([
-		{
-			connection: 'openai',
-			provider: 'openai',
-			displayName: 'OpenAI API',
-			apiKeyPolicy: 'required',
-			apiKeyConfigured: false,
-		},
-	]);
+	const providerObservation = {
+		connection: 'openai', provider: 'openai', displayName: 'OpenAI API', apiKeyPolicy: 'required' as const, apiKeyConfigured: false,
+		access: 'apiKey' as const, configured: false,
+		catalog: { connection: 'openai', provider: 'openai', freshness: 'staticOnly' as 'staticOnly' | 'fresh', issues: [] },
+	};
+	resolveProviders([providerObservation]);
 	await nextTurn();
 	assert.equal(root.querySelector('.ash-models-settings-api-row h5')?.textContent, 'OpenAI API');
 	assert.equal(root.querySelector('.ash-models-settings-model-row'), retainedModel);
 	assert.equal(root.querySelector('.ash-models-settings-model-copy > span')?.textContent, 'GPT Test Updated');
+	let refreshes = 0;
+	disposables.add(panel.onDidChange(() => refreshes++));
+	const providerName = root.querySelector('.ash-models-settings-api-row h5')!.firstChild;
+	catalog = [{ model, displayName: 'GPT Test Context Updated' }];
+	providerObservation.catalog.freshness = 'fresh';
+	providerObservation.configured = true;
+	changed.fire();
+	await nextTurn();
+	assert.equal(root.querySelector('.ash-models-settings-model-copy > span')?.textContent, 'GPT Test Context Updated');
+	assert.equal(root.querySelector('.ash-models-settings-model-row'), retainedModel);
+	assert.equal(root.querySelector('.ash-models-settings-api-row h5')!.firstChild, providerName);
+	assert.equal(refreshes, 0, 'Catalog-only updates leave connection sections and the Settings tree intact');
+	providerObservation.displayName = 'OpenAI API Updated';
+	changed.fire();
+	await nextTurn();
+	assert.equal(root.querySelector('.ash-models-settings-api-row h5')?.textContent, 'OpenAI API Updated');
+	assert.equal(refreshes, 1, 'Connection metadata changes still update their Settings section');
 });
 
 test('Models Settings orders enabled models first in a unified list', async () => {
