@@ -22,6 +22,7 @@ export function sessionDateFromNow(sessionTime: number, appendAgoLabel = false):
 	const calendarDays = Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) - Date.UTC(day.getFullYear(), day.getMonth(), day.getDate())) / 86_400_000);
 	const unit = calendarDays > 0 ? 'day' : elapsed >= 3_600_000 ? 'hour' : 'minute';
 	const amount = calendarDays > 0 ? calendarDays : Math.floor(elapsed / (unit === 'hour' ? 3_600_000 : 60_000));
+	if (appendAgoLabel && unit === 'minute') return localize('sessions.history.minutesAgo', '{0} min ago', amount);
 	if (appendAgoLabel) return new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'auto', style: 'short' }).format(-amount, unit);
 	return new Intl.NumberFormat(getNLSLanguage(), { style: 'unit', unit, unitDisplay: 'short' }).format(amount);
 }

@@ -4,6 +4,7 @@ import { onUnexpectedError } from '../../../base/common/errors.js';
 import { getNLSLanguage, localize, localize2 } from '../../../nls.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { Separator } from '../../../base/common/actions.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem, type IQuickPickSeparator } from '../../../platform/quickinput/common/quickInput.js';
@@ -22,7 +23,7 @@ import { IContextMenuService } from '../../../platform/contextview/browser/conte
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { cancelOnDispose } from '../../../base/common/cancellation.js';
 import { sessionDateFromNow } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsViewer.js';
-import { ChatSessionArchiveActionWording, getChatSessionArchiveActionWording } from '../../../platform/chat/common/sessionArchiveActions.js';
+import { ForkConversationActionId } from '../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 
 registerAction2(class NewChatAction extends Action2 {
 	constructor() {
@@ -119,12 +120,11 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 		disposables.add(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key.startsWith('sessions.list.pinned.')) refresh();
 		}));
-		const runSessionCommand = async (item: ChatHistoryQuickPickItem, command: string): Promise<void> => {
-			// Rename and archive have their own prompt. Keep this picker and its search alive
-			// while the shared command operates on the captured Session, not the foreground chat.
+		const runSessionCommand = async (item: ChatHistoryQuickPickItem, command: string, target: unknown = historyItemTarget(item)): Promise<void> => {
+			// Keep the search alive while the shared command operates on the captured target.
 			suspended = true;
 			quickPick.hide();
-			try { await commands.executeCommand(command, historyItemTarget(item)); }
+			try { await commands.executeCommand(command, target); }
 			catch (error) { notifications.error(String(error)); }
 			finally {
 				suspended = false;
@@ -144,6 +144,8 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 			if (!isHTMLElement(event.anchor)) return;
 			const button = event.anchor;
 			const row = button.closest('.ash-chat-history-item');
+			const draftId = event.item.kind === 'draft' ? event.item.untitledSessionId : undefined;
+			const draft = draftId === undefined ? undefined : sessions.untitledSessions.find(session => session.untitledSessionId === draftId);
 			row?.classList.add('has-open-actions');
 			button.setAttribute('aria-expanded', 'true');
 			quickPick.ignoreFocusOut = true;
@@ -152,16 +154,20 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
 				// Context views start below Quick Input; this child menu belongs above its host.
 				layer: 200,
 				getAnchor: () => button,
-				getMenuClassName: () => 'ash-chat-history-menu',
 				autoSelectFirstItem: true,
 				getActions: () => [
-					{ id: 'rename', label: localize('sessions.history.rename', 'Rename session…'), tooltip: '', enabled: true, run: () => runSessionCommand(event.item, 'agentSession.rename') },
+					{ id: 'rename', label: localize('sessions.list.rename', 'Rename'), tooltip: '', enabled: true, run: () => runSessionCommand(event.item, 'agentSession.rename') },
 					{
-						id: 'archive',
-						label: getChatSessionArchiveActionWording(configuration) === ChatSessionArchiveActionWording.MarkAsDone
-							? localize('sessions.history.markDone', 'Mark session as done…')
-							: localize('sessions.history.archive', 'Archive session…'),
-						tooltip: '', enabled: true, run: () => runSessionCommand(event.item, 'agentSession.archive'),
+						id: 'fork', label: localize('sessions.history.fork', 'Fork'), tooltip: '', enabled: event.item.kind === 'thread',
+						run: () => {
+							if (event.item.kind === 'thread') return runSessionCommand(event.item, ForkConversationActionId, { sessionId: event.item.sessionId, threadId: event.item.threadId });
+						},
+					},
+					new Separator(),
+					{ id: 'archive', label: localize('chatSession.archive', 'Archive'), tooltip: '', enabled: true, run: () => runSessionCommand(event.item, 'agentSession.archive') },
+					{
+						id: 'delete', label: localize('sessions.list.delete', 'Delete'), tooltip: '', enabled: event.item.kind === 'thread' || draft !== undefined,
+						run: () => runSessionCommand(event.item, 'agentSession.delete', draft ? { kind: 'untitled', session: draft } : historyItemTarget(event.item)),
 					},
 				],
 				onHide: () => {

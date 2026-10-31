@@ -67,7 +67,8 @@ import { JSDOM } from 'jsdom';
 import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from '../../../../../.build/protocol/typescript/index.js';
 import type { SessionMutationParams, SessionOperationInput, ThreadTranscriptEntry } from '../../../platform/agentHost/common/agent.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
-import type { IAction } from '../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../base/common/actions.js';
+import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
@@ -83,7 +84,9 @@ import { IContextMenuService } from '../../../platform/contextview/browser/conte
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { TestNotificationService } from '../../../workbench/services/notification/test/common/testNotificationService.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
-import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, QuickInputType, type IQuickPick, type IQuickPickItem, type IQuickPickItemButton } from '../../../platform/quickinput/common/quickInput.js';
+import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
+import { ForkConversationActionId } from '../../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import type { IPaneComposite } from '../../../workbench/common/panecomposite.js';
 import { IViewDescriptorService, ViewContainerLocation, ViewsRegistry, WorkbenchViewRegistry } from '../../../workbench/common/views.js';
@@ -1728,7 +1731,6 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 	} as unknown as IViewsService);
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
-	services.registerInstance(IContextMenuService, { showContextMenu: () => { } } as unknown as IContextMenuService);
 	services.registerInstance(INotificationService, notifications);
 	await sessions.initialize();
 
@@ -1762,6 +1764,84 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 		null,
 	);
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Chat history More captures the selected branch and separates lifecycle actions (${locale})`, async () => {
+		initializeTestLocalization(locale);
+		try {
+			const dom = new JSDOM('<!doctype html><body><button>More</button></body>');
+			using domCleanup = toDisposable(() => dom.window.close());
+			using services = new InstantiationService();
+			using configuration = new WorkbenchConfigurationService();
+			using storage = createTestStorage();
+			using sessions = new SessionsManagementService(fakeApi({ sessions: [session('source', 'branch'), session('other', 'foreground')] }).api);
+			await sessions.initialize();
+			const draft = sessions.createUntitledSession('Unsent draft');
+			using hidden = new Emitter<void>();
+			using triggered = new Emitter<{ item: IQuickPickItem; button: IQuickPickItemButton; anchor: HTMLElement; }>();
+			const picker: IQuickPick<IQuickPickItem> = {
+				type: QuickInputType.QuickPick, items: [], activeItems: [], selectedItems: [],
+				ariaLabel: '', placeholder: '', value: 'Keep search', valueSelection: { start: 0, end: 0 },
+				sortByLabel: true, canSelectMany: false, filterValue: value => value,
+				onDidHide: hidden.event, onDidTriggerItemButton: triggered.event,
+				onDidAccept: Event.None, onDidChangeValue: Event.None, onDidBlur: Event.None, onDidChangeSelection: Event.None,
+				show() { }, hide() { hidden.fire(); }, focus() { }, accept() { }, toggle() { }, dispose() { },
+				[Symbol.dispose]() { this.dispose(); },
+			};
+			let menu: IContextMenuDelegate | undefined;
+			const calls: { id: string; target: unknown; }[] = [];
+			services.registerInstance(ISessionsManagementService, sessions);
+			services.registerInstance(IConfigurationService, configuration);
+			services.registerInstance(IStorageService, storage);
+			services.registerInstance(IViewsService, {} as IViewsService);
+			services.registerInstance(INotificationService, notifications);
+			services.registerInstance(IQuickInputService, {
+				...quickInputServiceTestControls, input: async () => undefined,
+				createQuickPick: <T extends IQuickPickItem>() => picker as IQuickPick<T>,
+			});
+			services.registerInstance(ICommandService, {
+				onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
+				executeCommand: async <T>(id: string, target: unknown): Promise<T> => { calls.push({ id, target }); return undefined as T; },
+			});
+			services.registerInstance(IContextMenuService, {
+				contextMenuStyle: 'system', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+				showContextMenu: delegate => { menu = delegate as IContextMenuDelegate; }, hideContextMenu() { },
+			});
+			using commands = new CommandService(services);
+			const picking = commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+			const items = picker.items.filter((item): item is IQuickPickItem => !('type' in item));
+			const source = items.find(item => item.label === 'Session source')!;
+			const openMenu = (item: IQuickPickItem): readonly IAction[] => {
+				triggered.fire({ item, button: item.buttons!.find(button => button.id === 'more')!, anchor: dom.window.document.querySelector('button')! });
+				assert.ok(menu);
+				return menu.getActions();
+			};
+			const actions = openMenu(source);
+			assert.deepEqual(actions.map(action => action.id), ['rename', 'fork', Separator.ID, 'archive', 'delete']);
+			assert.deepEqual(actions.filter(action => !(action instanceof Separator)).map(action => action.label), locale === 'en'
+				? ['Rename', 'Fork', 'Archive', 'Delete'] : ['重命名', '分叉', '归档', '删除']);
+			sessions.selectThread('other', 'foreground');
+			for (const action of actions.filter(action => !(action instanceof Separator))) {
+				menu!.onHide?.(false);
+				await action.run();
+			}
+			assert.deepEqual(calls, [
+				{ id: 'agentSession.rename', target: 'source' },
+				{ id: ForkConversationActionId, target: { sessionId: 'source', threadId: 'branch' } },
+				{ id: 'agentSession.archive', target: 'source' },
+				{ id: 'agentSession.delete', target: 'source' },
+			]);
+			const draftActions = openMenu(items.find(item => item.label === draft.title)!);
+			assert.equal(draftActions.find(action => action.id === 'fork')?.enabled, false);
+			menu!.onHide?.(false);
+			await draftActions.find(action => action.id === 'delete')!.run();
+			assert.deepEqual(calls.at(-1), { id: 'agentSession.delete', target: { kind: 'untitled', session: draft } });
+			assert.equal(picker.value, 'Keep search');
+			picker.hide();
+			await picking;
+		} finally { resetNlsResolver(); }
+	});
+}
 
 test('ViewsService resolves, opens, and focuses contributed views', async () => {
 	const registry = ViewsRegistry;
