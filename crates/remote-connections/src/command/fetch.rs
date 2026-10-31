@@ -19,10 +19,14 @@ pub(super) fn run(options: RemoteFetchOptions) -> Result<(), String> {
         }),
     }
     .map_err(|error| error.to_string())?;
+    let download_url = updater
+        .artifact_download_url(&artifact)
+        .map_err(|error| error.to_string())?;
+    let mut output = RemoteRuntimeArtifactOutput::from(&artifact);
+    output.download_url = Some(download_url.as_str());
     println!(
         "{}",
-        serde_json::to_string(&RemoteRuntimeArtifactOutput::from(&artifact))
-            .map_err(|error| error.to_string())?
+        serde_json::to_string(&output).map_err(|error| error.to_string())?
     );
     Ok(())
 }
@@ -41,6 +45,8 @@ struct RemoteRuntimeArtifactOutput<'a> {
     archive_size: u64,
     unpacked_size: u64,
     sha256: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    download_url: Option<&'a str>,
 }
 
 impl<'a> From<&'a RemoteRuntimeArtifact> for RemoteRuntimeArtifactOutput<'a> {
@@ -52,6 +58,7 @@ impl<'a> From<&'a RemoteRuntimeArtifact> for RemoteRuntimeArtifactOutput<'a> {
             archive_size: artifact.integrity().archive_size().get(),
             unpacked_size: artifact.integrity().unpacked_size().get(),
             sha256: artifact.integrity().sha256(),
+            download_url: None,
         }
     }
 }

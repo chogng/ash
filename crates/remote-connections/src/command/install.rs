@@ -14,6 +14,11 @@ pub(super) fn run(options: RemoteInstallOptions) -> Result<(), String> {
     if let Some(root) = options.install_root {
         installer = installer.with_install_root(root);
     }
+    if let Some(url) = options.download_url {
+        installer = installer
+            .with_download_url(&url)
+            .map_err(|error| error.to_string())?;
+    }
     let installed = match options.progress {
         RemoteInstallProgressFormat::ExecutableOnly => installer.install(&options.artifact),
         RemoteInstallProgressFormat::JsonLines => installer
@@ -53,6 +58,7 @@ impl From<RemoteRuntimeInstallProgress> for RemoteRuntimeInstallProgressRecord {
 enum RemoteRuntimeInstallProgressOutput {
     ValidatingArtifact,
     ProbingPlatform,
+    DownloadingOnRemote,
     Uploading {
         #[serde(rename = "transferredBytes")]
         transferred_bytes: u64,
@@ -70,6 +76,7 @@ impl From<RemoteRuntimeInstallProgress> for RemoteRuntimeInstallProgressOutput {
         match progress {
             RemoteRuntimeInstallProgress::ValidatingArtifact => Self::ValidatingArtifact,
             RemoteRuntimeInstallProgress::ProbingPlatform => Self::ProbingPlatform,
+            RemoteRuntimeInstallProgress::DownloadingOnRemote => Self::DownloadingOnRemote,
             RemoteRuntimeInstallProgress::Uploading {
                 transferred_bytes,
                 total_bytes,

@@ -12,6 +12,8 @@ pub enum RemoteRuntimeInstallProgress {
     ValidatingArtifact,
     /// The host platform is being probed before any artifact bytes are uploaded.
     ProbingPlatform,
+    /// The Remote host is downloading the release-bound archive over HTTPS.
+    DownloadingOnRemote,
     /// The validated archive is being streamed through the local OpenSSH process.
     Uploading {
         /// Bytes accepted by the OpenSSH stdin stream.

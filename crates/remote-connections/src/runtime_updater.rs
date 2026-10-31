@@ -165,13 +165,13 @@ impl RemoteRuntimeCatalogUpdater {
         Self { release, cache }
     }
 
-    /// Downloads through the shared HTTP transport with public-Internet-only DNS policy.
+    /// Downloads authenticated release bytes through the host's proxy and DNS settings.
     pub fn fetch_for(
         &self,
         platform: RemotePlatform,
         report_progress: impl FnMut(RemoteRuntimeDownloadProgress),
     ) -> Result<RemoteRuntimeArtifact, RemoteRuntimeUpdateError> {
-        let client = UreqHttpClient::with_config(public_download_config()?)?;
+        let client = UreqHttpClient::with_config(release_download_config()?)?;
         self.fetch_for_with_client(platform, &client, report_progress)
     }
 
@@ -307,6 +307,19 @@ impl RemoteRuntimeCatalogUpdater {
             })
     }
 
+    pub(crate) fn artifact_download_url(
+        &self,
+        artifact: &RemoteRuntimeArtifact,
+    ) -> Result<Url, RemoteRuntimeUpdateError> {
+        let generation = self.generation_root();
+        let relative = artifact.archive().strip_prefix(&generation).map_err(|_| {
+            RemoteRuntimeUpdateError::InvalidRelease(
+                "Remote runtime artifact escaped its catalog generation".into(),
+            )
+        })?;
+        self.artifact_url(relative)
+    }
+
     fn generation_root(&self) -> PathBuf {
         self.cache
             .root
@@ -371,7 +384,7 @@ fn require_real_directory(path: &Path) -> Result<(), RemoteRuntimeUpdateError> {
     Ok(())
 }
 
-fn public_download_config() -> Result<HttpClientConfig, RemoteRuntimeUpdateError> {
+fn release_download_config() -> Result<HttpClientConfig, RemoteRuntimeUpdateError> {
     let error_limit = ResponseBodyLimit::new(NonZeroUsize::new(MAX_ERROR_RESPONSE_BYTES).unwrap())?;
     let artifact_limit = usize::try_from(MAX_RUNTIME_ARCHIVE_BYTES).map_err(|_| {
         RemoteRuntimeUpdateError::InvalidRelease(
@@ -379,10 +392,13 @@ fn public_download_config() -> Result<HttpClientConfig, RemoteRuntimeUpdateError
         )
     })?;
     let artifact_limit = ResponseBodyLimit::new(NonZeroUsize::new(artifact_limit).unwrap())?;
+    // The product binds the HTTPS catalog URL and digest; this is not an arbitrary-URL
+    // fetcher. Let the host's proxy (including Fake-IP DNS) route those release requests.
+    // TLS verification, the single checked CDN redirect and both digests still apply.
     Ok(HttpClientConfig::new()
-        .with_proxy_policy(ProxyPolicy::Direct)
+        .with_proxy_policy(ProxyPolicy::FromEnvironment)
         .with_redirect_policy(RedirectPolicy::Reject)
-        .with_network_target_policy(NetworkTargetPolicy::PublicInternetOnly)
+        .with_network_target_policy(NetworkTargetPolicy::Any)
         .with_response_body_limit(error_limit)
         .with_streaming_response_body_limit(artifact_limit)
         .with_timeouts(TransportTimeouts::new(

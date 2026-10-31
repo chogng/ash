@@ -12,16 +12,28 @@ pub(super) fn install_command(
     artifact: &RemoteRuntimeArtifact,
     location: &RemoteRuntimeInstallLocation,
 ) -> String {
+    install_command_with_download(artifact, location, None)
+}
+
+pub(super) fn install_command_with_download(
+    artifact: &RemoteRuntimeArtifact,
+    location: &RemoteRuntimeInstallLocation,
+    download_url: Option<&url::Url>,
+) -> String {
     let root = match location {
         RemoteRuntimeInstallLocation::UserData => "$null".to_owned(),
         RemoteRuntimeInstallLocation::Absolute(root) => quote_powershell_argument(root.as_str()),
     };
     let script = format!(
-        "$root={root}; $target={}; $version={}; $digest={}; $expectedSize={};\n{}",
+        "$root={root}; $target={}; $version={}; $digest={}; $expectedSize={}; $downloadUrl={};\n{}",
         quote_powershell_argument(artifact.platform.target_triple()),
         quote_powershell_argument(artifact.version.as_str()),
         quote_powershell_argument(&artifact.integrity.sha256),
         artifact.integrity.archive_size,
+        download_url.map_or_else(
+            || "$null".to_owned(),
+            |url| quote_powershell_argument(url.as_str())
+        ),
         include_str!("windows-install.ps1"),
     );
     // cmd.exe limits command lines to 8191 characters. Compress the trusted script,

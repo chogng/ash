@@ -1,5 +1,7 @@
 {
   "ash": {
+    "remoteRuntimeInstall.downloadingOnRemote": "正在远端下载运行时…",
+    "remoteRuntimeInstall.remoteDownloadDetail": "正在远端校验 HTTPS 发行包。下载失败时，Ash 会通过 SSH 上传已校验的本地安装包。",
     "workbench.editor.auxiliaryUnavailable": "此窗口不支持在新窗口中打开编辑器。",
     "hover.accessibilityHelp": "悬停内容\n使用 <keybinding:workbench.action.showHover> 显示或聚焦当前控件的提示。Tab 和 Shift+Tab 在操作之间移动。Escape 关闭当前提示并返回焦点。移动鼠标时按住 Alt 或 Option 可保持提示显示。使用 <keybinding:editor.action.accessibleView> 阅读其内容。",
     "hover.verbosityInvalid": "悬停内容的无障碍详细提示设置必须为布尔值。",

@@ -93,8 +93,16 @@ older installation moves its receipt out of the package before backend activatio
 so installation state cannot invalidate the packaged file manifest.
 
 Downloads allow only GitHub's single HTTPS hop to `release-assets.githubusercontent.com`;
-other redirects remain rejected. Every hop retains public-Internet-only DNS checks,
-and final catalog/archive bytes must match the product-bound digests and sizes.
+other redirects remain rejected. Downloads respect the host's proxy environment
+and DNS routing, including Fake-IP proxies, without changing system settings.
+HTTPS certificate verification remains enabled, and final catalog/archive bytes
+must match the product-bound digests and sizes. SSH allows 30 seconds for connection
+and key exchange; encrypted keepalives detect an unresponsive peer during upload
+or a connected session without imposing a total upload deadline.
+For a network release, Windows first downloads the same release-bound archive on
+the Remote host and verifies its size and SHA-256 before installation. A failed
+HTTPS download falls back to uploading the verified local cache over SSH; an
+integrity failure remains an error. Packaged/offline catalogs use SSH upload.
 
 For local verification and retained failure artifacts, `archive --unsigned` skips
 production signing only; it is not used for published release assets.

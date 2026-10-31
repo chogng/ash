@@ -28,6 +28,8 @@ export interface TrustedRemoteRuntimeArtifact {
 	readonly archiveSize: number;
 	readonly unpackedSize: number;
 	readonly sha256: string;
+	/** Release-derived HTTPS URL; packaged/offline catalogs keep using SSH upload. */
+	readonly downloadUrl?: string;
 }
 
 export interface RemoteRuntimeInstallerOptions {
@@ -49,7 +51,7 @@ export interface RemoteRuntimeInstallRequestOptions {
  * Invokes the packaged local `ash-remote install` command from Electron Main.
  *
  * The artifact and all integrity facts are bound by the trusted product host. Renderer supplies
- * neither paths nor SSH options, and the Remote host never downloads release content itself.
+ * neither paths nor SSH options. Windows may fetch the release-bound HTTPS archive itself.
  */
 export class RemoteRuntimeInstaller {
 	private readonly runCommand: RunRemoteCommand;
@@ -84,6 +86,7 @@ export class RemoteRuntimeInstaller {
 			this.options.sshExecutable,
 		];
 		if (this.options.installRoot !== undefined) args.push('--install-root', this.options.installRoot);
+		if (artifact.downloadUrl !== undefined) args.push('--download-url', artifact.downloadUrl);
 		const reportProgress = request.onProgress ?? this.options.onProgress;
 		const progressDecoder = reportProgress === undefined ? undefined : new RemoteRuntimeInstallProgressDecoder(reportProgress);
 		if (progressDecoder !== undefined) args.push('--progress', 'json-lines');
@@ -140,6 +143,7 @@ function parseRemoteRuntimeInstallProgress(line: string): RemoteRuntimeInstallPr
 	switch (value.phase) {
 		case 'validatingArtifact':
 		case 'probingPlatform':
+		case 'downloadingOnRemote':
 		case 'finalizingRemoteInstall':
 			return Object.freeze({ phase: value.phase });
 		case 'uploading':
@@ -186,6 +190,12 @@ export function validateTrustedRemoteRuntimeArtifact(artifact: TrustedRemoteRunt
 	if (!Number.isSafeInteger(artifact.archiveSize) || artifact.archiveSize <= 0) throw new Error('Remote runtime archive size must be a positive safe integer');
 	if (!Number.isSafeInteger(artifact.unpackedSize) || artifact.unpackedSize <= 0) throw new Error('Remote runtime unpacked size must be a positive safe integer');
 	if (!SHA256_PATTERN.test(artifact.sha256)) throw new Error('Remote runtime SHA-256 must be 64 lowercase hex characters');
+	if (artifact.downloadUrl !== undefined) {
+		const url = new URL(artifact.downloadUrl);
+		if (url.protocol !== 'https:' || !url.hostname || url.username || url.password || url.search || url.hash || artifact.downloadUrl.length > 16 * 1024) {
+			throw new Error('Remote runtime download URL must be credential-free HTTPS without query or fragment');
+		}
+	}
 }
 
 function parsePositiveSafeInteger(value: string, name: string): number {

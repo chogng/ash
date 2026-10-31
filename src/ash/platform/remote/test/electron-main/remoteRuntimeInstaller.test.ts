@@ -106,7 +106,7 @@ test('installer decodes fragmented structured progress without mixing it with th
 		runCommand: async (_executable, commandArgs, _environment, observer) => {
 			args = commandArgs;
 			observer?.onStderrData('{"kind":"remoteRuntimeInstallProgress","phase":"validatingArtifact"}\n{"kind":"remoteRuntimeInstallProgress","phase":"upload');
-			observer?.onStderrData('ing","transferredBytes":2048,"totalBytes":4096}\nplain diagnostic\n{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"installed"}\n');
+			observer?.onStderrData('ing","transferredBytes":2048,"totalBytes":4096}\nplain diagnostic\n{"kind":"remoteRuntimeInstallProgress","phase":"downloadingOnRemote"}\n{"kind":"remoteRuntimeInstallProgress","phase":"complete","disposition":"installed"}\n');
 			return { exitCode: 0, stdout: '/srv/ash/runtime/bin/ash-remote-server\n', stderr: '' };
 		},
 	});
@@ -117,6 +117,7 @@ test('installer decodes fragmented structured progress without mixing it with th
 	assert.deepEqual(progress, [
 		{ phase: 'validatingArtifact' },
 		{ phase: 'uploading', transferredBytes: 2048, totalBytes: 4096 },
+		{ phase: 'downloadingOnRemote' },
 		{ phase: 'complete', disposition: 'installed' },
 	]);
 });

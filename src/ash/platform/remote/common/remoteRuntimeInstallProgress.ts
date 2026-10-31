@@ -12,6 +12,7 @@ export type RemoteRuntimeInstallProgress =
 	| { readonly phase: 'downloadComplete'; readonly disposition: 'downloaded' | 'reused'; }
 	| { readonly phase: 'validatingArtifact'; }
 	| { readonly phase: 'probingPlatform'; }
+	| { readonly phase: 'downloadingOnRemote'; }
 	| { readonly phase: 'uploading'; readonly transferredBytes: number; readonly totalBytes: number; }
 	| { readonly phase: 'finalizingRemoteInstall'; }
 	| { readonly phase: 'complete'; readonly disposition: 'installed' | 'reused'; };

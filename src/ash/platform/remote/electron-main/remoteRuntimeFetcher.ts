@@ -110,6 +110,7 @@ function parseArtifact(text: string, target: string): TrustedRemoteRuntimeArtifa
 		archiveSize: value.archiveSize,
 		unpackedSize: value.unpackedSize,
 		sha256: value.sha256,
+		...(value.downloadUrl === undefined ? {} : { downloadUrl: value.downloadUrl as string }),
 	};
 	validateTrustedRemoteRuntimeArtifact(artifact);
 	if (artifact.target !== target) throw new Error('Remote runtime fetcher returned an artifact for the wrong target');
@@ -117,6 +118,7 @@ function parseArtifact(text: string, target: string): TrustedRemoteRuntimeArtifa
 }
 
 function hasExactKeys(value: Record<string, unknown>, expected: ReadonlySet<string>): boolean {
-	const keys = Object.keys(value);
+	if (value.downloadUrl !== undefined && typeof value.downloadUrl !== 'string') return false;
+	const keys = Object.keys(value).filter(key => key !== 'downloadUrl');
 	return keys.length === expected.size && keys.every(key => expected.has(key));
 }

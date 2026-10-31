@@ -195,7 +195,11 @@ export function sshRuntimeProbeArguments(host: string, executable: string, windo
 		'-o',
 		'BatchMode=yes',
 		'-o',
-		'ConnectTimeout=10',
+		'ConnectTimeout=30',
+		'-o',
+		'ServerAliveInterval=15',
+		'-o',
+		'ServerAliveCountMax=3',
 		host,
 		remoteRuntimeProbeCommand(executable, windows),
 	];

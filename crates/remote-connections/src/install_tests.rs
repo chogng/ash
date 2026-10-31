@@ -698,3 +698,86 @@ fn make_executable(path: &Path) {
     permissions.set_mode(0o755);
     fs::set_permissions(path, permissions).unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn windows_download_installs_without_upload_and_falls_back_only_on_network_failure() {
+    for outcome in ["installed", "download-failed", "archive-sha256-mismatch"] {
+        let root = tempfile::tempdir().unwrap();
+        let artifact = package_artifact_for_platform(
+            root.path(),
+            PackageVariant::Canonical,
+            RemotePlatform::windows(RemoteArchitecture::X86_64),
+        );
+        let attempts = root.path().join("attempts");
+        let captured = root.path().join("uploaded");
+        let fake_ssh = root.path().join("ssh");
+        let executable = format!(
+            "C:/Ash/remote/{}/bin/ash-remote-server.exe",
+            artifact.integrity().sha256()
+        );
+        let first_reply = if outcome == "installed" {
+            format!(
+                "__ASH_REMOTE_RUNTIME_INSTALLED__:{}:{executable}",
+                artifact.integrity().sha256()
+            )
+        } else {
+            format!("__ASH_REMOTE_RUNTIME_INSTALL_ERROR__:{outcome}")
+        };
+        fs::write(&fake_ssh, format!(
+            "#!/bin/sh\ncase \"$*\" in *__ASH_REMOTE_PLATFORM__*) echo '__ASH_REMOTE_PLATFORM__:windows:x86_64:msvc'; exit 0 ;; esac\nn=0; [ ! -f '{count}' ] || n=$(cat '{count}'); n=$((n+1)); echo $n > '{count}'\nif [ $n -eq 1 ]; then echo '{first_reply}'; exit {status}; fi\ncat > '{upload}'; echo '__ASH_REMOTE_RUNTIME_INSTALLED__:{digest}:{executable}'\n",
+            count=attempts.display(), upload=captured.display(), digest=artifact.integrity().sha256(), status=if outcome == "installed" {0} else {69},
+        )).unwrap();
+        make_executable(&fake_ssh);
+        let mut progress = Vec::new();
+        let result = SshRemoteRuntimeInstaller::new(SshHost::parse("windows-dev").unwrap())
+            .with_ssh_executable(fake_ssh)
+            .with_download_url("https://github.com/owner/repo/releases/download/v1/runtime.tar.gz")
+            .unwrap()
+            .install_with_progress(&artifact, |event| progress.push(event));
+        assert!(progress.contains(&RemoteRuntimeInstallProgress::DownloadingOnRemote));
+        match outcome {
+            "installed" => {
+                assert_eq!(result.unwrap().runtime().executable(), executable);
+                assert!(!captured.exists());
+                assert_eq!(fs::read_to_string(attempts).unwrap().trim(), "1");
+            }
+            "download-failed" => {
+                assert_eq!(result.unwrap().runtime().executable(), executable);
+                assert_eq!(
+                    fs::read(captured).unwrap(),
+                    fs::read(artifact.archive()).unwrap()
+                );
+                assert_eq!(fs::read_to_string(attempts).unwrap().trim(), "2");
+            }
+            "archive-sha256-mismatch" => {
+                assert_eq!(
+                    result.unwrap_err().kind(),
+                    RemoteRuntimeInstallFailureKind::ArtifactIntegrity
+                );
+                assert!(!captured.exists());
+                assert_eq!(fs::read_to_string(attempts).unwrap().trim(), "1");
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn remote_download_rejects_credentials_and_non_https_sources() {
+    for url in [
+        "http://github.com/file",
+        "https://user@github.com/file",
+        "https://github.com/file?token=secret",
+        "https://github.com/file#fragment",
+    ] {
+        assert!(
+            crate::SshRemoteRuntimeInstaller::new(
+                ash_remote::SshHost::parse("windows-dev").unwrap()
+            )
+            .with_download_url(url)
+            .is_err(),
+            "{url}"
+        );
+    }
+}
