@@ -313,6 +313,52 @@ just test ash-model-provider --lib live_luna_websocket_uses_two_responses_on_one
 
 Luna 实连使用只读 Codex 凭据、固定 low、合成文本。同一连接两轮请求成功，发送统计为 2 次请求、1 次增量、合计 2 个输入条目。样本仅 28／44 个输入 token，不能作为大前缀缓存命中测试。Realtime 的真实认证、音频和延迟需要对应模型及 API 凭据；本地 PCM／事件测试不能替代实连。
 
+### 公共 Realtime GA 小额实连
+
+`crates/ash-api/tests/realtime_live.rs` 复用 `RealtimeSession`，固定连接公共 API 和
+`gpt-realtime-mini-2025-12-15`，不读取订阅凭据。同一连接依次验证文本输出、PCM16／24 kHz
+音频及字幕输出、将生成音频回传后提交输入，以及 `response.cancel` 的 cancelled 终态和关闭。
+手动提交输入，不启用自动 VAD 生成、工具或重试；这不验证麦克风、扬声器、语音识别准确率或 VAD。
+
+每次响应通过 `RealtimeConfig::max_output_tokens` 设置服务端上限 64；GA 数值范围为 1–4096，
+省略时不修改会话已有上限。测试最多生成 3 次，音频最多 2 秒，单次 I/O 超时 10 秒，握手后总场景超时
+45 秒，失败或超时后关闭连接。取消若晚于响应完成则测试失败，不自动增加付费请求。
+
+按 2026-10-30 官方价格，mini 的音频输入／输出为每百万 token 10／20 美元，文本为
+0.60／2.40 美元。测试将所有输入／输出都按较贵的未缓存音频估算，每次发送前预留 3000 输入和
+64 输出 token，三次合计预留 0.09384 美元，预算为 0.10 美元。固定短指令、合成文本和最多两秒的
+PCM 限制输入；终态用量超过预留时立即失败。这个本地预算保护不是平台账单硬限额；运行前核对
+价格与赠金余额，并在项目设置中配置适用的硬支出限额；平台限额传播有延迟，也不能保证精确封顶到分。
+
+2026-10-30 核对的官方订阅 API 赠金说明明确覆盖 Realtime，但额度只属于已关联组织；必须使用该组织的
+项目 API key，赠金不增加订阅模式的使用限额，也不支持以 API key 计费的 Codex 用量。
+模型文档列出该 mini 快照；当前项目是否允许使用，仍以组织限制和实际握手结果为准。
+
+在同一个终端设置凭据后运行（key 通过隐藏输入读取，不放进命令历史）：
+
+```zsh
+read -rs 'OPENAI_API_KEY?Project API key: '; echo
+export OPENAI_API_KEY
+export OPENAI_ORG_ID='org-REPLACE_WITH_LINKED_ORGANIZATION'
+# 需要显式选择项目时再设置 OPENAI_PROJECT_ID。
+set -o pipefail
+just test ash-api --test realtime_live live_realtime_ga_text_audio_cancel -- --ignored --exact --nocapture 2>&1 | tee /tmp/ash-realtime-ga.log
+unset OPENAI_API_KEY
+```
+
+运行前确认所选组织的 active credit grant 覆盖 Realtime、余额和到期日，以及项目的模型权限。
+`REALTIME_GA` JSON 日志仅记录模型、会话／响应 ID、建立会话耗时、首个文本／音频增量延迟、终态／取消延迟、
+字节数和服务端实际 token 用量，不记录凭据或完整事件。`cost_upper_usd` 是保守估价，
+`billing_cost_usd:null` 表示未从账单核实，实际赠金扣减须在 Usage／Billing 中核对。
+无凭据时测试在联网前失败。2026-10-30 本地进程未配置项目 API key，因此没有执行真实握手或生成请求，
+本次 API 费用为 0；真实认证、模型权限、取消、延迟和账单扣款仍未实测。
+
+官方依据：[订阅 API 赠金覆盖范围](https://developers.openai.com/api/docs/guides/chatgpt-api-credits)、
+[mini 快照](https://developers.openai.com/api/docs/models/gpt-realtime-mini)、
+[Realtime 价格](https://developers.openai.com/api/docs/pricing)、
+[支出限额](https://developers.openai.com/api/docs/guides/spend-limits#understand-hard-limit-behavior)、
+[GA session.update](https://developers.openai.com/api/reference/resources/realtime/client-events#session.update)。
+
 ## 5. 供应商运行时联动
 
 `ash-api` 不知道当前 Provider registry，但可以提供包含兼容差异的 endpoint profile：

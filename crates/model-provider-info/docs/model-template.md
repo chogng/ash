@@ -49,6 +49,8 @@ Gemini 已推荐 Interactions，GenerateContent 仍受支持。Ash 当前 Google
 
 JSON 对象输出和按 JSON Schema 约束输出是两种能力。参数 schema、响应 schema 的支持子集也要分别记录；“支持 JSON”不能推出支持任意 schema。Claude 官方明确区分响应格式约束与工具 `strict`，并列出 schema 限制。[Claude 结构化输出](https://platform.claude.com/docs/en/build-with-claude/structured-outputs)
 
+公共 Realtime GA 使用 `session.max_output_tokens` 限制每次响应（含工具调用），数值范围为 1–4096，初始默认 `inf`。Ash 的 `RealtimeConfig::max_output_tokens: Option<u32>` 已接入数值上限，`None` 不修改会话已有值；此字段只属于公共 GA，不改变上表其他协议或订阅接入的约束。[Realtime client events](https://developers.openai.com/api/reference/resources/realtime/client-events#session.update)（2026-10-30 核对）
+
 ### 2.2 思考模式、深度、预算和返回内容
 
 ChatGPT Web 的订阅对话由 Sessions ChatGPT contribution 单独接入：`/backend-api/models` 中的 `versions` 决定产品模型系列，`intelligence_presets` 决定滑杆档位，每档同时指定请求型号与可选的 `thinking_effort`。底层 `models` 与 `thinking_efforts` 用于核对预设目标和能力，不直接作为菜单或滑杆条目；Instant 与 Pro 也可能是预设。Pro 的专属展示由预设的 `lane=pro` 标记决定，不从翻译文案或滑杆位置推断。准备和提交请求按所选预设发送 `model` 与顶层 `thinking_effort`，不根据显示文案或型号名称推断参数。
