@@ -1,7 +1,5 @@
-//! Cross-platform synchronous Unix domain socket types.
-//!
-//! Unix targets use the Rust standard library. Windows uses `uds_windows` while the equivalent
-//! standard-library API remains unstable.
+//! Synchronous local IPC: Unix domain sockets on Unix and native named pipes on Windows.
+//! Windows uses overlapped IO driven by one process-wide IOCP reactor.
 
 #[cfg(windows)]
 extern crate windows_sys_052 as windows_sys;
@@ -24,7 +22,7 @@ pub struct PeerIdentity {
 }
 
 /// Reads the peer identity before the caller sends or accepts application data.
-pub fn peer_identity(stream: &UnixStream) -> std::io::Result<PeerIdentity> {
+pub fn peer_identity(stream: &IpcStream) -> std::io::Result<PeerIdentity> {
     #[cfg(unix)]
     {
         unix::peer_identity(stream)
@@ -36,24 +34,24 @@ pub fn peer_identity(stream: &UnixStream) -> std::io::Result<PeerIdentity> {
 }
 
 #[cfg(unix)]
-pub use std::os::unix::net::UnixListener;
+pub use std::os::unix::net::UnixListener as IpcListener;
 #[cfg(unix)]
-pub use std::os::unix::net::UnixStream;
+pub use std::os::unix::net::UnixStream as IpcStream;
 #[cfg(windows)]
-pub use uds_windows::UnixListener;
+pub use windows::IpcListener;
 #[cfg(windows)]
-pub use uds_windows::UnixStream;
+pub use windows::IpcStream;
 
-/// Waits for Windows local sockets to become readable or writable, or for the timeout.
-/// The borrowed sockets stay open throughout the wait; callers retry IO after a wakeup.
+/// Waits for Windows local IPC endpoints to become readable or writable, or for the timeout.
+/// The borrowed endpoints stay open throughout the wait; callers retry IO after a wakeup.
 #[cfg(windows)]
-pub fn wait_for_socket_activity(
-    listener: Option<&UnixListener>,
-    readers: &[&UnixStream],
-    writers: &[&UnixStream],
+pub fn wait_for_ipc_activity(
+    listener: Option<&IpcListener>,
+    readers: &[&IpcStream],
+    writers: &[&IpcStream],
     timeout: std::time::Duration,
 ) -> std::io::Result<()> {
-    windows::wait_for_socket_activity(listener, readers, writers, timeout)
+    windows::wait_for_ipc_activity(listener, readers, writers, timeout)
 }
 
 #[cfg(test)]

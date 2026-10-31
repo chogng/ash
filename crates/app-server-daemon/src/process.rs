@@ -380,7 +380,8 @@ impl SpawnedBackend {
         // while the owned child is still live, then remove only that exact record.
         if let Some(record) = owned_record? {
             remove_matching_process_record(&self.endpoint.pid, &record)?;
-            // Only the failed child's generation may lose its stale socket.
+            // Only the failed child's generation may lose its stale Unix socket.
+            #[cfg(unix)]
             if read_process_record(&self.endpoint.pid)?.is_none()
                 && crate::endpoint::connect_existing(&self.endpoint.socket)?.is_none()
             {

@@ -8,7 +8,7 @@ use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelRef;
-use ash_uds::UnixStream;
+use ash_uds::IpcStream;
 use core_api::CoreError;
 use serde_json::Value;
 use serde_json::json;
@@ -398,13 +398,13 @@ fn stalled_git_clone_leaves_queries_and_control_requests_available() {
 }
 
 pub(crate) struct Client {
-    pub(crate) writer: UnixStream,
-    reader: BufReader<UnixStream>,
+    pub(crate) writer: IpcStream,
+    reader: BufReader<IpcStream>,
 }
 
 impl Client {
-    pub(crate) fn pair() -> (Self, UnixStream) {
-        let (client, host) = UnixStream::pair().unwrap();
+    pub(crate) fn pair() -> (Self, IpcStream) {
+        let (client, host) = IpcStream::pair().unwrap();
         client
             .set_read_timeout(Some(Duration::from_secs(3)))
             .unwrap();

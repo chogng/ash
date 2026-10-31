@@ -196,11 +196,6 @@ export class DesktopLayoutController extends BaseLayoutController {
 
 	public async openChanges(): Promise<void> {
 		if (this.isDisposed) { return; }
-		// Reloading the retained pane briefly removes its visible editor; this explicit open owns visibility.
-		using suppression = this.suppressEditorAutoVisibility();
-		await this.showEditor();
-		if (this.isDisposed) { return; }
 		await this.tabs.openChanges();
-		if (!this.isDisposed) { this.setDocumentsVisible(true); }
 	}
 }

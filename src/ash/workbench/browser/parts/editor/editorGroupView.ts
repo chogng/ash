@@ -28,7 +28,7 @@ import type { EditorCloseOptions } from '../../../services/editor/common/editorG
 import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
 import { Schemas } from '../../../../base/common/network.js';
 import { extractSelection } from '../../../../platform/opener/common/opener.js';
-import type { IEditorGroupView } from './editor.js';
+import type { IEditorGroupView, IEditorGroupViewOptions } from './editor.js';
 import { ActiveEditorContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 
@@ -65,7 +65,7 @@ import { ActiveEditorGroupLockedContext } from '../../../common/contextkeys.js';
 import { EditorFocusRecentEditorAfterCloseConfiguration } from '../../../services/editor/common/editorConfiguration.js';
 
 /** Construction inputs for one independently navigable EditorGroup. */
-export interface EditorGroupOptions {
+export interface EditorGroupOptions extends IEditorGroupViewOptions {
 	readonly id?: EditorGroupId;
 	/** Ash extension: a single-content host replaces its item even when pinned; VS Code groups normally retain multiple tabs. */
 	readonly editorLimit?: 1;
@@ -286,6 +286,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 			options.breadcrumbsService,
 			options.languageFeaturesService,
 			options.showBreadcrumbSymbolPicker,
+			options,
 		));
 		this.contentDomNode = h(ownerDocument, 'div');
 		this.contentDomNode.className = 'ash-editor-group-content';

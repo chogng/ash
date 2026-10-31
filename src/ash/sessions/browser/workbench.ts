@@ -1,4 +1,5 @@
 import { CodeCardControls } from './codeCardControls.js';
+import { Menus } from './menus.js';
 import type { CodeCardTarget, ICodeCardLayout, ICodeCardPresentation } from './codeCardLayout.js';
 import { Button } from '../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../platform/theme/browser/defaultStyles.js';
@@ -148,6 +149,9 @@ import { NotificationActionRunner } from '../../workbench/browser/parts/notifica
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { addDisposableListener, Dimension, h, type IDimension } from '../../base/browser/dom.js';
 import { canceled, errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { TaskQueue } from '../../base/common/async.js';
+import { URI } from '../../base/common/uri.js';
+import { SessionChangesEditorInput } from '../contrib/changes/browser/sessionChangesEditorInput.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
@@ -238,7 +242,10 @@ import { IExtensionService } from '../../workbench/services/extensions/common/ex
 import { DiffService } from '../../workbench/services/diff/browser/diffService.js';
 import { IDiffService } from '../../workbench/services/diff/common/diffService.js';
 import { IEditorPart } from '../../workbench/browser/parts/editor/editorPart.js';
-import { EditorPart } from './parts/editorPart.js';
+import { DesktopMainEditorPart } from './parts/desktopEditorPart.js';
+import { EditorPart as WorkbenchEditorPart, type IEditorPartOptions } from '../../workbench/browser/parts/editor/editorPart.js';
+import { EditorParts, IEditorPartsService } from '../../workbench/browser/parts/editor/editorParts.js';
+import { SessionsLayoutService } from '../contrib/layout/browser/sessionsLayoutService.js';
 import { BrowserEditorService } from '../../workbench/services/editor/browser/browserEditorService.js';
 import { IEditorService } from '../../workbench/services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
@@ -391,7 +398,7 @@ export abstract class Workbench extends Disposable {
 		}
 		// Load service descriptions before consumers so shared dependencies resolve in this window's scope.
 		for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-			if (!serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
+			if (id !== ISessionsLayoutService && !serviceCollection.has(id)) { serviceCollection.set(id, descriptor); }
 		}
 		const hostPolicies = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id === IPolicyService));
 		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
@@ -892,7 +899,7 @@ export abstract class Workbench extends Disposable {
 
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
-		const editor = this._register(services.createInstance(EditorPart, this.domNode, {
+		const editorOptions: IEditorPartOptions = {
 			configurationService,
 			contextKeyService: contextKeys,
 			keybindingService: keybindings,
@@ -908,10 +915,31 @@ export abstract class Workbench extends Disposable {
 			dialogService: dialogs,
 			fileDialogService: services.get(IFileDialogService),
 			titleActions: { menuService: menus, contextMenuProvider: contextMenus },
+		};
+		const editor = this._register(services.createInstance(DesktopMainEditorPart, this.domNode, editorOptions));
+		const documentServices = this._register(services.createChild());
+		documentServices.registerInstance(IEditorPart, editor);
+		const documentEditors = this._register(new BrowserEditorService(editor));
+		documentServices.registerInstance(IEditorService, documentEditors);
+		documentServices.registerInstance(IEditorGroupsService, documentEditors);
+		if (!services.has(ISessionsLayoutService)) {
+			services.registerSingleton(ISessionsLayoutService, () => documentServices.createInstance(SessionsLayoutService));
+		}
+		const changesHost = h(ownerWindow.document, 'div');
+		const changesScope = this._register(services.createChild());
+		const changesContext = this._register(contextKeys.createScoped(changesHost));
+		changesScope.registerInstance(IContextKeyService, changesContext);
+		const changesEditor = this._register(changesScope.createInstance(WorkbenchEditorPart, changesHost, {
+			...editorOptions, editorLimit: 1, contextKeyService: changesContext,
 		}));
-		services.registerInstance(IEditorPart, editor);
-		this._register(new EditorContextKeyController(contextKeys, editor, EditorPanes, languageService));
-		const editors = this._register(new BrowserEditorService(editor));
+		changesEditor.activeGroup.setTitleVisible(false);
+		const editorParts = this._register(services.createInstance(EditorParts, editor,
+			services.get(IAuxiliaryWindowService), undefined, services.get(IAccessibilityService), storage));
+		this._register(editorParts.registerEditorPart(changesEditor, input => input.resource.scheme === 'ash-session-changes', () => layout.codeCards?.setChangesVisible(true)));
+		services.registerInstance(IEditorPartsService, editorParts);
+		services.registerInstance(IEditorPart, editorParts);
+		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
+		const editors = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editors);
 		services.registerInstance(IEditorGroupsService, editors);
 		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
@@ -923,7 +951,7 @@ export abstract class Workbench extends Disposable {
 		this._register(new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors));
 		services.registerInstance(IHistoryService, this._register(services.createInstance(HistoryService)));
 		this._register(services.createInstance(TextFileEditorTracker, ownerWindow));
-		auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, this.domNode));
+		auxiliarybar = editor.auxiliaryBar;
 		services.registerInstance(ITerminalProcessService, options.api.terminal);
 		const panel = this._register(services.createInstance(PanelPart, this.domNode));
 		const panes = this._register(services.createInstance(PaneCompositePartService, new Map<ViewContainerLocation, PaneCompositePart>([
@@ -951,13 +979,52 @@ export abstract class Workbench extends Disposable {
 		layout.createWorkbenchLayout(parts);
 		if (layout.codeCards) {
 			const cards = layout.codeCards;
+			cards.setChangesPart(changesEditor);
+			// Projected headers keep window commands targeted at the card receiving focus.
+			for (const [header, part] of [[cards.files.header, editor], [cards.changes.header, changesEditor]] as const) {
+				for (const event of ['focusin', 'pointerdown'] as const) {
+					this._register(addDisposableListener(header, event, () => editorParts.activateGroup(part.activeGroup.id)));
+				}
+			}
+			this._register(changesEditor.onDidChangeEditors(event => {
+				if (event.kind !== 'groupChanged') { return; }
+				if (event.event.kind === 'activeEditorChanged') {
+					for (const group of changesEditor.groups) group.setTitleVisible(false);
+				}
+				if (event.event.kind === 'editorClosed' && event.event.reason !== 'replace' && event.event.reason !== 'previewReplace'
+					&& changesEditor.groups.every(group => group.inputs.length === 0)) {
+					cards.setChangesVisible(false);
+				}
+			}));
+			const changesUpdates = new TaskQueue();
+			this._register(toDisposable(() => changesUpdates.clearPending()));
+			this._register(view.onDidChange(() => {
+				void changesUpdates.scheduleSkipIfCleared(async () => {
+					if (this.isDisposed || !changesEditor.activeInput) { return; }
+					const input = new SessionChangesEditorInput(view.activeSelection ?? URI.parse('ash-session:/draft/empty'));
+					if (changesEditor.activeInput.resource.toString() === input.resource.toString()) { return; }
+					// Updating the retained review follows selection without reopening its closed card.
+					const activePart = editorParts.activePart;
+					await changesEditor.openEditor(input, { pinned: true, preserveFocus: true });
+					if (!changesEditor.domNode.contains(changesEditor.domNode.ownerDocument.activeElement)) {
+						editorParts.activateGroup(activePart.activeGroup.id);
+					}
+				}).catch(error => { if (!this.isDisposed) notificationService.error(getErrorMessage(error)); });
+			}));
 			const presentations = new Map<CodeCardTarget, ICodeCardPresentation>([
 				['terminal', panel.card],
 				['files', {
 					title: localize('sessions.cards.files', 'Files'),
 					domNode: cards.files.card,
 					header: cards.files.header,
+					layoutMenuId: Menus.SessionsEditorHeaderLayout,
 					layout: dimension => cards.files.layoutCard(dimension),
+				}],
+				['changes', {
+					title: localize('sessions.changes.title', 'Changes'),
+					domNode: cards.changes.card,
+					header: cards.changes.header,
+					layout: dimension => cards.changes.layoutCard(dimension),
 				}],
 				['info', {
 					title: localize('sessions.cards.information', 'Session information'),

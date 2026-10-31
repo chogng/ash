@@ -1,0 +1,39 @@
+.ash-desktop-editor-frame {
+	padding: var(--ash-spacing-size40);
+	box-sizing: border-box;
+}
+
+.ash-workbench-editor.ash-desktop-editor-docked {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: 0 var(--ash-spacing-size20) var(--ash-spacing-size40)
+		var(--ash-widget-shadow);
+}
+
+.ash-desktop-editor-docked > .ash-desktop-editor-auxiliary {
+	position: absolute;
+	min-width: 0;
+	min-height: 0;
+}
+
+.ash-desktop-editor-auxiliary > .ash-workbench-part-title {
+	display: none;
+}
+
+.ash-desktop-editor-docked .ash-editor-group-header {
+	cursor: grab;
+}
+
+.ash-code-card-window > .ash-desktop-editor-docked {
+	flex: 1;
+	min-height: 0;
+}
+
+:is(.hc-black, .hc-light) .ash-desktop-editor-docked {
+	box-shadow: none;
+}

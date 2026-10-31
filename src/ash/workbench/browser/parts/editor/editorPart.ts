@@ -41,7 +41,7 @@ import type { IDocumentCollaborationApi } from '../../../../platform/collab/comm
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { Part } from '../../part.js';
 import { EditorGroupView, EditorOpenSupersededError, type EditorGroupOptions } from './editorGroupView.js';
-import type { IEditorGroupView } from './editor.js';
+import type { IEditorGroupView, IEditorGroupViewOptions } from './editor.js';
 import { AutoLockGroupsConfiguration, DefaultBinaryEditorConfiguration, EditorLargeFileConfirmationConfiguration, EditorOpenErrorDialogConfiguration, type AutoLockGroups } from './editorConfiguration.js';
 import type { FileElement } from './breadcrumbsModel.js';
 import type { IBreadcrumbsService } from './breadcrumbs.js';
@@ -959,10 +959,15 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return replacement;
 	}
 
+	protected getGroupViewOptions(): IEditorGroupViewOptions {
+		return {};
+	}
+
 	private createGroup(id?: EditorGroupId): EditorGroupHost {
 		let group: EditorGroupView;
 		group = this.instantiationService.createInstance(EditorGroupView, this.contentDomNode, {
 			...this.groupOptions,
+			...this.getGroupViewOptions(),
 			...(id !== undefined ? { id } : {}),
 			onDidActivate: () => {
 				this.setActiveGroup(group);

@@ -60,6 +60,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	private readonly auxiliaryCreatedEmitter = this._register(new Emitter<IEditorPart>());
 	private readonly partWindows = new Map<IEditorPart, IAuxiliaryWindow>();
+	private readonly embedded = new Map<IEditorPart, { readonly accepts: (input: IResourceEditorInput) => boolean; readonly reveal: () => void; }>();
 	private readonly auxiliary = this._register(new DisposableMap<IEditorPart, AuxiliaryEditorPart>());
 	private readonly partListeners = this._register(new DisposableMap<IEditorPart, DisposableStore>());
 	private _activePart: IEditorPart;
@@ -72,7 +73,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	constructor(
 		readonly mainPart: IEditorPart,
 		private readonly windows: IAuxiliaryWindowService,
-		private readonly createPart: AuxiliaryEditorPartFactory,
+		private readonly createPart: AuxiliaryEditorPartFactory | undefined,
 		private readonly accessibility: IAccessibilityService,
 		private readonly storage: IStorageService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -89,7 +90,18 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		}));
 	}
 
-	get parts(): readonly IEditorPart[] { return [this.mainPart, ...this.auxiliary.keys()]; }
+	get parts(): readonly IEditorPart[] { return [this.mainPart, ...this.embedded.keys(), ...this.auxiliary.keys()]; }
+
+	/** A host retains ownership and persistence of an embedded part; commands share this coordinator. */
+	public registerEditorPart(part: IEditorPart, accepts: (input: IResourceEditorInput) => boolean, reveal: () => void): IDisposable {
+		this.embedded.set(part, { accepts, reveal });
+		this.registerPart(part, undefined, true);
+		return toDisposable(() => {
+			this.embedded.delete(part);
+			this.partListeners.deleteAndDispose(part);
+			if (this._activePart === part) { this.setActivePart(this.mainPart); }
+		});
+	}
 	get activePart(): IEditorPart { return this._activePart; }
 	get domNode(): HTMLElement { return this._activePart.domNode; }
 	get groups(): readonly IEditorGroupView[] { return this.parts.flatMap(part => part.groups); }
@@ -114,8 +126,8 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	getEditorState(): EditorPartState { return this._activePart.getEditorState(); }
 
 	savePartsState(): EditorPartsState {
-		const parts = this.parts;
-		return { version: 1, active: parts.indexOf(this._activePart), parts: parts.map(part => part.saveWorkingSet('lastSession', this.getEmptySessionGroups(part).map(group => group.id))), windows: parts.map(part => this.partWindows.get(part)?.createState() ?? null) };
+		const parts = [this.mainPart, ...this.auxiliary.keys()];
+		return { version: 1, active: Math.max(0, parts.indexOf(this._activePart)), parts: parts.map(part => part.saveWorkingSet('lastSession', this.getEmptySessionGroups(part).map(group => group.id))), windows: parts.map(part => this.partWindows.get(part)?.createState() ?? null) };
 	}
 
 	private getEmptySessionGroups(part: IEditorPart): readonly IEditorGroupView[] {
@@ -163,11 +175,12 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 			const part = await this.createAuxiliaryEditorPart(windowOptions);
 			await part.applyWorkingSet(workingSet, options);
 		}
-		this.setActivePart(this.parts[state.active]!);
+		this.setActivePart([this.mainPart, ...this.auxiliary.keys()][state.active]!);
 	}
 
 	async createAuxiliaryEditorPart(options?: AuxiliaryWindowOpenOptions): Promise<IEditorPart> {
 		this.assertNotDisposed();
+		if (!this.createPart) { throw new Error(localize('workbench.editor.auxiliaryUnavailable', 'Opening an editor in a new window is unavailable in this window.')); }
 		const auxiliaryWindow = await this.windows.open(options);
 		if (this.isDisposed) {
 			auxiliaryWindow.dispose();
@@ -279,11 +292,19 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return true;
 	}
 
-	openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane> {
+	async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane> {
+		const embedded = [...this.embedded].find(([, registration]) => registration.accepts(input));
+		if (embedded) {
+			const [part, registration] = embedded;
+			const destination = typeof target === 'object' && !part.groups.some(group => group.id === target.groupId) ? undefined : target;
+			const pane = await part.openEditor(input, options, destination);
+			registration.reveal();
+			return pane;
+		}
 		if (typeof target === 'object') {
 			return this.parts.find(part => part.groups.some(group => group.id === target.groupId))!.openEditor(input, options, target);
 		}
-		return this._activePart.openEditor(input, options, target);
+		return (this.embedded.has(this._activePart) ? this.mainPart : this._activePart).openEditor(input, options, target);
 	}
 
 	public addGroup(reference: EditorGroupId, direction: Direction): IEditorGroupView {
@@ -393,7 +414,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	layout(dimension: IDimension): void { this.mainPart.layout(dimension); }
 	focus(): void { this._activePart.focus(); }
 
-	private registerPart(part: IEditorPart, auxiliaryWindow?: IAuxiliaryWindow): void {
+	private registerPart(part: IEditorPart, auxiliaryWindow?: IAuxiliaryWindow, embedded = false): void {
 		const listeners = new DisposableStore();
 		listeners.add(part.onDidChangeEditors(event => {
 			if (isActivationEvent(event)) this.setActivePart(part, false);
@@ -401,8 +422,19 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		}));
 		listeners.add(addDisposableListener(part.domNode, 'focusin', () => this.setActivePart(part)));
 		// Window chrome and shortcuts can receive focus without focusing the editor DOM.
-		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
-			listeners.add(addDisposableListener(getWindow(part.domNode), event, () => this.setActivePart(part), true));
+		if (!embedded) {
+			for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
+				listeners.add(addDisposableListener(getWindow(part.domNode), event, e => {
+					const target = event === 'focus' ? part.domNode.ownerDocument.activeElement : e.target;
+					if (part === this.mainPart && this.embedded.size > 0) {
+						const focused = [this.mainPart, ...this.embedded.keys()].find(candidate => candidate.domNode.contains(target as Node));
+						if (focused) { this.setActivePart(focused); }
+						return;
+					}
+					if ([...this.embedded.keys()].some(candidate => candidate.domNode.contains(target as Node))) { return; }
+					this.setActivePart(part);
+				}, true));
+			}
 		}
 		if (auxiliaryWindow) listeners.add(addDisposableListener(auxiliaryWindow.container, 'focusin', () => this.setActivePart(part)));
 		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onBeforeUnload(event => {

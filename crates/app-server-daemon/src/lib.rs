@@ -277,6 +277,8 @@ pub fn launch_web(
 }
 
 /// Returns the profile-scoped daemon endpoint path used for diagnostics and integration tests.
+/// On Windows this is a rendezvous identity for `ash_uds::IpcStream`, not a socket file;
+/// the IPC layer derives its fixed-length native pipe name from this identity.
 #[cfg(any(unix, windows))]
 pub fn daemon_endpoint_path(profile_root: &Path) -> Result<PathBuf, String> {
     endpoint::EndpointPaths::prepare(profile_root).map(|endpoint| endpoint.socket)

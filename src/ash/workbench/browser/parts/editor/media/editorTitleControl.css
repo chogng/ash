@@ -43,6 +43,7 @@
 	margin-left: auto;
 	padding: 0 4px;
 }
+
 .ash-editor-group-lock-indicator {
 	align-self: center;
 	flex: 0 0 auto;
@@ -50,5 +51,36 @@
 	color: var(--ash-description-foreground);
 }
 .ash-editor-title-control[hidden] {
+	display: none;
+}
+
+.ash-editor-title-control.ash-editor-separate-header {
+	height: auto;
+	flex-basis: auto;
+}
+
+.ash-editor-group-header {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	height: var(--ash-pane-titleHeight);
+	padding-inline: var(--ash-spacing-size40);
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-editor-header-primary {
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.ash-editor-group-header > .ash-editor-breadcrumbs {
+	flex: 1;
+}
+
+.ash-editor-header-layout {
+	flex: 0 0 auto;
+}
+
+.ash-editor-tabs-and-actions[hidden] {
 	display: none;
 }

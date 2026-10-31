@@ -13,7 +13,7 @@ use ash_app_server_daemon::LifecycleCommand;
 use ash_app_server_daemon::LifecycleStatus;
 use ash_app_server_daemon::daemon_endpoint_path;
 use ash_app_server_daemon::run_lifecycle;
-use ash_uds::UnixStream;
+use ash_uds::IpcStream;
 use serde_json::json;
 
 struct StopOnDrop<'a> {
@@ -317,7 +317,7 @@ fn stop_closes_active_connections_after_its_bounded_grace_window() {
         executable,
     };
     run_lifecycle(LifecycleCommand::Start, options.clone(), executable).unwrap();
-    let mut stream = UnixStream::connect(daemon_endpoint_path(&profile).unwrap()).unwrap();
+    let mut stream = IpcStream::connect(daemon_endpoint_path(&profile).unwrap()).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_secs(8)))
         .unwrap();
@@ -353,7 +353,7 @@ fn stop_closes_active_connections_after_its_bounded_grace_window() {
     assert!(initialize.contains("\"result\""));
 
     // Request stop directly so the lifecycle lock stays available during the grace period.
-    let mut control = UnixStream::connect(daemon_endpoint_path(&profile).unwrap()).unwrap();
+    let mut control = IpcStream::connect(daemon_endpoint_path(&profile).unwrap()).unwrap();
     control
         .set_read_timeout(Some(Duration::from_secs(2)))
         .unwrap();

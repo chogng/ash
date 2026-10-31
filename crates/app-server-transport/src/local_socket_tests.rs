@@ -6,8 +6,8 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-use ash_uds::UnixListener;
-use ash_uds::UnixStream;
+use ash_uds::IpcListener;
+use ash_uds::IpcStream;
 
 use crate::LocalConnections;
 use crate::LocalSocketAccept;
@@ -15,7 +15,7 @@ use crate::PollingLocalListener;
 
 #[test]
 fn slow_reader_receives_large_frames_without_repeated_bytes() -> io::Result<()> {
-    let (server, mut peer) = UnixStream::pair()?;
+    let (server, mut peer) = IpcStream::pair()?;
     peer.set_read_timeout(Some(Duration::from_secs(5)))?;
     let (reader, mut writer) = crate::LocalStream::pair(server)?;
     drop(reader);
@@ -40,7 +40,7 @@ fn slow_reader_receives_large_frames_without_repeated_bytes() -> io::Result<()> 
 
 #[test]
 fn input_eof_wakes_a_writer_when_the_peer_retains_its_read_half() -> io::Result<()> {
-    let (mut server, peer) = UnixStream::pair()?;
+    let (mut server, peer) = IpcStream::pair()?;
     server.set_nonblocking(true)?;
     let payload = [0u8; 4096];
     loop {
@@ -74,6 +74,35 @@ fn input_eof_wakes_a_writer_when_the_peer_retains_its_read_half() -> io::Result<
 }
 
 #[test]
+fn connection_close_interrupts_a_backpressured_writer() -> io::Result<()> {
+    let (mut stream, _peer) = IpcStream::pair()?;
+    stream.set_nonblocking(true)?;
+    loop {
+        match stream.write(&[0; 4096]) {
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::WouldBlock => break,
+            Err(error) => return Err(error),
+        }
+    }
+    let (reader, mut writer) = crate::LocalStream::pair(stream)?;
+    let (finished, result) = std::sync::mpsc::channel();
+    let worker = thread::spawn(move || {
+        finished
+            .send(writer.write_all(b"pending response"))
+            .unwrap();
+    });
+    reader.close();
+    assert!(
+        result
+            .recv_timeout(Duration::from_secs(1))
+            .unwrap()
+            .is_err()
+    );
+    worker.join().unwrap();
+    Ok(())
+}
+
+#[test]
 fn local_endpoint_rejects_other_users_and_elevation_contexts() {
     for peer in [
         ash_uds::PeerIdentity {
@@ -102,13 +131,13 @@ fn local_endpoint_rejects_other_users_and_elevation_contexts() {
 fn polling_listener_returns_blocking_connections() -> io::Result<()> {
     let socket_directory = tempfile::tempdir()?;
     let socket_path = socket_directory.path().join("polling-listener.sock");
-    let listener = PollingLocalListener::new(UnixListener::bind(&socket_path)?)?;
+    let listener = PollingLocalListener::new(IpcListener::bind(&socket_path)?)?;
     assert!(matches!(
         listener.poll_accept()?,
         LocalSocketAccept::Pending
     ));
 
-    let mut client = UnixStream::connect(&socket_path)?;
+    let mut client = IpcStream::connect(&socket_path)?;
     let mut server = wait_for_connection(&listener)?;
     let sender = thread::spawn(move || -> io::Result<()> {
         thread::sleep(Duration::from_millis(50));
@@ -126,14 +155,14 @@ fn polling_listener_returns_blocking_connections() -> io::Result<()> {
 fn listener_activity_wakes_before_the_maintenance_timeout() -> io::Result<()> {
     let directory = tempfile::tempdir()?;
     let path = directory.path().join("ready.sock");
-    let listener = PollingLocalListener::new(UnixListener::bind(&path)?)?;
+    let listener = PollingLocalListener::new(IpcListener::bind(&path)?)?;
     let (finished, waiting) = std::sync::mpsc::channel();
     let worker = thread::spawn(move || {
         finished
             .send(listener.wait_for_activity(&[], &[], Duration::from_secs(5)))
             .unwrap();
     });
-    let _peer = UnixStream::connect(&path)?;
+    let _peer = IpcStream::connect(&path)?;
     waiting
         .recv_timeout(Duration::from_secs(1))
         .expect("listener readiness must wake the wait")?;
@@ -145,8 +174,8 @@ fn listener_activity_wakes_before_the_maintenance_timeout() -> io::Result<()> {
 fn pending_peer_activity_wakes_without_a_new_listener_connection() -> io::Result<()> {
     let directory = tempfile::tempdir()?;
     let path = directory.path().join("pending.sock");
-    let listener = PollingLocalListener::new(UnixListener::bind(&path)?)?;
-    let mut peer = UnixStream::connect(&path)?;
+    let listener = PollingLocalListener::new(IpcListener::bind(&path)?)?;
+    let mut peer = IpcStream::connect(&path)?;
     let stream = wait_for_connection(&listener)?;
     let (finished, waiting) = std::sync::mpsc::channel();
     let worker = thread::spawn(move || {
@@ -164,7 +193,7 @@ fn pending_peer_activity_wakes_without_a_new_listener_connection() -> io::Result
 
 #[test]
 fn connection_guard_tracks_and_removes_connection() -> io::Result<()> {
-    let (stream, _peer) = UnixStream::pair()?;
+    let (stream, _peer) = IpcStream::pair()?;
     let connections = Arc::new(LocalConnections::new());
     let guard = connections.register(stream.try_clone()?)?;
     assert_eq!(connections.len(), 1);
@@ -174,7 +203,7 @@ fn connection_guard_tracks_and_removes_connection() -> io::Result<()> {
     Ok(())
 }
 
-fn wait_for_connection(listener: &PollingLocalListener) -> io::Result<UnixStream> {
+fn wait_for_connection(listener: &PollingLocalListener) -> io::Result<IpcStream> {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
         match listener.poll_accept()? {

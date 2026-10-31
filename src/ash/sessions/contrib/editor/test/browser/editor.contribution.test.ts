@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import { MenuId } from '../../../../../platform/actions/common/actions.js';
+import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -69,9 +69,18 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	// Shared editor imports may already contribute commands to the same registry.
 	const existingPaletteIds = paletteIds();
 	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
+	using desktopTitle = menus.createMenu(Menus.SessionsEditorTitle);
+	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
+	assert.deepEqual(desktopIds(), title.getActions().flatMap(([, actions]) => actions).map(action => action.id));
+	const dynamic = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
+		command: { id: 'test.desktopEditor.action', title: 'Dynamic editor command' }, group: 'navigation',
+	});
+	assert.ok(desktopIds().includes('test.desktopEditor.action'));
+	dynamic.dispose();
+	assert.ok(!desktopIds().includes('test.desktopEditor.action'));
 	const titleState = () => title.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.enabled, action.checked]);
 	assert.deepEqual(titleState(), [['Add tab', true, undefined], ['Toggle details', true, true], ['Show editor', true, undefined]]);
-	assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.id), [NEW_FILE_TAB_COMMAND_ID, 'workbench.agentSessions.action.viewChanges']);
+	assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.id), [NEW_FILE_TAB_COMMAND_ID]);
 	assert.deepEqual(paletteIds(), [
 		...existingPaletteIds,
 		NEW_FILE_TAB_COMMAND_ID,
@@ -125,7 +134,7 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 		documentContent.set(true, undefined);
 		using translated = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 		assert.deepEqual(titleState().map(([label]) => label), ['添加标签', '切换详情', '显示编辑器']);
-		assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.label), ['打开文件标签', '打开更改标签']);
+		assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.label), ['打开文件标签']);
 	} finally {
 		resetNlsResolver();
 	}

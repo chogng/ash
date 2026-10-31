@@ -10,8 +10,8 @@ use ash_file_access::Dir;
 use ash_file_access::Grant;
 use ash_file_access::GrantSource;
 use ash_file_access::Permissions;
+use ash_uds::IpcStream;
 use ash_uds::SocketDirectory;
-use ash_uds::UnixStream;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -143,7 +143,7 @@ type Reply = Result<Response, TerminalError>;
 
 /// One authorization facade's transport, not a second owner of terminal state.
 pub(super) struct Client {
-    stream: Mutex<BufReader<UnixStream>>,
+    stream: Mutex<BufReader<IpcStream>>,
     disconnected: AtomicBool,
     connection: Option<ConnectionOptions>,
     // Revocation objects cannot cross a process boundary. Retain their proofs
@@ -179,6 +179,7 @@ impl Client {
                     io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused
                 ) =>
             {
+                #[cfg(unix)]
                 directory
                     .remove_socket(Path::new(SOCKET))
                     .map_err(operation_failed)?;
@@ -513,7 +514,7 @@ fn directory(profile: &Path) -> io::Result<SocketDirectory> {
     SocketDirectory::prepare(&base.join(format!("ash-pty-v{VERSION}-{}", &hash[..32])))
 }
 
-fn connect(directory: &SocketDirectory) -> io::Result<UnixStream> {
+fn connect(directory: &SocketDirectory) -> io::Result<IpcStream> {
     let stream = directory.connect(Path::new(SOCKET))?;
     validate_peer(&stream)?;
     stream.set_read_timeout(Some(IO_TIMEOUT))?;
@@ -521,7 +522,7 @@ fn connect(directory: &SocketDirectory) -> io::Result<UnixStream> {
     Ok(stream)
 }
 
-fn validate_peer(stream: &UnixStream) -> io::Result<()> {
+fn validate_peer(stream: &IpcStream) -> io::Result<()> {
     let peer = ash_uds::peer_identity(stream)?;
     if peer.same_user && peer.same_elevation {
         Ok(())
@@ -637,14 +638,15 @@ pub fn run(path: &Path) -> Result<(), String> {
         thread::sleep(Duration::from_millis(50));
     }
     drop(listener);
-    let result = directory
+    #[cfg(unix)]
+    directory
         .remove_socket(Path::new(SOCKET))
-        .map_err(|e| e.to_string());
+        .map_err(|e| e.to_string())?;
     drop(shutdown_lock);
-    result
+    Ok(())
 }
 
-fn serve(stream: UnixStream, services: Services, next_owner: Arc<AtomicU64>) {
+fn serve(stream: IpcStream, services: Services, next_owner: Arc<AtomicU64>) {
     // The accept loop polls a nonblocking listener. In particular on macOS,
     // accepted streams need their own blocking mode before framed reads.
     if stream.set_nonblocking(false).is_err()
@@ -961,7 +963,7 @@ fn unit(result: Result<(), TerminalError>) -> Reply {
 mod tests;
 
 // The window's connection, rather than any PID or grace timer, is authoritative.
-fn serve_lifetime(reader: &mut BufReader<UnixStream>, services: &Services, token: &str) {
+fn serve_lifetime(reader: &mut BufReader<IpcStream>, services: &Services, token: &str) {
     let alive = Arc::new(AtomicBool::new(true));
     let registered = {
         let mut registry = services.lock().unwrap_or_else(|e| e.into_inner());

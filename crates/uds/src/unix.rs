@@ -1,8 +1,8 @@
 // OS FFI stays in this platform boundary.
 #![allow(unsafe_code)]
 
+use crate::IpcStream;
 use crate::PeerIdentity;
-use crate::UnixStream;
 use std::fs::DirBuilder;
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -41,7 +41,7 @@ pub(super) fn open_private_directory(path: &Path) -> io::Result<(PathBuf, File)>
     Ok((path, file))
 }
 
-pub(super) fn peer_identity(stream: &UnixStream) -> io::Result<PeerIdentity> {
+pub(super) fn peer_identity(stream: &IpcStream) -> io::Result<PeerIdentity> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     let user = {
         let mut credentials: libc::ucred = unsafe { std::mem::zeroed() };

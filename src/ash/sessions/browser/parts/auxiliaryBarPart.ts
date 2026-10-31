@@ -20,14 +20,11 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		return this.embedded ? 180 : 270;
 	}
 
-	/** Lends the explorer toolbar to its Files card; product pages restore the original title host. */
-	public setEmbedded(header: HTMLElement | undefined): void {
-		const embedded = header !== undefined;
-		if (this.embedded === embedded) { return; }
-		this.embedded = embedded;
-		this.titleDomNode.classList.toggle('ash-sessions-files-toolbar', embedded);
-		if (header) { header.append(this.titleDomNode); }
-		else { this.domNode.prepend(this.titleDomNode); }
+	/** Docked Files actions are rendered by the editor header; product pages retain this Part title. */
+	public setDocked(docked: boolean): void {
+		if (this.embedded === docked) { return; }
+		this.embedded = docked;
+		this.titleDomNode.hidden = docked;
 		this.notifyConstraintsChanged();
 	}
 

@@ -106,7 +106,7 @@ use ash_sandboxing::NetworkAccess;
 use ash_sandboxing::SandboxPolicy;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretStore;
-use ash_uds::UnixStream;
+use ash_uds::IpcStream;
 use base64::Engine;
 use core_api::ActionPolicyService;
 use core_api::CoreError;
@@ -6685,7 +6685,7 @@ fn remote_host_keeps_editor_authority_but_rejects_local_media() {
 #[test]
 fn jsonl_transport_writes_notifications_without_another_request() {
     let server = Arc::new(server());
-    let (mut client, host) = UnixStream::pair().unwrap();
+    let (mut client, host) = IpcStream::pair().unwrap();
     let output = Arc::new((Mutex::new(Vec::new()), Condvar::new()));
     let served = Arc::clone(&server);
     let captured = Arc::clone(&output);

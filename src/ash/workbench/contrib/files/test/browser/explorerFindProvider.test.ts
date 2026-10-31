@@ -79,6 +79,18 @@ test('Explorer find reads collapsed workspace names and cancels late results on 
 		await change;
 		assert.equal(input.hidden, true);
 		assert.equal(input.value, '');
+		provider.setPresentation(host, 'inline');
+		assert.equal(input.parentElement, host);
+		assert.equal(input.hidden, false);
+		query('missing');
+		escape();
+		assert.equal(input.hidden, false, 'Escape clears an inline filter without removing its entry point');
+		assert.equal(input.value, '');
+		await tree.setInput(root);
+		assert.equal(input.hidden, false, 'workspace replacement retains the inline filter');
+		provider.setPresentation(header, 'overlay');
+		assert.equal(input.parentElement, header);
+		assert.equal(input.hidden, true);
 	} finally { browser.window.close(); }
 });
 

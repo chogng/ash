@@ -12,7 +12,7 @@ use std::time::Instant;
 use ash_app_server_daemon::daemon_endpoint_path;
 use ash_remote::{RemoteDirPath, RemoteProfile, RemoteRuntime, SshHost, SshTarget};
 use ash_remote_profile_store::RemoteConnectionProfileStore;
-use ash_uds::UnixStream;
+use ash_uds::IpcStream;
 use serde_json::Value;
 use serde_json::json;
 
@@ -490,10 +490,10 @@ fn read_response(reader: &mut impl BufRead, id: u64) -> Value {
     }
 }
 
-fn connect_when_ready(endpoint: &std::path::Path) -> UnixStream {
+fn connect_when_ready(endpoint: &std::path::Path) -> IpcStream {
     let deadline = Instant::now() + CONNECT_TIMEOUT;
     loop {
-        match UnixStream::connect(endpoint) {
+        match IpcStream::connect(endpoint) {
             Ok(stream) => return stream,
             Err(error) if Instant::now() < deadline => {
                 let _ = error;

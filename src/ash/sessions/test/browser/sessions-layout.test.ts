@@ -1,6 +1,6 @@
 import { Orientation } from '../../../base/browser/ui/sash/sash.js';
 import { Direction } from '../../../base/browser/ui/grid/grid.js';
-import { createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import { createTestComponentServices, createTestEditorServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { sessionsPartIds } from '../../common/layoutConstants.js';
@@ -30,6 +30,7 @@ const { WorkbenchWindowBarHeight } = await import('../../../workbench/browser/pa
 const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
 const { IStorageService, WillSaveStateReason } = await import('../../../platform/storage/common/storage.js');
 const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
+const { DesktopMainEditorPart } = await import('../../browser/parts/desktopEditorPart.js');
 const { DesktopWorkbenchLayout } = await import('../../../sessions/browser/desktopWorkbench.js');
 const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
 const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
@@ -78,8 +79,17 @@ class TestSessionsPart extends Part {
 	}
 }
 
-function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPartInstance> {
-	return new Map(sessionsPartIds.map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
+class TestDesktopEditorPart extends DesktopMainEditorPart {
+	public retain(resource: import('../../../base/common/lifecycle.js').IDisposable): void { this._register(resource); }
+}
+
+function createParts(ownerDocument: Document, storage?: import('../../../platform/storage/common/storage.js').IStorageService): Map<SessionsPartId, WorkbenchPartInstance> {
+	const parts: Map<SessionsPartId, WorkbenchPartInstance> = new Map(sessionsPartIds.filter(id => id !== 'editor').map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
+	const services = registerTestComponentServices(createTestEditorServices(undefined, undefined, ownerDocument, storage), ownerDocument);
+	const editor = services.createInstance(TestDesktopEditorPart, ownerDocument.body, {});
+	editor.retain(services);
+	parts.set('editor', editor);
+	return parts;
 }
 
 test('Sessions Grid follows viewport resize synchronously and retains fractional root dimensions', () => {
@@ -238,7 +248,7 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 		layout.showPart('editor');
 		layout.showPart('auxiliarybar');
 		layout.setPanelPosition(Position.RIGHT);
-		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
+		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), true);
 		layout.setPrimaryPart('editor');
 		layout.setPanelPosition(Position.LEFT);
 		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
@@ -338,7 +348,7 @@ test('Code stacks Terminal and the complete Files card and restores their retain
 		assert.equal(layout.files.card.contains(parts.get('auxiliarybar')!.domNode), true);
 		assert.equal(layout.files.card.contains(parts.get('editor')!.domNode), true);
 		assert.equal(stackParent().classList.contains('ash-split-view-vertical'), true);
-		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
+		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), true);
 		assert.equal(layout.getPartSize('panel').width, layout.getPartSize('auxiliarybar').width);
 		assert.equal(layout.getPartSize('panel').height, 280);
 		assert.equal(
@@ -405,7 +415,35 @@ test('Files moves and hides its tree and retained editor as one card', () => {
 	}
 });
 
-test('Files changes orientation in one Grid while retaining editor state and tree width', () => {
+test('Changes is an independent card while Files retains its open document', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(2000, 1000) });
+		layout.showPart('editor');
+		layout.setChangesVisible(true);
+		assert.equal(layout.isCardVisible('changes'), true);
+		assert.equal(layout.files.card.contains(layout.changes.card), false);
+		layout.closeCard('files');
+		assert.equal(layout.isCardVisible('changes'), true);
+		layout.showPart('auxiliarybar');
+		assert.equal(layout.isPartVisible('editor'), true);
+		layout.closeCard('changes');
+		assert.equal(layout.isCardVisible('files'), true);
+		assert.equal(layout.isPartVisible('editor'), true);
+		layout.setChangesVisible(true);
+		layout.moveCard('changes', 'files', Direction.Down);
+		layout.expandCard('changes');
+		assert.equal(layout.expandedCard, 'changes');
+		layout.expandCard('changes');
+		assert.equal(layout.isCardVisible('files'), true);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Files keeps the editor left and tree right while retaining editor state and preferred tree width', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);
 	const input = dom.window.document.createElement('textarea');
@@ -415,21 +453,17 @@ test('Files changes orientation in one Grid while retaining editor state and tre
 		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(2000, 1000) });
 		layout.showPart('editor');
 		layout.resizePart('auxiliarybar', new Dimension(1000, 1000));
-		const grid = layout.files.grid!;
-		const element = grid.element;
-		const treeSize = (): number => {
-			const descriptor = grid.serialize();
-			assert.equal(descriptor.type, 'branch');
-			return descriptor.type === 'branch' ? descriptor.children[0]!.size : 0;
-		};
-		assert.equal(grid.orientation, Orientation.HORIZONTAL);
-		const sash = grid.element.querySelector<HTMLElement>('.ash-sash-vertical')!;
+		const docking = layout.files;
+		const element = docking.element;
+		const treeSize = (): number => Number.parseFloat(parts.get('auxiliarybar')!.domNode.style.width);
+		const sash = docking.card.querySelector<HTMLElement>(':scope > .ash-sash-vertical')!;
 		const previousWidth = treeSize();
 		sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 200 }));
 		for (const type of ['pointermove', 'pointerup']) {
-			dom.window.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX: 250 }));
+			dom.window.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX: 150 }));
 		}
 		assert.equal(treeSize(), previousWidth + 50);
+		assert.equal(Number(sash.getAttribute('aria-valuenow')), layout.getPartSize('editor').width);
 		const treeWidth = treeSize();
 		input.focus();
 		input.setSelectionRange(2, 8);
@@ -438,16 +472,16 @@ test('Files changes orientation in one Grid while retaining editor state and tre
 		for (const width of [900, 800, 700, 600, 500, 350]) {
 			layout.resizePart('auxiliarybar', new Dimension(width, 1000));
 		}
-		assert.equal(layout.files.grid, grid);
-		assert.equal(grid.orientation, Orientation.VERTICAL);
+		assert.equal(layout.files, docking);
+		assert.equal(docking.isMounted, true);
 		assert.equal(dom.window.document.activeElement, input);
 		assert.equal(layout.isPartVisible('editor'), true);
 		for (const width of [500, 650, 800, 1000]) {
 			layout.resizePart('auxiliarybar', new Dimension(width, 1000));
 		}
-		assert.equal(layout.files.grid, grid);
-		assert.equal(grid.element, element);
-		assert.equal(grid.orientation, Orientation.HORIZONTAL);
+		assert.equal(layout.files, docking);
+		assert.equal(docking.element, element);
+		assert.equal(docking.isMounted, true);
 		assert.equal(treeSize(), treeWidth);
 		assert.equal(dom.window.document.activeElement, input);
 		assert.deepEqual([input.selectionStart, input.selectionEnd, input.scrollTop], [2, 8, 70]);
@@ -455,17 +489,17 @@ test('Files changes orientation in one Grid while retaining editor state and tre
 
 		layout.hidePart('editor');
 		layout.resizePart('auxiliarybar', new Dimension(350, 1000));
-		assert.equal(grid.orientation, Orientation.VERTICAL);
+		assert.equal(docking.isMounted, true);
 		assert.equal(layout.isPartVisible('editor'), false);
 		layout.resizePart('auxiliarybar', new Dimension(1000, 1000));
-		assert.equal(grid.orientation, Orientation.HORIZONTAL);
-		assert.equal(layout.isPartVisible('editor'), false, 'orientation changes keep a closed editor hidden');
-		assert.equal(layout.files.grid, grid);
+		assert.equal(docking.isMounted, true);
+		assert.equal(layout.isPartVisible('editor'), false, 'resizing keeps a closed editor hidden');
+		assert.equal(layout.files, docking);
 		layout.showPart('editor');
 		assert.equal(layout.files.card.contains(input), true);
 		assert.equal(input.value, 'retained unsaved file');
 		assert.equal(treeSize(), treeWidth, 'reopening the editor retains the user-established tree width');
-		grid.element.querySelector<HTMLElement>('.ash-sash-vertical')!
+		docking.card.querySelector<HTMLElement>(':scope > .ash-sash-vertical')!
 			.dispatchEvent(new dom.window.MouseEvent('dblclick', { bubbles: true }));
 		const resetWidth = treeSize();
 		layout.resizePart('auxiliarybar', new Dimension(350, 1000));
@@ -691,7 +725,7 @@ test('Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	});
 	const firstStorage = createStorage();
 	const firstContainer = h(dom.window.document, 'main');
-	const firstParts = createParts(dom.window.document);
+	const firstParts = createParts(dom.window.document, firstStorage);
 	const first = createLayout(firstContainer, firstParts, { initialDimension: new Dimension(1_100, 700), storageService: firstStorage });
 	first.layout(new Dimension(1_100, 700));
 	first.resizePart('sidebar', new Dimension(320, first.getPartSize('sidebar').height));
@@ -708,7 +742,7 @@ test('Sessions layout restores its profile-scoped geometry and auxiliary visibil
 
 	const restoredStorage = createStorage();
 	const restoredContainer = h(dom.window.document, 'main');
-	const restoredParts = createParts(dom.window.document);
+	const restoredParts = createParts(dom.window.document, restoredStorage);
 	const restored = createLayout(restoredContainer, restoredParts, { initialDimension: new Dimension(1_100, 700), storageService: restoredStorage });
 	restored.layout(new Dimension(1_100, 700));
 

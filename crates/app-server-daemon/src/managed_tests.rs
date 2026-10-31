@@ -16,10 +16,10 @@ fn stopping_endpoint_keeps_control_responsive_and_rejects_business_admission() {
         },
     )
     .unwrap();
-    let mut stop = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    let mut stop = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
     stop.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
     write_json_line(&mut stop, &ControlPrelude::new(ControlCommand::Stop)).unwrap();
-    assert!(endpoint.poll_connection().unwrap().is_none());
+    poll_until(&mut endpoint, |endpoint| endpoint.is_stopping());
     let mut response = String::new();
     BufReader::new(stop).read_line(&mut response).unwrap();
     assert_eq!(
@@ -28,14 +28,14 @@ fn stopping_endpoint_keeps_control_responsive_and_rejects_business_admission() {
             .state,
         ControlState::Stopping
     );
-    let mut business = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    let mut business = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
     business
         .set_read_timeout(Some(Duration::from_secs(1)))
         .unwrap();
     let options =
         ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None);
     write_json_line(&mut business, &ConnectionPrelude::from_options(&options)).unwrap();
-    assert!(endpoint.poll_connection().unwrap().is_none());
+    drain_prelude(&mut endpoint);
     assert_eq!(business.read(&mut [0_u8; 1]).unwrap(), 0);
     let worker = std::thread::spawn(move || {
         let executable = std::env::current_exe().unwrap();
@@ -90,23 +90,20 @@ fn incomplete_prelude_leaves_business_and_stop_connections_available() {
         },
     )
     .unwrap();
-    let _silent = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    let _silent = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
     let started = Instant::now();
-    assert!(endpoint.poll_connection().unwrap().is_none());
+    poll_until(&mut endpoint, |endpoint| endpoint.has_pending_connections());
     assert!(started.elapsed() < Duration::from_millis(250));
     assert!(endpoint.has_pending_connections());
 
     let options =
         ConnectionOptions::new(profile.path(), None, GrantSource::HostConfiguration, None);
-    let mut business = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    let mut business = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
     let mut bytes = serde_json::to_vec(&ConnectionPrelude::from_options(&options)).unwrap();
     bytes.extend_from_slice(b"\n{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\n");
     business.write_all(&bytes).unwrap();
     business.shutdown(Shutdown::Write).unwrap();
-    let mut accepted = endpoint
-        .poll_connection()
-        .unwrap()
-        .expect("ready peer bypasses incomplete peer");
+    let mut accepted = accept_business(&mut endpoint);
     assert_eq!(accepted.options, options);
     let mut first_rpc = String::new();
     accepted.reader.read_line(&mut first_rpc).unwrap();
@@ -115,11 +112,10 @@ fn incomplete_prelude_leaves_business_and_stop_connections_available() {
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\n"
     );
 
-    let mut stop = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    let mut stop = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
     stop.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
     write_json_line(&mut stop, &ControlPrelude::new(ControlCommand::Stop)).unwrap();
-    assert!(endpoint.poll_connection().unwrap().is_none());
-    assert!(endpoint.is_stopping());
+    poll_until(&mut endpoint, |endpoint| endpoint.is_stopping());
     let mut response = String::new();
     BufReader::new(stop).read_line(&mut response).unwrap();
     let response: ControlResponse = serde_json::from_str(&response).unwrap();
@@ -137,15 +133,20 @@ fn partial_prelude_is_resumed_without_losing_buffered_rpc_bytes() {
         },
     )
     .unwrap();
-    let mut peer = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    let mut peer = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
     let options = ConnectionOptions::new(profile.path(), None, GrantSource::UserConfig, None);
     let mut prelude = serde_json::to_vec(&ConnectionPrelude::from_options(&options)).unwrap();
     prelude.extend_from_slice(b"\nfirst RPC\nsecond RPC\n");
     peer.write_all(&prelude[..8]).unwrap();
-    assert!(endpoint.poll_connection().unwrap().is_none());
+    poll_until(&mut endpoint, |endpoint| {
+        endpoint
+            .pending
+            .front()
+            .is_some_and(|pending| pending.line.len() == 8)
+    });
     peer.write_all(&prelude[8..]).unwrap();
+    let mut accepted = accept_business(&mut endpoint);
     peer.shutdown(Shutdown::Write).unwrap();
-    let mut accepted = endpoint.poll_connection().unwrap().unwrap();
     assert_eq!(accepted.options, options);
     let mut messages = String::new();
     accepted.reader.read_to_string(&mut messages).unwrap();
@@ -163,12 +164,17 @@ fn pending_handshake_wakes_the_endpoint_and_preserves_its_buffered_prefix() {
         },
     )
     .unwrap();
-    let mut peer = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    let mut peer = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
     let options = ConnectionOptions::new(profile.path(), None, GrantSource::UserConfig, None);
     let mut prelude = serde_json::to_vec(&ConnectionPrelude::from_options(&options)).unwrap();
     prelude.extend_from_slice(b"\nfirst RPC\n");
     peer.write_all(&prelude[..8]).unwrap();
-    assert!(endpoint.poll_connection().unwrap().is_none());
+    poll_until(&mut endpoint, |endpoint| {
+        endpoint
+            .pending
+            .front()
+            .is_some_and(|pending| pending.line.len() == 8)
+    });
     let (finished, waiting) = std::sync::mpsc::channel();
     let worker = std::thread::spawn(move || {
         endpoint.wait_for_activity(Duration::from_secs(5)).unwrap();
@@ -198,15 +204,21 @@ fn pending_preludes_are_bounded_and_expired_without_waiting() {
     )
     .unwrap();
     let peers = (0..MAX_PENDING_PRELUDES)
-        .map(|_| {
-            let peer = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
-            assert!(endpoint.poll_connection().unwrap().is_none());
+        .map(|index| {
+            let peer = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
+            poll_until(&mut endpoint, |endpoint| {
+                endpoint.pending.len() == index + 1
+            });
             peer
         })
         .collect::<Vec<_>>();
-    let mut rejected = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+    let mut rejected = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
     rejected
         .set_read_timeout(Some(Duration::from_secs(1)))
+        .unwrap();
+    endpoint
+        .listener
+        .wait_for_activity(&[], &[], Duration::from_secs(1))
         .unwrap();
     assert!(endpoint.poll_connection().unwrap().is_none());
     assert_eq!(endpoint.pending.len(), MAX_PENDING_PRELUDES);
@@ -231,10 +243,10 @@ fn control_handshake_advertises_the_owner_contract_without_business_admission() 
     ] {
         let root = tempfile::tempdir().unwrap();
         let mut endpoint = ManagedEndpoint::bind(root.path(), contract.clone()).unwrap();
-        let mut peer = UnixStream::connect(&endpoint.endpoint.socket).unwrap();
+        let mut peer = IpcStream::connect(&endpoint.endpoint.socket).unwrap();
         peer.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
         write_json_line(&mut peer, &ControlPrelude::new(ControlCommand::Status)).unwrap();
-        assert!(endpoint.poll_connection().unwrap().is_none());
+        drain_prelude(&mut endpoint);
         let mut response = String::new();
         BufReader::new(peer).read_line(&mut response).unwrap();
         let control: ControlResponse = serde_json::from_str(&response).unwrap();
@@ -243,5 +255,41 @@ fn control_handshake_advertises_the_owner_contract_without_business_admission() 
         assert_eq!(control.pid, endpoint.record.pid);
         assert_eq!(control.instance_id, endpoint.record.instance_id);
         assert!(!endpoint.has_pending_connections());
+    }
+}
+
+fn poll_until(endpoint: &mut ManagedEndpoint, ready: impl Fn(&ManagedEndpoint) -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    while !ready(endpoint) {
+        assert!(endpoint.poll_connection().unwrap().is_none());
+        if ready(endpoint) {
+            break;
+        }
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .expect("prelude progress must not wait for a maintenance timer");
+        endpoint.wait_for_activity(remaining).unwrap();
+    }
+}
+
+fn drain_prelude(endpoint: &mut ManagedEndpoint) {
+    endpoint
+        .listener
+        .wait_for_activity(&[], &[], Duration::from_secs(1))
+        .unwrap();
+    assert!(endpoint.poll_connection().unwrap().is_none());
+    poll_until(endpoint, |endpoint| !endpoint.has_pending_connections());
+}
+
+fn accept_business(endpoint: &mut ManagedEndpoint) -> ManagedConnection {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        if let Some(connection) = endpoint.poll_connection().unwrap() {
+            return connection;
+        }
+        let remaining = deadline
+            .checked_duration_since(Instant::now())
+            .expect("ready peer must bypass incomplete peers");
+        endpoint.wait_for_activity(remaining).unwrap();
     }
 }

@@ -5,6 +5,19 @@ import type { EditorOpenOptions } from '../../../services/editor/common/editorSe
 import type { EditorGroupId, EditorInstanceId } from '../../../services/editor/common/editorState.js';
 import type { SerializedEditorViewState } from '../../../services/editor/common/editorWorkingSet.js';
 import type { ISaveEditorsOptions } from '../../../services/editor/common/editorService.js';
+import type { MenuId } from '../../../../platform/actions/common/actions.js';
+
+/** Menu locations supplied by the product hosting an editor group. */
+export interface IEditorGroupMenuIds {
+	readonly headerPrimary?: MenuId;
+	readonly headerLayout?: MenuId;
+	readonly editorActions?: MenuId;
+}
+
+export interface IEditorGroupViewOptions {
+	readonly menuIds?: IEditorGroupMenuIds;
+	readonly showHeader?: boolean;
+}
 
 /** Shared presentation marker for editor tabs connected to their pane. */
 export const CONNECTED_EDITOR_TABS_CLASS = 'ash-connected-editor-tabs';

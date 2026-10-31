@@ -48,6 +48,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 	private readonly editorService: IEditorService;
 	private readonly explorerService: IExplorerService;
 	private readonly tree: WorkbenchCompressibleAsyncDataTree<ExplorerItem, ExplorerItem>;
+	private readonly find: ExplorerFindProvider;
 	private readonly scrollContent: HTMLDivElement;
 	private statusDomNode: HTMLDivElement | undefined;
 	private root: ExplorerItem | undefined;
@@ -160,7 +161,7 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 		};
 		updateTwistieLayout();
 		this._register(resourceIconRenderer.onDidChangeResourceIcons(updateTwistieLayout));
-		this._register(new ExplorerFindProvider(this.tree, this.headerElement));
+		this.find = this._register(new ExplorerFindProvider(this.tree, this.headerElement));
 		this.scopedContext = this._register(contextKeyService.createScoped(this.element));
 		this.scopedContext.setContext('view', options.id);
 		this.titleMenu = this._register(menuService.createMenu(MenuId.for('ViewTitle'), this.scopedContext));
@@ -419,6 +420,12 @@ export class ExplorerView extends ViewPane implements IExplorerView {
 
 	public collapseAll(): void {
 		this.tree.collapseAll();
+	}
+
+	/** Selects an always available filter without exposing the tree's owned input DOM. */
+	public setFindPresentation(presentation: 'inline' | 'overlay'): void {
+		this.contentElement.classList.toggle('inline-find', presentation === 'inline');
+		this.find.setPresentation(presentation === 'inline' ? this.contentElement : this.headerElement, presentation);
 	}
 
 	public async refresh(recursive: boolean, item?: ExplorerItem): Promise<void> {

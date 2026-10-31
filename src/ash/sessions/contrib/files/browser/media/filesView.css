@@ -19,3 +19,12 @@
 	text-align: center;
 	overflow-wrap: anywhere;
 }
+
+.ash-sessions-files-view .ash-explorer-find-input {
+	flex: 0 0 auto;
+	width: calc(100% - var(--ash-spacing-size160));
+	min-height: 32px;
+	margin: var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-large);
+	font-size: var(--ash-fontSize-body1);
+}

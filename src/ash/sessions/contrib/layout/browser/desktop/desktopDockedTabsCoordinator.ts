@@ -49,9 +49,13 @@ export class DesktopDockedTabsCoordinator extends Disposable {
 	public async removeRestoredDetailTabs(): Promise<void> {
 		if (this.isDisposed) { return; }
 		for (const group of this.documentGroups) {
-			// Files lives in Details; a Changes tab needs a selected conversation to restore against.
+			// Retired Files tabs disappear; compatible Changes inputs migrate to their independent host.
 			const hasConversation = this.sessions.activeSelection?.kind === 'session';
-			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-sessions-files' || !hasConversation && input.resource.scheme === 'ash-session-changes')) {
+			for (const input of group.inputs.filter(input => input.resource.scheme === 'ash-sessions-files' || input.resource.scheme === 'ash-session-changes')) {
+				if (hasConversation && input instanceof SessionChangesEditorInput) {
+					await this.changes.openChangesEditor(input.sessionResource, { changesetSelection: input.changesetSelection, preserveFocus: true });
+					if (this.isDisposed) { return; }
+				}
 				await group.closeEditor(input, { skipConfirmation: true, reason: 'reset' });
 				if (this.isDisposed) { return; }
 			}

@@ -31,6 +31,7 @@ import { ResourceGlobMatcher } from '../../../../common/resources.js';
 export class ExplorerFindProvider extends Disposable {
 	private readonly input: HTMLInputElement;
 	private searchGeneration = 0;
+	private inline = false;
 	private readonly search = this._register(new RunOnceScheduler(() => { void this.findWorkspaceNames(); }, 150));
 
 	constructor(
@@ -64,7 +65,7 @@ export class ExplorerFindProvider extends Disposable {
 			this.searchGeneration++;
 			this.search.cancel();
 			this.input.value = '';
-			this.input.hidden = true;
+			this.input.hidden = !this.inline;
 			tree.clearFind();
 		}));
 		this._register(addDisposableListener(this.input, 'input', () => {
@@ -78,7 +79,7 @@ export class ExplorerFindProvider extends Disposable {
 				this.searchGeneration++;
 				this.search.cancel();
 				this.input.value = '';
-				this.input.hidden = true;
+				this.input.hidden = !this.inline;
 				tree.clearFind();
 				tree.domFocus();
 			} else if (event.key === 'Enter') {
@@ -86,6 +87,13 @@ export class ExplorerFindProvider extends Disposable {
 				tree.findNext();
 			}
 		}));
+	}
+
+	/** An inline field remains available when the tree changes workspace or find is dismissed. */
+	public setPresentation(host: HTMLElement, presentation: 'inline' | 'overlay'): void {
+		this.inline = presentation === 'inline';
+		host.prepend(this.input);
+		this.input.hidden = !this.inline;
 	}
 
 	private async findWorkspaceNames(): Promise<void> {

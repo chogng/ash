@@ -33,10 +33,10 @@ export function registerAddTabActions(
 	for (const [order, action] of actions.entries()) {
 		registrations.add(CommandsRegistry.register(action.id, action.run));
 		registrations.add(MenusRegistry.appendMenuItems([
-			{
+			...(action.id === NEW_FILE_TAB_COMMAND_ID ? [{
 				id: Menus.CodeAddTab,
 				item: { command: { id: action.id, title: action.title, icon: action.icon }, order },
-			},
+			}] : []),
 			...([MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
 				id,
 				item: {

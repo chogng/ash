@@ -8,21 +8,21 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use ash_uds::UnixListener;
-use ash_uds::UnixStream;
+use ash_uds::IpcListener;
+use ash_uds::IpcStream;
 
 /// One half of an established local RPC connection, sharing its input-end lifetime.
 ///
 /// IO waits remain interruptible: EOF on the reader ends queued output even when the peer keeps
 /// its read half open without consuming data. Finite stdio transports do not use this contract.
 pub struct LocalStream {
-    stream: UnixStream,
+    stream: IpcStream,
     closed: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl LocalStream {
     /// Splits a validated socket into reader and writer with one connection-close signal.
-    pub fn pair(stream: UnixStream) -> io::Result<(Self, Self)> {
+    pub fn pair(stream: IpcStream) -> io::Result<(Self, Self)> {
         // A Windows blocking send can time out after accepting bytes. Retrying
         // that write repeats bytes (including JSONL delimiters) under backpressure.
         // Nonblocking WouldBlock commits no bytes and is safe to retry.
@@ -42,7 +42,7 @@ impl LocalStream {
     }
 
     /// Clones the socket solely for the process owner's shutdown registration.
-    pub fn try_clone(&self) -> io::Result<UnixStream> {
+    pub fn try_clone(&self) -> io::Result<IpcStream> {
         self.stream.try_clone()
     }
 
@@ -92,7 +92,7 @@ impl Read for LocalStream {
                     #[cfg(unix)]
                     self.wait(rustix::event::PollFlags::IN)?;
                     #[cfg(windows)]
-                    ash_uds::wait_for_socket_activity(
+                    ash_uds::wait_for_ipc_activity(
                         None,
                         &[&self.stream],
                         &[],
@@ -123,7 +123,7 @@ impl std::io::Write for LocalStream {
                     #[cfg(unix)]
                     self.wait(rustix::event::PollFlags::OUT)?;
                     #[cfg(windows)]
-                    ash_uds::wait_for_socket_activity(
+                    ash_uds::wait_for_ipc_activity(
                         None,
                         &[],
                         &[&self.stream],
@@ -149,7 +149,7 @@ pub enum LocalSocketAccept {
     /// No connection is currently ready.
     Pending,
     /// A connection was accepted and normalized for blocking request processing.
-    Accepted(UnixStream),
+    Accepted(IpcStream),
     /// A connection was accepted but could not be normalized for request processing.
     Rejected(io::Error),
 }
@@ -160,12 +160,12 @@ pub enum LocalSocketAccept {
 /// normalized before a synchronous protocol reader receives it. This distinction
 /// is required on platforms where accepted streams inherit the listener mode.
 pub struct PollingLocalListener {
-    listener: UnixListener,
+    listener: IpcListener,
 }
 
 impl PollingLocalListener {
     /// Configures an existing listener for polling.
-    pub fn new(listener: UnixListener) -> io::Result<Self> {
+    pub fn new(listener: IpcListener) -> io::Result<Self> {
         listener.set_nonblocking(true)?;
         Ok(Self { listener })
     }
@@ -174,8 +174,8 @@ impl PollingLocalListener {
     /// owner's next maintenance deadline. Socket readiness interrupts the wait.
     pub fn wait_for_activity(
         &self,
-        readers: &[&UnixStream],
-        writers: &[&UnixStream],
+        readers: &[&IpcStream],
+        writers: &[&IpcStream],
         timeout: std::time::Duration,
     ) -> io::Result<()> {
         #[cfg(unix)]
@@ -207,7 +207,7 @@ impl PollingLocalListener {
         }
         #[cfg(windows)]
         {
-            ash_uds::wait_for_socket_activity(Some(&self.listener), readers, writers, timeout)
+            ash_uds::wait_for_ipc_activity(Some(&self.listener), readers, writers, timeout)
         }
     }
 
@@ -231,7 +231,7 @@ impl PollingLocalListener {
 
 /// Local App Server connections may not cross user or Windows elevation boundaries.
 /// Call before sending initialization data or starting a protocol reader.
-pub fn validate_local_peer(stream: &UnixStream) -> io::Result<()> {
+pub fn validate_local_peer(stream: &IpcStream) -> io::Result<()> {
     validate_local_identity(ash_uds::peer_identity(stream)?)
 }
 
@@ -250,7 +250,7 @@ fn validate_local_identity(peer: ash_uds::PeerIdentity) -> io::Result<()> {
 pub struct LocalConnections {
     next_id: AtomicU64,
     count: AtomicUsize,
-    streams: Mutex<BTreeMap<u64, UnixStream>>,
+    streams: Mutex<BTreeMap<u64, IpcStream>>,
 }
 
 impl LocalConnections {
@@ -276,7 +276,7 @@ impl LocalConnections {
     /// Registers a connection shutdown handle and returns its lifetime guard.
     pub fn register(
         self: &Arc<Self>,
-        shutdown_stream: UnixStream,
+        shutdown_stream: IpcStream,
     ) -> io::Result<LocalConnectionGuard> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.streams

@@ -249,6 +249,8 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+# Named-pipe completion buffers must remain owned through cancellation and ERROR_MORE_DATA.
+mio = "1.2.4"
 katex-rs = "=0.3.0"
 ash-utils-markdown-math = { path = "crates/utils/markdown-math" }
 trash = { version = "5.2.9", default-features = false, features = ["coinit_multithreaded", "chrono"] }
@@ -470,7 +472,6 @@ tree-sitter = "0.26.11"
 ash-grammars = { git = "https://github.com/chogng/ash-grammars", rev = "1b0906dd92167820aad912a6c4a509e2b58bc661" }
 unicode-segmentation = "1"
 unicode-width = "0.2"
-uds_windows = "1.2.1"
 zbus = { version = "6", default-features = false }
 url = "2"
 urlencoding = "2"

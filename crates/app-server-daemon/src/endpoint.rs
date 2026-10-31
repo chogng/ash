@@ -25,9 +25,9 @@ use std::os::unix::fs::OpenOptionsExt;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+use ash_uds::IpcListener;
+use ash_uds::IpcStream;
 use ash_uds::SocketDirectory;
-use ash_uds::UnixListener;
-use ash_uds::UnixStream;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -56,12 +56,14 @@ impl EndpointPaths {
     pub(crate) fn prepare(profile_root: &Path) -> Result<Self, String> {
         fs::create_dir_all(profile_root).map_err(io_error)?;
         let profile_root = dunce::canonicalize(profile_root).map_err(io_error)?;
+        let identity = endpoint_identity(&profile_root);
         let runtime_root = runtime_root(&profile_root);
         let directory = SocketDirectory::prepare(&runtime_root).map_err(io_error)?;
         let runtime_root = directory.path();
-        let identity = endpoint_identity(&profile_root);
         Ok(Self {
-            socket: runtime_root.join(format!("{identity}.sock")),
+            socket: directory
+                .socket_path(Path::new(&format!("{identity}.sock")))
+                .map_err(io_error)?,
             operation_lock: runtime_root.join(format!("{identity}.operation")),
             log: runtime_root.join(format!("{identity}.log")),
             pid: runtime_root.join(format!("{identity}.pid.json")),
@@ -122,14 +124,14 @@ impl EndpointPaths {
         }
     }
 
-    pub(crate) fn bind_listener(&self) -> Result<UnixListener, String> {
-        match connect_existing(&self.socket)? {
-            Some(_) => return Err("Local App Server daemon is already running".into()),
-            None => self
-                .directory
-                .remove_socket(self.socket.file_name().unwrap().as_ref())
-                .map_err(io_error)?,
+    pub(crate) fn bind_listener(&self) -> Result<IpcListener, String> {
+        if connect_existing(&self.socket)?.is_some() {
+            return Err("Local App Server daemon is already running".into());
         }
+        #[cfg(unix)]
+        self.directory
+            .remove_socket(self.socket.file_name().unwrap().as_ref())
+            .map_err(io_error)?;
         self.directory
             .bind(self.socket.file_name().unwrap().as_ref())
             .map_err(io_error)
@@ -198,14 +200,17 @@ impl Drop for OperationLock {
     }
 }
 
+#[cfg(unix)]
 pub(crate) struct SocketCleanup(PathBuf);
 
+#[cfg(unix)]
 impl SocketCleanup {
     pub(crate) fn new(path: PathBuf) -> Self {
         Self(path)
     }
 }
 
+#[cfg(unix)]
 impl Drop for SocketCleanup {
     fn drop(&mut self) {
         if socket_path_exists(&self.0) {
@@ -214,7 +219,7 @@ impl Drop for SocketCleanup {
     }
 }
 
-pub(crate) fn connect_existing(path: &Path) -> Result<Option<UnixStream>, String> {
+pub(crate) fn connect_existing(path: &Path) -> Result<Option<IpcStream>, String> {
     let directory =
         SocketDirectory::open(path.parent().ok_or("socket has no parent")?).map_err(io_error)?;
     match directory.connect(path.file_name().ok_or("socket has no filename")?.as_ref()) {
@@ -445,12 +450,6 @@ pub(crate) fn read_process_logs(
 #[cfg(unix)]
 fn socket_path_exists(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket())
-}
-
-#[cfg(windows)]
-fn socket_path_exists(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .is_ok_and(|metadata| !metadata.file_type().is_symlink() && metadata.is_file())
 }
 
 fn io_error(error: io::Error) -> String {

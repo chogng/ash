@@ -9,6 +9,7 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Menus } from '../../../browser/menus.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -64,6 +65,12 @@ registerAction2(class extends Action2 {
 		super({
 			id: 'sessions.files.action.collapseExplorerFolders',
 			title: localize2({ bundle: 'ash', key: 'sessions.files.collapseFolders' }, 'Collapse folders'),
+			icon: Lxicon.chevronUp,
+			menu: {
+				id: Menus.SessionsEditorHeaderPrimary,
+				when: ContextKeyExpr.equals('sessions.filesCardLayoutActive', true),
+				group: 'navigation',
+			},
 			precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0)),
 			f1: true,
 		});
@@ -124,7 +131,7 @@ AccessibleViewRegistry.register({
 		return new AccessibleContentProvider(
 			AccessibleViewProviderId.Explorer,
 			{ type: AccessibleViewType.Help },
-			() => localize('sessions.files.help', 'Files\nThe Files card contains the file tree, document tabs and editor. Opening a file keeps it inside this card. Drag the card header to move the whole card; drag its internal separator to resize the tree and editor. Closing the card keeps open documents and unsaved edits for reopening. Files follow the selected session directory. Press Ctrl or Command+Shift+E to focus Files. Use the arrow keys to move through files and folders, Right Arrow to expand, Left Arrow to collapse, and Enter to open a file. Use Collapse folders in the Files toolbar to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message. Use GitHub: Browse Repository Files in the Command Palette to choose a repository and branch, search filenames, and open read-only files without a local checkout. In GitHub file results, use Tab to reach Add to current Agent context, then Enter or Space to attach the captured file content without sending. Escape cancels a pending read.'),
+			() => localize('sessions.files.help', 'Files\nThe Files card contains the file tree, document tabs and editor. Opening a file shows its editor on the left and the file tree on the right. Document tabs share the card header. Use the filter above the tree to find files; Escape clears the filter and returns focus to the tree. Changes opens in a separate card. Drag the card header to move the whole card; drag its internal separator to resize the tree and editor. Closing the card keeps open documents and unsaved edits for reopening. Files follow the selected session directory. Press Ctrl or Command+Shift+E to focus Files. Use the arrow keys to move through files and folders, Right Arrow to expand, Left Arrow to collapse, and Enter to open a file. Use Collapse folders in the Files toolbar to collapse all folders. Press Shift+F10 for file actions and Alt+F2 to read the visible files. Remote files can be downloaded from the editor title. When there is no directory, Files shows an empty message. Use GitHub: Browse Repository Files in the Command Palette to choose a repository and branch, search filenames, and open read-only files without a local checkout. In GitHub file results, use Tab to reach Add to current Agent context, then Enter or Space to attach the captured file content without sending. Escape cancels a pending read.'),
 			() => { if (focused instanceof HTMLElement) { focused.focus(); } },
 			AccessibilityVerbositySettingId.Explorer,
 		);

@@ -3013,6 +3013,47 @@ for (const closeEmptyGroups of [true, false]) {
 	});
 }
 
+test('embedded editor cards route reviews separately and retain document tabs in their groups', async () => {
+	using services = createTestEditorServices();
+	using registry = new EditorPaneRegistry();
+	using descriptorRegistration = registry.registerEditorPane(descriptor('test.embedded', '.ts', () => new TestEditorPane('test.embedded')));
+	const document = browserEnvironment.window.document;
+	using main = createEditorPart(document.body, { registry }, services);
+	using review = createEditorPart(document.body, { registry, editorLimit: 1 }, services);
+	using windows = new TestAuxiliaryWindowService();
+	using accessibility = new AccessibilityService({ root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService) });
+	using parts = services.createInstance(EditorParts, main, windows, undefined, accessibility, services.get(IStorageService));
+	let reveals = 0;
+	using registration = parts.registerEditorPart(review, input => input.resource.scheme === 'ash-session-changes', () => reveals++);
+	const file = input('/project/source.ts');
+	const pane = await parts.openEditor(file, { pinned: true });
+	const group = main.activeGroup;
+	const titleHeight = main.getTabsHeight();
+	assert.equal(group.domNode.querySelector('[role="tab"]')?.textContent?.includes('source.ts'), true);
+	assert.equal(main.getTabsHeight(), titleHeight);
+	const changes = { resource: URI.parse('ash-session-changes:/review.ts') };
+	await parts.openEditor(changes, { pinned: true });
+	assert.deepEqual(main.activeGroup.inputs, [file]);
+	assert.deepEqual(review.activeGroup.inputs, [changes]);
+	assert.equal(main.activePane, pane);
+	assert.equal(reveals, 1);
+	assert.equal(parts.activePart, review);
+	document.body.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key: 'F1', bubbles: true }));
+	assert.equal(parts.activePart, review, 'window chrome retains the active embedded editor for global commands');
+	await parts.openEditor(changes, { pinned: true });
+	assert.equal(reveals, 2, 'reopening the same review reveals its closed card');
+	await parts.openEditor(input('/project/second.ts'), { pinned: true });
+	assert.equal(main.activeGroup.inputs.length, 2, 'opening a file from a review returns to the document host');
+	assert.deepEqual(review.activeGroup.inputs, [changes]);
+	const nextReview = { resource: URI.parse('ash-session-changes:/next-review.ts') };
+	await review.openEditor(nextReview, { pinned: true, preserveFocus: true });
+	assert.deepEqual(review.activeGroup.inputs, [nextReview]);
+	assert.equal(reveals, 2, 'a background selection update does not reveal a closed card');
+	assert.equal(parts.savePartsState().parts.length, 1, 'embedded cards do not restore as auxiliary windows');
+	assert.equal(main.getTabsHeight(), titleHeight);
+	assert.equal(group.domNode.querySelectorAll('[role="tab"]').length, 2);
+});
+
 test('EditorParts session persistence keeps one active group when every group is empty', async () => {
 	using services = createTestEditorServices();
 	using editor = createEditorPart(browserEnvironment.window.document.body, {}, services);
