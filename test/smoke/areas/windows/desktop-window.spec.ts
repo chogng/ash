@@ -202,20 +202,20 @@ test('cancelling directory authorization during startup keeps the window usable 
 	await page.screenshot({ path: testInfo.outputPath('cancelled-startup-authorization.png') });
 	// Cancellation must not persist a grant: reloading still asks for authorization.
 	await page.reload();
-	await expect(prompt.getByRole('button', { name: 'Open Read-Only', exact: true })).toBeFocused();
+	await expect(prompt.getByRole('button', { name: 'Open in Restricted Mode', exact: true })).toBeFocused();
 	await page.keyboard.press('Escape');
 	await workbench.waitForReady();
 	await expect(reconnect).toBeVisible();
 	await reconnect.click();
 	await expect(prompt).toBeVisible();
-	await prompt.getByRole('button', { name: 'Open Read-Only', exact: true }).click();
+	await prompt.getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
 	await expect(reconnect).toHaveCount(0);
 	await expect(page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' })).toHaveCount(1);
 	await expect(page.locator('.ash-explorer').getByRole('alert')).toHaveCount(0);
 	await workbench.quickaccess.open(join(testWorkspace.directory, 'main.ts'));
 	await workbench.quickaccess.select('main.ts');
 	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'const value = 1;\n');
-	await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Read-only');
+	await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Restricted');
 	await page.screenshot({ path: testInfo.outputPath('retried-startup-authorization.png') });
 });
 
@@ -240,8 +240,8 @@ test('opening a folder names the target and explains the permission choice in th
 	await expect(prompt).toBeVisible();
 	await expect(prompt.locator('.ash-dialog-message')).toHaveText('是否信任此文件夹中的文件？');
 	await expect(prompt.locator('.ash-dialog-detail')).toContainText(`文件夹：${URI.file(testWorkspace.directory).fsPath}`);
-	await expect(prompt.locator('.ash-dialog-detail')).toContainText('Ash 可以修改文件和运行命令');
-	const readOnly = prompt.getByRole('button', { name: '以只读模式打开' });
+	await expect(prompt.locator('.ash-dialog-detail')).toContainText('受限模式下可编辑和保存文件');
+	const readOnly = prompt.getByRole('button', { name: '在受限模式下打开' });
 	await expect(readOnly).toBeFocused();
 	await expect(page.getByText('No Folder Opened')).toHaveCount(1);
 	await prompt.getByRole('button', { name: '取消' }).click();
@@ -252,7 +252,7 @@ test('opening a folder names the target and explains the permission choice in th
 	});
 	expect(parseWorkspace(workspaceAfterCancel).folders).toHaveLength(0);
 	await page.getByRole('button', { name: /^(Open folder|打开文件夹)$/ }).click();
-	await page.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: '以只读模式打开' }).click();
+	await page.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: '在受限模式下打开' }).click();
 	await expect.poll(async () => {
 		const value = await workbench.page.evaluate(() => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
@@ -260,5 +260,5 @@ test('opening a folder names the target and explains the permission choice in th
 		});
 		return parseWorkspace(value).folders[0]?.uri.fsPath;
 	}).toBe(URI.file(testWorkspace.directory).fsPath);
-	await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('只读文件夹');
+	await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('受限工作区');
 });

@@ -47,7 +47,7 @@ export class DirectoryPermissionDialog extends Disposable implements IDirectoryP
 			const outcome = await this.handler.showDialog(prompt, controller.signal);
 			throwIfCancelled(controller.signal);
 			switch (outcome.button) {
-				case DialogResult.Primary: return 'readOnly';
+				case DialogResult.Primary: return 'restricted';
 				case DialogResult.Secondary: return 'development';
 				default: return 'cancel';
 			}

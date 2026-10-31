@@ -449,7 +449,7 @@ test.describe('SCM commit authorization', () => {
 		}
 	});
 
-	test('SCM read-only folder authorization rejects commit before staging', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	test('SCM restricted folder authorization rejects commit before staging', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 		if (!('windows' in application)) return;
 		const cwd = testWorkspace.directory;
 		const git = async (...args: string[]) => (await run('git', args, { cwd })).stdout.trim();
@@ -462,11 +462,11 @@ test.describe('SCM commit authorization', () => {
 		}, cwd);
 		await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
 		const page = workbench.page;
-		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Open Read-Only', exact: true }).click();
+		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
 		await workbench.waitForReady();
-		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Read-only');
+		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Restricted');
 		const banner = page.locator('[data-part="banner"]');
-		await expect(banner).toContainText('This workspace is read-only');
+		await expect(banner).toContainText('Restricted Mode is intended for safe code browsing');
 		await banner.getByRole('button', { name: 'Close Banner', exact: true }).click();
 		await expect(banner).toBeHidden();
 		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toBeVisible();

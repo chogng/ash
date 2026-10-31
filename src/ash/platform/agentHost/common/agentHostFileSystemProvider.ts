@@ -57,6 +57,8 @@ interface AgentHostFileSystemProviderOptions {
 	readonly resourceApi: IResourceApi;
 	/** Environment roots known by the host, independent of the visible Explorer selection. */
 	readonly directories?: () => readonly IFileSystemDirectory[];
+	/** Protocol readiness can precede directory authorization on this connection. */
+	readonly isConnectionReady?: () => boolean;
 	readonly onDidChange?: Event<FileInvalidation>;
 }
 
@@ -116,6 +118,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	private readonly configuration: () => URI | undefined;
 	private readonly resourceApi: IResourceApi;
 	private readonly directories: () => readonly IFileSystemDirectory[];
+	private readonly isConnectionReady: () => boolean;
 	private readonly resolvedDirectories = new Map<string, IFileSystemDirectory>();
 	private readonly directoryRequests = new Map<string, Promise<IFileSystemDirectory>>();
 	private readonly fileChanges = this._register(new Emitter<IFileChangeEvent>());
@@ -138,6 +141,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		}));
 		this.resourceApi = options.resourceApi;
 		this.directories = options.directories ?? (() => []);
+		this.isConnectionReady = options.isConnectionReady ?? (() => true);
 		this._register(this.api.onDidChangeConnection(() => {
 			this.connectionEpoch++;
 			this.reads.clearAndDisposeAll();
@@ -314,9 +318,10 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		if (route) { return this.onRoute(route, provider => provider.resolvePathIdentity(resource)); }
 		this.assertNotDisposed();
 		if (this.isConfiguration(resource)) return;
+		if (!this.isConnectionReady()) { throw canceled(); }
 		const generation = this.api.connectionGeneration;
 		const directory = this.knownDirectory(resource) ?? await this.resolveDirectory(resource);
-		if (this.isDisposed || generation !== this.api.connectionGeneration) { throw canceled(); }
+		if (this.isDisposed || !this.isConnectionReady() || generation !== this.api.connectionGeneration) { throw canceled(); }
 		const target = this.directoryTarget(directory, resource);
 		const state = this.pathIdentityState(directory);
 		const existing = state.requests.get(target.path);
@@ -836,6 +841,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 
 	private async resolveDirectory(resource: URI): Promise<IFileSystemDirectory> {
 		this.assertNotDisposed();
+		if (!this.isConnectionReady()) { throw canceled(); }
 		const known = this.knownDirectory(resource);
 		if (known) { return known; }
 		// A remote URI must belong to this provider's host authority, not merely have a
@@ -868,7 +874,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const target = await this.fileTarget(resource);
 		// Resolving even a known root yields to the caller. Retiring its mount or
 		// connection during that await must prevent dispatch, especially for writes.
-		if (this.isDisposed || generation !== this.api.connectionGeneration || epoch !== this.connectionEpoch) { throw canceled(); }
+		if (this.isDisposed || !this.isConnectionReady() || generation !== this.api.connectionGeneration || epoch !== this.connectionEpoch) { throw canceled(); }
 		assertScope?.();
 		return operation(target);
 	}
@@ -894,7 +900,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	private assertResourceConnection(generation: number, epoch: number): void {
-		if (this.isDisposed || !this.isCurrentResourceConnection(generation, epoch)) { throw canceled(); }
+		if (this.isDisposed || !this.isConnectionReady() || !this.isCurrentResourceConnection(generation, epoch)) { throw canceled(); }
 	}
 
 	private async readResourceBytes(resource: ResourceMetadataResult, generation: number, epoch: number): Promise<Uint8Array> {

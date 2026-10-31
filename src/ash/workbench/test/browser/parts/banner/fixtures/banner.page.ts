@@ -11,7 +11,7 @@ import { IDialogsModel } from '../../../../../common/dialogs.js';
 import { BrowserDialogHandler } from '../../../../../browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../../../browser/parts/dialogs/dialog.web.contribution.js';
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
-import { IWorkspaceTrustApi, READ_DIR_PERMISSIONS, DEVELOPMENT_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustApi, READ_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, DEVELOPMENT_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../../platform/workspace/common/workspaceTrust.js';
 import settingsChinese from '../../../../../../../../extensions/language-pack-zh-cn/translations/settings.json' with { type: 'json' };
 import '../../../../../../base/browser/ui/styles.css';
 import '../../../../../browser/media/style.css';
@@ -205,7 +205,7 @@ window.ashBannerIntegration = {
 	setRecovery(status) { recovery.status = status; changed.fire(); },
 	setPermissions(mode) {
 		effectiveKnown = mode !== 'unknown';
-		granted = mode === 'trusted' ? DEVELOPMENT_DIR_PERMISSIONS : mode === 'readonly' ? READ_DIR_PERMISSIONS : [...READ_DIR_PERMISSIONS, 'executeCommands'];
+		granted = mode === 'trusted' ? DEVELOPMENT_DIR_PERMISSIONS : mode === 'readonly' ? READ_DIR_PERMISSIONS : RESTRICTED_DIR_PERMISSIONS;
 		savedPermissions = granted;
 		permissionChanges.fire();
 	},

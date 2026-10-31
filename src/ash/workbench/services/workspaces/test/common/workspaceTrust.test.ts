@@ -7,7 +7,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, IWorkspaceTrustApi, READ_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, IWorkspaceTrustApi, READ_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { createDisconnectedWorkspaceTrustApi } from '../../../../../platform/workspace/browser/workspaceTrustApi.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { WorkspaceTrustManagementService } from '../../common/workspaceTrust.js';
@@ -292,12 +292,12 @@ test('coalesced trust requests finish only after persistence, recovery and parti
 	await entered.p;
 	assert.deepEqual(events, [{ message: 'Run workspace code?' }]);
 	assert.equal(completed, false);
-	assert.deepEqual(f.effects, ['save:/first', 'reconnect', 'participant']);
+	assert.deepEqual(f.effects, [`save:${URI.file('/first').fsPath}`, 'reconnect', 'participant']);
 	await release.complete();
 	await completing;
 	assert.equal(await first, true);
 	assert.equal(await second, true);
-	assert.deepEqual(f.effects, ['save:/first', 'reconnect', 'participant', 'trusted:true']);
+	assert.deepEqual(f.effects, [`save:${URI.file('/first').fsPath}`, 'reconnect', 'participant', 'trusted:true']);
 	assert.equal(await f.requests.requestWorkspaceTrust(), true);
 });
 
@@ -344,7 +344,7 @@ test('an old trust completion cannot resolve a replacement workspace request', a
 test('save failures cancel the trust request, notify once and allow a fresh request', async () => {
 	using f = createTrustFixture();
 	await f.trust.workspaceTrustInitialized;
-	f.failPath = '/first';
+	f.failPath = URI.file('/first').fsPath;
 	const failed = f.requests.requestWorkspaceTrust();
 	await f.requests.completeWorkspaceTrustRequest(true);
 	assert.equal(await failed, undefined);
@@ -357,12 +357,23 @@ test('save failures cancel the trust request, notify once and allow a fresh requ
 	assert.equal(await retry, true);
 });
 
+test('revoking workspace trust retains file editing and saving without command execution', async () => {
+	using f = createTrustFixture();
+	await f.trust.workspaceTrustInitialized;
+	await f.trust.setWorkspaceTrust(true);
+	await f.trust.setWorkspaceTrust(false);
+	assert.deepEqual(f.active.get('first'), RESTRICTED_DIR_PERMISSIONS);
+	assert.deepEqual(await f.trust.getWorkspaceTrustInfo(), { isTrusted: false, isReadOnly: false });
+	assert.equal(RESTRICTED_DIR_PERMISSIONS.includes('writeFiles'), true);
+	assert.equal(RESTRICTED_DIR_PERMISSIONS.includes('executeCommands'), false);
+});
+
 test('a partially saved multi-root grant recovers effective permissions without reporting full trust', async () => {
 	using f = createTrustFixture(false, true);
 	await f.trust.workspaceTrustInitialized;
-	f.failPath = '/second';
+	f.failPath = URI.file('/second').fsPath;
 	await assert.rejects(f.trust.setWorkspaceTrust(true), /Revision conflict/);
-	assert.deepEqual(f.effects, ['save:/first', 'reconnect']);
+	assert.deepEqual(f.effects, [`save:${URI.file('/first').fsPath}`, 'reconnect']);
 	assert.deepEqual(f.active.get('first'), DEVELOPMENT_DIR_PERMISSIONS);
 	assert.deepEqual(f.active.get('second'), READ_DIR_PERMISSIONS);
 	assert.equal(f.trust.isWorkspaceTrusted(), false);

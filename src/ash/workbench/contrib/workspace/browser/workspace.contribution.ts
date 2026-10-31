@@ -129,7 +129,7 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 			actions: [{ label: localize('workspaceTrust.manage', 'Manage'), href: `command:${MANAGE_TRUST_COMMAND_ID}` }],
 			message: this.trustInfo.isReadOnly
 				? localize('workspaceTrust.readOnlyBanner', 'This workspace is read-only. Editing files and running commands are unavailable.')
-				: localize('workspaceTrust.restrictedBanner', 'This workspace has limited directory permissions. Some features are unavailable.'),
+				: localize('workspaceTrust.restrictedBanner', 'Restricted Mode is intended for safe code browsing. Trust this workspace to enable all features.'),
 			onClose: () => {
 				// A pending close must never dismiss a different workspace after a switch.
 				if (workspaceId === this.workspace.getWorkspace().id) this.storage.store(dismissedKey, true, StorageScope.WORKSPACE, StorageTarget.MACHINE);

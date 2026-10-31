@@ -42,6 +42,8 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../../../bas
 import { IEditorService } from '../../../../../../workbench/services/editor/common/editorService.js';
 import { ITerminalService } from '../../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalService } from '../../../../../../workbench/contrib/terminal/browser/terminalService.js';
+import { TestWorkspaceTrustManagementService } from '../../../../../../workbench/test/common/workbenchTestServices.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../../../platform/workspace/common/workspaceTrust.js';
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../../../workbench/contrib/terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../../../workbench/contrib/terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../../../../workbench/contrib/terminal/browser/terminalProfileResolverService.js';
@@ -207,6 +209,12 @@ services.registerInstance(IEditorService, { openEditor: async (...args: unknown[
 services.registerInstance(IOpenerService, { open: async (resource: { toString(): string; }) => { openedUrls.push(resource.toString()); return true; } } as unknown as IOpenerService);
 services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
 services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
+services.registerInstance(IWorkspaceTrustManagementService, resources.add(new TestWorkspaceTrustManagementService()));
+services.registerInstance(IWorkspaceTrustRequestService, {
+	onDidInitiateWorkspaceTrustRequest: Event.None, onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
+	requestWorkspaceTrust: async () => { throw new Error('App tool fixtures are already trusted'); },
+	requestWorkspaceTrustOnStartup() { }, completeWorkspaceTrustRequest: async () => { }, cancelWorkspaceTrustRequest() { },
+});
 const terminals = resources.add(services.createInstance(TerminalService));
 services.registerInstance(ITerminalService, terminals);
 services.registerInstance(IViewsService, { openView: async (id: string, focus: boolean | undefined) => { if (viewFailure) throw new Error('Terminal view unavailable'); terminalViews.push({ id, focus }); } } as unknown as IViewsService);

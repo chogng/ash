@@ -36,6 +36,34 @@ function connection(resource: URI, label: string, api: Partial<IFileApi> = {}, r
 suite('Agent Host filesystem authority routes', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('unbound workspace directories cancel file reads until authorization recovers', async () => {
+		const workspace = URI.file('/workspace');
+		let ready = false;
+		let directoryReads = 0;
+		using provider = new AgentHostFileSystemProvider({
+			...connection(workspace, 'primary', {
+				readDirectory: async () => { directoryReads++; return { entries: [] }; },
+			}),
+			isConnectionReady: () => ready,
+		});
+		const settings = URI.joinPath(workspace, '.vscode', 'settings.json');
+		await assert.rejects(provider.readFile(settings), isCancellationError);
+		await assert.rejects(provider.readDirectory(workspace), isCancellationError);
+		await assert.rejects(provider.resolvePathIdentity(settings), isCancellationError);
+		assert.equal(directoryReads, 0);
+		using remote = provider.registerAuthority(root.authority, connection(root, 'remote'));
+		assert.equal((await provider.readTextFile(URI.joinPath(root, 'main.ts'), 'utf8')).content, 'remote');
+		ready = true;
+		const pending = provider.readDirectory(workspace);
+		ready = false;
+		await assert.rejects(pending, isCancellationError);
+		assert.equal(directoryReads, 0);
+		ready = true;
+		assert.deepEqual(await provider.readDirectory(workspace), []);
+		assert.equal(directoryReads, 1);
+		assert.equal((await provider.readTextFile(settings, 'utf8')).content, 'primary');
+	});
+
 	test('selects the longest registered root on one authority while preserving sibling roots', async () => {
 		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
 		using files = new FileService();

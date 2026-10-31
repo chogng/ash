@@ -5,7 +5,8 @@ import { expect, test as baseTest } from '../../../automation/test.js';
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
+import { URI } from '../../../../src/ash/base/common/uri.js';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
@@ -53,18 +54,18 @@ interface ConnectionHarness {
 	backend(): Promise<{ pid: number; instanceId: string; }>;
 }
 
-const test = baseTest.extend<{ connectionHarness: ConnectionHarness; connectionSurface: 'agents' | 'workbench'; connectionWorkspace: 'empty' | 'readOnly'; }>({
+const test = baseTest.extend<{ connectionHarness: ConnectionHarness; connectionSurface: 'agents' | 'workbench'; connectionWorkspace: 'empty' | 'restricted'; }>({
 	connectionSurface: ['agents', { option: true }],
 	connectionWorkspace: ['empty', { option: true }],
-	connectionHarness: async ({ target, connectionSurface, connectionWorkspace }, use, testInfo) => {
+	connectionHarness: async ({ target, connectionSurface, connectionWorkspace, electronWindowMode }, use, testInfo) => {
 		baseTest.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the Electron backend connection.');
 		const directory = await mkdtemp(join(tmpdir(), 'ash-'));
-		const workspaceFolder = connectionWorkspace === 'readOnly' || connectionSurface === 'workbench' ? join(directory, 'workspace') : undefined;
+		const workspaceFolder = connectionWorkspace === 'restricted' || connectionSurface === 'workbench' ? join(directory, 'workspace') : undefined;
 		if (workspaceFolder) {
 			await mkdir(workspaceFolder);
 			await writeFile(join(workspaceFolder, 'example.txt'), 'Workspace permission fixture\n');
 		}
-		const configuration = resolveElectronConfiguration({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: workspaceFolder });
+		const configuration = resolveElectronConfiguration({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: workspaceFolder, windowMode: electronWindowMode });
 		const entry = testInfo.outputPath('connection-restart.mjs');
 		await writeFile(entry, `
 import { app } from 'electron/main';
@@ -198,7 +199,7 @@ startElectronApplication();
 			page.on('pageerror', error => startupErrors.push(error.stack ?? error.message));
 			page.on('console', message => { if (message.type() === 'error') startupErrors.push(message.text()); });
 			if (workspaceFolder) {
-				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: connectionWorkspace === 'readOnly' ? 'Open Read-Only' : 'Trust Folder', exact: true }).click();
+				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: connectionWorkspace === 'restricted' ? 'Open in Restricted Mode' : 'Trust Folder', exact: true }).click();
 			}
 			try {
 				await new Workbench(page).waitForReady();
@@ -309,7 +310,7 @@ test('Agents shows connection status without moving content and automatically re
 });
 
 test.describe('Agents recovery actions', () => {
-	test.use({ connectionWorkspace: 'readOnly' });
+	test.use({ connectionWorkspace: 'restricted' });
 	test('Agents retries a failed workspace restore from the keyboard without a banner or layout shift', async ({
 		connectionHarness: { application, page },
 	}, testInfo) => {
@@ -514,7 +515,7 @@ test('initialization of an exited carrier cannot report a ready Agents connectio
 
 for (const surface of ['workbench', 'agents'] as const) {
 	test.describe(`${surface} Workspace Trust`, () => {
-		test.use({ connectionSurface: surface, connectionWorkspace: 'readOnly' });
+		test.use({ connectionSurface: surface, connectionWorkspace: 'restricted', electronWindowMode: 'inactive' });
 		if (surface === 'agents') {
 			test('Agents scopes permission status to Code without a banner or content offset', async ({
 				connectionHarness: { page },
@@ -542,7 +543,7 @@ for (const surface of ['workbench', 'agents'] as const) {
 					.locator('.ash-window-mode-control')
 					.getByRole('button', { name: 'Code', exact: true })
 					.click();
-				await expect(permissions).toHaveAttribute('aria-label', 'Read-only workspace: workspace');
+				await expect(permissions).toHaveAttribute('aria-label', 'Restricted workspace: workspace');
 				await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
 				expect(await titlebar.boundingBox()).toEqual(titlebarBounds);
 				for (const button of await titlebar.getByRole('button').all()) {
@@ -553,16 +554,27 @@ for (const surface of ['workbench', 'agents'] as const) {
 			});
 		}
 		if (surface === 'workbench') {
-			test('New Terminal awaits Workspace Trust before creating a process in a read-only workspace', async ({ connectionHarness: { application, page } }) => {
+			test('Restricted Mode saves files and terminal entrypoints wait for Workspace Trust', async ({ connectionHarness: { application, page, workspaceFolder } }) => {
 				const workbench = new Workbench(page);
 				const banner = page.locator('[data-part="banner"]');
-				await expect(banner).toContainText('This workspace is read-only');
+				await expect(banner).toContainText('Restricted Mode is intended for safe code browsing');
+				await workbench.quickaccess.open(join(workspaceFolder!, 'example.txt'));
+				await workbench.quickaccess.select('example.txt');
+				const editor = workbench.editors.groupAt(0).editor;
+				await editor.waitForEditorFocus();
+				await page.keyboard.press('ControlOrMeta+End');
+				await editor.waitForTypeInEditor('Saved in Restricted Mode');
+				await workbench.quickaccess.runCommand('workbench.action.files.save');
+				await expect.poll(() => readFile(join(workspaceFolder!, 'example.txt'), 'utf8')).toBe('Workspace permission fixture\nSaved in Restricted Mode');
 				const dialogs = new Dialogs(page);
 				const canceled = await dialogs.confirm(application, 'Workspace Trust', 'Cancel', () => workbench.quickaccess.runCommand('workbench.action.terminal.new'));
 				expect(canceled.message).toContain('Creating a terminal can run code from this workspace');
 				await expect(page.locator('.xterm-screen')).toHaveCount(0);
-				await expect(banner).toContainText('This workspace is read-only');
-				await dialogs.confirm(application, 'Workspace Trust', 'Trust workspace', () => workbench.quickaccess.runCommand('workbench.action.terminal.new'));
+				await expect(banner).toContainText('Restricted Mode is intended for safe code browsing');
+				await dialogs.confirm(application, 'Workspace Trust', 'Cancel', () => workbench.quickaccess.runCommand('workbench.action.terminal.focus'));
+				await expect(page.locator('.xterm-screen')).toHaveCount(0);
+				await expect(page.locator('.ash-terminal-status')).toBeHidden();
+				await dialogs.confirm(application, 'Workspace Trust', 'Trust workspace', () => workbench.quickaccess.runCommand('workbench.action.terminal.focus'));
 				await expect(banner).toBeHidden();
 				await expect(page.locator('[data-part="panel"] .xterm-screen')).toBeVisible();
 			});
@@ -570,10 +582,10 @@ for (const surface of ['workbench', 'agents'] as const) {
 		test('Workspace status manages the current permissions and refreshes effective trust', async ({
 			connectionHarness: { application, page, workspaceFolder },
 		}, testInfo) => {
-			const folder = await realpath(workspaceFolder!);
+			const folder = URI.file(await realpath(workspaceFolder!)).fsPath;
 			const permissionStatus =
 				surface === 'agents'
-					? page.locator('[data-part="titlebar"]').getByRole('button', { name: /^Read-only workspace:/u })
+					? page.locator('[data-part="titlebar"]').getByRole('button', { name: /^Restricted workspace:/u })
 					: page.locator('[data-part="banner"]');
 			if (surface === 'agents') {
 				await page
@@ -583,7 +595,7 @@ for (const surface of ['workbench', 'agents'] as const) {
 				await expect(page.locator('[data-part="banner"]')).toHaveCount(0);
 				await permissionStatus.click();
 			} else {
-				await expect(permissionStatus).toContainText('This workspace is read-only');
+				await expect(permissionStatus).toContainText('Restricted Mode is intended for safe code browsing');
 				await permissionStatus.getByRole('button', { name: 'Manage', exact: true }).click();
 			}
 			const editor = page.locator('.ash-workspace-trust-editor');
@@ -592,16 +604,16 @@ for (const surface of ['workbench', 'agents'] as const) {
 			await expect(modal).toHaveCSS('width', '560px');
 			await expect(modal).toHaveCSS('height', '360px');
 			await expect(editor.locator('.workspace-trust-folder-path')).toHaveText(folder);
-			await expect(editor.getByRole('heading', { level: 2 })).toHaveText('Read-only workspace');
+			await expect(editor.getByRole('heading', { level: 2 })).toHaveText('Restricted Mode');
 			await expect(editor.getByRole('switch')).toHaveCount(0);
 			await expect(editor.getByRole('button')).toHaveCount(1);
 			const trust = editor.getByRole('button', { name: 'Trust workspace', exact: true });
-			const readOnly = editor.getByRole('button', { name: 'Open read-only', exact: true });
+			const readOnly = editor.getByRole('button', { name: 'Open in Restricted Mode', exact: true });
 			const confirm = async (button: string, enableDevelopment: boolean): Promise<void> => {
 				const action = enableDevelopment ? trust : readOnly;
 				if (surface === 'workbench') {
 					const message = await new Dialogs(page).confirm(application, 'Confirm', button, () => action.click());
-					expect(message.message).toContain(folder.split('/').at(-1)!);
+					expect(message.message).toContain(basename(folder));
 				} else {
 					await action.click();
 					await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: button, exact: true }).click();
@@ -618,13 +630,13 @@ for (const surface of ['workbench', 'agents'] as const) {
 			await expect(trust).toBeHidden();
 			await expect(editor.getByRole('switch')).toHaveCount(0);
 			await page.screenshot({ path: testInfo.outputPath(`${surface}-workspace-trust-management.png`) });
-			await confirm('Open read-only', false);
-			await expect(editor.getByRole('heading', { level: 2 })).toHaveText('Read-only workspace');
+			await confirm('Open in Restricted Mode', false);
+			await expect(editor.getByRole('heading', { level: 2 })).toHaveText('Restricted Mode');
 			await expect(permissionStatus).toBeVisible();
 			await editor.locator('summary').focus();
 			await page.keyboard.press('Enter');
 			const write = editor.getByRole('switch', { name: 'Write files', exact: true });
-			await expect(write).not.toBeChecked();
+			await expect(write).toBeChecked();
 			await write.focus();
 			await write.press('Space');
 			const save = editor.getByRole('button', { name: 'Save permissions', exact: true });
