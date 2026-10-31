@@ -14,6 +14,9 @@ import { localize } from '../../../../../../nls.js';
 import { onUnexpectedError } from '../../../../../../base/common/errors.js';
 import { cancelOnDispose } from '../../../../../../base/common/cancellation.js';
 import { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
+import { WorkbenchTabsControl } from '../../../../../browser/parts/editor/workbenchTabsControl.js';
+import type { TabListItem, TabListOptions } from '../../../../../../base/browser/ui/tablist/tabList.js';
 
 /** Shows the current conversation and delegates switching to the shared history picker. */
 export class ChatViewTitleControl extends Disposable {
@@ -24,6 +27,8 @@ export class ChatViewTitleControl extends Disposable {
 	private readonly titleLabel: HTMLSpanElement;
 	private readonly actionsElement: HTMLDivElement;
 	private readonly layoutToolbar: MenuWorkbenchToolBar;
+	private tabs: WorkbenchTabsControl<string> | undefined;
+	private tabsHost: HTMLElement | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -32,6 +37,7 @@ export class ChatViewTitleControl extends Disposable {
 		@IMenuService private readonly menuService: IMenuService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -92,6 +98,26 @@ export class ChatViewTitleControl extends Disposable {
 
 	get partTitleProjection(): PartTitleProjection {
 		return { content: this.titleElement, actions: this.actionsElement };
+	}
+
+	/** Shares editor tab presentation while the caller retains conversation identity and lifetime. */
+	setTabs(items: readonly TabListItem<string>[], activeId: string | undefined, options: TabListOptions<string> | undefined): void {
+		if (options && !this.tabs) {
+			this.tabsHost = h(this.titleElement.ownerDocument, 'div', { className: 'ash-chat-view-tabs' });
+			this.titleElement.prepend(this.tabsHost);
+			this.tabs = this._register(this.instantiationService.createInstance(WorkbenchTabsControl<string>, this.tabsHost, options));
+		}
+		const focusInTitle = this.titleElement.contains(this.titleElement.ownerDocument.activeElement);
+		this.titleButton.hidden = options !== undefined;
+		this.titleElement.classList.toggle('has-session-tabs', options !== undefined);
+		if (this.tabsHost) this.tabsHost.hidden = options === undefined;
+		this.tabs?.setTabs(items, activeId);
+		if (focusInTitle) {
+			if (options === undefined) this.titleButton.focus();
+			else if (this.titleElement.ownerDocument.activeElement === this.titleButton) {
+				this.tabsHost?.querySelector<HTMLElement>('.ash-tab.checked .ash-tab-label')?.focus();
+			}
+		}
 	}
 
 	private showTitleContextMenu(event: MouseEvent | KeyboardEvent): void {

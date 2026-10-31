@@ -16,61 +16,56 @@ import { IChatService } from '../../../workbench/services/chat/common/chatServic
 import type { ModelProviderCredentialStatus } from '../../../workbench/services/chat/common/chatService.js';
 import { IPreferencesService } from '../../../workbench/services/preferences/common/preferences.js';
 import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
-import { AGENT_SESSIONS_ORIENTATION_SETTING, AgentSessionsOrientation, AgentSessionsOrientationContext, AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { AGENT_SESSIONS_PRESENTATION_SETTING, AgentSessionsPresentation, AgentSessionsPresentationContext, AgentSessionsSidebarVisibleContext, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { ChatViewPane } from '../chatViewPane.js';
 import { Menus } from '../menus.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 
-Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsOrientation>({
-	key: AGENT_SESSIONS_ORIENTATION_SETTING,
-	defaultValue: AgentSessionsOrientation.SideBySide,
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<AgentSessionsPresentation>({
+	key: AGENT_SESSIONS_PRESENTATION_SETTING,
+	defaultValue: AgentSessionsPresentation.Tabs,
 	scope: ConfigurationScope.WINDOW,
-	schema: { type: 'string', enum: Object.values(AgentSessionsOrientation) },
-	parse(value: unknown): AgentSessionsOrientation {
-		switch (value) {
-			// Decode old profiles until Chat migrates the persisted value to a fixed layout.
-			case 'auto': return AgentSessionsOrientation.SideBySide;
-			case AgentSessionsOrientation.SideBySide:
-			case AgentSessionsOrientation.Stacked: return value;
-			default: throw new TypeError(localize('chat.sessions.layout.invalid', 'Invalid Sessions layout.'));
-		}
+	schema: { type: 'string', enum: Object.values(AgentSessionsPresentation) },
+	parse(value: unknown): AgentSessionsPresentation {
+		if (value === AgentSessionsPresentation.Tabs || value === AgentSessionsPresentation.List) return value;
+		throw new TypeError(localize('chat.sessions.presentation.invalid', 'Invalid session display mode.'));
 	},
 	setting: {
-		title: localize('chat.sessions.layout.title', 'Sessions layout'),
-		description: localize('chat.sessions.layout.description', 'Choose Side by side or Stacked for the Sessions list. Your choice is remembered and does not change when you resize Chat. Use the Sessions button to open or close the list.'),
+		title: localize('chat.sessions.presentation.title', 'Session display'),
+		description: localize('chat.sessions.presentation.description', 'Show opened sessions as tabs or switch conversations using a list.'),
 		valueType: 'select',
 		options: [
-			{ value: AgentSessionsOrientation.SideBySide, label: localize('chat.sessions.layout.sideBySide', 'Side by side') },
-			{ value: AgentSessionsOrientation.Stacked, label: localize('chat.sessions.layout.stacked', 'Stacked') },
+			{ value: AgentSessionsPresentation.Tabs, label: localize('chat.sessions.presentation.tabs', 'Tabs') },
+			{ value: AgentSessionsPresentation.List, label: localize('chat.sessions.presentation.list', 'List') },
 		],
 	},
 });
 
 MenusRegistry.appendMenuItem(MenuId.ChatTitle, {
 	submenu: Menus.ChatSessionsLayout,
-	title: localize2('chat.sessions.layout.title', 'Sessions layout'),
+	title: localize2('chat.sessions.presentation.title', 'Session display'),
 	group: 'layout',
 	order: 1,
 });
 
-for (const [orientation, title, id] of [
-	[AgentSessionsOrientation.SideBySide, localize2('chat.sessions.layout.sideBySide', 'Side by side'), 'workbench.action.chat.setAgentSessionsOrientationSideBySide'],
-	[AgentSessionsOrientation.Stacked, localize2('chat.sessions.layout.stacked', 'Stacked'), 'workbench.action.chat.setAgentSessionsOrientationStacked'],
+for (const [presentation, title, id] of [
+	[AgentSessionsPresentation.Tabs, localize2('chat.sessions.presentation.tabs', 'Tabs'), 'workbench.action.chat.setAgentSessionsPresentationTabs'],
+	[AgentSessionsPresentation.List, localize2('chat.sessions.presentation.list', 'List'), 'workbench.action.chat.setAgentSessionsPresentationList'],
 ] as const) {
 	registerAction2(class extends Action2 {
 		constructor() {
 			super({
 				id,
 				title,
-				toggled: AgentSessionsOrientationContext.isEqualTo(orientation),
-				menu: { id: Menus.ChatSessionsLayout, group: 'navigation' },
+				toggled: AgentSessionsPresentationContext.isEqualTo(presentation),
+				menu: { id: Menus.ChatSessionsLayout, group: 'navigation', order: presentation === AgentSessionsPresentation.Tabs ? 1 : 2 },
 				f1: true,
 			});
 		}
 		override async run(accessor: ServicesAccessor): Promise<void> {
-			await accessor.get(IConfigurationService).updateValue(AGENT_SESSIONS_ORIENTATION_SETTING, orientation, ConfigurationTarget.USER_LOCAL);
+			await accessor.get(IConfigurationService).updateValue(AGENT_SESSIONS_PRESENTATION_SETTING, presentation, ConfigurationTarget.USER_LOCAL);
 		}
 	});
 }

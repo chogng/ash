@@ -25,6 +25,21 @@
 	cursor: pointer;
 }
 
+.ash-chat-view-title-button[hidden],
+.ash-chat-view-tabs[hidden] {
+	display: none;
+}
+
+.ash-chat-view-title.has-session-tabs {
+	padding: 0;
+}
+
+.ash-chat-view-tabs {
+	min-width: 0;
+	height: 100%;
+	flex: 1 1 auto;
+}
+
 .ash-chat-view-title-button:hover {
 	background: var(--ash-toolbar-hoverBackground);
 }

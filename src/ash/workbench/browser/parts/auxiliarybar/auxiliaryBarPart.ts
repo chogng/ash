@@ -122,9 +122,10 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 			? this.domNode.ownerDocument.activeElement as HTMLElement : undefined;
 		const position = this.configurationService.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation);
 		const separateRow = position === ActivityBarPosition.TOP || position === ActivityBarPosition.BOTTOM;
-		const visible = position !== ActivityBarPosition.HIDDEN && !(separateRow
-			&& this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide)
-			&& this.visibleViewContainersTracker.visibleCount <= 1);
+		const visible = !(projection?.hideContainerSelector && this.visibleViewContainersTracker.visibleCount <= 1)
+			&& position !== ActivityBarPosition.HIDDEN && !(separateRow
+				&& this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide)
+				&& this.visibleViewContainersTracker.visibleCount <= 1);
 		const active = this.activeCompositeId ? this.getComposite(this.activeCompositeId) : undefined;
 		this.activeTitle.textContent = active?.getTitle() ?? '';
 		// Custom view headers and the container selector share this Part-owned title slot.

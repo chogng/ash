@@ -170,7 +170,7 @@ export const SettingsNavigation = [
 							'workbench.notifications.position',
 							'workbench.notifications.showInTitleBar',
 							'workbench.view.alwaysShowHeaderActions',
-							'chat.viewSessions.orientation',
+							'chat.viewSessions.presentation',
 							'chat.experimental.sessionArchiveActionWording',
 							'window.title',
 							'window.titleSeparator',
