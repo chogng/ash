@@ -162,7 +162,7 @@
     "groups.agents.label": "聊天",
     "groups.agents.description": "配置聊天、智能体、模型及共享能力。",
     "categories.agents.label": "智能体",
-    "categories.agents.description": "配置智能体及提供第二意见的顾问。",
+    "categories.agents.description": "配置智能体、代码审查以及用于提供第二意见的 Advisor。",
     "categories.teams.label": "团队",
     "categories.teams.description": "通过明确的成员、角色与协调方式组合可复用的多 Agent 团队。",
     "categories.agent-defaults.label": "默认设置",
@@ -490,7 +490,17 @@
     "codeActions.save.editor": "保存文件时运行的代码操作。例如：`\"source.organizeImports\": \"explicit\"`。延迟自动保存时不运行这些操作。",
     "codeActions.save.notebook": "保存笔记本时运行的代码操作。例如：`\"notebook.source.organizeImports\": \"explicit\"`。延迟自动保存时不运行这些操作。",
     "codeActions.save.kind": "选择保存时何时运行 {0}。",
-    "codeActions.save.changed": "准备保存期间代码发生了变化。请再次保存，以便对最新内容执行代码操作。"
+    "codeActions.save.changed": "准备保存期间代码发生了变化。请再次保存，以便对最新内容执行代码操作。",
+    "codeReview.settings.title": "审查模型",
+    "codeReview.settings.description": "为“查找问题”和代码审查选择专用模型，或跟随当前对话的模型。",
+    "codeReview.settings.help": "审查模型设置\n按 Tab 移至模型选择器。按 Enter 或空格打开，使用方向键选择模型，按 Enter 立即保存。“跟随当前模型”会清除代码审查专用模型。此选择适用于后续代码审查，包括“查找问题”中的当前改动、暂存改动、分支改动和自定义审查。模型和接入在“模型”中管理。已保存但不可用的模型会保留显示，请在审查前选择可用模型。Escape 关闭帮助并返回焦点。",
+    "codeReview.settings.follow": "跟随当前模型",
+    "codeReview.settings.unavailable": "{0}（不可用）",
+    "codeReview.settings.selector": "模型",
+    "codeReview.settings.loading": "正在加载审查模型…",
+    "codeReview.settings.loadFailed": "无法加载审查模型：{0}",
+    "codeReview.settings.saved": "审查模型已保存。",
+    "codeReview.settings.saveFailed": "无法保存审查模型：{0}"
   },
   "ash.workbench": {
     "command.ChangeKeyboardLayoutAction": "首选项：更改键盘布局",

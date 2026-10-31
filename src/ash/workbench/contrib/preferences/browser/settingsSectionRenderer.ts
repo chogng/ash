@@ -46,6 +46,7 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div'); this.domNode.className = 'ash-settings-section';
+		if (model.groupId === null) { this.domNode.classList.add('ash-settings-card'); }
 		this.titleDomNode = h(document, 'h5'); this.descriptionDomNode = h(document, 'p'); this.domNode.append(this.titleDomNode, this.descriptionDomNode);
 		this.actionsDomNode = h(document, 'div'); this.actionsDomNode.className = 'ash-settings-section-actions';
 		this._register(model.onDidChange(() => { this.render(); this.changed.fire(); }));
@@ -74,7 +75,9 @@ export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectio
 
 	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		this.render();
-		return [{ element: { kind: 'group', id: this.model.groupId ?? `${this.categoryId}.services`, title: this.model.groupTitle ?? this.model.title, description: '' }, children: [{ element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode) } }] }];
+		const item: SettingsTreeNode<SettingsSectionReference> = { element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode) } };
+		if (this.model.groupId === null) { return [item]; }
+		return [{ element: { kind: 'group', id: this.model.groupId ?? `${this.categoryId}.services`, title: this.model.groupTitle ?? this.model.title, description: '' }, children: [item] }];
 	}
 
 	public setVisible(visible: boolean): void { this.isVisible = visible; this.model.setVisible(visible); }

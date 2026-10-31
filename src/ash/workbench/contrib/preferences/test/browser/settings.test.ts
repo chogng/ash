@@ -63,6 +63,8 @@ import { ILanguageServerService } from '../../../../../platform/language/common/
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { createTestFileService, createTestEditorServices, createTestTextFileService } from '../../../../test/common/testEditorServices.js';
 import assert from 'node:assert/strict';
+import { IAgentModelsService } from '../../../../../platform/agentHost/common/agentModels.js';
+import { createDisconnectedAgentModelsService } from '../../../../../platform/agentHost/browser/appServerAgentModels.js';
 import { suiteTeardown, test } from 'mocha';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
 import { JSDOM } from 'jsdom';
@@ -2434,7 +2436,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 		listModels: async () => catalog.filter(entry => enabled.has(entry.displayName)),
 		getDefaultNewChatModel: () => undefined,
 		rememberSelectedModel: async () => { },
-		readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }),
+		readModelDefaults: async () => ({ codeReviewModel: null, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => catalog,
 		listCustomModelProviders: async () => [],
@@ -2869,6 +2871,10 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		subscribe: listener => autoFetchChanged.event(() => listener({ method: 'config/changed', params: { revision: 1, generation: 1 } })),
 	});
 	services.registerInstance(ChatServiceId, chatService);
+	services.registerInstance(IAgentModelsService, {
+		...createDisconnectedAgentModelsService(async operation => { throw new Error(`Unexpected ${operation}`); }),
+		readDefaults: () => (chatService as unknown as ILanguageModelsService).readModelDefaults(),
+	});
 	services.registerInstance(ILanguageModelsService, chatService as unknown as ILanguageModelsService);
 	services.registerInstance(IBrowserPasswordService, UnavailableBrowserPasswordService);
 	services.registerInstance(ISecretStorageStatusService, {

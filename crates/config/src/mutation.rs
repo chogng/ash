@@ -242,6 +242,11 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.agent.advisor = None,
         Patch::Value(advisor) => document.agent.advisor = Some(advisor.clone()),
     }
+    match &update.code_review_model {
+        Patch::Missing => {}
+        Patch::Null => document.agent.code_review_model = None,
+        Patch::Value(model) => document.agent.code_review_model = Some(model.clone()),
+    }
     match &update.commit_message_model {
         Patch::Missing => {}
         Patch::Null => {

@@ -142,6 +142,7 @@ pub(super) fn update<T: JsonRpcTransport>(
         expected_revision: config.revision,
         model: Patch::Missing,
         model_reasoning_effort: Patch::Value(effort),
+        code_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,

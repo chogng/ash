@@ -580,6 +580,7 @@ fn update_preferences(
             model,
             model_reasoning_effort: Patch::Missing,
             approval_review_model: Patch::Missing,
+            code_review_model: Patch::Missing,
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,
             grep_backend: Patch::Missing,
@@ -934,6 +935,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
                 model: Patch::Missing,
                 model_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
+                code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Value(ash_protocol::ToolMode::CodeModeOnly),
                 grep_backend: Patch::Value(GrepBackend::Tgrep),
@@ -1454,6 +1456,70 @@ fn built_in_model_can_be_selected_before_any_connection_is_configured() {
 }
 
 #[test]
+fn code_review_model_persists_independently_and_clears_to_current() {
+    let path = config_path("code-review-model");
+    let store = ConfigStore::open(&path).unwrap();
+    assert!(
+        store
+            .read_snapshot()
+            .unwrap()
+            .values
+            .code_review_model
+            .is_none()
+    );
+    let configured = configure_provider(&store, 0, "openai");
+    let chat_model = model_ref("openai", "gpt-6-astra");
+    let review_model = model_ref("openai", "gpt-6.1-sol");
+    let selected = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("code-review-model").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                model: Patch::Value(chat_model.clone()),
+                code_review_model: Patch::Value(review_model.clone()),
+                ..PreferencesUpdate::default()
+            }),
+        })
+        .unwrap();
+    let restored = ConfigStore::open(&path).unwrap().read_snapshot().unwrap();
+    assert_eq!(
+        restored.values.code_review_model,
+        Some(review_model.clone())
+    );
+    assert_eq!(restored.values.model, Some(chat_model.clone()));
+    assert_eq!(
+        restored.values.approval_review_model,
+        ApprovalReviewModelSelection::Automatic
+    );
+    assert!(
+        store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("stale-code-review-model").unwrap(),
+                expected_revision: configured.revision,
+                command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    code_review_model: Patch::Null,
+                    ..PreferencesUpdate::default()
+                }),
+            })
+            .is_err()
+    );
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("clear-code-review-model").unwrap(),
+            expected_revision: selected.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                code_review_model: Patch::Null,
+                ..PreferencesUpdate::default()
+            }),
+        })
+        .unwrap();
+    let cleared = store.read_snapshot().unwrap();
+    assert_eq!(cleared.values.code_review_model, None);
+    assert_eq!(cleared.values.model, Some(chat_model));
+    remove_config_files(&path);
+}
+
+#[test]
 fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
     let path = config_path("approval-review-model");
     let store = ConfigStore::open(&path).unwrap();
@@ -1476,6 +1542,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
                 features: Default::default(),
                 model: Patch::Missing,
                 model_reasoning_effort: Patch::Missing,
+                code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,

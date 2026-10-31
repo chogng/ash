@@ -148,12 +148,15 @@ export type ApprovalReviewModelSelection =
 
 /** Backend execution defaults. Null means no configured model, not an executable automatic selection. */
 export interface AgentModelDefaults {
+	/** Null follows the reviewing Thread's current model. */
+	readonly codeReviewModel: ModelRef | null;
 	readonly revision: number;
 	readonly model: ModelRef | null;
 	readonly reasoningEffort: ModelReasoningEffort | null;
 }
 
 export interface AgentModelDefaultsUpdate {
+	readonly codeReviewModel?: ModelRef | null;
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 }

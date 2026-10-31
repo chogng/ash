@@ -112,6 +112,7 @@ export interface IAgentTurnService {
 	listQueued(params: Agent.QueueListParams): Promise<Agent.QueueListResult>;
 	consultAdvisor(params: Agent.SessionOperationInput<'consultAdvisor'>): Promise<Agent.TurnStartResult>;
 	start(params: Agent.SessionOperationInput<'startTurn'>, signal?: AbortSignal): Promise<Agent.TurnStartResult>;
+	startReview(params: Agent.SessionOperationInput<'startReview'>): Promise<Agent.TurnStartResult>;
 	compact(params: Agent.SessionOperationInput<'compactContext'>): Promise<Agent.TurnStartResult>;
 	steer(params: Agent.SessionOperationInput<'steerTurn'>, signal?: AbortSignal): Promise<Agent.TurnSteerResult>;
 	interrupt(params: Agent.SessionOperationInput<'interruptTurn'>): Promise<Agent.TurnInterruptResult>;

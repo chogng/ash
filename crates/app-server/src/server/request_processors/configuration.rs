@@ -440,6 +440,7 @@ impl<'ctx, C: ConfigRequestProcessorContext + ?Sized> ConfigRequestProcessor<'ct
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
+                    code_review_model: model_ref_update_from_dto(params.code_review_model)?,
                     commit_message_model: model_ref_update_from_dto(params.commit_message_model)?,
                     advisor: params.advisor,
                     tool_mode: params.tool_mode,
@@ -484,6 +485,7 @@ impl<'ctx, C: ConfigRequestProcessorContext + ?Sized> ConfigRequestProcessor<'ct
                     model: Patch::Missing,
                     model_reasoning_effort: Patch::Missing,
                     approval_review_model: Patch::Missing,
+                    code_review_model: Patch::Missing,
                     commit_message_model: Patch::Missing,
                     advisor: Patch::Missing,
                     tool_mode: Patch::Missing,
@@ -938,6 +940,7 @@ fn config_read_result(
         model: snapshot.values.model.map(model_ref_dto),
         model_reasoning_effort: snapshot.values.model_reasoning_effort,
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
+        code_review_model: snapshot.values.code_review_model.map(model_ref_dto),
         commit_message_model: snapshot.values.commit_message_model.map(model_ref_dto),
         advisor: snapshot.values.advisor,
         commit_message_active_dir_authorized,

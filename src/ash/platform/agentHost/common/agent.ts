@@ -9,6 +9,13 @@ export type SessionId = string;
 
 export type ThreadId = string;
 
+/** Code selected for a read-only reviewer Turn, independent of approval review. */
+export type AgentReviewTarget =
+	| { readonly type: 'uncommittedChanges'; }
+	| { readonly type: 'stagedChanges'; }
+	| { readonly type: 'baseBranch'; readonly branch: string; }
+	| { readonly type: 'custom'; readonly instructions: string; };
+
 type ChatMode = SessionMode;
 
 export interface SessionMutationParams {
@@ -52,6 +59,11 @@ interface SessionOperations {
 		readonly reasoningEffort?: ModelReasoningEffort | null;
 		readonly toolMode?: 'direct' | 'codeMode' | 'codeModeOnly' | null;
 		readonly input: AgentInput[];
+	};
+	readonly startReview: {
+		readonly threadId: string;
+		readonly expectedSequence: number;
+		readonly target: AgentReviewTarget;
 	};
 	readonly compactContext: {
 		readonly threadId: string;

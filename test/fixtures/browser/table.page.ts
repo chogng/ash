@@ -173,7 +173,7 @@ services.registerInstance(ILanguageModelsService, {
 	listModels: async () => [], listModelCatalog: async () => [], refreshModels: async () => [],
 	listAdvisorModels: async () => [], listModelProviders: async () => credentialSettings ? [{ connection: 'openai', provider: 'openai', displayName: 'OpenAI API', access: 'apiKey', active: true, configured: true, ready: true, apiKeyPolicy: 'required', apiKeyConfigured: true }] : [], listCustomModelProviders: async () => [],
 	getDefaultNewChatModel: () => undefined, rememberSelectedModel: async () => { }, isModelVisible: () => true,
-	readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }), saveReasoningEffort: async () => { },
+	readModelDefaults: async () => ({ codeReviewModel: null, revision: 1, model: null, reasoningEffort: null }), saveReasoningEffort: async () => { },
 	setModelVisible: async () => { }, setModelPreferences: async () => { },
 	readApprovalReviewModel: async () => ({ type: 'automatic' }), setApprovalReviewModel: async () => { },
 	removeCustomModelProvider: async () => { },

@@ -5486,6 +5486,7 @@ test('AI preference blocks direct dispatch, including a pending permission read,
 	for (const request of [
 		() => chat.startTurn(options), () => chat.queueTurn(options), () => chat.steerTurn({ ...options, turnId: 'turn-1' }),
 		() => chat.consultAdvisor({ ...options, question: 'Synthetic question' }), () => chat.compactContext(options),
+		() => chat.startReview({ ...options, target: { type: 'uncommittedChanges' } }),
 		() => chat.generateTurnChangeMessage('session-1', 'thread-1', 'change-1', 1),
 	]) await assert.rejects(request(), /AI features are disabled/);
 	assert.equal(fake.turnStartRequests.length + fake.queuedRequests.length + fake.turnSteerRequests.length + fake.consultRequests.length + fake.turnCompactRequests.length, 0);
@@ -5584,6 +5585,30 @@ for (const kind of ['Chat', 'Cowork']) {
 		assert.deepEqual(submissions, [{ sessionId: 'created', threadId: 'created-thread', isNewSession: true, requestSequence: 1 }]);
 	});
 }
+
+test('Chat review reports only accepted reviewer submissions', async () => {
+	const fake = fakeApi();
+	const requests: SessionOperationInput<'startReview'>[] = [];
+	let reject = false;
+	using chat = createChatService({
+		...fake.api, turn: {
+			...fake.api.turn, startReview: async params => {
+				if (reject) throw new Error('Controlled rejected review');
+				requests.push(params);
+				return { turnId: 'review-turn', sequence: 2 };
+			}
+		}
+	});
+	const submissions: unknown[] = [];
+	using listener = chat.onDidSubmitRequest(value => submissions.push(value));
+	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, target: { type: 'stagedChanges' as const } };
+	await chat.startReview(options);
+	assert.deepEqual(requests.map(({ commandId, ...request }) => { assert.ok(commandId); return request; }), [options]);
+	assert.deepEqual(submissions, [{ sessionId: 'session-1', threadId: 'thread-1', isNewSession: true, requestSequence: 1 }]);
+	reject = true;
+	await assert.rejects(chat.startReview(options), /Controlled rejected review/);
+	assert.equal(submissions.length, 1);
+});
 
 test('Chat accepted-request notifications follow backend success and exclude rejected or retired dispatches', async () => {
 	const fake = fakeApi();

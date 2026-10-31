@@ -1534,6 +1534,14 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             role.role_instructions(),
         )
         .expect("validated reviewer instructions");
+        let model = self
+            .config
+            .as_ref()
+            .map(|config| config.read_snapshot())
+            .transpose()
+            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+            .and_then(|snapshot| snapshot.values.code_review_model)
+            .map_or(TurnModelSelection::Current, TurnModelSelection::Explicit);
         self.start_agent_turn_request(
             mutation,
             thread_id,
@@ -1543,7 +1551,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             vec![UserInput::Text { text: prompt }],
             ash_protocol::TurnKind::Review,
             TurnInstructionSelection::Product(instructions),
-            TurnModelSelection::Current,
+            model,
             None,
         )
     }

@@ -416,6 +416,33 @@ test('Session restoration uses the existing typed lifecycle request', async () =
 	assert.deepEqual({ requests, restored }, { requests: [{ method: 'session/request', params: { sessionId: 'session', commandId: 'restore-session', request: { type: 'restore' } } }], restored: { session: { ...session, executionTarget: undefined, model: undefined, threads: [{ ...session.threads[0]!, forkedFromId: undefined, manager: undefined, parentThreadId: undefined }] }, agentTree: { roots: [] } } });
 });
 
+test('Review starts a reviewer Turn with the exact scope and never a normal coding Turn', async () => {
+	const requests: unknown[] = [];
+	const service = createAppServerAgentTurnService({
+		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+			requests.push({ method: definition.method, params });
+			return { type: 'turn', value: { turnId: 'review-turn', sequence: 8 } };
+		},
+	} as unknown as AppServerProtocolClient);
+	const mutation = { commandId: 'review', sessionId: 'session', threadId: 'thread', expectedSequence: 7 };
+	for (const target of [{ type: 'uncommittedChanges' as const }, { type: 'baseBranch' as const, branch: 'refs/heads/main' }, { type: 'custom' as const, instructions: 'Check concurrency' }]) {
+		assert.deepEqual(await service.startReview({ ...mutation, target }), { turnId: 'review-turn', sequence: 8 });
+		assert.deepEqual(requests.at(-1), {
+			method: 'session/request', params: { sessionId: 'session', commandId: 'review', request: { type: 'startReview', threadId: 'thread', expectedSequence: 7, target } },
+		});
+	}
+	await service.startReview({ ...mutation, target: { type: 'stagedChanges' } });
+	assert.deepEqual(requests.at(-1), {
+		method: 'session/request', params: {
+			sessionId: 'session', commandId: 'review', request: {
+				type: 'startReview', threadId: 'thread', expectedSequence: 7, target: {
+					type: 'custom', instructions: 'Review only staged changes in the Git index (git diff --cached). Read the staged file contents from the index when needed. Exclude unstaged and untracked changes, including unstaged edits to partially staged files. Do not modify files or the index.',
+				}
+			}
+		},
+	});
+});
+
 test('Turn interruption keeps the Session, Thread and accepted sequence on the existing request', async () => {
 	const requests: { method: string; params: unknown; }[] = [];
 	const service = createAppServerAgentTurnService({

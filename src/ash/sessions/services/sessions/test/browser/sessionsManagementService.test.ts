@@ -930,6 +930,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection, work
 		listQueued: async () => ({ messages: [] }),
 		async consultAdvisor() { throw new Error('Not used'); },
 		async start() { throw new Error('Not used'); },
+		async startReview() { throw new Error('Not used'); },
 		async compact() { throw new Error('Not used'); },
 		async steer() { throw new Error('Not used'); },
 		async interrupt(params) {

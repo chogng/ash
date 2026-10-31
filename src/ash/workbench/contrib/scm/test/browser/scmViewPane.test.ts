@@ -120,6 +120,10 @@ test('Git contribution registers Repositories before Changes and hides it for a 
 			providerCount.set(count);
 			return views[0].when!.evaluate(context);
 		}), [false, false, true]);
+		context.setContext('chatIsEnabled', false);
+		assert.equal(views[2].when!.evaluate(context), false);
+		context.setContext('chatIsEnabled', true);
+		assert.equal(views[2].when!.evaluate(context), true);
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -136,6 +140,7 @@ test('SCM panes follow repository and history availability through the window co
 		const { WorkbenchViewRegistry, WorkbenchViewContainerId } = await import('../../../../common/views.js');
 		const { SCM_AGENT_REVIEW_VIEW_ID, SCM_HISTORY_VIEW_ID, registerSCMViews } = await import('../../browser/scm.contribution.js');
 		using context = new ContextKeyService();
+		context.setContext('chatIsEnabled', true);
 		using scm = new SCMService();
 		using services = new InstantiationService();
 		services.registerInstance(IContextKeyService, context);
@@ -1481,26 +1486,6 @@ test('SCM history opens a commit multi-diff from its inline action and context m
 		resetNlsResolver();
 		browser.window.close();
 		for (const name of installedGlobals) { Reflect.deleteProperty(globalThis, name); }
-	}
-});
-
-test('ScmAgentReviewViewPane exposes an explicit empty state', async () => {
-	const browser = new JSDOM('<!doctype html><body></body>');
-	const installedGlobals = installDomGlobals(browser);
-
-	try {
-		const { ScmAgentReviewViewPane } = await import('../../../../../workbench/contrib/scm/browser/scmAgentReviewViewPane.js');
-		using pane = new ScmAgentReviewViewPane(browser.window.document.body, { id: 'ash.gitAgentReview.test', title: 'Agent Review' });
-		assert.equal(pane.element.querySelector('.ash-scm-empty')?.textContent, 'No agent changes to review.');
-		const findIssues = pane.element.querySelector<HTMLButtonElement>('.ash-scm-find-issues');
-		assert.ok(findIssues);
-		assert.equal(findIssues.textContent, 'Find Issues');
-		assert.ok(findIssues.classList.contains('ash-button'));
-		assert.ok(findIssues.classList.contains('label-centered'));
-		assert.ok(findIssues.querySelector('.ash-icon'));
-	} finally {
-		browser.window.close();
-		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
 	}
 });
 

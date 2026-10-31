@@ -236,6 +236,9 @@ export class SessionsChatService extends Disposable implements IChatService {
 			return result;
 		});
 	}
+	startReview(options: Parameters<IChatService['startReview']>[0]): ReturnType<IChatService['startReview']> {
+		return this.run(options.sessionId, scope => scope.services.chat.startReview(backendOptions(options, scope)));
+	}
 	queueTurn(options: Parameters<IChatService['queueTurn']>[0]): ReturnType<IChatService['queueTurn']> {
 		return this.run(options.sessionId, async scope => {
 			const result = await scope.services.chat.queueTurn(backendOptions(options, scope));

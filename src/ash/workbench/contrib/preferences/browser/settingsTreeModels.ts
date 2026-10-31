@@ -36,7 +36,8 @@ export interface SettingsSectionReference {
 
 /** Non-configuration service state and actions; Preferences owns their DOM and widgets. */
 export interface SettingsSectionModel {
-	readonly groupId?: string;
+	/** Null renders a standalone card without an additional group heading. */
+	readonly groupId?: string | null;
 	readonly groupTitle?: string;
 	readonly itemId?: string;
 	readonly keywords?: readonly string[];

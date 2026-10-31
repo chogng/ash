@@ -1,7 +1,9 @@
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { CustomViewService, ICustomViewService } from '../../../../../sessions/services/customView/browser/customViewService.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../sessions/browser/agentHost/sessionProviderScopeService.js';
-import { ISCMService } from '../../../../contrib/scm/common/scm.js';
+import { ISCMService, ISCMViewService } from '../../../../contrib/scm/common/scm.js';
+import { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';
+import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { SCMService } from '../../../../contrib/scm/common/scmService.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -234,12 +236,21 @@ function createTimelinePane(): TimelinePane {
 	}));
 	return scope.createInstance(TimelinePane, root, { id: 'fixture.timeline', title: localize('timeline.title', 'Timeline') });
 }
+function createReviewPane(): ScmAgentReviewViewPane {
+	const scope = resources.add(changesServices.createChild());
+	scope.registerInstance(ISCMViewService, { activeRepository: { id: 'fixture', provider: { rootUri: URI.file('/fixture') } }, onDidChangeActiveRepository: Event.None } as unknown as ISCMViewService);
+	scope.registerInstance(IContextMenuService, contextMenus);
+	scope.registerInstance(IAgentSessionService, scopeHost.session);
+	scope.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+	scope.registerInstance(IConfigurationService, configuration);
+	return scope.createInstance(ScmAgentReviewViewPane, root, { id: 'fixture.review', title: 'Agent Review' });
+}
 const pane = resources.add(view === 'timeline' ? createTimelinePane() : view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
 		pickFolderAndOpen: async () => { throw new Error('Folder opening failed. '.repeat(12)); },
 	} as unknown as import('../../../../../platform/dialogs/common/dialogs.js').IFileDialogService, contextKeys)
 	: view === 'review'
-		? new ScmAgentReviewViewPane(root, { id: 'fixture.review', title: 'Agent Review' })
+		? createReviewPane()
 		: view === 'problems'
 			? new ProblemsViewPane(root, { id: 'fixture.problems', title: 'Problems' }, markers, editors, workspace, contextMenus, clipboard)
 			: view === 'bulk'

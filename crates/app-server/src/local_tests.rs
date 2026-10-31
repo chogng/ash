@@ -3517,6 +3517,7 @@ fn select_model(
                 model: Patch::Value(model_ref(model)),
                 model_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
+                code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,

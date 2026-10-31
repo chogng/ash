@@ -741,6 +741,9 @@ pub struct ConfigReadResult {
     pub approval_review_model: ApprovalReviewModelSelectionDto,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
+    pub code_review_model: Option<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub commit_message_model: Option<ModelRefDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -903,6 +906,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ApprovalReviewModelSelectionDto>")]
     #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]
     pub approval_review_model: Patch<ApprovalReviewModelSelectionDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ModelRefDto>")]
+    #[ts(as = "Option<ModelRefDto>", optional = nullable)]
+    pub code_review_model: Patch<ModelRefDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<ModelRefDto>")]
     #[ts(as = "Option<ModelRefDto>", optional = nullable)]

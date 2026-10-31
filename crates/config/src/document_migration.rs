@@ -401,6 +401,9 @@ fn migrate_subscription_models(document: &mut UserConfigDocument) {
     {
         migrate(model);
     }
+    if let Some(model) = &mut document.agent.code_review_model {
+        migrate(model);
+    }
     if let Some(model) = &mut document.agent.commit_message_model {
         migrate(model);
     }

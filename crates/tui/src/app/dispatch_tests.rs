@@ -1568,6 +1568,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
                 features: Default::default(),
                 model: Default::default(),
                 model_reasoning_effort: Default::default(),
+                code_review_model: Default::default(),
                 commit_message_model: Default::default(),
                 approval_review_model: Default::default(),
                 tool_mode: Default::default(),

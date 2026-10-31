@@ -111,6 +111,19 @@ test('Chat send unwraps the source address and never sends a removed remote Sess
 	await assert.rejects(chat.startTurn(options), isCancellationError);
 });
 
+test('Chat review stays on the owning host and unwraps its Session and Thread', async () => {
+	using context = fixture();
+	const calls: unknown[] = [];
+	context.remoteChat.startReview = async options => { calls.push(options); };
+	context.primaryChat.startReview = async () => { assert.fail('primary cannot receive remote reviews'); };
+	using chat = new SessionsChatService(context.scopes);
+	const options = { sessionId: context.sessionId, threadId: context.threadId, expectedSequence: 1, target: { type: 'stagedChanges' as const } };
+	await chat.startReview(options);
+	assert.deepEqual(calls, [{ ...options, sessionId: 'same', threadId: 'thread' }]);
+	context.registration.dispose();
+	await assert.rejects(chat.startReview(options), isCancellationError);
+});
+
 test('a late response from a retired provider cannot publish into a replacement with the same identity', async () => {
 	using context = fixture();
 	const response = new DeferredPromise<ThreadRead>();

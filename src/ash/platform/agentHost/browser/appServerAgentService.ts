@@ -114,6 +114,7 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 		enqueue: () => unavailable('queue.enqueue'),
 		listQueued: () => unavailable('queue.list'),
 		start: () => unavailable('turn.start'),
+		startReview: () => unavailable('turn.startReview'),
 		compact: () => unavailable('turn.compact'),
 		consultAdvisor: () => unavailable('turn.consultAdvisor'),
 		steer: () => unavailable('turn.steer'),
@@ -489,6 +490,17 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 					input
 				})
 			), signal).then(turnStartResult),
+		startReview: (params) => {
+			// The protocol's custom target supports an index-only review without
+			// misrepresenting it as a review of the entire working tree.
+			const target = params.target.type === 'stagedChanges'
+				? { type: 'custom' as const, instructions: localize('scm.review.stagedInstructions', 'Review only staged changes in the Git index (git diff --cached). Read the staged file contents from the index when needed. Exclude unstaged and untracked changes, including unstaged edits to partially staged files. Do not modify files or the index.') }
+				: params.target;
+			return appServerRequest(connection, 'session/request', sessionRequest(params, {
+				type: 'startReview', threadId: params.threadId,
+				expectedSequence: params.expectedSequence, target,
+			})).then(turnStartResult);
+		},
 		consultAdvisor: (params) =>
 			appServerRequest(
 				connection,

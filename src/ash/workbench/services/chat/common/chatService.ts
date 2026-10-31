@@ -1,4 +1,4 @@
-import type { AgentInteractionOffer, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
+import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 export type {
 	ChatImageAttachment,
 	ChatAudioAttachment,
@@ -151,6 +151,12 @@ export interface StartTurnOptions extends ChatSubmissionOptions {
 }
 
 export type ChatMode = SessionMode;
+export interface StartReviewOptions {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly expectedSequence: number;
+	readonly target: AgentReviewTarget;
+}
 export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection; }
 export interface ConsultAdvisorOptions { readonly isNewSession?: boolean; readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string; }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string; }
@@ -293,6 +299,7 @@ export interface IChatService {
 	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number, owner: object, history?: ThreadSnapshotHistory): Promise<ThreadSubscription>;
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId, owner: object): Promise<void>;
 	startTurn(options: StartTurnOptions): Promise<void>;
+	startReview(options: StartReviewOptions): Promise<void>;
 	queueTurn(options: StartTurnOptions): Promise<void>;
 	queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number>;
 	compactContext(options: CompactContextOptions): Promise<void>;

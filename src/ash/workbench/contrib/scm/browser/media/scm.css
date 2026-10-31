@@ -683,11 +683,14 @@
 }
 
 .ash-scm-commit.ash-button,
-.ash-scm-commit-dropdown.ash-button {
+.ash-scm-commit-dropdown.ash-button,
+.ash-scm-find-issues > .ash-button {
 	box-sizing: border-box;
 	height: 24px;
 	min-height: 24px;
 	padding-block: 0;
+	color: var(--ash-button-primaryForeground);
+	background: var(--ash-files-emptyExplorerOpenFolderBackground);
 }
 
 .ash-scm-commit .ash-icon-label-container {
@@ -716,21 +719,14 @@
 	text-overflow: ellipsis;
 }
 
-.ash-scm-find-issues.ash-button {
-	width: 100%;
-	color: var(--ash-button-primaryForeground);
-}
-
-.ash-scm-find-issues.ash-button {
-	background: var(--ash-files-emptyExplorerOpenFolderBackground);
-}
-
-.ash-scm-find-issues.ash-button:not(:disabled):hover {
+.ash-scm-commit.ash-button:not(:disabled):hover,
+.ash-scm-commit-dropdown.ash-button:not(:disabled):hover,
+.ash-scm-find-issues > .ash-button:not(:disabled):hover {
 	background: var(--ash-files-emptyExplorerOpenFolderHoverBackground);
 }
 
-.ash-scm-find-issues.ash-button {
-	margin: 0 8px 8px;
+.ash-scm-find-issues {
+	margin: 8px;
 	width: calc(100% - 16px);
 }
 
