@@ -7,8 +7,8 @@ test('terminal bell, clear, formatting and save signals play only after their re
 	test.setTimeout(120_000);
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectGroup('general');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('accessibilitySignals');
 	for (const name of ['terminalBell', 'clear', 'save', 'format']) {
 		const sound = workbench.settingsEditor.element.locator(`[data-configuration-key="accessibility.signals.${name}"]`).getByRole('textbox', { name: 'Mode 1', exact: true });
 		await sound.fill('on');
@@ -65,8 +65,8 @@ for (const shell of ['Bash', 'Zsh', 'PowerShell', 'Windows PowerShell']) {
 		test.setTimeout(90_000);
 		const page = workbench.page;
 		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('general');
-		await workbench.settingsEditor.selectCategory('general');
+		await workbench.settingsEditor.selectGroup('features');
+		await workbench.settingsEditor.selectCategory('accessibilitySignals');
 		for (const name of ['terminalCommandSucceeded', 'terminalCommandFailed']) {
 			const sound = workbench.settingsEditor.element.locator(`[data-configuration-key="accessibility.signals.${name}"]`).getByRole('textbox', { name: 'Mode 1', exact: true });
 			await sound.fill('on');

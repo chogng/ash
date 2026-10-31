@@ -43,58 +43,6 @@ export interface SettingsLayoutCategory {
  */
 export const SettingsNavigation = [
 	{
-		id: 'general',
-		label: localize({ bundle: 'ash.settings', key: 'groups.general.label' }, 'General'),
-		description: localize({ bundle: 'ash.settings', key: 'groups.general.description' }, 'Configure core application behavior.'),
-		categories: [
-			{
-				id: 'general',
-				label: localize({ bundle: 'ash.settings', key: 'categories.general.label' }, 'Application'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.general.description' }, 'Configure core application behavior.'),
-				presentation: 'general',
-				groups: [
-					{
-						id: 'display-language',
-						label: localize({ bundle: 'ash.settings', key: 'displayLanguage.title' }, 'Display Language'),
-						description: localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.'),
-						settings: ['workbench.locale'],
-					},
-					{
-						id: 'updates',
-						label: localize('update.settingsGroup', 'Updates'),
-						description: localize('update.settingsGroupDescription', 'Choose how Ash checks for updates and synchronizes language packs.'),
-						settings: ['update.policy', 'network.meteredConnection'],
-					},
-					{
-						id: 'interaction',
-						label: 'Interaction',
-						description: 'Tune hover feedback and resize handles.',
-						settings: [
-							'workbench.hover.*',
-							'workbench.sash.*',
-							'workbench.commandPalette.history',
-							'onboarding.enabled',
-							'output.smartScroll.enabled',
-							'chat.disableAIFeatures',
-							'sessions.automations.notifyOnSuccess',
-							'task.allowAutomaticTasks',
-							'extensions.ignoreRecommendations',
-							'extensions.showRecommendationsOnlyOnDemand',
-						],
-					},
-				],
-			},
-			{
-				id: 'network',
-				label: localize({ bundle: 'ash.settings', key: 'categories.network.label' }, 'Network'),
-				description: localize({ bundle: 'ash.settings', key: 'categories.network.description' }, 'Configure application HTTP compatibility and check service connectivity.'),
-				keywords: ['proxy', 'VPN', 'HTTP', 'domains', 'connectivity'],
-				presentation: 'general',
-				groups: [],
-			},
-		],
-	},
-	{
 		id: 'workbench',
 		label: localize({ bundle: 'ash.settings', key: 'groups.workbench.label' }, 'Workbench'),
 		description: localize({ bundle: 'ash.settings', key: 'groups.workbench.description' }, 'Configure the Workbench appearance, layout, and startup.'),
@@ -572,6 +520,74 @@ export const SettingsNavigation = [
 						label: localize('settings.dictation.group', 'Voice input'),
 						description: localize('settings.dictation.groupDescription', 'Choose how voice input is transcribed.'),
 						settings: ['dictation.*'],
+					},
+				],
+			},
+		],
+	},
+	{
+		id: 'application',
+		label: localize({ bundle: 'ash.settings', key: 'groups.application.label' }, 'Application'),
+		description: localize({ bundle: 'ash.settings', key: 'groups.application.description' }, 'Configure core application behavior.'),
+		categories: [
+			{
+				id: 'display-language',
+				label: localize({ bundle: 'ash.settings', key: 'categories.display-language.label' }, 'Display Language'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.display-language.description' }, 'Choose the language used by the Ash interface.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'display-language',
+						label: localize({ bundle: 'ash.settings', key: 'displayLanguage.title' }, 'Display Language'),
+						description: localize({ bundle: 'ash.settings', key: 'displayLanguage.description' }, 'Choose the language used by the Ash interface.'),
+						settings: ['workbench.locale'],
+					},
+				],
+			},
+			{
+				id: 'updates',
+				label: localize({ bundle: 'ash.settings', key: 'categories.updates.label' }, 'Updates'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.updates.description' }, 'Choose how Ash checks for updates and synchronizes language packs.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'updates',
+						label: localize('update.settingsGroup', 'Updates'),
+						description: localize('update.settingsGroupDescription', 'Choose how Ash checks for updates and synchronizes language packs.'),
+						settings: ['update.policy', 'network.meteredConnection'],
+					},
+				],
+			},
+			{
+				id: 'network',
+				label: localize({ bundle: 'ash.settings', key: 'categories.network.label' }, 'Network'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.network.description' }, 'Configure application HTTP compatibility and check service connectivity.'),
+				keywords: ['proxy', 'VPN', 'HTTP', 'domains', 'connectivity'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'interaction',
+				label: localize({ bundle: 'ash.settings', key: 'categories.interaction.label' }, 'Interaction'),
+				description: localize({ bundle: 'ash.settings', key: 'categories.interaction.description' }, 'Tune hover feedback and resize handles.'),
+				presentation: 'general',
+				groups: [
+					{
+						id: 'interaction',
+						label: localize({ bundle: 'ash.settings', key: 'categories.interaction.label' }, 'Interaction'),
+						description: localize({ bundle: 'ash.settings', key: 'categories.interaction.description' }, 'Tune hover feedback and resize handles.'),
+						settings: [
+							'workbench.hover.*',
+							'workbench.sash.*',
+							'workbench.commandPalette.history',
+							'onboarding.enabled',
+							'output.smartScroll.enabled',
+							'chat.disableAIFeatures',
+							'sessions.automations.notifyOnSuccess',
+							'task.allowAutomaticTasks',
+							'extensions.ignoreRecommendations',
+							'extensions.showRecommendationsOnlyOnDemand',
+						],
 					},
 				],
 			},

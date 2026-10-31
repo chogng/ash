@@ -183,8 +183,8 @@ test('Configure Editors opens workbench editor settings from the title menu in E
 test('accessibility signal settings validate modes and survive restart in Chinese', async ({ workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectGroup('general');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('accessibilitySignals');
 	let settings = workbench.settingsEditor.element;
 	let progress = settings.locator('[data-configuration-key="accessibility.signals.progress"]');
 	const sound = progress.getByRole('textbox', { name: 'Mode 1', exact: true });
@@ -219,8 +219,8 @@ test('accessibility signal settings validate modes and survive restart in Chines
 	({ workbench } = await restartWorkbench());
 	page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectGroup('general');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('accessibilitySignals');
 	settings = workbench.settingsEditor.element;
 	progress = settings.locator('[data-configuration-key="accessibility.signals.progress"]');
 	await expect(progress).toContainText('进度提示');
@@ -338,9 +338,12 @@ test('Settings sidebar stays at two levels and searches voice input inside Featu
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	const application = settings.locator('[data-tree-id="general"]');
-	await expect(application).toHaveAttribute('aria-level', '2');
-	await expect(application).not.toHaveAttribute('aria-expanded');
+	const application = settings.locator('[data-tree-id="group.application"]');
+	await expect(application).toHaveAttribute('aria-level', '1');
+	await expect(application).toHaveAttribute('aria-expanded', 'true');
+	const language = settings.locator('[data-tree-id="display-language"]');
+	await expect(language).toHaveAttribute('aria-level', '2');
+	await expect(language).not.toHaveAttribute('aria-expanded');
 	await expect(settings.locator('[data-settings-category-id="dictation"]')).toHaveCount(0);
 	for (const group of ['workbench', 'agents']) {
 		await settings.locator(`[data-settings-group-id="${group}"]`).click();
@@ -375,10 +378,10 @@ test('Settings sidebar stays at two levels and searches voice input inside Featu
 		await expect(settings.locator('[data-settings-category-id="voice-input"]')).toBeVisible();
 	}
 	await search.fill('');
-	await settings.locator('[data-settings-category-id="general"]').click();
-	await application.focus();
-	await application.press('ArrowRight');
-	await expect(application).not.toHaveAttribute('aria-expanded');
+	await workbench.settingsEditor.selectCategory('display-language');
+	await language.focus();
+	await language.press('ArrowRight');
+	await expect(language).not.toHaveAttribute('aria-expanded');
 });
 
 test('Dictation settings entry reveals Voice input in Features', async ({ workbench }) => {
@@ -689,10 +692,10 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(page.getByRole('heading', { name: 'Minimap', exact: true })).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.minimap.enabled"]')).toBeVisible();
 	if (target.kind === 'electron') {
-		await page.locator('[data-settings-category-id="general"]').click();
+		await workbench.settingsEditor.selectCategory('display-language');
 		await expect(rootTitle).toBeHidden();
 		await expect(rootDescription).toHaveCount(0);
-		await expect(page.locator('.ash-settings-page h3')).toHaveText('Application');
+		await expect(page.locator('.ash-settings-page h3')).toHaveText('Display Language');
 		await workbench.settingsEditor.selectGroup('features');
 		await workbench.settingsEditor.selectCategory('voice-input');
 		await expect(page.getByRole('heading', { name: 'Voice input', exact: true, level: 3 })).toBeVisible();
@@ -846,7 +849,8 @@ test('Saving a boolean setting does not move neighboring settings', async ({ wor
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await workbench.settingsEditor.selectGroup('features');
+	await workbench.settingsEditor.selectCategory('accessibility');
 	const row = settings.locator('[data-settings-item-id="accessibility.verbosity.memories"]');
 	const control = row.getByRole('switch', { name: 'Memories accessibility help' });
 	await expect(control).toBeVisible();
@@ -959,7 +963,7 @@ test.describe('Manage menu', () => {
 		await workbench.menus.select(application, () => manageButton.click(), ['Settings']);
 		await expect(page.getByRole('dialog', { name: 'Ash Settings' })).toBeVisible();
 		await expect(page.locator('.ash-settings-editor')).toBeVisible();
-		await page.locator('[data-settings-category-id="general"]').click();
+		await workbench.settingsEditor.selectCategory('updates');
 		if (target.kind === 'electron') {
 			const updatePolicy = page.locator('[data-configuration-key="update.policy"]').getByRole('combobox');
 			await expect(updatePolicy).toBeVisible();

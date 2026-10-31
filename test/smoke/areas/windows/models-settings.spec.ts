@@ -214,7 +214,8 @@ test('Models Settings saves enabled choices, preserves keyboard focus and restor
 	for (const name of originalSearchOrder) { expect(accessibleContent).toContain(name); }
 	expect(accessibleContent).toContain('Enabled');
 	await accessible.getByRole('button', { name: 'Close', exact: true }).click();
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('application');
+	await workbench.settingsEditor.selectCategory('display-language');
 	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();
 	({ workbench } = await restartWorkbench());
@@ -485,8 +486,8 @@ test('Model descriptions retain provider copy after restarting in Chinese', { ta
 	};
 	await openModelCard(false);
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectGroup('agents');
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('application');
+	await workbench.settingsEditor.selectCategory('display-language');
 	const settings = workbench.page.getByRole('dialog', { name: 'Ash Settings' });
 	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
 	await workbench.page.getByRole('option', { name: '简体中文', exact: true }).click();

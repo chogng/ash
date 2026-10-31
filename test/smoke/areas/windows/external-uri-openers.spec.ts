@@ -59,7 +59,8 @@ test('Graphical URL opening rules support suggestions, validation, persistence a
 	await picker.getByRole('combobox').press('Enter');
 	({ workbench } = await restartWorkbench());
 	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectCategory('general');
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('browser');
 	rules = workbench.page.locator('[data-configuration-key="workbench.externalUriOpeners"]');
 	await expect(rules).toContainText('网址打开规则');
 	await expect(rules).toContainText('用方向键选择打开方式，再按 Enter 确认');
@@ -137,7 +138,8 @@ test('URL rules open editor links in the Ash browser and default links in the sy
 	});
 	try {
 		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectCategory('general');
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('browser');
 		const rules = workbench.page.locator('[data-configuration-key="workbench.externalUriOpeners"]');
 		for (const [pattern, id] of [[`${root}/internal`, 'ash.browser.open'], ['*', 'default']]) {
 			await rules.getByRole('button', { name: 'Add rule', exact: true }).click();

@@ -158,6 +158,9 @@ const GitConfiguration = {
 	rebaseWhenSync: 'git.rebaseWhenSync',
 };
 await import('../../../scm/browser/scm.contribution.js');
+await import('../../../../../platform/update/common/update.config.contribution.js');
+await import('../../../../../platform/meteredConnection/common/meteredConnection.config.contribution.js');
+await import('../../../chat/browser/aiCustomization/customizationMarketplace.contribution.js');
 
 const { IChatService: ChatServiceId } = await import('../../../../services/chat/common/chatService.js');
 await import('../../../../services/chat/common/modelCatalog.js');
@@ -1948,8 +1951,6 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.deepEqual(
 		SettingsCategories.map(category => category.id),
 		[
-			'general',
-			'network',
 			'appearance',
 			'layout',
 			'debugging',
@@ -1972,6 +1973,10 @@ test('settingsLayout is the single projection from registered settings to catego
 			'source-control',
 			'terminal',
 			'voice-input',
+			'display-language',
+			'updates',
+			'network',
+			'interaction',
 			'chat-input',
 			'chat-code-blocks',
 			'agents',
@@ -2009,15 +2014,15 @@ test('settingsLayout is the single projection from registered settings to catego
 		[...features.children!].slice(0, 2).map(node => node.element.id),
 		['accessibilitySignals', 'accessibility'],
 	);
-	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'general');
-	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'general');
+	assert.equal(findSettingCategory(layout, LocalizationConfiguration.locale), 'display-language');
+	assert.equal(findSettingCategory(layout, 'workbench.commandPalette.history'), 'interaction');
 	for (const key of ['extensions.ignoreRecommendations', 'extensions.showRecommendationsOnlyOnDemand']) {
-		assert.equal(findSettingCategory(layout, key), 'general');
+		assert.equal(findSettingCategory(layout, key), 'interaction');
 	}
 	assert.equal(findSettingCategory(layout, 'workbench.externalUriOpeners'), 'browser');
 	assert.equal(defaults.get('workbench.externalUriOpeners').valueType, 'stringMap');
-	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'general');
-	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'general');
+	assert.equal(findSettingCategory(layout, HoverConfiguration.delay), 'interaction');
+	assert.equal(findSettingCategory(layout, SashConfiguration.size), 'interaction');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.backend), 'voice-input');
 	assert.equal(findSettingCategory(layout, DictationConfiguration.model), 'voice-input');
 	assert.equal(findSettingCategory(layout, 'chat.defaultModel'), undefined);
@@ -2169,9 +2174,9 @@ test('Settings layout matching preserves literal dots, wildcard groups and input
 	const locale = defaults.get(LocalizationConfiguration.locale);
 	const projected = (settings: readonly ISetting[]) => createSettingsLayout(settings).flatMap(category => category.groups.flatMap(group => group.settings.map(setting => [category.id, setting.id, setting.title])));
 	assert.deepEqual(projected([second, locale, first]), [
-		['general', locale.id, locale.title],
 		['editor-display', second.id, second.title],
 		['editor-display', first.id, first.title],
+		['display-language', locale.id, locale.title],
 	]);
 	assert.deepEqual(projected([{ ...first, title: 'Updated metadata' }]), [['editor-display', first.id, 'Updated metadata']]);
 	assert.throws(() => createSettingsLayout([{ ...locale, id: 'workbenchXlocale' }]), /missing from settingsLayout/u);
@@ -2187,6 +2192,11 @@ test('feature settings navigation and groups capture the language initialized be
 		assert.equal(style.description, '选择采用圆角区域的 Modern 样式或区域贴边的 Flat 样式。更改会立即生效。');
 		assert.equal(findSettingCategory(layout.createSettingsLayout(new DefaultSettings().all), WorkbenchConfiguration.layoutStyle), 'appearance');
 		assert.equal(layout.SettingsCategories.find(category => category.id === 'appearance')?.groups.find(group => group.id === 'style')?.label, '工作台样式');
+		const application = layout.SettingsNavigation.find(group => group.id === 'application');
+		assert.ok(application);
+		assert.equal(application.label, '应用');
+		assert.deepEqual(application.categories.map(category => category.label), ['显示语言', '更新', '网络', '交互']);
+		assert.equal(application.categories.find(category => category.id === 'interaction')?.description, '调整悬停反馈和调整大小手柄。');
 		const category = layout.SettingsCategories.find(category => category.id === 'terminal');
 		assert.ok(category);
 		assert.equal(category.label, '终端');
@@ -2414,7 +2424,7 @@ test('Settings search categories follow matched settings for text and ID filters
 	assert.deepEqual(categories(), ['editor-fonts']);
 	tree.setQuery('');
 	assert.equal(tree.isSearching, false);
-	assert.ok(categories().includes('general'));
+	assert.ok(categories().includes('display-language'));
 });
 
 test('Models Settings requires a separately registered secret storage status service', () => {
@@ -3259,20 +3269,40 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.ok(host);
 	assert.equal(host.hidden, false);
 	assert.equal(root.querySelector('.ash-modal-editor')?.getAttribute('role'), 'dialog');
-	assert.equal(root.querySelector('.ash-agent-roles-settings'), null, 'Agent definitions must not leak into Application settings');
+	assert.equal(root.querySelector('.ash-agent-roles-settings'), null, 'Agent definitions must not leak into Display Language settings');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'network'],
+		['display-language', 'updates', 'network', 'interaction'],
 	);
 	const workbenchGroup = root.querySelector<HTMLElement>('[data-settings-group-id="workbench"]');
 	assert.ok(workbenchGroup);
 	assert.equal(workbenchGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'false');
-	workbenchGroup.closest<HTMLElement>('.ash-tree-row')?.click();
+	workbenchGroup.closest<HTMLElement>('.ash-tree-row')!.click();
+	assert.deepEqual(
+		[...root.querySelectorAll<HTMLElement>('[data-settings-group-id]')].map(element => element.dataset.settingsGroupId),
+		['workbench', 'editor', 'features', 'application', 'agents', 'extensions'],
+	);
+	const applicationGroup = root.querySelector<HTMLElement>('[data-settings-group-id="application"]');
+	assert.ok(applicationGroup);
+	assert.equal(applicationGroup.textContent, 'Application');
+	assert.equal(applicationGroup.closest('.ash-tree-row')?.getAttribute('aria-level'), '1');
+	assert.equal(applicationGroup.closest('.ash-tree-row')?.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
-		['general', 'network', 'appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser'],
+		['appearance', 'layout', 'debugging', 'settings-editor', 'startup', 'browser', 'display-language', 'updates', 'network', 'interaction'],
 	);
-	assert.equal(root.querySelector('[data-settings-category-id="general"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
+	for (const categoryId of ['display-language', 'updates', 'network', 'interaction']) {
+		assert.equal(root.querySelector(`[data-settings-category-id="${categoryId}"]`)?.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');
+	}
+	await preferences.openSettings({ section: 'updates' });
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Updates');
+	assert.ok(root.querySelector('[data-settings-item-id="update.policy"]'));
+	assert.ok(root.querySelector('[data-settings-item-id="network.meteredConnection"]'));
+	assert.equal(root.querySelector('[data-settings-item-id="workbench.locale"]'), null);
+	await preferences.openSettings({ section: 'interaction' });
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Interaction');
+	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
+	assert.equal(root.querySelector('[data-settings-item-id="update.policy"]'), null);
 	assert.equal(root.querySelector('[data-settings-category-id="appearance"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="layout"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
 	assert.equal(root.querySelector('[data-settings-category-id="startup"]')?.closest('.ash-tree-row')?.hasAttribute('aria-expanded'), false);
@@ -3372,9 +3402,9 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	await nextTurn();
 	assert.equal(searchEngine.textContent, 'ripgrep');
 	assert.equal((searchEngine as HTMLButtonElement).disabled, false);
-	await preferences.openSettings({ section: 'general' });
+	await preferences.openSettings({ section: 'display-language' });
 	assert.equal(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks}"]`), null);
-	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`));
+	assert.equal(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay}"]`), null);
 	const languageControl = root.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
 	assert.ok(languageControl);
 	assert.equal(languageControl.textContent, 'English');
@@ -3483,7 +3513,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		configurationRegistry.updateConfigurations({ add: [], remove: extensionNodes });
 		assert.equal(root.querySelector('[data-settings-category-id="extension.test.live"]'), null);
 		assert.equal(root.querySelector('[data-settings-item-id="live.enabled"]'), null);
-		assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Application');
+		assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Display Language');
 		assert.equal(JSON.parse((await configuration.read()).source)['live.enabled'], true, 'withdrawal preserves saved extension values');
 	} finally {
 		configurationRegistry.updateConfigurations({ add: [], remove: extensionNodes });
@@ -3502,7 +3532,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(underlineIndicator?.hidden, true);
 	assert.equal(underlineIndicator?.textContent, '');
 
-	await preferences.openSettings({ section: 'general' });
+	await preferences.openSettings({ section: 'interaction' });
 	const hoverDelay = root.querySelector<HTMLInputElement>(`[data-configuration-key="${HoverConfiguration.delay}"]`);
 	assert.ok(hoverDelay);
 	hoverDelay.value = '750';
@@ -3538,7 +3568,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		),
 		['Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Sandbox', 'Execution trace', 'Hooks'],
 	);
-	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
+	assert.equal(root.querySelector('[data-tree-id="interaction"]')?.getAttribute('aria-selected'), 'true');
 	assert.equal(root.querySelector('[data-settings-category-id="skills"]'), null);
 	assert.deepEqual(skillScopes, []);
 	assert.deepEqual(skillMutations, []);
@@ -3959,7 +3989,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(ownerDocument.activeElement, scopedSearch);
 	await preferences.openSettings({ section: 'models', sectionQuery: '', focusSearch: false });
 	assert.equal(ownerDocument.activeElement, scopedSearch);
-	await assert.rejects(preferences.openSettings({ section: 'general', sectionQuery: 'unsupported' }), /does not provide its own search/);
+	await assert.rejects(preferences.openSettings({ section: 'interaction', sectionQuery: 'unsupported' }), /does not provide its own search/);
 
 
 	using language = editorServices.get(ILanguageService).registerLanguage({ id: 'settings-test-language' });

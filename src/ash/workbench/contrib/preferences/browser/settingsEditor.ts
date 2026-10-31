@@ -70,6 +70,8 @@ import { SettingsTree } from './settingsTree.js';
 import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode } from './settingsTreeModels.js';
 import { TOCTree, TOCTreeModel, type SettingsTOCOpenEntry } from './tocTree.js';
 
+const defaultSettingsCategory = SettingsCategories.find(category => category.id === 'display-language')!;
+
 export const SettingsEditorId = 'workbench.editor.settings';
 
 /** Owns the Settings search, navigation, and Configuration Registry-backed controls. */
@@ -261,7 +263,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		const modelServices = this._register(this.instantiationService.createChild(new ServiceCollection([IContextViewService, modelViews])));
 		modelServices.registerInstance(IContextMenuService, this._register(modelServices.createInstance(BrowserContextMenuService)));
 
-		const initialCategory = SettingsCategories[0];
+		const initialCategory = defaultSettingsCategory;
 		if (!initialCategory) throw new Error('Settings requires at least one category');
 		this.activeCategory = initialCategory;
 		const githubSettings = this._register(this.instantiationService.createInstance(GitHubSettingsModel, async () => { await this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService).executeCommand(CLOSE_EDITOR_COMMAND_ID)); }));
@@ -337,7 +339,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			for (const id of properties) this.extensionBindings.deleteAndDispose(id);
 			this.settingsModel.setSettings(this.registeredSettings());
 			this.rebuildContent();
-			const category = this.settingsLayout.find(entry => entry.id === this.activeCategory.id)?.descriptor ?? SettingsCategories[0];
+			const category = this.settingsLayout.find(entry => entry.id === this.activeCategory.id)?.descriptor ?? defaultSettingsCategory;
 			this.renderCategory(category);
 		}));
 		this._register(this.configurationService.onDidChangeConfiguration(() => {

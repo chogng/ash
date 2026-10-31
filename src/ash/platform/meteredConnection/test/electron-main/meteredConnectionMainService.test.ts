@@ -123,7 +123,7 @@ suite('Desktop metered connection policy', () => {
 			assert.deepEqual(['auto', 'on', 'off'].map(value => configuration.parse(value)), ['auto', 'on', 'off']);
 			for (const value of ['sometimes', null, false]) assert.throws(() => configuration.parse(value), /Invalid/);
 			const setting = new DefaultSettings().all.find(setting => setting.id === 'network.meteredConnection')!;
-			const updates = createSettingsLayout([setting]).find(category => category.id === 'general')?.groups.find(group => group.id === 'updates');
+			const updates = createSettingsLayout([setting]).find(category => category.id === 'updates')?.groups.find(group => group.id === 'updates');
 			assert.deepEqual(updates?.settings.map(setting => setting.id), ['network.meteredConnection']);
 		} finally {
 			resetNlsResolver();

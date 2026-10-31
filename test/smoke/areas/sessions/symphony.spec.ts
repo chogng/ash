@@ -123,7 +123,7 @@ test('built-in Symphony concurrently runs tasks, pauses, resumes and preserves c
 test('Symphony keyboard help and controls use Chinese in the Agents Window', async ({ target, application, workbench, restartWorkbench }) => {
 	await workbench.page.keyboard.press('ControlOrMeta+,');
 	const settings = workbench.page.locator('.ash-settings-editor');
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await settings.locator('[data-settings-category-id="display-language"]').click();
 	const language = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
 	await language.click(); await workbench.page.keyboard.press('End'); await workbench.page.keyboard.press('Enter');
 	await expect(language).toHaveText('简体中文');

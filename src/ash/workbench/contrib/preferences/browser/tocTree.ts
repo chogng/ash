@@ -49,7 +49,7 @@ export class TOCTreeModel {
 				element: { kind: 'group', id: `group.${entry.id}`, group: entry },
 				children,
 				collapsible: true,
-				collapsed: entry.id !== 'general',
+				collapsed: true,
 			};
 		}
 		return this.categoryElement(entry);
