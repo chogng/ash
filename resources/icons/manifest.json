@@ -167,6 +167,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "case-sensitive",
+      "file": "case-sensitive.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "chart",
       "file": "chart.svg",
       "rendering": "symbolic"
@@ -1132,6 +1137,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "preserve-case",
+      "file": "preserve-case.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "preview",
       "file": "preview.svg",
       "rendering": "symbolic"
@@ -1179,6 +1189,11 @@
     {
       "id": "refresh",
       "file": "refresh.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "regex",
+      "file": "regex.svg",
       "rendering": "symbolic"
     },
     {
@@ -1509,6 +1524,26 @@
     {
       "id": "whitespace-filled",
       "file": "whitespace-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "whole-word",
+      "file": "whole-word.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "workspace-trusted",
+      "file": "workspace-trusted.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "workspace-unknown",
+      "file": "workspace-unknown.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "workspace-untrusted",
+      "file": "workspace-untrusted.svg",
       "rendering": "symbolic"
     },
     {
