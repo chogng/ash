@@ -5117,6 +5117,55 @@ test('Sessions layout is explicit, persists across recreation and starts with fu
 });
 
 for (const presentation of [AgentSessionsPresentation.Tabs, AgentSessionsPresentation.List]) {
+	for (const width of [380, 720]) {
+		test(`Sessions button waits for its layout setting before revealing ${presentation} at ${width}px`, async () => {
+			const fixture = await createNavigationInputPane(JSON.stringify({
+				[AGENT_SESSIONS_PRESENTATION_SETTING]: presentation,
+				[ChatConfiguration.ChatViewSessionsOrientation]: 'stacked',
+			}));
+			using resources = fixture.resources;
+			const { pane, commands, configuration, layout, input, dom } = fixture;
+			pane.layout(600, 0, width);
+			const body = pane.element.querySelector<HTMLElement>('.ash-chat-body')!;
+			const sidebar = body.querySelector<HTMLElement>('.ash-chat-sessions-sidebar')!;
+			const wasHidden = sidebar.hidden;
+			input.value = 'Keep this draft while saving';
+			input.focus();
+			const saving = new DeferredPromise<void>();
+			const releaseSave = new DeferredPromise<void>();
+			const updateValue = configuration.updateValue.bind(configuration);
+			configuration.updateValue = async (key, value) => {
+				assert.equal(key, ChatConfiguration.ChatViewSessionsOrientation);
+				await saving.complete();
+				await releaseSave.p;
+				await updateValue(key, value);
+			};
+			const resize = layout.resizePart.bind(layout);
+			const requests: WorkbenchPartId[] = [];
+			layout.resizePart = (part, size) => {
+				requests.push(part);
+				resize(part, size);
+				pane.layout(size.height, 0, size.width);
+			};
+			const opening = commands.executeCommand(TOGGLE_AGENT_SESSIONS_SIDEBAR_COMMAND_ID);
+			await saving.p;
+			try {
+				assert.equal(sidebar.hidden, wasHidden);
+				assert.equal(body.classList.contains('sessions-side-by-side'), false);
+				assert.equal(dom.window.document.activeElement, input);
+				assert.deepEqual(requests, []);
+			} finally {
+				await releaseSave.complete();
+				await opening;
+			}
+			assert.equal(sidebar.hidden, false);
+			assert.equal(body.classList.contains('sessions-side-by-side'), true);
+			assert.equal(sidebar.contains(dom.window.document.activeElement), true);
+			assert.equal(body.querySelector('.ash-chat-textarea-input'), input);
+			assert.equal(input.value, 'Keep this draft while saving');
+		});
+	}
+
 	test(`Sessions button widens its host from ${presentation} without replacing the draft`, async () => {
 		const fixture = await createNavigationInputPane(JSON.stringify({
 			[AGENT_SESSIONS_PRESENTATION_SETTING]: presentation,

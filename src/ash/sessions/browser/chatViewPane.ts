@@ -438,8 +438,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			? sideBySideSessionsWidth : defaultChatWidth;
 	}
 
-	toggleSessionsSidebar(): boolean {
-		const visible = this.getSessionsViewerOrientation() !== AgentSessionsViewerOrientation.SideBySide;
+	toggleSessionsSidebar(options?: { readonly visible: boolean; }): boolean {
+		const visible = options?.visible ?? this.getSessionsViewerOrientation() !== AgentSessionsViewerOrientation.SideBySide;
 		this.sessionsSidebarManualVisibility = visible;
 		this.setSessionsSidebarVisible(visible);
 		this.updateSessionsSidebarLayout(this.chatBodyWidth || this.body.getBoundingClientRect().width);
