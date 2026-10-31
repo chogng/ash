@@ -132,10 +132,6 @@ def ssh_fixture(root: Path, reports: Path):
     reports.mkdir(parents=True, exist_ok=True)
     fixture = root / "ssh"
     fixture.mkdir(mode=0o700)
-    if os.name == "nt":
-        # sshd creates -E logs with mode 0600 as LocalSystem. Keep the fixture
-        # user as the owner so diagnostics remain readable after the service stops.
-        (fixture / "sshd.log").touch(mode=0o600)
 
     keygen = (
         str(Path(os.environ["SystemRoot"]) / "System32/OpenSSH/ssh-keygen.exe")
@@ -192,7 +188,16 @@ def ssh_fixture(root: Path, reports: Path):
     finally:
         ssh_log = fixture / "sshd.log"
         if ssh_log.exists():
-            (reports / "release-sshd-events.log").write_bytes(ssh_log.read_bytes())
+            try:
+                events = ssh_log.read_bytes()
+            except PermissionError as error:
+                # Windows can deny access to the LocalSystem service's log.
+                # Retain that diagnostic without replacing the acceptance result.
+                (reports / "release-sshd-events-unavailable.txt").write_text(
+                    str(error) + "\n"
+                )
+            else:
+                (reports / "release-sshd-events.log").write_bytes(events)
 
 
 def accept(
